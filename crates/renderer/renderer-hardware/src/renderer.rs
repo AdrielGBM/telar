@@ -6,7 +6,6 @@ use wgpu::{
 };
 
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
-    instance: Instance,
     surface: Surface<'static>,
     adapter: Adapter,
     device: Device,
@@ -108,7 +107,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         });
 
         Ok(Self {
-            instance,
             surface,
             adapter,
             device,
