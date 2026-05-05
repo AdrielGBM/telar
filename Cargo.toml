@@ -5,6 +5,7 @@ members = [
     "crates/platform/platform-winit",
     "crates/renderer/renderer-core",
     "crates/renderer/renderer-software",
+    "crates/renderer/renderer-hardware",
     "crates/framework/framework-core",
     "crates/ui/ui-core",
     "crates/rsx",
@@ -17,11 +18,13 @@ members = [
 
 [workspace.dependencies]
 raw-window-handle = "0.6"
+serde = { version = "1.0.228", features = ["derive"] }
 
 platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }
 renderer-core = { path = "crates/renderer/renderer-core" }
 renderer-software = { path = "crates/renderer/renderer-software" }
+renderer-hardware = { path = "crates/renderer/renderer-hardware" }
 framework-core = { path = "crates/framework/framework-core" }
 ui-core = { path = "crates/ui/ui-core" }
 rsx = { path = "crates/rsx" }

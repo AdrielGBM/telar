@@ -1,0 +1,10 @@
+[package]
+name = "renderer-hardware"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+renderer-core = { workspace = true }
+raw-window-handle = { workspace = true }
+wgpu = "24"
+pollster = "0.4"

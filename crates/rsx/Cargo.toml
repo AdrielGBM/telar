@@ -3,9 +3,24 @@ name = "rsx"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["runtime"]
+runtime = [
+    "dep:platform-core",
+    "dep:platform-winit",
+    "dep:renderer-core",
+    "dep:renderer-software",
+    "dep:renderer-hardware",
+    "dep:framework-core",
+]
+
 [dependencies]
-platform-core = { workspace = true }
-platform-winit = { workspace = true }
-renderer-core = { workspace = true }
-renderer-software = { workspace = true }
-framework-core = { workspace = true }
+serde = { workspace = true }
+toml = "1.1.2"
+dirs = "6.0.0"
+platform-core = { workspace = true, optional = true }
+platform-winit = { workspace = true, optional = true }
+renderer-core = { workspace = true, optional = true }
+renderer-software = { workspace = true, optional = true }
+renderer-hardware = { workspace = true, optional = true }
+framework-core = { workspace = true, optional = true }
