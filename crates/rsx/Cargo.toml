@@ -1,0 +1,11 @@
+[package]
+name = "rsx"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+platform-core = { workspace = true }
+platform-winit = { workspace = true }
+renderer-core = { workspace = true }
+renderer-software = { workspace = true }
+framework-core = { workspace = true }

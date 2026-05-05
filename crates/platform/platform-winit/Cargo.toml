@@ -1,0 +1,9 @@
+[package]
+name = "platform-winit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+platform-core = { workspace = true }
+winit = "0.30"
+raw-window-handle = { workspace = true }

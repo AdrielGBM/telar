@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/platform/platform-core",
+    "crates/platform/platform-winit",
+    "crates/renderer/renderer-core",
+    "crates/renderer/renderer-software",
+    "crates/framework/framework-core",
+    "crates/ui/ui-core",
+    "crates/rsx",
+    "crates/tools/cargo-rsx",
+    "crates/tools/rsx-parser",
+    "crates/tools/rsx-transpiler",
+    "crates/tools/rsx-bundler",
+    "apps/sandbox",
+]
+
+[workspace.dependencies]
+raw-window-handle = "0.6"
+
+platform-core = { path = "crates/platform/platform-core" }
+platform-winit = { path = "crates/platform/platform-winit" }
+renderer-core = { path = "crates/renderer/renderer-core" }
+renderer-software = { path = "crates/renderer/renderer-software" }
+framework-core = { path = "crates/framework/framework-core" }
+ui-core = { path = "crates/ui/ui-core" }
+rsx = { path = "crates/rsx" }
+rsx-parser = { path = "crates/tools/rsx-parser" }
+rsx-transpiler = { path = "crates/tools/rsx-transpiler" }
+rsx-bundler = { path = "crates/tools/rsx-bundler" }
+cargo-rsx = { path = "crates/tools/cargo-rsx" }
