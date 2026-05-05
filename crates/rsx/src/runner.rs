@@ -9,6 +9,16 @@ use crate::config::{self, RendererBackend};
 use crate::context::AppContext;
 use crate::prefs::UserPrefs;
 
+macro_rules! make_ctx {
+    ($self:expr) => {
+        AppContext {
+            app_name: &$self.app_name,
+            prefs: &mut $self.prefs,
+            pending_restart: &mut $self.pending_restart,
+        }
+    };
+}
+
 struct AppHandler<A: App> {
     app: A,
     renderer: Option<Box<dyn RenderBackend>>,
@@ -21,21 +31,11 @@ struct AppHandler<A: App> {
 impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
     fn on_resume(&mut self, window: &WinitWindow) {
         self.renderer = Some(create_renderer(self.backend, window));
-        let mut ctx = AppContext {
-            app_name: &self.app_name,
-            prefs: &mut self.prefs,
-            pending_restart: &mut self.pending_restart,
-        };
-        self.app.on_resume(&mut ctx);
+        self.app.on_resume(&mut make_ctx!(self));
     }
 
     fn on_event(&mut self, event: Event, _window: &WinitWindow) {
-        let mut ctx = AppContext {
-            app_name: &self.app_name,
-            prefs: &mut self.prefs,
-            pending_restart: &mut self.pending_restart,
-        };
-        self.app.on_event(event, &mut ctx);
+        self.app.on_event(event, &mut make_ctx!(self));
     }
 
     fn on_redraw(&mut self, window: &WinitWindow) {
@@ -47,22 +47,12 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         let mut frame = Frame {
             renderer: renderer.as_mut(),
         };
-        let mut ctx = AppContext {
-            app_name: &self.app_name,
-            prefs: &mut self.prefs,
-            pending_restart: &mut self.pending_restart,
-        };
-        app.on_redraw(&mut frame, &mut ctx);
+        app.on_redraw(&mut frame, &mut make_ctx!(self));
         frame.renderer.end_frame();
     }
 
     fn on_suspend(&mut self) {
-        let mut ctx = AppContext {
-            app_name: &self.app_name,
-            prefs: &mut self.prefs,
-            pending_restart: &mut self.pending_restart,
-        };
-        self.app.on_suspend(&mut ctx);
+        self.app.on_suspend(&mut make_ctx!(self));
     }
 }
 
@@ -91,13 +81,12 @@ fn create_renderer(backend: RendererBackend, window: &WinitWindow) -> Box<dyn Re
     }
 }
 
-fn resolve_backend(config_backend: RendererBackend, prefs: &UserPrefs) -> RendererBackend {
-    prefs.renderer.backend.unwrap_or(config_backend)
-}
-
 pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
     let prefs = UserPrefs::load(app_name);
-    let backend = resolve_backend(config::compile_time_backend(), &prefs);
+    let backend = prefs
+        .renderer
+        .backend
+        .unwrap_or_else(config::compile_time_backend);
 
     WinitPlatform::new().run(
         config,

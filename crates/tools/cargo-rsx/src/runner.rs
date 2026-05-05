@@ -36,18 +36,33 @@ fn find_workspace_root(dir: &Path) -> Option<PathBuf> {
     }
 }
 
+fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
+    if let Some(prefix) = pattern.strip_suffix("/*") {
+        std::fs::read_dir(workspace_root.join(prefix))
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect()
+    } else {
+        vec![workspace_root.join(pattern)]
+    }
+}
+
 fn find_package_dir_in_workspace(workspace_root: &Path, package_name: &str) -> Option<PathBuf> {
     let workspace_manifest = std::fs::read_to_string(workspace_root.join("Cargo.toml")).ok()?;
     let manifest: CargoManifest = toml::from_str(&workspace_manifest).ok()?;
     let members = manifest.workspace?.members;
 
     for member_glob in members {
-        let member_path = workspace_root.join(&member_glob);
-        let cargo_toml = member_path.join("Cargo.toml");
-        if let Ok(content) = std::fs::read_to_string(&cargo_toml) {
-            if let Ok(m) = toml::from_str::<CargoManifest>(&content) {
-                if m.package.map(|p| p.name == package_name).unwrap_or(false) {
-                    return Some(member_path);
+        for member_path in expand_member(workspace_root, &member_glob) {
+            let cargo_toml = member_path.join("Cargo.toml");
+            if let Ok(content) = std::fs::read_to_string(&cargo_toml) {
+                if let Ok(m) = toml::from_str::<CargoManifest>(&content) {
+                    if m.package.map(|p| p.name == package_name).unwrap_or(false) {
+                        return Some(member_path);
+                    }
                 }
             }
         }

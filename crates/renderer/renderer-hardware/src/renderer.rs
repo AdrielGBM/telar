@@ -5,6 +5,14 @@ use wgpu::{
     TextureViewDescriptor,
 };
 
+fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
+    caps.formats
+        .iter()
+        .find(|f| f.is_srgb())
+        .copied()
+        .unwrap_or(caps.formats[0])
+}
+
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
     surface: Surface<'static>,
     adapter: Adapter,
@@ -61,12 +69,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         });
 
         let surface_caps = surface.get_capabilities(&adapter);
-        let surface_format = surface_caps
-            .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(surface_caps.formats[0]);
+        let surface_format = preferred_format(&surface_caps);
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("rsx-render-pipeline"),
@@ -122,12 +125,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     fn reconfigure(&mut self, width: u32, height: u32) {
         let surface_caps = self.surface.get_capabilities(&self.adapter);
-        let format = surface_caps
-            .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(surface_caps.formats[0]);
+        let format = preferred_format(&surface_caps);
 
         let config = SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
