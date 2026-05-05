@@ -3,13 +3,14 @@ use std::num::NonZeroU32;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, RenderBackend};
 use softbuffer::{Context, Surface};
+use tiny_skia::Pixmap;
 
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     _context: Context<D>,
     surface: Surface<D, W>,
     width: u32,
     height: u32,
-    pixels: Vec<u32>,
+    pixmap: Option<Pixmap>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -25,7 +26,7 @@ where
             surface,
             width: 0,
             height: 0,
-            pixels: Vec::new(),
+            pixmap: None,
         }
     }
 }
@@ -39,7 +40,7 @@ where
         if width != self.width || height != self.height {
             self.width = width;
             self.height = height;
-            self.pixels.resize((width * height) as usize, 0);
+            self.pixmap = Pixmap::new(width, height);
             if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
                 self.surface.resize(w, h).unwrap();
             }
@@ -47,23 +48,31 @@ where
     }
 
     fn clear(&mut self, color: Color) {
-        self.pixels.fill(color_to_xrgb(color));
+        if let Some(pixmap) = &mut self.pixmap {
+            let skia_color = tiny_skia::Color::from_rgba(
+                color.r.clamp(0.0, 1.0),
+                color.g.clamp(0.0, 1.0),
+                color.b.clamp(0.0, 1.0),
+                color.a.clamp(0.0, 1.0),
+            )
+            .unwrap_or(tiny_skia::Color::BLACK);
+            pixmap.fill(skia_color);
+        }
     }
 
     fn end_frame(&mut self) {
+        let Some(pixmap) = &self.pixmap else { return };
         if self.width == 0 || self.height == 0 {
             return;
         }
         if let Ok(mut buffer) = self.surface.buffer_mut() {
-            buffer.copy_from_slice(&self.pixels);
+            for (dst, src) in buffer.iter_mut().zip(pixmap.pixels()) {
+                let r = src.red() as u32;
+                let g = src.green() as u32;
+                let b = src.blue() as u32;
+                *dst = (r << 16) | (g << 8) | b;
+            }
             buffer.present().unwrap();
         }
     }
-}
-
-fn color_to_xrgb(color: Color) -> u32 {
-    let r = (color.r.clamp(0.0, 1.0) * 255.0) as u32;
-    let g = (color.g.clamp(0.0, 1.0) * 255.0) as u32;
-    let b = (color.b.clamp(0.0, 1.0) * 255.0) as u32;
-    (r << 16) | (g << 8) | b
 }
