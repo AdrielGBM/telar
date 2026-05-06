@@ -12,7 +12,7 @@ pub use context::AppContext;
 pub use prefs::UserPrefs;
 
 #[cfg(feature = "runtime")]
-pub use app::{App, Color, Frame, WindowConfig};
+pub use app::{App, BorderRadius, Color, Frame, Rect, Stroke, WindowConfig};
 #[cfg(feature = "runtime")]
 pub use runner::run_with_name;
 

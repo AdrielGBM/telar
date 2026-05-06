@@ -30,7 +30,10 @@ struct AppHandler<A: App> {
 
 impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
     fn on_resume(&mut self, window: &WinitWindow) {
-        self.renderer = Some(create_renderer(self.backend, window));
+        match create_renderer(self.backend, window) {
+            Ok(renderer) => self.renderer = Some(renderer),
+            Err(e) => eprintln!("[rsx] Failed to initialize renderer: {e}"),
+        }
         self.app.on_resume(&mut make_ctx!(self));
     }
 
@@ -39,6 +42,19 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
     }
 
     fn on_redraw(&mut self, window: &WinitWindow) {
+        if self.pending_restart {
+            self.pending_restart = false;
+            self.backend = self
+                .prefs
+                .renderer
+                .backend
+                .unwrap_or_else(config::compile_time_backend);
+            match create_renderer(self.backend, window) {
+                Ok(renderer) => self.renderer = Some(renderer),
+                Err(e) => eprintln!("[rsx] Failed to switch renderer: {e}"),
+            }
+        }
+
         let Some(renderer) = &mut self.renderer else {
             return;
         };
@@ -56,27 +72,30 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
     }
 }
 
-fn create_renderer(backend: RendererBackend, window: &WinitWindow) -> Box<dyn RenderBackend> {
+fn create_renderer(
+    backend: RendererBackend,
+    window: &WinitWindow,
+) -> Result<Box<dyn RenderBackend>, String> {
     match backend {
         RendererBackend::Auto => match HardwareRenderer::new(window.clone()) {
             Ok(renderer) => {
                 eprintln!("[rsx] Using GPU renderer");
-                Box::new(renderer)
+                Ok(Box::new(renderer))
             }
             Err(e) => {
                 eprintln!("[rsx] GPU unavailable ({e}), falling back to CPU renderer");
-                Box::new(SoftwareRenderer::new(window.clone(), window.clone()))
+                SoftwareRenderer::new(window.clone(), window.clone())
+                    .map(|r| Box::new(r) as Box<dyn RenderBackend>)
             }
         },
-        RendererBackend::Gpu => HardwareRenderer::new(window.clone())
-            .map(|r| {
-                eprintln!("[rsx] Using GPU renderer");
-                Box::new(r) as Box<dyn RenderBackend>
-            })
-            .expect("[rsx] GPU renderer was requested but failed to initialize"),
+        RendererBackend::Gpu => HardwareRenderer::new(window.clone()).map(|r| {
+            eprintln!("[rsx] Using GPU renderer");
+            Box::new(r) as Box<dyn RenderBackend>
+        }),
         RendererBackend::Cpu => {
             eprintln!("[rsx] Using CPU renderer");
-            Box::new(SoftwareRenderer::new(window.clone(), window.clone()))
+            SoftwareRenderer::new(window.clone(), window.clone())
+                .map(|r| Box::new(r) as Box<dyn RenderBackend>)
         }
     }
 }

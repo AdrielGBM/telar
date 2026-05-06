@@ -1589,6 +1589,7 @@ version = "0.1.0"
 name = "renderer-hardware"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "pollster",
  "raw-window-handle",
  "renderer-core",

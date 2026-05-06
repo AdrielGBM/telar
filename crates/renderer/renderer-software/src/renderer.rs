@@ -1,16 +1,26 @@
 use std::num::NonZeroU32;
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, RenderBackend};
+use renderer_core::{BorderRadius, Color, Rect, RenderBackend, Stroke};
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
+
+pub(crate) fn to_skia_color(color: Color) -> tiny_skia::Color {
+    tiny_skia::Color::from_rgba(
+        color.r.clamp(0.0, 1.0),
+        color.g.clamp(0.0, 1.0),
+        color.b.clamp(0.0, 1.0),
+        color.a.clamp(0.0, 1.0),
+    )
+    .unwrap_or(tiny_skia::Color::BLACK)
+}
 
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     _context: Context<D>,
     surface: Surface<D, W>,
     width: u32,
     height: u32,
-    pixmap: Option<Pixmap>,
+    pub(crate) pixmap: Option<Pixmap>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -18,16 +28,16 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
-    pub fn new(display: D, window: W) -> Self {
-        let context = Context::new(display).unwrap();
-        let surface = Surface::new(&context, window).unwrap();
-        Self {
+    pub fn new(display: D, window: W) -> Result<Self, String> {
+        let context = Context::new(display).map_err(|e| e.to_string())?;
+        let surface = Surface::new(&context, window).map_err(|e| e.to_string())?;
+        Ok(Self {
             _context: context,
             surface,
             width: 0,
             height: 0,
             pixmap: None,
-        }
+        })
     }
 }
 
@@ -49,15 +59,18 @@ where
 
     fn clear(&mut self, color: Color) {
         if let Some(pixmap) = &mut self.pixmap {
-            let skia_color = tiny_skia::Color::from_rgba(
-                color.r.clamp(0.0, 1.0),
-                color.g.clamp(0.0, 1.0),
-                color.b.clamp(0.0, 1.0),
-                color.a.clamp(0.0, 1.0),
-            )
-            .unwrap_or(tiny_skia::Color::BLACK);
-            pixmap.fill(skia_color);
+            pixmap.fill(to_skia_color(color));
         }
+    }
+
+    fn draw_rect(
+        &mut self,
+        rect: Rect,
+        fill: Option<Color>,
+        stroke: Option<Stroke>,
+        radius: BorderRadius,
+    ) {
+        self.draw_rect_impl(rect, fill, stroke, radius);
     }
 
     fn end_frame(&mut self) {

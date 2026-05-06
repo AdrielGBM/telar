@@ -2,7 +2,7 @@ use platform_core::Event;
 use renderer_core::RenderBackend;
 
 pub use platform_core::WindowConfig;
-pub use renderer_core::Color;
+pub use renderer_core::{BorderRadius, Color, Rect, Stroke};
 
 use crate::context::AppContext;
 
@@ -13,6 +13,16 @@ pub struct Frame<'a> {
 impl<'a> Frame<'a> {
     pub fn clear(&mut self, color: Color) {
         self.renderer.clear(color);
+    }
+
+    pub fn draw_rect(
+        &mut self,
+        rect: Rect,
+        fill: Option<Color>,
+        stroke: Option<Stroke>,
+        radius: BorderRadius,
+    ) {
+        self.renderer.draw_rect(rect, fill, stroke, radius);
     }
 }
 
