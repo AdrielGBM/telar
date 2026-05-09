@@ -17,8 +17,10 @@ members = [
 ]
 
 [workspace.dependencies]
+thiserror = "2"
 raw-window-handle = "0.6"
 serde = { version = "1.0.228", features = ["derive"] }
+cosmic-text = "0.19.0"
 
 platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }

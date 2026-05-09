@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 pub enum RendererBackend {
     #[default]
     Auto,
-    Gpu,
-    Cpu,
+    Hardware,
+    Software,
 }
 
 #[derive(Deserialize, Default)]
@@ -23,8 +23,8 @@ pub struct RsxConfig {
 
 pub fn compile_time_backend() -> RendererBackend {
     match option_env!("RSX_RENDERER_BACKEND") {
-        Some("gpu") => RendererBackend::Gpu,
-        Some("cpu") => RendererBackend::Cpu,
+        Some("hardware") => RendererBackend::Hardware,
+        Some("software") => RendererBackend::Software,
         _ => RendererBackend::Auto,
     }
 }

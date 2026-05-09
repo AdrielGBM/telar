@@ -1,7 +1,10 @@
 use std::num::NonZeroU32;
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{BorderRadius, Color, Rect, RenderBackend, Stroke};
+use renderer_core::{
+    BorderRadius, Color, DrawCommand, FillStyle, Rect, RenderBackend, RendererError, Stroke,
+    TextShaper, TextStyle,
+};
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
@@ -12,7 +15,7 @@ pub(crate) fn to_skia_color(color: Color) -> tiny_skia::Color {
         color.b.clamp(0.0, 1.0),
         color.a.clamp(0.0, 1.0),
     )
-    .unwrap_or(tiny_skia::Color::BLACK)
+    .expect("channels clamped to [0,1]")
 }
 
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
@@ -21,6 +24,8 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     width: u32,
     height: u32,
     pub(crate) pixmap: Option<Pixmap>,
+    pub(crate) text_shaper: TextShaper,
+    draw_commands: Vec<DrawCommand>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -28,15 +33,18 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
-    pub fn new(display: D, window: W) -> Result<Self, String> {
-        let context = Context::new(display).map_err(|e| e.to_string())?;
-        let surface = Surface::new(&context, window).map_err(|e| e.to_string())?;
+    pub fn new(display: D, window: W) -> Result<Self, RendererError> {
+        let context = Context::new(display).map_err(|e| RendererError::Context(e.to_string()))?;
+        let surface =
+            Surface::new(&context, window).map_err(|e| RendererError::Surface(e.to_string()))?;
         Ok(Self {
             _context: context,
             surface,
             width: 0,
             height: 0,
             pixmap: None,
+            text_shaper: TextShaper::new(),
+            draw_commands: Vec::new(),
         })
     }
 }
@@ -52,28 +60,59 @@ where
             self.height = height;
             self.pixmap = Pixmap::new(width, height);
             if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
-                self.surface.resize(w, h).unwrap();
+                self.surface
+                    .resize(w, h)
+                    .expect("softbuffer surface resize failed");
             }
-        }
-    }
-
-    fn clear(&mut self, color: Color) {
-        if let Some(pixmap) = &mut self.pixmap {
-            pixmap.fill(to_skia_color(color));
         }
     }
 
     fn draw_rect(
         &mut self,
         rect: Rect,
-        fill: Option<Color>,
+        fill: Option<FillStyle>,
         stroke: Option<Stroke>,
         radius: BorderRadius,
     ) {
-        self.draw_rect_impl(rect, fill, stroke, radius);
+        self.draw_commands.push(DrawCommand::Rect {
+            rect,
+            fill,
+            stroke,
+            radius,
+        });
     }
 
-    fn end_frame(&mut self) {
+    fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle) {
+        self.draw_commands.push(DrawCommand::Text {
+            text: text.to_owned(),
+            rect,
+            style,
+        });
+    }
+
+    fn end_frame(&mut self, clear_color: Option<Color>) {
+        if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
+            pixmap.fill(to_skia_color(color));
+        }
+
+        let commands = std::mem::take(&mut self.draw_commands);
+
+        for cmd in commands {
+            match cmd {
+                DrawCommand::Rect {
+                    rect,
+                    fill,
+                    stroke,
+                    radius,
+                } => {
+                    self.draw_rect_impl(rect, fill, stroke, radius);
+                }
+                DrawCommand::Text { text, rect, style } => {
+                    self.draw_text_impl(&text, rect, style.font_size, style.color);
+                }
+            }
+        }
+
         let Some(pixmap) = &self.pixmap else { return };
         if self.width == 0 || self.height == 0 {
             return;
@@ -85,7 +124,7 @@ where
                 let b = src.blue() as u32;
                 *dst = (r << 16) | (g << 8) | b;
             }
-            buffer.present().unwrap();
+            buffer.present().expect("softbuffer present failed");
         }
     }
 }

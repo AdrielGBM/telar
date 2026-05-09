@@ -1,6 +1,6 @@
 use platform_core::{Event, EventHandler, Platform, Window, WindowConfig};
 use platform_winit::{WinitPlatform, WinitWindow};
-use renderer_core::RenderBackend;
+use renderer_core::{RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
 use renderer_software::SoftwareRenderer;
 
@@ -62,9 +62,11 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         let app = &mut self.app;
         let mut frame = Frame {
             renderer: renderer.as_mut(),
+            clear_color: None,
         };
         app.on_redraw(&mut frame, &mut make_ctx!(self));
-        frame.renderer.end_frame();
+        let clear = frame.clear_color;
+        frame.renderer.end_frame(clear);
     }
 
     fn on_suspend(&mut self) {
@@ -75,7 +77,7 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
 fn create_renderer(
     backend: RendererBackend,
     window: &WinitWindow,
-) -> Result<Box<dyn RenderBackend>, String> {
+) -> Result<Box<dyn RenderBackend>, RendererError> {
     match backend {
         RendererBackend::Auto => match HardwareRenderer::new(window.clone()) {
             Ok(renderer) => {
@@ -83,17 +85,19 @@ fn create_renderer(
                 Ok(Box::new(renderer))
             }
             Err(e) => {
-                eprintln!("[rsx] GPU unavailable ({e}), falling back to CPU renderer");
+                eprintln!(
+                    "[rsx] Hardware renderer unavailable ({e}), falling back to software renderer"
+                );
                 SoftwareRenderer::new(window.clone(), window.clone())
                     .map(|r| Box::new(r) as Box<dyn RenderBackend>)
             }
         },
-        RendererBackend::Gpu => HardwareRenderer::new(window.clone()).map(|r| {
-            eprintln!("[rsx] Using GPU renderer");
+        RendererBackend::Hardware => HardwareRenderer::new(window.clone()).map(|r| {
+            eprintln!("[rsx] Using hardware renderer");
             Box::new(r) as Box<dyn RenderBackend>
         }),
-        RendererBackend::Cpu => {
-            eprintln!("[rsx] Using CPU renderer");
+        RendererBackend::Software => {
+            eprintln!("[rsx] Using software renderer");
             SoftwareRenderer::new(window.clone(), window.clone())
                 .map(|r| Box::new(r) as Box<dyn RenderBackend>)
         }

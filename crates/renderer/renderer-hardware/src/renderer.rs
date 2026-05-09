@@ -1,182 +1,24 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{BorderRadius, Color, Rect, RenderBackend, Stroke};
+use renderer_core::{
+    BorderRadius, Color, DrawCommand, FillStyle, Rect, RenderBackend, RendererError, Stroke,
+    TextCacheKey, TextStyle,
+};
+use std::collections::{HashMap, HashSet};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub(crate) struct Viewport {
-    pub size: [f32; 2],
-    pub _pad: [f32; 2],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub(crate) struct RectInstance {
-    pub rect: [f32; 4],
-    pub radii: [f32; 4],
-    pub fill_color: [f32; 4],
-    pub stroke_color: [f32; 4],
-    pub stroke_width: f32,
-    pub _pad: [f32; 3],
-}
-
-const INITIAL_RECT_CAPACITY: usize = 256;
-
-struct RectPipeline {
-    pipeline: wgpu::RenderPipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
-    viewport_buffer: wgpu::Buffer,
-    instances_buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-    instances_capacity: usize,
-}
-
-impl RectPipeline {
-    fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
-        let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-rect-viewport"),
-            size: std::mem::size_of::<Viewport>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-rect-instances"),
-            size: (std::mem::size_of::<RectInstance>() * INITIAL_RECT_CAPACITY) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-rect-bgl"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let bind_group = Self::make_bind_group(
-            device,
-            &bind_group_layout,
-            &viewport_buffer,
-            &instances_buffer,
-        );
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("rsx-rect-shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("primitives/rect.wgsl").into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("rsx-rect-pipeline-layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("rsx-rect-pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-
-        Self {
-            pipeline,
-            bind_group_layout,
-            viewport_buffer,
-            instances_buffer,
-            bind_group,
-            instances_capacity: INITIAL_RECT_CAPACITY,
-        }
-    }
-
-    fn make_bind_group(
-        device: &Device,
-        layout: &wgpu::BindGroupLayout,
-        viewport_buffer: &wgpu::Buffer,
-        instances_buffer: &wgpu::Buffer,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-rect-bg"),
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: viewport_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: instances_buffer.as_entire_binding(),
-                },
-            ],
-        })
-    }
-
-    fn ensure_capacity(&mut self, device: &Device, count: usize) {
-        if count <= self.instances_capacity {
-            return;
-        }
-        let new_capacity = (count * 2).max(self.instances_capacity * 2);
-        self.instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-rect-instances"),
-            size: (std::mem::size_of::<RectInstance>() * new_capacity) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        self.bind_group = Self::make_bind_group(
-            device,
-            &self.bind_group_layout,
-            &self.viewport_buffer,
-            &self.instances_buffer,
-        );
-        self.instances_capacity = new_capacity;
-    }
-}
+use crate::primitives::Viewport;
+use crate::primitives::rect::{RectInstance, RectPipeline};
+use crate::primitives::text::{PreparedTextDraw, TextPipeline};
 
 fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
     caps.formats
         .iter()
-        .find(|f| f.is_srgb())
+        .find(|f| {
+            matches!(
+                f,
+                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Rgba8Unorm
+            )
+        })
         .copied()
         .unwrap_or(caps.formats[0])
 }
@@ -187,8 +29,10 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     queue: Queue,
     config: Option<SurfaceConfiguration>,
     rect_pipeline: RectPipeline,
-    pub(crate) rect_queue: Vec<RectInstance>,
-    clear_color: wgpu::Color,
+    text_pipeline: TextPipeline,
+    draw_commands: Vec<DrawCommand>,
+    text_shaper: renderer_core::TextShaper,
+    text_gpu_cache: HashMap<TextCacheKey, PreparedTextDraw>,
     surface_format: wgpu::TextureFormat,
     present_mode: wgpu::PresentMode,
     alpha_mode: wgpu::CompositeAlphaMode,
@@ -198,35 +42,32 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
-    pub fn new(window: W) -> Result<Self, String> {
+    pub fn new(window: W) -> Result<Self, RendererError> {
         let window = std::sync::Arc::new(window);
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
-            ..Default::default()
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
         });
 
         let surface = instance
             .create_surface(window.clone())
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| RendererError::Surface(e.to_string()))?;
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         }))
-        .ok_or_else(|| "No suitable GPU adapter found".to_string())?;
+        .map_err(|_| RendererError::NoAdapter)?;
 
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("rsx-hardware-renderer"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::default(),
-            },
-            None,
-        ))
-        .map_err(|e| e.to_string())?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("rsx-hardware-renderer"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::default(),
+            ..Default::default()
+        }))
+        .map_err(|e| RendererError::Device(e.to_string()))?;
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = preferred_format(&surface_caps);
@@ -236,9 +77,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .find(|&&m| m == wgpu::PresentMode::Mailbox)
             .copied()
             .unwrap_or(wgpu::PresentMode::Fifo);
-        let alpha_mode = surface_caps.alpha_modes[0];
+        let alpha_mode = surface_caps
+            .alpha_modes
+            .first()
+            .copied()
+            .unwrap_or(wgpu::CompositeAlphaMode::Auto);
 
         let rect_pipeline = RectPipeline::new(&device, surface_format);
+        let text_pipeline = TextPipeline::new(&device, surface_format);
 
         Ok(Self {
             surface,
@@ -246,8 +92,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             queue,
             config: None,
             rect_pipeline,
-            rect_queue: Vec::new(),
-            clear_color: wgpu::Color::BLACK,
+            text_pipeline,
+            draw_commands: Vec::new(),
+            text_shaper: renderer_core::TextShaper::new(),
+            text_gpu_cache: HashMap::new(),
             surface_format,
             present_mode,
             alpha_mode,
@@ -287,41 +135,60 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
     }
 
-    fn clear(&mut self, color: Color) {
-        self.clear_color = wgpu::Color {
-            r: color.r as f64,
-            g: color.g as f64,
-            b: color.b as f64,
-            a: color.a as f64,
-        };
-    }
-
     fn draw_rect(
         &mut self,
         rect: Rect,
-        fill: Option<Color>,
+        fill: Option<FillStyle>,
         stroke: Option<Stroke>,
         radius: BorderRadius,
     ) {
-        self.draw_rect_impl(rect, fill, stroke, radius);
+        self.draw_commands.push(DrawCommand::Rect {
+            rect,
+            fill,
+            stroke,
+            radius,
+        });
     }
 
-    fn end_frame(&mut self) {
-        let instances = std::mem::take(&mut self.rect_queue);
+    fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle) {
+        self.draw_commands.push(DrawCommand::Text {
+            text: text.to_owned(),
+            rect,
+            style,
+        });
+    }
+
+    fn end_frame(&mut self, clear_color: Option<Color>) {
+        let load_op = if let Some(c) = clear_color {
+            wgpu::LoadOp::Clear(wgpu::Color {
+                r: c.r as f64,
+                g: c.g as f64,
+                b: c.b as f64,
+                a: c.a as f64,
+            })
+        } else {
+            wgpu::LoadOp::Load
+        };
+
+        let commands = std::mem::take(&mut self.draw_commands);
 
         if self.config.is_none() || self.width == 0 || self.height == 0 {
             return;
         }
 
         let output = match self.surface.get_current_texture() {
-            Ok(texture) => texture,
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+            wgpu::CurrentSurfaceTexture::Success(t)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
                 if let Some(config) = &self.config.clone() {
                     self.surface.configure(&self.device, config);
                 }
                 return;
             }
-            Err(_) => return,
+            other => {
+                eprintln!("rsx: surface error: {other:?}");
+                return;
+            }
         };
 
         let viewport = Viewport {
@@ -333,16 +200,93 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             0,
             bytemuck::bytes_of(&viewport),
         );
+        self.queue.write_buffer(
+            &self.text_pipeline.viewport_buffer,
+            0,
+            bytemuck::bytes_of(&viewport),
+        );
 
-        let instance_count = instances.len();
-        if instance_count > 0 {
+        enum DrawStep {
+            RectBatch { start: u32, end: u32 },
+            TextIdx(usize),
+        }
+
+        let mut all_instances: Vec<RectInstance> = Vec::new();
+        let mut text_draws: Vec<crate::primitives::text::TextDraw> = Vec::new();
+        let mut steps: Vec<DrawStep> = Vec::new();
+        let mut current_batch_start: Option<u32> = None;
+
+        for cmd in commands {
+            match cmd {
+                DrawCommand::Rect {
+                    rect,
+                    fill,
+                    stroke,
+                    radius,
+                } => {
+                    let inst = crate::primitives::rect::make_rect_instance(
+                        rect,
+                        fill.as_ref(),
+                        stroke,
+                        radius,
+                    );
+                    if current_batch_start.is_none() {
+                        current_batch_start = Some(all_instances.len() as u32);
+                    }
+                    all_instances.push(inst);
+                }
+                DrawCommand::Text { text, rect, style } => {
+                    if let Some(start) = current_batch_start.take() {
+                        let end = all_instances.len() as u32;
+                        if end > start {
+                            steps.push(DrawStep::RectBatch { start, end });
+                        }
+                    }
+                    let (cache_key, pixels, width, height) =
+                        self.text_shaper
+                            .rasterize(&text, rect, style.font_size, style.color);
+                    if width > 0 && height > 0 {
+                        let idx = text_draws.len();
+                        text_draws.push(crate::primitives::text::TextDraw {
+                            pixels,
+                            rect,
+                            width,
+                            height,
+                            cache_key,
+                        });
+                        steps.push(DrawStep::TextIdx(idx));
+                    }
+                }
+            }
+        }
+        if let Some(start) = current_batch_start {
+            let end = all_instances.len() as u32;
+            if end > start {
+                steps.push(DrawStep::RectBatch { start, end });
+            }
+        }
+
+        if !all_instances.is_empty() {
             self.rect_pipeline
-                .ensure_capacity(&self.device, instance_count);
+                .ensure_capacity(&self.device, all_instances.len());
             self.queue.write_buffer(
                 &self.rect_pipeline.instances_buffer,
                 0,
-                bytemuck::cast_slice(&instances),
+                bytemuck::cast_slice(&all_instances),
             );
+        }
+
+        let frame_keys: HashSet<_> = text_draws.iter().map(|td| td.cache_key.clone()).collect();
+
+        self.text_gpu_cache.retain(|k, _| frame_keys.contains(k));
+
+        for td in &text_draws {
+            if !self.text_gpu_cache.contains_key(&td.cache_key) {
+                let prepared = self
+                    .text_pipeline
+                    .prepare_draw(&self.device, &self.queue, td);
+                self.text_gpu_cache.insert(td.cache_key.clone(), prepared);
+            }
         }
 
         let view = output
@@ -361,20 +305,35 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
+                    depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_color),
+                        load: load_op,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
                 timestamp_writes: None,
+                multiview_mask: None,
             });
 
-            if instance_count > 0 {
-                render_pass.set_pipeline(&self.rect_pipeline.pipeline);
-                render_pass.set_bind_group(0, &self.rect_pipeline.bind_group, &[]);
-                render_pass.draw(0..6, 0..instance_count as u32);
+            for step in &steps {
+                match step {
+                    DrawStep::RectBatch { start, end } => {
+                        render_pass.set_pipeline(&self.rect_pipeline.pipeline);
+                        render_pass.set_bind_group(0, &self.rect_pipeline.bind_group, &[]);
+                        render_pass.draw(0..6, *start..*end);
+                    }
+                    DrawStep::TextIdx(idx) => {
+                        let td = &text_draws[*idx];
+                        if let Some(prepared) = self.text_gpu_cache.get(&td.cache_key) {
+                            render_pass.set_pipeline(&self.text_pipeline.pipeline);
+                            render_pass.set_bind_group(0, &prepared.group0, &[]);
+                            render_pass.set_bind_group(1, &prepared.group1, &[]);
+                            render_pass.draw(0..6, 0..1);
+                        }
+                    }
+                }
             }
         }
 

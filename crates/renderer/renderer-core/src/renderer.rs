@@ -1,14 +1,14 @@
-use crate::{BorderRadius, Color, Rect, Stroke};
+use crate::{BorderRadius, Color, FillStyle, Rect, Stroke, TextStyle};
 
 pub trait RenderBackend {
     fn begin_frame(&mut self, width: u32, height: u32);
-    fn clear(&mut self, color: Color);
     fn draw_rect(
         &mut self,
         rect: Rect,
-        fill: Option<Color>,
+        fill: Option<FillStyle>,
         stroke: Option<Stroke>,
         radius: BorderRadius,
     );
-    fn end_frame(&mut self);
+    fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle);
+    fn end_frame(&mut self, clear_color: Option<Color>);
 }

@@ -1,5 +1,5 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{BorderRadius, Color, Rect, Stroke};
+use renderer_core::{BorderRadius, FillStyle, Rect, Stroke};
 
 use crate::renderer::{SoftwareRenderer, to_skia_color};
 
@@ -21,7 +21,7 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     let br = radius.bottom_right.min(w / 2.0).min(h / 2.0);
     let bl = radius.bottom_left.min(w / 2.0).min(h / 2.0);
 
-    const K: f32 = 0.5522847498;
+    const K: f32 = 0.552_284_8;
 
     let mut pb = tiny_skia::PathBuilder::new();
 
@@ -68,7 +68,7 @@ where
     pub(crate) fn draw_rect_impl(
         &mut self,
         rect: Rect,
-        fill: Option<Color>,
+        fill: Option<FillStyle>,
         stroke: Option<Stroke>,
         radius: BorderRadius,
     ) {
@@ -76,19 +76,20 @@ where
             return;
         };
 
-        if let Some(color) = fill {
-            if let Some(path) = build_rect_path(rect, radius) {
-                let mut paint = tiny_skia::Paint::default();
-                paint.set_color(to_skia_color(color));
-                paint.anti_alias = true;
-                pixmap.fill_path(
-                    &path,
-                    &paint,
-                    tiny_skia::FillRule::Winding,
-                    tiny_skia::Transform::identity(),
-                    None,
-                );
-            }
+        if let Some(fill_style) = fill
+            && let FillStyle::Solid(color) = fill_style
+            && let Some(path) = build_rect_path(rect, radius)
+        {
+            let mut paint = tiny_skia::Paint::default();
+            paint.set_color(to_skia_color(color));
+            paint.anti_alias = true;
+            pixmap.fill_path(
+                &path,
+                &paint,
+                tiny_skia::FillRule::Winding,
+                tiny_skia::Transform::identity(),
+                None,
+            );
         }
 
         if let Some(s) = stroke {

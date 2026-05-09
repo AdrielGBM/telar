@@ -22,12 +22,11 @@ fn find_workspace_root(dir: &Path) -> Option<PathBuf> {
     let mut current = dir.to_path_buf();
     loop {
         let manifest_path = current.join("Cargo.toml");
-        if let Ok(content) = std::fs::read_to_string(&manifest_path) {
-            if let Ok(manifest) = toml::from_str::<CargoManifest>(&content) {
-                if manifest.workspace.is_some() {
-                    return Some(current);
-                }
-            }
+        if let Ok(content) = std::fs::read_to_string(&manifest_path)
+            && let Ok(manifest) = toml::from_str::<CargoManifest>(&content)
+            && manifest.workspace.is_some()
+        {
+            return Some(current);
         }
         match current.parent() {
             Some(p) => current = p.to_path_buf(),
@@ -58,12 +57,11 @@ fn find_package_dir_in_workspace(workspace_root: &Path, package_name: &str) -> O
     for member_glob in members {
         for member_path in expand_member(workspace_root, &member_glob) {
             let cargo_toml = member_path.join("Cargo.toml");
-            if let Ok(content) = std::fs::read_to_string(&cargo_toml) {
-                if let Ok(m) = toml::from_str::<CargoManifest>(&content) {
-                    if m.package.map(|p| p.name == package_name).unwrap_or(false) {
-                        return Some(member_path);
-                    }
-                }
+            if let Ok(content) = std::fs::read_to_string(&cargo_toml)
+                && let Ok(m) = toml::from_str::<CargoManifest>(&content)
+                && m.package.map(|p| p.name == package_name).unwrap_or(false)
+            {
+                return Some(member_path);
             }
         }
     }
@@ -78,10 +76,10 @@ fn find_package_dir(args: &[String]) -> PathBuf {
 
     if let Some(name) = package_name {
         let cwd = std::env::current_dir().unwrap_or_default();
-        if let Some(root) = find_workspace_root(&cwd) {
-            if let Some(dir) = find_package_dir_in_workspace(&root, name) {
-                return dir;
-            }
+        if let Some(root) = find_workspace_root(&cwd)
+            && let Some(dir) = find_package_dir_in_workspace(&root, name)
+        {
+            return dir;
         }
     }
 
@@ -115,8 +113,8 @@ pub fn run(args: Vec<String>) {
     let config = load_config(&args);
     let backend_value = match config.renderer.backend {
         RendererBackend::Auto => "auto",
-        RendererBackend::Gpu => "gpu",
-        RendererBackend::Cpu => "cpu",
+        RendererBackend::Hardware => "hardware",
+        RendererBackend::Software => "software",
     };
 
     let status = Command::new("cargo")
