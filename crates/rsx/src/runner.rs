@@ -58,15 +58,19 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         let Some(renderer) = &mut self.renderer else {
             return;
         };
-        renderer.begin_frame(window.width(), window.height());
+        if let Err(e) = renderer.begin_frame(window.width(), window.height()) {
+            eprintln!("[rsx] begin_frame failed: {e}");
+            return;
+        }
         let app = &mut self.app;
-        let mut frame = Frame {
-            renderer: renderer.as_mut(),
-            clear_color: None,
-        };
+        let mut frame = Frame::new();
         app.on_redraw(&mut frame, &mut make_ctx!(self));
+        let commands = std::mem::take(&mut frame.commands);
         let clear = frame.clear_color;
-        frame.renderer.end_frame(clear);
+        renderer.as_mut().submit(&commands);
+        if let Err(e) = renderer.as_mut().end_frame(clear) {
+            eprintln!("[rsx] end_frame failed: {e}");
+        }
     }
 
     fn on_suspend(&mut self) {
@@ -81,7 +85,7 @@ fn create_renderer(
     match backend {
         RendererBackend::Auto => match HardwareRenderer::new(window.clone()) {
             Ok(renderer) => {
-                eprintln!("[rsx] Using GPU renderer");
+                eprintln!("[rsx] Using hardware renderer");
                 Ok(Box::new(renderer))
             }
             Err(e) => {

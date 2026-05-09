@@ -1,8 +1,6 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{
-    BorderRadius, Color, DrawCommand, FillStyle, Rect, RenderBackend, RendererError, Stroke,
-    TextCacheKey, TextStyle,
-};
+use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
+use renderer_text::TextCacheKey;
 use std::collections::{HashMap, HashSet};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
@@ -23,6 +21,11 @@ fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
         .unwrap_or(caps.formats[0])
 }
 
+enum DrawStep {
+    RectBatch { start: u32, end: u32 },
+    TextIdx(usize),
+}
+
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
     surface: Surface<'static>,
     device: Device,
@@ -30,14 +33,16 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     config: Option<SurfaceConfiguration>,
     rect_pipeline: RectPipeline,
     text_pipeline: TextPipeline,
-    draw_commands: Vec<DrawCommand>,
-    text_shaper: renderer_core::TextShaper,
+    text_shaper: renderer_text::TextShaper,
     text_gpu_cache: HashMap<TextCacheKey, PreparedTextDraw>,
     surface_format: wgpu::TextureFormat,
     present_mode: wgpu::PresentMode,
     alpha_mode: wgpu::CompositeAlphaMode,
     width: u32,
     height: u32,
+    pending_instances: Vec<RectInstance>,
+    pending_text_draws: Vec<crate::primitives::text::TextDraw>,
+    pending_steps: Vec<DrawStep>,
     _window: std::sync::Arc<W>,
 }
 
@@ -93,14 +98,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             config: None,
             rect_pipeline,
             text_pipeline,
-            draw_commands: Vec::new(),
-            text_shaper: renderer_core::TextShaper::new(),
+            text_shaper: renderer_text::TextShaper::new(),
             text_gpu_cache: HashMap::new(),
             surface_format,
             present_mode,
             alpha_mode,
             width: 0,
             height: 0,
+            pending_instances: Vec::new(),
+            pending_text_draws: Vec::new(),
+            pending_steps: Vec::new(),
             _window: window,
         })
     }
@@ -125,7 +132,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
     for HardwareRenderer<W>
 {
-    fn begin_frame(&mut self, width: u32, height: u32) {
+    fn begin_frame(&mut self, width: u32, height: u32) -> Result<(), RendererError> {
         if width != self.width || height != self.height || self.config.is_none() {
             self.width = width;
             self.height = height;
@@ -133,32 +140,68 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 self.reconfigure(width, height);
             }
         }
+        self.pending_instances.clear();
+        self.pending_text_draws.clear();
+        self.pending_steps.clear();
+        Ok(())
     }
 
-    fn draw_rect(
-        &mut self,
-        rect: Rect,
-        fill: Option<FillStyle>,
-        stroke: Option<Stroke>,
-        radius: BorderRadius,
-    ) {
-        self.draw_commands.push(DrawCommand::Rect {
-            rect,
-            fill,
-            stroke,
-            radius,
-        });
+    fn submit(&mut self, commands: &[DrawCommand]) {
+        let mut current_batch_start: Option<u32> = None;
+
+        for cmd in commands {
+            match cmd {
+                DrawCommand::Rect {
+                    rect,
+                    fill,
+                    stroke,
+                    radius,
+                } => {
+                    let inst = crate::primitives::rect::make_rect_instance(
+                        *rect,
+                        fill.as_ref(),
+                        *stroke,
+                        *radius,
+                    );
+                    if current_batch_start.is_none() {
+                        current_batch_start = Some(self.pending_instances.len() as u32);
+                    }
+                    self.pending_instances.push(inst);
+                }
+                DrawCommand::Text { text, rect, style } => {
+                    if let Some(start) = current_batch_start.take() {
+                        let end = self.pending_instances.len() as u32;
+                        if end > start {
+                            self.pending_steps.push(DrawStep::RectBatch { start, end });
+                        }
+                    }
+                    let (cache_key, pixels, width, height) =
+                        self.text_shaper.rasterize(text, *rect, style);
+                    if width > 0 && height > 0 {
+                        let idx = self.pending_text_draws.len();
+                        self.pending_text_draws
+                            .push(crate::primitives::text::TextDraw {
+                                pixels,
+                                rect: *rect,
+                                width,
+                                height,
+                                cache_key,
+                            });
+                        self.pending_steps.push(DrawStep::TextIdx(idx));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let Some(start) = current_batch_start {
+            let end = self.pending_instances.len() as u32;
+            if end > start {
+                self.pending_steps.push(DrawStep::RectBatch { start, end });
+            }
+        }
     }
 
-    fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle) {
-        self.draw_commands.push(DrawCommand::Text {
-            text: text.to_owned(),
-            rect,
-            style,
-        });
-    }
-
-    fn end_frame(&mut self, clear_color: Option<Color>) {
+    fn end_frame(&mut self, clear_color: Option<Color>) -> Result<(), RendererError> {
         let load_op = if let Some(c) = clear_color {
             wgpu::LoadOp::Clear(wgpu::Color {
                 r: c.r as f64,
@@ -170,10 +213,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             wgpu::LoadOp::Load
         };
 
-        let commands = std::mem::take(&mut self.draw_commands);
-
         if self.config.is_none() || self.width == 0 || self.height == 0 {
-            return;
+            self.pending_instances.clear();
+            self.pending_text_draws.clear();
+            self.pending_steps.clear();
+            return Ok(());
         }
 
         let output = match self.surface.get_current_texture() {
@@ -183,11 +227,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 if let Some(config) = &self.config.clone() {
                     self.surface.configure(&self.device, config);
                 }
-                return;
+                self.pending_instances.clear();
+                self.pending_text_draws.clear();
+                self.pending_steps.clear();
+                return Ok(());
             }
             other => {
-                eprintln!("rsx: surface error: {other:?}");
-                return;
+                self.pending_instances.clear();
+                self.pending_text_draws.clear();
+                self.pending_steps.clear();
+                return Err(RendererError::Present(format!("surface error: {other:?}")));
             }
         };
 
@@ -206,65 +255,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             bytemuck::bytes_of(&viewport),
         );
 
-        enum DrawStep {
-            RectBatch { start: u32, end: u32 },
-            TextIdx(usize),
-        }
-
-        let mut all_instances: Vec<RectInstance> = Vec::new();
-        let mut text_draws: Vec<crate::primitives::text::TextDraw> = Vec::new();
-        let mut steps: Vec<DrawStep> = Vec::new();
-        let mut current_batch_start: Option<u32> = None;
-
-        for cmd in commands {
-            match cmd {
-                DrawCommand::Rect {
-                    rect,
-                    fill,
-                    stroke,
-                    radius,
-                } => {
-                    let inst = crate::primitives::rect::make_rect_instance(
-                        rect,
-                        fill.as_ref(),
-                        stroke,
-                        radius,
-                    );
-                    if current_batch_start.is_none() {
-                        current_batch_start = Some(all_instances.len() as u32);
-                    }
-                    all_instances.push(inst);
-                }
-                DrawCommand::Text { text, rect, style } => {
-                    if let Some(start) = current_batch_start.take() {
-                        let end = all_instances.len() as u32;
-                        if end > start {
-                            steps.push(DrawStep::RectBatch { start, end });
-                        }
-                    }
-                    let (cache_key, pixels, width, height) =
-                        self.text_shaper
-                            .rasterize(&text, rect, style.font_size, style.color);
-                    if width > 0 && height > 0 {
-                        let idx = text_draws.len();
-                        text_draws.push(crate::primitives::text::TextDraw {
-                            pixels,
-                            rect,
-                            width,
-                            height,
-                            cache_key,
-                        });
-                        steps.push(DrawStep::TextIdx(idx));
-                    }
-                }
-            }
-        }
-        if let Some(start) = current_batch_start {
-            let end = all_instances.len() as u32;
-            if end > start {
-                steps.push(DrawStep::RectBatch { start, end });
-            }
-        }
+        let all_instances = std::mem::take(&mut self.pending_instances);
+        let text_draws = std::mem::take(&mut self.pending_text_draws);
+        let steps = std::mem::take(&mut self.pending_steps);
 
         if !all_instances.is_empty() {
             self.rect_pipeline
@@ -339,5 +332,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+        Ok(())
     }
 }

@@ -1,17 +1,24 @@
 use platform_core::Event;
-use renderer_core::RenderBackend;
+use renderer_core::DrawCommand;
 
 pub use platform_core::WindowConfig;
 pub use renderer_core::{BorderRadius, Color, FillStyle, Rect, Stroke, TextStyle};
 
 use crate::context::AppContext;
 
-pub struct Frame<'a> {
-    pub(crate) renderer: &'a mut dyn RenderBackend,
+pub struct Frame {
+    pub(crate) commands: Vec<DrawCommand>,
     pub(crate) clear_color: Option<Color>,
 }
 
-impl<'a> Frame<'a> {
+impl Frame {
+    pub(crate) fn new() -> Self {
+        Self {
+            commands: Vec::new(),
+            clear_color: None,
+        }
+    }
+
     pub fn clear(&mut self, color: Color) {
         self.clear_color = Some(color);
     }
@@ -23,11 +30,20 @@ impl<'a> Frame<'a> {
         stroke: Option<Stroke>,
         radius: BorderRadius,
     ) {
-        self.renderer.draw_rect(rect, fill, stroke, radius);
+        self.commands.push(DrawCommand::Rect {
+            rect,
+            fill,
+            stroke,
+            radius,
+        });
     }
 
     pub fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle) {
-        self.renderer.draw_text(text, rect, style);
+        self.commands.push(DrawCommand::Text {
+            text: text.to_owned(),
+            rect,
+            style,
+        });
     }
 }
 

@@ -1,5 +1,5 @@
-use crate::{Color, Rect};
 use cosmic_text::{Attrs, Buffer, Color as CosmicColor, FontSystem, Metrics, Shaping, SwashCache};
+use renderer_core::{Color, Rect, TextStyle};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -50,9 +50,10 @@ impl TextShaper {
         &mut self,
         text: &str,
         rect: Rect,
-        font_size: f32,
-        color: Color,
+        style: &TextStyle,
     ) -> (TextCacheKey, Vec<u8>, u32, u32) {
+        let font_size = style.font_size;
+        let color = style.color;
         let width = rect.w.ceil() as u32;
         let height = rect.h.ceil() as u32;
 
@@ -92,21 +93,20 @@ impl TextShaper {
                             && (py as usize) < height as usize
                         {
                             let idx = (py as usize * width as usize + px as usize) * 4;
-                            let a = color.a() as u32;
-                            pixels[idx] = (color.r() as u32 * a / 255) as u8;
-                            pixels[idx + 1] = (color.g() as u32 * a / 255) as u8;
-                            pixels[idx + 2] = (color.b() as u32 * a / 255) as u8;
-                            pixels[idx + 3] = a as u8;
+                            pixels[idx] = color.r();
+                            pixels[idx + 1] = color.g();
+                            pixels[idx + 2] = color.b();
+                            pixels[idx + 3] = color.a();
                         }
                     }
                 }
             },
         );
 
-        if self.pixel_cache.len() >= PIXEL_CACHE_MAX {
-            if let Some(old_key) = self.pixel_cache.keys().next().cloned() {
-                self.pixel_cache.remove(&old_key);
-            }
+        if self.pixel_cache.len() >= PIXEL_CACHE_MAX
+            && let Some(old_key) = self.pixel_cache.keys().next().cloned()
+        {
+            self.pixel_cache.remove(&old_key);
         }
         self.pixel_cache.insert(key.clone(), pixels.clone());
 

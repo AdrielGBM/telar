@@ -1,10 +1,8 @@
 use std::num::NonZeroU32;
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{
-    BorderRadius, Color, DrawCommand, FillStyle, Rect, RenderBackend, RendererError, Stroke,
-    TextShaper, TextStyle,
-};
+use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
+use renderer_text::TextShaper;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
@@ -25,7 +23,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     height: u32,
     pub(crate) pixmap: Option<Pixmap>,
     pub(crate) text_shaper: TextShaper,
-    draw_commands: Vec<DrawCommand>,
+    pending_commands: Vec<DrawCommand>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -44,7 +42,7 @@ where
             height: 0,
             pixmap: None,
             text_shaper: TextShaper::new(),
-            draw_commands: Vec::new(),
+            pending_commands: Vec::new(),
         })
     }
 }
@@ -54,7 +52,7 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
-    fn begin_frame(&mut self, width: u32, height: u32) {
+    fn begin_frame(&mut self, width: u32, height: u32) -> Result<(), RendererError> {
         if width != self.width || height != self.height {
             self.width = width;
             self.height = height;
@@ -62,40 +60,23 @@ where
             if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
                 self.surface
                     .resize(w, h)
-                    .expect("softbuffer surface resize failed");
+                    .map_err(|e| RendererError::Resize(e.to_string()))?;
             }
         }
+        self.pending_commands.clear();
+        Ok(())
     }
 
-    fn draw_rect(
-        &mut self,
-        rect: Rect,
-        fill: Option<FillStyle>,
-        stroke: Option<Stroke>,
-        radius: BorderRadius,
-    ) {
-        self.draw_commands.push(DrawCommand::Rect {
-            rect,
-            fill,
-            stroke,
-            radius,
-        });
+    fn submit(&mut self, commands: &[DrawCommand]) {
+        self.pending_commands.extend_from_slice(commands);
     }
 
-    fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle) {
-        self.draw_commands.push(DrawCommand::Text {
-            text: text.to_owned(),
-            rect,
-            style,
-        });
-    }
-
-    fn end_frame(&mut self, clear_color: Option<Color>) {
+    fn end_frame(&mut self, clear_color: Option<Color>) -> Result<(), RendererError> {
         if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
             pixmap.fill(to_skia_color(color));
         }
 
-        let commands = std::mem::take(&mut self.draw_commands);
+        let commands = std::mem::take(&mut self.pending_commands);
 
         for cmd in commands {
             match cmd {
@@ -108,14 +89,17 @@ where
                     self.draw_rect_impl(rect, fill, stroke, radius);
                 }
                 DrawCommand::Text { text, rect, style } => {
-                    self.draw_text_impl(&text, rect, style.font_size, style.color);
+                    self.draw_text_impl(&text, rect, &style);
                 }
+                _ => {}
             }
         }
 
-        let Some(pixmap) = &self.pixmap else { return };
+        let Some(pixmap) = &self.pixmap else {
+            return Ok(());
+        };
         if self.width == 0 || self.height == 0 {
-            return;
+            return Ok(());
         }
         if let Ok(mut buffer) = self.surface.buffer_mut() {
             for (dst, src) in buffer.iter_mut().zip(pixmap.pixels()) {
@@ -124,7 +108,10 @@ where
                 let b = src.blue() as u32;
                 *dst = (r << 16) | (g << 8) | b;
             }
-            buffer.present().expect("softbuffer present failed");
+            buffer
+                .present()
+                .map_err(|e| RendererError::Present(e.to_string()))?;
         }
+        Ok(())
     }
 }

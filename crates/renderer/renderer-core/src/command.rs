@@ -1,6 +1,7 @@
 use crate::{BorderRadius, FillStyle, Rect, Stroke, TextStyle};
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum DrawCommand {
     Rect {
         rect: Rect,

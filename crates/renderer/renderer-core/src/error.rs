@@ -12,4 +12,10 @@ pub enum RendererError {
     /// Software renderer only: softbuffer context creation failed.
     #[error("softbuffer context creation failed: {0}")]
     Context(String),
+    /// Both renderers: surface resize failed.
+    #[error("surface resize failed: {0}")]
+    Resize(String),
+    /// Both renderers: presenting the rendered frame failed.
+    #[error("frame present failed: {0}")]
+    Present(String),
 }

@@ -1,4 +1,5 @@
-use renderer_core::{Rect, TextCacheKey};
+use renderer_core::Rect;
+use renderer_text::TextCacheKey;
 use wgpu::{Device, Queue};
 
 use crate::primitives::Viewport;
@@ -112,7 +113,7 @@ impl TextPipeline {
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: surface_format,
-                    blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
