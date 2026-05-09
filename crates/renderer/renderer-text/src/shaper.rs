@@ -1,4 +1,8 @@
-use cosmic_text::{Attrs, Buffer, Color as CosmicColor, FontSystem, Metrics, Shaping, SwashCache};
+use cosmic_text::{
+    Attrs, Buffer, CacheKey, Color as CosmicColor, FontSystem, Metrics, Shaping, SwashCache,
+    SwashContent,
+};
+use etagere::{AtlasAllocator, size2};
 use renderer_core::{Color, Rect, TextStyle};
 use std::collections::HashMap;
 
@@ -10,8 +14,6 @@ pub struct TextCacheKey {
     pub height: u32,
     pub color_packed: u32,
 }
-
-const PIXEL_CACHE_MAX: usize = 512;
 
 pub fn make_text_cache_key(
     text: &str,
@@ -31,9 +33,103 @@ pub fn make_text_cache_key(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct GlyphKey {
+    pub cache_key: CacheKey,
+    pub color_packed: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AtlasEntry {
+    pub uv_min: [f32; 2],
+    pub uv_max: [f32; 2],
+    pub glyph_width: u32,
+    pub glyph_height: u32,
+    pub placement_left: i32,
+    pub placement_top: i32,
+}
+
+pub struct GlyphInfo {
+    pub dest_rect: [f32; 4],
+    pub uv_min: [f32; 2],
+    pub uv_max: [f32; 2],
+}
+
+pub const ATLAS_SIZE: u32 = 2048;
+
+pub struct GlyphAtlas {
+    pub pixels: Vec<u8>,
+    pub dirty: bool,
+    entries: HashMap<GlyphKey, AtlasEntry>,
+    allocator: AtlasAllocator,
+}
+
+impl GlyphAtlas {
+    pub fn new() -> Self {
+        Self {
+            pixels: vec![0u8; (ATLAS_SIZE * ATLAS_SIZE * 4) as usize],
+            dirty: true,
+            entries: HashMap::new(),
+            allocator: AtlasAllocator::new(size2(ATLAS_SIZE as i32, ATLAS_SIZE as i32)),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.pixels.fill(0);
+        self.entries.clear();
+        self.allocator.clear();
+        self.dirty = true;
+    }
+
+    fn insert(
+        &mut self,
+        key: GlyphKey,
+        pixels: &[u8],
+        w: u32,
+        h: u32,
+        placement_left: i32,
+        placement_top: i32,
+    ) -> Option<AtlasEntry> {
+        let alloc = self.allocator.allocate(size2(w as i32, h as i32))?;
+        let rect = alloc.rectangle;
+        let ax = rect.min.x as u32;
+        let ay = rect.min.y as u32;
+
+        for row in 0..h as usize {
+            let src = &pixels[row * w as usize * 4..(row + 1) * w as usize * 4];
+            let dst_start = ((ay as usize + row) * ATLAS_SIZE as usize + ax as usize) * 4;
+            self.pixels[dst_start..dst_start + w as usize * 4].copy_from_slice(src);
+        }
+
+        let entry = AtlasEntry {
+            uv_min: [ax as f32 / ATLAS_SIZE as f32, ay as f32 / ATLAS_SIZE as f32],
+            uv_max: [
+                (ax + w) as f32 / ATLAS_SIZE as f32,
+                (ay + h) as f32 / ATLAS_SIZE as f32,
+            ],
+            glyph_width: w,
+            glyph_height: h,
+            placement_left,
+            placement_top,
+        };
+        self.entries.insert(key, entry);
+        self.dirty = true;
+        Some(entry)
+    }
+}
+
+impl Default for GlyphAtlas {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+const PIXEL_CACHE_MAX: usize = 512;
+
 pub struct TextShaper {
     pub font_system: FontSystem,
     pub swash_cache: SwashCache,
+    pub atlas: GlyphAtlas,
     pixel_cache: HashMap<TextCacheKey, Vec<u8>>,
 }
 
@@ -42,8 +138,130 @@ impl TextShaper {
         Self {
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
+            atlas: GlyphAtlas::new(),
             pixel_cache: HashMap::new(),
         }
+    }
+
+    pub fn layout_glyphs(&mut self, text: &str, rect: Rect, style: &TextStyle) -> Vec<GlyphInfo> {
+        let font_size = style.font_size;
+        let color = style.color;
+        let width = rect.w.ceil() as u32;
+        let height = rect.h.ceil() as u32;
+
+        if width == 0 || height == 0 || text.is_empty() {
+            return Vec::new();
+        }
+
+        let rgba = color.to_rgba8();
+        let [r, g, b, a] = rgba;
+        let color_packed = u32::from_le_bytes(rgba);
+
+        let metrics = Metrics::new(font_size, font_size * 1.2);
+        let mut buffer = Buffer::new(&mut self.font_system, metrics);
+        buffer.set_size(Some(rect.w), Some(rect.h));
+        buffer.set_text(text, &Attrs::new(), Shaping::Advanced, None);
+        buffer.shape_until_scroll(&mut self.font_system, false);
+
+        let mut positions: Vec<(CacheKey, i32, i32)> = Vec::new();
+        for run in buffer.layout_runs() {
+            for glyph in run.glyphs.iter() {
+                let physical = glyph.physical((0., run.line_y), 1.0);
+                positions.push((physical.cache_key, physical.x, physical.y));
+            }
+        }
+        drop(buffer);
+
+        let mut result = Vec::with_capacity(positions.len());
+
+        for (cache_key, px, py) in positions {
+            let glyph_key = GlyphKey {
+                cache_key,
+                color_packed,
+            };
+
+            if let Some(entry) = self.atlas.entries.get(&glyph_key) {
+                let screen_x = rect.x + px as f32 + entry.placement_left as f32;
+                let screen_y = rect.y + py as f32 - entry.placement_top as f32;
+                result.push(GlyphInfo {
+                    dest_rect: [
+                        screen_x,
+                        screen_y,
+                        entry.glyph_width as f32,
+                        entry.glyph_height as f32,
+                    ],
+                    uv_min: entry.uv_min,
+                    uv_max: entry.uv_max,
+                });
+                continue;
+            }
+
+            let raster = {
+                let img_opt = self.swash_cache.get_image(&mut self.font_system, cache_key);
+                match img_opt {
+                    None => continue,
+                    Some(img) => {
+                        let w = img.placement.width;
+                        let h = img.placement.height;
+                        if w == 0 || h == 0 {
+                            continue;
+                        }
+                        let pl = img.placement.left;
+                        let pt = img.placement.top;
+                        let pixels = match img.content {
+                            SwashContent::Mask => {
+                                let mut out = vec![0u8; (w * h * 4) as usize];
+                                for (i, &mask) in img.data.iter().enumerate() {
+                                    out[i * 4] = r;
+                                    out[i * 4 + 1] = g;
+                                    out[i * 4 + 2] = b;
+                                    out[i * 4 + 3] = ((mask as u32 * a as u32) / 255) as u8;
+                                }
+                                out
+                            }
+                            SwashContent::SubpixelMask => {
+                                let mut out = vec![0u8; (w * h * 4) as usize];
+                                for (i, chunk) in img.data.chunks_exact(3).enumerate() {
+                                    let mask =
+                                        ((chunk[0] as u32 + chunk[1] as u32 + chunk[2] as u32) / 3)
+                                            as u8;
+                                    out[i * 4] = r;
+                                    out[i * 4 + 1] = g;
+                                    out[i * 4 + 2] = b;
+                                    out[i * 4 + 3] = ((mask as u32 * a as u32) / 255) as u8;
+                                }
+                                out
+                            }
+                            SwashContent::Color => img.data.to_vec(),
+                        };
+                        (w, h, pl, pt, pixels)
+                    }
+                }
+            };
+
+            let (w, h, pl, pt, pixels) = raster;
+
+            let entry = match self.atlas.insert(glyph_key, &pixels, w, h, pl, pt) {
+                Some(e) => e,
+                None => {
+                    self.atlas.clear();
+                    match self.atlas.insert(glyph_key, &pixels, w, h, pl, pt) {
+                        Some(e) => e,
+                        None => continue,
+                    }
+                }
+            };
+
+            let screen_x = rect.x + px as f32 + pl as f32;
+            let screen_y = rect.y + py as f32 - pt as f32;
+            result.push(GlyphInfo {
+                dest_rect: [screen_x, screen_y, w as f32, h as f32],
+                uv_min: entry.uv_min,
+                uv_max: entry.uv_max,
+            });
+        }
+
+        result
     }
 
     pub fn rasterize(
@@ -102,6 +320,12 @@ impl TextShaper {
                 }
             },
         );
+
+        if a < 255 {
+            for chunk in pixels.chunks_exact_mut(4) {
+                chunk[3] = ((chunk[3] as u32 * a as u32) / 255) as u8;
+            }
+        }
 
         if self.pixel_cache.len() >= PIXEL_CACHE_MAX
             && let Some(old_key) = self.pixel_cache.keys().next().cloned()

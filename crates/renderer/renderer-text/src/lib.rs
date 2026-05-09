@@ -1,3 +1,6 @@
 mod shaper;
 
-pub use shaper::{TextCacheKey, TextShaper, make_text_cache_key};
+pub use shaper::{
+    ATLAS_SIZE, AtlasEntry, GlyphAtlas, GlyphInfo, GlyphKey, TextCacheKey, TextShaper,
+    make_text_cache_key,
+};

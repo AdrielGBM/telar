@@ -1,12 +1,10 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
-use renderer_text::TextCacheKey;
-use std::collections::{HashMap, HashSet};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
 use crate::primitives::Viewport;
 use crate::primitives::rect::{RectInstance, RectPipeline};
-use crate::primitives::text::{PreparedTextDraw, TextPipeline};
+use crate::primitives::text::{TextInstance, TextPipeline};
 
 fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
     caps.formats
@@ -23,7 +21,7 @@ fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
 
 enum DrawStep {
     RectBatch { start: u32, end: u32 },
-    TextIdx(usize),
+    TextBatch { start: u32, end: u32 },
 }
 
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
@@ -34,14 +32,13 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     rect_pipeline: RectPipeline,
     text_pipeline: TextPipeline,
     text_shaper: renderer_text::TextShaper,
-    text_gpu_cache: HashMap<TextCacheKey, PreparedTextDraw>,
     surface_format: wgpu::TextureFormat,
     present_mode: wgpu::PresentMode,
     alpha_mode: wgpu::CompositeAlphaMode,
     width: u32,
     height: u32,
     pending_instances: Vec<RectInstance>,
-    pending_text_draws: Vec<crate::primitives::text::TextDraw>,
+    pending_text_instances: Vec<TextInstance>,
     pending_steps: Vec<DrawStep>,
     _window: std::sync::Arc<W>,
 }
@@ -99,14 +96,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             rect_pipeline,
             text_pipeline,
             text_shaper: renderer_text::TextShaper::new(),
-            text_gpu_cache: HashMap::new(),
             surface_format,
             present_mode,
             alpha_mode,
             width: 0,
             height: 0,
             pending_instances: Vec::new(),
-            pending_text_draws: Vec::new(),
+            pending_text_instances: Vec::new(),
             pending_steps: Vec::new(),
             _window: window,
         })
@@ -141,13 +137,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             }
         }
         self.pending_instances.clear();
-        self.pending_text_draws.clear();
+        self.pending_text_instances.clear();
         self.pending_steps.clear();
         Ok(())
     }
 
     fn submit(&mut self, commands: &[DrawCommand]) {
-        let mut current_batch_start: Option<u32> = None;
+        let mut current_rect_start: Option<u32> = None;
+        let mut current_text_start: Option<u32> = None;
 
         for cmd in commands {
             match cmd {
@@ -157,46 +154,55 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     stroke,
                     radius,
                 } => {
+                    if let Some(start) = current_text_start.take() {
+                        let end = self.pending_text_instances.len() as u32;
+                        if end > start {
+                            self.pending_steps.push(DrawStep::TextBatch { start, end });
+                        }
+                    }
+                    if current_rect_start.is_none() {
+                        current_rect_start = Some(self.pending_instances.len() as u32);
+                    }
                     let inst = crate::primitives::rect::make_rect_instance(
                         *rect,
                         fill.as_ref(),
                         *stroke,
                         *radius,
                     );
-                    if current_batch_start.is_none() {
-                        current_batch_start = Some(self.pending_instances.len() as u32);
-                    }
                     self.pending_instances.push(inst);
                 }
                 DrawCommand::Text { text, rect, style } => {
-                    if let Some(start) = current_batch_start.take() {
+                    if let Some(start) = current_rect_start.take() {
                         let end = self.pending_instances.len() as u32;
                         if end > start {
                             self.pending_steps.push(DrawStep::RectBatch { start, end });
                         }
                     }
-                    let (cache_key, pixels, width, height) =
-                        self.text_shaper.rasterize(text, *rect, style);
-                    if width > 0 && height > 0 {
-                        let idx = self.pending_text_draws.len();
-                        self.pending_text_draws
-                            .push(crate::primitives::text::TextDraw {
-                                pixels,
-                                rect: *rect,
-                                width,
-                                height,
-                                cache_key,
-                            });
-                        self.pending_steps.push(DrawStep::TextIdx(idx));
+                    if current_text_start.is_none() {
+                        current_text_start = Some(self.pending_text_instances.len() as u32);
                     }
+                    let glyphs = self.text_shaper.layout_glyphs(text, *rect, style);
+                    self.pending_text_instances
+                        .extend(glyphs.iter().map(|g| TextInstance {
+                            dest_rect: g.dest_rect,
+                            uv_min: g.uv_min,
+                            uv_max: g.uv_max,
+                        }));
                 }
                 _ => {}
             }
         }
-        if let Some(start) = current_batch_start {
+
+        if let Some(start) = current_rect_start {
             let end = self.pending_instances.len() as u32;
             if end > start {
                 self.pending_steps.push(DrawStep::RectBatch { start, end });
+            }
+        }
+        if let Some(start) = current_text_start {
+            let end = self.pending_text_instances.len() as u32;
+            if end > start {
+                self.pending_steps.push(DrawStep::TextBatch { start, end });
             }
         }
     }
@@ -215,7 +221,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         if self.config.is_none() || self.width == 0 || self.height == 0 {
             self.pending_instances.clear();
-            self.pending_text_draws.clear();
+            self.pending_text_instances.clear();
             self.pending_steps.clear();
             return Ok(());
         }
@@ -228,13 +234,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.surface.configure(&self.device, config);
                 }
                 self.pending_instances.clear();
-                self.pending_text_draws.clear();
+                self.pending_text_instances.clear();
                 self.pending_steps.clear();
                 return Ok(());
             }
             other => {
                 self.pending_instances.clear();
-                self.pending_text_draws.clear();
+                self.pending_text_instances.clear();
                 self.pending_steps.clear();
                 return Err(RendererError::Present(format!("surface error: {other:?}")));
             }
@@ -255,8 +261,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             bytemuck::bytes_of(&viewport),
         );
 
+        self.text_pipeline
+            .sync_atlas(&self.queue, &mut self.text_shaper.atlas);
+
         let all_instances = std::mem::take(&mut self.pending_instances);
-        let text_draws = std::mem::take(&mut self.pending_text_draws);
+        let text_instances = std::mem::take(&mut self.pending_text_instances);
         let steps = std::mem::take(&mut self.pending_steps);
 
         if !all_instances.is_empty() {
@@ -269,17 +278,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             );
         }
 
-        let frame_keys: HashSet<_> = text_draws.iter().map(|td| td.cache_key.clone()).collect();
-
-        self.text_gpu_cache.retain(|k, _| frame_keys.contains(k));
-
-        for td in &text_draws {
-            if !self.text_gpu_cache.contains_key(&td.cache_key) {
-                let prepared = self
-                    .text_pipeline
-                    .prepare_draw(&self.device, &self.queue, td);
-                self.text_gpu_cache.insert(td.cache_key.clone(), prepared);
-            }
+        if !text_instances.is_empty() {
+            self.text_pipeline
+                .ensure_capacity(&self.device, text_instances.len());
+            self.queue.write_buffer(
+                &self.text_pipeline.instances_buffer,
+                0,
+                bytemuck::cast_slice(&text_instances),
+            );
         }
 
         let view = output
@@ -317,14 +323,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         render_pass.set_bind_group(0, &self.rect_pipeline.bind_group, &[]);
                         render_pass.draw(0..6, *start..*end);
                     }
-                    DrawStep::TextIdx(idx) => {
-                        let td = &text_draws[*idx];
-                        if let Some(prepared) = self.text_gpu_cache.get(&td.cache_key) {
-                            render_pass.set_pipeline(&self.text_pipeline.pipeline);
-                            render_pass.set_bind_group(0, &prepared.group0, &[]);
-                            render_pass.set_bind_group(1, &prepared.group1, &[]);
-                            render_pass.draw(0..6, 0..1);
-                        }
+                    DrawStep::TextBatch { start, end } => {
+                        render_pass.set_pipeline(&self.text_pipeline.pipeline);
+                        render_pass.set_bind_group(
+                            0,
+                            &self.text_pipeline.instances_bind_group,
+                            &[],
+                        );
+                        render_pass.set_bind_group(1, &self.text_pipeline.atlas_bind_group, &[]);
+                        render_pass.draw(0..6, *start..*end);
                     }
                 }
             }

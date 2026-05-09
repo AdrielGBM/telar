@@ -1,34 +1,27 @@
-use renderer_core::Rect;
-use renderer_text::TextCacheKey;
+use renderer_text::{ATLAS_SIZE, GlyphAtlas};
 use wgpu::{Device, Queue};
 
 use crate::primitives::Viewport;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct TextUniformsData {
-    rect: [f32; 4],
+pub(crate) struct TextInstance {
+    pub dest_rect: [f32; 4],
+    pub uv_min: [f32; 2],
+    pub uv_max: [f32; 2],
 }
 
-#[derive(Clone)]
-pub(crate) struct TextDraw {
-    pub(crate) pixels: Vec<u8>,
-    pub(crate) rect: Rect,
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-    pub(crate) cache_key: TextCacheKey,
-}
-
-pub(crate) struct PreparedTextDraw {
-    pub(crate) group0: wgpu::BindGroup,
-    pub(crate) group1: wgpu::BindGroup,
-}
+pub(crate) const INITIAL_TEXT_CAPACITY: usize = 256;
 
 pub(crate) struct TextPipeline {
     pub(crate) pipeline: wgpu::RenderPipeline,
-    viewport_bgl: wgpu::BindGroupLayout,
-    text_bgl: wgpu::BindGroupLayout,
+    instances_bgl: wgpu::BindGroupLayout,
     pub(crate) viewport_buffer: wgpu::Buffer,
+    pub(crate) instances_buffer: wgpu::Buffer,
+    pub(crate) instances_bind_group: wgpu::BindGroup,
+    instances_capacity: usize,
+    atlas_texture: wgpu::Texture,
+    pub(crate) atlas_bind_group: wgpu::BindGroup,
 }
 
 impl TextPipeline {
@@ -40,8 +33,15 @@ impl TextPipeline {
             mapped_at_creation: false,
         });
 
-        let viewport_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-text-viewport-bgl"),
+        let instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("rsx-text-instances"),
+            size: (std::mem::size_of::<TextInstance>() * INITIAL_TEXT_CAPACITY) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let instances_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("rsx-text-instances-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -57,7 +57,7 @@ impl TextPipeline {
                     binding: 1,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -66,8 +66,15 @@ impl TextPipeline {
             ],
         });
 
-        let text_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-text-texture-bgl"),
+        let instances_bind_group = Self::make_instances_bind_group(
+            device,
+            &instances_bgl,
+            &viewport_buffer,
+            &instances_buffer,
+        );
+
+        let atlas_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("rsx-text-atlas-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -88,6 +95,48 @@ impl TextPipeline {
             ],
         });
 
+        let atlas_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("rsx-text-atlas"),
+            size: wgpu::Extent3d {
+                width: ATLAS_SIZE,
+                height: ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        let atlas_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("rsx-text-sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let atlas_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("rsx-text-atlas-bg"),
+            layout: &atlas_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rsx-text-shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("text.wgsl").into()),
@@ -95,7 +144,7 @@ impl TextPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-text-pipeline-layout"),
-            bind_group_layouts: &[Some(&viewport_bgl), Some(&text_bgl)],
+            bind_group_layouts: &[Some(&instances_bgl), Some(&atlas_bgl)],
             immediate_size: 0,
         });
 
@@ -130,106 +179,81 @@ impl TextPipeline {
 
         Self {
             pipeline,
-            viewport_bgl,
-            text_bgl,
+            instances_bgl,
             viewport_buffer,
+            instances_buffer,
+            instances_bind_group,
+            instances_capacity: INITIAL_TEXT_CAPACITY,
+            atlas_texture,
+            atlas_bind_group,
         }
     }
 
-    pub(crate) fn prepare_draw(
-        &self,
+    fn make_instances_bind_group(
         device: &Device,
-        queue: &Queue,
-        draw: &TextDraw,
-    ) -> PreparedTextDraw {
-        let text_uniforms_data = TextUniformsData {
-            rect: [draw.rect.x, draw.rect.y, draw.rect.w, draw.rect.h],
-        };
-        let text_uniforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-text-uniforms"),
-            size: std::mem::size_of::<TextUniformsData>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        queue.write_buffer(
-            &text_uniforms_buffer,
-            0,
-            bytemuck::bytes_of(&text_uniforms_data),
-        );
-
-        let group0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-text-bg-0"),
-            layout: &self.viewport_bgl,
+        layout: &wgpu::BindGroupLayout,
+        viewport_buffer: &wgpu::Buffer,
+        instances_buffer: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("rsx-text-instances-bg"),
+            layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: self.viewport_buffer.as_entire_binding(),
+                    resource: viewport_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: text_uniforms_buffer.as_entire_binding(),
+                    resource: instances_buffer.as_entire_binding(),
                 },
             ],
-        });
+        })
+    }
 
-        let texture_extent = wgpu::Extent3d {
-            width: draw.width,
-            height: draw.height,
-            depth_or_array_layers: 1,
-        };
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-text-texture"),
-            size: texture_extent,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
+    pub(crate) fn sync_atlas(&self, queue: &Queue, atlas: &mut GlyphAtlas) {
+        if !atlas.dirty {
+            return;
+        }
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
-                texture: &texture,
+                texture: &self.atlas_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &draw.pixels,
+            &atlas.pixels,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * draw.width),
-                rows_per_image: Some(draw.height),
+                bytes_per_row: Some(4 * ATLAS_SIZE),
+                rows_per_image: Some(ATLAS_SIZE),
             },
-            texture_extent,
+            wgpu::Extent3d {
+                width: ATLAS_SIZE,
+                height: ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
         );
+        atlas.dirty = false;
+    }
 
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("rsx-text-sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
-            ..Default::default()
+    pub(crate) fn ensure_capacity(&mut self, device: &Device, count: usize) {
+        if count <= self.instances_capacity {
+            return;
+        }
+        let new_capacity = (count * 2).max(self.instances_capacity * 2);
+        self.instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("rsx-text-instances"),
+            size: (std::mem::size_of::<TextInstance>() * new_capacity) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
-
-        let group1 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-text-bg-1"),
-            layout: &self.text_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        PreparedTextDraw { group0, group1 }
+        self.instances_bind_group = Self::make_instances_bind_group(
+            device,
+            &self.instances_bgl,
+            &self.viewport_buffer,
+            &self.instances_buffer,
+        );
+        self.instances_capacity = new_capacity;
     }
 }
