@@ -2,33 +2,25 @@ use cosmic_text::{
     Attrs, Buffer, CacheKey, Color as CosmicColor, FontSystem, Metrics, Shaping, SwashCache,
     SwashContent,
 };
-use etagere::{AtlasAllocator, size2};
+use etagere::{AllocId, AtlasAllocator, size2};
 use renderer_core::{Color, Rect, TextStyle};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextCacheKey {
     pub text: String,
     pub font_size_bits: u32,
     pub width: u32,
-    pub height: u32,
     pub color_packed: u32,
 }
 
-pub fn make_text_cache_key(
-    text: &str,
-    font_size: f32,
-    width: u32,
-    height: u32,
-    color: Color,
-) -> TextCacheKey {
+pub fn make_text_cache_key(text: &str, font_size: f32, width: u32, color: Color) -> TextCacheKey {
     let rgba = color.to_rgba8();
     let color_packed = u32::from_le_bytes(rgba);
     TextCacheKey {
         text: text.to_owned(),
         font_size_bits: font_size.to_bits(),
         width,
-        height,
         color_packed,
     }
 }
@@ -47,6 +39,8 @@ pub struct AtlasEntry {
     pub glyph_height: u32,
     pub placement_left: i32,
     pub placement_top: i32,
+    alloc_id: AllocId,
+    lru_gen: u64,
 }
 
 pub struct GlyphInfo {
@@ -62,6 +56,8 @@ pub struct GlyphAtlas {
     pub dirty: bool,
     entries: HashMap<GlyphKey, AtlasEntry>,
     allocator: AtlasAllocator,
+    lru_queue: VecDeque<(GlyphKey, u64)>,
+    lru_counter: u64,
 }
 
 impl GlyphAtlas {
@@ -71,6 +67,8 @@ impl GlyphAtlas {
             dirty: true,
             entries: HashMap::new(),
             allocator: AtlasAllocator::new(size2(ATLAS_SIZE as i32, ATLAS_SIZE as i32)),
+            lru_queue: VecDeque::new(),
+            lru_counter: 0,
         }
     }
 
@@ -78,6 +76,8 @@ impl GlyphAtlas {
         self.pixels.fill(0);
         self.entries.clear();
         self.allocator.clear();
+        self.lru_queue.clear();
+        self.lru_counter = 0;
         self.dirty = true;
     }
 
@@ -92,6 +92,7 @@ impl GlyphAtlas {
     ) -> Option<AtlasEntry> {
         let alloc = self.allocator.allocate(size2(w as i32, h as i32))?;
         let rect = alloc.rectangle;
+        let alloc_id = alloc.id;
         let ax = rect.min.x as u32;
         let ay = rect.min.y as u32;
 
@@ -101,6 +102,8 @@ impl GlyphAtlas {
             self.pixels[dst_start..dst_start + w as usize * 4].copy_from_slice(src);
         }
 
+        let stamp = self.lru_counter;
+        self.lru_counter += 1;
         let entry = AtlasEntry {
             uv_min: [ax as f32 / ATLAS_SIZE as f32, ay as f32 / ATLAS_SIZE as f32],
             uv_max: [
@@ -111,10 +114,36 @@ impl GlyphAtlas {
             glyph_height: h,
             placement_left,
             placement_top,
+            alloc_id,
+            lru_gen: stamp,
         };
         self.entries.insert(key, entry);
+        self.lru_queue.push_back((key, stamp));
         self.dirty = true;
         Some(entry)
+    }
+
+    pub fn get_and_touch(&mut self, key: &GlyphKey) -> Option<AtlasEntry> {
+        let entry = self.entries.get_mut(key)?;
+        let stamp = self.lru_counter;
+        self.lru_counter += 1;
+        entry.lru_gen = stamp;
+        self.lru_queue.push_back((*key, stamp));
+        Some(*entry)
+    }
+
+    fn evict_lru(&mut self) -> bool {
+        while let Some((key, stamp)) = self.lru_queue.pop_front() {
+            if let Some(entry) = self.entries.get(&key) {
+                if entry.lru_gen == stamp {
+                    self.allocator.deallocate(entry.alloc_id);
+                    self.entries.remove(&key);
+                    self.dirty = true;
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
@@ -180,7 +209,7 @@ impl TextShaper {
                 color_packed,
             };
 
-            if let Some(entry) = self.atlas.entries.get(&glyph_key) {
+            if let Some(entry) = self.atlas.get_and_touch(&glyph_key) {
                 let screen_x = rect.x + px as f32 + entry.placement_left as f32;
                 let screen_y = rect.y + py as f32 - entry.placement_top as f32;
                 result.push(GlyphInfo {
@@ -241,14 +270,22 @@ impl TextShaper {
 
             let (w, h, pl, pt, pixels) = raster;
 
-            let entry = match self.atlas.insert(glyph_key, &pixels, w, h, pl, pt) {
-                Some(e) => e,
-                None => {
-                    self.atlas.clear();
-                    match self.atlas.insert(glyph_key, &pixels, w, h, pl, pt) {
-                        Some(e) => e,
-                        None => continue,
+            let entry = if let Some(e) = self.atlas.insert(glyph_key, &pixels, w, h, pl, pt) {
+                e
+            } else {
+                let mut inserted = None;
+                loop {
+                    if !self.atlas.evict_lru() {
+                        break;
                     }
+                    if let Some(e) = self.atlas.insert(glyph_key, &pixels, w, h, pl, pt) {
+                        inserted = Some(e);
+                        break;
+                    }
+                }
+                match inserted {
+                    Some(e) => e,
+                    None => continue,
                 }
             };
 
@@ -275,7 +312,7 @@ impl TextShaper {
         let width = rect.w.ceil() as u32;
         let height = rect.h.ceil() as u32;
 
-        let key = make_text_cache_key(text, font_size, width, height, color);
+        let key = make_text_cache_key(text, font_size, width, color);
 
         if width == 0 || height == 0 {
             return (key, Vec::new(), 0, 0);
