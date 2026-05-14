@@ -91,7 +91,10 @@ where
                 DrawCommand::Text { text, rect, style } => {
                     self.draw_text_impl(&text, rect, &style);
                 }
-                _ => {}
+                DrawCommand::Image { data, rect, filter } => {
+                    self.draw_image_impl(&data, rect, filter);
+                }
+                _ => todo!(),
             }
         }
 

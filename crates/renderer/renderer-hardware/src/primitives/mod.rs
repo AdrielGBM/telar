@@ -1,3 +1,4 @@
+pub(crate) mod image;
 pub(crate) mod rect;
 pub(crate) mod text;
 

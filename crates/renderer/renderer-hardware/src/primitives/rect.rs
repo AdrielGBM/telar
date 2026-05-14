@@ -171,7 +171,7 @@ impl RectPipeline {
 
 pub(crate) fn make_rect_instance(
     rect: Rect,
-    fill: Option<&renderer_core::FillStyle>,
+    fill: Option<renderer_core::FillStyle>,
     stroke: Option<Stroke>,
     radius: BorderRadius,
 ) -> RectInstance {

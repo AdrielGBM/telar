@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use rsx::{
-    App, AppContext, BorderRadius, Color, FillStyle, Frame, Rect, Stroke, TextStyle, WindowConfig,
+    App, AppContext, BorderRadius, Color, FillStyle, Frame, ImageData, ImageFilter, Rect, Stroke,
+    TextStyle, WindowConfig,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -13,7 +16,11 @@ const MUTED: Color = Color::rgba(0.50, 0.50, 0.60, 1.0);
 const WHITE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
 const CARD_BORDER: Color = Color::rgba(0.80, 0.80, 0.88, 1.0);
 
-struct Sandbox;
+struct Sandbox {
+    gradient_image: Arc<ImageData>,
+    checker_image: Arc<ImageData>,
+    alpha_image: Arc<ImageData>,
+}
 
 impl App for Sandbox {
     fn on_redraw(&mut self, frame: &mut Frame, _ctx: &mut AppContext) {
@@ -167,9 +174,104 @@ impl App for Sandbox {
             Rect::new(424.0, 508.0, 340.0, 52.0),
             TextStyle::new(13.0, MUTED),
         );
+
+        frame.draw_text(
+            "Images",
+            Rect::new(24.0, 600.0, 200.0, 20.0),
+            TextStyle::new(12.0, MUTED),
+        );
+
+        frame.draw_image(
+            self.gradient_image.clone(),
+            Rect::new(24.0, 624.0, 128.0, 128.0),
+            ImageFilter::Linear,
+        );
+        frame.draw_text(
+            "gradient",
+            Rect::new(24.0, 756.0, 128.0, 16.0),
+            TextStyle::new(11.0, MUTED),
+        );
+
+        frame.draw_image(
+            self.checker_image.clone(),
+            Rect::new(172.0, 624.0, 192.0, 192.0),
+            ImageFilter::Nearest,
+        );
+        frame.draw_text(
+            "checker (scaled)",
+            Rect::new(172.0, 820.0, 192.0, 16.0),
+            TextStyle::new(11.0, MUTED),
+        );
+
+        frame.draw_image(
+            self.alpha_image.clone(),
+            Rect::new(384.0, 624.0, 128.0, 128.0),
+            ImageFilter::Nearest,
+        );
+        frame.draw_text(
+            "alpha blend",
+            Rect::new(384.0, 756.0, 128.0, 16.0),
+            TextStyle::new(11.0, MUTED),
+        );
     }
 }
 
 fn main() {
-    rsx::run!(WindowConfig::default(), Sandbox);
+    let gradient_image = Arc::new(make_gradient(128, 128));
+    let checker_image = Arc::new(make_checker(128, 128, 16));
+    let alpha_image = Arc::new(make_radial_alpha(128, 128));
+    rsx::run!(
+        WindowConfig::default(),
+        Sandbox {
+            gradient_image,
+            checker_image,
+            alpha_image,
+        }
+    );
+}
+
+fn make_gradient(width: u32, height: u32) -> ImageData {
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for _y in 0..height {
+        for x in 0..width {
+            let t = x as f32 / (width - 1) as f32;
+            let r = (t * 255.0) as u8;
+            let g = 60u8;
+            let b = ((1.0 - t) * 255.0) as u8;
+            pixels.extend_from_slice(&[r, g, b, 255]);
+        }
+    }
+    ImageData::new(pixels, width, height)
+}
+
+fn make_checker(width: u32, height: u32, cell: u32) -> ImageData {
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            let on = ((x / cell) + (y / cell)) % 2 == 0;
+            if on {
+                pixels.extend_from_slice(&[240, 240, 240, 255]);
+            } else {
+                pixels.extend_from_slice(&[60, 100, 200, 255]);
+            }
+        }
+    }
+    ImageData::new(pixels, width, height)
+}
+
+fn make_radial_alpha(width: u32, height: u32) -> ImageData {
+    let cx = width as f32 / 2.0;
+    let cy = height as f32 / 2.0;
+    let radius = cx.min(cy) - 2.0;
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            let dx = x as f32 - cx;
+            let dy = y as f32 - cy;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let alpha = ((radius - dist).clamp(0.0, 1.0) * 255.0) as u8;
+            pixels.extend_from_slice(&[240, 140, 30, alpha]);
+        }
+    }
+    ImageData::new(pixels, width, height)
 }

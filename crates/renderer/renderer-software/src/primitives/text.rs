@@ -23,12 +23,7 @@ where
             return;
         };
 
-        for chunk in pixels.chunks_exact_mut(4) {
-            let a = chunk[3] as u32;
-            chunk[0] = ((chunk[0] as u32 * a) / 255) as u8;
-            chunk[1] = ((chunk[1] as u32 * a) / 255) as u8;
-            chunk[2] = ((chunk[2] as u32 * a) / 255) as u8;
-        }
+        super::premultiply_rgba_in_place(&mut pixels);
 
         if let Some(src) = tiny_skia::Pixmap::from_vec(pixels, size) {
             let paint = tiny_skia::PixmapPaint {

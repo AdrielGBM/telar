@@ -12,7 +12,13 @@ pub use context::AppContext;
 pub use prefs::UserPrefs;
 
 #[cfg(feature = "runtime")]
-pub use app::{App, BorderRadius, Color, FillStyle, Frame, Rect, Stroke, TextStyle, WindowConfig};
+pub use app::{App, Frame};
+#[cfg(feature = "runtime")]
+pub use platform_core::WindowConfig;
+#[cfg(feature = "runtime")]
+pub use renderer_core::{
+    BorderRadius, Color, FillStyle, ImageData, ImageFilter, Rect, Stroke, TextStyle,
+};
 #[cfg(feature = "runtime")]
 pub use runner::run_with_name;
 

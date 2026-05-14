@@ -3,6 +3,7 @@ use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
 use crate::primitives::Viewport;
+use crate::primitives::image::{ImageInstance, ImagePipeline, make_image_instance};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
 
@@ -20,8 +21,18 @@ fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
 }
 
 enum DrawStep {
-    RectBatch { start: u32, end: u32 },
-    TextBatch { start: u32, end: u32 },
+    RectBatch {
+        start: u32,
+        end: u32,
+    },
+    TextBatch {
+        start: u32,
+        end: u32,
+    },
+    ImageDraw {
+        instance_index: u32,
+        texture_bind_group: wgpu::BindGroup,
+    },
 }
 
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
@@ -31,6 +42,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     config: Option<SurfaceConfiguration>,
     rect_pipeline: RectPipeline,
     text_pipeline: TextPipeline,
+    image_pipeline: ImagePipeline,
     text_shaper: renderer_text::TextShaper,
     surface_format: wgpu::TextureFormat,
     present_mode: wgpu::PresentMode,
@@ -39,6 +51,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     height: u32,
     pending_instances: Vec<RectInstance>,
     pending_text_instances: Vec<TextInstance>,
+    pending_image_instances: Vec<ImageInstance>,
     pending_steps: Vec<DrawStep>,
     _window: std::sync::Arc<W>,
 }
@@ -87,6 +100,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         let rect_pipeline = RectPipeline::new(&device, surface_format);
         let text_pipeline = TextPipeline::new(&device, surface_format);
+        let image_pipeline = ImagePipeline::new(&device, surface_format);
 
         Ok(Self {
             surface,
@@ -95,6 +109,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             config: None,
             rect_pipeline,
             text_pipeline,
+            image_pipeline,
             text_shaper: renderer_text::TextShaper::new(),
             surface_format,
             present_mode,
@@ -103,6 +118,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             height: 0,
             pending_instances: Vec::new(),
             pending_text_instances: Vec::new(),
+            pending_image_instances: Vec::new(),
             pending_steps: Vec::new(),
             _window: window,
         })
@@ -138,11 +154,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
         self.pending_instances.clear();
         self.pending_text_instances.clear();
+        self.pending_image_instances.clear();
         self.pending_steps.clear();
         Ok(())
     }
 
     fn submit(&mut self, commands: &[DrawCommand]) {
+        self.image_pipeline.begin_frame();
+
         let mut current_rect_start: Option<u32> = None;
         let mut current_text_start: Option<u32> = None;
 
@@ -163,12 +182,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if current_rect_start.is_none() {
                         current_rect_start = Some(self.pending_instances.len() as u32);
                     }
-                    let inst = crate::primitives::rect::make_rect_instance(
-                        *rect,
-                        fill.as_ref(),
-                        *stroke,
-                        *radius,
-                    );
+                    let inst =
+                        crate::primitives::rect::make_rect_instance(*rect, *fill, *stroke, *radius);
                     self.pending_instances.push(inst);
                 }
                 DrawCommand::Text { text, rect, style } => {
@@ -189,7 +204,34 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             uv_max: g.uv_max,
                         }));
                 }
-                _ => {}
+                DrawCommand::Image { data, rect, filter } => {
+                    if let Some(start) = current_rect_start.take() {
+                        let end = self.pending_instances.len() as u32;
+                        if end > start {
+                            self.pending_steps.push(DrawStep::RectBatch { start, end });
+                        }
+                    }
+                    if let Some(start) = current_text_start.take() {
+                        let end = self.pending_text_instances.len() as u32;
+                        if end > start {
+                            self.pending_steps.push(DrawStep::TextBatch { start, end });
+                        }
+                    }
+                    let instance_index = self.pending_image_instances.len() as u32;
+                    self.pending_image_instances
+                        .push(make_image_instance(*rect));
+                    let texture_bind_group = self.image_pipeline.get_or_create_bind_group(
+                        &self.device,
+                        &self.queue,
+                        data,
+                        *filter,
+                    );
+                    self.pending_steps.push(DrawStep::ImageDraw {
+                        instance_index,
+                        texture_bind_group,
+                    });
+                }
+                _ => todo!(),
             }
         }
 
@@ -222,6 +264,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         if self.config.is_none() || self.width == 0 || self.height == 0 {
             self.pending_instances.clear();
             self.pending_text_instances.clear();
+            self.pending_image_instances.clear();
             self.pending_steps.clear();
             return Ok(());
         }
@@ -235,12 +278,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
                 self.pending_instances.clear();
                 self.pending_text_instances.clear();
+                self.pending_image_instances.clear();
                 self.pending_steps.clear();
                 return Ok(());
             }
             other => {
                 self.pending_instances.clear();
                 self.pending_text_instances.clear();
+                self.pending_image_instances.clear();
                 self.pending_steps.clear();
                 return Err(RendererError::Present(format!("surface error: {other:?}")));
             }
@@ -260,12 +305,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             0,
             bytemuck::bytes_of(&viewport),
         );
+        self.queue.write_buffer(
+            &self.image_pipeline.viewport_buffer,
+            0,
+            bytemuck::bytes_of(&viewport),
+        );
 
         self.text_pipeline
             .sync_atlas(&self.queue, &mut self.text_shaper.atlas);
 
         let all_instances = std::mem::take(&mut self.pending_instances);
         let text_instances = std::mem::take(&mut self.pending_text_instances);
+        let image_instances = std::mem::take(&mut self.pending_image_instances);
         let steps = std::mem::take(&mut self.pending_steps);
 
         if !all_instances.is_empty() {
@@ -285,6 +336,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 &self.text_pipeline.instances_buffer,
                 0,
                 bytemuck::cast_slice(&text_instances),
+            );
+        }
+
+        if !image_instances.is_empty() {
+            self.image_pipeline
+                .ensure_capacity(&self.device, image_instances.len());
+            self.queue.write_buffer(
+                &self.image_pipeline.instances_buffer,
+                0,
+                bytemuck::cast_slice(&image_instances),
             );
         }
 
@@ -332,6 +393,19 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         );
                         render_pass.set_bind_group(1, &self.text_pipeline.atlas_bind_group, &[]);
                         render_pass.draw(0..6, *start..*end);
+                    }
+                    DrawStep::ImageDraw {
+                        instance_index,
+                        texture_bind_group,
+                    } => {
+                        render_pass.set_pipeline(&self.image_pipeline.pipeline);
+                        render_pass.set_bind_group(
+                            0,
+                            &self.image_pipeline.instances_bind_group,
+                            &[],
+                        );
+                        render_pass.set_bind_group(1, texture_bind_group, &[]);
+                        render_pass.draw(0..6, *instance_index..*instance_index + 1);
                     }
                 }
             }
