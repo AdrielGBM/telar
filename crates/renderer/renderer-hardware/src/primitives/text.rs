@@ -1,7 +1,7 @@
 use renderer_text::{ATLAS_SIZE, GlyphAtlas};
 use wgpu::{Device, Queue};
 
-use crate::primitives::Viewport;
+use super::InstancePipeline;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -14,64 +14,16 @@ pub(crate) struct TextInstance {
 pub(crate) const INITIAL_TEXT_CAPACITY: usize = 256;
 
 pub(crate) struct TextPipeline {
+    pub(crate) instances: InstancePipeline<TextInstance>,
     pub(crate) pipeline: wgpu::RenderPipeline,
-    instances_bgl: wgpu::BindGroupLayout,
-    pub(crate) viewport_buffer: wgpu::Buffer,
-    pub(crate) instances_buffer: wgpu::Buffer,
-    pub(crate) instances_bind_group: wgpu::BindGroup,
-    instances_capacity: usize,
     atlas_texture: wgpu::Texture,
     pub(crate) atlas_bind_group: wgpu::BindGroup,
 }
 
 impl TextPipeline {
     pub(crate) fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
-        let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-text-viewport"),
-            size: std::mem::size_of::<Viewport>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-text-instances"),
-            size: (std::mem::size_of::<TextInstance>() * INITIAL_TEXT_CAPACITY) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let instances_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-text-instances-bgl"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let instances_bind_group = Self::make_instances_bind_group(
-            device,
-            &instances_bgl,
-            &viewport_buffer,
-            &instances_buffer,
-        );
+        let instances =
+            InstancePipeline::<TextInstance>::new(device, "text", INITIAL_TEXT_CAPACITY);
 
         let atlas_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-text-atlas-bgl"),
@@ -137,14 +89,15 @@ impl TextPipeline {
             ],
         });
 
+        let shader_source = [include_str!("viewport.wgsl"), include_str!("text.wgsl")].concat();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rsx-text-shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("text.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-text-pipeline-layout"),
-            bind_group_layouts: &[Some(&instances_bgl), Some(&atlas_bgl)],
+            bind_group_layouts: &[Some(&instances.instances_bgl), Some(&atlas_bgl)],
             immediate_size: 0,
         });
 
@@ -178,37 +131,11 @@ impl TextPipeline {
         });
 
         Self {
+            instances,
             pipeline,
-            instances_bgl,
-            viewport_buffer,
-            instances_buffer,
-            instances_bind_group,
-            instances_capacity: INITIAL_TEXT_CAPACITY,
             atlas_texture,
             atlas_bind_group,
         }
-    }
-
-    fn make_instances_bind_group(
-        device: &Device,
-        layout: &wgpu::BindGroupLayout,
-        viewport_buffer: &wgpu::Buffer,
-        instances_buffer: &wgpu::Buffer,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-text-instances-bg"),
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: viewport_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: instances_buffer.as_entire_binding(),
-                },
-            ],
-        })
     }
 
     pub(crate) fn sync_atlas(&self, queue: &Queue, atlas: &mut GlyphAtlas) {
@@ -238,22 +165,6 @@ impl TextPipeline {
     }
 
     pub(crate) fn ensure_capacity(&mut self, device: &Device, count: usize) {
-        if count <= self.instances_capacity {
-            return;
-        }
-        let new_capacity = (count * 2).max(self.instances_capacity * 2);
-        self.instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-text-instances"),
-            size: (std::mem::size_of::<TextInstance>() * new_capacity) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        self.instances_bind_group = Self::make_instances_bind_group(
-            device,
-            &self.instances_bgl,
-            &self.viewport_buffer,
-            &self.instances_buffer,
-        );
-        self.instances_capacity = new_capacity;
+        self.instances.ensure_capacity(device, count);
     }
 }

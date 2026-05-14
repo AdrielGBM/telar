@@ -74,7 +74,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         }))
-        .map_err(|_| RendererError::NoAdapter)?;
+        .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
 
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("rsx-hardware-renderer"),
@@ -82,7 +82,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             required_limits: wgpu::Limits::default(),
             ..Default::default()
         }))
-        .map_err(|e| RendererError::Device(e.to_string()))?;
+        .map_err(|e| RendererError::Backend(format!("GPU device request failed: {}", e)))?;
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = preferred_format(&surface_caps);
@@ -296,17 +296,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             _pad: [0.0; 2],
         };
         self.queue.write_buffer(
-            &self.rect_pipeline.viewport_buffer,
+            &self.rect_pipeline.instances.viewport_buffer,
             0,
             bytemuck::bytes_of(&viewport),
         );
         self.queue.write_buffer(
-            &self.text_pipeline.viewport_buffer,
+            &self.text_pipeline.instances.viewport_buffer,
             0,
             bytemuck::bytes_of(&viewport),
         );
         self.queue.write_buffer(
-            &self.image_pipeline.viewport_buffer,
+            &self.image_pipeline.instances.viewport_buffer,
             0,
             bytemuck::bytes_of(&viewport),
         );
@@ -323,7 +323,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             self.rect_pipeline
                 .ensure_capacity(&self.device, all_instances.len());
             self.queue.write_buffer(
-                &self.rect_pipeline.instances_buffer,
+                &self.rect_pipeline.instances.instances_buffer,
                 0,
                 bytemuck::cast_slice(&all_instances),
             );
@@ -333,7 +333,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             self.text_pipeline
                 .ensure_capacity(&self.device, text_instances.len());
             self.queue.write_buffer(
-                &self.text_pipeline.instances_buffer,
+                &self.text_pipeline.instances.instances_buffer,
                 0,
                 bytemuck::cast_slice(&text_instances),
             );
@@ -343,7 +343,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             self.image_pipeline
                 .ensure_capacity(&self.device, image_instances.len());
             self.queue.write_buffer(
-                &self.image_pipeline.instances_buffer,
+                &self.image_pipeline.instances.instances_buffer,
                 0,
                 bytemuck::cast_slice(&image_instances),
             );
@@ -381,14 +381,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 match step {
                     DrawStep::RectBatch { start, end } => {
                         render_pass.set_pipeline(&self.rect_pipeline.pipeline);
-                        render_pass.set_bind_group(0, &self.rect_pipeline.bind_group, &[]);
+                        render_pass.set_bind_group(
+                            0,
+                            &self.rect_pipeline.instances.instances_bind_group,
+                            &[],
+                        );
                         render_pass.draw(0..6, *start..*end);
                     }
                     DrawStep::TextBatch { start, end } => {
                         render_pass.set_pipeline(&self.text_pipeline.pipeline);
                         render_pass.set_bind_group(
                             0,
-                            &self.text_pipeline.instances_bind_group,
+                            &self.text_pipeline.instances.instances_bind_group,
                             &[],
                         );
                         render_pass.set_bind_group(1, &self.text_pipeline.atlas_bind_group, &[]);
@@ -401,7 +405,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         render_pass.set_pipeline(&self.image_pipeline.pipeline);
                         render_pass.set_bind_group(
                             0,
-                            &self.image_pipeline.instances_bind_group,
+                            &self.image_pipeline.instances.instances_bind_group,
                             &[],
                         );
                         render_pass.set_bind_group(1, texture_bind_group, &[]);

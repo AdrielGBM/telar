@@ -1,8 +1,3 @@
-struct Viewport {
-    size: vec2<f32>,
-    _pad: vec2<f32>,
-}
-
 struct RectInstance {
     rect: vec4<f32>,         
     radii: vec4<f32>,        
@@ -14,7 +9,6 @@ struct RectInstance {
     _pad2: f32,
 }
 
-@group(0) @binding(0) var<uniform> viewport: Viewport;
 @group(0) @binding(1) var<storage, read> instances: array<RectInstance>;
 
 struct VertexOutput {

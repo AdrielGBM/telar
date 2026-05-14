@@ -1,13 +1,7 @@
-struct Viewport {
-    size: vec2<f32>,
-    _pad: vec2<f32>,
-}
-
 struct ImageInstance {
     dest_rect: vec4<f32>,
 }
 
-@group(0) @binding(0) var<uniform>       viewport:       Viewport;
 @group(0) @binding(1) var<storage, read> instances:      array<ImageInstance>;
 @group(1) @binding(0) var               image_texture:  texture_2d<f32>;
 @group(1) @binding(1) var               image_sampler:  sampler;

@@ -32,7 +32,9 @@ where
     W: HasWindowHandle,
 {
     pub fn new(display: D, window: W) -> Result<Self, RendererError> {
-        let context = Context::new(display).map_err(|e| RendererError::Context(e.to_string()))?;
+        let context = Context::new(display).map_err(|e| {
+            RendererError::Backend(format!("softbuffer context creation failed: {}", e))
+        })?;
         let surface =
             Surface::new(&context, window).map_err(|e| RendererError::Surface(e.to_string()))?;
         Ok(Self {
@@ -79,6 +81,9 @@ where
         let commands = std::mem::take(&mut self.pending_commands);
 
         for cmd in commands {
+            let Some(pixmap) = &mut self.pixmap else {
+                break;
+            };
             match cmd {
                 DrawCommand::Rect {
                     rect,
@@ -86,13 +91,19 @@ where
                     stroke,
                     radius,
                 } => {
-                    self.draw_rect_impl(rect, fill, stroke, radius);
+                    crate::primitives::rect::draw_rect(pixmap, rect, fill, stroke, radius);
                 }
                 DrawCommand::Text { text, rect, style } => {
-                    self.draw_text_impl(&text, rect, &style);
+                    crate::primitives::text::draw_text(
+                        pixmap,
+                        &mut self.text_shaper,
+                        &text,
+                        rect,
+                        &style,
+                    );
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    self.draw_image_impl(&data, rect, filter);
+                    crate::primitives::image::draw_image(pixmap, &data, rect, filter);
                 }
                 _ => todo!(),
             }

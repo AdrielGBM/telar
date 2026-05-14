@@ -4,7 +4,7 @@ use std::sync::Arc;
 use renderer_core::{ImageData, ImageFilter};
 use wgpu::Device;
 
-use crate::primitives::Viewport;
+use super::InstancePipeline;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -20,13 +20,9 @@ struct GpuImage {
 }
 
 pub(crate) struct ImagePipeline {
+    pub(crate) instances: InstancePipeline<ImageInstance>,
     pub(crate) pipeline: wgpu::RenderPipeline,
-    instances_bgl: wgpu::BindGroupLayout,
     texture_bgl: wgpu::BindGroupLayout,
-    pub(crate) viewport_buffer: wgpu::Buffer,
-    pub(crate) instances_buffer: wgpu::Buffer,
-    pub(crate) instances_bind_group: wgpu::BindGroup,
-    instances_capacity: usize,
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
     texture_cache: HashMap<(*const ImageData, ImageFilter), GpuImage>,
@@ -40,52 +36,8 @@ pub(crate) const INITIAL_IMAGE_CAPACITY: usize = 16;
 
 impl ImagePipeline {
     pub(crate) fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
-        let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-image-viewport"),
-            size: std::mem::size_of::<Viewport>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-image-instances"),
-            size: (std::mem::size_of::<ImageInstance>() * INITIAL_IMAGE_CAPACITY) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let instances_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-image-instances-bgl"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let instances_bind_group = Self::make_instances_bind_group(
-            device,
-            &instances_bgl,
-            &viewport_buffer,
-            &instances_buffer,
-        );
+        let instances =
+            InstancePipeline::<ImageInstance>::new(device, "image", INITIAL_IMAGE_CAPACITY);
 
         let texture_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-image-texture-bgl"),
@@ -130,14 +82,15 @@ impl ImagePipeline {
             ..Default::default()
         });
 
+        let shader_source = [include_str!("viewport.wgsl"), include_str!("image.wgsl")].concat();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rsx-image-shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("image.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-image-pipeline-layout"),
-            bind_group_layouts: &[Some(&instances_bgl), Some(&texture_bgl)],
+            bind_group_layouts: &[Some(&instances.instances_bgl), Some(&texture_bgl)],
             immediate_size: 0,
         });
 
@@ -171,13 +124,9 @@ impl ImagePipeline {
         });
 
         Self {
+            instances,
             pipeline,
-            instances_bgl,
             texture_bgl,
-            viewport_buffer,
-            instances_buffer,
-            instances_bind_group,
-            instances_capacity: INITIAL_IMAGE_CAPACITY,
             sampler_nearest,
             sampler_linear,
             texture_cache: HashMap::new(),
@@ -185,46 +134,8 @@ impl ImagePipeline {
         }
     }
 
-    fn make_instances_bind_group(
-        device: &Device,
-        layout: &wgpu::BindGroupLayout,
-        viewport_buffer: &wgpu::Buffer,
-        instances_buffer: &wgpu::Buffer,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-image-instances-bg"),
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: viewport_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: instances_buffer.as_entire_binding(),
-                },
-            ],
-        })
-    }
-
     pub(crate) fn ensure_capacity(&mut self, device: &Device, count: usize) {
-        if count <= self.instances_capacity {
-            return;
-        }
-        let new_capacity = (count * 2).max(self.instances_capacity * 2);
-        self.instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-image-instances"),
-            size: (std::mem::size_of::<ImageInstance>() * new_capacity) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        self.instances_bind_group = Self::make_instances_bind_group(
-            device,
-            &self.instances_bgl,
-            &self.viewport_buffer,
-            &self.instances_buffer,
-        );
-        self.instances_capacity = new_capacity;
+        self.instances.ensure_capacity(device, count);
     }
 
     fn create_gpu_image(
