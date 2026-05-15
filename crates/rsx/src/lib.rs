@@ -17,7 +17,8 @@ pub use app::{App, Frame};
 pub use platform_core::WindowConfig;
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    BorderRadius, Color, FillStyle, ImageData, ImageFilter, Rect, Stroke, TextStyle,
+    BorderRadius, Color, FillStyle, ImageData, ImageFilter, LineCap, LineStyle, Point, Rect,
+    Stroke, TextStyle,
 };
 #[cfg(feature = "runtime")]
 pub use runner::run_with_name;

@@ -105,7 +105,10 @@ where
                 DrawCommand::Image { data, rect, filter } => {
                     crate::primitives::image::draw_image(pixmap, &data, rect, filter);
                 }
-                _ => todo!(),
+                DrawCommand::Line { p1, p2, style } => {
+                    crate::primitives::line::draw_line(pixmap, p1, p2, style);
+                }
+                _ => {}
             }
         }
 

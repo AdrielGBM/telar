@@ -66,20 +66,22 @@ pub(crate) fn draw_rect(
     stroke: Option<Stroke>,
     radius: BorderRadius,
 ) {
-    if let Some(fill_style) = fill
-        && let FillStyle::Solid(color) = fill_style
-        && let Some(path) = build_rect_path(rect, radius)
-    {
-        let mut paint = tiny_skia::Paint::default();
-        paint.set_color(to_skia_color(color));
-        paint.anti_alias = true;
-        pixmap.fill_path(
-            &path,
-            &paint,
-            tiny_skia::FillRule::Winding,
-            tiny_skia::Transform::identity(),
-            None,
-        );
+    if let Some(fill_style) = fill {
+        if let Some(path) = build_rect_path(rect, radius) {
+            let color = match fill_style {
+                FillStyle::Solid(c) => c,
+            };
+            let mut paint = tiny_skia::Paint::default();
+            paint.set_color(to_skia_color(color));
+            paint.anti_alias = true;
+            pixmap.fill_path(
+                &path,
+                &paint,
+                tiny_skia::FillRule::Winding,
+                tiny_skia::Transform::identity(),
+                None,
+            );
+        }
     }
 
     if let Some(s) = stroke {

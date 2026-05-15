@@ -34,3 +34,27 @@ impl From<Color> for FillStyle {
         Self::Solid(color)
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LineCap {
+    #[default]
+    Butt,
+    Round,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LineStyle {
+    pub color: Color,
+    pub width: f32,
+    pub cap: LineCap,
+}
+
+impl LineStyle {
+    pub fn new(color: Color, width: f32) -> Self {
+        Self {
+            color,
+            width,
+            cap: LineCap::Butt,
+        }
+    }
+}

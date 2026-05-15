@@ -1,0 +1,94 @@
+use renderer_core::{LineCap, LineStyle, Point};
+use wgpu::Device;
+
+use super::InstancePipeline;
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct LineInstance {
+    pub p1: [f32; 2],
+    pub p2: [f32; 2],
+    pub color: [f32; 4],
+    pub width: f32,
+    pub cap: f32,
+    pub _pad: [f32; 2],
+}
+
+pub(crate) const INITIAL_LINE_CAPACITY: usize = 256;
+
+pub(crate) struct LinePipeline {
+    pub(crate) instances: InstancePipeline<LineInstance>,
+    pub(crate) pipeline: wgpu::RenderPipeline,
+}
+
+impl LinePipeline {
+    pub(crate) fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
+        let instances =
+            InstancePipeline::<LineInstance>::new(device, "line", INITIAL_LINE_CAPACITY);
+
+        let shader_source = [include_str!("viewport.wgsl"), include_str!("line.wgsl")].concat();
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("rsx-line-shader"),
+            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("rsx-line-pipeline-layout"),
+            bind_group_layouts: &[Some(&instances.instances_bgl)],
+            immediate_size: 0,
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("rsx-line-pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+        Self {
+            instances,
+            pipeline,
+        }
+    }
+
+    pub(crate) fn ensure_capacity(&mut self, device: &Device, count: usize) {
+        self.instances.ensure_capacity(device, count);
+    }
+}
+
+pub(crate) fn make_line_instance(p1: Point, p2: Point, style: LineStyle) -> LineInstance {
+    let cap = match style.cap {
+        LineCap::Butt => 0.0f32,
+        LineCap::Round => 1.0f32,
+    };
+    LineInstance {
+        p1: [p1.x, p1.y],
+        p2: [p2.x, p2.y],
+        color: [style.color.r, style.color.g, style.color.b, style.color.a],
+        width: style.width,
+        cap,
+        _pad: [0.0; 2],
+    }
+}

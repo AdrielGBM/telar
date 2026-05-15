@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use rsx::{
-    App, AppContext, BorderRadius, Color, FillStyle, Frame, ImageData, ImageFilter, Rect, Stroke,
-    TextStyle, WindowConfig,
+    App, AppContext, BorderRadius, Color, FillStyle, Frame, ImageData, ImageFilter, LineCap,
+    LineStyle, Point, Rect, Stroke, TextStyle, WindowConfig,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -213,6 +213,140 @@ impl App for Sandbox {
             Rect::new(384.0, 756.0, 128.0, 16.0),
             TextStyle::new(11.0, MUTED),
         );
+
+        frame.draw_text(
+            "Lines",
+            Rect::new(24.0, 860.0, 200.0, 20.0),
+            TextStyle::new(12.0, MUTED),
+        );
+
+        frame.draw_text(
+            "Width",
+            Rect::new(24.0, 884.0, 60.0, 16.0),
+            TextStyle::new(11.0, MUTED),
+        );
+        let width_examples: &[(f32, &str)] = &[
+            (1.0, "1 px"),
+            (2.0, "2 px"),
+            (4.0, "4 px"),
+            (8.0, "8 px"),
+            (16.0, "16 px"),
+        ];
+        let mut cy = 906.0f32;
+        for &(w, label) in width_examples {
+            frame.draw_text(
+                label,
+                Rect::new(24.0, cy - 8.0, 56.0, 16.0),
+                TextStyle::new(11.0, MUTED),
+            );
+            frame.draw_line(
+                Point::new(88.0, cy),
+                Point::new(360.0, cy),
+                LineStyle::new(PRIMARY, w),
+            );
+            cy += w.max(2.0) + 18.0;
+        }
+
+        frame.draw_text(
+            "Color",
+            Rect::new(420.0, 884.0, 60.0, 16.0),
+            TextStyle::new(11.0, MUTED),
+        );
+        let color_examples: &[(Color, &str)] = &[
+            (PRIMARY, "primary"),
+            (SUCCESS, "success"),
+            (DANGER, "danger"),
+            (WARNING, "warning"),
+            (PURPLE, "purple"),
+        ];
+        for (i, &(color, label)) in color_examples.iter().enumerate() {
+            let y = 906.0 + i as f32 * 24.0;
+            frame.draw_line(
+                Point::new(420.0, y),
+                Point::new(680.0, y),
+                LineStyle::new(color, 3.0),
+            );
+            frame.draw_text(
+                label,
+                Rect::new(688.0, y - 8.0, 80.0, 16.0),
+                TextStyle::new(11.0, color),
+            );
+        }
+
+        frame.draw_text(
+            "Separator & chart",
+            Rect::new(24.0, 1020.0, 300.0, 16.0),
+            TextStyle::new(11.0, MUTED),
+        );
+        frame.draw_line(
+            Point::new(24.0, 1040.0),
+            Point::new(760.0, 1040.0),
+            LineStyle::new(CARD_BORDER, 1.0),
+        );
+
+        let ax = 60.0f32;
+        let cb = 1150.0f32;
+        let ct = 1060.0f32;
+        let ax_right = 400.0f32;
+        frame.draw_line(
+            Point::new(ax, ct),
+            Point::new(ax, cb),
+            LineStyle::new(MUTED, 1.0),
+        );
+        frame.draw_line(
+            Point::new(ax, cb),
+            Point::new(ax_right, cb),
+            LineStyle::new(MUTED, 1.0),
+        );
+
+        let data_x = [ax, ax + 85.0, ax + 170.0, ax + 255.0, ax_right];
+        let s1 = [1140.0f32, 1115.0, 1098.0, 1078.0, 1068.0];
+        let s2 = [1135.0f32, 1112.0, 1100.0, 1088.0, 1075.0];
+        let s3 = [1115.0f32, 1122.0, 1130.0, 1138.0, 1145.0];
+        for i in 0..4 {
+            frame.draw_line(
+                Point::new(data_x[i], s1[i]),
+                Point::new(data_x[i + 1], s1[i + 1]),
+                LineStyle::new(PRIMARY, 2.0),
+            );
+            frame.draw_line(
+                Point::new(data_x[i], s2[i]),
+                Point::new(data_x[i + 1], s2[i + 1]),
+                LineStyle::new(SUCCESS, 2.0),
+            );
+            frame.draw_line(
+                Point::new(data_x[i], s3[i]),
+                Point::new(data_x[i + 1], s3[i + 1]),
+                LineStyle::new(DANGER, 2.0),
+            );
+        }
+
+        frame.draw_text(
+            "Diagonals",
+            Rect::new(460.0, 1044.0, 120.0, 16.0),
+            TextStyle::new(11.0, MUTED),
+        );
+        let fan_cx = 590.0f32;
+        let fan_cy = 1110.0f32;
+        let fan_tips: &[(f32, f32, Color)] = &[
+            (500.0, 1064.0, PRIMARY),
+            (540.0, 1058.0, SUCCESS),
+            (590.0, 1058.0, DANGER),
+            (640.0, 1058.0, WARNING),
+            (680.0, 1064.0, PURPLE),
+            (710.0, 1082.0, DARK),
+        ];
+        for &(tx, ty, color) in fan_tips {
+            frame.draw_line(
+                Point::new(fan_cx, fan_cy),
+                Point::new(tx, ty),
+                LineStyle {
+                    color,
+                    width: 2.0,
+                    cap: LineCap::Round,
+                },
+            );
+        }
     }
 }
 

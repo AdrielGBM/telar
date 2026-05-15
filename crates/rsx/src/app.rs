@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use platform_core::Event;
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, FillStyle, ImageData, ImageFilter, Rect, Stroke, TextStyle,
+    BorderRadius, Color, DrawCommand, FillStyle, ImageData, ImageFilter, LineStyle, Point, Rect,
+    Stroke, TextStyle,
 };
 
 use crate::context::AppContext;
@@ -50,6 +51,10 @@ impl Frame {
     pub fn draw_image(&mut self, data: Arc<ImageData>, rect: Rect, filter: ImageFilter) {
         self.commands
             .push(DrawCommand::Image { data, rect, filter });
+    }
+
+    pub fn draw_line(&mut self, p1: Point, p2: Point, style: LineStyle) {
+        self.commands.push(DrawCommand::Line { p1, p2, style });
     }
 }
 
