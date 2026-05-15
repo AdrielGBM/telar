@@ -72,10 +72,79 @@ impl Default for BorderRadius {
 pub struct Stroke {
     pub color: Color,
     pub width: f32,
+    pub cap: crate::LineCap,
+    pub join: crate::LineJoin,
 }
 
 impl Stroke {
     pub fn new(color: Color, width: f32) -> Self {
-        Self { color, width }
+        Self {
+            color,
+            width,
+            cap: crate::LineCap::default(),
+            join: crate::LineJoin::default(),
+        }
+    }
+
+    pub fn with_cap(mut self, cap: crate::LineCap) -> Self {
+        self.cap = cap;
+        self
+    }
+
+    pub fn with_join(mut self, join: crate::LineJoin) -> Self {
+        self.join = join;
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PathVerb {
+    MoveTo(Point),
+    LineTo(Point),
+    QuadTo {
+        ctrl: Point,
+        to: Point,
+    },
+    CubicTo {
+        ctrl1: Point,
+        ctrl2: Point,
+        to: Point,
+    },
+    Close,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PathData {
+    pub verbs: Vec<PathVerb>,
+}
+
+impl PathData {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn move_to(mut self, p: Point) -> Self {
+        self.verbs.push(PathVerb::MoveTo(p));
+        self
+    }
+
+    pub fn line_to(mut self, p: Point) -> Self {
+        self.verbs.push(PathVerb::LineTo(p));
+        self
+    }
+
+    pub fn quad_to(mut self, ctrl: Point, to: Point) -> Self {
+        self.verbs.push(PathVerb::QuadTo { ctrl, to });
+        self
+    }
+
+    pub fn cubic_to(mut self, ctrl1: Point, ctrl2: Point, to: Point) -> Self {
+        self.verbs.push(PathVerb::CubicTo { ctrl1, ctrl2, to });
+        self
+    }
+
+    pub fn close(mut self) -> Self {
+        self.verbs.push(PathVerb::Close);
+        self
     }
 }

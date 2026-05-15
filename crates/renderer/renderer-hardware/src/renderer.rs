@@ -5,6 +5,7 @@ use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 use crate::primitives::Viewport;
 use crate::primitives::image::{ImageInstance, ImagePipeline, make_image_instance};
 use crate::primitives::line::{LineInstance, LinePipeline, make_line_instance};
+use crate::primitives::path::{PathPipeline, PathTessCache, PathVertex, tessellate_path};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
 
@@ -38,6 +39,10 @@ enum DrawStep {
         instance_index: u32,
         texture_bind_group: wgpu::BindGroup,
     },
+    PathDraw {
+        index_start: u32,
+        index_end: u32,
+    },
 }
 
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
@@ -60,6 +65,11 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_line_instances: Vec<LineInstance>,
     pending_image_instances: Vec<ImageInstance>,
     pending_steps: Vec<DrawStep>,
+    path_pipeline: PathPipeline,
+    pending_path_vertices: Vec<PathVertex>,
+    pending_path_indices: Vec<u32>,
+    path_tess_cache: PathTessCache,
+    msaa_texture: Option<wgpu::Texture>,
     _window: std::sync::Arc<W>,
 }
 
@@ -109,6 +119,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let text_pipeline = TextPipeline::new(&device, surface_format);
         let line_pipeline = LinePipeline::new(&device, surface_format);
         let image_pipeline = ImagePipeline::new(&device, surface_format);
+        let path_pipeline = PathPipeline::new(&device, surface_format);
+        let path_tess_cache = PathTessCache::new();
 
         Ok(Self {
             surface,
@@ -119,6 +131,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             text_pipeline,
             line_pipeline,
             image_pipeline,
+            path_pipeline,
             text_shaper: renderer_text::TextShaper::new(),
             surface_format,
             present_mode,
@@ -130,6 +143,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_line_instances: Vec::new(),
             pending_image_instances: Vec::new(),
             pending_steps: Vec::new(),
+            pending_path_vertices: Vec::new(),
+            pending_path_indices: Vec::new(),
+            path_tess_cache,
+            msaa_texture: None,
             _window: window,
         })
     }
@@ -148,6 +165,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         self.surface.configure(&self.device, &config);
         self.config = Some(config);
+        self.msaa_texture = Some(self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("rsx-msaa"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.surface_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        }));
     }
 }
 
@@ -167,6 +198,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.pending_line_instances.clear();
         self.pending_image_instances.clear();
         self.pending_steps.clear();
+        self.path_tess_cache.begin_frame();
+        self.pending_path_vertices.clear();
+        self.pending_path_indices.clear();
         Ok(())
     }
 
@@ -266,6 +300,33 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         texture_bind_group,
                     });
                 }
+                DrawCommand::Path {
+                    data,
+                    fill,
+                    stroke,
+                    fill_rule,
+                } => {
+                    flush_rect!();
+                    flush_text!();
+                    flush_line!();
+                    let index_start = self.pending_path_indices.len() as u32;
+                    tessellate_path(
+                        &mut self.path_tess_cache,
+                        data,
+                        *fill,
+                        *stroke,
+                        *fill_rule,
+                        &mut self.pending_path_vertices,
+                        &mut self.pending_path_indices,
+                    );
+                    let index_end = self.pending_path_indices.len() as u32;
+                    if index_end > index_start {
+                        self.pending_steps.push(DrawStep::PathDraw {
+                            index_start,
+                            index_end,
+                        });
+                    }
+                }
                 _ => {}
             }
         }
@@ -293,6 +354,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             self.pending_line_instances.clear();
             self.pending_image_instances.clear();
             self.pending_steps.clear();
+            self.pending_path_vertices.clear();
+            self.pending_path_indices.clear();
             return Ok(());
         }
 
@@ -308,6 +371,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 self.pending_line_instances.clear();
                 self.pending_image_instances.clear();
                 self.pending_steps.clear();
+                self.pending_path_vertices.clear();
+                self.pending_path_indices.clear();
                 return Ok(());
             }
             other => {
@@ -316,6 +381,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 self.pending_line_instances.clear();
                 self.pending_image_instances.clear();
                 self.pending_steps.clear();
+                self.pending_path_vertices.clear();
+                self.pending_path_indices.clear();
                 return Err(RendererError::Present(format!("surface error: {other:?}")));
             }
         };
@@ -344,6 +411,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             0,
             bytemuck::bytes_of(&viewport),
         );
+        self.queue.write_buffer(
+            &self.path_pipeline.viewport_buffer,
+            0,
+            bytemuck::bytes_of(&viewport),
+        );
 
         self.text_pipeline
             .sync_atlas(&self.queue, &mut self.text_shaper.atlas);
@@ -353,6 +425,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let line_instances = std::mem::take(&mut self.pending_line_instances);
         let image_instances = std::mem::take(&mut self.pending_image_instances);
         let steps = std::mem::take(&mut self.pending_steps);
+        let path_vertices = std::mem::take(&mut self.pending_path_vertices);
+        let path_indices = std::mem::take(&mut self.pending_path_indices);
 
         if !all_instances.is_empty() {
             self.rect_pipeline
@@ -394,9 +468,33 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             );
         }
 
+        if !path_vertices.is_empty() {
+            self.path_pipeline.ensure_capacity(
+                &self.device,
+                path_vertices.len(),
+                path_indices.len(),
+            );
+            self.queue.write_buffer(
+                &self.path_pipeline.vertex_buffer,
+                0,
+                bytemuck::cast_slice(&path_vertices),
+            );
+            self.queue.write_buffer(
+                &self.path_pipeline.index_buffer,
+                0,
+                bytemuck::cast_slice(&path_indices),
+            );
+        }
+
         let view = output
             .texture
             .create_view(&TextureViewDescriptor::default());
+
+        let msaa_view = self
+            .msaa_texture
+            .as_ref()
+            .expect("msaa_texture initialized in reconfigure")
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = self
             .device
@@ -408,8 +506,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rsx-render-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
+                    view: &msaa_view,
+                    resolve_target: Some(&view),
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: load_op,
@@ -464,6 +562,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         );
                         render_pass.set_bind_group(1, texture_bind_group, &[]);
                         render_pass.draw(0..6, *instance_index..*instance_index + 1);
+                    }
+                    DrawStep::PathDraw {
+                        index_start,
+                        index_end,
+                    } => {
+                        render_pass.set_pipeline(&self.path_pipeline.pipeline);
+                        render_pass.set_bind_group(0, &self.path_pipeline.bind_group, &[]);
+                        render_pass
+                            .set_vertex_buffer(0, self.path_pipeline.vertex_buffer.slice(..));
+                        render_pass.set_index_buffer(
+                            self.path_pipeline.index_buffer.slice(..),
+                            wgpu::IndexFormat::Uint32,
+                        );
+                        render_pass.draw_indexed(*index_start..*index_end, 0, 0..1);
                     }
                 }
             }

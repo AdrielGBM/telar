@@ -58,3 +58,18 @@ impl LineStyle {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LineJoin {
+    #[default]
+    Miter,
+    Round,
+    Bevel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FillRule {
+    #[default]
+    Winding,
+    EvenOdd,
+}

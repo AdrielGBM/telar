@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use rsx::{
-    App, AppContext, BorderRadius, Color, FillStyle, Frame, ImageData, ImageFilter, LineCap,
-    LineStyle, Point, Rect, Stroke, TextStyle, WindowConfig,
+    App, AppContext, BorderRadius, Color, FillRule, FillStyle, Frame, ImageData, ImageFilter,
+    LineCap, LineJoin, LineStyle, PathData, Point, Rect, Stroke, TextStyle, WindowConfig,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -347,6 +347,8 @@ impl App for Sandbox {
                 },
             );
         }
+
+        draw_paths_section(frame);
     }
 }
 
@@ -408,4 +410,212 @@ fn make_radial_alpha(width: u32, height: u32) -> ImageData {
         }
     }
     ImageData::new(pixels, width, height)
+}
+
+fn draw_paths_section(frame: &mut Frame) {
+    use std::sync::Arc;
+
+    const Y0: f32 = 1200.0;
+
+    frame.draw_line(
+        Point::new(24.0, Y0),
+        Point::new(760.0, Y0),
+        LineStyle::new(CARD_BORDER, 1.0),
+    );
+    frame.draw_text(
+        "Paths",
+        Rect::new(24.0, Y0 + 12.0, 200.0, 20.0),
+        TextStyle::new(12.0, MUTED),
+    );
+    frame.draw_text(
+        "Polygon shapes",
+        Rect::new(24.0, Y0 + 36.0, 300.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    frame.draw_path(
+        Arc::new(
+            PathData::new()
+                .move_to(Point::new(99.0, Y0 + 56.0))
+                .line_to(Point::new(159.0, Y0 + 166.0))
+                .line_to(Point::new(39.0, Y0 + 166.0))
+                .close(),
+        ),
+        Some(FillStyle::solid(PRIMARY)),
+        None,
+        FillRule::Winding,
+    );
+    frame.draw_text(
+        "triangle",
+        Rect::new(24.0, Y0 + 176.0, 150.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    {
+        let cx = 269.0f32;
+        let cy = Y0 + 111.0;
+        let outer = 55.0f32;
+        let inner = 22.0f32;
+        let mut path = PathData::new();
+        for i in 0..10usize {
+            let angle = std::f32::consts::TAU * i as f32 / 10.0 - std::f32::consts::FRAC_PI_2;
+            let r = if i % 2 == 0 { outer } else { inner };
+            let p = Point::new(cx + r * angle.cos(), cy + r * angle.sin());
+            path = if i == 0 {
+                path.move_to(p)
+            } else {
+                path.line_to(p)
+            };
+        }
+        path = path.close();
+        frame.draw_path(
+            Arc::new(path),
+            Some(FillStyle::solid(DANGER)),
+            Some(Stroke::new(DARK, 1.0)),
+            FillRule::Winding,
+        );
+        frame.draw_text(
+            "star (fill + stroke)",
+            Rect::new(199.0, Y0 + 176.0, 200.0, 16.0),
+            TextStyle::new(11.0, MUTED),
+        );
+    }
+
+    frame.draw_path(
+        Arc::new(
+            PathData::new()
+                .move_to(Point::new(384.0, Y0 + 58.0))
+                .line_to(Point::new(564.0, Y0 + 58.0))
+                .line_to(Point::new(564.0, Y0 + 168.0))
+                .line_to(Point::new(384.0, Y0 + 168.0))
+                .close()
+                .move_to(Point::new(414.0, Y0 + 88.0))
+                .line_to(Point::new(534.0, Y0 + 88.0))
+                .line_to(Point::new(534.0, Y0 + 138.0))
+                .line_to(Point::new(414.0, Y0 + 138.0))
+                .close(),
+        ),
+        Some(FillStyle::solid(PURPLE)),
+        None,
+        FillRule::EvenOdd,
+    );
+    frame.draw_text(
+        "even-odd fill",
+        Rect::new(374.0, Y0 + 176.0, 200.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    frame.draw_text(
+        "Bézier curves",
+        Rect::new(24.0, Y0 + 212.0, 300.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    frame.draw_path(
+        Arc::new(
+            PathData::new()
+                .move_to(Point::new(24.0, Y0 + 308.0))
+                .quad_to(Point::new(164.0, Y0 + 238.0), Point::new(304.0, Y0 + 308.0)),
+        ),
+        None,
+        Some(Stroke::new(WARNING, 3.0).with_cap(LineCap::Round)),
+        FillRule::Winding,
+    );
+    frame.draw_text(
+        "quad_to arch",
+        Rect::new(24.0, Y0 + 318.0, 200.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    frame.draw_path(
+        Arc::new(
+            PathData::new()
+                .move_to(Point::new(334.0, Y0 + 248.0))
+                .cubic_to(
+                    Point::new(404.0, Y0 + 248.0),
+                    Point::new(334.0, Y0 + 308.0),
+                    Point::new(404.0, Y0 + 308.0),
+                ),
+        ),
+        None,
+        Some(Stroke::new(SUCCESS, 3.0).with_cap(LineCap::Round)),
+        FillRule::Winding,
+    );
+    frame.draw_text(
+        "cubic_to S-curve",
+        Rect::new(320.0, Y0 + 318.0, 200.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    frame.draw_path(
+        Arc::new(
+            PathData::new()
+                .move_to(Point::new(540.0, Y0 + 243.0))
+                .cubic_to(
+                    Point::new(610.0, Y0 + 243.0),
+                    Point::new(610.0, Y0 + 313.0),
+                    Point::new(540.0, Y0 + 313.0),
+                )
+                .cubic_to(
+                    Point::new(470.0, Y0 + 313.0),
+                    Point::new(470.0, Y0 + 243.0),
+                    Point::new(540.0, Y0 + 243.0),
+                )
+                .close(),
+        ),
+        Some(FillStyle::solid(Color::rgba(0.97, 0.72, 0.18, 0.75))),
+        Some(Stroke::new(WARNING, 1.5)),
+        FillRule::Winding,
+    );
+    frame.draw_text(
+        "closed cubic (petal)",
+        Rect::new(470.0, Y0 + 318.0, 200.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    frame.draw_text(
+        "Stroke style",
+        Rect::new(24.0, Y0 + 354.0, 300.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    frame.draw_path(
+        Arc::new(
+            PathData::new()
+                .move_to(Point::new(24.0, Y0 + 410.0))
+                .line_to(Point::new(100.0, Y0 + 390.0))
+                .line_to(Point::new(176.0, Y0 + 430.0))
+                .line_to(Point::new(252.0, Y0 + 390.0)),
+        ),
+        None,
+        Some(Stroke::new(PRIMARY, 8.0)),
+        FillRule::Winding,
+    );
+    frame.draw_text(
+        "Butt / Miter (default)",
+        Rect::new(24.0, Y0 + 448.0, 230.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
+
+    frame.draw_path(
+        Arc::new(
+            PathData::new()
+                .move_to(Point::new(324.0, Y0 + 410.0))
+                .line_to(Point::new(400.0, Y0 + 390.0))
+                .line_to(Point::new(476.0, Y0 + 430.0))
+                .line_to(Point::new(552.0, Y0 + 390.0)),
+        ),
+        None,
+        Some(
+            Stroke::new(DANGER, 8.0)
+                .with_cap(LineCap::Round)
+                .with_join(LineJoin::Round),
+        ),
+        FillRule::Winding,
+    );
+    frame.draw_text(
+        "Round cap / Round join",
+        Rect::new(324.0, Y0 + 448.0, 240.0, 16.0),
+        TextStyle::new(11.0, MUTED),
+    );
 }

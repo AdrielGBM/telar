@@ -108,6 +108,14 @@ where
                 DrawCommand::Line { p1, p2, style } => {
                     crate::primitives::line::draw_line(pixmap, p1, p2, style);
                 }
+                DrawCommand::Path {
+                    data,
+                    fill,
+                    stroke,
+                    fill_rule,
+                } => {
+                    crate::primitives::path::draw_path(pixmap, &data, fill, stroke, fill_rule);
+                }
                 _ => {}
             }
         }

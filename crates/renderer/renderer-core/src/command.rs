@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    BorderRadius, FillStyle, ImageData, ImageFilter, LineStyle, Point, Rect, Stroke, TextStyle,
+    BorderRadius, FillRule, FillStyle, ImageData, ImageFilter, LineStyle, PathData, Point, Rect,
+    Stroke, TextStyle,
 };
 
 #[derive(Debug, Clone)]
@@ -27,5 +28,11 @@ pub enum DrawCommand {
         p1: Point,
         p2: Point,
         style: LineStyle,
+    },
+    Path {
+        data: Arc<PathData>,
+        fill: Option<FillStyle>,
+        stroke: Option<Stroke>,
+        fill_rule: FillRule,
     },
 }
