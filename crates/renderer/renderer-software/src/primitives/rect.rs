@@ -1,4 +1,4 @@
-use renderer_core::{BorderRadius, FillStyle, Rect, Stroke};
+use renderer_core::{BorderRadius, FillStyle, Rect, RectStyle};
 
 use crate::renderer::to_skia_color;
 
@@ -59,15 +59,9 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     pb.finish()
 }
 
-pub(crate) fn draw_rect(
-    pixmap: &mut tiny_skia::Pixmap,
-    rect: Rect,
-    fill: Option<FillStyle>,
-    stroke: Option<Stroke>,
-    radius: BorderRadius,
-) {
-    if let Some(fill_style) = fill {
-        if let Some(path) = build_rect_path(rect, radius) {
+pub(crate) fn draw_rect(pixmap: &mut tiny_skia::Pixmap, rect: Rect, style: &RectStyle) {
+    if let Some(fill_style) = style.fill {
+        if let Some(path) = build_rect_path(rect, style.radius) {
             let color = match fill_style {
                 FillStyle::Solid(c) => c,
             };
@@ -84,7 +78,7 @@ pub(crate) fn draw_rect(
         }
     }
 
-    if let Some(s) = stroke {
+    if let Some(s) = style.stroke {
         let half = s.width / 2.0;
         let inset = Rect::new(
             rect.x + half,
@@ -93,10 +87,10 @@ pub(crate) fn draw_rect(
             rect.h - s.width,
         );
         let inset_radius = BorderRadius {
-            top_left: (radius.top_left - half).max(0.0),
-            top_right: (radius.top_right - half).max(0.0),
-            bottom_right: (radius.bottom_right - half).max(0.0),
-            bottom_left: (radius.bottom_left - half).max(0.0),
+            top_left: (style.radius.top_left - half).max(0.0),
+            top_right: (style.radius.top_right - half).max(0.0),
+            bottom_right: (style.radius.bottom_right - half).max(0.0),
+            bottom_left: (style.radius.bottom_left - half).max(0.0),
         };
         if let Some(path) = build_rect_path(inset, inset_radius) {
             let mut paint = tiny_skia::Paint::default();

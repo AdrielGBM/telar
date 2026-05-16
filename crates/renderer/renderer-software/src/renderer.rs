@@ -92,13 +92,7 @@ where
             };
             match cmd {
                 DrawCommand::Rect { rect, style } => {
-                    crate::primitives::rect::draw_rect(
-                        pixmap,
-                        rect,
-                        style.fill,
-                        style.stroke,
-                        style.radius,
-                    );
+                    crate::primitives::rect::draw_rect(pixmap, rect, &style);
                 }
                 DrawCommand::Text { text, rect, style } => {
                     crate::primitives::text::draw_text(
@@ -122,13 +116,7 @@ where
                     crate::primitives::line::draw_line(pixmap, p1, p2, style);
                 }
                 DrawCommand::Path { data, style } => {
-                    crate::primitives::path::draw_path(
-                        pixmap,
-                        &data,
-                        style.fill,
-                        style.stroke,
-                        style.fill_rule,
-                    );
+                    crate::primitives::path::draw_path(pixmap, &data, &style);
                 }
             }
         }

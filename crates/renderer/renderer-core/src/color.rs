@@ -91,11 +91,19 @@ impl Color {
     }
 
     pub fn from_hsv(h: f32, s: f32, v: f32) -> Self {
+        Self::from_hsva(h, s, v, 1.0)
+    }
+
+    pub fn from_hsva(h: f32, s: f32, v: f32, a: f32) -> Self {
         let c = v * s;
         let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
         let m = v - c;
         let (r, g, b) = Self::hue_to_rgb(c, x, h);
-        Self::rgba(r + m, g + m, b + m, 1.0)
+        Self::rgba(r + m, g + m, b + m, a)
+    }
+
+    pub fn to_array(self) -> [f32; 4] {
+        [self.r, self.g, self.b, self.a]
     }
 
     fn hue_to_rgb(c: f32, x: f32, h: f32) -> (f32, f32, f32) {

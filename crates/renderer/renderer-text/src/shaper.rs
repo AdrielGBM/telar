@@ -187,14 +187,7 @@ impl TextShaper {
             return Vec::new();
         }
 
-        let rgba = color.to_rgba8();
-        let [r, g, b, a] = rgba;
-        let tint = [
-            r as f32 / 255.0,
-            g as f32 / 255.0,
-            b as f32 / 255.0,
-            a as f32 / 255.0,
-        ];
+        let tint = color.to_array();
         let identity_tint = [1.0, 1.0, 1.0, 1.0];
 
         let metrics = Metrics::new(font_size, font_size * 1.2);

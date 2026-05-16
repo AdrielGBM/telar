@@ -1,4 +1,4 @@
-use renderer_core::{FillRule, FillStyle, LineCap, LineJoin, PathData, PathVerb, Stroke};
+use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 
 use crate::renderer::to_skia_color;
 
@@ -18,42 +18,44 @@ fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
     pb.finish()
 }
 
-pub(crate) fn draw_path(
-    pixmap: &mut tiny_skia::Pixmap,
-    data: &PathData,
-    fill: Option<FillStyle>,
-    stroke: Option<Stroke>,
-    fill_rule: FillRule,
-) {
+fn to_skia_line_cap(cap: LineCap) -> tiny_skia::LineCap {
+    match cap {
+        LineCap::Butt => tiny_skia::LineCap::Butt,
+        LineCap::Round => tiny_skia::LineCap::Round,
+        LineCap::Square => tiny_skia::LineCap::Square,
+    }
+}
+
+fn to_skia_line_join(join: LineJoin) -> tiny_skia::LineJoin {
+    match join {
+        LineJoin::Miter => tiny_skia::LineJoin::Miter,
+        LineJoin::Round => tiny_skia::LineJoin::Round,
+        LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
+    }
+}
+
+pub(crate) fn draw_path(pixmap: &mut tiny_skia::Pixmap, data: &PathData, style: &PathStyle) {
     let Some(path) = build_skia_path(data) else {
         return;
     };
 
-    if let Some(fill_style) = fill {
+    if let Some(fill_style) = style.fill {
         let mut paint = tiny_skia::Paint::default();
         paint.set_color(to_skia_color(fill_style.color()));
         paint.anti_alias = true;
-        let rule = match fill_rule {
+        let rule = match style.fill_rule {
             FillRule::Winding => tiny_skia::FillRule::Winding,
             FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
         };
         pixmap.fill_path(&path, &paint, rule, tiny_skia::Transform::identity(), None);
     }
 
-    if let Some(s) = stroke {
+    if let Some(s) = style.stroke {
         let mut paint = tiny_skia::Paint::default();
         paint.set_color(to_skia_color(s.color));
         paint.anti_alias = true;
-        let line_cap = match s.cap {
-            LineCap::Butt => tiny_skia::LineCap::Butt,
-            LineCap::Round => tiny_skia::LineCap::Round,
-            LineCap::Square => tiny_skia::LineCap::Square,
-        };
-        let line_join = match s.join {
-            LineJoin::Miter => tiny_skia::LineJoin::Miter,
-            LineJoin::Round => tiny_skia::LineJoin::Round,
-            LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
-        };
+        let line_cap = to_skia_line_cap(s.cap);
+        let line_join = to_skia_line_join(s.join);
         let stroke = tiny_skia::Stroke {
             width: s.width,
             line_cap,

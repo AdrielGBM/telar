@@ -70,7 +70,7 @@ fn emit_cached_geom(
     out_indices: &mut Vec<u32>,
 ) {
     geom.last_frame = current_frame;
-    let color_array = [color.r, color.g, color.b, color.a];
+    let color_array = color.to_array();
     let vertex_base = out_vertices.len() as u32;
     for &pos in &geom.positions {
         out_vertices.push(PathVertex {
@@ -197,16 +197,8 @@ pub(crate) fn prepare_path(
             let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = StrokeTessellator::new();
-            let line_cap = match s.cap {
-                LineCap::Butt => LyonLineCap::Butt,
-                LineCap::Round => LyonLineCap::Round,
-                LineCap::Square => LyonLineCap::Square,
-            };
-            let line_join = match s.join {
-                LineJoin::Miter => LyonLineJoin::Miter,
-                LineJoin::Round => LyonLineJoin::Round,
-                LineJoin::Bevel => LyonLineJoin::Bevel,
-            };
+            let line_cap = to_lyon_line_cap(s.cap);
+            let line_join = to_lyon_line_join(s.join);
             let options = StrokeOptions::default()
                 .with_line_width(s.width)
                 .with_start_cap(line_cap)
@@ -236,6 +228,22 @@ pub(crate) fn prepare_path(
         if let Some(geom) = cache.stroke.get_mut(&stroke_key) {
             emit_cached_geom(geom, s.color, current_frame, out_vertices, out_indices);
         }
+    }
+}
+
+fn to_lyon_line_cap(cap: LineCap) -> LyonLineCap {
+    match cap {
+        LineCap::Butt => LyonLineCap::Butt,
+        LineCap::Round => LyonLineCap::Round,
+        LineCap::Square => LyonLineCap::Square,
+    }
+}
+
+fn to_lyon_line_join(join: LineJoin) -> LyonLineJoin {
+    match join {
+        LineJoin::Miter => LyonLineJoin::Miter,
+        LineJoin::Round => LyonLineJoin::Round,
+        LineJoin::Bevel => LyonLineJoin::Bevel,
     }
 }
 

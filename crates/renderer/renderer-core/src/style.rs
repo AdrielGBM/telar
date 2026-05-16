@@ -87,11 +87,65 @@ pub struct RectStyle {
     pub radius: BorderRadius,
 }
 
+impl Default for RectStyle {
+    fn default() -> Self {
+        Self {
+            fill: None,
+            stroke: None,
+            radius: BorderRadius::default(),
+        }
+    }
+}
+
+impl RectStyle {
+    pub fn with_fill(mut self, fill: impl Into<FillStyle>) -> Self {
+        self.fill = Some(fill.into());
+        self
+    }
+
+    pub fn with_stroke(mut self, stroke: Stroke) -> Self {
+        self.stroke = Some(stroke);
+        self
+    }
+
+    pub fn with_radius(mut self, radius: BorderRadius) -> Self {
+        self.radius = radius;
+        self
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PathStyle {
     pub fill: Option<FillStyle>,
     pub stroke: Option<Stroke>,
     pub fill_rule: FillRule,
+}
+
+impl Default for PathStyle {
+    fn default() -> Self {
+        Self {
+            fill: None,
+            stroke: None,
+            fill_rule: FillRule::default(),
+        }
+    }
+}
+
+impl PathStyle {
+    pub fn with_fill(mut self, fill: impl Into<FillStyle>) -> Self {
+        self.fill = Some(fill.into());
+        self
+    }
+
+    pub fn with_stroke(mut self, stroke: Stroke) -> Self {
+        self.stroke = Some(stroke);
+        self
+    }
+
+    pub fn with_fill_rule(mut self, rule: FillRule) -> Self {
+        self.fill_rule = rule;
+        self
+    }
 }
 
 #[cfg(test)]

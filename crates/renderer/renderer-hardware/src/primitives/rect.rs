@@ -84,11 +84,11 @@ impl RectPipeline {
 
 pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle) -> RectInstance {
     let fill_color = match style.fill {
-        Some(renderer_core::FillStyle::Solid(c)) => [c.r, c.g, c.b, c.a],
+        Some(renderer_core::FillStyle::Solid(c)) => c.to_array(),
         None => [0.0; 4],
     };
     let (stroke_color, stroke_width) = match style.stroke {
-        Some(s) => ([s.color.r, s.color.g, s.color.b, s.color.a], s.width),
+        Some(s) => (s.color.to_array(), s.width),
         None => ([0.0; 4], 0.0),
     };
     RectInstance {
