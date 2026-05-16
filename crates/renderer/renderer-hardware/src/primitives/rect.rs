@@ -14,6 +14,7 @@ pub(crate) struct RectInstance {
     pub _pad: [f32; 3],
 }
 
+// Typical frame has 100–200 rects; doubles on overflow, so reallocations are rare after warmup.
 pub(crate) const INITIAL_RECT_CAPACITY: usize = 256;
 
 pub(crate) struct RectPipeline {

@@ -31,7 +31,7 @@ impl Frame {
 
     pub fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle) {
         self.commands.push(DrawCommand::Text {
-            text: text.to_owned(),
+            text: Arc::from(text),
             rect,
             style,
         });

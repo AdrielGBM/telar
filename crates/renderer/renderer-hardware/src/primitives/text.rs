@@ -13,6 +13,7 @@ pub(crate) struct TextInstance {
     pub color: [f32; 4],
 }
 
+// Typical frame has 100–200 text runs; doubles on overflow, so reallocations are rare after warmup.
 pub(crate) const INITIAL_TEXT_CAPACITY: usize = 256;
 
 pub(crate) struct TextPipeline {

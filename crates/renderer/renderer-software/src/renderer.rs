@@ -92,13 +92,19 @@ where
             };
             match cmd {
                 DrawCommand::Rect { rect, style } => {
+                    if rect.w <= 0.0
+                        || rect.h <= 0.0
+                        || (style.fill.is_none() && style.stroke.is_none())
+                    {
+                        continue;
+                    }
                     crate::primitives::rect::draw_rect(pixmap, rect, &style);
                 }
                 DrawCommand::Text { text, rect, style } => {
                     crate::primitives::text::draw_text(
                         pixmap,
                         &mut self.text_shaper,
-                        &text,
+                        &*text,
                         rect,
                         &style,
                     );

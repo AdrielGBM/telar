@@ -1,3 +1,14 @@
+macro_rules! flush_batch {
+    ($self:expr, $start_field:ident, $vec_field:ident, $variant:ident) => {
+        if let Some(start) = $self.$start_field.take() {
+            let end = $self.$vec_field.len() as u32;
+            if end > start {
+                $self.pending_steps.push(DrawStep::$variant { start, end });
+            }
+        }
+    };
+}
+
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, ImageFilter, RenderBackend, RendererError};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
@@ -235,30 +246,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn flush_rect(&mut self) {
-        if let Some(start) = self.batch_rect_start.take() {
-            let end = self.pending_instances.len() as u32;
-            if end > start {
-                self.pending_steps.push(DrawStep::RectBatch { start, end });
-            }
-        }
+        flush_batch!(self, batch_rect_start, pending_instances, RectBatch);
     }
 
     fn flush_text(&mut self) {
-        if let Some(start) = self.batch_text_start.take() {
-            let end = self.pending_text_instances.len() as u32;
-            if end > start {
-                self.pending_steps.push(DrawStep::TextBatch { start, end });
-            }
-        }
+        flush_batch!(self, batch_text_start, pending_text_instances, TextBatch);
     }
 
     fn flush_line(&mut self) {
-        if let Some(start) = self.batch_line_start.take() {
-            let end = self.pending_line_instances.len() as u32;
-            if end > start {
-                self.pending_steps.push(DrawStep::LineBatch { start, end });
-            }
-        }
+        flush_batch!(self, batch_line_start, pending_line_instances, LineBatch);
     }
 
     fn flush_image(&mut self) {
@@ -330,7 +326,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     }
                     let instances = crate::primitives::text::prepare_text(
                         &mut self.text_shaper,
-                        text,
+                        &*text,
                         *rect,
                         style,
                     );

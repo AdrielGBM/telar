@@ -14,6 +14,7 @@ pub(crate) struct LineInstance {
     pub _pad: [f32; 2],
 }
 
+// Typical frame has 100–200 line segments; doubles on overflow, so reallocations are rare after warmup.
 pub(crate) const INITIAL_LINE_CAPACITY: usize = 256;
 
 pub(crate) struct LinePipeline {

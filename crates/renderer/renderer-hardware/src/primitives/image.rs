@@ -30,7 +30,11 @@ pub(crate) struct ImagePipeline {
     current_frame: u64,
 }
 
+// UI frames rarely contain more than a few images; 16 is a reasonable cold-start value. UI frames rarely contain more than a few images; 16 is a reasonable cold-start value.
 pub(crate) const INITIAL_IMAGE_CAPACITY: usize = 16;
+
+// Approximately 1 second at 60 fps; GPU textures are expensive so evict aggressively.
+const IMAGE_GPU_MAX_AGE_FRAMES: u64 = 60;
 
 impl ImagePipeline {
     pub(crate) fn new(
@@ -222,7 +226,7 @@ impl ImagePipeline {
 
     pub fn begin_frame(&mut self) {
         self.current_frame += 1;
-        self.evict_unused(60);
+        self.evict_unused(IMAGE_GPU_MAX_AGE_FRAMES);
     }
 }
 

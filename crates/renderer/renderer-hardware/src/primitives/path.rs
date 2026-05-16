@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use lyon::math::point;
@@ -33,6 +34,8 @@ struct StrokeGeomKey {
     join: u8,
 }
 
+const PATH_TESS_MAX_AGE_FRAMES: u64 = 120; // ~2 s at 60 fps
+
 struct CachedGeom {
     positions: Vec<[f32; 2]>,
     indices: Vec<u32>,
@@ -42,6 +45,8 @@ struct CachedGeom {
 pub(crate) struct PathTessCache {
     fill: HashMap<FillGeomKey, CachedGeom>,
     stroke: HashMap<StrokeGeomKey, CachedGeom>,
+    fill_lru: VecDeque<(FillGeomKey, u64)>,
+    stroke_lru: VecDeque<(StrokeGeomKey, u64)>,
     frame: u64,
 }
 
@@ -50,26 +55,56 @@ impl PathTessCache {
         Self {
             fill: HashMap::new(),
             stroke: HashMap::new(),
+            fill_lru: VecDeque::new(),
+            stroke_lru: VecDeque::new(),
             frame: 0,
         }
     }
 
     pub(crate) fn begin_frame(&mut self) {
         self.frame += 1;
-        let frame = self.frame;
-        self.fill.retain(|_, v| frame - v.last_frame <= 120);
-        self.stroke.retain(|_, v| frame - v.last_frame <= 120);
+        let current = self.frame;
+
+        // queue is oldest-first; stop at first entry within threshold
+        while let Some(&(key, queued_frame)) = self.fill_lru.front() {
+            if current - queued_frame <= PATH_TESS_MAX_AGE_FRAMES {
+                break;
+            }
+            self.fill_lru.pop_front();
+            if let Some(entry) = self.fill.get(&key) {
+                // stale if re-accessed since queued; a newer queue entry will handle eviction
+                if entry.last_frame == queued_frame {
+                    self.fill.remove(&key);
+                }
+            }
+        }
+
+        while let Some(&(key, queued_frame)) = self.stroke_lru.front() {
+            if current - queued_frame <= PATH_TESS_MAX_AGE_FRAMES {
+                break;
+            }
+            self.stroke_lru.pop_front();
+            if let Some(entry) = self.stroke.get(&key) {
+                if entry.last_frame == queued_frame {
+                    self.stroke.remove(&key);
+                }
+            }
+        }
     }
 }
 
+// returns true on first touch this frame; caller pushes a fresh lru entry only then
 fn emit_cached_geom(
     geom: &mut CachedGeom,
     color: renderer_core::Color,
     current_frame: u64,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,
-) {
-    geom.last_frame = current_frame;
+) -> bool {
+    let touched = geom.last_frame != current_frame;
+    if touched {
+        geom.last_frame = current_frame;
+    }
     let color_array = color.to_array();
     let vertex_base = out_vertices.len() as u32;
     for &pos in &geom.positions {
@@ -81,6 +116,7 @@ fn emit_cached_geom(
     for &idx in &geom.indices {
         out_indices.push(vertex_base + idx);
     }
+    touched
 }
 
 fn build_lyon_path(data: &PathData) -> Path {
@@ -171,17 +207,20 @@ pub(crate) fn prepare_path(
                         last_frame: current_frame,
                     },
                 );
+                cache.fill_lru.push_back((fill_key, current_frame));
             }
         }
 
         if let Some(geom) = cache.fill.get_mut(&fill_key) {
-            emit_cached_geom(
+            if emit_cached_geom(
                 geom,
                 fill_style.color(),
                 current_frame,
                 out_vertices,
                 out_indices,
-            );
+            ) {
+                cache.fill_lru.push_back((fill_key, current_frame));
+            }
         }
     }
 
@@ -222,11 +261,14 @@ pub(crate) fn prepare_path(
                         last_frame: current_frame,
                     },
                 );
+                cache.stroke_lru.push_back((stroke_key, current_frame));
             }
         }
 
         if let Some(geom) = cache.stroke.get_mut(&stroke_key) {
-            emit_cached_geom(geom, s.color, current_frame, out_vertices, out_indices);
+            if emit_cached_geom(geom, s.color, current_frame, out_vertices, out_indices) {
+                cache.stroke_lru.push_back((stroke_key, current_frame));
+            }
         }
     }
 }
@@ -356,7 +398,7 @@ impl PathPipeline {
         if vertex_count > self.vertex_capacity {
             let new_cap = (vertex_count * 2).max(self.vertex_capacity * 2);
             self.vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
+                label: Some("rsx-path-vb"),
                 size: (std::mem::size_of::<PathVertex>() * new_cap) as u64,
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
@@ -366,7 +408,7 @@ impl PathPipeline {
         if index_count > self.index_capacity {
             let new_cap = (index_count * 2).max(self.index_capacity * 2);
             self.index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
+                label: Some("rsx-path-ib"),
                 size: (std::mem::size_of::<u32>() * new_cap) as u64,
                 usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,

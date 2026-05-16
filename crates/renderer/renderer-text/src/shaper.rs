@@ -4,7 +4,7 @@ use cosmic_text::{
 };
 use etagere::{AllocId, AtlasAllocator, size2};
 use lru::LruCache;
-use renderer_core::{Color, Rect, TextStyle};
+use renderer_core::{Color, Rect, TextStyle, premultiply_rgba};
 use std::collections::{HashMap, VecDeque};
 use std::num::NonZeroUsize;
 
@@ -13,16 +13,24 @@ pub struct TextCacheKey {
     pub text: String,
     pub font_size_bits: u32,
     pub width: u32,
+    pub height: u32,
     pub color_packed: u32,
 }
 
-pub fn make_text_cache_key(text: &str, font_size: f32, width: u32, color: Color) -> TextCacheKey {
+pub fn make_text_cache_key(
+    text: &str,
+    font_size: f32,
+    width: u32,
+    height: u32,
+    color: Color,
+) -> TextCacheKey {
     let rgba = color.to_rgba8();
     let color_packed = u32::from_le_bytes(rgba);
     TextCacheKey {
         text: text.to_owned(),
         font_size_bits: font_size.to_bits(),
         width,
+        height,
         color_packed,
     }
 }
@@ -137,6 +145,7 @@ impl GlyphAtlas {
         Some(*entry)
     }
 
+    /// Evicts one LRU entry from the glyph atlas when it becomes full. Uses capacity-based LRU (evict when full) rather than a frame threshold, because atlas space is the binding constraint.
     fn evict_lru(&mut self) -> bool {
         while let Some((key, stamp)) = self.lru_queue.pop_front() {
             if let Some(entry) = self.entries.get(&key) {
@@ -158,6 +167,7 @@ impl Default for GlyphAtlas {
     }
 }
 
+// Bounded by entry count (not frames): full rasterized bitmaps are large, so cap tightly.
 const PIXEL_CACHE_MAX: usize = 512;
 
 pub struct TextShaper {
@@ -258,6 +268,7 @@ impl TextShaper {
                             SwashContent::SubpixelMask => {
                                 let mut out = vec![0u8; (w * h * 4) as usize];
                                 for (i, chunk) in img.data.chunks_exact(3).enumerate() {
+                                    // Known limitation: subpixel RGB channels averaged to grayscale, discarding per-channel AA.
                                     let mask =
                                         ((chunk[0] as u32 + chunk[1] as u32 + chunk[2] as u32) / 3)
                                             as u8;
@@ -327,7 +338,7 @@ impl TextShaper {
         let width = rect.w.ceil() as u32;
         let height = rect.h.ceil() as u32;
 
-        let key = make_text_cache_key(text, font_size, width, color);
+        let key = make_text_cache_key(text, font_size, width, height, color);
 
         if width == 0 || height == 0 {
             return (key, Vec::new(), 0, 0);
@@ -379,19 +390,10 @@ impl TextShaper {
             }
         }
 
-        premultiply(&mut pixels);
+        premultiply_rgba(&mut pixels);
         self.pixel_cache.put(key.clone(), pixels.clone());
 
         (key, pixels, width, height)
-    }
-}
-
-fn premultiply(pixels: &mut [u8]) {
-    for chunk in pixels.chunks_exact_mut(4) {
-        let a = chunk[3] as u32;
-        chunk[0] = ((chunk[0] as u32 * a) / 255) as u8;
-        chunk[1] = ((chunk[1] as u32 * a) / 255) as u8;
-        chunk[2] = ((chunk[2] as u32 * a) / 255) as u8;
     }
 }
 

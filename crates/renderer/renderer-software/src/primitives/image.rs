@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use renderer_core::{ImageData, ImageFilter, Rect};
+use renderer_core::{ImageData, ImageFilter, Rect, premultiply_rgba};
 
 pub(crate) type ImageCache = HashMap<*const ImageData, (Arc<ImageData>, tiny_skia::Pixmap)>;
 
+/// Evicts unused cached images. The cache holds one Arc clone per entry. When strong_count == 1, no external holder remains, making the entry safe to evict. If the caller re-submits the same image next frame, the entry is recreated on demand (benign miss). Called at begin_frame, after the previous frame's pending_commands have been dropped.
 pub(crate) fn evict_cache(cache: &mut ImageCache) {
     cache.retain(|_, (arc, _)| Arc::strong_count(arc) > 1);
 }
@@ -22,7 +23,7 @@ pub(crate) fn draw_image(
         let size = tiny_skia::IntSize::from_wh(data.width, data.height);
         let src_pixmap = size.and_then(|s| {
             let mut pixels = data.pixels.clone();
-            super::premultiply_rgba_in_place(&mut pixels);
+            premultiply_rgba(&mut pixels);
             tiny_skia::Pixmap::from_vec(pixels, s)
         });
         let fallback = src_pixmap

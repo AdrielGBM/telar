@@ -11,7 +11,7 @@ pub enum DrawCommand {
         style: RectStyle,
     },
     Text {
-        text: String,
+        text: Arc<str>,
         rect: Rect,
         style: TextStyle,
     },
