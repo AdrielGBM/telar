@@ -1,4 +1,4 @@
-use crate::Color;
+use crate::{BorderRadius, Color, Stroke};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextStyle {
@@ -40,6 +40,7 @@ pub enum LineCap {
     #[default]
     Butt,
     Round,
+    Square,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,6 +58,11 @@ impl LineStyle {
             cap: LineCap::Butt,
         }
     }
+
+    pub fn with_cap(mut self, cap: LineCap) -> Self {
+        self.cap = cap;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -72,4 +78,90 @@ pub enum FillRule {
     #[default]
     Winding,
     EvenOdd,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RectStyle {
+    pub fill: Option<FillStyle>,
+    pub stroke: Option<Stroke>,
+    pub radius: BorderRadius,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PathStyle {
+    pub fill: Option<FillStyle>,
+    pub stroke: Option<Stroke>,
+    pub fill_rule: FillRule,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fill_style_solid_color_returns_color() {
+        let color = Color::RED;
+        let fill = FillStyle::Solid(color);
+        assert_eq!(fill.color(), color);
+    }
+
+    #[test]
+    fn fill_style_solid_constructor_wraps_color() {
+        let color = Color::BLUE;
+        let fill = FillStyle::solid(color);
+        assert_eq!(fill, FillStyle::Solid(color));
+    }
+
+    #[test]
+    fn fill_style_from_color_creates_solid() {
+        let color = Color::GREEN;
+        let fill: FillStyle = color.into();
+        assert_eq!(fill, FillStyle::Solid(color));
+    }
+
+    #[test]
+    fn text_style_new_stores_font_size() {
+        let style = TextStyle::new(16.0, Color::BLACK);
+        assert_eq!(style.font_size, 16.0);
+    }
+
+    #[test]
+    fn text_style_new_stores_color() {
+        let style = TextStyle::new(12.0, Color::WHITE);
+        assert_eq!(style.color, Color::WHITE);
+    }
+
+    #[test]
+    fn line_style_new_stores_color_and_width() {
+        let style = LineStyle::new(Color::RED, 2.0);
+        assert_eq!(style.color, Color::RED);
+        assert_eq!(style.width, 2.0);
+    }
+
+    #[test]
+    fn line_style_new_defaults_cap_to_butt() {
+        let style = LineStyle::new(Color::BLACK, 1.0);
+        assert_eq!(style.cap, LineCap::Butt);
+    }
+
+    #[test]
+    fn line_style_with_cap_sets_cap() {
+        let style = LineStyle::new(Color::BLACK, 1.0).with_cap(LineCap::Round);
+        assert_eq!(style.cap, LineCap::Round);
+    }
+
+    #[test]
+    fn line_cap_default_is_butt() {
+        assert_eq!(LineCap::default(), LineCap::Butt);
+    }
+
+    #[test]
+    fn line_join_default_is_miter() {
+        assert_eq!(LineJoin::default(), LineJoin::Miter);
+    }
+
+    #[test]
+    fn fill_rule_default_is_winding() {
+        assert_eq!(FillRule::default(), FillRule::Winding);
+    }
 }

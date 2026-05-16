@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use platform_core::Event;
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, FillRule, FillStyle, ImageData, ImageFilter, LineStyle,
-    PathData, Point, Rect, Stroke, TextStyle,
+    Color, DrawCommand, ImageData, ImageFilter, LineStyle, PathData, PathStyle, Point, Rect,
+    RectStyle, TextStyle,
 };
 
 use crate::context::AppContext;
@@ -25,19 +25,8 @@ impl Frame {
         self.clear_color = Some(color);
     }
 
-    pub fn draw_rect(
-        &mut self,
-        rect: Rect,
-        fill: Option<FillStyle>,
-        stroke: Option<Stroke>,
-        radius: BorderRadius,
-    ) {
-        self.commands.push(DrawCommand::Rect {
-            rect,
-            fill,
-            stroke,
-            radius,
-        });
+    pub fn draw_rect(&mut self, rect: Rect, style: RectStyle) {
+        self.commands.push(DrawCommand::Rect { rect, style });
     }
 
     pub fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle) {
@@ -57,19 +46,8 @@ impl Frame {
         self.commands.push(DrawCommand::Line { p1, p2, style });
     }
 
-    pub fn draw_path(
-        &mut self,
-        data: std::sync::Arc<PathData>,
-        fill: Option<FillStyle>,
-        stroke: Option<Stroke>,
-        fill_rule: FillRule,
-    ) {
-        self.commands.push(DrawCommand::Path {
-            data,
-            fill,
-            stroke,
-            fill_rule,
-        });
+    pub fn draw_path(&mut self, data: std::sync::Arc<PathData>, style: PathStyle) {
+        self.commands.push(DrawCommand::Path { data, style });
     }
 }
 

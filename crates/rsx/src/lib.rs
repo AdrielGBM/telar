@@ -18,7 +18,7 @@ pub use platform_core::WindowConfig;
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, Color, FillRule, FillStyle, ImageData, ImageFilter, LineCap, LineJoin, LineStyle,
-    PathData, PathVerb, Point, Rect, Stroke, TextStyle,
+    PathData, PathStyle, PathVerb, Point, Rect, RectStyle, Stroke, TextStyle,
 };
 #[cfg(feature = "runtime")]
 pub use runner::run_with_name;

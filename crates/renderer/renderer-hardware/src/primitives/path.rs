@@ -9,10 +9,8 @@ use lyon::tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, StrokeOptions, StrokeTessellator,
     StrokeVertex, VertexBuffers,
 };
-use renderer_core::{FillRule, FillStyle, LineCap, LineJoin, PathData, PathVerb, Stroke};
+use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 use wgpu::Device;
-
-use super::Viewport;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -64,6 +62,27 @@ impl PathTessCache {
     }
 }
 
+fn emit_cached_geom(
+    geom: &mut CachedGeom,
+    color: renderer_core::Color,
+    current_frame: u64,
+    out_vertices: &mut Vec<PathVertex>,
+    out_indices: &mut Vec<u32>,
+) {
+    geom.last_frame = current_frame;
+    let color_array = [color.r, color.g, color.b, color.a];
+    let vertex_base = out_vertices.len() as u32;
+    for &pos in &geom.positions {
+        out_vertices.push(PathVertex {
+            position: pos,
+            color: color_array,
+        });
+    }
+    for &idx in &geom.indices {
+        out_indices.push(vertex_base + idx);
+    }
+}
+
 fn build_lyon_path(data: &PathData) -> Path {
     let mut builder = Path::builder();
     let mut in_path = false;
@@ -106,26 +125,26 @@ fn build_lyon_path(data: &PathData) -> Path {
     builder.build()
 }
 
-pub(crate) fn tessellate_path(
+pub(crate) fn prepare_path(
     cache: &mut PathTessCache,
     data: &Arc<PathData>,
-    fill: Option<FillStyle>,
-    stroke: Option<Stroke>,
-    fill_rule: FillRule,
+    style: &PathStyle,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,
 ) {
     let current_frame = cache.frame;
     let ptr = Arc::as_ptr(data) as usize;
 
-    if let Some(fill_style) = fill {
+    let mut lyon_path: Option<Path> = None;
+
+    if let Some(fill_style) = style.fill {
         let fill_key = FillGeomKey {
             ptr,
-            even_odd: fill_rule == FillRule::EvenOdd,
+            even_odd: style.fill_rule == FillRule::EvenOdd,
         };
 
         if !cache.fill.contains_key(&fill_key) {
-            let lyon_path = build_lyon_path(data);
+            let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = FillTessellator::new();
             let lyon_fill_rule = if fill_key.even_odd {
@@ -136,7 +155,7 @@ pub(crate) fn tessellate_path(
             let options = FillOptions::default().with_fill_rule(lyon_fill_rule);
             if tessellator
                 .tessellate_path(
-                    &lyon_path,
+                    &*lyon_path,
                     &options,
                     &mut BuffersBuilder::new(&mut geometry, |v: FillVertex| {
                         [v.position().x, v.position().y]
@@ -156,23 +175,17 @@ pub(crate) fn tessellate_path(
         }
 
         if let Some(geom) = cache.fill.get_mut(&fill_key) {
-            geom.last_frame = current_frame;
-            let color = fill_style.color();
-            let color_array = [color.r, color.g, color.b, color.a];
-            let vertex_base = out_vertices.len() as u32;
-            for &pos in &geom.positions {
-                out_vertices.push(PathVertex {
-                    position: pos,
-                    color: color_array,
-                });
-            }
-            for &idx in &geom.indices {
-                out_indices.push(vertex_base + idx);
-            }
+            emit_cached_geom(
+                geom,
+                fill_style.color(),
+                current_frame,
+                out_vertices,
+                out_indices,
+            );
         }
     }
 
-    if let Some(s) = stroke {
+    if let Some(s) = style.stroke {
         let stroke_key = StrokeGeomKey {
             ptr,
             width_bits: s.width.to_bits(),
@@ -181,12 +194,13 @@ pub(crate) fn tessellate_path(
         };
 
         if !cache.stroke.contains_key(&stroke_key) {
-            let lyon_path = build_lyon_path(data);
+            let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = StrokeTessellator::new();
             let line_cap = match s.cap {
                 LineCap::Butt => LyonLineCap::Butt,
                 LineCap::Round => LyonLineCap::Round,
+                LineCap::Square => LyonLineCap::Square,
             };
             let line_join = match s.join {
                 LineJoin::Miter => LyonLineJoin::Miter,
@@ -200,7 +214,7 @@ pub(crate) fn tessellate_path(
                 .with_line_join(line_join);
             if tessellator
                 .tessellate_path(
-                    &lyon_path,
+                    &*lyon_path,
                     &options,
                     &mut BuffersBuilder::new(&mut geometry, |v: StrokeVertex| {
                         [v.position().x, v.position().y]
@@ -220,27 +234,12 @@ pub(crate) fn tessellate_path(
         }
 
         if let Some(geom) = cache.stroke.get_mut(&stroke_key) {
-            geom.last_frame = current_frame;
-            let color = s.color;
-            let color_array = [color.r, color.g, color.b, color.a];
-            let vertex_base = out_vertices.len() as u32;
-            for &pos in &geom.positions {
-                out_vertices.push(PathVertex {
-                    position: pos,
-                    color: color_array,
-                });
-            }
-            for &idx in &geom.indices {
-                out_indices.push(vertex_base + idx);
-            }
+            emit_cached_geom(geom, s.color, current_frame, out_vertices, out_indices);
         }
     }
 }
 
 pub(crate) struct PathPipeline {
-    pub(crate) viewport_buffer: wgpu::Buffer,
-    pub(crate) bind_group: wgpu::BindGroup,
-    _bind_group_layout: wgpu::BindGroupLayout,
     pub(crate) vertex_buffer: wgpu::Buffer,
     pub(crate) index_buffer: wgpu::Buffer,
     vertex_capacity: usize,
@@ -249,39 +248,13 @@ pub(crate) struct PathPipeline {
 }
 
 impl PathPipeline {
-    pub(crate) fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
+    pub(crate) fn new(
+        device: &Device,
+        surface_format: wgpu::TextureFormat,
+        viewport_bgl: &wgpu::BindGroupLayout,
+    ) -> Self {
         const INITIAL_VERTEX_CAPACITY: usize = 1024;
         const INITIAL_INDEX_CAPACITY: usize = 3072;
-
-        let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-path-viewport"),
-            size: std::mem::size_of::<Viewport>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-path-bgl"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-path-bg"),
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: viewport_buffer.as_entire_binding(),
-            }],
-        });
 
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rsx-path-vb"),
@@ -305,7 +278,7 @@ impl PathPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-path-pipeline-layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
+            bind_group_layouts: &[Some(viewport_bgl)],
             immediate_size: 0,
         });
 
@@ -358,9 +331,6 @@ impl PathPipeline {
         });
 
         Self {
-            viewport_buffer,
-            bind_group,
-            _bind_group_layout: bind_group_layout,
             vertex_buffer,
             index_buffer,
             vertex_capacity: INITIAL_VERTEX_CAPACITY,

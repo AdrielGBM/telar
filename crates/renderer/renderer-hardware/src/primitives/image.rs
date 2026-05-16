@@ -17,6 +17,7 @@ struct GpuImage {
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
     last_used_frame: u64,
+    _data: Arc<renderer_core::ImageData>,
 }
 
 pub(crate) struct ImagePipeline {
@@ -25,17 +26,18 @@ pub(crate) struct ImagePipeline {
     texture_bgl: wgpu::BindGroupLayout,
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
-    texture_cache: HashMap<(*const ImageData, ImageFilter), GpuImage>,
+    texture_cache: HashMap<(usize, ImageFilter), GpuImage>,
     current_frame: u64,
 }
-
-// SAFETY: *const ImageData keys are derived from Arc::as_ptr; the pointed-to data is owned by at least one Arc kept alive by the caller, so the pointer is valid as a cache key for the frame duration.
-unsafe impl Send for ImagePipeline {}
 
 pub(crate) const INITIAL_IMAGE_CAPACITY: usize = 16;
 
 impl ImagePipeline {
-    pub(crate) fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
+    pub(crate) fn new(
+        device: &Device,
+        surface_format: wgpu::TextureFormat,
+        viewport_bgl: &wgpu::BindGroupLayout,
+    ) -> Self {
         let instances =
             InstancePipeline::<ImageInstance>::new(device, "image", INITIAL_IMAGE_CAPACITY);
 
@@ -61,26 +63,8 @@ impl ImagePipeline {
             ],
         });
 
-        let sampler_nearest = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("rsx-image-sampler-nearest"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
-            ..Default::default()
-        });
-        let sampler_linear = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("rsx-image-sampler-linear"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
-            ..Default::default()
-        });
+        let sampler_nearest = create_sampler(device, wgpu::FilterMode::Nearest);
+        let sampler_linear = create_sampler(device, wgpu::FilterMode::Linear);
 
         let shader_source = [include_str!("viewport.wgsl"), include_str!("image.wgsl")].concat();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -90,7 +74,11 @@ impl ImagePipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-image-pipeline-layout"),
-            bind_group_layouts: &[Some(&instances.instances_bgl), Some(&texture_bgl)],
+            bind_group_layouts: &[
+                Some(viewport_bgl),
+                Some(&instances.instances_bgl),
+                Some(&texture_bgl),
+            ],
             immediate_size: 0,
         });
 
@@ -138,15 +126,11 @@ impl ImagePipeline {
         }
     }
 
-    pub(crate) fn ensure_capacity(&mut self, device: &Device, count: usize) {
-        self.instances.ensure_capacity(device, count);
-    }
-
     fn create_gpu_image(
         &self,
         device: &Device,
         queue: &wgpu::Queue,
-        image: &ImageData,
+        image: &Arc<ImageData>,
         filter: ImageFilter,
     ) -> GpuImage {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -209,6 +193,7 @@ impl ImagePipeline {
             texture,
             bind_group,
             last_used_frame: self.current_frame,
+            _data: image.clone(),
         }
     }
 
@@ -219,7 +204,7 @@ impl ImagePipeline {
         image: &Arc<ImageData>,
         filter: ImageFilter,
     ) -> wgpu::BindGroup {
-        let key = (Arc::as_ptr(image), filter);
+        let key = (Arc::as_ptr(image) as usize, filter);
         if !self.texture_cache.contains_key(&key) {
             let gpu_image = self.create_gpu_image(device, queue, image, filter);
             self.texture_cache.insert(key, gpu_image);
@@ -241,7 +226,20 @@ impl ImagePipeline {
     }
 }
 
-pub(crate) fn make_image_instance(rect: renderer_core::Rect) -> ImageInstance {
+fn create_sampler(device: &Device, filter: wgpu::FilterMode) -> wgpu::Sampler {
+    device.create_sampler(&wgpu::SamplerDescriptor {
+        label: None,
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: filter,
+        min_filter: filter,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+        ..Default::default()
+    })
+}
+
+pub(crate) fn prepare_image(rect: renderer_core::Rect) -> ImageInstance {
     ImageInstance {
         dest_rect: [rect.x, rect.y, rect.w, rect.h],
     }

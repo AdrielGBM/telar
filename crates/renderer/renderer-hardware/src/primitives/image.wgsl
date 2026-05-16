@@ -2,9 +2,9 @@ struct ImageInstance {
     dest_rect: vec4<f32>,
 }
 
-@group(0) @binding(1) var<storage, read> instances:      array<ImageInstance>;
-@group(1) @binding(0) var               image_texture:  texture_2d<f32>;
-@group(1) @binding(1) var               image_sampler:  sampler;
+@group(1) @binding(0) var<storage, read> instances:      array<ImageInstance>;
+@group(2) @binding(0) var               image_texture:  texture_2d<f32>;
+@group(2) @binding(1) var               image_sampler:  sampler;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -16,20 +16,15 @@ fn vs_main(
     @builtin(vertex_index)   vertex_index:   u32,
     @builtin(instance_index) instance_index: u32,
 ) -> VertexOutput {
-    var offsets = array<vec2<f32>, 6>(
-        vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0),
-        vec2(1.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 1.0),
-    );
     let inst = instances[instance_index];
-    let off  = offsets[vertex_index];
+    let off  = quad_uv(vertex_index);
 
     let px   = inst.dest_rect.x + off.x * inst.dest_rect.z;
     let py   = inst.dest_rect.y + off.y * inst.dest_rect.w;
-    let ndcx = px / viewport.size.x * 2.0 - 1.0;
-    let ndcy = 1.0 - py / viewport.size.y * 2.0;
+    let ndc  = to_ndc(px, py);
 
     var out: VertexOutput;
-    out.position = vec4(ndcx, ndcy, 0.0, 1.0);
+    out.position = vec4(ndc.x, ndc.y, 0.0, 1.0);
     out.uv       = off;
     return out;
 }

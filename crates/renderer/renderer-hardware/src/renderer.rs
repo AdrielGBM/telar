@@ -1,13 +1,13 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
+use renderer_core::{Color, DrawCommand, ImageFilter, RenderBackend, RendererError};
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
-use crate::primitives::Viewport;
-use crate::primitives::image::{ImageInstance, ImagePipeline, make_image_instance};
-use crate::primitives::line::{LineInstance, LinePipeline, make_line_instance};
-use crate::primitives::path::{PathPipeline, PathTessCache, PathVertex, tessellate_path};
+use crate::primitives::image::{ImageInstance, ImagePipeline};
+use crate::primitives::line::{LineInstance, LinePipeline};
+use crate::primitives::path::{PathPipeline, PathTessCache, PathVertex};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
+use crate::primitives::{Viewport, create_viewport_bgl};
 
 fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
     caps.formats
@@ -35,9 +35,10 @@ enum DrawStep {
         start: u32,
         end: u32,
     },
-    ImageDraw {
-        instance_index: u32,
-        texture_bind_group: wgpu::BindGroup,
+    ImageBatch {
+        start: u32,
+        end: u32,
+        bind_group: wgpu::BindGroup,
     },
     PathDraw {
         index_start: u32,
@@ -50,6 +51,9 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     device: Device,
     queue: Queue,
     config: Option<SurfaceConfiguration>,
+    viewport_buffer: wgpu::Buffer,
+    viewport_bind_group: wgpu::BindGroup,
+    viewport_dirty: bool,
     rect_pipeline: RectPipeline,
     text_pipeline: TextPipeline,
     line_pipeline: LinePipeline,
@@ -70,6 +74,13 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_path_indices: Vec<u32>,
     path_tess_cache: PathTessCache,
     msaa_texture: Option<wgpu::Texture>,
+    batch_rect_start: Option<u32>,
+    batch_text_start: Option<u32>,
+    batch_line_start: Option<u32>,
+    batch_image_key: Option<(usize, ImageFilter)>,
+    batch_image_start: Option<u32>,
+    batch_image_bind_group: Option<wgpu::BindGroup>,
+    // Keeps the window alive for the 'static lifetime required by Surface<'static>.
     _window: std::sync::Arc<W>,
 }
 
@@ -115,11 +126,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .copied()
             .unwrap_or(wgpu::CompositeAlphaMode::Auto);
 
-        let rect_pipeline = RectPipeline::new(&device, surface_format);
-        let text_pipeline = TextPipeline::new(&device, surface_format);
-        let line_pipeline = LinePipeline::new(&device, surface_format);
-        let image_pipeline = ImagePipeline::new(&device, surface_format);
-        let path_pipeline = PathPipeline::new(&device, surface_format);
+        let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("rsx-viewport"),
+            size: std::mem::size_of::<Viewport>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let viewport_bgl = create_viewport_bgl(&device);
+        let viewport_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("rsx-viewport-bg"),
+            layout: &viewport_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: viewport_buffer.as_entire_binding(),
+            }],
+        });
+
+        let rect_pipeline = RectPipeline::new(&device, surface_format, &viewport_bgl);
+        let text_pipeline = TextPipeline::new(&device, surface_format, &viewport_bgl);
+        let line_pipeline = LinePipeline::new(&device, surface_format, &viewport_bgl);
+        let image_pipeline = ImagePipeline::new(&device, surface_format, &viewport_bgl);
+        let path_pipeline = PathPipeline::new(&device, surface_format, &viewport_bgl);
         let path_tess_cache = PathTessCache::new();
 
         Ok(Self {
@@ -127,6 +154,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             device,
             queue,
             config: None,
+            viewport_buffer,
+            viewport_bind_group,
+            viewport_dirty: true,
             rect_pipeline,
             text_pipeline,
             line_pipeline,
@@ -147,6 +177,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_path_indices: Vec::new(),
             path_tess_cache,
             msaa_texture: None,
+            batch_rect_start: None,
+            batch_text_start: None,
+            batch_line_start: None,
+            batch_image_key: None,
+            batch_image_start: None,
+            batch_image_bind_group: None,
             _window: window,
         })
     }
@@ -165,6 +201,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         self.surface.configure(&self.device, &config);
         self.config = Some(config);
+        self.viewport_dirty = true;
         self.msaa_texture = Some(self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rsx-msaa"),
             size: wgpu::Extent3d {
@@ -180,6 +217,72 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             view_formats: &[],
         }));
     }
+
+    fn clear_pending(&mut self) {
+        self.pending_instances.clear();
+        self.pending_text_instances.clear();
+        self.pending_line_instances.clear();
+        self.pending_image_instances.clear();
+        self.pending_steps.clear();
+        self.pending_path_vertices.clear();
+        self.pending_path_indices.clear();
+        self.batch_rect_start = None;
+        self.batch_text_start = None;
+        self.batch_line_start = None;
+        self.batch_image_key = None;
+        self.batch_image_start = None;
+        self.batch_image_bind_group = None;
+    }
+
+    fn flush_rect(&mut self) {
+        if let Some(start) = self.batch_rect_start.take() {
+            let end = self.pending_instances.len() as u32;
+            if end > start {
+                self.pending_steps.push(DrawStep::RectBatch { start, end });
+            }
+        }
+    }
+
+    fn flush_text(&mut self) {
+        if let Some(start) = self.batch_text_start.take() {
+            let end = self.pending_text_instances.len() as u32;
+            if end > start {
+                self.pending_steps.push(DrawStep::TextBatch { start, end });
+            }
+        }
+    }
+
+    fn flush_line(&mut self) {
+        if let Some(start) = self.batch_line_start.take() {
+            let end = self.pending_line_instances.len() as u32;
+            if end > start {
+                self.pending_steps.push(DrawStep::LineBatch { start, end });
+            }
+        }
+    }
+
+    fn flush_image(&mut self) {
+        if let (Some(start), Some(bind_group)) = (
+            self.batch_image_start.take(),
+            self.batch_image_bind_group.take(),
+        ) {
+            let end = self.pending_image_instances.len() as u32;
+            if end > start {
+                self.pending_steps.push(DrawStep::ImageBatch {
+                    start,
+                    end,
+                    bind_group,
+                });
+            }
+        }
+    }
+
+    fn flush_all(&mut self) {
+        self.flush_rect();
+        self.flush_text();
+        self.flush_line();
+        self.flush_image();
+    }
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
@@ -193,129 +296,83 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 self.reconfigure(width, height);
             }
         }
-        self.pending_instances.clear();
-        self.pending_text_instances.clear();
-        self.pending_line_instances.clear();
-        self.pending_image_instances.clear();
-        self.pending_steps.clear();
+        self.clear_pending();
         self.path_tess_cache.begin_frame();
-        self.pending_path_vertices.clear();
-        self.pending_path_indices.clear();
+        self.image_pipeline.begin_frame();
         Ok(())
     }
 
     fn submit(&mut self, commands: &[DrawCommand]) {
-        self.image_pipeline.begin_frame();
-
-        let mut current_rect_start: Option<u32> = None;
-        let mut current_text_start: Option<u32> = None;
-        let mut current_line_start: Option<u32> = None;
-
-        macro_rules! flush_rect {
-            () => {
-                if let Some(start) = current_rect_start.take() {
-                    let end = self.pending_instances.len() as u32;
-                    if end > start {
-                        self.pending_steps.push(DrawStep::RectBatch { start, end });
-                    }
-                }
-            };
-        }
-        macro_rules! flush_text {
-            () => {
-                if let Some(start) = current_text_start.take() {
-                    let end = self.pending_text_instances.len() as u32;
-                    if end > start {
-                        self.pending_steps.push(DrawStep::TextBatch { start, end });
-                    }
-                }
-            };
-        }
-        macro_rules! flush_line {
-            () => {
-                if let Some(start) = current_line_start.take() {
-                    let end = self.pending_line_instances.len() as u32;
-                    if end > start {
-                        self.pending_steps.push(DrawStep::LineBatch { start, end });
-                    }
-                }
-            };
-        }
-
         for cmd in commands {
             match cmd {
-                DrawCommand::Rect {
-                    rect,
-                    fill,
-                    stroke,
-                    radius,
-                } => {
-                    flush_text!();
-                    flush_line!();
-                    if current_rect_start.is_none() {
-                        current_rect_start = Some(self.pending_instances.len() as u32);
+                DrawCommand::Rect { rect, style } => {
+                    if rect.w <= 0.0
+                        || rect.h <= 0.0
+                        || (style.fill.is_none() && style.stroke.is_none())
+                    {
+                        continue;
                     }
-                    let inst =
-                        crate::primitives::rect::make_rect_instance(*rect, *fill, *stroke, *radius);
+                    self.flush_text();
+                    self.flush_line();
+                    self.flush_image();
+                    if self.batch_rect_start.is_none() {
+                        self.batch_rect_start = Some(self.pending_instances.len() as u32);
+                    }
+                    let inst = crate::primitives::rect::prepare_rect(*rect, style);
                     self.pending_instances.push(inst);
                 }
                 DrawCommand::Text { text, rect, style } => {
-                    flush_rect!();
-                    flush_line!();
-                    if current_text_start.is_none() {
-                        current_text_start = Some(self.pending_text_instances.len() as u32);
+                    self.flush_rect();
+                    self.flush_line();
+                    self.flush_image();
+                    if self.batch_text_start.is_none() {
+                        self.batch_text_start = Some(self.pending_text_instances.len() as u32);
                     }
-                    let glyphs = self.text_shaper.layout_glyphs(text, *rect, style);
-                    self.pending_text_instances
-                        .extend(glyphs.iter().map(|g| TextInstance {
-                            dest_rect: g.dest_rect,
-                            uv_min: g.uv_min,
-                            uv_max: g.uv_max,
-                        }));
+                    let instances = crate::primitives::text::prepare_text(
+                        &mut self.text_shaper,
+                        text,
+                        *rect,
+                        style,
+                    );
+                    self.pending_text_instances.extend(instances);
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    flush_rect!();
-                    flush_text!();
-                    if current_line_start.is_none() {
-                        current_line_start = Some(self.pending_line_instances.len() as u32);
+                    self.flush_rect();
+                    self.flush_text();
+                    self.flush_image();
+                    if self.batch_line_start.is_none() {
+                        self.batch_line_start = Some(self.pending_line_instances.len() as u32);
                     }
                     self.pending_line_instances
-                        .push(make_line_instance(*p1, *p2, *style));
+                        .push(crate::primitives::line::prepare_line(*p1, *p2, *style));
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    flush_rect!();
-                    flush_text!();
-                    flush_line!();
-                    let instance_index = self.pending_image_instances.len() as u32;
+                    self.flush_rect();
+                    self.flush_text();
+                    self.flush_line();
+                    let key = (std::sync::Arc::as_ptr(data) as usize, *filter);
+                    if self.batch_image_start.is_none() || self.batch_image_key != Some(key) {
+                        self.flush_image();
+                        self.batch_image_key = Some(key);
+                        self.batch_image_start = Some(self.pending_image_instances.len() as u32);
+                        self.batch_image_bind_group =
+                            Some(self.image_pipeline.get_or_create_bind_group(
+                                &self.device,
+                                &self.queue,
+                                data,
+                                *filter,
+                            ));
+                    }
                     self.pending_image_instances
-                        .push(make_image_instance(*rect));
-                    let texture_bind_group = self.image_pipeline.get_or_create_bind_group(
-                        &self.device,
-                        &self.queue,
-                        data,
-                        *filter,
-                    );
-                    self.pending_steps.push(DrawStep::ImageDraw {
-                        instance_index,
-                        texture_bind_group,
-                    });
+                        .push(crate::primitives::image::prepare_image(*rect));
                 }
-                DrawCommand::Path {
-                    data,
-                    fill,
-                    stroke,
-                    fill_rule,
-                } => {
-                    flush_rect!();
-                    flush_text!();
-                    flush_line!();
+                DrawCommand::Path { data, style } => {
+                    self.flush_all();
                     let index_start = self.pending_path_indices.len() as u32;
-                    tessellate_path(
+                    crate::primitives::path::prepare_path(
                         &mut self.path_tess_cache,
                         data,
-                        *fill,
-                        *stroke,
-                        *fill_rule,
+                        style,
                         &mut self.pending_path_vertices,
                         &mut self.pending_path_indices,
                     );
@@ -327,13 +384,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         });
                     }
                 }
-                _ => {}
             }
         }
 
-        flush_rect!();
-        flush_text!();
-        flush_line!();
+        self.flush_all();
     }
 
     fn end_frame(&mut self, clear_color: Option<Color>) -> Result<(), RendererError> {
@@ -349,13 +403,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         };
 
         if self.config.is_none() || self.width == 0 || self.height == 0 {
-            self.pending_instances.clear();
-            self.pending_text_instances.clear();
-            self.pending_line_instances.clear();
-            self.pending_image_instances.clear();
-            self.pending_steps.clear();
-            self.pending_path_vertices.clear();
-            self.pending_path_indices.clear();
+            self.clear_pending();
             return Ok(());
         }
 
@@ -366,123 +414,87 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 if let Some(config) = &self.config.clone() {
                     self.surface.configure(&self.device, config);
                 }
-                self.pending_instances.clear();
-                self.pending_text_instances.clear();
-                self.pending_line_instances.clear();
-                self.pending_image_instances.clear();
-                self.pending_steps.clear();
-                self.pending_path_vertices.clear();
-                self.pending_path_indices.clear();
+                self.clear_pending();
                 return Ok(());
             }
             other => {
-                self.pending_instances.clear();
-                self.pending_text_instances.clear();
-                self.pending_line_instances.clear();
-                self.pending_image_instances.clear();
-                self.pending_steps.clear();
-                self.pending_path_vertices.clear();
-                self.pending_path_indices.clear();
+                self.clear_pending();
                 return Err(RendererError::Present(format!("surface error: {other:?}")));
             }
         };
 
-        let viewport = Viewport {
-            size: [self.width as f32, self.height as f32],
-            _pad: [0.0; 2],
-        };
-        self.queue.write_buffer(
-            &self.rect_pipeline.instances.viewport_buffer,
-            0,
-            bytemuck::bytes_of(&viewport),
-        );
-        self.queue.write_buffer(
-            &self.text_pipeline.instances.viewport_buffer,
-            0,
-            bytemuck::bytes_of(&viewport),
-        );
-        self.queue.write_buffer(
-            &self.line_pipeline.instances.viewport_buffer,
-            0,
-            bytemuck::bytes_of(&viewport),
-        );
-        self.queue.write_buffer(
-            &self.image_pipeline.instances.viewport_buffer,
-            0,
-            bytemuck::bytes_of(&viewport),
-        );
-        self.queue.write_buffer(
-            &self.path_pipeline.viewport_buffer,
-            0,
-            bytemuck::bytes_of(&viewport),
-        );
+        if self.viewport_dirty {
+            let viewport = Viewport {
+                size: [self.width as f32, self.height as f32],
+                _pad: [0.0; 2],
+            };
+            self.queue
+                .write_buffer(&self.viewport_buffer, 0, bytemuck::bytes_of(&viewport));
+            self.viewport_dirty = false;
+        }
 
         self.text_pipeline
             .sync_atlas(&self.queue, &mut self.text_shaper.atlas);
 
-        let all_instances = std::mem::take(&mut self.pending_instances);
-        let text_instances = std::mem::take(&mut self.pending_text_instances);
-        let line_instances = std::mem::take(&mut self.pending_line_instances);
-        let image_instances = std::mem::take(&mut self.pending_image_instances);
-        let steps = std::mem::take(&mut self.pending_steps);
-        let path_vertices = std::mem::take(&mut self.pending_path_vertices);
-        let path_indices = std::mem::take(&mut self.pending_path_indices);
-
-        if !all_instances.is_empty() {
+        if !self.pending_instances.is_empty() {
             self.rect_pipeline
-                .ensure_capacity(&self.device, all_instances.len());
+                .instances
+                .ensure_capacity(&self.device, self.pending_instances.len());
             self.queue.write_buffer(
                 &self.rect_pipeline.instances.instances_buffer,
                 0,
-                bytemuck::cast_slice(&all_instances),
+                bytemuck::cast_slice(&self.pending_instances),
             );
         }
 
-        if !text_instances.is_empty() {
+        if !self.pending_text_instances.is_empty() {
             self.text_pipeline
-                .ensure_capacity(&self.device, text_instances.len());
+                .instances
+                .ensure_capacity(&self.device, self.pending_text_instances.len());
             self.queue.write_buffer(
                 &self.text_pipeline.instances.instances_buffer,
                 0,
-                bytemuck::cast_slice(&text_instances),
+                bytemuck::cast_slice(&self.pending_text_instances),
             );
         }
 
-        if !line_instances.is_empty() {
+        if !self.pending_line_instances.is_empty() {
             self.line_pipeline
-                .ensure_capacity(&self.device, line_instances.len());
+                .instances
+                .ensure_capacity(&self.device, self.pending_line_instances.len());
             self.queue.write_buffer(
                 &self.line_pipeline.instances.instances_buffer,
                 0,
-                bytemuck::cast_slice(&line_instances),
+                bytemuck::cast_slice(&self.pending_line_instances),
             );
         }
 
-        if !image_instances.is_empty() {
+        if !self.pending_image_instances.is_empty() {
             self.image_pipeline
-                .ensure_capacity(&self.device, image_instances.len());
+                .instances
+                .ensure_capacity(&self.device, self.pending_image_instances.len());
             self.queue.write_buffer(
                 &self.image_pipeline.instances.instances_buffer,
                 0,
-                bytemuck::cast_slice(&image_instances),
+                bytemuck::cast_slice(&self.pending_image_instances),
             );
         }
 
-        if !path_vertices.is_empty() {
+        if !self.pending_path_vertices.is_empty() {
             self.path_pipeline.ensure_capacity(
                 &self.device,
-                path_vertices.len(),
-                path_indices.len(),
+                self.pending_path_vertices.len(),
+                self.pending_path_indices.len(),
             );
             self.queue.write_buffer(
                 &self.path_pipeline.vertex_buffer,
                 0,
-                bytemuck::cast_slice(&path_vertices),
+                bytemuck::cast_slice(&self.pending_path_vertices),
             );
             self.queue.write_buffer(
                 &self.path_pipeline.index_buffer,
                 0,
-                bytemuck::cast_slice(&path_indices),
+                bytemuck::cast_slice(&self.pending_path_indices),
             );
         }
 
@@ -520,12 +532,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 multiview_mask: None,
             });
 
-            for step in &steps {
+            render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
+
+            for step in &self.pending_steps {
                 match step {
                     DrawStep::RectBatch { start, end } => {
                         render_pass.set_pipeline(&self.rect_pipeline.pipeline);
                         render_pass.set_bind_group(
-                            0,
+                            1,
                             &self.rect_pipeline.instances.instances_bind_group,
                             &[],
                         );
@@ -534,41 +548,41 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     DrawStep::TextBatch { start, end } => {
                         render_pass.set_pipeline(&self.text_pipeline.pipeline);
                         render_pass.set_bind_group(
-                            0,
+                            1,
                             &self.text_pipeline.instances.instances_bind_group,
                             &[],
                         );
-                        render_pass.set_bind_group(1, &self.text_pipeline.atlas_bind_group, &[]);
+                        render_pass.set_bind_group(2, &self.text_pipeline.atlas_bind_group, &[]);
                         render_pass.draw(0..6, *start..*end);
                     }
                     DrawStep::LineBatch { start, end } => {
                         render_pass.set_pipeline(&self.line_pipeline.pipeline);
                         render_pass.set_bind_group(
-                            0,
+                            1,
                             &self.line_pipeline.instances.instances_bind_group,
                             &[],
                         );
                         render_pass.draw(0..6, *start..*end);
                     }
-                    DrawStep::ImageDraw {
-                        instance_index,
-                        texture_bind_group,
+                    DrawStep::ImageBatch {
+                        start,
+                        end,
+                        bind_group,
                     } => {
                         render_pass.set_pipeline(&self.image_pipeline.pipeline);
                         render_pass.set_bind_group(
-                            0,
+                            1,
                             &self.image_pipeline.instances.instances_bind_group,
                             &[],
                         );
-                        render_pass.set_bind_group(1, texture_bind_group, &[]);
-                        render_pass.draw(0..6, *instance_index..*instance_index + 1);
+                        render_pass.set_bind_group(2, bind_group, &[]);
+                        render_pass.draw(0..6, *start..*end);
                     }
                     DrawStep::PathDraw {
                         index_start,
                         index_end,
                     } => {
                         render_pass.set_pipeline(&self.path_pipeline.pipeline);
-                        render_pass.set_bind_group(0, &self.path_pipeline.bind_group, &[]);
                         render_pass
                             .set_vertex_buffer(0, self.path_pipeline.vertex_buffer.slice(..));
                         render_pass.set_index_buffer(
@@ -583,6 +597,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+        self.clear_pending();
         Ok(())
     }
 }

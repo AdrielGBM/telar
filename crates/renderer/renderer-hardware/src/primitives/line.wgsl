@@ -8,7 +8,7 @@ struct LineInstance {
     _pad1: f32,
 }
 
-@group(0) @binding(1) var<storage, read> instances: array<LineInstance>;
+@group(1) @binding(0) var<storage, read> instances: array<LineInstance>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -42,7 +42,7 @@ fn vs_main(
     }
     let perp = vec2<f32>(-dir.y, dir.x);
 
-    
+
     var verts = array<vec2<f32>, 6>(
         p1 - dir * half + perp * half,
         p2 + dir * half + perp * half,
@@ -53,11 +53,10 @@ fn vs_main(
     );
 
     let corner = verts[vertex_index];
-    let ndc_x = corner.x / viewport.size.x * 2.0 - 1.0;
-    let ndc_y = 1.0 - corner.y / viewport.size.y * 2.0;
+    let ndc = to_ndc(corner.x, corner.y);
 
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(ndc_x, ndc_y, 0.0, 1.0);
+    out.clip_position = vec4<f32>(ndc.x, ndc.y, 0.0, 1.0);
     out.screen_pos = corner;
     out.p1 = p1;
     out.p2 = p2;
@@ -79,27 +78,31 @@ fn sdf_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    let ab = in.p2 - in.p1;
+    let len = length(ab);
+    let dir = ab / max(len, 0.0001);
+    let ap = in.screen_pos - in.p1;
+    let along = dot(ap, dir);
+    let lateral = abs(dot(ap, vec2<f32>(-dir.y, dir.x)));
+
     if in.cap < 0.5 {
-        let ab = in.p2 - in.p1;
-        let len = length(ab);
-        let dir = ab / max(len, 0.0001);
-        let ap = in.screen_pos - in.p1;
-        let along = dot(ap, dir);
-        let lateral = abs(dot(ap, vec2<f32>(-dir.y, dir.x)));
         if along < 0.0 || along > len {
             discard;
         }
         let mask = smoothstep(in.half_width + AA, in.half_width - AA, lateral) * in.color.a;
-        if mask < 0.001 {
-            discard;
-        }
+        if mask < 0.001 { discard; }
         return vec4<f32>(in.color.rgb, mask);
-    } else {
+    } else if in.cap < 1.5 {
         let dist = sdf_segment(in.screen_pos, in.p1, in.p2);
         let mask = smoothstep(in.half_width + AA, in.half_width - AA, dist) * in.color.a;
-        if mask < 0.001 {
+        if mask < 0.001 { discard; }
+        return vec4<f32>(in.color.rgb, mask);
+    } else {
+        if along < -in.half_width || along > len + in.half_width {
             discard;
         }
+        let mask = smoothstep(in.half_width + AA, in.half_width - AA, lateral) * in.color.a;
+        if mask < 0.001 { discard; }
         return vec4<f32>(in.color.rgb, mask);
     }
 }

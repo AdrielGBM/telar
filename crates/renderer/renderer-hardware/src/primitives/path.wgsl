@@ -10,10 +10,9 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(in: PathVertex) -> VertexOutput {
-    let ndc_x = in.position.x / viewport.size.x * 2.0 - 1.0;
-    let ndc_y = 1.0 - in.position.y / viewport.size.y * 2.0;
+    let ndc = to_ndc(in.position.x, in.position.y);
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(ndc_x, ndc_y, 0.0, 1.0);
+    out.clip_position = vec4<f32>(ndc.x, ndc.y, 0.0, 1.0);
     out.color = in.color;
     return out;
 }

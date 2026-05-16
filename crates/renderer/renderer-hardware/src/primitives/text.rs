@@ -1,3 +1,4 @@
+use renderer_core::{Rect, TextStyle};
 use renderer_text::{ATLAS_SIZE, GlyphAtlas};
 use wgpu::{Device, Queue};
 
@@ -9,6 +10,7 @@ pub(crate) struct TextInstance {
     pub dest_rect: [f32; 4],
     pub uv_min: [f32; 2],
     pub uv_max: [f32; 2],
+    pub color: [f32; 4],
 }
 
 pub(crate) const INITIAL_TEXT_CAPACITY: usize = 256;
@@ -21,7 +23,11 @@ pub(crate) struct TextPipeline {
 }
 
 impl TextPipeline {
-    pub(crate) fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
+    pub(crate) fn new(
+        device: &Device,
+        surface_format: wgpu::TextureFormat,
+        viewport_bgl: &wgpu::BindGroupLayout,
+    ) -> Self {
         let instances =
             InstancePipeline::<TextInstance>::new(device, "text", INITIAL_TEXT_CAPACITY);
 
@@ -97,7 +103,11 @@ impl TextPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-text-pipeline-layout"),
-            bind_group_layouts: &[Some(&instances.instances_bgl), Some(&atlas_bgl)],
+            bind_group_layouts: &[
+                Some(viewport_bgl),
+                Some(&instances.instances_bgl),
+                Some(&atlas_bgl),
+            ],
             immediate_size: 0,
         });
 
@@ -167,8 +177,22 @@ impl TextPipeline {
         );
         atlas.dirty = false;
     }
+}
 
-    pub(crate) fn ensure_capacity(&mut self, device: &Device, count: usize) {
-        self.instances.ensure_capacity(device, count);
-    }
+pub(crate) fn prepare_text(
+    shaper: &mut renderer_text::TextShaper,
+    text: &str,
+    rect: Rect,
+    style: &TextStyle,
+) -> Vec<TextInstance> {
+    let glyphs = shaper.layout_glyphs(text, rect, style);
+    glyphs
+        .iter()
+        .map(|g| TextInstance {
+            dest_rect: g.dest_rect,
+            uv_min: g.uv_min,
+            uv_max: g.uv_max,
+            color: g.color,
+        })
+        .collect()
 }

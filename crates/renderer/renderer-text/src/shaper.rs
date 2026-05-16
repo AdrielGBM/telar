@@ -3,8 +3,10 @@ use cosmic_text::{
     SwashContent,
 };
 use etagere::{AllocId, AtlasAllocator, size2};
+use lru::LruCache;
 use renderer_core::{Color, Rect, TextStyle};
 use std::collections::{HashMap, VecDeque};
+use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextCacheKey {
@@ -28,7 +30,6 @@ pub fn make_text_cache_key(text: &str, font_size: f32, width: u32, color: Color)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct GlyphKey {
     pub cache_key: CacheKey,
-    pub color_packed: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -39,6 +40,7 @@ pub struct AtlasEntry {
     pub glyph_height: u32,
     pub placement_left: i32,
     pub placement_top: i32,
+    pub is_color_glyph: bool,
     alloc_id: AllocId,
     lru_gen: u64,
 }
@@ -47,6 +49,7 @@ pub struct GlyphInfo {
     pub dest_rect: [f32; 4],
     pub uv_min: [f32; 2],
     pub uv_max: [f32; 2],
+    pub color: [f32; 4],
 }
 
 pub const ATLAS_SIZE: u32 = 2048;
@@ -89,6 +92,7 @@ impl GlyphAtlas {
         h: u32,
         placement_left: i32,
         placement_top: i32,
+        is_color_glyph: bool,
     ) -> Option<AtlasEntry> {
         let alloc = self.allocator.allocate(size2(w as i32, h as i32))?;
         let rect = alloc.rectangle;
@@ -114,6 +118,7 @@ impl GlyphAtlas {
             glyph_height: h,
             placement_left,
             placement_top,
+            is_color_glyph,
             alloc_id,
             lru_gen: stamp,
         };
@@ -159,7 +164,7 @@ pub struct TextShaper {
     pub font_system: FontSystem,
     pub swash_cache: SwashCache,
     pub atlas: GlyphAtlas,
-    pixel_cache: HashMap<TextCacheKey, Vec<u8>>,
+    pixel_cache: LruCache<TextCacheKey, Vec<u8>>,
 }
 
 impl TextShaper {
@@ -168,7 +173,7 @@ impl TextShaper {
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
             atlas: GlyphAtlas::new(),
-            pixel_cache: HashMap::new(),
+            pixel_cache: LruCache::new(NonZeroUsize::new(PIXEL_CACHE_MAX).unwrap()),
         }
     }
 
@@ -184,7 +189,13 @@ impl TextShaper {
 
         let rgba = color.to_rgba8();
         let [r, g, b, a] = rgba;
-        let color_packed = u32::from_le_bytes(rgba);
+        let tint = [
+            r as f32 / 255.0,
+            g as f32 / 255.0,
+            b as f32 / 255.0,
+            a as f32 / 255.0,
+        ];
+        let identity_tint = [1.0, 1.0, 1.0, 1.0];
 
         let metrics = Metrics::new(font_size, font_size * 1.2);
         let mut buffer = Buffer::new(&mut self.font_system, metrics);
@@ -204,14 +215,16 @@ impl TextShaper {
         let mut result = Vec::with_capacity(positions.len());
 
         for (cache_key, px, py) in positions {
-            let glyph_key = GlyphKey {
-                cache_key,
-                color_packed,
-            };
+            let glyph_key = GlyphKey { cache_key };
 
             if let Some(entry) = self.atlas.get_and_touch(&glyph_key) {
                 let screen_x = rect.x + px as f32 + entry.placement_left as f32;
                 let screen_y = rect.y + py as f32 - entry.placement_top as f32;
+                let glyph_color = if entry.is_color_glyph {
+                    identity_tint
+                } else {
+                    tint
+                };
                 result.push(GlyphInfo {
                     dest_rect: [
                         screen_x,
@@ -221,6 +234,7 @@ impl TextShaper {
                     ],
                     uv_min: entry.uv_min,
                     uv_max: entry.uv_max,
+                    color: glyph_color,
                 });
                 continue;
             }
@@ -237,16 +251,16 @@ impl TextShaper {
                         }
                         let pl = img.placement.left;
                         let pt = img.placement.top;
-                        let pixels = match img.content {
+                        let (pixels, is_color_glyph) = match img.content {
                             SwashContent::Mask => {
                                 let mut out = vec![0u8; (w * h * 4) as usize];
                                 for (i, &mask) in img.data.iter().enumerate() {
-                                    out[i * 4] = r;
-                                    out[i * 4 + 1] = g;
-                                    out[i * 4 + 2] = b;
-                                    out[i * 4 + 3] = ((mask as u32 * a as u32) / 255) as u8;
+                                    out[i * 4] = 255;
+                                    out[i * 4 + 1] = 255;
+                                    out[i * 4 + 2] = 255;
+                                    out[i * 4 + 3] = mask;
                                 }
-                                out
+                                (out, false)
                             }
                             SwashContent::SubpixelMask => {
                                 let mut out = vec![0u8; (w * h * 4) as usize];
@@ -254,23 +268,26 @@ impl TextShaper {
                                     let mask =
                                         ((chunk[0] as u32 + chunk[1] as u32 + chunk[2] as u32) / 3)
                                             as u8;
-                                    out[i * 4] = r;
-                                    out[i * 4 + 1] = g;
-                                    out[i * 4 + 2] = b;
-                                    out[i * 4 + 3] = ((mask as u32 * a as u32) / 255) as u8;
+                                    out[i * 4] = 255;
+                                    out[i * 4 + 1] = 255;
+                                    out[i * 4 + 2] = 255;
+                                    out[i * 4 + 3] = mask;
                                 }
-                                out
+                                (out, false)
                             }
-                            SwashContent::Color => img.data.to_vec(),
+                            SwashContent::Color => (img.data.to_vec(), true),
                         };
-                        (w, h, pl, pt, pixels)
+                        (w, h, pl, pt, pixels, is_color_glyph)
                     }
                 }
             };
 
-            let (w, h, pl, pt, pixels) = raster;
+            let (w, h, pl, pt, pixels, is_color_glyph) = raster;
 
-            let entry = if let Some(e) = self.atlas.insert(glyph_key, &pixels, w, h, pl, pt) {
+            let entry = if let Some(e) =
+                self.atlas
+                    .insert(glyph_key, &pixels, w, h, pl, pt, is_color_glyph)
+            {
                 e
             } else {
                 let mut inserted = None;
@@ -278,7 +295,10 @@ impl TextShaper {
                     if !self.atlas.evict_lru() {
                         break;
                     }
-                    if let Some(e) = self.atlas.insert(glyph_key, &pixels, w, h, pl, pt) {
+                    if let Some(e) =
+                        self.atlas
+                            .insert(glyph_key, &pixels, w, h, pl, pt, is_color_glyph)
+                    {
                         inserted = Some(e);
                         break;
                     }
@@ -291,10 +311,12 @@ impl TextShaper {
 
             let screen_x = rect.x + px as f32 + pl as f32;
             let screen_y = rect.y + py as f32 - pt as f32;
+            let glyph_color = if is_color_glyph { identity_tint } else { tint };
             result.push(GlyphInfo {
                 dest_rect: [screen_x, screen_y, w as f32, h as f32],
                 uv_min: entry.uv_min,
                 uv_max: entry.uv_max,
+                color: glyph_color,
             });
         }
 
@@ -364,14 +386,19 @@ impl TextShaper {
             }
         }
 
-        if self.pixel_cache.len() >= PIXEL_CACHE_MAX
-            && let Some(old_key) = self.pixel_cache.keys().next().cloned()
-        {
-            self.pixel_cache.remove(&old_key);
-        }
-        self.pixel_cache.insert(key.clone(), pixels.clone());
+        premultiply(&mut pixels);
+        self.pixel_cache.put(key.clone(), pixels.clone());
 
         (key, pixels, width, height)
+    }
+}
+
+fn premultiply(pixels: &mut [u8]) {
+    for chunk in pixels.chunks_exact_mut(4) {
+        let a = chunk[3] as u32;
+        chunk[0] = ((chunk[0] as u32 * a) / 255) as u8;
+        chunk[1] = ((chunk[1] as u32 * a) / 255) as u8;
+        chunk[2] = ((chunk[2] as u32 * a) / 255) as u8;
     }
 }
 

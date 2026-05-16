@@ -22,7 +22,11 @@ pub(crate) struct LinePipeline {
 }
 
 impl LinePipeline {
-    pub(crate) fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
+    pub(crate) fn new(
+        device: &Device,
+        surface_format: wgpu::TextureFormat,
+        viewport_bgl: &wgpu::BindGroupLayout,
+    ) -> Self {
         let instances =
             InstancePipeline::<LineInstance>::new(device, "line", INITIAL_LINE_CAPACITY);
 
@@ -34,7 +38,7 @@ impl LinePipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-line-pipeline-layout"),
-            bind_group_layouts: &[Some(&instances.instances_bgl)],
+            bind_group_layouts: &[Some(viewport_bgl), Some(&instances.instances_bgl)],
             immediate_size: 0,
         });
 
@@ -76,16 +80,13 @@ impl LinePipeline {
             pipeline,
         }
     }
-
-    pub(crate) fn ensure_capacity(&mut self, device: &Device, count: usize) {
-        self.instances.ensure_capacity(device, count);
-    }
 }
 
-pub(crate) fn make_line_instance(p1: Point, p2: Point, style: LineStyle) -> LineInstance {
+pub(crate) fn prepare_line(p1: Point, p2: Point, style: LineStyle) -> LineInstance {
     let cap = match style.cap {
         LineCap::Butt => 0.0f32,
         LineCap::Round => 1.0f32,
+        LineCap::Square => 2.0f32,
     };
     LineInstance {
         p1: [p1.x, p1.y],

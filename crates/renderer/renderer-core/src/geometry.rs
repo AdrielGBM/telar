@@ -148,3 +148,167 @@ impl PathData {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn point_new_stores_coordinates() {
+        let p = Point::new(3.0, 4.0);
+        assert_eq!(p.x, 3.0);
+        assert_eq!(p.y, 4.0);
+    }
+
+    #[test]
+    fn rect_new_stores_fields() {
+        let r = Rect::new(1.0, 2.0, 10.0, 20.0);
+        assert_eq!(r.x, 1.0);
+        assert_eq!(r.y, 2.0);
+        assert_eq!(r.w, 10.0);
+        assert_eq!(r.h, 20.0);
+    }
+
+    #[test]
+    fn rect_default_is_zero() {
+        let r = Rect::default();
+        assert_eq!(r.x, 0.0);
+        assert_eq!(r.y, 0.0);
+        assert_eq!(r.w, 0.0);
+        assert_eq!(r.h, 0.0);
+    }
+
+    #[test]
+    fn border_radius_all_sets_all_corners_equal() {
+        let br = BorderRadius::all(8.0);
+        assert_eq!(br.top_left, 8.0);
+        assert_eq!(br.top_right, 8.0);
+        assert_eq!(br.bottom_right, 8.0);
+        assert_eq!(br.bottom_left, 8.0);
+    }
+
+    #[test]
+    fn border_radius_zero_all_corners_are_zero() {
+        let br = BorderRadius::zero();
+        assert_eq!(br.top_left, 0.0);
+        assert_eq!(br.top_right, 0.0);
+        assert_eq!(br.bottom_right, 0.0);
+        assert_eq!(br.bottom_left, 0.0);
+    }
+
+    #[test]
+    fn border_radius_zero_is_zero() {
+        assert!(BorderRadius::zero().is_zero());
+    }
+
+    #[test]
+    fn border_radius_non_zero_is_not_zero() {
+        assert!(!BorderRadius::all(1.0).is_zero());
+    }
+
+    #[test]
+    fn border_radius_default_is_zero() {
+        assert!(BorderRadius::default().is_zero());
+    }
+
+    #[test]
+    fn border_radius_partial_non_zero_is_not_zero() {
+        let br = BorderRadius {
+            top_left: 5.0,
+            top_right: 0.0,
+            bottom_right: 0.0,
+            bottom_left: 0.0,
+        };
+        assert!(!br.is_zero());
+    }
+
+    #[test]
+    fn stroke_new_stores_color_and_width() {
+        use crate::Color;
+        let s = Stroke::new(Color::RED, 3.0);
+        assert_eq!(s.color, Color::RED);
+        assert_eq!(s.width, 3.0);
+    }
+
+    #[test]
+    fn stroke_new_defaults_cap_to_butt() {
+        use crate::{Color, LineCap};
+        let s = Stroke::new(Color::BLACK, 1.0);
+        assert_eq!(s.cap, LineCap::Butt);
+    }
+
+    #[test]
+    fn stroke_new_defaults_join_to_miter() {
+        use crate::{Color, LineJoin};
+        let s = Stroke::new(Color::BLACK, 1.0);
+        assert_eq!(s.join, LineJoin::Miter);
+    }
+
+    #[test]
+    fn stroke_with_cap_sets_cap() {
+        use crate::{Color, LineCap};
+        let s = Stroke::new(Color::BLACK, 1.0).with_cap(LineCap::Square);
+        assert_eq!(s.cap, LineCap::Square);
+    }
+
+    #[test]
+    fn stroke_with_join_sets_join() {
+        use crate::{Color, LineJoin};
+        let s = Stroke::new(Color::BLACK, 1.0).with_join(LineJoin::Bevel);
+        assert_eq!(s.join, LineJoin::Bevel);
+    }
+
+    #[test]
+    fn path_data_new_is_empty() {
+        let path = PathData::new();
+        assert!(path.verbs.is_empty());
+    }
+
+    #[test]
+    fn path_data_move_to_adds_verb() {
+        let path = PathData::new().move_to(Point::new(0.0, 0.0));
+        assert_eq!(path.verbs.len(), 1);
+        assert!(matches!(path.verbs[0], PathVerb::MoveTo(_)));
+    }
+
+    #[test]
+    fn path_data_line_to_adds_verb() {
+        let path = PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(1.0, 1.0));
+        assert_eq!(path.verbs.len(), 2);
+        assert!(matches!(path.verbs[1], PathVerb::LineTo(_)));
+    }
+
+    #[test]
+    fn path_data_close_adds_verb() {
+        let path = PathData::new().move_to(Point::new(0.0, 0.0)).close();
+        assert!(matches!(path.verbs.last().unwrap(), PathVerb::Close));
+    }
+
+    #[test]
+    fn path_data_quad_to_adds_verb() {
+        let path = PathData::new().quad_to(Point::new(1.0, 0.0), Point::new(2.0, 0.0));
+        assert!(matches!(path.verbs[0], PathVerb::QuadTo { .. }));
+    }
+
+    #[test]
+    fn path_data_cubic_to_adds_verb() {
+        let path = PathData::new().cubic_to(
+            Point::new(1.0, 0.0),
+            Point::new(2.0, 0.0),
+            Point::new(3.0, 0.0),
+        );
+        assert!(matches!(path.verbs[0], PathVerb::CubicTo { .. }));
+    }
+
+    #[test]
+    fn path_data_builder_accumulates_verbs() {
+        let path = PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(1.0, 0.0))
+            .line_to(Point::new(1.0, 1.0))
+            .close();
+        assert_eq!(path.verbs.len(), 4);
+    }
+}

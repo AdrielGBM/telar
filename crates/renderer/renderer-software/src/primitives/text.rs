@@ -7,7 +7,7 @@ pub(crate) fn draw_text(
     rect: Rect,
     style: &TextStyle,
 ) {
-    let (_key, mut pixels, tex_width, tex_height) = shaper.rasterize(text, rect, style);
+    let (_key, pixels, tex_width, tex_height) = shaper.rasterize(text, rect, style);
     if tex_width == 0 || tex_height == 0 {
         return;
     }
@@ -15,8 +15,6 @@ pub(crate) fn draw_text(
     let Some(size) = tiny_skia::IntSize::from_wh(tex_width, tex_height) else {
         return;
     };
-
-    super::premultiply_rgba_in_place(&mut pixels);
 
     if let Some(src) = tiny_skia::Pixmap::from_vec(pixels, size) {
         let paint = tiny_skia::PixmapPaint {

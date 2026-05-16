@@ -47,6 +47,7 @@ pub(crate) fn draw_path(
         let line_cap = match s.cap {
             LineCap::Butt => tiny_skia::LineCap::Butt,
             LineCap::Round => tiny_skia::LineCap::Round,
+            LineCap::Square => tiny_skia::LineCap::Square,
         };
         let line_join = match s.join {
             LineJoin::Miter => tiny_skia::LineJoin::Miter,

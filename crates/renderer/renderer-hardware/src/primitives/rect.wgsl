@@ -1,7 +1,7 @@
 struct RectInstance {
-    rect: vec4<f32>,         
-    radii: vec4<f32>,        
-    fill_color: vec4<f32>,   
+    rect: vec4<f32>,
+    radii: vec4<f32>,
+    fill_color: vec4<f32>,
     stroke_color: vec4<f32>,
     stroke_width: f32,
     _pad0: f32,
@@ -9,7 +9,7 @@ struct RectInstance {
     _pad2: f32,
 }
 
-@group(0) @binding(1) var<storage, read> instances: array<RectInstance>;
+@group(1) @binding(0) var<storage, read> instances: array<RectInstance>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -26,25 +26,15 @@ fn vs_main(
     @builtin(vertex_index) vertex_index: u32,
     @builtin(instance_index) instance_index: u32,
 ) -> VertexOutput {
-    var offsets = array<vec2<f32>, 6>(
-        vec2<f32>(0.0, 0.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(0.0, 1.0),
-    );
-
     let inst = instances[instance_index];
-    let uv = offsets[vertex_index];
+    let uv = quad_uv(vertex_index);
 
     let px = inst.rect.x + uv.x * inst.rect.z;
     let py = inst.rect.y + uv.y * inst.rect.w;
-    let ndc_x = px / viewport.size.x * 2.0 - 1.0;
-    let ndc_y = 1.0 - py / viewport.size.y * 2.0;
+    let ndc = to_ndc(px, py);
 
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(ndc_x, ndc_y, 0.0, 1.0);
+    out.clip_position = vec4<f32>(ndc.x, ndc.y, 0.0, 1.0);
     out.local_pos = vec2<f32>((uv.x - 0.5) * inst.rect.z, (uv.y - 0.5) * inst.rect.w);
     out.half_size = vec2<f32>(inst.rect.z * 0.5, inst.rect.w * 0.5);
     out.radii = inst.radii;

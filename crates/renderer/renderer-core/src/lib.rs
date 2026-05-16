@@ -12,4 +12,6 @@ pub use error::RendererError;
 pub use geometry::{BorderRadius, PathData, PathVerb, Point, Rect, Stroke};
 pub use image::{ImageData, ImageFilter};
 pub use renderer::RenderBackend;
-pub use style::{FillRule, FillStyle, LineCap, LineJoin, LineStyle, TextStyle};
+pub use style::{
+    FillRule, FillStyle, LineCap, LineJoin, LineStyle, PathStyle, RectStyle, TextStyle,
+};

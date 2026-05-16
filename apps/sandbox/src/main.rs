@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use rsx::{
     App, AppContext, BorderRadius, Color, FillRule, FillStyle, Frame, ImageData, ImageFilter,
-    LineCap, LineJoin, LineStyle, PathData, Point, Rect, Stroke, TextStyle, WindowConfig,
+    LineCap, LineJoin, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, Stroke, TextStyle,
+    WindowConfig,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -34,9 +35,11 @@ impl App for Sandbox {
 
         frame.draw_rect(
             Rect::new(24.0, 44.0, 168.0, 80.0),
-            Some(FillStyle::solid(PRIMARY)),
-            None,
-            BorderRadius::all(8.0),
+            RectStyle {
+                fill: Some(FillStyle::solid(PRIMARY)),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
         );
         frame.draw_text(
             "fill",
@@ -46,9 +49,11 @@ impl App for Sandbox {
 
         frame.draw_rect(
             Rect::new(208.0, 44.0, 168.0, 80.0),
-            None,
-            Some(Stroke::new(DANGER, 2.0)),
-            BorderRadius::all(8.0),
+            RectStyle {
+                fill: None,
+                stroke: Some(Stroke::new(DANGER, 2.0)),
+                radius: BorderRadius::all(8.0),
+            },
         );
         frame.draw_text(
             "stroke",
@@ -58,9 +63,11 @@ impl App for Sandbox {
 
         frame.draw_rect(
             Rect::new(392.0, 44.0, 168.0, 80.0),
-            Some(FillStyle::solid(SUCCESS)),
-            Some(Stroke::new(DARK, 1.5)),
-            BorderRadius::zero(),
+            RectStyle {
+                fill: Some(FillStyle::solid(SUCCESS)),
+                stroke: Some(Stroke::new(DARK, 1.5)),
+                radius: BorderRadius::zero(),
+            },
         );
         frame.draw_text(
             "fill + stroke",
@@ -70,9 +77,11 @@ impl App for Sandbox {
 
         frame.draw_rect(
             Rect::new(576.0, 44.0, 168.0, 80.0),
-            Some(FillStyle::solid(PURPLE)),
-            None,
-            BorderRadius::all(40.0),
+            RectStyle {
+                fill: Some(FillStyle::solid(PURPLE)),
+                stroke: None,
+                radius: BorderRadius::all(40.0),
+            },
         );
         frame.draw_text(
             "pill radius",
@@ -92,9 +101,11 @@ impl App for Sandbox {
             let x = 24.0 + i as f32 * 116.0;
             frame.draw_rect(
                 Rect::new(x, 172.0, 100.0, 44.0),
-                Some(FillStyle::solid(color)),
-                None,
-                BorderRadius::all(6.0),
+                RectStyle {
+                    fill: Some(FillStyle::solid(color)),
+                    stroke: None,
+                    radius: BorderRadius::all(6.0),
+                },
             );
             frame.draw_text(
                 label,
@@ -143,9 +154,11 @@ impl App for Sandbox {
 
         frame.draw_rect(
             Rect::new(24.0, 464.0, 368.0, 110.0),
-            Some(FillStyle::solid(DARK)),
-            None,
-            BorderRadius::all(10.0),
+            RectStyle {
+                fill: Some(FillStyle::solid(DARK)),
+                stroke: None,
+                radius: BorderRadius::all(10.0),
+            },
         );
         frame.draw_text(
             "Dark Card",
@@ -160,9 +173,11 @@ impl App for Sandbox {
 
         frame.draw_rect(
             Rect::new(408.0, 464.0, 368.0, 110.0),
-            Some(FillStyle::solid(WHITE)),
-            Some(Stroke::new(CARD_BORDER, 1.0)),
-            BorderRadius::all(10.0),
+            RectStyle {
+                fill: Some(FillStyle::solid(WHITE)),
+                stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
+                radius: BorderRadius::all(10.0),
+            },
         );
         frame.draw_text(
             "Light Card",
@@ -340,11 +355,7 @@ impl App for Sandbox {
             frame.draw_line(
                 Point::new(fan_cx, fan_cy),
                 Point::new(tx, ty),
-                LineStyle {
-                    color,
-                    width: 2.0,
-                    cap: LineCap::Round,
-                },
+                LineStyle::new(color, 2.0).with_cap(LineCap::Round),
             );
         }
 
@@ -441,9 +452,11 @@ fn draw_paths_section(frame: &mut Frame) {
                 .line_to(Point::new(39.0, Y0 + 166.0))
                 .close(),
         ),
-        Some(FillStyle::solid(PRIMARY)),
-        None,
-        FillRule::Winding,
+        PathStyle {
+            fill: Some(FillStyle::solid(PRIMARY)),
+            stroke: None,
+            fill_rule: FillRule::Winding,
+        },
     );
     frame.draw_text(
         "triangle",
@@ -470,9 +483,11 @@ fn draw_paths_section(frame: &mut Frame) {
         path = path.close();
         frame.draw_path(
             Arc::new(path),
-            Some(FillStyle::solid(DANGER)),
-            Some(Stroke::new(DARK, 1.0)),
-            FillRule::Winding,
+            PathStyle {
+                fill: Some(FillStyle::solid(DANGER)),
+                stroke: Some(Stroke::new(DARK, 1.0)),
+                fill_rule: FillRule::Winding,
+            },
         );
         frame.draw_text(
             "star (fill + stroke)",
@@ -495,9 +510,11 @@ fn draw_paths_section(frame: &mut Frame) {
                 .line_to(Point::new(414.0, Y0 + 138.0))
                 .close(),
         ),
-        Some(FillStyle::solid(PURPLE)),
-        None,
-        FillRule::EvenOdd,
+        PathStyle {
+            fill: Some(FillStyle::solid(PURPLE)),
+            stroke: None,
+            fill_rule: FillRule::EvenOdd,
+        },
     );
     frame.draw_text(
         "even-odd fill",
@@ -517,9 +534,11 @@ fn draw_paths_section(frame: &mut Frame) {
                 .move_to(Point::new(24.0, Y0 + 308.0))
                 .quad_to(Point::new(164.0, Y0 + 238.0), Point::new(304.0, Y0 + 308.0)),
         ),
-        None,
-        Some(Stroke::new(WARNING, 3.0).with_cap(LineCap::Round)),
-        FillRule::Winding,
+        PathStyle {
+            fill: None,
+            stroke: Some(Stroke::new(WARNING, 3.0).with_cap(LineCap::Round)),
+            fill_rule: FillRule::Winding,
+        },
     );
     frame.draw_text(
         "quad_to arch",
@@ -537,9 +556,11 @@ fn draw_paths_section(frame: &mut Frame) {
                     Point::new(404.0, Y0 + 308.0),
                 ),
         ),
-        None,
-        Some(Stroke::new(SUCCESS, 3.0).with_cap(LineCap::Round)),
-        FillRule::Winding,
+        PathStyle {
+            fill: None,
+            stroke: Some(Stroke::new(SUCCESS, 3.0).with_cap(LineCap::Round)),
+            fill_rule: FillRule::Winding,
+        },
     );
     frame.draw_text(
         "cubic_to S-curve",
@@ -563,9 +584,11 @@ fn draw_paths_section(frame: &mut Frame) {
                 )
                 .close(),
         ),
-        Some(FillStyle::solid(Color::rgba(0.97, 0.72, 0.18, 0.75))),
-        Some(Stroke::new(WARNING, 1.5)),
-        FillRule::Winding,
+        PathStyle {
+            fill: Some(FillStyle::solid(Color::rgba(0.97, 0.72, 0.18, 0.75))),
+            stroke: Some(Stroke::new(WARNING, 1.5)),
+            fill_rule: FillRule::Winding,
+        },
     );
     frame.draw_text(
         "closed cubic (petal)",
@@ -587,9 +610,11 @@ fn draw_paths_section(frame: &mut Frame) {
                 .line_to(Point::new(176.0, Y0 + 430.0))
                 .line_to(Point::new(252.0, Y0 + 390.0)),
         ),
-        None,
-        Some(Stroke::new(PRIMARY, 8.0)),
-        FillRule::Winding,
+        PathStyle {
+            fill: None,
+            stroke: Some(Stroke::new(PRIMARY, 8.0)),
+            fill_rule: FillRule::Winding,
+        },
     );
     frame.draw_text(
         "Butt / Miter (default)",
@@ -605,13 +630,15 @@ fn draw_paths_section(frame: &mut Frame) {
                 .line_to(Point::new(476.0, Y0 + 430.0))
                 .line_to(Point::new(552.0, Y0 + 390.0)),
         ),
-        None,
-        Some(
-            Stroke::new(DANGER, 8.0)
-                .with_cap(LineCap::Round)
-                .with_join(LineJoin::Round),
-        ),
-        FillRule::Winding,
+        PathStyle {
+            fill: None,
+            stroke: Some(
+                Stroke::new(DANGER, 8.0)
+                    .with_cap(LineCap::Round)
+                    .with_join(LineJoin::Round),
+            ),
+            fill_rule: FillRule::Winding,
+        },
     );
     frame.draw_text(
         "Round cap / Round join",

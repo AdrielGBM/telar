@@ -1,4 +1,4 @@
-use renderer_core::{BorderRadius, Rect, Stroke};
+use renderer_core::{Rect, RectStyle};
 use wgpu::Device;
 
 use super::InstancePipeline;
@@ -11,9 +11,7 @@ pub(crate) struct RectInstance {
     pub fill_color: [f32; 4],
     pub stroke_color: [f32; 4],
     pub stroke_width: f32,
-    pub _pad0: f32,
-    pub _pad1: f32,
-    pub _pad2: f32,
+    pub _pad: [f32; 3],
 }
 
 pub(crate) const INITIAL_RECT_CAPACITY: usize = 256;
@@ -24,7 +22,11 @@ pub(crate) struct RectPipeline {
 }
 
 impl RectPipeline {
-    pub(crate) fn new(device: &Device, surface_format: wgpu::TextureFormat) -> Self {
+    pub(crate) fn new(
+        device: &Device,
+        surface_format: wgpu::TextureFormat,
+        viewport_bgl: &wgpu::BindGroupLayout,
+    ) -> Self {
         let instances =
             InstancePipeline::<RectInstance>::new(device, "rect", INITIAL_RECT_CAPACITY);
 
@@ -36,7 +38,7 @@ impl RectPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-rect-pipeline-layout"),
-            bind_group_layouts: &[Some(&instances.instances_bgl)],
+            bind_group_layouts: &[Some(viewport_bgl), Some(&instances.instances_bgl)],
             immediate_size: 0,
         });
 
@@ -78,39 +80,28 @@ impl RectPipeline {
             pipeline,
         }
     }
-
-    pub(crate) fn ensure_capacity(&mut self, device: &Device, count: usize) {
-        self.instances.ensure_capacity(device, count);
-    }
 }
 
-pub(crate) fn make_rect_instance(
-    rect: Rect,
-    fill: Option<renderer_core::FillStyle>,
-    stroke: Option<Stroke>,
-    radius: BorderRadius,
-) -> RectInstance {
-    let fill_color = match fill {
+pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle) -> RectInstance {
+    let fill_color = match style.fill {
         Some(renderer_core::FillStyle::Solid(c)) => [c.r, c.g, c.b, c.a],
         None => [0.0; 4],
     };
-    let (stroke_color, stroke_width) = match stroke {
+    let (stroke_color, stroke_width) = match style.stroke {
         Some(s) => ([s.color.r, s.color.g, s.color.b, s.color.a], s.width),
         None => ([0.0; 4], 0.0),
     };
     RectInstance {
         rect: [rect.x, rect.y, rect.w, rect.h],
         radii: [
-            radius.top_left,
-            radius.top_right,
-            radius.bottom_right,
-            radius.bottom_left,
+            style.radius.top_left,
+            style.radius.top_right,
+            style.radius.bottom_right,
+            style.radius.bottom_left,
         ],
         fill_color,
         stroke_color,
         stroke_width,
-        _pad0: 0.0,
-        _pad1: 0.0,
-        _pad2: 0.0,
+        _pad: [0.0; 3],
     }
 }

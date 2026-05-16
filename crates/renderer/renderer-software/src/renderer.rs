@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -5,6 +6,8 @@ use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
 use renderer_text::TextShaper;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
+
+use crate::primitives::image::ImageCache;
 
 pub(crate) fn to_skia_color(color: Color) -> tiny_skia::Color {
     tiny_skia::Color::from_rgba(
@@ -24,6 +27,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     pub(crate) pixmap: Option<Pixmap>,
     pub(crate) text_shaper: TextShaper,
     pending_commands: Vec<DrawCommand>,
+    image_cache: ImageCache,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -45,6 +49,7 @@ where
             pixmap: None,
             text_shaper: TextShaper::new(),
             pending_commands: Vec::new(),
+            image_cache: HashMap::new(),
         })
     }
 }
@@ -65,6 +70,7 @@ where
                     .map_err(|e| RendererError::Resize(e.to_string()))?;
             }
         }
+        crate::primitives::image::evict_cache(&mut self.image_cache);
         self.pending_commands.clear();
         Ok(())
     }
@@ -85,13 +91,14 @@ where
                 break;
             };
             match cmd {
-                DrawCommand::Rect {
-                    rect,
-                    fill,
-                    stroke,
-                    radius,
-                } => {
-                    crate::primitives::rect::draw_rect(pixmap, rect, fill, stroke, radius);
+                DrawCommand::Rect { rect, style } => {
+                    crate::primitives::rect::draw_rect(
+                        pixmap,
+                        rect,
+                        style.fill,
+                        style.stroke,
+                        style.radius,
+                    );
                 }
                 DrawCommand::Text { text, rect, style } => {
                     crate::primitives::text::draw_text(
@@ -103,20 +110,26 @@ where
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    crate::primitives::image::draw_image(pixmap, &data, rect, filter);
+                    crate::primitives::image::draw_image(
+                        pixmap,
+                        &data,
+                        &mut self.image_cache,
+                        rect,
+                        filter,
+                    );
                 }
                 DrawCommand::Line { p1, p2, style } => {
                     crate::primitives::line::draw_line(pixmap, p1, p2, style);
                 }
-                DrawCommand::Path {
-                    data,
-                    fill,
-                    stroke,
-                    fill_rule,
-                } => {
-                    crate::primitives::path::draw_path(pixmap, &data, fill, stroke, fill_rule);
+                DrawCommand::Path { data, style } => {
+                    crate::primitives::path::draw_path(
+                        pixmap,
+                        &data,
+                        style.fill,
+                        style.stroke,
+                        style.fill_rule,
+                    );
                 }
-                _ => {}
             }
         }
 
@@ -127,11 +140,8 @@ where
             return Ok(());
         }
         if let Ok(mut buffer) = self.surface.buffer_mut() {
-            for (dst, src) in buffer.iter_mut().zip(pixmap.pixels()) {
-                let r = src.red() as u32;
-                let g = src.green() as u32;
-                let b = src.blue() as u32;
-                *dst = (r << 16) | (g << 8) | b;
+            for (dst, chunk) in buffer.iter_mut().zip(pixmap.data().chunks_exact(4)) {
+                *dst = ((chunk[0] as u32) << 16) | ((chunk[1] as u32) << 8) | chunk[2] as u32;
             }
             buffer
                 .present()
