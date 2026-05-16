@@ -1,6 +1,8 @@
-use platform_core::{Event, EventHandler, MouseButton, Platform, Window, WindowConfig};
+use platform_core::{
+    Event, EventHandler, Platform, PointerButton, PointerSource, Window, WindowConfig,
+};
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, MouseButton as WinitMouseButton, WindowEvent};
+use winit::event::{ElementState, MouseButton as WinitMouseButton, Touch, TouchPhase, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{WindowAttributes, WindowId};
 
@@ -69,24 +71,61 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor_pos = (position.x, position.y);
                 self.handler.on_event(
-                    Event::MouseMoved {
+                    Event::PointerMoved {
                         x: position.x,
                         y: position.y,
+                        source: PointerSource::Mouse,
                     },
                     window,
                 );
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 let btn = match button {
-                    WinitMouseButton::Left => MouseButton::Left,
-                    WinitMouseButton::Right => MouseButton::Right,
-                    WinitMouseButton::Middle => MouseButton::Middle,
+                    WinitMouseButton::Left => PointerButton::Primary,
+                    WinitMouseButton::Right => PointerButton::Secondary,
+                    WinitMouseButton::Middle => PointerButton::Auxiliary,
                     _ => return,
                 };
                 let (x, y) = self.cursor_pos;
                 let ev = match state {
-                    ElementState::Pressed => Event::MousePressed { x, y, button: btn },
-                    ElementState::Released => Event::MouseReleased { x, y, button: btn },
+                    ElementState::Pressed => Event::PointerPressed {
+                        x,
+                        y,
+                        button: btn,
+                        source: PointerSource::Mouse,
+                    },
+                    ElementState::Released => Event::PointerReleased {
+                        x,
+                        y,
+                        button: btn,
+                        source: PointerSource::Mouse,
+                    },
+                };
+                self.handler.on_event(ev, window);
+            }
+            WindowEvent::Touch(Touch {
+                phase,
+                location,
+                id,
+                ..
+            }) => {
+                let x = location.x;
+                let y = location.y;
+                let source = PointerSource::Touch { id };
+                let ev = match phase {
+                    TouchPhase::Started => Event::PointerPressed {
+                        x,
+                        y,
+                        button: PointerButton::Primary,
+                        source,
+                    },
+                    TouchPhase::Moved => Event::PointerMoved { x, y, source },
+                    TouchPhase::Ended | TouchPhase::Cancelled => Event::PointerReleased {
+                        x,
+                        y,
+                        button: PointerButton::Primary,
+                        source,
+                    },
                 };
                 self.handler.on_event(ev, window);
             }
