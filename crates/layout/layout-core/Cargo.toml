@@ -1,0 +1,9 @@
+[package]
+name = "layout-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+renderer-core = { workspace = true }
+taffy = "0.10.1"
+thiserror = { workspace = true }

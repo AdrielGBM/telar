@@ -9,6 +9,7 @@ members = [
     "crates/renderer/renderer-text",
     "crates/reactive/reactive-core",
     "crates/reactive/reactive-tree",
+    "crates/layout/layout-core",
     "crates/ui/ui-core",
     "crates/rsx",
     "crates/tools/cargo-rsx",
@@ -34,6 +35,7 @@ renderer-hardware = { path = "crates/renderer/renderer-hardware" }
 renderer-text = { path = "crates/renderer/renderer-text" }
 reactive-core = { path = "crates/reactive/reactive-core" }
 reactive-tree = { path = "crates/reactive/reactive-tree" }
+layout-core = { path = "crates/layout/layout-core" }
 ui-core = { path = "crates/ui/ui-core" }
 rsx = { path = "crates/rsx" }
 rsx-parser = { path = "crates/tools/rsx-parser" }
