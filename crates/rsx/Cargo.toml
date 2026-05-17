@@ -11,7 +11,6 @@ runtime = [
     "dep:renderer-core",
     "dep:renderer-software",
     "dep:renderer-hardware",
-    "dep:framework-core",
 ]
 
 [dependencies]
@@ -23,4 +22,3 @@ platform-winit = { workspace = true, optional = true }
 renderer-core = { workspace = true, optional = true }
 renderer-software = { workspace = true, optional = true }
 renderer-hardware = { workspace = true, optional = true }
-framework-core = { workspace = true, optional = true }

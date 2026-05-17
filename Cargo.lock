@@ -647,10 +647,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
-name = "framework-core"
-version = "0.1.0"
-
-[[package]]
 name = "futures-core"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1740,6 +1736,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "reactive-core"
+version = "0.1.0"
+
+[[package]]
+name = "reactive-tree"
+version = "0.1.0"
+
+[[package]]
 name = "read-fonts"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1848,7 +1852,6 @@ name = "rsx"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "framework-core",
  "platform-core",
  "platform-winit",
  "renderer-core",
