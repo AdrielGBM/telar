@@ -76,6 +76,7 @@ impl Component for Label {
 
 #[cfg(test)]
 mod tests {
+    use layout_core::AvailableSpace;
     use renderer_core::{Color, DrawCommand, TextStyle};
 
     use super::*;
@@ -109,7 +110,12 @@ mod tests {
                 &[label.layout_node()],
             )
             .unwrap();
-        ctx.compute(root, 200.0, 100.0).unwrap();
+        ctx.compute(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
 
         let view = label.view();
         if let View::Primitive(DrawCommand::Text { rect, .. }) = view {

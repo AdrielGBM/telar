@@ -118,6 +118,27 @@ mod tests {
     }
 
     #[test]
+    fn scope_with_cleans_up_after_closure_returns() {
+        Scope::with(|| {
+            provide(String::from("ephemeral")).unwrap();
+            assert!(try_inject::<String>().is_some());
+        });
+        assert_eq!(
+            try_inject::<String>(),
+            None,
+            "service must not be visible after Scope::with returns"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "not found in any scope")]
+    fn inject_panics_when_service_not_provided() {
+        Scope::with(|| {
+            inject::<i128>();
+        });
+    }
+
+    #[test]
     fn scope_with_nested() {
         Scope::with(|| {
             provide(String::from("outer")).unwrap();

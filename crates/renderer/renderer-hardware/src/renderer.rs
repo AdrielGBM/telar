@@ -344,7 +344,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         Ok(())
     }
 
-    fn submit(&mut self, commands: &[DrawCommand]) {
+    fn submit(&mut self, commands: Vec<DrawCommand>) {
         let mut clip_stack: Vec<Rect> = Vec::new();
         let mut translate_stack: Vec<(f32, f32)> = Vec::new();
         let mut cum_tx: f32 = 0.0;
@@ -366,7 +366,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.batch_rect_start = Some(self.pending_instances.len() as u32);
                     }
                     let translated = Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.w, rect.h);
-                    let inst = crate::primitives::rect::prepare_rect(translated, style);
+                    let inst = crate::primitives::rect::prepare_rect(translated, &style);
                     self.pending_instances.push(inst);
                 }
                 DrawCommand::Text { text, rect, style } => {
@@ -381,7 +381,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &mut self.text_shaper,
                         &*text,
                         translated,
-                        style,
+                        &style,
                     );
                     self.pending_text_instances.extend(instances);
                 }
@@ -396,13 +396,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     let tp1 = Point::new(p1.x + cum_tx, p1.y + cum_ty);
                     let tp2 = Point::new(p2.x + cum_tx, p2.y + cum_ty);
                     self.pending_line_instances
-                        .push(crate::primitives::line::prepare_line(tp1, tp2, *style));
+                        .push(crate::primitives::line::prepare_line(tp1, tp2, style));
                 }
                 DrawCommand::Image { data, rect, filter } => {
                     self.flush_rect();
                     self.flush_text();
                     self.flush_line();
-                    let key = (data.id, *filter);
+                    let key = (data.id, filter);
                     if self.batch_image_start.is_none() || self.batch_image_key != Some(key) {
                         self.flush_image();
                         self.batch_image_key = Some(key);
@@ -411,8 +411,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             Some(self.image_pipeline.get_or_create_bind_group(
                                 &self.device,
                                 &self.queue,
-                                data,
-                                *filter,
+                                &data,
+                                filter,
                             ));
                     }
                     let translated = Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.w, rect.h);
@@ -425,8 +425,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     let index_start = self.pending_path_indices.len() as u32;
                     crate::primitives::path::prepare_path(
                         &mut self.path_tess_cache,
-                        data,
-                        style,
+                        &data,
+                        &style,
                         &mut self.pending_path_vertices,
                         &mut self.pending_path_indices,
                     );
@@ -446,8 +446,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_all();
                     let effective = clip_stack
                         .last()
-                        .and_then(|&current| intersect_rects(current, *rect))
-                        .unwrap_or(*rect);
+                        .and_then(|&current| intersect_rects(current, rect))
+                        .unwrap_or(rect);
                     clip_stack.push(effective);
                     self.pending_steps.push(DrawStep::SetScissor {
                         rect: Some(effective),
@@ -461,7 +461,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     });
                 }
                 DrawCommand::PushTransform { tx, ty } => {
-                    translate_stack.push((*tx, *ty));
+                    translate_stack.push((tx, ty));
                     cum_tx += tx;
                     cum_ty += ty;
                 }

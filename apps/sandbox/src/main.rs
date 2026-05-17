@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
 use rsx::{
-    App, AppContext, BorderRadius, Button, Color, Component, ComponentTree, Event, EventResult,
-    FillRule, FillStyle, Frame, ImageData, ImageFilter, LayoutStyle, LineCap, LineJoin, LineStyle,
-    PathData, PathStyle, Point, ReadSignal, Rect, RectStyle, RwSignal, Stroke, TextStyle, View,
-    WidgetCtx, WindowConfig, create_rw_signal,
+    App, AppContext, AvailableSpace, BorderRadius, Button, Color, Component, ComponentTree, Event,
+    EventResult, FillRule, FillStyle, Frame, ImageData, ImageFilter, LayoutStyle, LineCap,
+    LineJoin, LineStyle, PathData, PathStyle, Point, ReadSignal, Rect, RectStyle, RwSignal, Stroke,
+    TextStyle, View, WidgetCtx, WindowConfig, create_rw_signal,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -519,7 +519,11 @@ fn main() {
         )
         .expect("layout failed");
     widget_ctx
-        .compute(widget_root, PANEL_W, PANEL_H)
+        .compute(
+            widget_root,
+            AvailableSpace::Definite(PANEL_W),
+            AvailableSpace::Definite(PANEL_H),
+        )
         .expect("layout failed");
 
     let count = create_rw_signal(0i32);

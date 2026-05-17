@@ -283,7 +283,7 @@ impl TextShaper {
                             SwashContent::SubpixelMask => {
                                 let mut out = vec![0u8; (w * h * 4) as usize];
                                 for (i, chunk) in img.data.chunks_exact(3).enumerate() {
-                                    // Known limitation: subpixel RGB channels averaged to grayscale, discarding per-channel AA.
+                                    // KNOWN LIMITATION: Subpixel anti-aliasing (LCD rendering) requires per-channel alpha compositing in the renderer to preserve per-color subpixel masks. Currently, we average the RGB channels to grayscale, losing the color-specific AA information. This produces visually inferior text on LCD screens. Supporting proper subpixel AA would require renderer-level per-channel compositing, which is not yet implemented.
                                     let mask =
                                         ((chunk[0] as u32 + chunk[1] as u32 + chunk[2] as u32) / 3)
                                             as u8;

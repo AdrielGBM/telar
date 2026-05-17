@@ -1,7 +1,7 @@
-use taffy::{AvailableSpace, TaffyTree};
+use taffy::TaffyTree;
 
 use crate::error::LayoutError;
-use crate::style::LayoutStyle;
+use crate::style::{AvailableSpace, LayoutStyle};
 
 pub type NodeId = taffy::NodeId;
 
@@ -52,15 +52,15 @@ impl LayoutEngine {
     pub fn compute(
         &mut self,
         root: NodeId,
-        available_width: f32,
-        available_height: f32,
+        available_width: AvailableSpace,
+        available_height: AvailableSpace,
     ) -> Result<(), LayoutError> {
         self.tree
             .compute_layout(
                 root,
                 taffy::geometry::Size {
-                    width: AvailableSpace::Definite(available_width),
-                    height: AvailableSpace::Definite(available_height),
+                    width: available_width.into(),
+                    height: available_height.into(),
                 },
             )
             .map_err(LayoutError::from)
@@ -131,7 +131,13 @@ mod tests {
         let leaf = engine
             .new_leaf(LayoutStyle::new().width(50.0).height(40.0))
             .unwrap();
-        engine.compute(leaf, 200.0, 200.0).unwrap();
+        engine
+            .compute(
+                leaf,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(200.0),
+            )
+            .unwrap();
         let rect = engine.get_layout(leaf).unwrap();
         assert_eq!(rect.w, 50.0_f32);
         assert_eq!(rect.h, 40.0_f32);
@@ -152,7 +158,13 @@ mod tests {
                 &[child1, child2],
             )
             .unwrap();
-        engine.compute(root, 200.0, 100.0).unwrap();
+        engine
+            .compute(
+                root,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
 
         let r1 = engine.get_layout(child1).unwrap();
         let r2 = engine.get_layout(child2).unwrap();
@@ -177,7 +189,13 @@ mod tests {
                 &[child1, child2],
             )
             .unwrap();
-        engine.compute(root, 100.0, 200.0).unwrap();
+        engine
+            .compute(
+                root,
+                AvailableSpace::Definite(100.0),
+                AvailableSpace::Definite(200.0),
+            )
+            .unwrap();
 
         let r1 = engine.get_layout(child1).unwrap();
         let r2 = engine.get_layout(child2).unwrap();
@@ -208,7 +226,13 @@ mod tests {
                 &[outer_first, inner],
             )
             .unwrap();
-        engine.compute(root, 150.0, 50.0).unwrap();
+        engine
+            .compute(
+                root,
+                AvailableSpace::Definite(150.0),
+                AvailableSpace::Definite(50.0),
+            )
+            .unwrap();
 
         let mut hits: Vec<(NodeId, renderer_core::Rect)> = Vec::new();
         engine
@@ -235,7 +259,13 @@ mod tests {
         engine
             .set_style(leaf, LayoutStyle::new().width(80.0).height(60.0))
             .unwrap();
-        engine.compute(leaf, 200.0, 200.0).unwrap();
+        engine
+            .compute(
+                leaf,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(200.0),
+            )
+            .unwrap();
         let rect = engine.get_layout(leaf).unwrap();
         assert_eq!(rect.w, 80.0_f32);
         assert_eq!(rect.h, 60.0_f32);

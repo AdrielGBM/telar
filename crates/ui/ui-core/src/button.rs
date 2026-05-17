@@ -111,6 +111,7 @@ mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
 
+    use layout_core::AvailableSpace;
     use platform_core::{Event, PointerButton, PointerSource};
     use renderer_core::{Color, DrawCommand};
 
@@ -129,7 +130,12 @@ mod tests {
                 &[button.layout_node()],
             )
             .unwrap();
-        ctx.compute(root, 200.0, 100.0).unwrap();
+        ctx.compute(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
         (button, ctx)
     }
 
@@ -198,7 +204,12 @@ mod tests {
                 &[button.layout_node()],
             )
             .unwrap();
-        ctx.compute(root, 200.0, 100.0).unwrap();
+        ctx.compute(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
         let mut button = button;
 
         let result = button.on_event(&Event::PointerPressed {
@@ -229,7 +240,12 @@ mod tests {
                 &[button.layout_node()],
             )
             .unwrap();
-        ctx.compute(root, 200.0, 100.0).unwrap();
+        ctx.compute(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
         let mut button = button;
 
         let result = button.on_event(&Event::PointerPressed {

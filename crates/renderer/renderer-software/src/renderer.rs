@@ -110,8 +110,8 @@ where
         Ok(())
     }
 
-    fn submit(&mut self, commands: &[DrawCommand]) {
-        self.pending_commands.extend_from_slice(commands);
+    fn submit(&mut self, commands: Vec<DrawCommand>) {
+        self.pending_commands = commands;
     }
 
     fn end_frame(&mut self, clear_color: Option<Color>) -> Result<(), RendererError> {

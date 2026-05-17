@@ -13,7 +13,7 @@ pub use prefs::UserPrefs;
 
 #[cfg(feature = "runtime")]
 pub use app::{App, Frame};
-pub use layout_core::{AlignItems, JustifyContent, LayoutStyle};
+pub use layout_core::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle};
 #[cfg(feature = "runtime")]
 pub use platform_core::{Event, ScrollDelta, WindowConfig};
 pub use reactive_core::{ReadSignal, RwSignal, create_rw_signal};

@@ -1,5 +1,22 @@
 use taffy::{Dimension, Display, FlexDirection, LengthPercentage, LengthPercentageAuto, Style};
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AvailableSpace {
+    Definite(f32),
+    MinContent,
+    MaxContent,
+}
+
+impl From<AvailableSpace> for taffy::AvailableSpace {
+    fn from(s: AvailableSpace) -> Self {
+        match s {
+            AvailableSpace::Definite(v) => taffy::AvailableSpace::Definite(v),
+            AvailableSpace::MinContent => taffy::AvailableSpace::MinContent,
+            AvailableSpace::MaxContent => taffy::AvailableSpace::MaxContent,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AlignItems {
     Start,

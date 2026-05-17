@@ -259,6 +259,35 @@ mod tests {
     }
 
     #[test]
+    fn from_hex_wrong_length_5_no_hash_returns_none() {
+        assert!(Color::from_hex("ff000").is_none());
+    }
+
+    #[test]
+    fn from_hex_wrong_length_9_returns_none() {
+        assert!(Color::from_hex("ff0000ff0").is_none());
+    }
+
+    #[test]
+    fn from_hex_whitespace_prefix_returns_none() {
+        assert!(Color::from_hex(" ff0000").is_none());
+    }
+
+    #[test]
+    fn from_hex_invalid_hex_chars_returns_none() {
+        assert!(Color::from_hex("zz0000").is_none());
+    }
+
+    #[test]
+    fn from_hex_uppercase_parses_correctly() {
+        let color = Color::from_hex("FF0000").unwrap();
+        assert_eq!(color.r, 1.0);
+        assert_eq!(color.g, 0.0);
+        assert_eq!(color.b, 0.0);
+        assert_eq!(color.a, 1.0);
+    }
+
+    #[test]
     fn from_hex_empty_returns_none() {
         assert!(Color::from_hex("").is_none());
     }

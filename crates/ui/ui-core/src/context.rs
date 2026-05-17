@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use layout_core::{LayoutEngine, LayoutError, LayoutStyle, NodeId};
+use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, NodeId};
 use reactive_core::{ReadSignal, RwSignal, batch, create_rw_signal};
 use renderer_core::Rect;
 
@@ -35,7 +35,12 @@ impl WidgetCtx {
         self.engine.new_container(style, children)
     }
 
-    pub fn compute(&mut self, root: NodeId, width: f32, height: f32) -> Result<(), LayoutError> {
+    pub fn compute(
+        &mut self,
+        root: NodeId,
+        width: AvailableSpace,
+        height: AvailableSpace,
+    ) -> Result<(), LayoutError> {
         self.engine.compute(root, width, height)?;
         let registry = &self.registry;
         let mut walk_result = Ok(());
@@ -72,6 +77,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ctx_register_leaf_returns_ok() {
+        let mut ctx = WidgetCtx::new();
+        let result = ctx.register_leaf(LayoutStyle::new());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ctx_new_container_returns_ok() {
+        let mut ctx = WidgetCtx::new();
+        let leaf_result = ctx.register_leaf(LayoutStyle::new());
+        assert!(leaf_result.is_ok());
+        let (leaf, _) = leaf_result.unwrap();
+        let container_result = ctx.new_container(LayoutStyle::new(), &[leaf]);
+        assert!(container_result.is_ok());
+    }
+
+    #[test]
     fn ctx_register_leaf_returns_zero_rect() {
         let mut ctx = WidgetCtx::new();
         let (_node, rect) = ctx.register_leaf(LayoutStyle::new()).unwrap();
@@ -90,7 +112,12 @@ mod tests {
                 &[leaf],
             )
             .unwrap();
-        ctx.compute(root, 200.0, 100.0).unwrap();
+        ctx.compute(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
         assert_eq!(rect.get().w, 100.0);
         assert_eq!(rect.get().h, 50.0);
     }
