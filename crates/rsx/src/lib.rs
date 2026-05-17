@@ -23,6 +23,7 @@ pub use renderer_core::{
     BorderRadius, Color, FillRule, FillStyle, ImageData, ImageFilter, LineCap, LineJoin, LineStyle,
     PathData, PathStyle, PathVerb, Point, Rect, RectStyle, Stroke, TextStyle,
 };
+pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{Button, WidgetCtx};
 
 #[cfg(feature = "runtime")]

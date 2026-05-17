@@ -24,5 +24,6 @@ renderer-software = { workspace = true, optional = true }
 renderer-hardware = { workspace = true, optional = true }
 reactive-core = { workspace = true }
 reactive-tree = { workspace = true }
+services-core = { workspace = true }
 layout-core = { workspace = true }
 ui-core = { workspace = true }
