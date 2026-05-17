@@ -123,7 +123,7 @@ impl App for Sandbox {
         frame.draw_rect(
             Rect::new(24.0, 44.0, 168.0, 80.0),
             RectStyle {
-                fill: Some(FillStyle::solid(PRIMARY)),
+                fill: Some(FillStyle::Solid(PRIMARY)),
                 stroke: None,
                 radius: BorderRadius::all(8.0),
             },
@@ -151,7 +151,7 @@ impl App for Sandbox {
         frame.draw_rect(
             Rect::new(392.0, 44.0, 168.0, 80.0),
             RectStyle {
-                fill: Some(FillStyle::solid(SUCCESS)),
+                fill: Some(FillStyle::Solid(SUCCESS)),
                 stroke: Some(Stroke::new(DARK, 1.5)),
                 radius: BorderRadius::zero(),
             },
@@ -165,7 +165,7 @@ impl App for Sandbox {
         frame.draw_rect(
             Rect::new(576.0, 44.0, 168.0, 80.0),
             RectStyle {
-                fill: Some(FillStyle::solid(PURPLE)),
+                fill: Some(FillStyle::Solid(PURPLE)),
                 stroke: None,
                 radius: BorderRadius::all(40.0),
             },
@@ -189,7 +189,7 @@ impl App for Sandbox {
             frame.draw_rect(
                 Rect::new(x, 172.0, 100.0, 44.0),
                 RectStyle {
-                    fill: Some(FillStyle::solid(color)),
+                    fill: Some(FillStyle::Solid(color)),
                     stroke: None,
                     radius: BorderRadius::all(6.0),
                 },
@@ -242,7 +242,7 @@ impl App for Sandbox {
         frame.draw_rect(
             Rect::new(24.0, 464.0, 368.0, 110.0),
             RectStyle {
-                fill: Some(FillStyle::solid(DARK)),
+                fill: Some(FillStyle::Solid(DARK)),
                 stroke: None,
                 radius: BorderRadius::all(10.0),
             },
@@ -261,7 +261,7 @@ impl App for Sandbox {
         frame.draw_rect(
             Rect::new(408.0, 464.0, 368.0, 110.0),
             RectStyle {
-                fill: Some(FillStyle::solid(WHITE)),
+                fill: Some(FillStyle::Solid(WHITE)),
                 stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
                 radius: BorderRadius::all(10.0),
             },
@@ -460,7 +460,7 @@ impl App for Sandbox {
         frame.draw_rect(
             Rect::new(0.0, 0.0, PANEL_W, PANEL_H),
             RectStyle {
-                fill: Some(FillStyle::solid(DARK)),
+                fill: Some(FillStyle::Solid(DARK)),
                 stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
                 radius: BorderRadius::all(8.0),
             },
@@ -481,7 +481,7 @@ impl App for Sandbox {
             frame.draw_rect(
                 Rect::new(self.window_width - 8.0, bar_y, 6.0, bar_h),
                 RectStyle {
-                    fill: Some(FillStyle::solid(MUTED)),
+                    fill: Some(FillStyle::Solid(MUTED)),
                     stroke: None,
                     radius: BorderRadius::all(3.0),
                 },
@@ -508,7 +508,9 @@ fn main() {
             .gap(8.0),
         &[label_node, btn_inc.layout_node(), btn_dec.layout_node()],
     );
-    widget_ctx.compute(widget_root, PANEL_W, PANEL_H);
+    widget_ctx
+        .compute(widget_root, PANEL_W, PANEL_H)
+        .expect("layout failed");
 
     let count = create_rw_signal(0i32);
 
@@ -594,8 +596,6 @@ fn make_radial_alpha(width: u32, height: u32) -> ImageData {
 }
 
 fn draw_paths_section(frame: &mut Frame) {
-    use std::sync::Arc;
-
     const Y0: f32 = 1200.0;
 
     frame.draw_line(
@@ -623,7 +623,7 @@ fn draw_paths_section(frame: &mut Frame) {
                 .close(),
         ),
         PathStyle {
-            fill: Some(FillStyle::solid(PRIMARY)),
+            fill: Some(FillStyle::Solid(PRIMARY)),
             stroke: None,
             fill_rule: FillRule::Winding,
         },
@@ -654,7 +654,7 @@ fn draw_paths_section(frame: &mut Frame) {
         frame.draw_path(
             Arc::new(path),
             PathStyle {
-                fill: Some(FillStyle::solid(DANGER)),
+                fill: Some(FillStyle::Solid(DANGER)),
                 stroke: Some(Stroke::new(DARK, 1.0)),
                 fill_rule: FillRule::Winding,
             },
@@ -681,7 +681,7 @@ fn draw_paths_section(frame: &mut Frame) {
                 .close(),
         ),
         PathStyle {
-            fill: Some(FillStyle::solid(PURPLE)),
+            fill: Some(FillStyle::Solid(PURPLE)),
             stroke: None,
             fill_rule: FillRule::EvenOdd,
         },
@@ -755,7 +755,7 @@ fn draw_paths_section(frame: &mut Frame) {
                 .close(),
         ),
         PathStyle {
-            fill: Some(FillStyle::solid(Color::rgba(0.97, 0.72, 0.18, 0.75))),
+            fill: Some(FillStyle::Solid(Color::rgba(0.97, 0.72, 0.18, 0.75))),
             stroke: Some(Stroke::new(WARNING, 1.5)),
             fill_rule: FillRule::Winding,
         },

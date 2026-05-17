@@ -1,5 +1,6 @@
 use platform_core::{Event, EventHandler, Platform, Window, WindowConfig};
 use platform_winit::{WinitPlatform, WinitWindow};
+use reactive_core::set_flush_notify;
 use renderer_core::{RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
 use renderer_software::SoftwareRenderer;
@@ -38,6 +39,9 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         }
         self.redraw_requested = false;
         self.app.on_resume(&mut make_ctx!(self));
+
+        let w = window.clone();
+        set_flush_notify(move || w.request_redraw());
         window.request_redraw();
     }
 
@@ -128,7 +132,7 @@ pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
         .backend
         .unwrap_or_else(config::compile_time_backend);
 
-    WinitPlatform::new().run(
+    if let Err(e) = WinitPlatform::new().run(
         config,
         AppHandler {
             app,
@@ -139,5 +143,7 @@ pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
             pending_restart: false,
             redraw_requested: false,
         },
-    );
+    ) {
+        eprintln!("[rsx] event loop exited with error: {e}");
+    }
 }

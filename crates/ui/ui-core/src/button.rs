@@ -9,7 +9,7 @@ use renderer_core::{BorderRadius, Color, DrawCommand, Rect, RectStyle, TextStyle
 use crate::context::WidgetCtx;
 
 pub struct Button {
-    label: String,
+    label: Arc<str>,
     layout_node: NodeId,
     rect: ReadSignal<Rect>,
     bg: Color,
@@ -23,7 +23,7 @@ impl Button {
     pub fn new(label: impl Into<String>, ctx: &mut WidgetCtx) -> Self {
         let (node, rect) = ctx.register_leaf(LayoutStyle::new().height(36.0));
         Self {
-            label: label.into(),
+            label: Arc::from(label.into()),
             layout_node: node,
             rect,
             bg: Color::from_rgb_u8(59, 130, 246),
@@ -67,7 +67,7 @@ impl Component for Button {
                     .with_radius(BorderRadius::all(4.0)),
             }),
             View::Primitive(DrawCommand::Text {
-                text: Arc::from(self.label.as_str()),
+                text: Arc::clone(&self.label),
                 rect,
                 style: self.text_style,
             }),
@@ -78,8 +78,14 @@ impl Component for Button {
         let rect = self.rect.get();
         match event {
             Event::PointerMoved { x, y, .. } => {
-                self.hovered.set(point_in_rect(*x as f32, *y as f32, rect));
-                EventResult::Ignored
+                let now = point_in_rect(*x as f32, *y as f32, rect);
+                let changed = now != self.hovered.get();
+                self.hovered.set(now);
+                if changed {
+                    EventResult::Handled
+                } else {
+                    EventResult::Ignored
+                }
             }
             Event::PointerPressed {
                 x,
@@ -126,7 +132,7 @@ mod tests {
                 .height(100.0),
             &[button.layout_node()],
         );
-        ctx.compute(root, 200.0, 100.0);
+        ctx.compute(root, 200.0, 100.0).unwrap();
         (button, ctx)
     }
 
@@ -191,7 +197,7 @@ mod tests {
                 .height(100.0),
             &[button.layout_node()],
         );
-        ctx.compute(root, 200.0, 100.0);
+        ctx.compute(root, 200.0, 100.0).unwrap();
         let mut button = button;
 
         let result = button.on_event(&Event::PointerPressed {
@@ -218,7 +224,7 @@ mod tests {
                 .height(100.0),
             &[button.layout_node()],
         );
-        ctx.compute(root, 200.0, 100.0);
+        ctx.compute(root, 200.0, 100.0).unwrap();
         let mut button = button;
 
         let result = button.on_event(&Event::PointerPressed {

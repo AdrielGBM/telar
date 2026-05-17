@@ -9,6 +9,24 @@ macro_rules! flush_batch {
     };
 }
 
+macro_rules! flush_image_batch {
+    ($self:expr) => {
+        if let (Some(start), Some(bind_group)) = (
+            $self.batch_image_start.take(),
+            $self.batch_image_bind_group.take(),
+        ) {
+            let end = $self.pending_image_instances.len() as u32;
+            if end > start {
+                $self.pending_steps.push(DrawStep::ImageBatch {
+                    start,
+                    end,
+                    bind_group,
+                });
+            }
+        }
+    };
+}
+
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, ImageFilter, Rect, RenderBackend, RendererError};
 
@@ -272,19 +290,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn flush_image(&mut self) {
-        if let (Some(start), Some(bind_group)) = (
-            self.batch_image_start.take(),
-            self.batch_image_bind_group.take(),
-        ) {
-            let end = self.pending_image_instances.len() as u32;
-            if end > start {
-                self.pending_steps.push(DrawStep::ImageBatch {
-                    start,
-                    end,
-                    bind_group,
-                });
-            }
-        }
+        flush_image_batch!(self);
     }
 
     fn flush_all(&mut self) {

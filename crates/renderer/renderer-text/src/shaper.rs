@@ -177,6 +177,15 @@ pub struct TextShaper {
     pixel_cache: LruCache<TextCacheKey, Vec<u8>>,
 }
 
+fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
+    let metrics = Metrics::new(font_size, font_size * 1.2);
+    let mut buffer = Buffer::new(font_system, metrics);
+    buffer.set_size(Some(rect.w), Some(rect.h));
+    buffer.set_text(text, &Attrs::new(), Shaping::Advanced, None);
+    buffer.shape_until_scroll(font_system, false);
+    buffer
+}
+
 impl TextShaper {
     pub fn new() -> Self {
         Self {
@@ -200,11 +209,7 @@ impl TextShaper {
         let tint = color.to_array();
         let identity_tint = [1.0, 1.0, 1.0, 1.0];
 
-        let metrics = Metrics::new(font_size, font_size * 1.2);
-        let mut buffer = Buffer::new(&mut self.font_system, metrics);
-        buffer.set_size(Some(rect.w), Some(rect.h));
-        buffer.set_text(text, &Attrs::new(), Shaping::Advanced, None);
-        buffer.shape_until_scroll(&mut self.font_system, false);
+        let mut buffer = make_buffer(&mut self.font_system, text, rect, font_size);
 
         let mut positions: Vec<(CacheKey, i32, i32)> = Vec::new();
         for run in buffer.layout_runs() {
@@ -352,11 +357,7 @@ impl TextShaper {
         let [r, g, b, a] = rgba;
         let cosmic_color = CosmicColor::rgba(r, g, b, a);
 
-        let metrics = Metrics::new(font_size, font_size * 1.2);
-        let mut buffer = Buffer::new(&mut self.font_system, metrics);
-        buffer.set_size(Some(rect.w), Some(rect.h));
-        buffer.set_text(text, &Attrs::new(), Shaping::Advanced, None);
-        buffer.shape_until_scroll(&mut self.font_system, false);
+        let mut buffer = make_buffer(&mut self.font_system, text, rect, font_size);
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
         buffer.draw(

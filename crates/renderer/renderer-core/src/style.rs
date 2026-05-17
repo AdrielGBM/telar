@@ -18,10 +18,6 @@ pub enum FillStyle {
 }
 
 impl FillStyle {
-    pub fn solid(color: Color) -> Self {
-        Self::Solid(color)
-    }
-
     pub fn color(&self) -> Color {
         match self {
             Self::Solid(c) => *c,
@@ -157,13 +153,6 @@ mod tests {
         let color = Color::RED;
         let fill = FillStyle::Solid(color);
         assert_eq!(fill.color(), color);
-    }
-
-    #[test]
-    fn fill_style_solid_constructor_wraps_color() {
-        let color = Color::BLUE;
-        let fill = FillStyle::solid(color);
-        assert_eq!(fill, FillStyle::Solid(color));
     }
 
     #[test]

@@ -1607,6 +1607,7 @@ name = "platform-core"
 version = "0.1.0"
 dependencies = [
  "raw-window-handle",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

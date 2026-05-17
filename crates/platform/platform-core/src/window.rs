@@ -1,5 +1,5 @@
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use crate::Event;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 #[derive(Debug, Clone)]
 pub struct WindowConfig {
@@ -11,12 +11,16 @@ pub struct WindowConfig {
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            title: String::from("ui"),
+            title: String::from("RSX App"),
             width: 800,
             height: 600,
         }
     }
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("platform error: {0}")]
+pub struct PlatformError(pub String);
 
 pub trait Window: HasWindowHandle + HasDisplayHandle {
     fn width(&self) -> u32;
@@ -33,5 +37,9 @@ pub trait EventHandler<W: Window> {
 
 pub trait Platform {
     type Window: Window;
-    fn run<H: EventHandler<Self::Window>>(self, config: WindowConfig, handler: H);
+    fn run<H: EventHandler<Self::Window>>(
+        self,
+        config: WindowConfig,
+        handler: H,
+    ) -> Result<(), PlatformError>;
 }

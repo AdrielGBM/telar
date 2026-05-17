@@ -9,7 +9,11 @@ thread_local! {
 
 pub fn provide<T: Any + 'static>(service: T) {
     STACK.with(|stack| {
-        stack.borrow_mut().last_mut().unwrap().insert(service);
+        stack
+            .borrow_mut()
+            .last_mut()
+            .expect("service stack is empty — this is a bug")
+            .insert(service);
     });
 }
 
@@ -46,6 +50,23 @@ impl Scope {
     pub fn new() -> Self {
         STACK.with(|stack| stack.borrow_mut().push(ServiceRegistry::new()));
         Self(())
+    }
+
+    pub fn with<R>(f: impl FnOnce() -> R) -> R {
+        STACK.with(|stack| stack.borrow_mut().push(ServiceRegistry::new()));
+        struct PopGuard;
+        impl Drop for PopGuard {
+            fn drop(&mut self) {
+                STACK.with(|stack| {
+                    let mut stack = stack.borrow_mut();
+                    if stack.len() > 1 {
+                        stack.pop();
+                    }
+                });
+            }
+        }
+        let _guard = PopGuard;
+        f()
     }
 }
 

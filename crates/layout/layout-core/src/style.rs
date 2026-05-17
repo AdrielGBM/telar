@@ -18,13 +18,11 @@ impl LayoutStyle {
     }
 
     pub fn flex_row(mut self) -> Self {
-        self.inner.display = Display::Flex;
         self.inner.flex_direction = FlexDirection::Row;
         self
     }
 
     pub fn flex_column(mut self) -> Self {
-        self.inner.display = Display::Flex;
         self.inner.flex_direction = FlexDirection::Column;
         self
     }

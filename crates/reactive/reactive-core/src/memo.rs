@@ -1,11 +1,12 @@
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use crate::runtime::{self, EffectId};
 
 struct MemoInner<T> {
     value: Option<T>,
-    subscribers: Vec<EffectId>,
+    subscribers: BTreeSet<EffectId>,
 }
 
 pub struct Memo<T: 'static> {
@@ -23,22 +24,35 @@ impl<T: 'static> Clone for Memo<T> {
 impl<T: Clone + 'static> Memo<T> {
     pub fn get(&self) -> T {
         self.track();
-        self.inner.borrow().value.as_ref().unwrap().clone()
+        self.inner
+            .borrow()
+            .value
+            .as_ref()
+            .expect("memo value uninitialized — possible reactive cycle")
+            .clone()
+    }
+
+    pub fn try_get(&self) -> Option<T> {
+        self.track();
+        self.inner.borrow().value.as_ref().cloned()
     }
 }
 
 impl<T: 'static> Memo<T> {
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         self.track();
-        f(self.inner.borrow().value.as_ref().unwrap())
+        f(self
+            .inner
+            .borrow()
+            .value
+            .as_ref()
+            .expect("memo value uninitialized — possible reactive cycle"))
     }
 
     fn track(&self) {
         if let Some(id) = runtime::current_observer() {
             let mut inner = self.inner.borrow_mut();
-            if !inner.subscribers.contains(&id) {
-                inner.subscribers.push(id);
-            }
+            inner.subscribers.insert(id);
         }
     }
 }
@@ -46,7 +60,7 @@ impl<T: 'static> Memo<T> {
 pub fn create_memo<T: 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
     let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {
         value: None,
-        subscribers: Vec::new(),
+        subscribers: BTreeSet::new(),
     }));
     let inner_clone = Rc::clone(&inner);
 
@@ -55,7 +69,7 @@ pub fn create_memo<T: 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
         let subs = {
             let mut memo = inner_clone.borrow_mut();
             memo.value = Some(new_value);
-            memo.subscribers.clone()
+            memo.subscribers.iter().copied().collect::<Vec<_>>()
         };
         for id in subs {
             runtime::schedule(id);

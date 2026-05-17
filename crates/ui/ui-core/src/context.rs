@@ -1,44 +1,50 @@
-use layout_core::{LayoutEngine, LayoutStyle, NodeId};
-use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
+use std::collections::HashMap;
+
+use layout_core::{LayoutEngine, LayoutError, LayoutStyle, NodeId};
+use reactive_core::{ReadSignal, RwSignal, batch, create_rw_signal};
 use renderer_core::Rect;
 
 pub struct WidgetCtx {
     engine: LayoutEngine,
-    registry: Vec<(NodeId, RwSignal<Rect>)>,
+    registry: HashMap<NodeId, RwSignal<Rect>>,
 }
 
 impl WidgetCtx {
     pub fn new() -> Self {
         Self {
             engine: LayoutEngine::new(),
-            registry: Vec::new(),
+            registry: HashMap::new(),
         }
     }
 
     pub fn register_leaf(&mut self, style: LayoutStyle) -> (NodeId, ReadSignal<Rect>) {
-        let node = self.engine.new_leaf(style).unwrap();
+        let node = self
+            .engine
+            .new_leaf(style)
+            .expect("bug: taffy failed to add leaf node");
         let signal = create_rw_signal(Rect::default());
-        self.registry.push((node, signal.clone()));
+        self.registry.insert(node, signal.clone());
         (node, signal.read_only())
     }
 
     pub fn new_container(&mut self, style: LayoutStyle, children: &[NodeId]) -> NodeId {
-        self.engine.new_container(style, children).unwrap()
+        self.engine
+            .new_container(style, children)
+            .expect("bug: taffy failed to add container node")
     }
 
-    pub fn compute(&mut self, root: NodeId, width: f32, height: f32) {
-        self.engine.compute(root, width, height).unwrap();
+    pub fn compute(&mut self, root: NodeId, width: f32, height: f32) -> Result<(), LayoutError> {
+        self.engine.compute(root, width, height)?;
         let registry = &self.registry;
-        self.engine
-            .walk(root, &mut |node_id, rect| {
-                for (id, sig) in registry {
-                    if *id == node_id {
-                        sig.set(rect);
-                        break;
-                    }
+        let mut walk_result = Ok(());
+        batch(|| {
+            walk_result = self.engine.walk(root, &mut |node_id, rect| {
+                if let Some(sig) = registry.get(&node_id) {
+                    sig.set(rect);
                 }
-            })
-            .unwrap();
+            });
+        });
+        walk_result
     }
 
     pub fn engine(&self) -> &LayoutEngine {
@@ -78,7 +84,7 @@ mod tests {
             LayoutStyle::new().flex_row().width(200.0).height(100.0),
             &[leaf],
         );
-        ctx.compute(root, 200.0, 100.0);
+        ctx.compute(root, 200.0, 100.0).unwrap();
         assert_eq!(rect.get().w, 100.0);
         assert_eq!(rect.get().h, 50.0);
     }

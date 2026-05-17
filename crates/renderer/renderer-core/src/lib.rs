@@ -1,10 +1,10 @@
-pub mod color;
-pub mod command;
-pub mod error;
-pub mod geometry;
-pub mod image;
-pub mod renderer;
-pub mod style;
+mod color;
+mod command;
+mod error;
+mod geometry;
+mod image;
+mod renderer;
+mod style;
 
 pub use color::Color;
 pub use command::DrawCommand;

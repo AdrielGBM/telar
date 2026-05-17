@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 raw-window-handle = { workspace = true }
+thiserror = { workspace = true }

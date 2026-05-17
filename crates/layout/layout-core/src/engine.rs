@@ -17,9 +17,7 @@ impl LayoutEngine {
     }
 
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
-        self.tree
-            .new_leaf(style.inner)
-            .map_err(|_| LayoutError::InvalidNode)
+        self.tree.new_leaf(style.inner).map_err(LayoutError::from)
     }
 
     pub fn new_container(
@@ -29,26 +27,26 @@ impl LayoutEngine {
     ) -> Result<NodeId, LayoutError> {
         self.tree
             .new_with_children(style.inner, children)
-            .map_err(|_| LayoutError::InvalidNode)
+            .map_err(LayoutError::from)
     }
 
     pub fn set_style(&mut self, node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
         self.tree
             .set_style(node, style.inner)
-            .map_err(|_| LayoutError::InvalidNode)
+            .map_err(LayoutError::from)
     }
 
     pub fn add_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
         self.tree
             .add_child(parent, child)
-            .map_err(|_| LayoutError::InvalidNode)
+            .map_err(LayoutError::from)
     }
 
     pub fn remove(&mut self, node: NodeId) -> Result<(), LayoutError> {
         self.tree
             .remove(node)
             .map(|_| ())
-            .map_err(|_| LayoutError::InvalidNode)
+            .map_err(LayoutError::from)
     }
 
     pub fn compute(
@@ -65,14 +63,11 @@ impl LayoutEngine {
                     height: AvailableSpace::Definite(available_height),
                 },
             )
-            .map_err(|_| LayoutError::InvalidNode)
+            .map_err(LayoutError::from)
     }
 
     pub fn get_layout(&self, node: NodeId) -> Result<renderer_core::Rect, LayoutError> {
-        let layout = self
-            .tree
-            .layout(node)
-            .map_err(|_| LayoutError::InvalidNode)?;
+        let layout = self.tree.layout(node).map_err(LayoutError::from)?;
         Ok(renderer_core::Rect::new(
             layout.location.x,
             layout.location.y,
@@ -98,10 +93,7 @@ impl LayoutEngine {
     where
         F: FnMut(NodeId, renderer_core::Rect),
     {
-        let layout = self
-            .tree
-            .layout(node)
-            .map_err(|_| LayoutError::InvalidNode)?;
+        let layout = self.tree.layout(node).map_err(LayoutError::from)?;
         let abs_x = offset_x + layout.location.x;
         let abs_y = offset_y + layout.location.y;
 
@@ -110,10 +102,7 @@ impl LayoutEngine {
             renderer_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
         );
 
-        let children = self
-            .tree
-            .children(node)
-            .map_err(|_| LayoutError::InvalidNode)?;
+        let children = self.tree.children(node).map_err(LayoutError::from)?;
         for child in children {
             self.walk_recursive(child, abs_x, abs_y, f)?;
         }

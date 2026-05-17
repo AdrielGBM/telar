@@ -105,4 +105,26 @@ mod tests {
         let _scope = Scope::new();
         assert_eq!(try_inject::<u64>(), None);
     }
+
+    #[test]
+    fn scope_with_provides_service() {
+        Scope::with(|| {
+            provide(42u32);
+            assert_eq!(inject::<u32>(), 42);
+        });
+        // service no longer available after with() returns
+        assert_eq!(try_inject::<u32>(), None);
+    }
+
+    #[test]
+    fn scope_with_nested() {
+        Scope::with(|| {
+            provide(String::from("outer"));
+            Scope::with(|| {
+                provide(String::from("inner"));
+                assert_eq!(inject::<String>(), "inner");
+            });
+            assert_eq!(inject::<String>(), "outer");
+        });
+    }
 }

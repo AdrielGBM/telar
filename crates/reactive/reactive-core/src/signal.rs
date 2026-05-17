@@ -1,11 +1,12 @@
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use crate::runtime::{self, EffectId};
 
 pub(crate) struct SignalInner<T> {
     pub(crate) value: T,
-    pub(crate) subscribers: Vec<EffectId>,
+    pub(crate) subscribers: BTreeSet<EffectId>,
 }
 pub struct ReadSignal<T: 'static> {
     pub(crate) inner: Rc<RefCell<SignalInner<T>>>,
@@ -108,7 +109,7 @@ impl<T: Clone + 'static> RwSignal<T> {
 pub fn create_signal<T: 'static>(value: T) -> (ReadSignal<T>, WriteSignal<T>) {
     let inner = Rc::new(RefCell::new(SignalInner {
         value,
-        subscribers: Vec::new(),
+        subscribers: BTreeSet::new(),
     }));
     (
         ReadSignal {
@@ -122,23 +123,31 @@ pub fn create_rw_signal<T: 'static>(value: T) -> RwSignal<T> {
     RwSignal {
         inner: Rc::new(RefCell::new(SignalInner {
             value,
-            subscribers: Vec::new(),
+            subscribers: BTreeSet::new(),
         })),
     }
 }
 
 fn track<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
     if let Some(id) = runtime::current_observer() {
-        let mut inner = inner.borrow_mut();
-        if !inner.subscribers.contains(&id) {
-            inner.subscribers.push(id);
-        }
+        inner.borrow_mut().subscribers.insert(id);
     }
 }
 
 pub(crate) fn notify<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
-    let subs = inner.borrow().subscribers.clone();
+    let subs: Vec<EffectId> = inner.borrow().subscribers.iter().copied().collect();
+    let mut dead = Vec::new();
     for id in subs {
-        runtime::schedule(id);
+        if runtime::is_alive(id) {
+            runtime::schedule(id);
+        } else {
+            dead.push(id);
+        }
+    }
+    if !dead.is_empty() {
+        let mut inner = inner.borrow_mut();
+        for id in dead {
+            inner.subscribers.remove(&id);
+        }
     }
 }

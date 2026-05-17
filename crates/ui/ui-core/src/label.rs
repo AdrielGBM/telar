@@ -9,7 +9,7 @@ use renderer_core::{DrawCommand, TextStyle};
 use crate::context::WidgetCtx;
 
 pub struct Label {
-    text: String,
+    text: Arc<str>,
     style: TextStyle,
     layout_node: NodeId,
     rect: ReadSignal<renderer_core::Rect>,
@@ -19,7 +19,7 @@ impl Label {
     pub fn new(text: impl Into<String>, style: TextStyle, ctx: &mut WidgetCtx) -> Self {
         let (node, rect) = ctx.register_leaf(LayoutStyle::new());
         Self {
-            text: text.into(),
+            text: Arc::from(text.into()),
             style,
             layout_node: node,
             rect,
@@ -35,7 +35,7 @@ impl Label {
     ) -> Self {
         let (node, rect) = ctx.register_leaf(LayoutStyle::new().width(width).height(height));
         Self {
-            text: text.into(),
+            text: Arc::from(text.into()),
             style,
             layout_node: node,
             rect,
@@ -51,7 +51,7 @@ impl Component for Label {
     fn view(&self) -> View {
         let rect = self.rect.get();
         View::Primitive(DrawCommand::Text {
-            text: Arc::from(self.text.as_str()),
+            text: Arc::clone(&self.text),
             rect,
             style: self.style,
         })
@@ -94,7 +94,7 @@ mod tests {
                 .height(100.0),
             &[label.layout_node()],
         );
-        ctx.compute(root, 200.0, 100.0);
+        ctx.compute(root, 200.0, 100.0).unwrap();
 
         let view = label.view();
         if let View::Primitive(DrawCommand::Text { rect, .. }) = view {

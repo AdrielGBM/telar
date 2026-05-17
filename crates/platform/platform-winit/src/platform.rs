@@ -1,5 +1,6 @@
 use platform_core::{
-    Event, EventHandler, Platform, PointerButton, PointerSource, Window, WindowConfig,
+    Event, EventHandler, Platform, PlatformError, PointerButton, PointerSource, Window,
+    WindowConfig,
 };
 use winit::application::ApplicationHandler;
 use winit::event::{
@@ -15,10 +16,14 @@ pub struct WinitPlatform {
 }
 
 impl WinitPlatform {
+    pub fn try_new() -> Result<Self, winit::error::EventLoopError> {
+        Ok(Self {
+            event_loop: EventLoop::new()?,
+        })
+    }
+
     pub fn new() -> Self {
-        Self {
-            event_loop: EventLoop::new().unwrap(),
-        }
+        Self::try_new().expect("failed to create winit event loop")
     }
 }
 
@@ -44,10 +49,15 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 self.config.height,
             ));
         use std::sync::Arc;
-        let window = WinitWindow(Arc::new(event_loop.create_window(attrs).unwrap()));
-        self.handler.on_resume(&window);
-        window.request_redraw();
-        self.window = Some(window);
+        match event_loop.create_window(attrs) {
+            Ok(w) => {
+                let window = WinitWindow(Arc::new(w));
+                self.handler.on_resume(&window);
+                window.request_redraw();
+                self.window = Some(window);
+            }
+            Err(e) => eprintln!("[rsx] failed to create window: {e}"),
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -160,13 +170,19 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
 impl Platform for WinitPlatform {
     type Window = WinitWindow;
 
-    fn run<H: EventHandler<Self::Window>>(self, config: WindowConfig, handler: H) {
+    fn run<H: EventHandler<Self::Window>>(
+        self,
+        config: WindowConfig,
+        handler: H,
+    ) -> Result<(), PlatformError> {
         let mut runner = WinitRunner {
             handler,
             window: None,
             config,
             cursor_pos: (0.0, 0.0),
         };
-        self.event_loop.run_app(&mut runner).unwrap();
+        self.event_loop
+            .run_app(&mut runner)
+            .map_err(|e| PlatformError(e.to_string()))
     }
 }
