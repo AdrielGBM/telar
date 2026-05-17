@@ -1742,6 +1742,11 @@ version = "0.1.0"
 [[package]]
 name = "reactive-tree"
 version = "0.1.0"
+dependencies = [
+ "platform-core",
+ "reactive-core",
+ "renderer-core",
+]
 
 [[package]]
 name = "read-fonts"
