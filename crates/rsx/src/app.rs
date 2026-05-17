@@ -65,6 +65,10 @@ impl Frame {
     pub fn pop_transform(&mut self) {
         self.commands.push(DrawCommand::PopTransform);
     }
+
+    pub fn extend(&mut self, commands: impl IntoIterator<Item = DrawCommand>) {
+        self.commands.extend(commands);
+    }
 }
 
 pub trait App {

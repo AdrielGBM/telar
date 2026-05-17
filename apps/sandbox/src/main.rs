@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use rsx::{
-    App, AppContext, BorderRadius, Color, Event, FillRule, FillStyle, Frame, ImageData,
-    ImageFilter, LineCap, LineJoin, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, Stroke,
-    TextStyle, WindowConfig,
+    App, AppContext, BorderRadius, Button, Color, Component, ComponentTree, Event, EventResult,
+    FillRule, FillStyle, Frame, ImageData, ImageFilter, LayoutStyle, LineCap, LineJoin, LineStyle,
+    PathData, PathStyle, Point, ReadSignal, Rect, RectStyle, RwSignal, Stroke, TextStyle, View,
+    WidgetCtx, WindowConfig, create_rw_signal,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -19,6 +20,65 @@ const CARD_BORDER: Color = Color::rgba(0.80, 0.80, 0.88, 1.0);
 
 const CONTENT_HEIGHT: f32 = 1700.0;
 
+const PANEL_X: f32 = 614.0;
+const PANEL_Y: f32 = 40.0;
+const PANEL_W: f32 = 160.0;
+const PANEL_H: f32 = 128.0;
+
+struct WidgetPanel {
+    btn_inc: Button,
+    btn_dec: Button,
+}
+
+impl Component for WidgetPanel {
+    fn view(&self) -> View {
+        View::group([self.btn_inc.view(), self.btn_dec.view()])
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        let r1 = self.btn_inc.on_event(event);
+        let r2 = self.btn_dec.on_event(event);
+        if matches!(r1, EventResult::Handled) || matches!(r2, EventResult::Handled) {
+            EventResult::Handled
+        } else {
+            EventResult::Ignored
+        }
+    }
+}
+
+fn panel_relative_event(event: &Event, dx: f64, dy: f64) -> Option<Event> {
+    match event {
+        Event::PointerMoved { x, y, source } => Some(Event::PointerMoved {
+            x: x - dx,
+            y: y - dy,
+            source: source.clone(),
+        }),
+        Event::PointerPressed {
+            x,
+            y,
+            button,
+            source,
+        } => Some(Event::PointerPressed {
+            x: x - dx,
+            y: y - dy,
+            button: button.clone(),
+            source: source.clone(),
+        }),
+        Event::PointerReleased {
+            x,
+            y,
+            button,
+            source,
+        } => Some(Event::PointerReleased {
+            x: x - dx,
+            y: y - dy,
+            button: button.clone(),
+            source: source.clone(),
+        }),
+        _ => None,
+    }
+}
+
 struct Sandbox {
     gradient_image: Arc<ImageData>,
     checker_image: Arc<ImageData>,
@@ -26,10 +86,17 @@ struct Sandbox {
     scroll_y: f32,
     window_width: f32,
     window_height: f32,
+    widget_tree: ComponentTree,
+    count: RwSignal<i32>,
+    label_rect: ReadSignal<Rect>,
 }
 
 impl App for Sandbox {
     fn on_event(&mut self, event: Event, ctx: &mut AppContext) {
+        if let Some(rel) = panel_relative_event(&event, PANEL_X as f64, PANEL_Y as f64) {
+            self.widget_tree.on_event(&rel);
+            ctx.request_redraw();
+        }
         if let Event::Scrolled { delta_y, .. } = event {
             let max_scroll = (CONTENT_HEIGHT - self.window_height).max(0.0);
             self.scroll_y = (self.scroll_y - delta_y as f32).clamp(0.0, max_scroll);
@@ -384,6 +451,29 @@ impl App for Sandbox {
         frame.pop_transform();
         frame.pop_clip();
 
+        frame.draw_text(
+            "Reactive Widgets",
+            Rect::new(PANEL_X, PANEL_Y - 18.0, PANEL_W, 14.0),
+            TextStyle::new(11.0, MUTED),
+        );
+        frame.push_translate(PANEL_X, PANEL_Y);
+        frame.draw_rect(
+            Rect::new(0.0, 0.0, PANEL_W, PANEL_H),
+            RectStyle {
+                fill: Some(FillStyle::solid(DARK)),
+                stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
+                radius: BorderRadius::all(8.0),
+            },
+        );
+        let count_text = format!("Count: {}", self.count.get());
+        frame.draw_text(
+            &count_text,
+            self.label_rect.get(),
+            TextStyle::new(14.0, WHITE),
+        );
+        frame.extend(self.widget_tree.commands());
+        frame.pop_transform();
+
         if CONTENT_HEIGHT > self.window_height {
             let bar_h = (self.window_height / CONTENT_HEIGHT * self.window_height).max(24.0);
             let max_scroll = (CONTENT_HEIGHT - self.window_height).max(1.0);
@@ -404,6 +494,42 @@ fn main() {
     let gradient_image = Arc::new(make_gradient(128, 128));
     let checker_image = Arc::new(make_checker(128, 128, 16));
     let alpha_image = Arc::new(make_radial_alpha(128, 128));
+
+    let mut widget_ctx = WidgetCtx::new();
+    let (label_node, label_rect) = widget_ctx.register_leaf(LayoutStyle::new().height(24.0));
+    let btn_inc = Button::new("+", &mut widget_ctx);
+    let btn_dec = Button::new("-", &mut widget_ctx);
+    let widget_root = widget_ctx.new_container(
+        LayoutStyle::new()
+            .flex_column()
+            .width(PANEL_W)
+            .height(PANEL_H)
+            .padding_all(8.0)
+            .gap(8.0),
+        &[label_node, btn_inc.layout_node(), btn_dec.layout_node()],
+    );
+    widget_ctx.compute(widget_root, PANEL_W, PANEL_H);
+
+    let count = create_rw_signal(0i32);
+
+    let c = count.clone();
+    let btn_inc = btn_inc
+        .with_bg(
+            Color::from_rgb_u8(34, 197, 94),
+            Color::from_rgb_u8(22, 163, 74),
+        )
+        .on_click(move || c.set(c.get() + 1));
+
+    let c = count.clone();
+    let btn_dec = btn_dec
+        .with_bg(
+            Color::from_rgb_u8(239, 68, 68),
+            Color::from_rgb_u8(220, 38, 38),
+        )
+        .on_click(move || c.set(c.get() - 1));
+
+    let widget_tree = ComponentTree::new(WidgetPanel { btn_inc, btn_dec });
+
     let config = WindowConfig::default();
     rsx::run!(
         config,
@@ -414,6 +540,9 @@ fn main() {
             scroll_y: 0.0,
             window_width: 800.0,
             window_height: 600.0,
+            widget_tree,
+            count,
+            label_rect,
         }
     );
 }

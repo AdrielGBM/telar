@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use platform_core::Event;
-use reactive_core::{Effect, create_effect};
+use reactive_core::{Effect, batch, create_effect};
 use renderer_core::DrawCommand;
 
 use crate::component::{AnyComponent, Component, EventResult};
@@ -40,7 +40,7 @@ impl ComponentTree {
     }
 
     pub fn on_event(&mut self, event: &Event) -> EventResult {
-        self.root.borrow_mut().on_event(event)
+        batch(|| self.root.borrow_mut().on_event(event))
     }
 }
 

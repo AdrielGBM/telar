@@ -1872,13 +1872,17 @@ name = "rsx"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "layout-core",
  "platform-core",
  "platform-winit",
+ "reactive-core",
+ "reactive-tree",
  "renderer-core",
  "renderer-hardware",
  "renderer-software",
  "serde",
  "toml",
+ "ui-core",
 ]
 
 [[package]]
@@ -2440,6 +2444,13 @@ dependencies = [
 [[package]]
 name = "ui-core"
 version = "0.1.0"
+dependencies = [
+ "layout-core",
+ "platform-core",
+ "reactive-core",
+ "reactive-tree",
+ "renderer-core",
+]
 
 [[package]]
 name = "unicode-bidi"

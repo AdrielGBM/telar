@@ -2,6 +2,7 @@ use platform_core::Event;
 
 use crate::view::View;
 
+#[derive(Debug, PartialEq)]
 pub enum EventResult {
     Handled,
     Ignored,
