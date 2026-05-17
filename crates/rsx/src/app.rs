@@ -3,7 +3,7 @@ use std::rc::Rc;
 use platform_core::Event;
 use renderer_core::{
     Color, DrawCommand, ImageData, ImageFilter, LineStyle, PathData, PathStyle, Point, Rect,
-    RectStyle, TextStyle,
+    RectStyle, RendererError, TextStyle,
 };
 
 use crate::context::AppContext;
@@ -72,7 +72,9 @@ impl Frame {
 }
 
 pub trait App {
-    fn on_resume(&mut self, _ctx: &mut AppContext) {}
+    fn on_resume(&mut self, _ctx: &mut AppContext) -> Result<(), RendererError> {
+        Ok(())
+    }
     fn on_event(&mut self, _event: Event, _ctx: &mut AppContext) {}
     fn on_redraw(&mut self, frame: &mut Frame, ctx: &mut AppContext);
     fn on_suspend(&mut self, _ctx: &mut AppContext) {}

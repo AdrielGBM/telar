@@ -1,3 +1,7 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_IMAGE_ID: AtomicU64 = AtomicU64::new(1);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ImageFilter {
     #[default]
@@ -7,6 +11,7 @@ pub enum ImageFilter {
 
 #[derive(Debug, Clone)]
 pub struct ImageData {
+    pub id: u64,
     /// RGBA8 pixels with straight (non-premultiplied) alpha.
     pub pixels: Vec<u8>,
     pub width: u32,
@@ -21,6 +26,7 @@ impl ImageData {
             "pixels must be RGBA8: width * height * 4 bytes"
         );
         Self {
+            id: NEXT_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
             pixels,
             width,
             height,

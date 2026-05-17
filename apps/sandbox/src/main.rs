@@ -97,9 +97,14 @@ impl App for Sandbox {
             self.widget_tree.on_event(&rel);
             ctx.request_redraw();
         }
-        if let Event::Scrolled { delta_y, .. } = event {
+        if let Event::Scrolled { delta } = &event {
+            use rsx::ScrollDelta;
+            let dy = match delta {
+                ScrollDelta::Lines { y, .. } => *y * 20.0,
+                ScrollDelta::Pixels { y, .. } => *y,
+            };
             let max_scroll = (CONTENT_HEIGHT - self.window_height).max(0.0);
-            self.scroll_y = (self.scroll_y - delta_y as f32).clamp(0.0, max_scroll);
+            self.scroll_y = (self.scroll_y - dy).clamp(0.0, max_scroll);
             ctx.request_redraw();
         }
         if let Event::WindowResized { width, height } = event {

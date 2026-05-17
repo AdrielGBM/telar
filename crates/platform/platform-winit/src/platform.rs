@@ -1,6 +1,6 @@
 use platform_core::{
-    Event, EventHandler, Platform, PlatformError, PointerButton, PointerSource, Window,
-    WindowConfig,
+    Event, EventHandler, Platform, PlatformError, PointerButton, PointerSource, ScrollDelta,
+    Window, WindowConfig,
 };
 use winit::application::ApplicationHandler;
 use winit::event::{
@@ -17,14 +17,14 @@ pub struct WinitPlatform {
 }
 
 impl WinitPlatform {
-    pub fn try_new() -> Result<Self, winit::error::EventLoopError> {
+    pub fn try_new() -> Result<Self, PlatformError> {
         Ok(Self {
-            event_loop: EventLoop::new()?,
+            event_loop: EventLoop::new().map_err(|e| PlatformError(e.to_string()))?,
         })
     }
 
     pub fn new() -> Self {
-        Self::try_new().expect("failed to create winit event loop")
+        Self::try_new().expect("failed to create event loop")
     }
 }
 
@@ -54,7 +54,10 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
         match event_loop.create_window(attrs) {
             Ok(w) => {
                 let window = WinitWindow(Arc::new(w));
-                self.handler.on_resume(&window);
+                if !self.handler.on_resume(&window) {
+                    event_loop.exit();
+                    return;
+                }
                 window.request_redraw();
                 self.window = Some(window);
             }
@@ -143,13 +146,34 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 };
                 self.handler.on_event(ev, window);
             }
-            WindowEvent::MouseWheel { delta, .. } => {
-                let (delta_x, delta_y) = match delta {
-                    MouseScrollDelta::LineDelta(x, y) => (x as f64 * 20.0, y as f64 * 20.0),
-                    MouseScrollDelta::PixelDelta(pos) => (pos.x, pos.y),
-                };
+            WindowEvent::Focused(gained) => {
                 self.handler
-                    .on_event(Event::Scrolled { delta_x, delta_y }, window);
+                    .on_event(Event::FocusChanged { gained }, window);
+            }
+            WindowEvent::CursorEntered { .. } => {
+                self.handler.on_event(Event::CursorEntered, window);
+            }
+            WindowEvent::CursorLeft { .. } => {
+                self.handler.on_event(Event::CursorLeft, window);
+            }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.handler
+                    .on_event(Event::ScaleFactorChanged { scale_factor }, window);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let scroll_delta = match delta {
+                    MouseScrollDelta::LineDelta(x, y) => ScrollDelta::Lines { x, y },
+                    MouseScrollDelta::PixelDelta(pos) => ScrollDelta::Pixels {
+                        x: pos.x as f32,
+                        y: pos.y as f32,
+                    },
+                };
+                self.handler.on_event(
+                    Event::Scrolled {
+                        delta: scroll_delta,
+                    },
+                    window,
+                );
             }
             WindowEvent::ModifiersChanged(mods) => {
                 self.modifiers = platform_core::ModifiersState {

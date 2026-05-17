@@ -32,17 +32,24 @@ struct AppHandler<A: App> {
 }
 
 impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
-    fn on_resume(&mut self, window: &WinitWindow) {
+    fn on_resume(&mut self, window: &WinitWindow) -> bool {
         match create_renderer(self.backend, window) {
             Ok(renderer) => self.renderer = Some(renderer),
-            Err(e) => eprintln!("[rsx] Failed to initialize renderer: {e}"),
+            Err(e) => {
+                eprintln!("[rsx] Failed to initialize renderer: {e}");
+                return false;
+            }
         }
         self.redraw_requested = false;
-        self.app.on_resume(&mut make_ctx!(self));
+        if let Err(e) = self.app.on_resume(&mut make_ctx!(self)) {
+            eprintln!("[rsx] App::on_resume failed: {e}");
+            return false;
+        }
 
         let w = window.clone();
         set_flush_notify(move || w.request_redraw());
         window.request_redraw();
+        true
     }
 
     fn on_event(&mut self, event: Event, window: &WinitWindow) {

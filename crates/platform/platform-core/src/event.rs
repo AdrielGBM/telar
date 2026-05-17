@@ -45,12 +45,26 @@ pub struct ModifiersState {
 }
 
 #[derive(Debug, Clone)]
+pub enum ScrollDelta {
+    Lines { x: f32, y: f32 },
+    Pixels { x: f32, y: f32 },
+}
+
+#[derive(Debug, Clone)]
 pub enum Event {
     WindowResized {
         width: u32,
         height: u32,
     },
     WindowCloseRequested,
+    FocusChanged {
+        gained: bool,
+    },
+    CursorEntered,
+    CursorLeft,
+    ScaleFactorChanged {
+        scale_factor: f64,
+    },
     KeyPressed {
         key: Key,
         modifiers: ModifiersState,
@@ -77,8 +91,7 @@ pub enum Event {
         source: PointerSource,
     },
     Scrolled {
-        delta_x: f64,
-        delta_y: f64,
+        delta: ScrollDelta,
     },
 }
 

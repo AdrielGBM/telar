@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use renderer_core::{ImageData, ImageFilter, Rect, premultiply_rgba};
 
-pub(crate) type ImageCache = HashMap<*const ImageData, (Rc<ImageData>, tiny_skia::Pixmap)>;
+pub(crate) type ImageCache = HashMap<u64, (Rc<ImageData>, tiny_skia::Pixmap)>;
 
 /// Maximum simultaneous cached images. Entries beyond this limit are evicted after dead-reference cleanup to prevent unbounded memory growth.
 const IMAGE_CACHE_MAX_ENTRIES: usize = 256;
@@ -29,7 +29,7 @@ pub(crate) fn draw_image(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
 ) {
-    let key = Rc::as_ptr(data);
+    let key = data.id;
 
     let entry = cache.entry(key).or_insert_with(|| {
         let size = tiny_skia::IntSize::from_wh(data.width, data.height);

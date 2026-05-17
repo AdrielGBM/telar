@@ -83,6 +83,7 @@ impl Color {
     }
 
     pub fn from_hsla(h: f32, s: f32, l: f32, a: f32) -> Self {
+        let h = h.rem_euclid(360.0);
         let s = s.clamp(0.0, 1.0);
         let l = l.clamp(0.0, 1.0);
         let a = a.clamp(0.0, 1.0);
@@ -98,6 +99,7 @@ impl Color {
     }
 
     pub fn from_hsva(h: f32, s: f32, v: f32, a: f32) -> Self {
+        let h = h.rem_euclid(360.0);
         let s = s.clamp(0.0, 1.0);
         let v = v.clamp(0.0, 1.0);
         let a = a.clamp(0.0, 1.0);
@@ -376,5 +378,116 @@ mod tests {
         assert!((color.r - 1.0).abs() < 1e-5);
         assert!((color.g - 1.0).abs() < 1e-5);
         assert!((color.b - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsla_hue_wraps_above_360() {
+        let color1 = Color::from_hsla(400.0, 1.0, 0.5, 1.0);
+        let color2 = Color::from_hsla(40.0, 1.0, 0.5, 1.0);
+        assert!((color1.r - color2.r).abs() < 1e-5);
+        assert!((color1.g - color2.g).abs() < 1e-5);
+        assert!((color1.b - color2.b).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsla_hue_wraps_negative() {
+        let color1 = Color::from_hsla(-30.0, 1.0, 0.5, 1.0);
+        let color2 = Color::from_hsla(330.0, 1.0, 0.5, 1.0);
+        assert!((color1.r - color2.r).abs() < 1e-5);
+        assert!((color1.g - color2.g).abs() < 1e-5);
+        assert!((color1.b - color2.b).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsla_clamps_saturation_above_one() {
+        let color = Color::from_hsla(0.0, 2.0, 0.5, 1.0);
+        let expected = Color::from_hsla(0.0, 1.0, 0.5, 1.0);
+        assert!((color.r - expected.r).abs() < 1e-5);
+        assert!((color.g - expected.g).abs() < 1e-5);
+        assert!((color.b - expected.b).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsla_clamps_lightness_above_one() {
+        let color = Color::from_hsla(0.0, 1.0, 1.5, 1.0);
+        assert!((color.r - 1.0).abs() < 1e-5);
+        assert!((color.g - 1.0).abs() < 1e-5);
+        assert!((color.b - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsla_clamps_lightness_below_zero() {
+        let color = Color::from_hsla(0.0, 1.0, -0.5, 1.0);
+        assert!(color.r.abs() < 1e-5);
+        assert!(color.g.abs() < 1e-5);
+        assert!(color.b.abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsla_clamps_alpha_above_one() {
+        let color = Color::from_hsla(0.0, 0.0, 0.5, 2.0);
+        assert_eq!(color.a, 1.0);
+    }
+
+    #[test]
+    fn from_hsla_clamps_alpha_below_zero() {
+        let color = Color::from_hsla(0.0, 0.0, 0.5, -1.0);
+        assert_eq!(color.a, 0.0);
+    }
+
+    #[test]
+    fn from_hsva_hue_wraps_above_360() {
+        let color1 = Color::from_hsva(400.0, 1.0, 1.0, 1.0);
+        let color2 = Color::from_hsva(40.0, 1.0, 1.0, 1.0);
+        assert!((color1.r - color2.r).abs() < 1e-5);
+        assert!((color1.g - color2.g).abs() < 1e-5);
+        assert!((color1.b - color2.b).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsva_hue_wraps_negative() {
+        let color1 = Color::from_hsva(-30.0, 1.0, 1.0, 1.0);
+        let color2 = Color::from_hsva(330.0, 1.0, 1.0, 1.0);
+        assert!((color1.r - color2.r).abs() < 1e-5);
+        assert!((color1.g - color2.g).abs() < 1e-5);
+        assert!((color1.b - color2.b).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsva_clamps_saturation_above_one() {
+        let color = Color::from_hsva(0.0, 2.0, 1.0, 1.0);
+        let expected = Color::from_hsva(0.0, 1.0, 1.0, 1.0);
+        assert!((color.r - expected.r).abs() < 1e-5);
+        assert!((color.g - expected.g).abs() < 1e-5);
+        assert!((color.b - expected.b).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsva_clamps_value_above_one() {
+        let color = Color::from_hsva(0.0, 1.0, 1.5, 1.0);
+        let expected = Color::from_hsva(0.0, 1.0, 1.0, 1.0);
+        assert!((color.r - expected.r).abs() < 1e-5);
+        assert!((color.g - expected.g).abs() < 1e-5);
+        assert!((color.b - expected.b).abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsva_clamps_value_below_zero() {
+        let color = Color::from_hsva(0.0, 1.0, -0.5, 1.0);
+        assert!(color.r.abs() < 1e-5);
+        assert!(color.g.abs() < 1e-5);
+        assert!(color.b.abs() < 1e-5);
+    }
+
+    #[test]
+    fn from_hsva_clamps_alpha_above_one() {
+        let color = Color::from_hsva(0.0, 0.0, 1.0, 2.0);
+        assert_eq!(color.a, 1.0);
+    }
+
+    #[test]
+    fn from_hsva_clamps_alpha_below_zero() {
+        let color = Color::from_hsva(0.0, 0.0, 1.0, -1.0);
+        assert_eq!(color.a, 0.0);
     }
 }

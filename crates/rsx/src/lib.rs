@@ -15,13 +15,13 @@ pub use prefs::UserPrefs;
 pub use app::{App, Frame};
 pub use layout_core::LayoutStyle;
 #[cfg(feature = "runtime")]
-pub use platform_core::{Event, WindowConfig};
+pub use platform_core::{Event, ScrollDelta, WindowConfig};
 pub use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
 pub use reactive_tree::{Component, ComponentTree, EventResult, View};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, Color, FillRule, FillStyle, ImageData, ImageFilter, LineCap, LineJoin, LineStyle,
-    PathData, PathStyle, PathVerb, Point, Rect, RectStyle, Stroke, TextStyle,
+    PathData, PathStyle, PathVerb, Point, Rect, RectStyle, RendererError, Stroke, TextStyle,
 };
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{Button, WidgetCtx};

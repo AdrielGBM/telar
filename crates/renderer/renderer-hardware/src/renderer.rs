@@ -121,7 +121,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     batch_rect_start: Option<u32>,
     batch_text_start: Option<u32>,
     batch_line_start: Option<u32>,
-    batch_image_key: Option<(usize, ImageFilter)>,
+    batch_image_key: Option<(u64, ImageFilter)>,
     batch_image_start: Option<u32>,
     batch_image_bind_group: Option<wgpu::BindGroup>,
     _window: std::sync::Arc<W>,
@@ -376,7 +376,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_rect();
                     self.flush_text();
                     self.flush_line();
-                    let key = (std::rc::Rc::as_ptr(data) as usize, *filter);
+                    let key = (data.id, *filter);
                     if self.batch_image_start.is_none() || self.batch_image_key != Some(key) {
                         self.flush_image();
                         self.batch_image_key = Some(key);

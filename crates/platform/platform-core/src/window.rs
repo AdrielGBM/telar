@@ -29,7 +29,7 @@ pub trait Window: HasWindowHandle + HasDisplayHandle {
 }
 
 pub trait EventHandler<W: Window> {
-    fn on_resume(&mut self, window: &W);
+    fn on_resume(&mut self, window: &W) -> bool;
     fn on_event(&mut self, event: Event, window: &W);
     fn on_redraw(&mut self, window: &W);
     fn on_suspend(&mut self) {}
