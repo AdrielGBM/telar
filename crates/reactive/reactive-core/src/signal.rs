@@ -1,12 +1,13 @@
 use std::cell::RefCell;
-use std::collections::BTreeSet;
 use std::rc::Rc;
+
+use smallvec::SmallVec;
 
 use crate::runtime::{self, EffectId};
 
 pub(crate) struct SignalInner<T> {
     pub(crate) value: T,
-    pub(crate) subscribers: BTreeSet<EffectId>,
+    pub(crate) subscribers: SmallVec<[EffectId; 4]>,
 }
 pub struct ReadSignal<T: 'static> {
     pub(crate) inner: Rc<RefCell<SignalInner<T>>>,
@@ -127,7 +128,7 @@ impl<T: Eq + 'static> RwSignal<T> {
 pub fn create_signal<T: 'static>(value: T) -> (ReadSignal<T>, WriteSignal<T>) {
     let inner = Rc::new(RefCell::new(SignalInner {
         value,
-        subscribers: BTreeSet::new(),
+        subscribers: SmallVec::new(),
     }));
     (
         ReadSignal {
@@ -141,14 +142,17 @@ pub fn create_rw_signal<T: 'static>(value: T) -> RwSignal<T> {
     RwSignal {
         inner: Rc::new(RefCell::new(SignalInner {
             value,
-            subscribers: BTreeSet::new(),
+            subscribers: SmallVec::new(),
         })),
     }
 }
 
 fn track<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
     if let Some(id) = runtime::current_observer() {
-        inner.borrow_mut().subscribers.insert(id);
+        let mut inner = inner.borrow_mut();
+        if !inner.subscribers.contains(&id) {
+            inner.subscribers.push(id);
+        }
     }
 }
 
@@ -164,8 +168,6 @@ pub(crate) fn notify<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
     }
     if !dead.is_empty() {
         let mut inner = inner.borrow_mut();
-        for id in dead {
-            inner.subscribers.remove(&id);
-        }
+        inner.subscribers.retain(|x| !dead.contains(x));
     }
 }

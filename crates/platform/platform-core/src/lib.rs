@@ -1,5 +1,5 @@
 pub mod event;
 pub mod window;
 
-pub use event::{Event, PointerButton, PointerSource};
+pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource};
 pub use window::{EventHandler, Platform, PlatformError, Window, WindowConfig};

@@ -21,9 +21,8 @@ fn intersect_rects(a: Rect, b: Rect) -> Option<Rect> {
     }
 }
 
-fn build_clip_mask(rect: Rect, width: u32, height: u32) -> tiny_skia::Mask {
-    let mut mask = tiny_skia::Mask::new(width, height)
-        .unwrap_or_else(|| tiny_skia::Mask::new(1, 1).expect("1x1 mask always valid"));
+fn build_clip_mask(rect: Rect, width: u32, height: u32) -> Option<tiny_skia::Mask> {
+    let mut mask = tiny_skia::Mask::new(width, height)?;
     let x = rect.x.max(0.0);
     let y = rect.y.max(0.0);
     let right = (rect.x + rect.w).min(width as f32);
@@ -42,7 +41,7 @@ fn build_clip_mask(rect: Rect, width: u32, height: u32) -> tiny_skia::Mask {
             );
         }
     }
-    mask
+    Some(mask)
 }
 
 pub(crate) fn to_skia_color(color: Color) -> tiny_skia::Color {
@@ -198,12 +197,12 @@ where
                         .and_then(|current| intersect_rects(current, rect))
                         .or(Some(rect));
                     clip_stack.push(effective);
-                    clip_mask = effective.map(|r| build_clip_mask(r, self.width, self.height));
+                    clip_mask = effective.and_then(|r| build_clip_mask(r, self.width, self.height));
                 }
                 DrawCommand::PopClip => {
                     clip_stack.pop();
                     let effective = clip_stack.last().copied().flatten();
-                    clip_mask = effective.map(|r| build_clip_mask(r, self.width, self.height));
+                    clip_mask = effective.and_then(|r| build_clip_mask(r, self.width, self.height));
                 }
                 DrawCommand::PushTransform { tx, ty } => {
                     translate_stack.push((tx, ty));

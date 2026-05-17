@@ -566,7 +566,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let msaa_view = self
             .msaa_texture
             .as_ref()
-            .expect("msaa_texture initialized in reconfigure")
+            .ok_or_else(|| {
+                RendererError::Backend(
+                    "msaa_texture not initialized; call reconfigure first".into(),
+                )
+            })?
             .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = self
@@ -657,13 +661,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             render_pass.set_scissor_rect(0, 0, self.width, self.height);
                         }
                         Some(r) => {
-                            let x = (r.x.max(0.0).floor() as u32).min(self.width - 1);
-                            let y = (r.y.max(0.0).floor() as u32).min(self.height - 1);
+                            let x = (r.x.max(0.0).floor() as u32).min(self.width.saturating_sub(1));
+                            let y =
+                                (r.y.max(0.0).floor() as u32).min(self.height.saturating_sub(1));
 
                             let right = ((r.x + r.w).ceil() as u32).min(self.width);
                             let bottom = ((r.y + r.h).ceil() as u32).min(self.height);
-                            let w = right.saturating_sub(x).max(1).min(self.width - x);
-                            let h = bottom.saturating_sub(y).max(1).min(self.height - y);
+                            let w = right
+                                .saturating_sub(x)
+                                .max(1)
+                                .min(self.width.saturating_sub(x));
+                            let h = bottom
+                                .saturating_sub(y)
+                                .max(1)
+                                .min(self.height.saturating_sub(y));
                             render_pass.set_scissor_rect(x, y, w, h);
                         }
                     },

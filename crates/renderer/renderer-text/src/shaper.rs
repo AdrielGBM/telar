@@ -1,9 +1,9 @@
+use clru::{CLruCache, CLruCacheConfig, WeightScale};
 use cosmic_text::{
     Attrs, Buffer, CacheKey, Color as CosmicColor, FontSystem, Metrics, Shaping, SwashCache,
     SwashContent,
 };
 use etagere::{AllocId, AtlasAllocator, size2};
-use lru::LruCache;
 use renderer_core::{Color, Rect, TextStyle, premultiply_rgba};
 use std::collections::{HashMap, VecDeque};
 use std::num::NonZeroUsize;
@@ -167,14 +167,21 @@ impl Default for GlyphAtlas {
     }
 }
 
-// Bounded by entry count (not frames): full rasterized bitmaps are large, so cap tightly.
-const PIXEL_CACHE_MAX: usize = 512;
+struct PixelCacheScale;
+impl WeightScale<TextCacheKey, Vec<u8>> for PixelCacheScale {
+    fn weight(&self, _key: &TextCacheKey, value: &Vec<u8>) -> usize {
+        value.len().max(1)
+    }
+}
+
+const PIXEL_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;
 
 pub struct TextShaper {
     pub font_system: FontSystem,
     pub swash_cache: SwashCache,
     pub atlas: GlyphAtlas,
-    pixel_cache: LruCache<TextCacheKey, Vec<u8>>,
+    pixel_cache:
+        CLruCache<TextCacheKey, Vec<u8>, std::collections::hash_map::RandomState, PixelCacheScale>,
 }
 
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
@@ -192,7 +199,10 @@ impl TextShaper {
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
             atlas: GlyphAtlas::new(),
-            pixel_cache: LruCache::new(NonZeroUsize::new(PIXEL_CACHE_MAX).unwrap()),
+            pixel_cache: CLruCache::with_config(
+                CLruCacheConfig::new(NonZeroUsize::new(PIXEL_CACHE_BUDGET_BYTES).unwrap())
+                    .with_scale(PixelCacheScale),
+            ),
         }
     }
 
@@ -392,7 +402,9 @@ impl TextShaper {
         }
 
         premultiply_rgba(&mut pixels);
-        self.pixel_cache.put(key.clone(), pixels.clone());
+        self.pixel_cache
+            .put_with_weight(key.clone(), pixels.clone())
+            .ok();
 
         (key, pixels, width, height)
     }

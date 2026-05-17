@@ -1,3 +1,49 @@
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum NamedKey {
+    Enter,
+    Backspace,
+    Escape,
+    Tab,
+    Delete,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    ArrowUp,
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    Space,
+    Insert,
+    CapsLock,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Key {
+    Char(char),
+    Named(NamedKey),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ModifiersState {
+    pub shift: bool,
+    pub ctrl: bool,
+    pub alt: bool,
+    pub meta: bool,
+}
+
 #[derive(Debug, Clone)]
 pub enum Event {
     WindowResized {
@@ -6,10 +52,12 @@ pub enum Event {
     },
     WindowCloseRequested,
     KeyPressed {
-        key: String,
+        key: Key,
+        modifiers: ModifiersState,
     },
     KeyReleased {
-        key: String,
+        key: Key,
+        modifiers: ModifiersState,
     },
     PointerMoved {
         x: f64,

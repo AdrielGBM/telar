@@ -7,6 +7,7 @@ use winit::event::{
     ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, Touch, TouchPhase, WindowEvent,
 };
 use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::keyboard::{Key as WinitKey, NamedKey as WinitNamedKey};
 use winit::window::{WindowAttributes, WindowId};
 
 use crate::window::WinitWindow;
@@ -38,6 +39,7 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     window: Option<WinitWindow>,
     config: WindowConfig,
     cursor_pos: (f64, f64),
+    modifiers: platform_core::ModifiersState,
 }
 
 impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
@@ -149,18 +151,65 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 self.handler
                     .on_event(Event::Scrolled { delta_x, delta_y }, window);
             }
+            WindowEvent::ModifiersChanged(mods) => {
+                self.modifiers = platform_core::ModifiersState {
+                    shift: mods.state().shift_key(),
+                    ctrl: mods.state().control_key(),
+                    alt: mods.state().alt_key(),
+                    meta: mods.state().super_key(),
+                };
+            }
             WindowEvent::KeyboardInput { event, .. } => {
-                if let Some(text) = event.logical_key.to_text() {
-                    let ev = match event.state {
-                        ElementState::Pressed => Event::KeyPressed {
-                            key: text.to_string(),
-                        },
-                        ElementState::Released => Event::KeyReleased {
-                            key: text.to_string(),
-                        },
-                    };
-                    self.handler.on_event(ev, window);
-                }
+                let key = match &event.logical_key {
+                    WinitKey::Character(c) => {
+                        if let Some(ch) = c.as_str().chars().next() {
+                            platform_core::Key::Char(ch)
+                        } else {
+                            return;
+                        }
+                    }
+                    WinitKey::Named(named) => {
+                        let nk = match named {
+                            WinitNamedKey::Enter => platform_core::NamedKey::Enter,
+                            WinitNamedKey::Backspace => platform_core::NamedKey::Backspace,
+                            WinitNamedKey::Escape => platform_core::NamedKey::Escape,
+                            WinitNamedKey::Tab => platform_core::NamedKey::Tab,
+                            WinitNamedKey::Delete => platform_core::NamedKey::Delete,
+                            WinitNamedKey::Home => platform_core::NamedKey::Home,
+                            WinitNamedKey::End => platform_core::NamedKey::End,
+                            WinitNamedKey::PageUp => platform_core::NamedKey::PageUp,
+                            WinitNamedKey::PageDown => platform_core::NamedKey::PageDown,
+                            WinitNamedKey::ArrowUp => platform_core::NamedKey::ArrowUp,
+                            WinitNamedKey::ArrowDown => platform_core::NamedKey::ArrowDown,
+                            WinitNamedKey::ArrowLeft => platform_core::NamedKey::ArrowLeft,
+                            WinitNamedKey::ArrowRight => platform_core::NamedKey::ArrowRight,
+                            WinitNamedKey::F1 => platform_core::NamedKey::F1,
+                            WinitNamedKey::F2 => platform_core::NamedKey::F2,
+                            WinitNamedKey::F3 => platform_core::NamedKey::F3,
+                            WinitNamedKey::F4 => platform_core::NamedKey::F4,
+                            WinitNamedKey::F5 => platform_core::NamedKey::F5,
+                            WinitNamedKey::F6 => platform_core::NamedKey::F6,
+                            WinitNamedKey::F7 => platform_core::NamedKey::F7,
+                            WinitNamedKey::F8 => platform_core::NamedKey::F8,
+                            WinitNamedKey::F9 => platform_core::NamedKey::F9,
+                            WinitNamedKey::F10 => platform_core::NamedKey::F10,
+                            WinitNamedKey::F11 => platform_core::NamedKey::F11,
+                            WinitNamedKey::F12 => platform_core::NamedKey::F12,
+                            WinitNamedKey::Space => platform_core::NamedKey::Space,
+                            WinitNamedKey::Insert => platform_core::NamedKey::Insert,
+                            WinitNamedKey::CapsLock => platform_core::NamedKey::CapsLock,
+                            _ => return,
+                        };
+                        platform_core::Key::Named(nk)
+                    }
+                    _ => return,
+                };
+                let modifiers = self.modifiers.clone();
+                let ev = match event.state {
+                    ElementState::Pressed => platform_core::Event::KeyPressed { key, modifiers },
+                    ElementState::Released => platform_core::Event::KeyReleased { key, modifiers },
+                };
+                self.handler.on_event(ev, window);
             }
             _ => {}
         }
@@ -180,6 +229,7 @@ impl Platform for WinitPlatform {
             window: None,
             config,
             cursor_pos: (0.0, 0.0),
+            modifiers: platform_core::ModifiersState::default(),
         };
         self.event_loop
             .run_app(&mut runner)
