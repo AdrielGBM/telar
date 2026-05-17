@@ -29,4 +29,13 @@ pub enum DrawCommand {
         data: Arc<PathData>,
         style: PathStyle,
     },
+    PushClip {
+        rect: Rect,
+    },
+    PopClip,
+    PushTransform {
+        tx: f32,
+        ty: f32,
+    },
+    PopTransform,
 }

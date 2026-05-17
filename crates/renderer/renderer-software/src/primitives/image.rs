@@ -16,6 +16,8 @@ pub(crate) fn draw_image(
     cache: &mut ImageCache,
     rect: Rect,
     filter: ImageFilter,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
 ) {
     let key = Arc::as_ptr(data);
 
@@ -51,12 +53,8 @@ pub(crate) fn draw_image(
         ..Default::default()
     };
 
-    pixmap.draw_pixmap(
-        0,
-        0,
-        src_pixmap.as_ref(),
-        &paint,
-        tiny_skia::Transform::from_scale(scale_x, scale_y).post_translate(rect.x, rect.y),
-        None,
-    );
+    let image_transform = tiny_skia::Transform::from_scale(scale_x, scale_y)
+        .post_translate(rect.x, rect.y)
+        .post_concat(transform);
+    pixmap.draw_pixmap(0, 0, src_pixmap.as_ref(), &paint, image_transform, clip);
 }

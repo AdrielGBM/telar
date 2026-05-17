@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use rsx::{
-    App, AppContext, BorderRadius, Color, FillRule, FillStyle, Frame, ImageData, ImageFilter,
-    LineCap, LineJoin, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, Stroke, TextStyle,
-    WindowConfig,
+    App, AppContext, BorderRadius, Color, Event, FillRule, FillStyle, Frame, ImageData,
+    ImageFilter, LineCap, LineJoin, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, Stroke,
+    TextStyle, WindowConfig,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -17,15 +17,35 @@ const MUTED: Color = Color::rgba(0.50, 0.50, 0.60, 1.0);
 const WHITE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
 const CARD_BORDER: Color = Color::rgba(0.80, 0.80, 0.88, 1.0);
 
+const CONTENT_HEIGHT: f32 = 1700.0;
+
 struct Sandbox {
     gradient_image: Arc<ImageData>,
     checker_image: Arc<ImageData>,
     alpha_image: Arc<ImageData>,
+    scroll_y: f32,
+    window_width: f32,
+    window_height: f32,
 }
 
 impl App for Sandbox {
+    fn on_event(&mut self, event: Event, ctx: &mut AppContext) {
+        if let Event::Scrolled { delta_y, .. } = event {
+            let max_scroll = (CONTENT_HEIGHT - self.window_height).max(0.0);
+            self.scroll_y = (self.scroll_y - delta_y as f32).clamp(0.0, max_scroll);
+            ctx.request_redraw();
+        }
+        if let Event::WindowResized { width, height } = event {
+            self.window_width = width as f32;
+            self.window_height = height as f32;
+            ctx.request_redraw();
+        }
+    }
+
     fn on_redraw(&mut self, frame: &mut Frame, _ctx: &mut AppContext) {
         frame.clear(SURFACE);
+        frame.push_clip(Rect::new(0.0, 0.0, f32::MAX, self.window_height));
+        frame.push_translate(0.0, -self.scroll_y);
 
         frame.draw_text(
             "Shapes",
@@ -360,6 +380,23 @@ impl App for Sandbox {
         }
 
         draw_paths_section(frame);
+
+        frame.pop_transform();
+        frame.pop_clip();
+
+        if CONTENT_HEIGHT > self.window_height {
+            let bar_h = (self.window_height / CONTENT_HEIGHT * self.window_height).max(24.0);
+            let max_scroll = (CONTENT_HEIGHT - self.window_height).max(1.0);
+            let bar_y = (self.scroll_y / max_scroll) * (self.window_height - bar_h);
+            frame.draw_rect(
+                Rect::new(self.window_width - 8.0, bar_y, 6.0, bar_h),
+                RectStyle {
+                    fill: Some(FillStyle::solid(MUTED)),
+                    stroke: None,
+                    radius: BorderRadius::all(3.0),
+                },
+            );
+        }
     }
 }
 
@@ -367,12 +404,16 @@ fn main() {
     let gradient_image = Arc::new(make_gradient(128, 128));
     let checker_image = Arc::new(make_checker(128, 128, 16));
     let alpha_image = Arc::new(make_radial_alpha(128, 128));
+    let config = WindowConfig::default();
     rsx::run!(
-        WindowConfig::default(),
+        config,
         Sandbox {
             gradient_image,
             checker_image,
             alpha_image,
+            scroll_y: 0.0,
+            window_width: 800.0,
+            window_height: 600.0,
         }
     );
 }

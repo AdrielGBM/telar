@@ -2,7 +2,14 @@ use renderer_core::{LineCap, LineStyle, Point};
 
 use crate::renderer::to_skia_color;
 
-pub(crate) fn draw_line(pixmap: &mut tiny_skia::Pixmap, p1: Point, p2: Point, style: LineStyle) {
+pub(crate) fn draw_line(
+    pixmap: &mut tiny_skia::Pixmap,
+    p1: Point,
+    p2: Point,
+    style: LineStyle,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+) {
     let mut pb = tiny_skia::PathBuilder::new();
     pb.move_to(p1.x, p1.y);
     pb.line_to(p2.x, p2.y);
@@ -23,11 +30,5 @@ pub(crate) fn draw_line(pixmap: &mut tiny_skia::Pixmap, p1: Point, p2: Point, st
         ..Default::default()
     };
 
-    pixmap.stroke_path(
-        &path,
-        &paint,
-        &stroke,
-        tiny_skia::Transform::identity(),
-        None,
-    );
+    pixmap.stroke_path(&path, &paint, &stroke, transform, clip);
 }

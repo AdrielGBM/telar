@@ -10,7 +10,19 @@ macro_rules! flush_batch {
 }
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, DrawCommand, ImageFilter, RenderBackend, RendererError};
+use renderer_core::{Color, DrawCommand, ImageFilter, Rect, RenderBackend, RendererError};
+
+fn intersect_rects(a: Rect, b: Rect) -> Option<Rect> {
+    let x = a.x.max(b.x);
+    let y = a.y.max(b.y);
+    let right = (a.x + a.w).min(b.x + b.w);
+    let bottom = (a.y + a.h).min(b.y + b.h);
+    if right > x && bottom > y {
+        Some(Rect::new(x, y, right - x, bottom - y))
+    } else {
+        None
+    }
+}
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
 use crate::primitives::image::{ImageInstance, ImagePipeline};
@@ -55,6 +67,9 @@ enum DrawStep {
         index_start: u32,
         index_end: u32,
     },
+    SetScissor {
+        rect: Option<renderer_core::Rect>,
+    },
 }
 
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
@@ -91,7 +106,6 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     batch_image_key: Option<(usize, ImageFilter)>,
     batch_image_start: Option<u32>,
     batch_image_bind_group: Option<wgpu::BindGroup>,
-    // Keeps the window alive for the 'static lifetime required by Surface<'static>.
     _window: std::sync::Arc<W>,
 }
 
@@ -299,6 +313,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
     }
 
     fn submit(&mut self, commands: &[DrawCommand]) {
+        let mut clip_stack: Vec<Rect> = Vec::new();
+        let mut translate_stack: Vec<(f32, f32)> = Vec::new();
+        let mut cum_tx: f32 = 0.0;
+        let mut cum_ty: f32 = 0.0;
+
         for cmd in commands {
             match cmd {
                 DrawCommand::Rect { rect, style } => {
@@ -314,7 +333,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_rect_start.is_none() {
                         self.batch_rect_start = Some(self.pending_instances.len() as u32);
                     }
-                    let inst = crate::primitives::rect::prepare_rect(*rect, style);
+                    let translated = Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.w, rect.h);
+                    let inst = crate::primitives::rect::prepare_rect(translated, style);
                     self.pending_instances.push(inst);
                 }
                 DrawCommand::Text { text, rect, style } => {
@@ -324,10 +344,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_text_start.is_none() {
                         self.batch_text_start = Some(self.pending_text_instances.len() as u32);
                     }
+                    let translated = Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.w, rect.h);
                     let instances = crate::primitives::text::prepare_text(
                         &mut self.text_shaper,
                         &*text,
-                        *rect,
+                        translated,
                         style,
                     );
                     self.pending_text_instances.extend(instances);
@@ -339,8 +360,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_line_start.is_none() {
                         self.batch_line_start = Some(self.pending_line_instances.len() as u32);
                     }
+                    use renderer_core::Point;
+                    let tp1 = Point::new(p1.x + cum_tx, p1.y + cum_ty);
+                    let tp2 = Point::new(p2.x + cum_tx, p2.y + cum_ty);
                     self.pending_line_instances
-                        .push(crate::primitives::line::prepare_line(*p1, *p2, *style));
+                        .push(crate::primitives::line::prepare_line(tp1, tp2, *style));
                 }
                 DrawCommand::Image { data, rect, filter } => {
                     self.flush_rect();
@@ -359,11 +383,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 *filter,
                             ));
                     }
+                    let translated = Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.w, rect.h);
                     self.pending_image_instances
-                        .push(crate::primitives::image::prepare_image(*rect));
+                        .push(crate::primitives::image::prepare_image(translated));
                 }
                 DrawCommand::Path { data, style } => {
                     self.flush_all();
+                    let vertex_start = self.pending_path_vertices.len();
                     let index_start = self.pending_path_indices.len() as u32;
                     crate::primitives::path::prepare_path(
                         &mut self.path_tess_cache,
@@ -372,12 +398,45 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &mut self.pending_path_vertices,
                         &mut self.pending_path_indices,
                     );
+                    for v in &mut self.pending_path_vertices[vertex_start..] {
+                        v.position[0] += cum_tx;
+                        v.position[1] += cum_ty;
+                    }
                     let index_end = self.pending_path_indices.len() as u32;
                     if index_end > index_start {
                         self.pending_steps.push(DrawStep::PathDraw {
                             index_start,
                             index_end,
                         });
+                    }
+                }
+                DrawCommand::PushClip { rect } => {
+                    self.flush_all();
+                    let effective = clip_stack
+                        .last()
+                        .and_then(|&current| intersect_rects(current, *rect))
+                        .unwrap_or(*rect);
+                    clip_stack.push(effective);
+                    self.pending_steps.push(DrawStep::SetScissor {
+                        rect: Some(effective),
+                    });
+                }
+                DrawCommand::PopClip => {
+                    self.flush_all();
+                    clip_stack.pop();
+                    self.pending_steps.push(DrawStep::SetScissor {
+                        rect: clip_stack.last().copied(),
+                    });
+                }
+                DrawCommand::PushTransform { tx, ty } => {
+                    translate_stack.push((*tx, *ty));
+                    cum_tx += tx;
+                    cum_ty += ty;
+                }
+                DrawCommand::PopTransform => {
+                    if let Some((tx, ty)) = translate_stack.pop() {
+                        cum_tx -= tx;
+                        cum_ty -= ty;
                     }
                 }
             }
@@ -587,6 +646,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         );
                         render_pass.draw_indexed(*index_start..*index_end, 0, 0..1);
                     }
+                    DrawStep::SetScissor { rect } => match rect {
+                        None => {
+                            render_pass.set_scissor_rect(0, 0, self.width, self.height);
+                        }
+                        Some(r) => {
+                            let x = (r.x.max(0.0).floor() as u32).min(self.width - 1);
+                            let y = (r.y.max(0.0).floor() as u32).min(self.height - 1);
+
+                            let right = ((r.x + r.w).ceil() as u32).min(self.width);
+                            let bottom = ((r.y + r.h).ceil() as u32).min(self.height);
+                            let w = right.saturating_sub(x).max(1).min(self.width - x);
+                            let h = bottom.saturating_sub(y).max(1).min(self.height - y);
+                            render_pass.set_scissor_rect(x, y, w, h);
+                        }
+                    },
                 }
             }
         }

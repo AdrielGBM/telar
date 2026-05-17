@@ -6,6 +6,8 @@ pub(crate) fn draw_text(
     text: &str,
     rect: Rect,
     style: &TextStyle,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
 ) {
     let (_key, pixels, tex_width, tex_height) = shaper.rasterize(text, rect, style);
     if tex_width == 0 || tex_height == 0 {
@@ -26,8 +28,8 @@ pub(crate) fn draw_text(
             rect.y as i32,
             src.as_ref(),
             &paint,
-            tiny_skia::Transform::identity(),
-            None,
+            transform,
+            clip,
         );
     }
 }

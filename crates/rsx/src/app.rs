@@ -49,6 +49,22 @@ impl Frame {
     pub fn draw_path(&mut self, data: std::sync::Arc<PathData>, style: PathStyle) {
         self.commands.push(DrawCommand::Path { data, style });
     }
+
+    pub fn push_clip(&mut self, rect: Rect) {
+        self.commands.push(DrawCommand::PushClip { rect });
+    }
+
+    pub fn pop_clip(&mut self) {
+        self.commands.push(DrawCommand::PopClip);
+    }
+
+    pub fn push_translate(&mut self, tx: f32, ty: f32) {
+        self.commands.push(DrawCommand::PushTransform { tx, ty });
+    }
+
+    pub fn pop_transform(&mut self) {
+        self.commands.push(DrawCommand::PopTransform);
+    }
 }
 
 pub trait App {

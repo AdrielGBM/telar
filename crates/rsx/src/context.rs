@@ -5,9 +5,14 @@ pub struct AppContext<'a> {
     pub(crate) app_name: &'a str,
     pub(crate) prefs: &'a mut UserPrefs,
     pub(crate) pending_restart: &'a mut bool,
+    pub(crate) redraw_requested: &'a mut bool,
 }
 
 impl<'a> AppContext<'a> {
+    pub fn request_redraw(&mut self) {
+        *self.redraw_requested = true;
+    }
+
     pub fn restart_required(&self) -> bool {
         *self.pending_restart
     }

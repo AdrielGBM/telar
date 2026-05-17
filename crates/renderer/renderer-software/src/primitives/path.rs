@@ -34,7 +34,13 @@ fn to_skia_line_join(join: LineJoin) -> tiny_skia::LineJoin {
     }
 }
 
-pub(crate) fn draw_path(pixmap: &mut tiny_skia::Pixmap, data: &PathData, style: &PathStyle) {
+pub(crate) fn draw_path(
+    pixmap: &mut tiny_skia::Pixmap,
+    data: &PathData,
+    style: &PathStyle,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+) {
     let Some(path) = build_skia_path(data) else {
         return;
     };
@@ -47,7 +53,7 @@ pub(crate) fn draw_path(pixmap: &mut tiny_skia::Pixmap, data: &PathData, style: 
             FillRule::Winding => tiny_skia::FillRule::Winding,
             FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
         };
-        pixmap.fill_path(&path, &paint, rule, tiny_skia::Transform::identity(), None);
+        pixmap.fill_path(&path, &paint, rule, transform, clip);
     }
 
     if let Some(s) = style.stroke {
@@ -62,12 +68,6 @@ pub(crate) fn draw_path(pixmap: &mut tiny_skia::Pixmap, data: &PathData, style: 
             line_join,
             ..Default::default()
         };
-        pixmap.stroke_path(
-            &path,
-            &paint,
-            &stroke,
-            tiny_skia::Transform::identity(),
-            None,
-        );
+        pixmap.stroke_path(&path, &paint, &stroke, transform, clip);
     }
 }

@@ -59,7 +59,13 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     pb.finish()
 }
 
-pub(crate) fn draw_rect(pixmap: &mut tiny_skia::Pixmap, rect: Rect, style: &RectStyle) {
+pub(crate) fn draw_rect(
+    pixmap: &mut tiny_skia::Pixmap,
+    rect: Rect,
+    style: &RectStyle,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+) {
     if let Some(fill_style) = style.fill {
         if let Some(path) = build_rect_path(rect, style.radius) {
             let color = match fill_style {
@@ -68,13 +74,7 @@ pub(crate) fn draw_rect(pixmap: &mut tiny_skia::Pixmap, rect: Rect, style: &Rect
             let mut paint = tiny_skia::Paint::default();
             paint.set_color(to_skia_color(color));
             paint.anti_alias = true;
-            pixmap.fill_path(
-                &path,
-                &paint,
-                tiny_skia::FillRule::Winding,
-                tiny_skia::Transform::identity(),
-                None,
-            );
+            pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, clip);
         }
     }
 
@@ -100,13 +100,7 @@ pub(crate) fn draw_rect(pixmap: &mut tiny_skia::Pixmap, rect: Rect, style: &Rect
                 width: s.width,
                 ..Default::default()
             };
-            pixmap.stroke_path(
-                &path,
-                &paint,
-                &stroke,
-                tiny_skia::Transform::identity(),
-                None,
-            );
+            pixmap.stroke_path(&path, &paint, &stroke, transform, clip);
         }
     }
 }

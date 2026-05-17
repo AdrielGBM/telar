@@ -28,6 +28,10 @@ pub enum Event {
         button: PointerButton,
         source: PointerSource,
     },
+    Scrolled {
+        delta_x: f64,
+        delta_y: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

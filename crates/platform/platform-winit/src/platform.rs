@@ -2,7 +2,9 @@ use platform_core::{
     Event, EventHandler, Platform, PointerButton, PointerSource, Window, WindowConfig,
 };
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, MouseButton as WinitMouseButton, Touch, TouchPhase, WindowEvent};
+use winit::event::{
+    ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, Touch, TouchPhase, WindowEvent,
+};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{WindowAttributes, WindowId};
 
@@ -128,6 +130,14 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                     },
                 };
                 self.handler.on_event(ev, window);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let (delta_x, delta_y) = match delta {
+                    MouseScrollDelta::LineDelta(x, y) => (x as f64 * 20.0, y as f64 * 20.0),
+                    MouseScrollDelta::PixelDelta(pos) => (pos.x, pos.y),
+                };
+                self.handler
+                    .on_event(Event::Scrolled { delta_x, delta_y }, window);
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Some(text) = event.logical_key.to_text() {

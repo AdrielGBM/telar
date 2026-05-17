@@ -15,6 +15,7 @@ macro_rules! make_ctx {
             app_name: &$self.app_name,
             prefs: &mut $self.prefs,
             pending_restart: &mut $self.pending_restart,
+            redraw_requested: &mut $self.redraw_requested,
         }
     };
 }
@@ -26,6 +27,7 @@ struct AppHandler<A: App> {
     app_name: String,
     prefs: UserPrefs,
     pending_restart: bool,
+    redraw_requested: bool,
 }
 
 impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
@@ -34,11 +36,17 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
             Ok(renderer) => self.renderer = Some(renderer),
             Err(e) => eprintln!("[rsx] Failed to initialize renderer: {e}"),
         }
+        self.redraw_requested = false;
         self.app.on_resume(&mut make_ctx!(self));
+        window.request_redraw();
     }
 
-    fn on_event(&mut self, event: Event, _window: &WinitWindow) {
+    fn on_event(&mut self, event: Event, window: &WinitWindow) {
+        self.redraw_requested = false;
         self.app.on_event(event, &mut make_ctx!(self));
+        if self.redraw_requested {
+            window.request_redraw();
+        }
     }
 
     fn on_redraw(&mut self, window: &WinitWindow) {
@@ -62,6 +70,7 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
             eprintln!("[rsx] begin_frame failed: {e}");
             return;
         }
+        self.redraw_requested = false;
         let app = &mut self.app;
         let mut frame = Frame::new();
         app.on_redraw(&mut frame, &mut make_ctx!(self));
@@ -71,9 +80,13 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         if let Err(e) = renderer.as_mut().end_frame(clear) {
             eprintln!("[rsx] end_frame failed: {e}");
         }
+        if self.redraw_requested {
+            window.request_redraw();
+        }
     }
 
     fn on_suspend(&mut self) {
+        self.redraw_requested = false;
         self.app.on_suspend(&mut make_ctx!(self));
     }
 }
@@ -124,6 +137,7 @@ pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
             app_name: app_name.to_string(),
             prefs,
             pending_restart: false,
+            redraw_requested: false,
         },
     );
 }

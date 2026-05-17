@@ -2,12 +2,48 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
+use renderer_core::{Color, DrawCommand, Rect, RenderBackend, RendererError};
 use renderer_text::TextShaper;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
 use crate::primitives::image::ImageCache;
+
+fn intersect_rects(a: Rect, b: Rect) -> Option<Rect> {
+    let x = a.x.max(b.x);
+    let y = a.y.max(b.y);
+    let right = (a.x + a.w).min(b.x + b.w);
+    let bottom = (a.y + a.h).min(b.y + b.h);
+    if right > x && bottom > y {
+        Some(Rect::new(x, y, right - x, bottom - y))
+    } else {
+        None
+    }
+}
+
+fn build_clip_mask(rect: Rect, width: u32, height: u32) -> tiny_skia::Mask {
+    let mut mask = tiny_skia::Mask::new(width, height)
+        .unwrap_or_else(|| tiny_skia::Mask::new(1, 1).expect("1x1 mask always valid"));
+    let x = rect.x.max(0.0);
+    let y = rect.y.max(0.0);
+    let right = (rect.x + rect.w).min(width as f32);
+    let bottom = (rect.y + rect.h).min(height as f32);
+    let w = (right - x).max(0.0);
+    let h = (bottom - y).max(0.0);
+    if let Some(r) = tiny_skia::Rect::from_xywh(x, y, w, h) {
+        let mut pb = tiny_skia::PathBuilder::new();
+        pb.push_rect(r);
+        if let Some(path) = pb.finish() {
+            mask.fill_path(
+                &path,
+                tiny_skia::FillRule::Winding,
+                false,
+                tiny_skia::Transform::identity(),
+            );
+        }
+    }
+    mask
+}
 
 pub(crate) fn to_skia_color(color: Color) -> tiny_skia::Color {
     tiny_skia::Color::from_rgba(
@@ -86,10 +122,17 @@ where
 
         let commands = std::mem::take(&mut self.pending_commands);
 
+        let mut clip_stack: Vec<Option<Rect>> = Vec::new();
+        let mut clip_mask: Option<tiny_skia::Mask> = None;
+        let mut translate_stack: Vec<(f32, f32)> = Vec::new();
+        let mut cum_tx: f32 = 0.0;
+        let mut cum_ty: f32 = 0.0;
+
         for cmd in commands {
             let Some(pixmap) = &mut self.pixmap else {
                 break;
             };
+            let transform = tiny_skia::Transform::from_translate(cum_tx, cum_ty);
             match cmd {
                 DrawCommand::Rect { rect, style } => {
                     if rect.w <= 0.0
@@ -98,7 +141,13 @@ where
                     {
                         continue;
                     }
-                    crate::primitives::rect::draw_rect(pixmap, rect, &style);
+                    crate::primitives::rect::draw_rect(
+                        pixmap,
+                        rect,
+                        &style,
+                        transform,
+                        clip_mask.as_ref(),
+                    );
                 }
                 DrawCommand::Text { text, rect, style } => {
                     crate::primitives::text::draw_text(
@@ -107,6 +156,8 @@ where
                         &*text,
                         rect,
                         &style,
+                        transform,
+                        clip_mask.as_ref(),
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
@@ -116,13 +167,54 @@ where
                         &mut self.image_cache,
                         rect,
                         filter,
+                        transform,
+                        clip_mask.as_ref(),
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    crate::primitives::line::draw_line(pixmap, p1, p2, style);
+                    crate::primitives::line::draw_line(
+                        pixmap,
+                        p1,
+                        p2,
+                        style,
+                        transform,
+                        clip_mask.as_ref(),
+                    );
                 }
                 DrawCommand::Path { data, style } => {
-                    crate::primitives::path::draw_path(pixmap, &data, &style);
+                    crate::primitives::path::draw_path(
+                        pixmap,
+                        &data,
+                        &style,
+                        transform,
+                        clip_mask.as_ref(),
+                    );
+                }
+                DrawCommand::PushClip { rect } => {
+                    let effective = clip_stack
+                        .last()
+                        .copied()
+                        .flatten()
+                        .and_then(|current| intersect_rects(current, rect))
+                        .or(Some(rect));
+                    clip_stack.push(effective);
+                    clip_mask = effective.map(|r| build_clip_mask(r, self.width, self.height));
+                }
+                DrawCommand::PopClip => {
+                    clip_stack.pop();
+                    let effective = clip_stack.last().copied().flatten();
+                    clip_mask = effective.map(|r| build_clip_mask(r, self.width, self.height));
+                }
+                DrawCommand::PushTransform { tx, ty } => {
+                    translate_stack.push((tx, ty));
+                    cum_tx += tx;
+                    cum_ty += ty;
+                }
+                DrawCommand::PopTransform => {
+                    if let Some((tx, ty)) = translate_stack.pop() {
+                        cum_tx -= tx;
+                        cum_ty -= ty;
+                    }
                 }
             }
         }

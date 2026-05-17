@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use lyon::math::point;
 use lyon::path::LineCap as LyonLineCap;
@@ -40,6 +40,7 @@ struct CachedGeom {
     positions: Vec<[f32; 2]>,
     indices: Vec<u32>,
     last_frame: u64,
+    weak: Weak<PathData>,
 }
 
 pub(crate) struct PathTessCache {
@@ -179,7 +180,13 @@ pub(crate) fn prepare_path(
             even_odd: style.fill_rule == FillRule::EvenOdd,
         };
 
-        if !cache.fill.contains_key(&fill_key) {
+        let fill_hit = cache
+            .fill
+            .get(&fill_key)
+            .map(|g| g.weak.upgrade().is_some())
+            .unwrap_or(false);
+
+        if !fill_hit {
             let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = FillTessellator::new();
@@ -205,6 +212,7 @@ pub(crate) fn prepare_path(
                         positions: geometry.vertices,
                         indices: geometry.indices,
                         last_frame: current_frame,
+                        weak: Arc::downgrade(data),
                     },
                 );
                 cache.fill_lru.push_back((fill_key, current_frame));
@@ -232,7 +240,13 @@ pub(crate) fn prepare_path(
             join: s.join as u8,
         };
 
-        if !cache.stroke.contains_key(&stroke_key) {
+        let stroke_hit = cache
+            .stroke
+            .get(&stroke_key)
+            .map(|g| g.weak.upgrade().is_some())
+            .unwrap_or(false);
+
+        if !stroke_hit {
             let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = StrokeTessellator::new();
@@ -259,6 +273,7 @@ pub(crate) fn prepare_path(
                         positions: geometry.vertices,
                         indices: geometry.indices,
                         last_frame: current_frame,
+                        weak: Arc::downgrade(data),
                     },
                 );
                 cache.stroke_lru.push_back((stroke_key, current_frame));

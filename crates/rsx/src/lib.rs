@@ -14,7 +14,7 @@ pub use prefs::UserPrefs;
 #[cfg(feature = "runtime")]
 pub use app::{App, Frame};
 #[cfg(feature = "runtime")]
-pub use platform_core::WindowConfig;
+pub use platform_core::{Event, WindowConfig};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, Color, FillRule, FillStyle, ImageData, ImageFilter, LineCap, LineJoin, LineStyle,
