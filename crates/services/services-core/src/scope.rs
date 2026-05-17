@@ -47,11 +47,6 @@ pub fn with_service<T: Any + 'static, R>(f: impl FnOnce(&T) -> R) -> Option<R> {
 pub struct Scope(());
 
 impl Scope {
-    fn new() -> Self {
-        STACK.with(|stack| stack.borrow_mut().push(ServiceRegistry::new()));
-        Self(())
-    }
-
     pub fn with<R>(f: impl FnOnce() -> R) -> R {
         STACK.with(|stack| stack.borrow_mut().push(ServiceRegistry::new()));
         struct PopGuard;

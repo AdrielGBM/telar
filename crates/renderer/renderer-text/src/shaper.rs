@@ -209,7 +209,7 @@ impl TextShaper {
         let tint = color.to_array();
         let identity_tint = [1.0, 1.0, 1.0, 1.0];
 
-        let mut buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+        let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
 
         let mut positions: Vec<(CacheKey, i32, i32)> = Vec::new();
         for run in buffer.layout_runs() {

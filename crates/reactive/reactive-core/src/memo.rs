@@ -4,9 +4,15 @@ use std::rc::Rc;
 
 use crate::runtime::{self, EffectId};
 
+enum MemoState<T> {
+    Computing,
+    Ready(T),
+}
+
 struct MemoInner<T> {
-    value: Option<T>,
+    state: MemoState<T>,
     subscribers: BTreeSet<EffectId>,
+    effect_id: EffectId,
 }
 
 pub struct Memo<T: 'static> {
@@ -21,32 +27,41 @@ impl<T: 'static> Clone for Memo<T> {
     }
 }
 
+impl<T: 'static> Drop for Memo<T> {
+    fn drop(&mut self) {
+        if Rc::strong_count(&self.inner) == 1 {
+            let id = self.inner.borrow().effect_id;
+            runtime::deregister_effect(id);
+        }
+    }
+}
+
 impl<T: Clone + 'static> Memo<T> {
     pub fn get(&self) -> T {
         self.track();
-        self.inner
-            .borrow()
-            .value
-            .as_ref()
-            .expect("memo value uninitialized — possible reactive cycle")
-            .clone()
+        match &self.inner.borrow().state {
+            MemoState::Ready(v) => v.clone(),
+            MemoState::Computing => panic!("reactive cycle detected in memo"),
+        }
     }
 
     pub fn try_get(&self) -> Option<T> {
         self.track();
-        self.inner.borrow().value.as_ref().cloned()
+        match &self.inner.borrow().state {
+            MemoState::Ready(v) => Some(v.clone()),
+            MemoState::Computing => None,
+        }
     }
 }
 
 impl<T: 'static> Memo<T> {
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         self.track();
-        f(self
-            .inner
-            .borrow()
-            .value
-            .as_ref()
-            .expect("memo value uninitialized — possible reactive cycle"))
+        let borrow = self.inner.borrow();
+        match &borrow.state {
+            MemoState::Ready(v) => f(v),
+            MemoState::Computing => panic!("reactive cycle detected in memo"),
+        }
     }
 
     fn track(&self) {
@@ -58,17 +73,25 @@ impl<T: 'static> Memo<T> {
 }
 
 pub fn create_memo<T: 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
+    use std::rc::Weak;
+
     let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {
-        value: None,
+        state: MemoState::Computing,
         subscribers: BTreeSet::new(),
+        effect_id: 0,
     }));
-    let inner_clone = Rc::clone(&inner);
+
+    let weak: Weak<RefCell<MemoInner<T>>> = Rc::downgrade(&inner);
 
     let effect_f: Rc<dyn Fn()> = Rc::new(move || {
+        let Some(inner) = weak.upgrade() else {
+            return;
+        };
+        inner.borrow_mut().state = MemoState::Computing;
         let new_value = f();
         let subs = {
-            let mut memo = inner_clone.borrow_mut();
-            memo.value = Some(new_value);
+            let mut memo = inner.borrow_mut();
+            memo.state = MemoState::Ready(new_value);
             memo.subscribers.iter().copied().collect::<Vec<_>>()
         };
         for id in subs {
@@ -76,8 +99,10 @@ pub fn create_memo<T: 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
         }
     });
 
-    let id = runtime::register_effect(Rc::clone(&effect_f));
-    runtime::run_effect(id);
+    let effect_id = runtime::register_effect(Rc::clone(&effect_f));
+    inner.borrow_mut().effect_id = effect_id;
+
+    runtime::run_effect(effect_id);
 
     Memo { inner }
 }
