@@ -376,7 +376,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_rect();
                     self.flush_text();
                     self.flush_line();
-                    let key = (std::sync::Arc::as_ptr(data) as usize, *filter);
+                    let key = (std::rc::Rc::as_ptr(data) as usize, *filter);
                     if self.batch_image_start.is_none() || self.batch_image_key != Some(key) {
                         self.flush_image();
                         self.batch_image_key = Some(key);

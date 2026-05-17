@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::sync::{Arc, Weak};
+use std::rc::{Rc, Weak};
 
 use lyon::math::point;
 use lyon::path::LineCap as LyonLineCap;
@@ -164,13 +164,13 @@ fn build_lyon_path(data: &PathData) -> Path {
 
 pub(crate) fn prepare_path(
     cache: &mut PathTessCache,
-    data: &Arc<PathData>,
+    data: &Rc<PathData>,
     style: &PathStyle,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,
 ) {
     let current_frame = cache.frame;
-    let ptr = Arc::as_ptr(data) as usize;
+    let ptr = Rc::as_ptr(data) as usize;
 
     let mut lyon_path: Option<Path> = None;
 
@@ -212,7 +212,7 @@ pub(crate) fn prepare_path(
                         positions: geometry.vertices,
                         indices: geometry.indices,
                         last_frame: current_frame,
-                        weak: Arc::downgrade(data),
+                        weak: Rc::downgrade(data),
                     },
                 );
                 cache.fill_lru.push_back((fill_key, current_frame));
@@ -273,7 +273,7 @@ pub(crate) fn prepare_path(
                         positions: geometry.vertices,
                         indices: geometry.indices,
                         last_frame: current_frame,
-                        weak: Arc::downgrade(data),
+                        weak: Rc::downgrade(data),
                     },
                 );
                 cache.stroke_lru.push_back((stroke_key, current_frame));

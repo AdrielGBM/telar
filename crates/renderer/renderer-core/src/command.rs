@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use crate::{
     ImageData, ImageFilter, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, TextStyle,
@@ -11,12 +11,12 @@ pub enum DrawCommand {
         style: RectStyle,
     },
     Text {
-        text: Arc<str>,
+        text: Rc<str>,
         rect: Rect,
         style: TextStyle,
     },
     Image {
-        data: Arc<ImageData>,
+        data: Rc<ImageData>,
         rect: Rect,
         filter: ImageFilter,
     },
@@ -26,7 +26,7 @@ pub enum DrawCommand {
         style: LineStyle,
     },
     Path {
-        data: Arc<PathData>,
+        data: Rc<PathData>,
         style: PathStyle,
     },
     PushClip {

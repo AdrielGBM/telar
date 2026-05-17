@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use platform_core::Event;
 use renderer_core::{
@@ -31,13 +31,13 @@ impl Frame {
 
     pub fn draw_text(&mut self, text: &str, rect: Rect, style: TextStyle) {
         self.commands.push(DrawCommand::Text {
-            text: Arc::from(text),
+            text: Rc::from(text),
             rect,
             style,
         });
     }
 
-    pub fn draw_image(&mut self, data: Arc<ImageData>, rect: Rect, filter: ImageFilter) {
+    pub fn draw_image(&mut self, data: Rc<ImageData>, rect: Rect, filter: ImageFilter) {
         self.commands
             .push(DrawCommand::Image { data, rect, filter });
     }
@@ -46,7 +46,7 @@ impl Frame {
         self.commands.push(DrawCommand::Line { p1, p2, style });
     }
 
-    pub fn draw_path(&mut self, data: std::sync::Arc<PathData>, style: PathStyle) {
+    pub fn draw_path(&mut self, data: std::rc::Rc<PathData>, style: PathStyle) {
         self.commands.push(DrawCommand::Path { data, style });
     }
 

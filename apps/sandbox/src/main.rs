@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use rsx::{
     App, AppContext, BorderRadius, Button, Color, Component, ComponentTree, Event, EventResult,
@@ -80,9 +80,9 @@ fn panel_relative_event(event: &Event, dx: f64, dy: f64) -> Option<Event> {
 }
 
 struct Sandbox {
-    gradient_image: Arc<ImageData>,
-    checker_image: Arc<ImageData>,
-    alpha_image: Arc<ImageData>,
+    gradient_image: Rc<ImageData>,
+    checker_image: Rc<ImageData>,
+    alpha_image: Rc<ImageData>,
     scroll_y: f32,
     window_width: f32,
     window_height: f32,
@@ -491,9 +491,9 @@ impl App for Sandbox {
 }
 
 fn main() {
-    let gradient_image = Arc::new(make_gradient(128, 128));
-    let checker_image = Arc::new(make_checker(128, 128, 16));
-    let alpha_image = Arc::new(make_radial_alpha(128, 128));
+    let gradient_image = Rc::new(make_gradient(128, 128));
+    let checker_image = Rc::new(make_checker(128, 128, 16));
+    let alpha_image = Rc::new(make_radial_alpha(128, 128));
 
     let mut widget_ctx = WidgetCtx::new();
     let (label_node, label_rect) = widget_ctx.register_leaf(LayoutStyle::new().height(24.0));
@@ -615,7 +615,7 @@ fn draw_paths_section(frame: &mut Frame) {
     );
 
     frame.draw_path(
-        Arc::new(
+        Rc::new(
             PathData::new()
                 .move_to(Point::new(99.0, Y0 + 56.0))
                 .line_to(Point::new(159.0, Y0 + 166.0))
@@ -652,7 +652,7 @@ fn draw_paths_section(frame: &mut Frame) {
         }
         path = path.close();
         frame.draw_path(
-            Arc::new(path),
+            Rc::new(path),
             PathStyle {
                 fill: Some(FillStyle::Solid(DANGER)),
                 stroke: Some(Stroke::new(DARK, 1.0)),
@@ -667,7 +667,7 @@ fn draw_paths_section(frame: &mut Frame) {
     }
 
     frame.draw_path(
-        Arc::new(
+        Rc::new(
             PathData::new()
                 .move_to(Point::new(384.0, Y0 + 58.0))
                 .line_to(Point::new(564.0, Y0 + 58.0))
@@ -699,7 +699,7 @@ fn draw_paths_section(frame: &mut Frame) {
     );
 
     frame.draw_path(
-        Arc::new(
+        Rc::new(
             PathData::new()
                 .move_to(Point::new(24.0, Y0 + 308.0))
                 .quad_to(Point::new(164.0, Y0 + 238.0), Point::new(304.0, Y0 + 308.0)),
@@ -717,7 +717,7 @@ fn draw_paths_section(frame: &mut Frame) {
     );
 
     frame.draw_path(
-        Arc::new(
+        Rc::new(
             PathData::new()
                 .move_to(Point::new(334.0, Y0 + 248.0))
                 .cubic_to(
@@ -739,7 +739,7 @@ fn draw_paths_section(frame: &mut Frame) {
     );
 
     frame.draw_path(
-        Arc::new(
+        Rc::new(
             PathData::new()
                 .move_to(Point::new(540.0, Y0 + 243.0))
                 .cubic_to(
@@ -773,7 +773,7 @@ fn draw_paths_section(frame: &mut Frame) {
     );
 
     frame.draw_path(
-        Arc::new(
+        Rc::new(
             PathData::new()
                 .move_to(Point::new(24.0, Y0 + 410.0))
                 .line_to(Point::new(100.0, Y0 + 390.0))
@@ -793,7 +793,7 @@ fn draw_paths_section(frame: &mut Frame) {
     );
 
     frame.draw_path(
-        Arc::new(
+        Rc::new(
             PathData::new()
                 .move_to(Point::new(324.0, Y0 + 410.0))
                 .line_to(Point::new(400.0, Y0 + 390.0))

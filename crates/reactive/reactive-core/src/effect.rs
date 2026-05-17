@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::runtime;
 
 pub struct Effect {
-    id: usize,
+    id: runtime::EffectId,
 }
 
 impl Drop for Effect {

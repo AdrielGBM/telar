@@ -1,16 +1,16 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use renderer_core::{ImageData, ImageFilter, Rect, premultiply_rgba};
 
-pub(crate) type ImageCache = HashMap<*const ImageData, (Arc<ImageData>, tiny_skia::Pixmap)>;
+pub(crate) type ImageCache = HashMap<*const ImageData, (Rc<ImageData>, tiny_skia::Pixmap)>;
 
 /// Maximum simultaneous cached images. Entries beyond this limit are evicted after dead-reference cleanup to prevent unbounded memory growth.
 const IMAGE_CACHE_MAX_ENTRIES: usize = 256;
 
-/// Evicts unused cached images. The cache holds one Arc clone per entry. When strong_count == 1, no external holder remains, making the entry safe to evict. If still over `IMAGE_CACHE_MAX_ENTRIES` after that pass, arbitrary live entries are removed as a safety valve.
+/// Evicts unused cached images. The cache holds one Rc clone per entry. When strong_count == 1, no external holder remains, making the entry safe to evict. If still over `IMAGE_CACHE_MAX_ENTRIES` after that pass, arbitrary live entries are removed as a safety valve.
 pub(crate) fn evict_cache(cache: &mut ImageCache) {
-    cache.retain(|_, (arc, _)| Arc::strong_count(arc) > 1);
+    cache.retain(|_, (rc, _)| Rc::strong_count(rc) > 1);
     while cache.len() > IMAGE_CACHE_MAX_ENTRIES {
         if let Some(&key) = cache.keys().next() {
             cache.remove(&key);
@@ -22,14 +22,14 @@ pub(crate) fn evict_cache(cache: &mut ImageCache) {
 
 pub(crate) fn draw_image(
     pixmap: &mut tiny_skia::Pixmap,
-    data: &Arc<ImageData>,
+    data: &Rc<ImageData>,
     cache: &mut ImageCache,
     rect: Rect,
     filter: ImageFilter,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
 ) {
-    let key = Arc::as_ptr(data);
+    let key = Rc::as_ptr(data);
 
     let entry = cache.entry(key).or_insert_with(|| {
         let size = tiny_skia::IntSize::from_wh(data.width, data.height);
@@ -40,7 +40,7 @@ pub(crate) fn draw_image(
         });
         let fallback = src_pixmap
             .unwrap_or_else(|| tiny_skia::Pixmap::new(1, 1).expect("1x1 pixmap always valid"));
-        (Arc::clone(data), fallback)
+        (Rc::clone(data), fallback)
     });
 
     if entry.1.width() != data.width || entry.1.height() != data.height {

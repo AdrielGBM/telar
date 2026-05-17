@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use renderer_core::{ImageData, ImageFilter};
 use wgpu::Device;
@@ -17,7 +17,7 @@ struct GpuImage {
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
     last_used_frame: u64,
-    _data: Arc<renderer_core::ImageData>,
+    _data: Rc<renderer_core::ImageData>,
 }
 
 pub(crate) struct ImagePipeline {
@@ -134,7 +134,7 @@ impl ImagePipeline {
         &self,
         device: &Device,
         queue: &wgpu::Queue,
-        image: &Arc<ImageData>,
+        image: &Rc<ImageData>,
         filter: ImageFilter,
     ) -> GpuImage {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -205,10 +205,10 @@ impl ImagePipeline {
         &mut self,
         device: &Device,
         queue: &wgpu::Queue,
-        image: &Arc<ImageData>,
+        image: &Rc<ImageData>,
         filter: ImageFilter,
     ) -> wgpu::BindGroup {
-        let key = (Arc::as_ptr(image) as usize, filter);
+        let key = (Rc::as_ptr(image) as usize, filter);
         if !self.texture_cache.contains_key(&key) {
             let gpu_image = self.create_gpu_image(device, queue, image, filter);
             self.texture_cache.insert(key, gpu_image);

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use layout_core::{LayoutStyle, NodeId};
 use platform_core::Event;
@@ -9,7 +9,7 @@ use renderer_core::{DrawCommand, TextStyle};
 use crate::context::WidgetCtx;
 
 pub struct Label {
-    text: Arc<str>,
+    text: Rc<str>,
     style: TextStyle,
     layout_node: NodeId,
     rect: ReadSignal<renderer_core::Rect>,
@@ -19,7 +19,7 @@ impl Label {
     pub fn new(text: impl Into<String>, style: TextStyle, ctx: &mut WidgetCtx) -> Self {
         let (node, rect) = ctx.register_leaf(LayoutStyle::new());
         Self {
-            text: Arc::from(text.into()),
+            text: Rc::from(text.into()),
             style,
             layout_node: node,
             rect,
@@ -35,7 +35,7 @@ impl Label {
     ) -> Self {
         let (node, rect) = ctx.register_leaf(LayoutStyle::new().width(width).height(height));
         Self {
-            text: Arc::from(text.into()),
+            text: Rc::from(text.into()),
             style,
             layout_node: node,
             rect,
@@ -51,7 +51,7 @@ impl Component for Label {
     fn view(&self) -> View {
         let rect = self.rect.get();
         View::Primitive(DrawCommand::Text {
-            text: Arc::clone(&self.text),
+            text: Rc::clone(&self.text),
             rect,
             style: self.style,
         })

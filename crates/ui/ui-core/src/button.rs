@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use layout_core::{LayoutStyle, NodeId};
 use platform_core::{Event, PointerButton};
@@ -9,7 +9,7 @@ use renderer_core::{BorderRadius, Color, DrawCommand, Rect, RectStyle, TextStyle
 use crate::context::WidgetCtx;
 
 pub struct Button {
-    label: Arc<str>,
+    label: Rc<str>,
     layout_node: NodeId,
     rect: ReadSignal<Rect>,
     bg: Color,
@@ -23,7 +23,7 @@ impl Button {
     pub fn new(label: impl Into<String>, ctx: &mut WidgetCtx) -> Self {
         let (node, rect) = ctx.register_leaf(LayoutStyle::new().height(36.0));
         Self {
-            label: Arc::from(label.into()),
+            label: Rc::from(label.into()),
             layout_node: node,
             rect,
             bg: Color::from_rgb_u8(59, 130, 246),
@@ -67,7 +67,7 @@ impl Component for Button {
                     .with_radius(BorderRadius::all(4.0)),
             }),
             View::Primitive(DrawCommand::Text {
-                text: Arc::clone(&self.label),
+                text: Rc::clone(&self.label),
                 rect,
                 style: self.text_style,
             }),

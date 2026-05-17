@@ -1754,6 +1754,9 @@ dependencies = [
 [[package]]
 name = "reactive-core"
 version = "0.1.0"
+dependencies = [
+ "slab",
+]
 
 [[package]]
 name = "reactive-tree"

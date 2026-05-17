@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 pub(crate) type EffectId = usize;
@@ -9,18 +10,20 @@ pub(crate) struct EffectEntry {
 
 struct Runtime {
     observer_stack: Vec<EffectId>,
-    effects: Vec<Option<EffectEntry>>,
+    effects: slab::Slab<EffectEntry>,
     batch_depth: usize,
     pending: Vec<EffectId>,
+    pending_set: HashSet<EffectId>,
     on_flush: Option<Rc<dyn Fn()>>,
 }
 
 thread_local! {
     static RUNTIME: RefCell<Runtime> = RefCell::new(Runtime {
         observer_stack: Vec::new(),
-        effects: Vec::new(),
+        effects: slab::Slab::new(),
         batch_depth: 0,
         pending: Vec::new(),
+        pending_set: HashSet::new(),
         on_flush: None,
     });
 }
@@ -38,36 +41,29 @@ pub(crate) fn current_observer() -> Option<EffectId> {
 pub(crate) fn register_effect(f: Rc<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let id = rt.effects.len();
-        rt.effects.push(Some(EffectEntry { f }));
-        id
+        rt.effects.insert(EffectEntry { f })
     })
 }
 
 pub(crate) fn deregister_effect(id: EffectId) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        if let Some(slot) = rt.effects.get_mut(id) {
-            *slot = None;
+        if rt.effects.contains(id) {
+            rt.effects.remove(id);
         }
+        rt.pending_set.remove(&id);
     });
 }
 
 pub(crate) fn is_alive(id: EffectId) -> bool {
-    RUNTIME.with(|rt| {
-        rt.borrow()
-            .effects
-            .get(id)
-            .map(|e| e.is_some())
-            .unwrap_or(false)
-    })
+    RUNTIME.with(|rt| rt.borrow().effects.contains(id))
 }
 
 pub(crate) fn schedule(id: EffectId) {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let alive = rt.effects.get(id).map(|e| e.is_some()).unwrap_or(false);
-        if alive && !rt.pending.contains(&id) {
+        let alive = rt.effects.contains(id);
+        if alive && rt.pending_set.insert(id) {
             rt.pending.push(id);
         }
         rt.batch_depth == 0
@@ -78,12 +74,10 @@ pub(crate) fn schedule(id: EffectId) {
 }
 
 pub(crate) fn run_effect(id: EffectId) {
-    let f = RUNTIME.with(|rt| {
-        rt.borrow()
-            .effects
-            .get(id)
-            .and_then(|e| e.as_ref().map(|e| Rc::clone(&e.f)))
-    });
+    if !RUNTIME.with(|rt| rt.borrow().effects.contains(id)) {
+        return;
+    }
+    let f = RUNTIME.with(|rt| rt.borrow().effects.get(id).map(|e| Rc::clone(&e.f)));
     if let Some(f) = f {
         RUNTIME.with(|rt| rt.borrow_mut().observer_stack.push(id));
         f();
@@ -96,7 +90,11 @@ const MAX_FLUSH_ITERATIONS: usize = 1_000;
 fn flush() {
     let mut did_work = false;
     for _ in 0..MAX_FLUSH_ITERATIONS {
-        let pending = RUNTIME.with(|rt| std::mem::take(&mut rt.borrow_mut().pending));
+        let pending = RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            rt.pending_set.clear();
+            std::mem::take(&mut rt.pending)
+        });
         if pending.is_empty() {
             if did_work {
                 let cb = RUNTIME.with(|rt| rt.borrow().on_flush.as_ref().map(Rc::clone));
