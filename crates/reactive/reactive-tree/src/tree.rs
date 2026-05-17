@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use platform_core::Event;
@@ -11,6 +11,7 @@ use crate::reconciler;
 struct ComponentSlot {
     component: Rc<RefCell<Box<dyn Component>>>,
     commands: Rc<RefCell<Vec<DrawCommand>>>,
+    dirty: Rc<Cell<bool>>,
     _effect: Effect,
 }
 
@@ -18,20 +19,24 @@ impl ComponentSlot {
     fn new<C: Component + 'static>(component: C) -> Self {
         let component = Rc::new(RefCell::new(Box::new(component) as Box<dyn Component>));
         let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
+        let dirty = Rc::new(Cell::new(true));
 
         let comp_clone = Rc::clone(&component);
         let cmds_clone = Rc::clone(&commands);
+        let dirty_clone = Rc::clone(&dirty);
         let _effect = create_effect(move || {
             let view = comp_clone.borrow().view();
             let flat = reconciler::flatten(view);
             let mut cmds = cmds_clone.borrow_mut();
             cmds.clear();
             cmds.extend(flat);
+            dirty_clone.set(true);
         });
 
         ComponentSlot {
             component,
             commands,
+            dirty,
             _effect,
         }
     }
@@ -39,6 +44,7 @@ impl ComponentSlot {
 
 pub struct ComponentTree {
     slots: Vec<ComponentSlot>,
+    cached: RefCell<Vec<DrawCommand>>,
 }
 
 impl ComponentTree {
@@ -46,6 +52,7 @@ impl ComponentTree {
         component.on_mount();
         Self {
             slots: vec![ComponentSlot::new(component)],
+            cached: RefCell::new(Vec::new()),
         }
     }
 
@@ -55,10 +62,18 @@ impl ComponentTree {
     }
 
     pub fn commands(&self) -> Vec<DrawCommand> {
-        self.slots
-            .iter()
-            .flat_map(|s| s.commands.borrow().clone())
-            .collect()
+        let any_dirty = self.slots.iter().any(|s| s.dirty.get());
+        if any_dirty {
+            let mut cached = self.cached.borrow_mut();
+            cached.clear();
+            for slot in &self.slots {
+                cached.extend(slot.commands.borrow().iter().cloned());
+                slot.dirty.set(false);
+            }
+            cached.clone()
+        } else {
+            self.cached.borrow().clone()
+        }
     }
 
     pub fn on_event(&mut self, event: &Event) -> EventResult {

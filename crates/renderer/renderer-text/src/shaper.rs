@@ -9,6 +9,14 @@ use std::collections::{HashMap, VecDeque};
 use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ShapingCacheKey {
+    pub text: String,
+    pub font_size_bits: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextCacheKey {
     pub text: String,
     pub font_size_bits: u32,
@@ -182,6 +190,7 @@ pub struct TextShaper {
     pub atlas: GlyphAtlas,
     pixel_cache:
         CLruCache<TextCacheKey, Vec<u8>, std::collections::hash_map::RandomState, PixelCacheScale>,
+    shaping_cache: CLruCache<ShapingCacheKey, Vec<(CacheKey, i32, i32)>>,
 }
 
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
@@ -203,6 +212,7 @@ impl TextShaper {
                 CLruCacheConfig::new(NonZeroUsize::new(PIXEL_CACHE_BUDGET_BYTES).unwrap())
                     .with_scale(PixelCacheScale),
             ),
+            shaping_cache: CLruCache::new(NonZeroUsize::new(2048).unwrap()),
         }
     }
 
@@ -219,16 +229,28 @@ impl TextShaper {
         let tint = color.to_array();
         let identity_tint = [1.0, 1.0, 1.0, 1.0];
 
-        let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+        let shaping_key = ShapingCacheKey {
+            text: text.to_owned(),
+            font_size_bits: font_size.to_bits(),
+            width,
+            height,
+        };
 
-        let mut positions: Vec<(CacheKey, i32, i32)> = Vec::new();
-        for run in buffer.layout_runs() {
-            for glyph in run.glyphs.iter() {
-                let physical = glyph.physical((0., run.line_y), 1.0);
-                positions.push((physical.cache_key, physical.x, physical.y));
+        let positions = if let Some(cached) = self.shaping_cache.get(&shaping_key) {
+            cached.clone()
+        } else {
+            let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+            let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
+            for run in buffer.layout_runs() {
+                for glyph in run.glyphs.iter() {
+                    let physical = glyph.physical((0., run.line_y), 1.0);
+                    pos.push((physical.cache_key, physical.x, physical.y));
+                }
             }
-        }
-        drop(buffer);
+            drop(buffer);
+            let _ = self.shaping_cache.put(shaping_key, pos.clone());
+            pos
+        };
 
         let mut result = Vec::with_capacity(positions.len());
 

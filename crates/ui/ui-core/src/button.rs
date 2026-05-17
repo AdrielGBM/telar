@@ -74,6 +74,7 @@ impl Component for Button {
         ])
     }
 
+    // NOTE: expects coords pre-adjusted to layout space; callers are responsible for subtracting any PushTransform offsets. DPI normalization (physical → logical pixels) is handled upstream by platform-winit before events are emitted.
     fn on_event(&mut self, event: &Event) -> EventResult {
         let rect = self.rect.get();
         match event {

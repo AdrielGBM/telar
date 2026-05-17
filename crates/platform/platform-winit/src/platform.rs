@@ -39,6 +39,7 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     window: Option<WinitWindow>,
     config: WindowConfig,
     cursor_pos: (f64, f64),
+    scale_factor: f64,
     modifiers: platform_core::ModifiersState,
 }
 
@@ -86,11 +87,13 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 self.handler.on_redraw(window);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.cursor_pos = (position.x, position.y);
+                let lx = position.x / self.scale_factor;
+                let ly = position.y / self.scale_factor;
+                self.cursor_pos = (lx, ly);
                 self.handler.on_event(
                     Event::PointerMoved {
-                        x: position.x,
-                        y: position.y,
+                        x: lx,
+                        y: ly,
                         source: PointerSource::Mouse,
                     },
                     window,
@@ -126,8 +129,8 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 id,
                 ..
             }) => {
-                let x = location.x;
-                let y = location.y;
+                let x = location.x / self.scale_factor;
+                let y = location.y / self.scale_factor;
                 let source = PointerSource::Touch { id };
                 let ev = match phase {
                     TouchPhase::Started => Event::PointerPressed {
@@ -157,6 +160,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 self.handler.on_event(Event::CursorLeft, window);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.scale_factor = scale_factor;
                 self.handler
                     .on_event(Event::ScaleFactorChanged { scale_factor }, window);
             }
@@ -253,6 +257,7 @@ impl Platform for WinitPlatform {
             window: None,
             config,
             cursor_pos: (0.0, 0.0),
+            scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
         };
         self.event_loop

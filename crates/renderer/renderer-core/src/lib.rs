@@ -7,7 +7,7 @@ mod renderer;
 mod style;
 
 pub use color::Color;
-pub use command::DrawCommand;
+pub use command::{DrawCommand, DrawNode};
 pub use error::RendererError;
 pub use geometry::{BorderRadius, PathData, PathVerb, Point, Rect, Stroke};
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
