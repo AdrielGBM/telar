@@ -2,18 +2,21 @@ use renderer_core::DrawCommand;
 
 use crate::view::View;
 
-pub(crate) fn flatten(view: View) -> Vec<DrawCommand> {
-    match view {
-        View::Empty => Vec::new(),
-        View::Primitive(cmd) => vec![cmd],
-        View::Group(children) => {
-            let mut out = Vec::new();
-            for child in children {
-                out.extend(flatten(child));
+pub(crate) fn flatten(root: View) -> Vec<DrawCommand> {
+    let mut out = Vec::new();
+    let mut stack = vec![root];
+    while let Some(view) = stack.pop() {
+        match view {
+            View::Empty => {}
+            View::Primitive(cmd) => out.push(cmd),
+            View::Group(children) => {
+                for child in children.into_iter().rev() {
+                    stack.push(child);
+                }
             }
-            out
         }
     }
+    out
 }
 
 #[cfg(test)]

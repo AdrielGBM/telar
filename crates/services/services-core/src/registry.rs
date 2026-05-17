@@ -1,6 +1,21 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
+#[derive(Debug, PartialEq)]
+pub enum ServiceError {
+    AlreadyRegistered,
+}
+
+impl std::fmt::Display for ServiceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AlreadyRegistered => write!(f, "service already registered for this type"),
+        }
+    }
+}
+
+impl std::error::Error for ServiceError {}
+
 #[derive(Default)]
 pub struct ServiceRegistry {
     services: HashMap<TypeId, Box<dyn Any>>,
@@ -11,8 +26,12 @@ impl ServiceRegistry {
         Self::default()
     }
 
-    pub fn insert<T: Any + 'static>(&mut self, value: T) {
+    pub fn insert<T: Any + 'static>(&mut self, value: T) -> Result<(), ServiceError> {
+        if self.services.contains_key(&TypeId::of::<T>()) {
+            return Err(ServiceError::AlreadyRegistered);
+        }
         self.services.insert(TypeId::of::<T>(), Box::new(value));
+        Ok(())
     }
 
     pub fn get<T: Any + 'static>(&self) -> Option<&T> {

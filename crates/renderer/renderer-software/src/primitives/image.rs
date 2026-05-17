@@ -5,9 +5,19 @@ use renderer_core::{ImageData, ImageFilter, Rect, premultiply_rgba};
 
 pub(crate) type ImageCache = HashMap<*const ImageData, (Arc<ImageData>, tiny_skia::Pixmap)>;
 
-/// Evicts unused cached images. The cache holds one Arc clone per entry. When strong_count == 1, no external holder remains, making the entry safe to evict. If the caller re-submits the same image next frame, the entry is recreated on demand (benign miss). Called at begin_frame, after the previous frame's pending_commands have been dropped.
+/// Maximum simultaneous cached images. Entries beyond this limit are evicted after dead-reference cleanup to prevent unbounded memory growth.
+const IMAGE_CACHE_MAX_ENTRIES: usize = 256;
+
+/// Evicts unused cached images. The cache holds one Arc clone per entry. When strong_count == 1, no external holder remains, making the entry safe to evict. If still over `IMAGE_CACHE_MAX_ENTRIES` after that pass, arbitrary live entries are removed as a safety valve.
 pub(crate) fn evict_cache(cache: &mut ImageCache) {
     cache.retain(|_, (arc, _)| Arc::strong_count(arc) > 1);
+    while cache.len() > IMAGE_CACHE_MAX_ENTRIES {
+        if let Some(&key) = cache.keys().next() {
+            cache.remove(&key);
+        } else {
+            break;
+        }
+    }
 }
 
 pub(crate) fn draw_image(

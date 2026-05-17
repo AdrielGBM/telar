@@ -79,9 +79,8 @@ impl Component for Button {
         match event {
             Event::PointerMoved { x, y, .. } => {
                 let now = point_in_rect(*x as f32, *y as f32, rect);
-                let changed = now != self.hovered.get();
-                self.hovered.set(now);
-                if changed {
+                if now != self.hovered.get() {
+                    self.hovered.set(now);
                     EventResult::Handled
                 } else {
                     EventResult::Ignored

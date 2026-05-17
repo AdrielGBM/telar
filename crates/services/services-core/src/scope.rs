@@ -7,14 +7,14 @@ thread_local! {
     static STACK: RefCell<Vec<ServiceRegistry>> = RefCell::new(vec![ServiceRegistry::new()]);
 }
 
-pub fn provide<T: Any + 'static>(service: T) {
+pub fn provide<T: Any + 'static>(service: T) -> Result<(), crate::registry::ServiceError> {
     STACK.with(|stack| {
         stack
             .borrow_mut()
             .last_mut()
             .expect("service stack is empty — this is a bug")
-            .insert(service);
-    });
+            .insert(service)
+    })
 }
 
 pub fn try_inject<T: Any + Clone + 'static>() -> Option<T> {
@@ -47,7 +47,7 @@ pub fn with_service<T: Any + 'static, R>(f: impl FnOnce(&T) -> R) -> Option<R> {
 pub struct Scope(());
 
 impl Scope {
-    pub fn new() -> Self {
+    fn new() -> Self {
         STACK.with(|stack| stack.borrow_mut().push(ServiceRegistry::new()));
         Self(())
     }
@@ -67,12 +67,6 @@ impl Scope {
         }
         let _guard = PopGuard;
         f()
-    }
-}
-
-impl Default for Scope {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

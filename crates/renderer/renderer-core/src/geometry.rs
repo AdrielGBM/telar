@@ -68,6 +68,7 @@ impl Default for BorderRadius {
     }
 }
 
+/// Stroke style for shapes that have corners: paths and rects. Includes `join` to control how corners are rendered. For simple line segments (no corners), use [`LineStyle`] instead.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Stroke {
     pub color: Color,

@@ -39,6 +39,7 @@ pub enum LineCap {
     Square,
 }
 
+/// Stroke style for `DrawCommand::Line` primitives (point-to-point segments)..Does not include `join` because a single segment has no corners. For paths and rects where corners need styling, use [`Stroke`] instead.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineStyle {
     pub color: Color,

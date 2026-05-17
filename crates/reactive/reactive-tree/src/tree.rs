@@ -5,48 +5,80 @@ use platform_core::Event;
 use reactive_core::{Effect, batch, create_effect};
 use renderer_core::DrawCommand;
 
-use crate::component::{AnyComponent, Component, EventResult};
+use crate::component::{Component, EventResult};
 use crate::reconciler;
 
-pub struct ComponentTree {
-    root: Rc<RefCell<Box<dyn AnyComponent>>>,
+struct ComponentSlot {
+    component: Rc<RefCell<Box<dyn Component>>>,
     commands: Rc<RefCell<Vec<DrawCommand>>>,
     _effect: Effect,
 }
 
-impl ComponentTree {
-    pub fn new<C: Component>(component: C) -> Self {
-        component.on_mount();
-        let root: Rc<RefCell<Box<dyn AnyComponent>>> = Rc::new(RefCell::new(Box::new(component)));
-        let commands: Rc<RefCell<Vec<DrawCommand>>> = Rc::new(RefCell::new(Vec::new()));
+impl ComponentSlot {
+    fn new<C: Component + 'static>(component: C) -> Self {
+        let component = Rc::new(RefCell::new(Box::new(component) as Box<dyn Component>));
+        let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
 
-        let root_clone = Rc::clone(&root);
+        let comp_clone = Rc::clone(&component);
         let cmds_clone = Rc::clone(&commands);
-        let effect = create_effect(move || {
-            let view = root_clone.borrow().view();
+        let _effect = create_effect(move || {
+            let view = comp_clone.borrow().view();
             let flat = reconciler::flatten(view);
-            *cmds_clone.borrow_mut() = flat;
+            let mut cmds = cmds_clone.borrow_mut();
+            cmds.clear();
+            cmds.extend(flat);
         });
 
-        ComponentTree {
-            root,
+        ComponentSlot {
+            component,
             commands,
-            _effect: effect,
+            _effect,
+        }
+    }
+}
+
+pub struct ComponentTree {
+    slots: Vec<ComponentSlot>,
+}
+
+impl ComponentTree {
+    pub fn new<C: Component + 'static>(component: C) -> Self {
+        component.on_mount();
+        Self {
+            slots: vec![ComponentSlot::new(component)],
         }
     }
 
+    pub fn add<C: Component + 'static>(&mut self, component: C) {
+        component.on_mount();
+        self.slots.push(ComponentSlot::new(component));
+    }
+
     pub fn commands(&self) -> Vec<DrawCommand> {
-        self.commands.borrow().clone()
+        self.slots
+            .iter()
+            .flat_map(|s| s.commands.borrow().clone())
+            .collect()
     }
 
     pub fn on_event(&mut self, event: &Event) -> EventResult {
-        batch(|| self.root.borrow_mut().on_event(event))
+        batch(|| {
+            for slot in &mut self.slots {
+                let result = slot.component.borrow_mut().on_event(event);
+                if result == EventResult::Handled {
+                    return EventResult::Handled;
+                }
+            }
+            EventResult::Ignored
+        })
     }
 }
 
 impl Drop for ComponentTree {
     fn drop(&mut self) {
-        self.root.borrow().on_unmount();
+        for slot in &self.slots {
+            slot.component.borrow().on_unmount();
+        }
     }
 }
 
