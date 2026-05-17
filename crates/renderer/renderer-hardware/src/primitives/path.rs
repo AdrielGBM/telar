@@ -124,7 +124,7 @@ fn build_lyon_path(data: &PathData) -> Path {
     let mut builder = Path::builder();
     let mut in_path = false;
 
-    for verb in &data.verbs {
+    for verb in data.verbs() {
         match verb {
             PathVerb::MoveTo(p) => {
                 if in_path {

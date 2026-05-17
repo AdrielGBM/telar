@@ -31,7 +31,10 @@ impl<T: Clone + 'static> ReadSignal<T> {
 impl<T: 'static> ReadSignal<T> {
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         track(&self.inner);
-        f(&self.inner.borrow().value)
+        let borrow = self.inner.borrow();
+        let result = f(&borrow.value);
+        drop(borrow);
+        result
     }
 }
 
@@ -54,7 +57,9 @@ impl<T: 'static> WriteSignal<T> {
     }
 
     pub fn update(&self, f: impl FnOnce(&mut T)) {
-        f(&mut self.inner.borrow_mut().value);
+        let mut borrow = self.inner.borrow_mut();
+        f(&mut borrow.value);
+        drop(borrow);
         notify(&self.inner);
     }
 }
@@ -87,13 +92,18 @@ impl<T: 'static> RwSignal<T> {
     }
 
     pub fn update(&self, f: impl FnOnce(&mut T)) {
-        f(&mut self.inner.borrow_mut().value);
+        let mut borrow = self.inner.borrow_mut();
+        f(&mut borrow.value);
+        drop(borrow);
         notify(&self.inner);
     }
 
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         track(&self.inner);
-        f(&self.inner.borrow().value)
+        let borrow = self.inner.borrow();
+        let result = f(&borrow.value);
+        drop(borrow);
+        result
     }
 
     pub fn read_only(&self) -> ReadSignal<T> {

@@ -4,7 +4,7 @@ use crate::renderer::to_skia_color;
 
 fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
     let mut pb = tiny_skia::PathBuilder::new();
-    for verb in &data.verbs {
+    for verb in data.verbs() {
         match verb {
             PathVerb::MoveTo(p) => pb.move_to(p.x, p.y),
             PathVerb::LineTo(p) => pb.line_to(p.x, p.y),

@@ -116,12 +116,16 @@ pub enum PathVerb {
 
 #[derive(Debug, Clone, Default)]
 pub struct PathData {
-    pub verbs: Vec<PathVerb>,
+    pub(crate) verbs: Vec<PathVerb>,
 }
 
 impl PathData {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn verbs(&self) -> &[PathVerb] {
+        &self.verbs
     }
 
     pub fn move_to(mut self, p: Point) -> Self {
@@ -262,14 +266,14 @@ mod tests {
     #[test]
     fn path_data_new_is_empty() {
         let path = PathData::new();
-        assert!(path.verbs.is_empty());
+        assert!(path.verbs().is_empty());
     }
 
     #[test]
     fn path_data_move_to_adds_verb() {
         let path = PathData::new().move_to(Point::new(0.0, 0.0));
-        assert_eq!(path.verbs.len(), 1);
-        assert!(matches!(path.verbs[0], PathVerb::MoveTo(_)));
+        assert_eq!(path.verbs().len(), 1);
+        assert!(matches!(path.verbs()[0], PathVerb::MoveTo(_)));
     }
 
     #[test]
@@ -277,20 +281,20 @@ mod tests {
         let path = PathData::new()
             .move_to(Point::new(0.0, 0.0))
             .line_to(Point::new(1.0, 1.0));
-        assert_eq!(path.verbs.len(), 2);
-        assert!(matches!(path.verbs[1], PathVerb::LineTo(_)));
+        assert_eq!(path.verbs().len(), 2);
+        assert!(matches!(path.verbs()[1], PathVerb::LineTo(_)));
     }
 
     #[test]
     fn path_data_close_adds_verb() {
         let path = PathData::new().move_to(Point::new(0.0, 0.0)).close();
-        assert!(matches!(path.verbs.last().unwrap(), PathVerb::Close));
+        assert!(matches!(path.verbs().last().unwrap(), PathVerb::Close));
     }
 
     #[test]
     fn path_data_quad_to_adds_verb() {
         let path = PathData::new().quad_to(Point::new(1.0, 0.0), Point::new(2.0, 0.0));
-        assert!(matches!(path.verbs[0], PathVerb::QuadTo { .. }));
+        assert!(matches!(path.verbs()[0], PathVerb::QuadTo { .. }));
     }
 
     #[test]
@@ -300,7 +304,7 @@ mod tests {
             Point::new(2.0, 0.0),
             Point::new(3.0, 0.0),
         );
-        assert!(matches!(path.verbs[0], PathVerb::CubicTo { .. }));
+        assert!(matches!(path.verbs()[0], PathVerb::CubicTo { .. }));
     }
 
     #[test]
@@ -310,6 +314,6 @@ mod tests {
             .line_to(Point::new(1.0, 0.0))
             .line_to(Point::new(1.0, 1.0))
             .close();
-        assert_eq!(path.verbs.len(), 4);
+        assert_eq!(path.verbs().len(), 4);
     }
 }

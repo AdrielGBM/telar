@@ -15,6 +15,7 @@ struct Runtime {
     pending: Vec<EffectId>,
     pending_set: HashSet<EffectId>,
     on_flush: Option<Rc<dyn Fn()>>,
+    flushing: bool,
 }
 
 thread_local! {
@@ -25,6 +26,7 @@ thread_local! {
         pending: Vec::new(),
         pending_set: HashSet::new(),
         on_flush: None,
+        flushing: false,
     });
 }
 
@@ -46,13 +48,17 @@ pub(crate) fn register_effect(f: Rc<dyn Fn()>) -> EffectId {
 }
 
 pub(crate) fn deregister_effect(id: EffectId) {
-    RUNTIME.with(|rt| {
+    let removed = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        if rt.effects.contains(id) {
-            rt.effects.remove(id);
-        }
+        let removed = if rt.effects.contains(id) {
+            Some(rt.effects.remove(id))
+        } else {
+            None
+        };
         rt.pending_set.remove(&id);
+        removed
     });
+    drop(removed);
 }
 
 pub(crate) fn is_alive(id: EffectId) -> bool {
@@ -66,7 +72,7 @@ pub(crate) fn schedule(id: EffectId) {
         if alive && rt.pending_set.insert(id) {
             rt.pending.push(id);
         }
-        rt.batch_depth == 0
+        rt.batch_depth == 0 && !rt.flushing
     });
     if should_flush {
         flush();
@@ -88,31 +94,42 @@ pub(crate) fn run_effect(id: EffectId) {
 const MAX_FLUSH_ITERATIONS: usize = 1_000;
 
 fn flush() {
-    let mut did_work = false;
-    for _ in 0..MAX_FLUSH_ITERATIONS {
-        let pending = RUNTIME.with(|rt| {
-            let mut rt = rt.borrow_mut();
-            rt.pending_set.clear();
-            std::mem::take(&mut rt.pending)
-        });
-        if pending.is_empty() {
-            if did_work {
-                let cb = RUNTIME.with(|rt| rt.borrow().on_flush.as_ref().map(Rc::clone));
-                if let Some(cb) = cb {
-                    cb();
+    RUNTIME.with(|rt| rt.borrow_mut().flushing = true);
+
+    let should_panic = {
+        let mut did_work = false;
+        for _ in 0..MAX_FLUSH_ITERATIONS {
+            let pending = RUNTIME.with(|rt| {
+                let mut rt = rt.borrow_mut();
+                rt.pending_set.clear();
+                std::mem::take(&mut rt.pending)
+            });
+            if pending.is_empty() {
+                if did_work {
+                    let cb = RUNTIME.with(|rt| rt.borrow().on_flush.as_ref().map(Rc::clone));
+                    if let Some(cb) = cb {
+                        cb();
+                    }
                 }
+                RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
+                return;
             }
-            return;
+            did_work = true;
+            for id in pending {
+                run_effect(id);
+            }
         }
-        did_work = true;
-        for id in pending {
-            run_effect(id);
-        }
+        true
+    };
+
+    RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
+
+    if should_panic {
+        panic!(
+            "reactive flush exceeded {MAX_FLUSH_ITERATIONS} iterations — \
+             likely an effect is writing to a signal it depends on"
+        );
     }
-    panic!(
-        "reactive flush exceeded {MAX_FLUSH_ITERATIONS} iterations — \
-         likely an effect is writing to a signal it depends on"
-    );
 }
 
 pub fn batch<R>(f: impl FnOnce() -> R) -> R {

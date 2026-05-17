@@ -80,31 +80,36 @@ impl LayoutEngine {
     where
         F: FnMut(NodeId, renderer_core::Rect),
     {
-        self.walk_recursive(root, 0.0, 0.0, f)
-    }
+        struct StackEntry {
+            node: NodeId,
+            offset_x: f32,
+            offset_y: f32,
+        }
 
-    fn walk_recursive<F>(
-        &self,
-        node: NodeId,
-        offset_x: f32,
-        offset_y: f32,
-        f: &mut F,
-    ) -> Result<(), LayoutError>
-    where
-        F: FnMut(NodeId, renderer_core::Rect),
-    {
-        let layout = self.tree.layout(node).map_err(LayoutError::from)?;
-        let abs_x = offset_x + layout.location.x;
-        let abs_y = offset_y + layout.location.y;
+        let mut stack = vec![StackEntry {
+            node: root,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        }];
 
-        f(
-            node,
-            renderer_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
-        );
+        while let Some(entry) = stack.pop() {
+            let layout = self.tree.layout(entry.node).map_err(LayoutError::from)?;
+            let abs_x = entry.offset_x + layout.location.x;
+            let abs_y = entry.offset_y + layout.location.y;
 
-        let children = self.tree.children(node).map_err(LayoutError::from)?;
-        for child in children {
-            self.walk_recursive(child, abs_x, abs_y, f)?;
+            f(
+                entry.node,
+                renderer_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
+            );
+
+            let children = self.tree.children(entry.node).map_err(LayoutError::from)?;
+            for child in children.into_iter().rev() {
+                stack.push(StackEntry {
+                    node: child,
+                    offset_x: abs_x,
+                    offset_y: abs_y,
+                });
+            }
         }
         Ok(())
     }
