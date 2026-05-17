@@ -1,6 +1,6 @@
 use platform_core::{Event, EventHandler, Platform, Window, WindowConfig};
 use platform_winit::{WinitPlatform, WinitWindow};
-use reactive_core::set_flush_notify;
+use reactive_core::{FlushNotifyHandle, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
 use renderer_software::SoftwareRenderer;
@@ -29,6 +29,7 @@ struct AppHandler<A: App> {
     prefs: UserPrefs,
     pending_restart: bool,
     redraw_requested: bool,
+    _flush_notify: Option<FlushNotifyHandle>,
 }
 
 impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
@@ -47,7 +48,7 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         }
 
         let w = window.clone();
-        set_flush_notify(move || w.request_redraw());
+        self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
         window.request_redraw();
         true
     }
@@ -149,6 +150,7 @@ pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
             prefs,
             pending_restart: false,
             redraw_requested: false,
+            _flush_notify: None,
         },
     ) {
         eprintln!("[rsx] event loop exited with error: {e}");

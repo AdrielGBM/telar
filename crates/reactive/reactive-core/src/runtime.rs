@@ -14,7 +14,8 @@ struct Runtime {
     batch_depth: usize,
     pending: Vec<EffectId>,
     pending_set: HashSet<EffectId>,
-    on_flush: Option<Rc<dyn Fn()>>,
+    on_flush: Vec<(u64, Rc<dyn Fn()>)>,
+    next_flush_notify_id: u64,
     flushing: bool,
 }
 
@@ -25,15 +26,38 @@ thread_local! {
         batch_depth: 0,
         pending: Vec::new(),
         pending_set: HashSet::new(),
-        on_flush: None,
+        on_flush: Vec::new(),
+        next_flush_notify_id: 0,
         flushing: false,
     });
 }
 
-pub fn set_flush_notify(f: impl Fn() + 'static) {
+pub struct FlushNotifyHandle {
+    id: u64,
+}
+
+impl Drop for FlushNotifyHandle {
+    fn drop(&mut self) {
+        deregister_flush_notify(self.id);
+    }
+}
+
+fn deregister_flush_notify(id: u64) {
     RUNTIME.with(|rt| {
-        rt.borrow_mut().on_flush = Some(Rc::new(f));
+        rt.borrow_mut()
+            .on_flush
+            .retain(|(entry_id, _)| *entry_id != id);
     });
+}
+
+pub fn set_flush_notify(f: impl Fn() + 'static) -> FlushNotifyHandle {
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let id = rt.next_flush_notify_id;
+        rt.next_flush_notify_id += 1;
+        rt.on_flush.push((id, Rc::new(f)));
+        FlushNotifyHandle { id }
+    })
 }
 
 pub(crate) fn current_observer() -> Option<EffectId> {
@@ -106,8 +130,14 @@ fn flush() {
             });
             if pending.is_empty() {
                 if did_work {
-                    let cb = RUNTIME.with(|rt| rt.borrow().on_flush.as_ref().map(Rc::clone));
-                    if let Some(cb) = cb {
+                    let cbs: Vec<Rc<dyn Fn()>> = RUNTIME.with(|rt| {
+                        rt.borrow()
+                            .on_flush
+                            .iter()
+                            .map(|(_, cb)| Rc::clone(cb))
+                            .collect()
+                    });
+                    for cb in cbs {
                         cb();
                     }
                 }

@@ -1,32 +1,3 @@
-macro_rules! flush_batch {
-    ($self:expr, $start_field:ident, $vec_field:ident, $variant:ident) => {
-        if let Some(start) = $self.$start_field.take() {
-            let end = $self.$vec_field.len() as u32;
-            if end > start {
-                $self.pending_steps.push(DrawStep::$variant { start, end });
-            }
-        }
-    };
-}
-
-macro_rules! flush_image_batch {
-    ($self:expr) => {
-        if let (Some(start), Some(bind_group)) = (
-            $self.batch_image_start.take(),
-            $self.batch_image_bind_group.take(),
-        ) {
-            let end = $self.pending_image_instances.len() as u32;
-            if end > start {
-                $self.pending_steps.push(DrawStep::ImageBatch {
-                    start,
-                    end,
-                    bind_group,
-                });
-            }
-        }
-    };
-}
-
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, ImageFilter, Rect, RenderBackend, RendererError};
 
@@ -90,6 +61,41 @@ enum DrawStep {
     },
 }
 
+#[inline]
+fn flush_batch(
+    pending_steps: &mut Vec<DrawStep>,
+    batch_start: &mut Option<u32>,
+    vec_len: u32,
+    variant: impl Fn(u32, u32) -> DrawStep,
+) {
+    if let Some(start) = batch_start.take() {
+        if vec_len > start {
+            pending_steps.push(variant(start, vec_len));
+        }
+    }
+}
+
+#[inline]
+fn flush_image_batch(
+    pending_steps: &mut Vec<DrawStep>,
+    batch_image_start: &mut Option<u32>,
+    batch_image_bind_group: &mut Option<wgpu::BindGroup>,
+    pending_image_instances_len: u32,
+) {
+    if let (Some(start), Some(bind_group)) =
+        (batch_image_start.take(), batch_image_bind_group.take())
+    {
+        if pending_image_instances_len > start {
+            pending_steps.push(DrawStep::ImageBatch {
+                start,
+                end: pending_image_instances_len,
+                bind_group,
+            });
+        }
+    }
+}
+
+/// A hardware-accelerated renderer using wgpu. The `W: Send + Sync + 'static` bound is a wgpu requirement for surface creation, not an indication that this renderer is thread-safe. The renderer must only be used on the main thread alongside the reactive runtime; it is not safe to move between threads.
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
     surface: Surface<'static>,
     device: Device,
@@ -278,19 +284,39 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn flush_rect(&mut self) {
-        flush_batch!(self, batch_rect_start, pending_instances, RectBatch);
+        flush_batch(
+            &mut self.pending_steps,
+            &mut self.batch_rect_start,
+            self.pending_instances.len() as u32,
+            |start, end| DrawStep::RectBatch { start, end },
+        );
     }
 
     fn flush_text(&mut self) {
-        flush_batch!(self, batch_text_start, pending_text_instances, TextBatch);
+        flush_batch(
+            &mut self.pending_steps,
+            &mut self.batch_text_start,
+            self.pending_text_instances.len() as u32,
+            |start, end| DrawStep::TextBatch { start, end },
+        );
     }
 
     fn flush_line(&mut self) {
-        flush_batch!(self, batch_line_start, pending_line_instances, LineBatch);
+        flush_batch(
+            &mut self.pending_steps,
+            &mut self.batch_line_start,
+            self.pending_line_instances.len() as u32,
+            |start, end| DrawStep::LineBatch { start, end },
+        );
     }
 
     fn flush_image(&mut self) {
-        flush_image_batch!(self);
+        flush_image_batch(
+            &mut self.pending_steps,
+            &mut self.batch_image_start,
+            &mut self.batch_image_bind_group,
+            self.pending_image_instances.len() as u32,
+        );
     }
 
     fn flush_all(&mut self) {

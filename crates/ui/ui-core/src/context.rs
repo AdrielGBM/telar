@@ -17,20 +17,22 @@ impl WidgetCtx {
         }
     }
 
-    pub fn register_leaf(&mut self, style: LayoutStyle) -> (NodeId, ReadSignal<Rect>) {
-        let node = self
-            .engine
-            .new_leaf(style)
-            .expect("bug: taffy failed to add leaf node");
+    pub fn register_leaf(
+        &mut self,
+        style: LayoutStyle,
+    ) -> Result<(NodeId, ReadSignal<Rect>), LayoutError> {
+        let node = self.engine.new_leaf(style)?;
         let signal = create_rw_signal(Rect::default());
         self.registry.insert(node, signal.clone());
-        (node, signal.read_only())
+        Ok((node, signal.read_only()))
     }
 
-    pub fn new_container(&mut self, style: LayoutStyle, children: &[NodeId]) -> NodeId {
-        self.engine
-            .new_container(style, children)
-            .expect("bug: taffy failed to add container node")
+    pub fn new_container(
+        &mut self,
+        style: LayoutStyle,
+        children: &[NodeId],
+    ) -> Result<NodeId, LayoutError> {
+        self.engine.new_container(style, children)
     }
 
     pub fn compute(&mut self, root: NodeId, width: f32, height: f32) -> Result<(), LayoutError> {
@@ -72,18 +74,22 @@ mod tests {
     #[test]
     fn ctx_register_leaf_returns_zero_rect() {
         let mut ctx = WidgetCtx::new();
-        let (_node, rect) = ctx.register_leaf(LayoutStyle::new());
+        let (_node, rect) = ctx.register_leaf(LayoutStyle::new()).unwrap();
         assert_eq!(rect.get(), Rect::default());
     }
 
     #[test]
     fn ctx_compute_updates_rect() {
         let mut ctx = WidgetCtx::new();
-        let (leaf, rect) = ctx.register_leaf(LayoutStyle::new().width(100.0).height(50.0));
-        let root = ctx.new_container(
-            LayoutStyle::new().flex_row().width(200.0).height(100.0),
-            &[leaf],
-        );
+        let (leaf, rect) = ctx
+            .register_leaf(LayoutStyle::new().width(100.0).height(50.0))
+            .unwrap();
+        let root = ctx
+            .new_container(
+                LayoutStyle::new().flex_row().width(200.0).height(100.0),
+                &[leaf],
+            )
+            .unwrap();
         ctx.compute(root, 200.0, 100.0).unwrap();
         assert_eq!(rect.get().w, 100.0);
         assert_eq!(rect.get().h, 50.0);

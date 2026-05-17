@@ -501,18 +501,22 @@ fn main() {
     let alpha_image = Rc::new(make_radial_alpha(128, 128));
 
     let mut widget_ctx = WidgetCtx::new();
-    let (label_node, label_rect) = widget_ctx.register_leaf(LayoutStyle::new().height(24.0));
-    let btn_inc = Button::new("+", &mut widget_ctx);
-    let btn_dec = Button::new("-", &mut widget_ctx);
-    let widget_root = widget_ctx.new_container(
-        LayoutStyle::new()
-            .flex_column()
-            .width(PANEL_W)
-            .height(PANEL_H)
-            .padding_all(8.0)
-            .gap(8.0),
-        &[label_node, btn_inc.layout_node(), btn_dec.layout_node()],
-    );
+    let (label_node, label_rect) = widget_ctx
+        .register_leaf(LayoutStyle::new().height(24.0))
+        .expect("layout failed");
+    let btn_inc = Button::new("+", &mut widget_ctx).expect("layout failed");
+    let btn_dec = Button::new("-", &mut widget_ctx).expect("layout failed");
+    let widget_root = widget_ctx
+        .new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(PANEL_W)
+                .height(PANEL_H)
+                .padding_all(8.0)
+                .gap(8.0),
+            &[label_node, btn_inc.layout_node(), btn_dec.layout_node()],
+        )
+        .expect("layout failed");
     widget_ctx
         .compute(widget_root, PANEL_W, PANEL_H)
         .expect("layout failed");

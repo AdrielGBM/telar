@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use layout_core::{LayoutStyle, NodeId};
+use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, PointerButton};
 use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
 use reactive_tree::{Component, EventResult, View};
@@ -20,9 +20,9 @@ pub struct Button {
 }
 
 impl Button {
-    pub fn new(label: impl Into<String>, ctx: &mut WidgetCtx) -> Self {
-        let (node, rect) = ctx.register_leaf(LayoutStyle::new().height(36.0));
-        Self {
+    pub fn new(label: impl Into<String>, ctx: &mut WidgetCtx) -> Result<Self, LayoutError> {
+        let (node, rect) = ctx.register_leaf(LayoutStyle::new().height(36.0))?;
+        Ok(Self {
             label: Rc::from(label.into()),
             layout_node: node,
             rect,
@@ -31,7 +31,7 @@ impl Button {
             text_style: TextStyle::new(14.0, Color::WHITE),
             on_click: None,
             hovered: create_rw_signal(false),
-        }
+        })
     }
 
     pub fn on_click(mut self, f: impl Fn() + 'static) -> Self {
@@ -78,7 +78,7 @@ impl Component for Button {
         let rect = self.rect.get();
         match event {
             Event::PointerMoved { x, y, .. } => {
-                let now = point_in_rect(*x as f32, *y as f32, rect);
+                let now = rect.contains(*x as f32, *y as f32);
                 if now != self.hovered.get() {
                     self.hovered.set(now);
                     EventResult::Handled
@@ -92,7 +92,7 @@ impl Component for Button {
                 button: PointerButton::Primary,
                 ..
             } => {
-                if point_in_rect(*x as f32, *y as f32, rect) {
+                if rect.contains(*x as f32, *y as f32) {
                     if let Some(cb) = &self.on_click {
                         cb();
                     }
@@ -104,10 +104,6 @@ impl Component for Button {
             _ => EventResult::Ignored,
         }
     }
-}
-
-fn point_in_rect(x: f32, y: f32, rect: Rect) -> bool {
-    x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h
 }
 
 #[cfg(test)]
@@ -123,14 +119,16 @@ mod tests {
 
     fn make_button_with_rect() -> (Button, WidgetCtx) {
         let mut ctx = WidgetCtx::new();
-        let button = Button::new("OK", &mut ctx);
-        let root = ctx.new_container(
-            layout_core::LayoutStyle::new()
-                .flex_column()
-                .width(200.0)
-                .height(100.0),
-            &[button.layout_node()],
-        );
+        let button = Button::new("OK", &mut ctx).unwrap();
+        let root = ctx
+            .new_container(
+                layout_core::LayoutStyle::new()
+                    .flex_column()
+                    .width(200.0)
+                    .height(100.0),
+                &[button.layout_node()],
+            )
+            .unwrap();
         ctx.compute(root, 200.0, 100.0).unwrap();
         (button, ctx)
     }
@@ -188,14 +186,18 @@ mod tests {
         let mut ctx = WidgetCtx::new();
         let flag = Rc::new(Cell::new(false));
         let flag_clone = flag.clone();
-        let button = Button::new("OK", &mut ctx).on_click(move || flag_clone.set(true));
-        let root = ctx.new_container(
-            layout_core::LayoutStyle::new()
-                .flex_column()
-                .width(200.0)
-                .height(100.0),
-            &[button.layout_node()],
-        );
+        let button = Button::new("OK", &mut ctx)
+            .unwrap()
+            .on_click(move || flag_clone.set(true));
+        let root = ctx
+            .new_container(
+                layout_core::LayoutStyle::new()
+                    .flex_column()
+                    .width(200.0)
+                    .height(100.0),
+                &[button.layout_node()],
+            )
+            .unwrap();
         ctx.compute(root, 200.0, 100.0).unwrap();
         let mut button = button;
 
@@ -215,14 +217,18 @@ mod tests {
         let flag = Rc::new(Cell::new(false));
         let flag_clone = flag.clone();
         let mut ctx = WidgetCtx::new();
-        let button = Button::new("OK", &mut ctx).on_click(move || flag_clone.set(true));
-        let root = ctx.new_container(
-            layout_core::LayoutStyle::new()
-                .flex_column()
-                .width(200.0)
-                .height(100.0),
-            &[button.layout_node()],
-        );
+        let button = Button::new("OK", &mut ctx)
+            .unwrap()
+            .on_click(move || flag_clone.set(true));
+        let root = ctx
+            .new_container(
+                layout_core::LayoutStyle::new()
+                    .flex_column()
+                    .width(200.0)
+                    .height(100.0),
+                &[button.layout_node()],
+            )
+            .unwrap();
         ctx.compute(root, 200.0, 100.0).unwrap();
         let mut button = button;
 

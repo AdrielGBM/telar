@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use layout_core::{LayoutStyle, NodeId};
+use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::ReadSignal;
 use reactive_tree::{Component, EventResult, View};
@@ -16,14 +16,12 @@ pub struct Label {
 }
 
 impl Label {
-    pub fn new(text: impl Into<String>, style: TextStyle, ctx: &mut WidgetCtx) -> Self {
-        let (node, rect) = ctx.register_leaf(LayoutStyle::new());
-        Self {
-            text: Rc::from(text.into()),
-            style,
-            layout_node: node,
-            rect,
-        }
+    pub fn new(
+        text: impl Into<String>,
+        style: TextStyle,
+        ctx: &mut WidgetCtx,
+    ) -> Result<Self, LayoutError> {
+        Self::build(text, LayoutStyle::new(), style, ctx)
     }
 
     pub fn with_size(
@@ -32,14 +30,28 @@ impl Label {
         height: f32,
         style: TextStyle,
         ctx: &mut WidgetCtx,
-    ) -> Self {
-        let (node, rect) = ctx.register_leaf(LayoutStyle::new().width(width).height(height));
-        Self {
+    ) -> Result<Self, LayoutError> {
+        Self::build(
+            text,
+            LayoutStyle::new().width(width).height(height),
+            style,
+            ctx,
+        )
+    }
+
+    fn build(
+        text: impl Into<String>,
+        layout_style: LayoutStyle,
+        style: TextStyle,
+        ctx: &mut WidgetCtx,
+    ) -> Result<Self, LayoutError> {
+        let (node, rect) = ctx.register_leaf(layout_style)?;
+        Ok(Self {
             text: Rc::from(text.into()),
             style,
             layout_node: node,
             rect,
-        }
+        })
     }
 
     pub fn layout_node(&self) -> NodeId {
@@ -72,7 +84,7 @@ mod tests {
     #[test]
     fn label_view_returns_text_command() {
         let mut ctx = WidgetCtx::new();
-        let label = Label::new("Hello", TextStyle::new(16.0, Color::WHITE), &mut ctx);
+        let label = Label::new("Hello", TextStyle::new(16.0, Color::WHITE), &mut ctx).unwrap();
         let view = label.view();
         assert!(matches!(view, View::Primitive(DrawCommand::Text { .. })));
     }
@@ -86,14 +98,17 @@ mod tests {
             40.0,
             TextStyle::new(14.0, Color::BLACK),
             &mut ctx,
-        );
-        let root = ctx.new_container(
-            layout_core::LayoutStyle::new()
-                .flex_row()
-                .width(200.0)
-                .height(100.0),
-            &[label.layout_node()],
-        );
+        )
+        .unwrap();
+        let root = ctx
+            .new_container(
+                layout_core::LayoutStyle::new()
+                    .flex_row()
+                    .width(200.0)
+                    .height(100.0),
+                &[label.layout_node()],
+            )
+            .unwrap();
         ctx.compute(root, 200.0, 100.0).unwrap();
 
         let view = label.view();
