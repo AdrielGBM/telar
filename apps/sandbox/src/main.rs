@@ -496,6 +496,7 @@ impl App for Sandbox {
 }
 
 fn main() {
+    tracing_subscriber::fmt::init();
     let gradient_image = Rc::new(make_gradient(128, 128));
     let checker_image = Rc::new(make_checker(128, 128, 16));
     let alpha_image = Rc::new(make_radial_alpha(128, 128));

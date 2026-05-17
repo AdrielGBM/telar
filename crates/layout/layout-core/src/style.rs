@@ -1,7 +1,48 @@
-use taffy::{
-    AlignItems, Dimension, Display, FlexDirection, JustifyContent, LengthPercentage,
-    LengthPercentageAuto, Style,
-};
+use taffy::{Dimension, Display, FlexDirection, LengthPercentage, LengthPercentageAuto, Style};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlignItems {
+    Start,
+    End,
+    Center,
+    Stretch,
+    Baseline,
+}
+
+impl From<AlignItems> for taffy::AlignItems {
+    fn from(v: AlignItems) -> Self {
+        match v {
+            AlignItems::Start => taffy::AlignItems::Start,
+            AlignItems::End => taffy::AlignItems::End,
+            AlignItems::Center => taffy::AlignItems::Center,
+            AlignItems::Stretch => taffy::AlignItems::Stretch,
+            AlignItems::Baseline => taffy::AlignItems::Baseline,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JustifyContent {
+    Start,
+    End,
+    Center,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+impl From<JustifyContent> for taffy::JustifyContent {
+    fn from(v: JustifyContent) -> Self {
+        match v {
+            JustifyContent::Start => taffy::JustifyContent::Start,
+            JustifyContent::End => taffy::JustifyContent::End,
+            JustifyContent::Center => taffy::JustifyContent::Center,
+            JustifyContent::SpaceBetween => taffy::JustifyContent::SpaceBetween,
+            JustifyContent::SpaceAround => taffy::JustifyContent::SpaceAround,
+            JustifyContent::SpaceEvenly => taffy::JustifyContent::SpaceEvenly,
+        }
+    }
+}
 
 pub struct LayoutStyle {
     pub(crate) inner: Style,
@@ -87,23 +128,13 @@ impl LayoutStyle {
         self
     }
 
-    pub fn align_items_center(mut self) -> Self {
-        self.inner.align_items = Some(AlignItems::Center);
+    pub fn align_items(mut self, value: AlignItems) -> Self {
+        self.inner.align_items = Some(value.into());
         self
     }
 
-    pub fn align_items_stretch(mut self) -> Self {
-        self.inner.align_items = Some(AlignItems::Stretch);
-        self
-    }
-
-    pub fn justify_center(mut self) -> Self {
-        self.inner.justify_content = Some(JustifyContent::Center);
-        self
-    }
-
-    pub fn justify_space_between(mut self) -> Self {
-        self.inner.justify_content = Some(JustifyContent::SpaceBetween);
+    pub fn justify_content(mut self, value: JustifyContent) -> Self {
+        self.inner.justify_content = Some(value.into());
         self
     }
 }
@@ -150,14 +181,17 @@ mod tests {
 
     #[test]
     fn style_align_items_center_sets_field() {
-        let style = LayoutStyle::new().align_items_center();
-        assert_eq!(style.inner.align_items, Some(AlignItems::Center));
+        let style = LayoutStyle::new().align_items(AlignItems::Center);
+        assert_eq!(style.inner.align_items, Some(taffy::AlignItems::Center));
     }
 
     #[test]
     fn style_justify_center_sets_field() {
-        let style = LayoutStyle::new().justify_center();
-        assert_eq!(style.inner.justify_content, Some(JustifyContent::Center));
+        let style = LayoutStyle::new().justify_content(JustifyContent::Center);
+        assert_eq!(
+            style.inner.justify_content,
+            Some(taffy::JustifyContent::Center)
+        );
     }
 
     #[test]

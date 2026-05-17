@@ -25,7 +25,7 @@ impl<'a> AppContext<'a> {
         self.prefs.renderer.backend = Some(backend);
         *self.pending_restart = true;
         if let Err(e) = self.prefs.save(self.app_name) {
-            eprintln!("[rsx] Warning: could not save preferences: {e}");
+            tracing::warn!("Could not save preferences: {e}");
         }
     }
 
@@ -33,7 +33,7 @@ impl<'a> AppContext<'a> {
         self.prefs.renderer.backend = None;
         *self.pending_restart = true;
         if let Err(e) = self.prefs.save(self.app_name) {
-            eprintln!("[rsx] Warning: could not save preferences: {e}");
+            tracing::warn!("Could not save preferences: {e}");
         }
     }
 }

@@ -37,13 +37,13 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         match create_renderer(self.backend, window) {
             Ok(renderer) => self.renderer = Some(renderer),
             Err(e) => {
-                eprintln!("[rsx] Failed to initialize renderer: {e}");
+                tracing::error!("Failed to initialize renderer: {e}");
                 return false;
             }
         }
         self.redraw_requested = false;
         if let Err(e) = self.app.on_resume(&mut make_ctx!(self)) {
-            eprintln!("[rsx] App::on_resume failed: {e}");
+            tracing::error!("App::on_resume failed: {e}");
             return false;
         }
 
@@ -71,7 +71,7 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
                 .unwrap_or_else(config::compile_time_backend);
             match create_renderer(self.backend, window) {
                 Ok(renderer) => self.renderer = Some(renderer),
-                Err(e) => eprintln!("[rsx] Failed to switch renderer: {e}"),
+                Err(e) => tracing::error!("Failed to switch renderer: {e}"),
             }
         }
 
@@ -79,7 +79,7 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
             return;
         };
         if let Err(e) = renderer.begin_frame(window.width(), window.height()) {
-            eprintln!("[rsx] begin_frame failed: {e}");
+            tracing::error!("begin_frame failed: {e}");
             return;
         }
         self.redraw_requested = false;
@@ -90,7 +90,7 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         let clear = frame.clear_color;
         renderer.as_mut().submit(&commands);
         if let Err(e) = renderer.as_mut().end_frame(clear) {
-            eprintln!("[rsx] end_frame failed: {e}");
+            tracing::error!("end_frame failed: {e}");
         }
         if self.redraw_requested {
             window.request_redraw();
@@ -110,23 +110,23 @@ fn create_renderer(
     match backend {
         RendererBackend::Auto => match HardwareRenderer::new(window.clone()) {
             Ok(renderer) => {
-                eprintln!("[rsx] Using hardware renderer");
+                tracing::info!("Using hardware renderer");
                 Ok(Box::new(renderer))
             }
             Err(e) => {
-                eprintln!(
-                    "[rsx] Hardware renderer unavailable ({e}), falling back to software renderer"
+                tracing::warn!(
+                    "Hardware renderer unavailable ({e}), falling back to software renderer"
                 );
                 SoftwareRenderer::new(window.clone(), window.clone())
                     .map(|r| Box::new(r) as Box<dyn RenderBackend>)
             }
         },
         RendererBackend::Hardware => HardwareRenderer::new(window.clone()).map(|r| {
-            eprintln!("[rsx] Using hardware renderer");
+            tracing::info!("Using hardware renderer");
             Box::new(r) as Box<dyn RenderBackend>
         }),
         RendererBackend::Software => {
-            eprintln!("[rsx] Using software renderer");
+            tracing::info!("Using software renderer");
             SoftwareRenderer::new(window.clone(), window.clone())
                 .map(|r| Box::new(r) as Box<dyn RenderBackend>)
         }
@@ -153,6 +153,6 @@ pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
             _flush_notify: None,
         },
     ) {
-        eprintln!("[rsx] event loop exited with error: {e}");
+        tracing::error!("Event loop exited with error: {e}");
     }
 }

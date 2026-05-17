@@ -16,6 +16,7 @@ impl std::fmt::Display for ServiceError {
 
 impl std::error::Error for ServiceError {}
 
+/// A registry for storing and retrieving typed services. Services are stored without `Send` bounds, making them compatible with the single-threaded reactive runtime. Services must only be accessed from the thread they were registered on.
 #[derive(Default)]
 pub struct ServiceRegistry {
     services: HashMap<TypeId, Box<dyn Any>>,

@@ -27,3 +27,4 @@ reactive-tree = { workspace = true }
 services-core = { workspace = true }
 layout-core = { workspace = true }
 ui-core = { workspace = true }
+tracing = "0.1.44"
