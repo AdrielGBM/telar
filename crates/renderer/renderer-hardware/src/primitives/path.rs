@@ -196,26 +196,26 @@ pub(crate) fn prepare_path(
                 lyon::tessellation::FillRule::NonZero
             };
             let options = FillOptions::default().with_fill_rule(lyon_fill_rule);
-            if tessellator
-                .tessellate_path(
-                    &*lyon_path,
-                    &options,
-                    &mut BuffersBuilder::new(&mut geometry, |v: FillVertex| {
-                        [v.position().x, v.position().y]
-                    }),
-                )
-                .is_ok()
-            {
-                cache.fill.insert(
-                    fill_key,
-                    CachedGeom {
-                        positions: geometry.vertices,
-                        indices: geometry.indices,
-                        last_frame: current_frame,
-                        weak: Rc::downgrade(data),
-                    },
-                );
-                cache.fill_lru.push_back((fill_key, current_frame));
+            match tessellator.tessellate_path(
+                &*lyon_path,
+                &options,
+                &mut BuffersBuilder::new(&mut geometry, |v: FillVertex| {
+                    [v.position().x, v.position().y]
+                }),
+            ) {
+                Ok(_) => {
+                    cache.fill.insert(
+                        fill_key,
+                        CachedGeom {
+                            positions: geometry.vertices,
+                            indices: geometry.indices,
+                            last_frame: current_frame,
+                            weak: Rc::downgrade(data),
+                        },
+                    );
+                    cache.fill_lru.push_back((fill_key, current_frame));
+                }
+                Err(e) => tracing::warn!("path fill tessellation failed: {e}"),
             }
         }
 
@@ -257,26 +257,26 @@ pub(crate) fn prepare_path(
                 .with_start_cap(line_cap)
                 .with_end_cap(line_cap)
                 .with_line_join(line_join);
-            if tessellator
-                .tessellate_path(
-                    &*lyon_path,
-                    &options,
-                    &mut BuffersBuilder::new(&mut geometry, |v: StrokeVertex| {
-                        [v.position().x, v.position().y]
-                    }),
-                )
-                .is_ok()
-            {
-                cache.stroke.insert(
-                    stroke_key,
-                    CachedGeom {
-                        positions: geometry.vertices,
-                        indices: geometry.indices,
-                        last_frame: current_frame,
-                        weak: Rc::downgrade(data),
-                    },
-                );
-                cache.stroke_lru.push_back((stroke_key, current_frame));
+            match tessellator.tessellate_path(
+                &*lyon_path,
+                &options,
+                &mut BuffersBuilder::new(&mut geometry, |v: StrokeVertex| {
+                    [v.position().x, v.position().y]
+                }),
+            ) {
+                Ok(_) => {
+                    cache.stroke.insert(
+                        stroke_key,
+                        CachedGeom {
+                            positions: geometry.vertices,
+                            indices: geometry.indices,
+                            last_frame: current_frame,
+                            weak: Rc::downgrade(data),
+                        },
+                    );
+                    cache.stroke_lru.push_back((stroke_key, current_frame));
+                }
+                Err(e) => tracing::warn!("path stroke tessellation failed: {e}"),
             }
         }
 

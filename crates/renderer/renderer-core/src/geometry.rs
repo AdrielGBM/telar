@@ -124,6 +124,18 @@ impl PathData {
     }
 }
 
+pub fn intersect_rects(a: Rect, b: Rect) -> Option<Rect> {
+    let x = a.x.max(b.x);
+    let y = a.y.max(b.y);
+    let right = (a.x + a.width).min(b.x + b.width);
+    let bottom = (a.y + a.height).min(b.y + b.height);
+    if right > x && bottom > y {
+        Some(Rect::new(x, y, right - x, bottom - y))
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

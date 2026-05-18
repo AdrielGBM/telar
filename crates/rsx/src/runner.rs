@@ -88,7 +88,10 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         app.on_redraw(&mut frame, &mut make_ctx!(self));
         let commands = std::mem::take(&mut frame.commands);
         let clear = frame.clear_color;
-        renderer.as_mut().submit(commands);
+        if let Err(e) = renderer.as_mut().submit(commands) {
+            tracing::error!("submit failed: {e}");
+            return;
+        }
         if let Err(e) = renderer.as_mut().end_frame(clear) {
             tracing::error!("end_frame failed: {e}");
         }

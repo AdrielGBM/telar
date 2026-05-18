@@ -1,17 +1,6 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, ImageFilter, Rect, RenderBackend, RendererError};
 
-fn intersect_rects(a: Rect, b: Rect) -> Option<Rect> {
-    let x = a.x.max(b.x);
-    let y = a.y.max(b.y);
-    let right = (a.x + a.width).min(b.x + b.width);
-    let bottom = (a.y + a.height).min(b.y + b.height);
-    if right > x && bottom > y {
-        Some(Rect::new(x, y, right - x, bottom - y))
-    } else {
-        None
-    }
-}
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
 use crate::primitives::image::{ImageInstance, ImagePipeline};
@@ -345,11 +334,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         Ok(())
     }
 
-    fn submit(&mut self, commands: Vec<DrawCommand>) {
-        let mut clip_stack: Vec<Rect> = Vec::new();
-        let mut translate_stack: Vec<(f32, f32)> = Vec::new();
-        let mut cum_tx: f32 = 0.0;
-        let mut cum_ty: f32 = 0.0;
+    fn submit(&mut self, commands: Vec<DrawCommand>) -> Result<(), RendererError> {
+        let mut state = renderer_core::DrawState::new();
 
         for cmd in commands {
             match cmd {
@@ -366,8 +352,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_rect_start.is_none() {
                         self.batch_rect_start = Some(self.pending_instances.len() as u32);
                     }
-                    let translated =
-                        Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.width, rect.height);
+                    let translated = Rect::new(
+                        rect.x + state.cum_tx,
+                        rect.y + state.cum_ty,
+                        rect.width,
+                        rect.height,
+                    );
                     let inst = crate::primitives::rect::prepare_rect(translated, &style);
                     self.pending_instances.push(inst);
                 }
@@ -378,8 +368,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_text_start.is_none() {
                         self.batch_text_start = Some(self.pending_text_instances.len() as u32);
                     }
-                    let translated =
-                        Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.width, rect.height);
+                    let translated = Rect::new(
+                        rect.x + state.cum_tx,
+                        rect.y + state.cum_ty,
+                        rect.width,
+                        rect.height,
+                    );
                     let instances = crate::primitives::text::prepare_text(
                         &mut self.text_shaper,
                         &*text,
@@ -396,8 +390,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.batch_line_start = Some(self.pending_line_instances.len() as u32);
                     }
                     use renderer_core::Point;
-                    let tp1 = Point::new(p1.x + cum_tx, p1.y + cum_ty);
-                    let tp2 = Point::new(p2.x + cum_tx, p2.y + cum_ty);
+                    let tp1 = Point::new(p1.x + state.cum_tx, p1.y + state.cum_ty);
+                    let tp2 = Point::new(p2.x + state.cum_tx, p2.y + state.cum_ty);
                     self.pending_line_instances
                         .push(crate::primitives::line::prepare_line(tp1, tp2, style));
                 }
@@ -418,8 +412,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 filter,
                             ));
                     }
-                    let translated =
-                        Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.width, rect.height);
+                    let translated = Rect::new(
+                        rect.x + state.cum_tx,
+                        rect.y + state.cum_ty,
+                        rect.width,
+                        rect.height,
+                    );
                     self.pending_image_instances
                         .push(crate::primitives::image::prepare_image(translated));
                 }
@@ -435,8 +433,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &mut self.pending_path_indices,
                     );
                     for v in &mut self.pending_path_vertices[vertex_start..] {
-                        v.position[0] += cum_tx;
-                        v.position[1] += cum_ty;
+                        v.position[0] += state.cum_tx;
+                        v.position[1] += state.cum_ty;
                     }
                     let index_end = self.pending_path_indices.len() as u32;
                     if index_end > index_start {
@@ -448,37 +446,28 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
                 DrawCommand::PushClip { rect } => {
                     self.flush_all();
-                    let effective = clip_stack
-                        .last()
-                        .and_then(|&current| intersect_rects(current, rect))
-                        .unwrap_or(rect);
-                    clip_stack.push(effective);
+                    let effective = state.push_clip(rect);
                     self.pending_steps.push(DrawStep::SetScissor {
                         rect: Some(effective),
                     });
                 }
                 DrawCommand::PopClip => {
                     self.flush_all();
-                    clip_stack.pop();
-                    self.pending_steps.push(DrawStep::SetScissor {
-                        rect: clip_stack.last().copied(),
-                    });
+                    let effective = state.pop_clip();
+                    self.pending_steps
+                        .push(DrawStep::SetScissor { rect: effective });
                 }
                 DrawCommand::PushTransform { tx, ty } => {
-                    translate_stack.push((tx, ty));
-                    cum_tx += tx;
-                    cum_ty += ty;
+                    state.push_transform(tx, ty);
                 }
                 DrawCommand::PopTransform => {
-                    if let Some((tx, ty)) = translate_stack.pop() {
-                        cum_tx -= tx;
-                        cum_ty -= ty;
-                    }
+                    state.pop_transform();
                 }
             }
         }
 
         self.flush_all();
+        Ok(())
     }
 
     fn end_frame(&mut self, clear_color: Option<Color>) -> Result<(), RendererError> {

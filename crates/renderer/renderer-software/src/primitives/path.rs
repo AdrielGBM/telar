@@ -1,6 +1,6 @@
 use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 
-use crate::renderer::to_skia_color;
+use crate::primitives::to_skia_color;
 
 fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
     let mut pb = tiny_skia::PathBuilder::new();

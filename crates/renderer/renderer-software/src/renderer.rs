@@ -9,18 +9,6 @@ use tiny_skia::Pixmap;
 
 use crate::primitives::image::ImageCache;
 
-fn intersect_rects(a: Rect, b: Rect) -> Option<Rect> {
-    let x = a.x.max(b.x);
-    let y = a.y.max(b.y);
-    let right = (a.x + a.width).min(b.x + b.width);
-    let bottom = (a.y + a.height).min(b.y + b.height);
-    if right > x && bottom > y {
-        Some(Rect::new(x, y, right - x, bottom - y))
-    } else {
-        None
-    }
-}
-
 fn build_clip_mask(rect: Rect, width: u32, height: u32) -> Option<tiny_skia::Mask> {
     let mut mask = tiny_skia::Mask::new(width, height)?;
     let x = rect.x.max(0.0);
@@ -42,16 +30,6 @@ fn build_clip_mask(rect: Rect, width: u32, height: u32) -> Option<tiny_skia::Mas
         }
     }
     Some(mask)
-}
-
-pub(crate) fn to_skia_color(color: Color) -> tiny_skia::Color {
-    tiny_skia::Color::from_rgba(
-        color.r.clamp(0.0, 1.0),
-        color.g.clamp(0.0, 1.0),
-        color.b.clamp(0.0, 1.0),
-        color.a.clamp(0.0, 1.0),
-    )
-    .expect("channels clamped to [0,1]")
 }
 
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
@@ -110,28 +88,26 @@ where
         Ok(())
     }
 
-    fn submit(&mut self, commands: Vec<DrawCommand>) {
+    fn submit(&mut self, commands: Vec<DrawCommand>) -> Result<(), RendererError> {
         self.pending_commands = commands;
+        Ok(())
     }
 
     fn end_frame(&mut self, clear_color: Option<Color>) -> Result<(), RendererError> {
         if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
-            pixmap.fill(to_skia_color(color));
+            pixmap.fill(crate::primitives::to_skia_color(color));
         }
 
         let commands = std::mem::take(&mut self.pending_commands);
 
-        let mut clip_stack: Vec<Option<Rect>> = Vec::new();
+        let mut state = renderer_core::DrawState::new();
         let mut clip_mask: Option<tiny_skia::Mask> = None;
-        let mut translate_stack: Vec<(f32, f32)> = Vec::new();
-        let mut cum_tx: f32 = 0.0;
-        let mut cum_ty: f32 = 0.0;
 
         for cmd in commands {
             let Some(pixmap) = &mut self.pixmap else {
                 break;
             };
-            let transform = tiny_skia::Transform::from_translate(cum_tx, cum_ty);
+            let transform = tiny_skia::Transform::from_translate(state.cum_tx, state.cum_ty);
             match cmd {
                 DrawCommand::Rect { rect, style } => {
                     if rect.width <= 0.0
@@ -190,30 +166,18 @@ where
                     );
                 }
                 DrawCommand::PushClip { rect } => {
-                    let effective = clip_stack
-                        .last()
-                        .copied()
-                        .flatten()
-                        .and_then(|current| intersect_rects(current, rect))
-                        .or(Some(rect));
-                    clip_stack.push(effective);
-                    clip_mask = effective.and_then(|r| build_clip_mask(r, self.width, self.height));
+                    let effective = state.push_clip(rect);
+                    clip_mask = build_clip_mask(effective, self.width, self.height);
                 }
                 DrawCommand::PopClip => {
-                    clip_stack.pop();
-                    let effective = clip_stack.last().copied().flatten();
+                    let effective = state.pop_clip();
                     clip_mask = effective.and_then(|r| build_clip_mask(r, self.width, self.height));
                 }
                 DrawCommand::PushTransform { tx, ty } => {
-                    translate_stack.push((tx, ty));
-                    cum_tx += tx;
-                    cum_ty += ty;
+                    state.push_transform(tx, ty);
                 }
                 DrawCommand::PopTransform => {
-                    if let Some((tx, ty)) = translate_stack.pop() {
-                        cum_tx -= tx;
-                        cum_ty -= ty;
-                    }
+                    state.pop_transform();
                 }
             }
         }

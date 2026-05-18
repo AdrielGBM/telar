@@ -12,3 +12,4 @@ pollster = "0.4"
 bytemuck = { version = "1.25.0", features = ["derive"] }
 renderer-text = { workspace = true }
 lyon = "1.0.19"
+tracing = "0.1.44"

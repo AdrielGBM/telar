@@ -1,6 +1,6 @@
 use renderer_core::{BorderRadius, FillStyle, Rect, RectStyle};
 
-use crate::renderer::to_skia_color;
+use crate::primitives::to_skia_color;
 
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
     let x = rect.x;

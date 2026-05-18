@@ -1,6 +1,6 @@
 use renderer_core::{LineCap, LineStyle, Point};
 
-use crate::renderer::to_skia_color;
+use crate::primitives::to_skia_color;
 
 pub(crate) fn draw_line(
     pixmap: &mut tiny_skia::Pixmap,
