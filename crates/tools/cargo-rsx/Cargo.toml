@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 serde = { workspace = true }
-toml = "1.1.2"
+toml = { workspace = true }
 rsx = { path = "../../rsx", default-features = false }

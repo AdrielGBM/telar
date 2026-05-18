@@ -7,5 +7,4 @@ edition = "2024"
 clru = "0.6.3"
 cosmic-text = "0.19.0"
 etagere = "0.3.0"
-lru = "0.18.0"
 renderer-core = { workspace = true }

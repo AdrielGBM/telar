@@ -15,7 +15,7 @@ runtime = [
 
 [dependencies]
 serde = { workspace = true }
-toml = "1.1.2"
+toml = { workspace = true }
 dirs = "6.0.0"
 platform-core = { workspace = true, optional = true }
 platform-winit = { workspace = true, optional = true }
@@ -26,4 +26,4 @@ reactive-core = { workspace = true }
 services-core = { workspace = true }
 layout-core = { workspace = true }
 ui-core = { workspace = true }
-tracing = "0.1.44"
+tracing = { workspace = true }
