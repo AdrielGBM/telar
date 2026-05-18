@@ -1,37 +1,35 @@
+use std::cell::Cell;
 use std::rc::Rc;
 
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, PointerButton};
-use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
-use renderer_core::{BorderRadius, Color, DrawCommand, Rect, RectStyle, TextStyle};
+use renderer_core::{BorderRadius, Color, DrawCommand, RectStyle, TextStyle};
 use ui_tree::{Component, EventResult, View};
 
-use crate::context;
+use crate::layout_leaf::LayoutLeaf;
 
 pub struct Button {
     label: Rc<str>,
-    layout_node: NodeId,
-    rect: ReadSignal<Rect>,
+    leaf: LayoutLeaf,
     bg: Color,
     hover_bg: Color,
     text_style: TextStyle,
     on_click: Option<Box<dyn Fn()>>,
-    // Signals here serve as state storage, not redraw triggers. Redraws are driven by the event loop (on_event → request_redraw), not by signal writes. This is intentional: view() is called imperatively each frame, not reactively.
-    hovered: RwSignal<bool>,
+    // Cell<bool> here serves as state storage, not a redraw trigger. Redraws are driven by the event loop (on_event → request_redraw), not by signal writes. This is intentional: view() is called imperatively each frame, not reactively.
+    hovered: Cell<bool>,
 }
 
 impl Button {
     pub fn new(label: impl Into<String>) -> Result<Self, LayoutError> {
-        let (node, rect) = context::register_leaf(LayoutStyle::new().height(36.0))?;
+        let leaf = LayoutLeaf::register(LayoutStyle::new().height(36.0))?;
         Ok(Self {
             label: Rc::from(label.into()),
-            layout_node: node,
-            rect,
+            leaf,
             bg: Color::from_rgb_u8(59, 130, 246),
             hover_bg: Color::from_rgb_u8(37, 99, 235),
             text_style: TextStyle::new(14.0, Color::WHITE),
             on_click: None,
-            hovered: create_rw_signal(false),
+            hovered: Cell::new(false),
         })
     }
 
@@ -47,13 +45,13 @@ impl Button {
     }
 
     pub fn layout_node(&self) -> NodeId {
-        self.layout_node
+        self.leaf.node
     }
 }
 
 impl Component for Button {
     fn view(&self) -> View {
-        let rect = self.rect.get();
+        let rect = self.leaf.rect.get();
         let color = if self.hovered.get() {
             self.hover_bg
         } else {
@@ -77,7 +75,7 @@ impl Component for Button {
 
     // NOTE: expects coords pre-adjusted to layout space; callers are responsible for subtracting any PushTransform offsets. DPI normalization (physical → logical pixels) is handled upstream by platform-winit before events are emitted.
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let rect = self.rect.get();
+        let rect = self.leaf.rect.get();
         match event {
             Event::PointerMoved { x, y, .. } => {
                 let now = rect.contains(*x as f32, *y as f32);

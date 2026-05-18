@@ -3,7 +3,8 @@ use taffy::TaffyTree;
 use crate::error::LayoutError;
 use crate::style::{AvailableSpace, LayoutStyle};
 
-pub type NodeId = taffy::NodeId;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NodeId(taffy::NodeId);
 
 pub struct LayoutEngine {
     tree: TaffyTree,
@@ -17,7 +18,10 @@ impl LayoutEngine {
     }
 
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
-        self.tree.new_leaf(style.inner).map_err(LayoutError::from)
+        self.tree
+            .new_leaf(style.inner)
+            .map(NodeId)
+            .map_err(LayoutError::from)
     }
 
     pub fn new_container(
@@ -25,26 +29,28 @@ impl LayoutEngine {
         style: LayoutStyle,
         children: &[NodeId],
     ) -> Result<NodeId, LayoutError> {
+        let taffy_children: Vec<taffy::NodeId> = children.iter().map(|n| n.0).collect();
         self.tree
-            .new_with_children(style.inner, children)
+            .new_with_children(style.inner, &taffy_children)
+            .map(NodeId)
             .map_err(LayoutError::from)
     }
 
     pub fn set_style(&mut self, node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
         self.tree
-            .set_style(node, style.inner)
+            .set_style(node.0, style.inner)
             .map_err(LayoutError::from)
     }
 
     pub fn add_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
         self.tree
-            .add_child(parent, child)
+            .add_child(parent.0, child.0)
             .map_err(LayoutError::from)
     }
 
     pub fn remove(&mut self, node: NodeId) -> Result<(), LayoutError> {
         self.tree
-            .remove(node)
+            .remove(node.0)
             .map(|_| ())
             .map_err(LayoutError::from)
     }
@@ -57,7 +63,7 @@ impl LayoutEngine {
     ) -> Result<(), LayoutError> {
         self.tree
             .compute_layout(
-                root,
+                root.0,
                 taffy::geometry::Size {
                     width: available_width.into(),
                     height: available_height.into(),
@@ -67,7 +73,7 @@ impl LayoutEngine {
     }
 
     pub fn get_layout(&self, node: NodeId) -> Result<geometry_core::Rect, LayoutError> {
-        let layout = self.tree.layout(node).map_err(LayoutError::from)?;
+        let layout = self.tree.layout(node.0).map_err(LayoutError::from)?;
         Ok(geometry_core::Rect::new(
             layout.location.x,
             layout.location.y,
@@ -93,7 +99,7 @@ impl LayoutEngine {
         }];
 
         while let Some(entry) = stack.pop() {
-            let layout = self.tree.layout(entry.node).map_err(LayoutError::from)?;
+            let layout = self.tree.layout(entry.node.0).map_err(LayoutError::from)?;
             let abs_x = entry.offset_x + layout.location.x;
             let abs_y = entry.offset_y + layout.location.y;
 
@@ -102,10 +108,13 @@ impl LayoutEngine {
                 geometry_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
             );
 
-            let children = self.tree.children(entry.node).map_err(LayoutError::from)?;
+            let children = self
+                .tree
+                .children(entry.node.0)
+                .map_err(LayoutError::from)?;
             for child in children.into_iter().rev() {
                 stack.push(StackEntry {
-                    node: child,
+                    node: NodeId(child),
                     offset_x: abs_x,
                     offset_y: abs_y,
                 });

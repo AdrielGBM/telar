@@ -2,17 +2,15 @@ use std::rc::Rc;
 
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use reactive_core::ReadSignal;
 use renderer_core::{DrawCommand, TextStyle};
 use ui_tree::{Component, EventResult, View};
 
-use crate::context;
+use crate::layout_leaf::LayoutLeaf;
 
 pub struct Label {
     text: Rc<str>,
     style: TextStyle,
-    layout_node: NodeId,
-    rect: ReadSignal<renderer_core::Rect>,
+    leaf: LayoutLeaf,
 }
 
 impl Label {
@@ -34,23 +32,22 @@ impl Label {
         layout_style: LayoutStyle,
         style: TextStyle,
     ) -> Result<Self, LayoutError> {
-        let (node, rect) = context::register_leaf(layout_style)?;
+        let leaf = LayoutLeaf::register(layout_style)?;
         Ok(Self {
             text: Rc::from(text.into()),
             style,
-            layout_node: node,
-            rect,
+            leaf,
         })
     }
 
     pub fn layout_node(&self) -> NodeId {
-        self.layout_node
+        self.leaf.node
     }
 }
 
 impl Component for Label {
     fn view(&self) -> View {
-        let rect = self.rect.get();
+        let rect = self.leaf.rect.get();
         View::Primitive(DrawCommand::Text {
             text: Rc::clone(&self.text),
             rect,
