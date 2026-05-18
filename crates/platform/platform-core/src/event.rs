@@ -78,6 +78,7 @@ pub enum Event {
         y: f64,
         source: PointerSource,
     },
+    // Note: pointer events intentionally omit ModifiersState. Detecting modifier chords (e.g. Shift+Click) requires tracking modifier state from KeyPressed / KeyReleased events externally. Add a `modifiers` field here if that becomes a first-class requirement.
     PointerPressed {
         x: f64,
         y: f64,

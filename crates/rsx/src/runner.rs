@@ -6,13 +6,13 @@ use renderer_hardware::HardwareRenderer;
 use renderer_software::SoftwareRenderer;
 
 use crate::app::{App, Frame};
+use crate::app_context::AppCtx;
 use crate::config::{self, RendererBackend};
-use crate::context::AppContext;
 use crate::prefs::UserPrefs;
 
 macro_rules! make_ctx {
     ($self:expr) => {
-        AppContext {
+        AppCtx {
             app_name: &$self.app_name,
             prefs: &mut $self.prefs,
             pending_restart: &mut $self.pending_restart,

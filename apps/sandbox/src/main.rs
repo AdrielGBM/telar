@@ -1,11 +1,10 @@
 use std::rc::Rc;
 
 use rsx::{
-    App, AppContext, AvailableSpace, BorderRadius, Button, Color, Component, ComponentTree, Event,
-    EventResult, FillRule, FillStyle, Frame, ImageData, ImageFilter, LayoutStyle, LineCap,
-    LineJoin, LineStyle, PathData, PathStyle, Point, ReadSignal, Rect, RectStyle, RwSignal, Stroke,
-    TextStyle, View, WidgetCtx, WindowConfig, compute_layout, create_rw_signal, new_container,
-    register_leaf, with_context,
+    App, AppCtx, AvailableSpace, BorderRadius, Button, Color, Component, ComponentTree, Event,
+    EventResult, FillRule, FillStyle, Frame, ImageData, ImageFilter, Label, LayoutStyle, LineCap,
+    LineJoin, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, RwSignal, Stroke, TextStyle,
+    View, WidgetCtx, WindowConfig, compute_layout, create_rw_signal, new_container, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -27,13 +26,18 @@ const PANEL_W: f32 = 160.0;
 const PANEL_H: f32 = 128.0;
 
 struct WidgetPanel {
+    count_label: Label,
     btn_inc: Button,
     btn_dec: Button,
 }
 
 impl Component for WidgetPanel {
     fn view(&self) -> View {
-        View::group([self.btn_inc.view(), self.btn_dec.view()])
+        View::group([
+            self.count_label.view(),
+            self.btn_inc.view(),
+            self.btn_dec.view(),
+        ])
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -89,11 +93,10 @@ struct Sandbox {
     window_height: f32,
     widget_tree: ComponentTree,
     count: RwSignal<i32>,
-    label_rect: ReadSignal<Rect>,
 }
 
 impl App for Sandbox {
-    fn on_event(&mut self, event: Event, ctx: &mut AppContext) {
+    fn on_event(&mut self, event: Event, ctx: &mut AppCtx) {
         if let Some(rel) = panel_relative_event(&event, PANEL_X as f64, PANEL_Y as f64) {
             self.widget_tree.on_event(&rel);
             ctx.request_redraw();
@@ -115,7 +118,7 @@ impl App for Sandbox {
         }
     }
 
-    fn on_redraw(&mut self, frame: &mut Frame, _ctx: &mut AppContext) {
+    fn on_redraw(&mut self, frame: &mut Frame, _ctx: &mut AppCtx) {
         frame.clear(SURFACE);
         frame.push_clip(Rect::new(0.0, 0.0, f32::MAX, self.window_height));
         frame.push_translate(0.0, -self.scroll_y);
@@ -471,13 +474,13 @@ impl App for Sandbox {
                 radius: BorderRadius::all(8.0),
             },
         );
+        frame.extend(self.widget_tree.commands());
         let count_text = format!("Count: {}", self.count.get());
         frame.draw_text(
             &count_text,
-            self.label_rect.get(),
+            Rect::new(8.0, 8.0, PANEL_W - 16.0, 24.0),
             TextStyle::new(14.0, WHITE),
         );
-        frame.extend(self.widget_tree.commands());
         frame.pop_transform();
 
         if CONTENT_HEIGHT > self.window_height {
@@ -502,9 +505,14 @@ fn main() {
     let checker_image = Rc::new(make_checker(128, 128, 16));
     let alpha_image = Rc::new(make_radial_alpha(128, 128));
 
-    let ((label_rect, btn_inc, btn_dec), _) = with_context(WidgetCtx::new(), || {
-        let (label_node, label_rect) =
-            register_leaf(LayoutStyle::new().height(24.0)).expect("layout failed");
+    let ((count_label, btn_inc, btn_dec), _) = with_context(WidgetCtx::new(), || {
+        let count_label = Label::with_size(
+            "Count: 0",
+            PANEL_W - 16.0,
+            24.0,
+            TextStyle::new(14.0, WHITE),
+        )
+        .expect("layout failed");
         let btn_inc = Button::new("+").expect("layout failed");
         let btn_dec = Button::new("-").expect("layout failed");
         let widget_root = new_container(
@@ -514,7 +522,11 @@ fn main() {
                 .height(PANEL_H)
                 .padding_all(8.0)
                 .gap(8.0),
-            &[label_node, btn_inc.layout_node(), btn_dec.layout_node()],
+            &[
+                count_label.layout_node(),
+                btn_inc.layout_node(),
+                btn_dec.layout_node(),
+            ],
         )
         .expect("layout failed");
         compute_layout(
@@ -523,7 +535,7 @@ fn main() {
             AvailableSpace::Definite(PANEL_H),
         )
         .expect("layout failed");
-        (label_rect, btn_inc, btn_dec)
+        (count_label, btn_inc, btn_dec)
     });
 
     let count = create_rw_signal(0i32);
@@ -544,7 +556,11 @@ fn main() {
         )
         .on_click(move || c.set(c.get() - 1));
 
-    let widget_tree = ComponentTree::new(WidgetPanel { btn_inc, btn_dec });
+    let widget_tree = ComponentTree::new(WidgetPanel {
+        count_label,
+        btn_inc,
+        btn_dec,
+    });
 
     let config = WindowConfig::default();
     rsx::run!(
@@ -558,7 +574,6 @@ fn main() {
             window_height: 600.0,
             widget_tree,
             count,
-            label_rect,
         }
     );
 }

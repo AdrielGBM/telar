@@ -25,6 +25,10 @@ pub fn compile_time_backend() -> RendererBackend {
     match option_env!("RSX_RENDERER_BACKEND") {
         Some("hardware") => RendererBackend::Hardware,
         Some("software") => RendererBackend::Software,
-        _ => RendererBackend::Auto,
+        Some("auto") | None => RendererBackend::Auto,
+        Some(other) => panic!(
+            "Unknown RSX_RENDERER_BACKEND value: \"{other}\". \
+             Expected \"auto\", \"hardware\", or \"software\"."
+        ),
     }
 }

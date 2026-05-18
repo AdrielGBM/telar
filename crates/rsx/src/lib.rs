@@ -1,5 +1,5 @@
+pub mod app_context;
 pub mod config;
-pub mod context;
 pub mod prefs;
 
 #[cfg(feature = "runtime")]
@@ -7,8 +7,8 @@ pub mod app;
 #[cfg(feature = "runtime")]
 pub mod runner;
 
+pub use app_context::AppCtx;
 pub use config::{RendererBackend, RendererConfig, RsxConfig};
-pub use context::AppContext;
 pub use prefs::UserPrefs;
 
 #[cfg(feature = "runtime")]

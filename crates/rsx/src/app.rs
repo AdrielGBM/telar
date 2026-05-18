@@ -6,7 +6,7 @@ use renderer_core::{
     RectStyle, RendererError, TextStyle,
 };
 
-use crate::context::AppContext;
+use crate::app_context::AppCtx;
 
 pub struct Frame {
     pub(crate) commands: Vec<DrawCommand>,
@@ -72,10 +72,10 @@ impl Frame {
 }
 
 pub trait App {
-    fn on_resume(&mut self, _ctx: &mut AppContext) -> Result<(), RendererError> {
+    fn on_resume(&mut self, _ctx: &mut AppCtx) -> Result<(), RendererError> {
         Ok(())
     }
-    fn on_event(&mut self, _event: Event, _ctx: &mut AppContext) {}
-    fn on_redraw(&mut self, frame: &mut Frame, ctx: &mut AppContext);
-    fn on_suspend(&mut self, _ctx: &mut AppContext) {}
+    fn on_event(&mut self, _event: Event, _ctx: &mut AppCtx) {}
+    fn on_redraw(&mut self, frame: &mut Frame, ctx: &mut AppCtx);
+    fn on_suspend(&mut self, _ctx: &mut AppCtx) {}
 }
