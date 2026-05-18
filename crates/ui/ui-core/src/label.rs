@@ -8,14 +8,15 @@ use ui_tree::{Component, EventResult, View};
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Label {
-    text: Rc<str>,
+    text: Box<dyn Fn() -> Rc<str>>,
     style: TextStyle,
     leaf: LayoutLeaf,
 }
 
 impl Label {
     pub fn new(text: impl Into<String>, style: TextStyle) -> Result<Self, LayoutError> {
-        Self::build(text, LayoutStyle::new(), style)
+        let s: Rc<str> = Rc::from(text.into());
+        Self::build(move || Rc::clone(&s), LayoutStyle::new(), style)
     }
 
     pub fn with_size(
@@ -24,17 +25,42 @@ impl Label {
         height: f32,
         style: TextStyle,
     ) -> Result<Self, LayoutError> {
-        Self::build(text, LayoutStyle::new().width(width).height(height), style)
+        let s: Rc<str> = Rc::from(text.into());
+        Self::build(
+            move || Rc::clone(&s),
+            LayoutStyle::new().width(width).height(height),
+            style,
+        )
+    }
+
+    pub fn from_fn(
+        text: impl Fn() -> String + 'static,
+        style: TextStyle,
+    ) -> Result<Self, LayoutError> {
+        Self::build(move || Rc::from(text()), LayoutStyle::new(), style)
+    }
+
+    pub fn from_fn_with_size(
+        text: impl Fn() -> String + 'static,
+        width: f32,
+        height: f32,
+        style: TextStyle,
+    ) -> Result<Self, LayoutError> {
+        Self::build(
+            move || Rc::from(text()),
+            LayoutStyle::new().width(width).height(height),
+            style,
+        )
     }
 
     fn build(
-        text: impl Into<String>,
+        text: impl Fn() -> Rc<str> + 'static,
         layout_style: LayoutStyle,
         style: TextStyle,
     ) -> Result<Self, LayoutError> {
         let leaf = LayoutLeaf::register(layout_style)?;
         Ok(Self {
-            text: Rc::from(text.into()),
+            text: Box::new(text),
             style,
             leaf,
         })
@@ -48,8 +74,9 @@ impl Label {
 impl Component for Label {
     fn view(&self) -> View {
         let rect = self.leaf.rect.get();
+        let text = (self.text)();
         View::Primitive(DrawCommand::Text {
-            text: Rc::clone(&self.text),
+            text,
             rect,
             style: self.style,
         })

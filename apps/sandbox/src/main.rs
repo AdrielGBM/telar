@@ -3,8 +3,8 @@ use std::rc::Rc;
 use rsx::{
     App, AppCtx, AvailableSpace, BorderRadius, Button, Color, Component, ComponentTree, Event,
     EventResult, FillRule, FillStyle, Frame, ImageData, ImageFilter, Label, LayoutStyle, LineCap,
-    LineJoin, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, RwSignal, Stroke, TextStyle,
-    View, WidgetCtx, WindowConfig, compute_layout, create_rw_signal, new_container, with_context,
+    LineJoin, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, Stroke, TextStyle, View,
+    WidgetCtx, WindowConfig, compute_layout, create_rw_signal, new_container, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -92,7 +92,6 @@ struct Sandbox {
     window_width: f32,
     window_height: f32,
     widget_tree: ComponentTree,
-    count: RwSignal<i32>,
 }
 
 impl App for Sandbox {
@@ -475,12 +474,6 @@ impl App for Sandbox {
             },
         );
         frame.extend(self.widget_tree.commands());
-        let count_text = format!("Count: {}", self.count.get());
-        frame.draw_text(
-            &count_text,
-            Rect::new(8.0, 8.0, PANEL_W - 16.0, 24.0),
-            TextStyle::new(14.0, WHITE),
-        );
         frame.pop_transform();
 
         if CONTENT_HEIGHT > self.window_height {
@@ -505,9 +498,12 @@ fn main() {
     let checker_image = Rc::new(make_checker(128, 128, 16));
     let alpha_image = Rc::new(make_radial_alpha(128, 128));
 
+    let count = create_rw_signal(0i32);
+
     let ((count_label, btn_inc, btn_dec), _) = with_context(WidgetCtx::new(), || {
-        let count_label = Label::with_size(
-            "Count: 0",
+        let c = count.clone();
+        let count_label = Label::from_fn_with_size(
+            move || format!("Count: {}", c.get()),
             PANEL_W - 16.0,
             24.0,
             TextStyle::new(14.0, WHITE),
@@ -537,8 +533,6 @@ fn main() {
         .expect("layout failed");
         (count_label, btn_inc, btn_dec)
     });
-
-    let count = create_rw_signal(0i32);
 
     let c = count.clone();
     let btn_inc = btn_inc
@@ -573,7 +567,6 @@ fn main() {
             window_width: 800.0,
             window_height: 600.0,
             widget_tree,
-            count,
         }
     );
 }
