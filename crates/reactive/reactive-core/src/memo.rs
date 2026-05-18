@@ -1,6 +1,7 @@
 use std::cell::RefCell;
-use std::collections::BTreeSet;
 use std::rc::Rc;
+
+use smallvec::SmallVec;
 
 use crate::runtime::{self, EffectId};
 
@@ -11,7 +12,7 @@ enum MemoState<T> {
 
 struct MemoInner<T> {
     state: MemoState<T>,
-    subscribers: BTreeSet<EffectId>,
+    subscribers: SmallVec<[EffectId; 4]>,
     effect_id: EffectId,
 }
 
@@ -76,7 +77,9 @@ impl<T: 'static> Memo<T> {
     fn track(&self) {
         if let Some(id) = runtime::current_observer() {
             let mut inner = self.inner.borrow_mut();
-            inner.subscribers.insert(id);
+            if !inner.subscribers.contains(&id) {
+                inner.subscribers.push(id);
+            }
         }
     }
 }
@@ -86,7 +89,7 @@ pub fn create_memo<T: 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
 
     let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {
         state: MemoState::Computing,
-        subscribers: BTreeSet::new(),
+        subscribers: SmallVec::new(),
         effect_id: 0,
     }));
 
@@ -98,13 +101,21 @@ pub fn create_memo<T: 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
         };
         inner.borrow_mut().state = MemoState::Computing;
         let new_value = f();
-        let subs = {
+        let subs: Vec<EffectId> = {
             let mut memo = inner.borrow_mut();
             memo.state = MemoState::Ready(new_value);
-            memo.subscribers.iter().copied().collect::<Vec<_>>()
+            memo.subscribers.iter().copied().collect()
         };
+        let mut dead = Vec::new();
         for id in subs {
-            runtime::schedule(id);
+            if runtime::is_alive(id) {
+                runtime::schedule(id);
+            } else {
+                dead.push(id);
+            }
+        }
+        if !dead.is_empty() {
+            inner.borrow_mut().subscribers.retain(|x| !dead.contains(x));
         }
     });
 
