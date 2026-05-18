@@ -1,20 +1,11 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ServiceError {
+    #[error("service already registered for this type")]
     AlreadyRegistered,
 }
-
-impl std::fmt::Display for ServiceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::AlreadyRegistered => write!(f, "service already registered for this type"),
-        }
-    }
-}
-
-impl std::error::Error for ServiceError {}
 
 /// A registry for storing and retrieving typed services. Services are stored without `Send` bounds, making them compatible with the single-threaded reactive runtime. Services must only be accessed from the thread they were registered on.
 #[derive(Default)]

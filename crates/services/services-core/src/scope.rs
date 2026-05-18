@@ -65,14 +65,3 @@ impl Scope {
         f()
     }
 }
-
-impl Drop for Scope {
-    fn drop(&mut self) {
-        STACK.with(|stack| {
-            let mut stack = stack.borrow_mut();
-            if stack.len() > 1 {
-                stack.pop();
-            }
-        });
-    }
-}
