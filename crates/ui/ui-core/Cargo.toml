@@ -7,5 +7,5 @@ edition = "2024"
 layout-core = { workspace = true }
 platform-core = { workspace = true }
 reactive-core = { workspace = true }
-reactive-tree = { workspace = true }
 renderer-core = { workspace = true }
+ui-tree = { workspace = true }

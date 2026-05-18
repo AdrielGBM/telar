@@ -3,8 +3,8 @@ use std::rc::Rc;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::ReadSignal;
-use reactive_tree::{Component, EventResult, View};
 use renderer_core::{DrawCommand, TextStyle};
+use ui_tree::{Component, EventResult, View};
 
 use crate::context;
 

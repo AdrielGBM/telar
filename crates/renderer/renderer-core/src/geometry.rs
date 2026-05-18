@@ -1,45 +1,6 @@
 use crate::Color;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Point {
-    pub x: f32,
-    pub y: f32,
-}
-
-impl Point {
-    pub fn new(x: f32, y: f32) -> Self {
-        Self { x, y }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Rect {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-impl Rect {
-    pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
-        Self {
-            x,
-            y,
-            width,
-            height,
-        }
-    }
-
-    pub fn contains(&self, x: f32, y: f32) -> bool {
-        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
-    }
-}
-
-impl Default for Rect {
-    fn default() -> Self {
-        Self::new(0.0, 0.0, 0.0, 0.0)
-    }
-}
+pub use geometry_core::{Point, Rect};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BorderRadius {
@@ -166,31 +127,6 @@ impl PathData {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn point_new_stores_coordinates() {
-        let p = Point::new(3.0, 4.0);
-        assert_eq!(p.x, 3.0);
-        assert_eq!(p.y, 4.0);
-    }
-
-    #[test]
-    fn rect_new_stores_fields() {
-        let r = Rect::new(1.0, 2.0, 10.0, 20.0);
-        assert_eq!(r.x, 1.0);
-        assert_eq!(r.y, 2.0);
-        assert_eq!(r.width, 10.0);
-        assert_eq!(r.height, 20.0);
-    }
-
-    #[test]
-    fn rect_default_is_zero() {
-        let r = Rect::default();
-        assert_eq!(r.x, 0.0);
-        assert_eq!(r.y, 0.0);
-        assert_eq!(r.width, 0.0);
-        assert_eq!(r.height, 0.0);
-    }
 
     #[test]
     fn border_radius_all_sets_all_corners_equal() {

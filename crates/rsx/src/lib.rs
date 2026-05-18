@@ -17,7 +17,6 @@ pub use layout_core::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle};
 #[cfg(feature = "runtime")]
 pub use platform_core::{Event, ScrollDelta, WindowConfig};
 pub use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
-pub use reactive_tree::{Component, ComponentTree, EventResult, View};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, Color, FillRule, FillStyle, ImageData, ImageFilter, LineCap, LineJoin, LineStyle,
@@ -25,7 +24,8 @@ pub use renderer_core::{
 };
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{
-    Button, Label, WidgetCtx, compute_layout, new_container, register_leaf, with_context,
+    Button, Component, ComponentTree, EventResult, IntoView, Label, View, WidgetCtx,
+    compute_layout, new_container, register_leaf, with_context,
 };
 
 #[cfg(feature = "runtime")]

@@ -66,9 +66,9 @@ impl LayoutEngine {
             .map_err(LayoutError::from)
     }
 
-    pub fn get_layout(&self, node: NodeId) -> Result<renderer_core::Rect, LayoutError> {
+    pub fn get_layout(&self, node: NodeId) -> Result<geometry_core::Rect, LayoutError> {
         let layout = self.tree.layout(node).map_err(LayoutError::from)?;
-        Ok(renderer_core::Rect::new(
+        Ok(geometry_core::Rect::new(
             layout.location.x,
             layout.location.y,
             layout.size.width,
@@ -78,7 +78,7 @@ impl LayoutEngine {
 
     pub fn walk<F>(&self, root: NodeId, f: &mut F) -> Result<(), LayoutError>
     where
-        F: FnMut(NodeId, renderer_core::Rect),
+        F: FnMut(NodeId, geometry_core::Rect),
     {
         struct StackEntry {
             node: NodeId,
@@ -99,7 +99,7 @@ impl LayoutEngine {
 
             f(
                 entry.node,
-                renderer_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
+                geometry_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
             );
 
             let children = self.tree.children(entry.node).map_err(LayoutError::from)?;
@@ -234,7 +234,7 @@ mod tests {
             )
             .unwrap();
 
-        let mut hits: Vec<(NodeId, renderer_core::Rect)> = Vec::new();
+        let mut hits: Vec<(NodeId, geometry_core::Rect)> = Vec::new();
         engine
             .walk(root, &mut |node, rect| hits.push((node, rect)))
             .unwrap();

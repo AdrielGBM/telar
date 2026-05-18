@@ -8,10 +8,11 @@ members = [
     "crates/renderer/renderer-hardware",
     "crates/renderer/renderer-text",
     "crates/reactive/reactive-core",
-    "crates/reactive/reactive-tree",
     "crates/services/services-core",
+    "crates/geometry/geometry-core",
     "crates/layout/layout-core",
     "crates/ui/ui-core",
+    "crates/ui/ui-tree",
     "crates/rsx",
     "crates/tools/cargo-rsx",
     "crates/tools/rsx-parser",
@@ -35,12 +36,9 @@ renderer-software = { path = "crates/renderer/renderer-software" }
 renderer-hardware = { path = "crates/renderer/renderer-hardware" }
 renderer-text = { path = "crates/renderer/renderer-text" }
 reactive-core = { path = "crates/reactive/reactive-core" }
-reactive-tree = { path = "crates/reactive/reactive-tree" }
 services-core = { path = "crates/services/services-core" }
+geometry-core = { path = "crates/geometry/geometry-core" }
 layout-core = { path = "crates/layout/layout-core" }
 ui-core = { path = "crates/ui/ui-core" }
+ui-tree = { path = "crates/ui/ui-tree" }
 rsx = { path = "crates/rsx" }
-rsx-parser = { path = "crates/tools/rsx-parser" }
-rsx-transpiler = { path = "crates/tools/rsx-transpiler" }
-rsx-bundler = { path = "crates/tools/rsx-bundler" }
-cargo-rsx = { path = "crates/tools/cargo-rsx" }

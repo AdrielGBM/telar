@@ -689,6 +689,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "geometry-core"
+version = "0.1.0"
+
+[[package]]
 name = "gethostname"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -972,7 +976,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 name = "layout-core"
 version = "0.1.0"
 dependencies = [
- "renderer-core",
+ "geometry-core",
  "taffy",
  "thiserror 2.0.18",
 ]
@@ -1802,15 +1806,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reactive-tree"
-version = "0.1.0"
-dependencies = [
- "platform-core",
- "reactive-core",
- "renderer-core",
-]
-
-[[package]]
 name = "read-fonts"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1886,6 +1881,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 name = "renderer-core"
 version = "0.1.0"
 dependencies = [
+ "geometry-core",
  "thiserror 2.0.18",
 ]
 
@@ -1941,7 +1937,6 @@ dependencies = [
  "platform-core",
  "platform-winit",
  "reactive-core",
- "reactive-tree",
  "renderer-core",
  "renderer-hardware",
  "renderer-software",
@@ -2583,7 +2578,16 @@ dependencies = [
  "layout-core",
  "platform-core",
  "reactive-core",
- "reactive-tree",
+ "renderer-core",
+ "ui-tree",
+]
+
+[[package]]
+name = "ui-tree"
+version = "0.1.0"
+dependencies = [
+ "platform-core",
+ "reactive-core",
  "renderer-core",
 ]
 

@@ -6,7 +6,7 @@ use reactive_core::{Effect, batch, create_effect};
 use renderer_core::DrawCommand;
 
 use crate::component::{Component, EventResult};
-use crate::reconciler;
+use crate::view_flatten;
 
 struct ComponentSlot {
     component: Rc<RefCell<Box<dyn Component>>>,
@@ -26,7 +26,7 @@ impl ComponentSlot {
         let dirty_clone = Rc::clone(&dirty);
         let _effect = create_effect(move || {
             let view = comp_clone.borrow().view();
-            let flat = reconciler::flatten(view);
+            let flat = view_flatten::flatten_view(view);
             let mut cmds = cmds_clone.borrow_mut();
             cmds.clear();
             cmds.extend(flat);

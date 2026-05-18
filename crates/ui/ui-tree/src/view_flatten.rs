@@ -2,7 +2,7 @@ use renderer_core::DrawCommand;
 
 use crate::view::View;
 
-pub(crate) fn flatten(root: View) -> Vec<DrawCommand> {
+pub fn flatten_view(root: View) -> Vec<DrawCommand> {
     let mut out = Vec::new();
     let mut stack = vec![root];
     while let Some(view) = stack.pop() {
@@ -34,14 +34,14 @@ mod tests {
 
     #[test]
     fn flatten_empty_returns_empty() {
-        let out = flatten(View::Empty);
+        let out = flatten_view(View::Empty);
         assert!(out.is_empty());
     }
 
     #[test]
     fn flatten_group_of_empties() {
         let view = View::Group(vec![View::Empty, View::Empty, View::Empty]);
-        let out = flatten(view);
+        let out = flatten_view(view);
         assert!(out.is_empty());
     }
 
@@ -56,7 +56,7 @@ mod tests {
             ]),
             View::Primitive(sample_rect()),
         ]);
-        let out = flatten(view);
+        let out = flatten_view(view);
         assert_eq!(out.len(), 4);
     }
 }

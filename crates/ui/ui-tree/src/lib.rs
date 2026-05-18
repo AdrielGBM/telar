@@ -1,8 +1,9 @@
 mod component;
-mod reconciler;
 mod tree;
 mod view;
+mod view_flatten;
 
 pub use component::{Component, EventResult};
 pub use tree::ComponentTree;
 pub use view::{IntoView, View};
+pub use view_flatten::flatten_view;
