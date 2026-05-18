@@ -44,13 +44,13 @@ pub struct ModifiersState {
     pub meta: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ScrollDelta {
     Lines { x: f32, y: f32 },
     Pixels { x: f32, y: f32 },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Event {
     WindowResized {
         width: u32,

@@ -22,16 +22,6 @@ impl WinitPlatform {
             event_loop: EventLoop::new().map_err(|e| PlatformError(e.to_string()))?,
         })
     }
-
-    pub fn new() -> Self {
-        Self::try_new().expect("failed to create event loop")
-    }
-}
-
-impl Default for WinitPlatform {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 struct WinitRunner<H: EventHandler<WinitWindow>> {

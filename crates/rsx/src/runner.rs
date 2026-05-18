@@ -143,7 +143,14 @@ pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
         .backend
         .unwrap_or_else(config::compile_time_backend);
 
-    if let Err(e) = WinitPlatform::new().run(
+    let platform = match WinitPlatform::try_new() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to create event loop: {e}");
+            return;
+        }
+    };
+    if let Err(e) = platform.run(
         config,
         AppHandler {
             app,

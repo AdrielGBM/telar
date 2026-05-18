@@ -1,4 +1,4 @@
-use crate::Event;
+use crate::{Event, PlatformError};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 #[derive(Debug, Clone)]
@@ -17,10 +17,6 @@ impl Default for WindowConfig {
         }
     }
 }
-
-#[derive(Debug, thiserror::Error)]
-#[error("platform error: {0}")]
-pub struct PlatformError(pub String);
 
 pub trait Window: HasWindowHandle + HasDisplayHandle {
     fn width(&self) -> u32;
