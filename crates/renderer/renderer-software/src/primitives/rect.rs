@@ -5,8 +5,8 @@ use crate::renderer::to_skia_color;
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
     let x = rect.x;
     let y = rect.y;
-    let w = rect.w;
-    let h = rect.h;
+    let w = rect.width;
+    let h = rect.height;
 
     if radius.is_zero() {
         let r = tiny_skia::Rect::from_xywh(x, y, w, h)?;
@@ -83,8 +83,8 @@ pub(crate) fn draw_rect(
         let inset = Rect::new(
             rect.x + half,
             rect.y + half,
-            rect.w - s.width,
-            rect.h - s.width,
+            rect.width - s.width,
+            rect.height - s.width,
         );
         let inset_radius = BorderRadius {
             top_left: (style.radius.top_left - half).max(0.0),

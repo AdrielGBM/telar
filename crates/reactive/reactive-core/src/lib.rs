@@ -1,3 +1,8 @@
+//! Factory functions (`create_signal`, `create_effect`, `create_memo`) create
+//! nodes in the reactive graph. Struct constructors (`Runtime::new`, etc.) own
+//! their state. Free functions (`batch`, `set_flush_notify`) operate on the
+//! thread-local runtime.
+
 mod effect;
 mod memo;
 mod runtime;

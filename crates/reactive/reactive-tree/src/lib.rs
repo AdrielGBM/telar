@@ -1,5 +1,5 @@
 mod component;
-pub(crate) mod reconciler;
+mod reconciler;
 mod tree;
 mod view;
 

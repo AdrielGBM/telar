@@ -139,8 +139,8 @@ mod tests {
             )
             .unwrap();
         let rect = engine.get_layout(leaf).unwrap();
-        assert_eq!(rect.w, 50.0_f32);
-        assert_eq!(rect.h, 40.0_f32);
+        assert_eq!(rect.width, 50.0_f32);
+        assert_eq!(rect.height, 40.0_f32);
     }
 
     #[test]
@@ -246,8 +246,8 @@ mod tests {
             .unwrap();
         assert_eq!(inner_child_rect.x, 100.0_f32);
         assert_eq!(inner_child_rect.y, 0.0_f32);
-        assert_eq!(inner_child_rect.w, 50.0_f32);
-        assert_eq!(inner_child_rect.h, 50.0_f32);
+        assert_eq!(inner_child_rect.width, 50.0_f32);
+        assert_eq!(inner_child_rect.height, 50.0_f32);
     }
 
     #[test]
@@ -267,7 +267,7 @@ mod tests {
             )
             .unwrap();
         let rect = engine.get_layout(leaf).unwrap();
-        assert_eq!(rect.w, 80.0_f32);
-        assert_eq!(rect.h, 60.0_f32);
+        assert_eq!(rect.width, 80.0_f32);
+        assert_eq!(rect.height, 60.0_f32);
     }
 }

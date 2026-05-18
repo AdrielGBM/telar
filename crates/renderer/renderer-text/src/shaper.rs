@@ -196,7 +196,7 @@ pub struct TextShaper {
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
     let metrics = Metrics::new(font_size, font_size * 1.2);
     let mut buffer = Buffer::new(font_system, metrics);
-    buffer.set_size(Some(rect.w), Some(rect.h));
+    buffer.set_size(Some(rect.width), Some(rect.height));
     buffer.set_text(text, &Attrs::new(), Shaping::Advanced, None);
     buffer.shape_until_scroll(font_system, false);
     buffer
@@ -219,8 +219,8 @@ impl TextShaper {
     pub fn layout_glyphs(&mut self, text: &str, rect: Rect, style: &TextStyle) -> Vec<GlyphInfo> {
         let font_size = style.font_size;
         let color = style.color;
-        let width = rect.w.ceil() as u32;
-        let height = rect.h.ceil() as u32;
+        let width = rect.width.ceil() as u32;
+        let height = rect.height.ceil() as u32;
 
         if width == 0 || height == 0 || text.is_empty() {
             return Vec::new();
@@ -372,8 +372,8 @@ impl TextShaper {
     ) -> (TextCacheKey, Vec<u8>, u32, u32) {
         let font_size = style.font_size;
         let color = style.color;
-        let width = rect.w.ceil() as u32;
-        let height = rect.h.ceil() as u32;
+        let width = rect.width.ceil() as u32;
+        let height = rect.height.ceil() as u32;
 
         let key = make_text_cache_key(text, font_size, width, height, color);
 

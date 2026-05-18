@@ -30,6 +30,7 @@ pub fn try_inject<T: Any + Clone + 'static>() -> Option<T> {
 
 pub fn inject<T: Any + Clone + 'static>() -> T {
     try_inject::<T>().unwrap_or_else(|| {
+        // Panics intentionally: inject() is the "expect service to exist" path, symmetric to indexing a HashMap. Use try_inject() for fallible access.
         panic!(
             "service `{}` not found in any scope",
             std::any::type_name::<T>()

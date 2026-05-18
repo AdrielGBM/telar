@@ -6,7 +6,7 @@ use reactive_core::ReadSignal;
 use reactive_tree::{Component, EventResult, View};
 use renderer_core::{DrawCommand, TextStyle};
 
-use crate::context::WidgetCtx;
+use crate::context;
 
 pub struct Label {
     text: Rc<str>,
@@ -16,12 +16,8 @@ pub struct Label {
 }
 
 impl Label {
-    pub fn new(
-        text: impl Into<String>,
-        style: TextStyle,
-        ctx: &mut WidgetCtx,
-    ) -> Result<Self, LayoutError> {
-        Self::build(text, LayoutStyle::new(), style, ctx)
+    pub fn new(text: impl Into<String>, style: TextStyle) -> Result<Self, LayoutError> {
+        Self::build(text, LayoutStyle::new(), style)
     }
 
     pub fn with_size(
@@ -29,23 +25,16 @@ impl Label {
         width: f32,
         height: f32,
         style: TextStyle,
-        ctx: &mut WidgetCtx,
     ) -> Result<Self, LayoutError> {
-        Self::build(
-            text,
-            LayoutStyle::new().width(width).height(height),
-            style,
-            ctx,
-        )
+        Self::build(text, LayoutStyle::new().width(width).height(height), style)
     }
 
     fn build(
         text: impl Into<String>,
         layout_style: LayoutStyle,
         style: TextStyle,
-        ctx: &mut WidgetCtx,
     ) -> Result<Self, LayoutError> {
-        let (node, rect) = ctx.register_leaf(layout_style)?;
+        let (node, rect) = context::register_leaf(layout_style)?;
         Ok(Self {
             text: Rc::from(text.into()),
             style,
@@ -80,29 +69,23 @@ mod tests {
     use renderer_core::{Color, DrawCommand, TextStyle};
 
     use super::*;
-    use crate::context::WidgetCtx;
+    use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
 
     #[test]
     fn label_view_returns_text_command() {
-        let mut ctx = WidgetCtx::new();
-        let label = Label::new("Hello", TextStyle::new(16.0, Color::WHITE), &mut ctx).unwrap();
-        let view = label.view();
-        assert!(matches!(view, View::Primitive(DrawCommand::Text { .. })));
+        with_context(WidgetCtx::new(), || {
+            let label = Label::new("Hello", TextStyle::new(16.0, Color::WHITE)).unwrap();
+            let view = label.view();
+            assert!(matches!(view, View::Primitive(DrawCommand::Text { .. })));
+        });
     }
 
     #[test]
     fn label_view_reacts_to_rect_change() {
-        let mut ctx = WidgetCtx::new();
-        let label = Label::with_size(
-            "Hi",
-            120.0,
-            40.0,
-            TextStyle::new(14.0, Color::BLACK),
-            &mut ctx,
-        )
-        .unwrap();
-        let root = ctx
-            .new_container(
+        with_context(WidgetCtx::new(), || {
+            let label =
+                Label::with_size("Hi", 120.0, 40.0, TextStyle::new(14.0, Color::BLACK)).unwrap();
+            let root = new_container(
                 layout_core::LayoutStyle::new()
                     .flex_row()
                     .width(200.0)
@@ -110,19 +93,20 @@ mod tests {
                 &[label.layout_node()],
             )
             .unwrap();
-        ctx.compute(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
+            compute_layout(
+                root,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
 
-        let view = label.view();
-        if let View::Primitive(DrawCommand::Text { rect, .. }) = view {
-            assert_eq!(rect.w, 120.0);
-            assert_eq!(rect.h, 40.0);
-        } else {
-            panic!("expected Text command");
-        }
+            let view = label.view();
+            if let View::Primitive(DrawCommand::Text { rect, .. }) = view {
+                assert_eq!(rect.width, 120.0);
+                assert_eq!(rect.height, 40.0);
+            } else {
+                panic!("expected Text command");
+            }
+        });
     }
 }

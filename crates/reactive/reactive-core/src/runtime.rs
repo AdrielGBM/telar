@@ -129,6 +129,7 @@ fn flush() {
                 std::mem::take(&mut rt.pending)
             });
             if pending.is_empty() {
+                RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
                 if did_work {
                     let cbs: Vec<Rc<dyn Fn()>> = RUNTIME.with(|rt| {
                         rt.borrow()
@@ -141,7 +142,6 @@ fn flush() {
                         cb();
                     }
                 }
-                RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
                 return;
             }
             did_work = true;

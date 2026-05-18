@@ -6,7 +6,7 @@ use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
 use reactive_tree::{Component, EventResult, View};
 use renderer_core::{BorderRadius, Color, DrawCommand, Rect, RectStyle, TextStyle};
 
-use crate::context::WidgetCtx;
+use crate::context;
 
 pub struct Button {
     label: Rc<str>,
@@ -16,12 +16,13 @@ pub struct Button {
     hover_bg: Color,
     text_style: TextStyle,
     on_click: Option<Box<dyn Fn()>>,
+    // Signals here serve as state storage, not redraw triggers. Redraws are driven by the event loop (on_event → request_redraw), not by signal writes. This is intentional: view() is called imperatively each frame, not reactively.
     hovered: RwSignal<bool>,
 }
 
 impl Button {
-    pub fn new(label: impl Into<String>, ctx: &mut WidgetCtx) -> Result<Self, LayoutError> {
-        let (node, rect) = ctx.register_leaf(LayoutStyle::new().height(36.0))?;
+    pub fn new(label: impl Into<String>) -> Result<Self, LayoutError> {
+        let (node, rect) = context::register_leaf(LayoutStyle::new().height(36.0))?;
         Ok(Self {
             label: Rc::from(label.into()),
             layout_node: node,
@@ -117,13 +118,12 @@ mod tests {
     use renderer_core::{Color, DrawCommand};
 
     use super::*;
-    use crate::context::WidgetCtx;
+    use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
 
     fn make_button_with_rect() -> (Button, WidgetCtx) {
-        let mut ctx = WidgetCtx::new();
-        let button = Button::new("OK", &mut ctx).unwrap();
-        let root = ctx
-            .new_container(
+        let (result, ctx) = with_context(WidgetCtx::new(), || {
+            let button = Button::new("OK").unwrap();
+            let root = new_container(
                 layout_core::LayoutStyle::new()
                     .flex_column()
                     .width(200.0)
@@ -131,13 +131,15 @@ mod tests {
                 &[button.layout_node()],
             )
             .unwrap();
-        ctx.compute(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        (button, ctx)
+            compute_layout(
+                root,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
+            button
+        });
+        (result, ctx)
     }
 
     #[test]
@@ -190,14 +192,13 @@ mod tests {
 
     #[test]
     fn button_on_event_click_calls_callback() {
-        let mut ctx = WidgetCtx::new();
         let flag = Rc::new(Cell::new(false));
         let flag_clone = flag.clone();
-        let button = Button::new("OK", &mut ctx)
-            .unwrap()
-            .on_click(move || flag_clone.set(true));
-        let root = ctx
-            .new_container(
+        let (mut button, _ctx) = with_context(WidgetCtx::new(), || {
+            let button = Button::new("OK")
+                .unwrap()
+                .on_click(move || flag_clone.set(true));
+            let root = new_container(
                 layout_core::LayoutStyle::new()
                     .flex_column()
                     .width(200.0)
@@ -205,13 +206,14 @@ mod tests {
                 &[button.layout_node()],
             )
             .unwrap();
-        ctx.compute(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        let mut button = button;
+            compute_layout(
+                root,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
+            button
+        });
 
         let result = button.on_event(&Event::PointerPressed {
             x: 1.0,
@@ -228,12 +230,11 @@ mod tests {
     fn button_on_event_click_outside_does_nothing() {
         let flag = Rc::new(Cell::new(false));
         let flag_clone = flag.clone();
-        let mut ctx = WidgetCtx::new();
-        let button = Button::new("OK", &mut ctx)
-            .unwrap()
-            .on_click(move || flag_clone.set(true));
-        let root = ctx
-            .new_container(
+        let (mut button, _ctx) = with_context(WidgetCtx::new(), || {
+            let button = Button::new("OK")
+                .unwrap()
+                .on_click(move || flag_clone.set(true));
+            let root = new_container(
                 layout_core::LayoutStyle::new()
                     .flex_column()
                     .width(200.0)
@@ -241,13 +242,14 @@ mod tests {
                 &[button.layout_node()],
             )
             .unwrap();
-        ctx.compute(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        let mut button = button;
+            compute_layout(
+                root,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
+            button
+        });
 
         let result = button.on_event(&Event::PointerPressed {
             x: 9999.0,

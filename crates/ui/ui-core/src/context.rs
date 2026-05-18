@@ -1,8 +1,62 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, NodeId};
 use reactive_core::{ReadSignal, RwSignal, batch, create_rw_signal};
 use renderer_core::Rect;
+
+thread_local! {
+    static CURRENT_CTX: RefCell<Option<WidgetCtx>> = const { RefCell::new(None) };
+}
+
+/// Runs `f` with `ctx` as the active layout context on this thread. Returns the closure result and the context back.
+pub fn with_context<R>(ctx: WidgetCtx, f: impl FnOnce() -> R) -> (R, WidgetCtx) {
+    CURRENT_CTX.with(|c| {
+        assert!(
+            c.borrow().is_none(),
+            "nested with_context calls are not supported"
+        );
+        *c.borrow_mut() = Some(ctx);
+    });
+    let result = f();
+    let ctx = CURRENT_CTX.with(|c| {
+        c.borrow_mut()
+            .take()
+            .expect("WidgetCtx was taken during with_context closure")
+    });
+    (result, ctx)
+}
+
+pub fn register_leaf(style: LayoutStyle) -> Result<(NodeId, ReadSignal<Rect>), LayoutError> {
+    CURRENT_CTX.with(|c| {
+        c.borrow_mut()
+            .as_mut()
+            .expect("no active WidgetCtx — call within with_context()")
+            .register_leaf(style)
+    })
+}
+
+pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, LayoutError> {
+    CURRENT_CTX.with(|c| {
+        c.borrow_mut()
+            .as_mut()
+            .expect("no active WidgetCtx — call within with_context()")
+            .new_container(style, children)
+    })
+}
+
+pub fn compute_layout(
+    root: NodeId,
+    width: AvailableSpace,
+    height: AvailableSpace,
+) -> Result<(), LayoutError> {
+    CURRENT_CTX.with(|c| {
+        c.borrow_mut()
+            .as_mut()
+            .expect("no active WidgetCtx — call within with_context()")
+            .compute(root, width, height)
+    })
+}
 
 pub struct WidgetCtx {
     engine: LayoutEngine,
@@ -78,47 +132,48 @@ mod tests {
 
     #[test]
     fn ctx_register_leaf_returns_ok() {
-        let mut ctx = WidgetCtx::new();
-        let result = ctx.register_leaf(LayoutStyle::new());
-        assert!(result.is_ok());
+        with_context(WidgetCtx::new(), || {
+            let result = register_leaf(LayoutStyle::new());
+            assert!(result.is_ok());
+        });
     }
 
     #[test]
     fn ctx_new_container_returns_ok() {
-        let mut ctx = WidgetCtx::new();
-        let leaf_result = ctx.register_leaf(LayoutStyle::new());
-        assert!(leaf_result.is_ok());
-        let (leaf, _) = leaf_result.unwrap();
-        let container_result = ctx.new_container(LayoutStyle::new(), &[leaf]);
-        assert!(container_result.is_ok());
+        with_context(WidgetCtx::new(), || {
+            let leaf_result = register_leaf(LayoutStyle::new());
+            assert!(leaf_result.is_ok());
+            let (leaf, _) = leaf_result.unwrap();
+            let container_result = new_container(LayoutStyle::new(), &[leaf]);
+            assert!(container_result.is_ok());
+        });
     }
 
     #[test]
     fn ctx_register_leaf_returns_zero_rect() {
-        let mut ctx = WidgetCtx::new();
-        let (_node, rect) = ctx.register_leaf(LayoutStyle::new()).unwrap();
-        assert_eq!(rect.get(), Rect::default());
+        with_context(WidgetCtx::new(), || {
+            let (_node, rect) = register_leaf(LayoutStyle::new()).unwrap();
+            assert_eq!(rect.get(), Rect::default());
+        });
     }
 
     #[test]
     fn ctx_compute_updates_rect() {
-        let mut ctx = WidgetCtx::new();
-        let (leaf, rect) = ctx
-            .register_leaf(LayoutStyle::new().width(100.0).height(50.0))
-            .unwrap();
-        let root = ctx
-            .new_container(
+        with_context(WidgetCtx::new(), || {
+            let (leaf, rect) = register_leaf(LayoutStyle::new().width(100.0).height(50.0)).unwrap();
+            let root = new_container(
                 LayoutStyle::new().flex_row().width(200.0).height(100.0),
                 &[leaf],
             )
             .unwrap();
-        ctx.compute(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        assert_eq!(rect.get().w, 100.0);
-        assert_eq!(rect.get().h, 50.0);
+            compute_layout(
+                root,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
+            assert_eq!(rect.get().width, 100.0);
+            assert_eq!(rect.get().height, 50.0);
+        });
     }
 }

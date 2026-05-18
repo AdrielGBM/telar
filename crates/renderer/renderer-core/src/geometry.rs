@@ -16,17 +16,22 @@ impl Point {
 pub struct Rect {
     pub x: f32,
     pub y: f32,
-    pub w: f32,
-    pub h: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 impl Rect {
-    pub fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
-        Self { x, y, w, h }
+    pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     pub fn contains(&self, x: f32, y: f32) -> bool {
-        x >= self.x && x < self.x + self.w && y >= self.y && y < self.y + self.h
+        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 }
 
@@ -174,8 +179,8 @@ mod tests {
         let r = Rect::new(1.0, 2.0, 10.0, 20.0);
         assert_eq!(r.x, 1.0);
         assert_eq!(r.y, 2.0);
-        assert_eq!(r.w, 10.0);
-        assert_eq!(r.h, 20.0);
+        assert_eq!(r.width, 10.0);
+        assert_eq!(r.height, 20.0);
     }
 
     #[test]
@@ -183,8 +188,8 @@ mod tests {
         let r = Rect::default();
         assert_eq!(r.x, 0.0);
         assert_eq!(r.y, 0.0);
-        assert_eq!(r.w, 0.0);
-        assert_eq!(r.h, 0.0);
+        assert_eq!(r.width, 0.0);
+        assert_eq!(r.height, 0.0);
     }
 
     #[test]

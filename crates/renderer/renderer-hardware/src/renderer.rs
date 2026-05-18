@@ -4,8 +4,8 @@ use renderer_core::{Color, DrawCommand, ImageFilter, Rect, RenderBackend, Render
 fn intersect_rects(a: Rect, b: Rect) -> Option<Rect> {
     let x = a.x.max(b.x);
     let y = a.y.max(b.y);
-    let right = (a.x + a.w).min(b.x + b.w);
-    let bottom = (a.y + a.h).min(b.y + b.h);
+    let right = (a.x + a.width).min(b.x + b.width);
+    let bottom = (a.y + a.height).min(b.y + b.height);
     if right > x && bottom > y {
         Some(Rect::new(x, y, right - x, bottom - y))
     } else {
@@ -146,6 +146,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .create_surface(window.clone())
             .map_err(|e| RendererError::Surface(e.to_string()))?;
 
+        // Blocks the main thread synchronously. On slow or broken drivers this can hang indefinitely. Long-term fix: expose an async HardwareRenderer::request() + poll_ready() pair and drive it from the event loop.
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: Some(&surface),
@@ -353,8 +354,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         for cmd in commands {
             match cmd {
                 DrawCommand::Rect { rect, style } => {
-                    if rect.w <= 0.0
-                        || rect.h <= 0.0
+                    if rect.width <= 0.0
+                        || rect.height <= 0.0
                         || (style.fill.is_none() && style.stroke.is_none())
                     {
                         continue;
@@ -365,7 +366,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_rect_start.is_none() {
                         self.batch_rect_start = Some(self.pending_instances.len() as u32);
                     }
-                    let translated = Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.w, rect.h);
+                    let translated =
+                        Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.width, rect.height);
                     let inst = crate::primitives::rect::prepare_rect(translated, &style);
                     self.pending_instances.push(inst);
                 }
@@ -376,7 +378,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_text_start.is_none() {
                         self.batch_text_start = Some(self.pending_text_instances.len() as u32);
                     }
-                    let translated = Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.w, rect.h);
+                    let translated =
+                        Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.width, rect.height);
                     let instances = crate::primitives::text::prepare_text(
                         &mut self.text_shaper,
                         &*text,
@@ -415,7 +418,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 filter,
                             ));
                     }
-                    let translated = Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.w, rect.h);
+                    let translated =
+                        Rect::new(rect.x + cum_tx, rect.y + cum_ty, rect.width, rect.height);
                     self.pending_image_instances
                         .push(crate::primitives::image::prepare_image(translated));
                 }
@@ -691,8 +695,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             let y =
                                 (r.y.max(0.0).floor() as u32).min(self.height.saturating_sub(1));
 
-                            let right = ((r.x + r.w).ceil() as u32).min(self.width);
-                            let bottom = ((r.y + r.h).ceil() as u32).min(self.height);
+                            let right = ((r.x + r.width).ceil() as u32).min(self.width);
+                            let bottom = ((r.y + r.height).ceil() as u32).min(self.height);
                             let w = right
                                 .saturating_sub(x)
                                 .max(1)

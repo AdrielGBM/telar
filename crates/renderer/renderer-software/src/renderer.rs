@@ -12,8 +12,8 @@ use crate::primitives::image::ImageCache;
 fn intersect_rects(a: Rect, b: Rect) -> Option<Rect> {
     let x = a.x.max(b.x);
     let y = a.y.max(b.y);
-    let right = (a.x + a.w).min(b.x + b.w);
-    let bottom = (a.y + a.h).min(b.y + b.h);
+    let right = (a.x + a.width).min(b.x + b.width);
+    let bottom = (a.y + a.height).min(b.y + b.height);
     if right > x && bottom > y {
         Some(Rect::new(x, y, right - x, bottom - y))
     } else {
@@ -25,8 +25,8 @@ fn build_clip_mask(rect: Rect, width: u32, height: u32) -> Option<tiny_skia::Mas
     let mut mask = tiny_skia::Mask::new(width, height)?;
     let x = rect.x.max(0.0);
     let y = rect.y.max(0.0);
-    let right = (rect.x + rect.w).min(width as f32);
-    let bottom = (rect.y + rect.h).min(height as f32);
+    let right = (rect.x + rect.width).min(width as f32);
+    let bottom = (rect.y + rect.height).min(height as f32);
     let w = (right - x).max(0.0);
     let h = (bottom - y).max(0.0);
     if let Some(r) = tiny_skia::Rect::from_xywh(x, y, w, h) {
@@ -134,8 +134,8 @@ where
             let transform = tiny_skia::Transform::from_translate(cum_tx, cum_ty);
             match cmd {
                 DrawCommand::Rect { rect, style } => {
-                    if rect.w <= 0.0
-                        || rect.h <= 0.0
+                    if rect.width <= 0.0
+                        || rect.height <= 0.0
                         || (style.fill.is_none() && style.stroke.is_none())
                     {
                         continue;

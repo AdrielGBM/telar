@@ -24,7 +24,9 @@ pub use renderer_core::{
     PathData, PathStyle, PathVerb, Point, Rect, RectStyle, RendererError, Stroke, TextStyle,
 };
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
-pub use ui_core::{Button, WidgetCtx};
+pub use ui_core::{
+    Button, Label, WidgetCtx, compute_layout, new_container, register_leaf, with_context,
+};
 
 #[cfg(feature = "runtime")]
 pub use runner::run_with_name;

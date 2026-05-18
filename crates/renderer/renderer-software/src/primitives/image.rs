@@ -49,8 +49,8 @@ pub(crate) fn draw_image(
 
     let src_pixmap = &entry.1;
 
-    let scale_x = rect.w / data.width as f32;
-    let scale_y = rect.h / data.height as f32;
+    let scale_x = rect.width / data.width as f32;
+    let scale_y = rect.height / data.height as f32;
 
     let quality = match filter {
         ImageFilter::Nearest => tiny_skia::FilterQuality::Nearest,

@@ -64,6 +64,15 @@ impl<T: 'static> Memo<T> {
         }
     }
 
+    pub fn try_with<R>(&self, f: impl FnOnce(&T) -> R) -> Option<R> {
+        self.track();
+        let borrow = self.inner.borrow();
+        match &borrow.state {
+            MemoState::Ready(v) => Some(f(v)),
+            MemoState::Computing => None,
+        }
+    }
+
     fn track(&self) {
         if let Some(id) = runtime::current_observer() {
             let mut inner = self.inner.borrow_mut();

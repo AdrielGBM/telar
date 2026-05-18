@@ -93,7 +93,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle) -> RectInstance {
         None => ([0.0; 4], 0.0),
     };
     RectInstance {
-        rect: [rect.x, rect.y, rect.w, rect.h],
+        rect: [rect.x, rect.y, rect.width, rect.height],
         radii: [
             style.radius.top_left,
             style.radius.top_right,

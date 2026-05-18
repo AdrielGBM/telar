@@ -4,7 +4,8 @@ use rsx::{
     App, AppContext, AvailableSpace, BorderRadius, Button, Color, Component, ComponentTree, Event,
     EventResult, FillRule, FillStyle, Frame, ImageData, ImageFilter, LayoutStyle, LineCap,
     LineJoin, LineStyle, PathData, PathStyle, Point, ReadSignal, Rect, RectStyle, RwSignal, Stroke,
-    TextStyle, View, WidgetCtx, WindowConfig, create_rw_signal,
+    TextStyle, View, WidgetCtx, WindowConfig, compute_layout, create_rw_signal, new_container,
+    register_leaf, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -501,14 +502,12 @@ fn main() {
     let checker_image = Rc::new(make_checker(128, 128, 16));
     let alpha_image = Rc::new(make_radial_alpha(128, 128));
 
-    let mut widget_ctx = WidgetCtx::new();
-    let (label_node, label_rect) = widget_ctx
-        .register_leaf(LayoutStyle::new().height(24.0))
-        .expect("layout failed");
-    let btn_inc = Button::new("+", &mut widget_ctx).expect("layout failed");
-    let btn_dec = Button::new("-", &mut widget_ctx).expect("layout failed");
-    let widget_root = widget_ctx
-        .new_container(
+    let ((label_rect, btn_inc, btn_dec), _) = with_context(WidgetCtx::new(), || {
+        let (label_node, label_rect) =
+            register_leaf(LayoutStyle::new().height(24.0)).expect("layout failed");
+        let btn_inc = Button::new("+").expect("layout failed");
+        let btn_dec = Button::new("-").expect("layout failed");
+        let widget_root = new_container(
             LayoutStyle::new()
                 .flex_column()
                 .width(PANEL_W)
@@ -518,13 +517,14 @@ fn main() {
             &[label_node, btn_inc.layout_node(), btn_dec.layout_node()],
         )
         .expect("layout failed");
-    widget_ctx
-        .compute(
+        compute_layout(
             widget_root,
             AvailableSpace::Definite(PANEL_W),
             AvailableSpace::Definite(PANEL_H),
         )
         .expect("layout failed");
+        (label_rect, btn_inc, btn_dec)
+    });
 
     let count = create_rw_signal(0i32);
 
