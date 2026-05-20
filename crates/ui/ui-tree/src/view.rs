@@ -1,9 +1,32 @@
-use renderer_core::DrawCommand;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use renderer_core::{DrawCommand, Rect};
+
+pub struct SubtreeHandle {
+    pub(crate) commands: Rc<RefCell<Vec<DrawCommand>>>,
+}
+
+impl SubtreeHandle {
+    pub(crate) fn new(commands: Rc<RefCell<Vec<DrawCommand>>>) -> Self {
+        Self { commands }
+    }
+}
 
 pub enum View {
     Empty,
     Primitive(DrawCommand),
+    Subtree(SubtreeHandle),
     Group(Vec<View>),
+    Translate {
+        tx: f32,
+        ty: f32,
+        children: Vec<View>,
+    },
+    Clip {
+        rect: Rect,
+        children: Vec<View>,
+    },
 }
 
 impl View {

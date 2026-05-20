@@ -1,16 +1,22 @@
 use crate::config::RendererBackend;
 use crate::prefs::UserPrefs;
+use crate::window_signals::WindowSignals;
 
 pub struct AppCtx<'a> {
     pub(crate) app_name: &'a str,
     pub(crate) prefs: &'a mut UserPrefs,
     pub(crate) pending_restart: &'a mut bool,
     pub(crate) redraw_requested: &'a mut bool,
+    pub(crate) window_signals: Option<&'a WindowSignals>,
 }
 
 impl<'a> AppCtx<'a> {
     pub fn request_redraw(&mut self) {
         *self.redraw_requested = true;
+    }
+
+    pub fn window(&self) -> Option<&WindowSignals> {
+        self.window_signals
     }
 
     pub fn restart_required(&self) -> bool {

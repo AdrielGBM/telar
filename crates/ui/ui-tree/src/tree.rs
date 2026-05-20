@@ -2,10 +2,11 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use platform_core::Event;
-use reactive_core::{Effect, batch, create_effect};
+use reactive_core::{Effect, ReadSignal, RwSignal, batch, create_effect, create_rw_signal};
 use renderer_core::DrawCommand;
 
 use crate::component::{Component, EventResult};
+use crate::view::SubtreeHandle;
 use crate::view_flatten;
 
 struct ComponentSlot {
@@ -39,6 +40,50 @@ impl ComponentSlot {
             dirty,
             _effect,
         }
+    }
+}
+
+pub struct SubtreeSlot {
+    component: Rc<RefCell<Box<dyn Component>>>,
+    commands: Rc<RefCell<Vec<DrawCommand>>>,
+    version: RwSignal<u32>,
+    _effect: Effect,
+}
+
+impl SubtreeSlot {
+    pub fn new<C: Component + 'static>(component: C) -> Self {
+        let component = Rc::new(RefCell::new(Box::new(component) as Box<dyn Component>));
+        let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
+        let version = create_rw_signal(0u32);
+
+        let comp_clone = Rc::clone(&component);
+        let cmds_clone = Rc::clone(&commands);
+        let ver_clone = version.clone();
+        let _effect = create_effect(move || {
+            let view = comp_clone.borrow().view();
+            let flat = view_flatten::flatten_view(view);
+            *cmds_clone.borrow_mut() = flat;
+            ver_clone.update(|v| *v = v.wrapping_add(1));
+        });
+
+        Self {
+            component,
+            commands,
+            version,
+            _effect,
+        }
+    }
+
+    pub fn handle(&self) -> SubtreeHandle {
+        SubtreeHandle::new(Rc::clone(&self.commands))
+    }
+
+    pub fn version(&self) -> ReadSignal<u32> {
+        self.version.read_only()
+    }
+
+    pub fn on_event(&mut self, event: &Event) -> EventResult {
+        self.component.borrow_mut().on_event(event)
     }
 }
 

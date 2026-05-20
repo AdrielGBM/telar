@@ -1,21 +1,27 @@
 pub mod app_context;
 pub mod config;
 pub mod prefs;
+pub mod window_signals;
 
 #[cfg(feature = "runtime")]
 pub mod app;
+#[cfg(feature = "runtime")]
+pub mod reactive_app;
+#[cfg(feature = "runtime")]
+pub(crate) mod reactive_runner;
 #[cfg(feature = "runtime")]
 pub mod runner;
 
 pub use app_context::AppCtx;
 pub use config::{RendererBackend, RendererConfig, RsxConfig};
 pub use prefs::UserPrefs;
+pub use window_signals::WindowSignals;
 
-#[cfg(feature = "runtime")]
-pub use app::{App, Frame};
 pub use layout_core::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle};
 #[cfg(feature = "runtime")]
 pub use platform_core::{Event, ScrollDelta, WindowConfig};
+#[cfg(feature = "runtime")]
+pub use reactive_app::ReactiveApp;
 pub use reactive_core::{
     Effect, Memo, ReadSignal, RwSignal, WriteSignal, batch, create_effect, create_memo,
     create_rw_signal, create_signal,
@@ -23,21 +29,22 @@ pub use reactive_core::{
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, Color, FillRule, FillStyle, ImageData, ImageFilter, LineCap, LineJoin, LineStyle,
-    PathData, PathStyle, PathVerb, Point, Rect, RectStyle, RendererError, Stroke, TextStyle,
+    PathData, PathStyle, PathVerb, Point, Rect as Bounds, RectStyle, Stroke, TextStyle,
 };
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{
-    Button, Component, ComponentTree, EventResult, IntoView, Label, View, WidgetCtx,
+    Button, ClipGroup, Component, ComponentTree, EventResult, Image, IntoView, Label, LayoutLeaf,
+    Line, Path, Rect, SubtreeHandle, SubtreeSlot, Text, TranslateGroup, View, WidgetCtx,
     compute_layout, new_container, register_leaf, with_context,
 };
 
 #[cfg(feature = "runtime")]
-pub use runner::run_with_name;
+pub use runner::run_reactive_with_name;
 
 #[cfg(feature = "runtime")]
 #[macro_export]
-macro_rules! run {
+macro_rules! run_reactive {
     ($config:expr, $app:expr) => {
-        $crate::run_with_name($config, $app, env!("CARGO_PKG_NAME"))
+        $crate::run_reactive_with_name($config, $app, env!("CARGO_PKG_NAME"))
     };
 }

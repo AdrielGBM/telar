@@ -4,6 +4,6 @@ mod view;
 mod view_flatten;
 
 pub use component::{Component, EventResult};
-pub use tree::ComponentTree;
-pub use view::{IntoView, View};
+pub use tree::{ComponentTree, SubtreeSlot};
+pub use view::{IntoView, SubtreeHandle, View};
 pub use view_flatten::flatten_view;

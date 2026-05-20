@@ -8,6 +8,7 @@ use renderer_core::{
 
 use crate::app_context::AppCtx;
 
+#[doc(hidden)]
 pub struct Frame {
     pub(crate) commands: Vec<DrawCommand>,
     pub(crate) clear_color: Option<Color>,
@@ -71,6 +72,7 @@ impl Frame {
     }
 }
 
+#[doc(hidden)]
 pub trait App {
     fn on_resume(&mut self, _ctx: &mut AppCtx) -> Result<(), RendererError> {
         Ok(())

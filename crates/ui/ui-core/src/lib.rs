@@ -1,10 +1,26 @@
 mod button;
+mod clip_group;
 mod context;
+mod image;
 mod label;
 mod layout_leaf;
+mod line;
+mod path;
+mod rect;
+mod text;
+mod translate_group;
 
 pub use button::Button;
+pub use clip_group::ClipGroup;
 pub use context::{WidgetCtx, compute_layout, new_container, register_leaf, with_context};
+pub use image::Image;
 pub use label::Label;
 pub use layout_leaf::LayoutLeaf;
-pub use ui_tree::{Component, ComponentTree, EventResult, IntoView, View};
+pub use line::Line;
+pub use path::Path;
+pub use rect::Rect;
+pub use text::Text;
+pub use translate_group::TranslateGroup;
+pub use ui_tree::{
+    Component, ComponentTree, EventResult, IntoView, SubtreeHandle, SubtreeSlot, View,
+};

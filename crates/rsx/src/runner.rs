@@ -9,6 +9,9 @@ use crate::app::{App, Frame};
 use crate::app_context::AppCtx;
 use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
+use crate::reactive_app::ReactiveApp;
+use crate::reactive_runner::ReactiveAdapter;
+use crate::window_signals::WindowSignals;
 
 macro_rules! make_ctx {
     ($self:expr) => {
@@ -17,6 +20,7 @@ macro_rules! make_ctx {
             prefs: &mut $self.prefs,
             pending_restart: &mut $self.pending_restart,
             redraw_requested: &mut $self.redraw_requested,
+            window_signals: $self.window_signals.as_ref(),
         }
     };
 }
@@ -30,6 +34,7 @@ struct AppHandler<A: App> {
     pending_restart: bool,
     redraw_requested: bool,
     _flush_notify: Option<FlushNotifyHandle>,
+    window_signals: Option<WindowSignals>,
 }
 
 impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
@@ -41,6 +46,9 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
                 return false;
             }
         }
+        let initial_width = window.width() as f32;
+        let initial_height = window.height() as f32;
+        self.window_signals = Some(WindowSignals::new(initial_width, initial_height));
         self.redraw_requested = false;
         if let Err(e) = self.app.on_resume(&mut make_ctx!(self)) {
             tracing::error!("App::on_resume failed: {e}");
@@ -55,6 +63,11 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
 
     fn on_event(&mut self, event: Event, window: &WinitWindow) {
         self.redraw_requested = false;
+        if let Event::WindowResized { width, height } = &event {
+            if let Some(ref signals) = self.window_signals {
+                signals.update(*width as f32, *height as f32);
+            }
+        }
         self.app.on_event(event, &mut make_ctx!(self));
         if self.redraw_requested {
             window.request_redraw();
@@ -136,7 +149,11 @@ fn create_renderer(
     }
 }
 
-pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
+pub fn run_reactive_with_name<R: ReactiveApp>(config: WindowConfig, app: R, app_name: &str) {
+    run_with_name(config, ReactiveAdapter::new(app), app_name);
+}
+
+pub(crate) fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
     let prefs = UserPrefs::load(app_name);
     let backend = prefs
         .renderer
@@ -161,6 +178,7 @@ pub fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
             pending_restart: false,
             redraw_requested: false,
             _flush_notify: None,
+            window_signals: None,
         },
     ) {
         tracing::error!("Event loop exited with error: {e}");

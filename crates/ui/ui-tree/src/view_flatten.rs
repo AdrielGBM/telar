@@ -9,10 +9,27 @@ pub fn flatten_view(root: View) -> Vec<DrawCommand> {
         match view {
             View::Empty => {}
             View::Primitive(cmd) => out.push(cmd),
+            View::Subtree(handle) => {
+                out.extend(handle.commands.borrow().iter().cloned());
+            }
             View::Group(children) => {
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
+            }
+            View::Translate { tx, ty, children } => {
+                stack.push(View::Primitive(DrawCommand::PopTransform));
+                for child in children.into_iter().rev() {
+                    stack.push(child);
+                }
+                out.push(DrawCommand::PushTransform { tx, ty });
+            }
+            View::Clip { rect, children } => {
+                stack.push(View::Primitive(DrawCommand::PopClip));
+                for child in children.into_iter().rev() {
+                    stack.push(child);
+                }
+                out.push(DrawCommand::PushClip { rect });
             }
         }
     }
