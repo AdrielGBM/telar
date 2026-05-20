@@ -6,10 +6,6 @@ pub mod window_signals;
 #[cfg(feature = "runtime")]
 pub mod app;
 #[cfg(feature = "runtime")]
-pub mod reactive_app;
-#[cfg(feature = "runtime")]
-pub(crate) mod reactive_runner;
-#[cfg(feature = "runtime")]
 pub mod runner;
 
 pub use app_context::AppCtx;
@@ -17,11 +13,11 @@ pub use config::{RendererBackend, RendererConfig, RsxConfig};
 pub use prefs::UserPrefs;
 pub use window_signals::WindowSignals;
 
+#[cfg(feature = "runtime")]
+pub use app::App;
 pub use layout_core::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle};
 #[cfg(feature = "runtime")]
 pub use platform_core::{Event, ScrollDelta, WindowConfig};
-#[cfg(feature = "runtime")]
-pub use reactive_app::ReactiveApp;
 pub use reactive_core::{
     Effect, Memo, ReadSignal, RwSignal, WriteSignal, batch, create_effect, create_memo,
     create_rw_signal, create_signal,
@@ -39,12 +35,12 @@ pub use ui_core::{
 };
 
 #[cfg(feature = "runtime")]
-pub use runner::run_reactive_with_name;
+pub use runner::run_app_with_name;
 
 #[cfg(feature = "runtime")]
 #[macro_export]
-macro_rules! run_reactive {
+macro_rules! run_app {
     ($config:expr, $app:expr) => {
-        $crate::run_reactive_with_name($config, $app, env!("CARGO_PKG_NAME"))
+        $crate::run_app_with_name($config, $app, env!("CARGO_PKG_NAME"))
     };
 }

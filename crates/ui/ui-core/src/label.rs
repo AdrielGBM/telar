@@ -14,51 +14,29 @@ pub struct Label {
 }
 
 impl Label {
-    pub fn new(text: impl Into<String>, style: TextStyle) -> Result<Self, LayoutError> {
-        let s: Rc<str> = Rc::from(text.into());
-        Self::build(move || Rc::clone(&s), LayoutStyle::new(), style)
-    }
-
-    pub fn with_size(
+    pub fn new(
         text: impl Into<String>,
-        width: f32,
-        height: f32,
+        layout: LayoutStyle,
         style: TextStyle,
     ) -> Result<Self, LayoutError> {
         let s: Rc<str> = Rc::from(text.into());
-        Self::build(
-            move || Rc::clone(&s),
-            LayoutStyle::new().width(width).height(height),
-            style,
-        )
+        Self::build(move || Rc::clone(&s), layout, style)
     }
 
-    pub fn from_fn(
+    pub fn dynamic(
         text: impl Fn() -> String + 'static,
+        layout: LayoutStyle,
         style: TextStyle,
     ) -> Result<Self, LayoutError> {
-        Self::build(move || Rc::from(text()), LayoutStyle::new(), style)
-    }
-
-    pub fn from_fn_with_size(
-        text: impl Fn() -> String + 'static,
-        width: f32,
-        height: f32,
-        style: TextStyle,
-    ) -> Result<Self, LayoutError> {
-        Self::build(
-            move || Rc::from(text()),
-            LayoutStyle::new().width(width).height(height),
-            style,
-        )
+        Self::build(move || Rc::from(text()), layout, style)
     }
 
     fn build(
         text: impl Fn() -> Rc<str> + 'static,
-        layout_style: LayoutStyle,
+        layout: LayoutStyle,
         style: TextStyle,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(layout_style)?;
+        let leaf = LayoutLeaf::register(layout)?;
         Ok(Self {
             text: Box::new(text),
             style,
@@ -98,7 +76,12 @@ mod tests {
     #[test]
     fn label_view_returns_text_command() {
         with_context(WidgetCtx::new(), || {
-            let label = Label::new("Hello", TextStyle::new(16.0, Color::WHITE)).unwrap();
+            let label = Label::new(
+                "Hello",
+                LayoutStyle::new(),
+                TextStyle::new(16.0, Color::WHITE),
+            )
+            .unwrap();
             let view = label.view();
             assert!(matches!(view, View::Primitive(DrawCommand::Text { .. })));
         });
@@ -107,8 +90,12 @@ mod tests {
     #[test]
     fn label_view_reacts_to_rect_change() {
         with_context(WidgetCtx::new(), || {
-            let label =
-                Label::with_size("Hi", 120.0, 40.0, TextStyle::new(14.0, Color::BLACK)).unwrap();
+            let label = Label::new(
+                "Hi",
+                LayoutStyle::new().width(120.0).height(40.0),
+                TextStyle::new(14.0, Color::BLACK),
+            )
+            .unwrap();
             let root = new_container(
                 layout_core::LayoutStyle::new()
                     .flex_row()

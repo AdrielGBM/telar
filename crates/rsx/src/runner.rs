@@ -4,40 +4,25 @@ use reactive_core::{FlushNotifyHandle, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
 use renderer_software::SoftwareRenderer;
+use ui_core::ComponentTree;
 
-use crate::app::{App, Frame};
-use crate::app_context::AppCtx;
+use crate::app::App;
 use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
-use crate::reactive_app::ReactiveApp;
-use crate::reactive_runner::ReactiveAdapter;
 use crate::window_signals::WindowSignals;
 
-macro_rules! make_ctx {
-    ($self:expr) => {
-        AppCtx {
-            app_name: &$self.app_name,
-            prefs: &mut $self.prefs,
-            pending_restart: &mut $self.pending_restart,
-            redraw_requested: &mut $self.redraw_requested,
-            window_signals: $self.window_signals.as_ref(),
-        }
-    };
-}
-
-struct AppHandler<A: App> {
-    app: A,
+struct AppHandler {
+    app: Box<dyn App>,
+    tree: Option<ComponentTree>,
     renderer: Option<Box<dyn RenderBackend>>,
     backend: RendererBackend,
-    app_name: String,
     prefs: UserPrefs,
     pending_restart: bool,
-    redraw_requested: bool,
     _flush_notify: Option<FlushNotifyHandle>,
     window_signals: Option<WindowSignals>,
 }
 
-impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
+impl EventHandler<WinitWindow> for AppHandler {
     fn on_resume(&mut self, window: &WinitWindow) -> bool {
         match create_renderer(self.backend, window) {
             Ok(renderer) => self.renderer = Some(renderer),
@@ -46,14 +31,11 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
                 return false;
             }
         }
-        let initial_width = window.width() as f32;
-        let initial_height = window.height() as f32;
-        self.window_signals = Some(WindowSignals::new(initial_width, initial_height));
-        self.redraw_requested = false;
-        if let Err(e) = self.app.on_resume(&mut make_ctx!(self)) {
-            tracing::error!("App::on_resume failed: {e}");
-            return false;
-        }
+        self.window_signals = Some(WindowSignals::new(
+            window.width() as f32,
+            window.height() as f32,
+        ));
+        self.tree = Some(ComponentTree::new(self.app.root()));
 
         let w = window.clone();
         self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
@@ -61,16 +43,14 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         true
     }
 
-    fn on_event(&mut self, event: Event, window: &WinitWindow) {
-        self.redraw_requested = false;
+    fn on_event(&mut self, event: Event, _window: &WinitWindow) {
         if let Event::WindowResized { width, height } = &event {
             if let Some(ref signals) = self.window_signals {
                 signals.update(*width as f32, *height as f32);
             }
         }
-        self.app.on_event(event, &mut make_ctx!(self));
-        if self.redraw_requested {
-            window.request_redraw();
+        if let Some(tree) = &mut self.tree {
+            tree.on_event(&event);
         }
     }
 
@@ -95,12 +75,8 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
             tracing::error!("begin_frame failed: {e}");
             return;
         }
-        self.redraw_requested = false;
-        let app = &mut self.app;
-        let mut frame = Frame::new();
-        app.on_redraw(&mut frame, &mut make_ctx!(self));
-        let commands = std::mem::take(&mut frame.commands);
-        let clear = frame.clear_color;
+        let clear = self.app.clear_color();
+        let commands = self.tree.as_ref().map(|t| t.commands()).unwrap_or_default();
         if let Err(e) = renderer.as_mut().submit(commands) {
             tracing::error!("submit failed: {e}");
             return;
@@ -108,15 +84,9 @@ impl<A: App> EventHandler<WinitWindow> for AppHandler<A> {
         if let Err(e) = renderer.as_mut().end_frame(clear) {
             tracing::error!("end_frame failed: {e}");
         }
-        if self.redraw_requested {
-            window.request_redraw();
-        }
     }
 
-    fn on_suspend(&mut self) {
-        self.redraw_requested = false;
-        self.app.on_suspend(&mut make_ctx!(self));
-    }
+    fn on_suspend(&mut self) {}
 }
 
 fn create_renderer(
@@ -149,11 +119,7 @@ fn create_renderer(
     }
 }
 
-pub fn run_reactive_with_name<R: ReactiveApp>(config: WindowConfig, app: R, app_name: &str) {
-    run_with_name(config, ReactiveAdapter::new(app), app_name);
-}
-
-pub(crate) fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
+pub fn run_app_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
     let prefs = UserPrefs::load(app_name);
     let backend = prefs
         .renderer
@@ -170,13 +136,12 @@ pub(crate) fn run_with_name<A: App>(config: WindowConfig, app: A, app_name: &str
     if let Err(e) = platform.run(
         config,
         AppHandler {
-            app,
+            app: Box::new(app),
+            tree: None,
             renderer: None,
             backend,
-            app_name: app_name.to_string(),
             prefs,
             pending_restart: false,
-            redraw_requested: false,
             _flush_notify: None,
             window_signals: None,
         },

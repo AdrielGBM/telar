@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
 use rsx::{
-    AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Event, EventResult, FillRule,
-    FillStyle, Image, ImageData, ImageFilter, Label, LayoutStyle, Line, LineCap, LineJoin,
-    LineStyle, Path, PathData, PathStyle, Point, ReactiveApp, Rect, RectStyle, RwSignal,
-    ScrollDelta, Stroke, SubtreeSlot, Text, TextStyle, View, WidgetCtx, WindowConfig,
-    compute_layout, create_rw_signal, new_container, with_context,
+    App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Event, EventResult,
+    FillRule, FillStyle, Image, ImageData, ImageFilter, Label, LayoutStyle, Line, LineCap,
+    LineJoin, LineStyle, Path, PathData, PathStyle, Point, Rect, RectStyle, RwSignal, ScrollDelta,
+    Stroke, SubtreeSlot, Text, TextStyle, View, WidgetCtx, WindowConfig, compute_layout,
+    create_rw_signal, new_container, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -42,13 +42,9 @@ impl Component for WidgetPanel {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let r1 = self.btn_inc.on_event(event);
-        let r2 = self.btn_dec.on_event(event);
-        if matches!(r1, EventResult::Handled) || matches!(r2, EventResult::Handled) {
-            EventResult::Handled
-        } else {
-            EventResult::Ignored
-        }
+        self.btn_inc
+            .on_event(event)
+            .or(self.btn_dec.on_event(event))
     }
 }
 
@@ -936,7 +932,7 @@ impl Component for SandboxRootComponent {
 
 struct SandboxRoot;
 
-impl ReactiveApp for SandboxRoot {
+impl App for SandboxRoot {
     fn root(&self) -> Box<dyn Component> {
         let scroll_y = create_rw_signal(0.0f32);
         let window_width = create_rw_signal(800.0f32);
@@ -950,10 +946,9 @@ impl ReactiveApp for SandboxRoot {
 
         let ((count_label, btn_inc, btn_dec), _) = with_context(WidgetCtx::new(), || {
             let c = count.clone();
-            let count_label = Label::from_fn_with_size(
+            let count_label = Label::dynamic(
                 move || format!("Count: {}", c.get()),
-                PANEL_W - 16.0,
-                24.0,
+                LayoutStyle::new().width(PANEL_W - 16.0).height(24.0),
                 TextStyle::new(14.0, WHITE),
             )
             .expect("layout failed");
@@ -1022,7 +1017,7 @@ impl ReactiveApp for SandboxRoot {
 
 fn main() {
     tracing_subscriber::fmt::init();
-    rsx::run_reactive!(WindowConfig::default(), SandboxRoot);
+    rsx::run_app!(WindowConfig::default(), SandboxRoot);
 }
 
 fn make_gradient(width: u32, height: u32) -> ImageData {

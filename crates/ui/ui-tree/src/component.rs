@@ -8,6 +8,20 @@ pub enum EventResult {
     Ignored,
 }
 
+impl EventResult {
+    pub fn or(self, other: Self) -> Self {
+        if matches!(self, EventResult::Handled) {
+            self
+        } else {
+            other
+        }
+    }
+
+    pub fn is_handled(&self) -> bool {
+        matches!(self, EventResult::Handled)
+    }
+}
+
 pub trait Component: 'static {
     fn view(&self) -> View;
 
