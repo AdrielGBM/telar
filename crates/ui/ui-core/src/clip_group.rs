@@ -2,6 +2,8 @@ use platform_core::Event;
 use renderer_core::Rect;
 use ui_tree::{Component, EventResult, View};
 
+use crate::pointer::{dispatch_to_children, pointer_coords};
+
 pub struct ClipGroup {
     rect: Box<dyn Fn() -> Rect>,
     children: Vec<Box<dyn Component>>,
@@ -30,20 +32,6 @@ impl Component for ClipGroup {
                 return EventResult::Ignored;
             }
         }
-        for child in &mut self.children {
-            if child.on_event(event).is_handled() {
-                return EventResult::Handled;
-            }
-        }
-        EventResult::Ignored
-    }
-}
-
-fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
-    match event {
-        Event::PointerMoved { x, y, .. } => Some((*x, *y)),
-        Event::PointerPressed { x, y, .. } => Some((*x, *y)),
-        Event::PointerReleased { x, y, .. } => Some((*x, *y)),
-        _ => None,
+        dispatch_to_children(&mut self.children, event)
     }
 }

@@ -107,14 +107,6 @@ impl WidgetCtx {
         });
         walk_result
     }
-
-    pub fn engine(&self) -> &LayoutEngine {
-        &self.engine
-    }
-
-    pub fn engine_mut(&mut self) -> &mut LayoutEngine {
-        &mut self.engine
-    }
 }
 
 impl Default for WidgetCtx {

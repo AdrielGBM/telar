@@ -42,19 +42,6 @@ impl LayoutEngine {
             .map_err(LayoutError::from)
     }
 
-    pub fn add_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
-        self.tree
-            .add_child(parent.0, child.0)
-            .map_err(LayoutError::from)
-    }
-
-    pub fn remove(&mut self, node: NodeId) -> Result<(), LayoutError> {
-        self.tree
-            .remove(node.0)
-            .map(|_| ())
-            .map_err(LayoutError::from)
-    }
-
     pub fn compute(
         &mut self,
         root: NodeId,

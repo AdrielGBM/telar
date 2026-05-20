@@ -3,6 +3,8 @@ use reactive_core::{RwSignal, create_rw_signal};
 use renderer_core::{BorderRadius, Color, DrawCommand, Rect, RectStyle};
 use ui_tree::{Component, EventResult, View};
 
+use crate::pointer::{dispatch_to_children, offset_pointer, pointer_coords};
+
 pub struct ScrollArea {
     viewport: Box<dyn Fn() -> Rect>,
     content_height: f32,
@@ -81,55 +83,7 @@ impl Component for ScrollArea {
         let scroll_y = self.scroll_y.get() as f64;
         let adjusted = offset_pointer(event, -(vp.x as f64), -(vp.y as f64) + scroll_y);
         let effective = adjusted.as_ref().unwrap_or(event);
-
-        for child in &mut self.children {
-            if child.on_event(effective).is_handled() {
-                return EventResult::Handled;
-            }
-        }
-        EventResult::Ignored
-    }
-}
-
-fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
-    match event {
-        Event::PointerMoved { x, y, .. } => Some((*x, *y)),
-        Event::PointerPressed { x, y, .. } => Some((*x, *y)),
-        Event::PointerReleased { x, y, .. } => Some((*x, *y)),
-        _ => None,
-    }
-}
-
-fn offset_pointer(event: &Event, dx: f64, dy: f64) -> Option<Event> {
-    match event {
-        Event::PointerMoved { x, y, source } => Some(Event::PointerMoved {
-            x: x + dx,
-            y: y + dy,
-            source: source.clone(),
-        }),
-        Event::PointerPressed {
-            x,
-            y,
-            button,
-            source,
-        } => Some(Event::PointerPressed {
-            x: x + dx,
-            y: y + dy,
-            button: button.clone(),
-            source: source.clone(),
-        }),
-        Event::PointerReleased {
-            x,
-            y,
-            button,
-            source,
-        } => Some(Event::PointerReleased {
-            x: x + dx,
-            y: y + dy,
-            button: button.clone(),
-            source: source.clone(),
-        }),
-        _ => None,
+        dispatch_to_children(&mut self.children, effective)
     }
 }
 

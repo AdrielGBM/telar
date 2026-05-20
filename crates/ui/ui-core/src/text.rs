@@ -7,19 +7,19 @@ use ui_tree::{Component, EventResult, View};
 pub struct Text {
     text: Box<dyn Fn() -> Rc<str>>,
     rect: Box<dyn Fn() -> Rect>,
-    style: TextStyle,
+    style: Box<dyn Fn() -> TextStyle>,
 }
 
 impl Text {
     pub fn new(
         text: impl Fn() -> String + 'static,
         rect: impl Fn() -> Rect + 'static,
-        style: TextStyle,
+        style: impl Fn() -> TextStyle + 'static,
     ) -> Self {
         Self {
             text: Box::new(move || Rc::from(text())),
             rect: Box::new(rect),
-            style,
+            style: Box::new(style),
         }
     }
 }
@@ -29,7 +29,7 @@ impl Component for Text {
         View::Primitive(DrawCommand::Text {
             text: (self.text)(),
             rect: (self.rect)(),
-            style: self.style,
+            style: (self.style)(),
         })
     }
 

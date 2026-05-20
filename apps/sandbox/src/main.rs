@@ -65,7 +65,7 @@ fn shapes_section() -> View {
         Text::new(
             || "Shapes".to_string(),
             || Bounds::new(24.0, 20.0, 200.0, 20.0),
-            TextStyle::new(12.0, MUTED),
+            || TextStyle::new(12.0, MUTED),
         )
         .view(),
         Rect::new(
@@ -80,7 +80,7 @@ fn shapes_section() -> View {
         Text::new(
             || "fill".to_string(),
             || Bounds::new(24.0, 48.0, 168.0, 72.0),
-            TextStyle::new(13.0, WHITE),
+            || TextStyle::new(13.0, WHITE),
         )
         .view(),
         Rect::new(
@@ -95,7 +95,7 @@ fn shapes_section() -> View {
         Text::new(
             || "stroke".to_string(),
             || Bounds::new(208.0, 48.0, 168.0, 72.0),
-            TextStyle::new(13.0, DANGER),
+            || TextStyle::new(13.0, DANGER),
         )
         .view(),
         Rect::new(
@@ -110,7 +110,7 @@ fn shapes_section() -> View {
         Text::new(
             || "fill + stroke".to_string(),
             || Bounds::new(392.0, 48.0, 168.0, 72.0),
-            TextStyle::new(13.0, WHITE),
+            || TextStyle::new(13.0, WHITE),
         )
         .view(),
         Rect::new(
@@ -125,7 +125,7 @@ fn shapes_section() -> View {
         Text::new(
             || "pill radius".to_string(),
             || Bounds::new(576.0, 48.0, 168.0, 72.0),
-            TextStyle::new(13.0, WHITE),
+            || TextStyle::new(13.0, WHITE),
         )
         .view(),
     ])
@@ -137,7 +137,7 @@ fn colors_section() -> View {
         Text::new(
             || "Colors".to_string(),
             || Bounds::new(24.0, 148.0, 200.0, 20.0),
-            TextStyle::new(12.0, MUTED),
+            || TextStyle::new(12.0, MUTED),
         )
         .view(),
     );
@@ -161,7 +161,7 @@ fn colors_section() -> View {
             Text::new(
                 || label.to_string(),
                 move || Bounds::new(x, 176.0, 100.0, 36.0),
-                TextStyle::new(11.0, WHITE),
+                || TextStyle::new(11.0, WHITE),
             )
             .view(),
         );
@@ -175,37 +175,37 @@ fn typography_section() -> View {
         Text::new(
             || "Typography".to_string(),
             || Bounds::new(24.0, 240.0, 300.0, 20.0),
-            TextStyle::new(12.0, MUTED),
+            || TextStyle::new(12.0, MUTED),
         )
         .view(),
         Text::new(
             || "Small — 12px — The quick brown fox".to_string(),
             || Bounds::new(24.0, 262.0, 600.0, 20.0),
-            TextStyle::new(12.0, DARK),
+            || TextStyle::new(12.0, DARK),
         )
         .view(),
         Text::new(
             || "Regular — 14px — The quick brown fox".to_string(),
             || Bounds::new(24.0, 286.0, 600.0, 22.0),
-            TextStyle::new(14.0, DARK),
+            || TextStyle::new(14.0, DARK),
         )
         .view(),
         Text::new(
             || "Medium — 18px — The quick brown fox".to_string(),
             || Bounds::new(24.0, 312.0, 600.0, 26.0),
-            TextStyle::new(18.0, DARK),
+            || TextStyle::new(18.0, DARK),
         )
         .view(),
         Text::new(
             || "Large — 24px — The quick brown fox".to_string(),
             || Bounds::new(24.0, 342.0, 700.0, 32.0),
-            TextStyle::new(24.0, DARK),
+            || TextStyle::new(24.0, DARK),
         )
         .view(),
         Text::new(
             || "Display — 32px".to_string(),
             || Bounds::new(24.0, 378.0, 500.0, 42.0),
-            TextStyle::new(32.0, PRIMARY),
+            || TextStyle::new(32.0, PRIMARY),
         )
         .view(),
     ])
@@ -216,7 +216,7 @@ fn cards_section() -> View {
         Text::new(
             || "Cards".to_string(),
             || Bounds::new(24.0, 440.0, 200.0, 20.0),
-            TextStyle::new(12.0, MUTED),
+            || TextStyle::new(12.0, MUTED),
         )
         .view(),
         Rect::new(
@@ -231,13 +231,13 @@ fn cards_section() -> View {
         Text::new(
             || "Dark Card".to_string(),
             || Bounds::new(40.0, 478.0, 340.0, 24.0),
-            TextStyle::new(16.0, WHITE),
+            || TextStyle::new(16.0, WHITE),
         )
         .view(),
         Text::new(
             || "White text on a dark background.".to_string(),
             || Bounds::new(40.0, 508.0, 340.0, 52.0),
-            TextStyle::new(13.0, MUTED),
+            || TextStyle::new(13.0, MUTED),
         )
         .view(),
         Rect::new(
@@ -252,13 +252,13 @@ fn cards_section() -> View {
         Text::new(
             || "Light Card".to_string(),
             || Bounds::new(424.0, 478.0, 340.0, 24.0),
-            TextStyle::new(16.0, DARK),
+            || TextStyle::new(16.0, DARK),
         )
         .view(),
         Text::new(
             || "Dark text on a white background.".to_string(),
             || Bounds::new(424.0, 508.0, 340.0, 52.0),
-            TextStyle::new(13.0, MUTED),
+            || TextStyle::new(13.0, MUTED),
         )
         .view(),
     ])
@@ -269,7 +269,7 @@ fn images_section(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<Ima
         Text::new(
             || "Images".to_string(),
             || Bounds::new(24.0, 600.0, 200.0, 20.0),
-            TextStyle::new(12.0, MUTED),
+            || TextStyle::new(12.0, MUTED),
         )
         .view(),
         Image::new(
@@ -278,13 +278,13 @@ fn images_section(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<Ima
                 move || g.clone()
             },
             || Bounds::new(24.0, 624.0, 128.0, 128.0),
-            ImageFilter::Linear,
+            || ImageFilter::Linear,
         )
         .view(),
         Text::new(
             || "gradient".to_string(),
             || Bounds::new(24.0, 756.0, 128.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
         Image::new(
@@ -293,13 +293,13 @@ fn images_section(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<Ima
                 move || c.clone()
             },
             || Bounds::new(172.0, 624.0, 192.0, 192.0),
-            ImageFilter::Nearest,
+            || ImageFilter::Nearest,
         )
         .view(),
         Text::new(
             || "checker (scaled)".to_string(),
             || Bounds::new(172.0, 820.0, 192.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
         Image::new(
@@ -308,13 +308,13 @@ fn images_section(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<Ima
                 move || a.clone()
             },
             || Bounds::new(384.0, 624.0, 128.0, 128.0),
-            ImageFilter::Nearest,
+            || ImageFilter::Nearest,
         )
         .view(),
         Text::new(
             || "alpha blend".to_string(),
             || Bounds::new(384.0, 756.0, 128.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     ])
@@ -327,7 +327,7 @@ fn lines_section() -> View {
         Text::new(
             || "Lines".to_string(),
             || Bounds::new(24.0, 860.0, 200.0, 20.0),
-            TextStyle::new(12.0, MUTED),
+            || TextStyle::new(12.0, MUTED),
         )
         .view(),
     );
@@ -336,7 +336,7 @@ fn lines_section() -> View {
         Text::new(
             || "Width".to_string(),
             || Bounds::new(24.0, 884.0, 60.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -354,7 +354,7 @@ fn lines_section() -> View {
             Text::new(
                 || label.to_string(),
                 move || Bounds::new(24.0, cy - 8.0, 56.0, 16.0),
-                TextStyle::new(11.0, MUTED),
+                || TextStyle::new(11.0, MUTED),
             )
             .view(),
         );
@@ -373,7 +373,7 @@ fn lines_section() -> View {
         Text::new(
             || "Color".to_string(),
             || Bounds::new(420.0, 884.0, 60.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -398,7 +398,7 @@ fn lines_section() -> View {
             Text::new(
                 || label.to_string(),
                 move || Bounds::new(688.0, y - 8.0, 80.0, 16.0),
-                TextStyle::new(11.0, color),
+                move || TextStyle::new(11.0, color),
             )
             .view(),
         );
@@ -408,7 +408,7 @@ fn lines_section() -> View {
         Text::new(
             || "Separator & chart".to_string(),
             || Bounds::new(24.0, 1020.0, 300.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -477,7 +477,7 @@ fn lines_section() -> View {
         Text::new(
             || "Diagonals".to_string(),
             || Bounds::new(460.0, 1044.0, 120.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -521,7 +521,7 @@ fn paths_section() -> View {
         Text::new(
             || "Paths".to_string(),
             || Bounds::new(24.0, Y0 + 12.0, 200.0, 20.0),
-            TextStyle::new(12.0, MUTED),
+            || TextStyle::new(12.0, MUTED),
         )
         .view(),
     );
@@ -529,7 +529,7 @@ fn paths_section() -> View {
         Text::new(
             || "Polygon shapes".to_string(),
             || Bounds::new(24.0, Y0 + 36.0, 300.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -559,7 +559,7 @@ fn paths_section() -> View {
         Text::new(
             || "triangle".to_string(),
             || Bounds::new(24.0, Y0 + 176.0, 150.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -600,7 +600,7 @@ fn paths_section() -> View {
             Text::new(
                 || "star (fill + stroke)".to_string(),
                 || Bounds::new(199.0, Y0 + 176.0, 200.0, 16.0),
-                TextStyle::new(11.0, MUTED),
+                || TextStyle::new(11.0, MUTED),
             )
             .view(),
         );
@@ -637,7 +637,7 @@ fn paths_section() -> View {
         Text::new(
             || "even-odd fill".to_string(),
             || Bounds::new(374.0, Y0 + 176.0, 200.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -646,7 +646,7 @@ fn paths_section() -> View {
         Text::new(
             || "Bézier curves".to_string(),
             || Bounds::new(24.0, Y0 + 212.0, 300.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -674,7 +674,7 @@ fn paths_section() -> View {
         Text::new(
             || "quad_to arch".to_string(),
             || Bounds::new(24.0, Y0 + 318.0, 200.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -706,7 +706,7 @@ fn paths_section() -> View {
         Text::new(
             || "cubic_to S-curve".to_string(),
             || Bounds::new(320.0, Y0 + 318.0, 200.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -744,7 +744,7 @@ fn paths_section() -> View {
         Text::new(
             || "closed cubic (petal)".to_string(),
             || Bounds::new(470.0, Y0 + 318.0, 200.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -753,7 +753,7 @@ fn paths_section() -> View {
         Text::new(
             || "Stroke style".to_string(),
             || Bounds::new(24.0, Y0 + 354.0, 300.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -783,7 +783,7 @@ fn paths_section() -> View {
         Text::new(
             || "Butt / Miter (default)".to_string(),
             || Bounds::new(24.0, Y0 + 448.0, 230.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -817,7 +817,7 @@ fn paths_section() -> View {
         Text::new(
             || "Round cap / Round join".to_string(),
             || Bounds::new(324.0, Y0 + 448.0, 240.0, 16.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
@@ -857,7 +857,7 @@ impl Component for SandboxRootComponent {
         let widget_label = Text::new(
             || "Reactive Widgets".to_string(),
             || Bounds::new(PANEL_X, PANEL_Y - 18.0, PANEL_W, 14.0),
-            TextStyle::new(11.0, MUTED),
+            || TextStyle::new(11.0, MUTED),
         )
         .view();
         let panel_bg = Rect::new(

@@ -6,6 +6,7 @@ mod label;
 mod layout_leaf;
 mod line;
 mod path;
+mod pointer;
 mod rect;
 mod scroll_area;
 mod text;
@@ -23,6 +24,4 @@ pub use rect::Rect;
 pub use scroll_area::ScrollArea;
 pub use text::Text;
 pub use translate_group::TranslateGroup;
-pub use ui_tree::{
-    Component, ComponentTree, EventResult, IntoView, SubtreeHandle, SubtreeSlot, View,
-};
+pub use ui_tree::{Component, ComponentTree, EventResult, View};

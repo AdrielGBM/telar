@@ -7,19 +7,19 @@ use ui_tree::{Component, EventResult, View};
 pub struct Image {
     data: Box<dyn Fn() -> Rc<ImageData>>,
     rect: Box<dyn Fn() -> Rect>,
-    filter: ImageFilter,
+    filter: Box<dyn Fn() -> ImageFilter>,
 }
 
 impl Image {
     pub fn new(
         data: impl Fn() -> Rc<ImageData> + 'static,
         rect: impl Fn() -> Rect + 'static,
-        filter: ImageFilter,
+        filter: impl Fn() -> ImageFilter + 'static,
     ) -> Self {
         Self {
             data: Box::new(data),
             rect: Box::new(rect),
-            filter,
+            filter: Box::new(filter),
         }
     }
 }
@@ -31,7 +31,7 @@ impl Component for Image {
         View::Primitive(DrawCommand::Image {
             data,
             rect,
-            filter: self.filter,
+            filter: (self.filter)(),
         })
     }
 

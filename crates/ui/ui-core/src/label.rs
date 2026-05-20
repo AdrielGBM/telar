@@ -19,17 +19,9 @@ impl Label {
         layout: LayoutStyle,
         style: TextStyle,
     ) -> Result<Self, LayoutError> {
-        Self::build(move || Rc::from(text()), layout, style)
-    }
-
-    fn build(
-        text: impl Fn() -> Rc<str> + 'static,
-        layout: LayoutStyle,
-        style: TextStyle,
-    ) -> Result<Self, LayoutError> {
         let leaf = LayoutLeaf::register(layout)?;
         Ok(Self {
-            text: Box::new(text),
+            text: Box::new(move || Rc::from(text())),
             style,
             leaf,
         })
