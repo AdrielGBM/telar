@@ -19,14 +19,6 @@ impl TranslateGroup {
             children,
         }
     }
-
-    pub fn static_offset(tx: f32, ty: f32, children: Vec<Box<dyn Component>>) -> Self {
-        Self {
-            tx: Box::new(move || tx),
-            ty: Box::new(move || ty),
-            children,
-        }
-    }
 }
 
 impl Component for TranslateGroup {

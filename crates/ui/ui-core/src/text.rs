@@ -11,16 +11,7 @@ pub struct Text {
 }
 
 impl Text {
-    pub fn new(text: impl Into<String>, rect: Rect, style: TextStyle) -> Self {
-        let s: Rc<str> = Rc::from(text.into());
-        Self {
-            text: Box::new(move || Rc::clone(&s)),
-            rect: Box::new(move || rect),
-            style,
-        }
-    }
-
-    pub fn from_fn(
+    pub fn new(
         text: impl Fn() -> String + 'static,
         rect: impl Fn() -> Rect + 'static,
         style: TextStyle,

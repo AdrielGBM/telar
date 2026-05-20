@@ -7,6 +7,7 @@ mod layout_leaf;
 mod line;
 mod path;
 mod rect;
+mod scroll_area;
 mod text;
 mod translate_group;
 
@@ -19,6 +20,7 @@ pub use layout_leaf::LayoutLeaf;
 pub use line::Line;
 pub use path::Path;
 pub use rect::Rect;
+pub use scroll_area::ScrollArea;
 pub use text::Text;
 pub use translate_group::TranslateGroup;
 pub use ui_tree::{

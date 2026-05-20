@@ -30,8 +30,8 @@ pub use renderer_core::{
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{
     Button, ClipGroup, Component, ComponentTree, EventResult, Image, IntoView, Label, LayoutLeaf,
-    Line, Path, Rect, SubtreeHandle, SubtreeSlot, Text, TranslateGroup, View, WidgetCtx,
-    compute_layout, new_container, register_leaf, with_context,
+    Line, Path, Rect, ScrollArea, SubtreeHandle, SubtreeSlot, Text, TranslateGroup, View,
+    WidgetCtx, compute_layout, new_container, register_leaf, with_context,
 };
 
 #[cfg(feature = "runtime")]

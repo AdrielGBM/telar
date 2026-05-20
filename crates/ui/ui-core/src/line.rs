@@ -9,15 +9,7 @@ pub struct Line {
 }
 
 impl Line {
-    pub fn new(p1: Point, p2: Point, style: LineStyle) -> Self {
-        Self {
-            p1: Box::new(move || p1),
-            p2: Box::new(move || p2),
-            style: Box::new(move || style),
-        }
-    }
-
-    pub fn from_fn(
+    pub fn new(
         p1: impl Fn() -> Point + 'static,
         p2: impl Fn() -> Point + 'static,
         style: impl Fn() -> LineStyle + 'static,

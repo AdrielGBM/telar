@@ -11,15 +11,7 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn new(data: Rc<ImageData>, rect: Rect, filter: ImageFilter) -> Self {
-        Self {
-            data: Box::new(move || Rc::clone(&data)),
-            rect: Box::new(move || rect),
-            filter,
-        }
-    }
-
-    pub fn from_fn(
+    pub fn new(
         data: impl Fn() -> Rc<ImageData> + 'static,
         rect: impl Fn() -> Rect + 'static,
         filter: ImageFilter,

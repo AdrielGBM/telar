@@ -10,14 +10,7 @@ pub struct Path {
 }
 
 impl Path {
-    pub fn new(data: Rc<PathData>, style: PathStyle) -> Self {
-        Self {
-            data: Box::new(move || Rc::clone(&data)),
-            style: Box::new(move || style),
-        }
-    }
-
-    pub fn from_fn(
+    pub fn new(
         data: impl Fn() -> Rc<PathData> + 'static,
         style: impl Fn() -> PathStyle + 'static,
     ) -> Self {

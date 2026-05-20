@@ -14,13 +14,6 @@ impl ClipGroup {
             children,
         }
     }
-
-    pub fn static_rect(rect: Rect, children: Vec<Box<dyn Component>>) -> Self {
-        Self {
-            rect: Box::new(move || rect),
-            children,
-        }
-    }
 }
 
 impl Component for ClipGroup {

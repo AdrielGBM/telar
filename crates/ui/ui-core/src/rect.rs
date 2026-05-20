@@ -8,14 +8,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    pub fn new(rect: RectBounds, style: RectStyle) -> Self {
-        Self {
-            rect: Box::new(move || rect),
-            style: Box::new(move || style),
-        }
-    }
-
-    pub fn from_fn(
+    pub fn new(
         rect: impl Fn() -> RectBounds + 'static,
         style: impl Fn() -> RectStyle + 'static,
     ) -> Self {

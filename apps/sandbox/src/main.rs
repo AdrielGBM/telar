@@ -3,7 +3,7 @@ use std::rc::Rc;
 use rsx::{
     App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Event, EventResult,
     FillRule, FillStyle, Image, ImageData, ImageFilter, Label, LayoutStyle, Line, LineCap,
-    LineJoin, LineStyle, Path, PathData, PathStyle, Point, Rect, RectStyle, RwSignal, ScrollDelta,
+    LineJoin, LineStyle, Path, PathData, PathStyle, Point, Rect, RectStyle, RwSignal, ScrollArea,
     Stroke, Text, TextStyle, TranslateGroup, View, WidgetCtx, WindowConfig, compute_layout,
     create_rw_signal, new_container, with_context,
 };
@@ -63,14 +63,14 @@ fn static_content(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<Ima
 fn shapes_section() -> View {
     View::group([
         Text::new(
-            "Shapes",
-            Bounds::new(24.0, 20.0, 200.0, 20.0),
+            || "Shapes".to_string(),
+            || Bounds::new(24.0, 20.0, 200.0, 20.0),
             TextStyle::new(12.0, MUTED),
         )
         .view(),
         Rect::new(
-            Bounds::new(24.0, 44.0, 168.0, 80.0),
-            RectStyle {
+            || Bounds::new(24.0, 44.0, 168.0, 80.0),
+            || RectStyle {
                 fill: Some(FillStyle::Solid(PRIMARY)),
                 stroke: None,
                 radius: BorderRadius::all(8.0),
@@ -78,14 +78,14 @@ fn shapes_section() -> View {
         )
         .view(),
         Text::new(
-            "fill",
-            Bounds::new(24.0, 48.0, 168.0, 72.0),
+            || "fill".to_string(),
+            || Bounds::new(24.0, 48.0, 168.0, 72.0),
             TextStyle::new(13.0, WHITE),
         )
         .view(),
         Rect::new(
-            Bounds::new(208.0, 44.0, 168.0, 80.0),
-            RectStyle {
+            || Bounds::new(208.0, 44.0, 168.0, 80.0),
+            || RectStyle {
                 fill: None,
                 stroke: Some(Stroke::new(DANGER, 2.0)),
                 radius: BorderRadius::all(8.0),
@@ -93,14 +93,14 @@ fn shapes_section() -> View {
         )
         .view(),
         Text::new(
-            "stroke",
-            Bounds::new(208.0, 48.0, 168.0, 72.0),
+            || "stroke".to_string(),
+            || Bounds::new(208.0, 48.0, 168.0, 72.0),
             TextStyle::new(13.0, DANGER),
         )
         .view(),
         Rect::new(
-            Bounds::new(392.0, 44.0, 168.0, 80.0),
-            RectStyle {
+            || Bounds::new(392.0, 44.0, 168.0, 80.0),
+            || RectStyle {
                 fill: Some(FillStyle::Solid(SUCCESS)),
                 stroke: Some(Stroke::new(DARK, 1.5)),
                 radius: BorderRadius::zero(),
@@ -108,14 +108,14 @@ fn shapes_section() -> View {
         )
         .view(),
         Text::new(
-            "fill + stroke",
-            Bounds::new(392.0, 48.0, 168.0, 72.0),
+            || "fill + stroke".to_string(),
+            || Bounds::new(392.0, 48.0, 168.0, 72.0),
             TextStyle::new(13.0, WHITE),
         )
         .view(),
         Rect::new(
-            Bounds::new(576.0, 44.0, 168.0, 80.0),
-            RectStyle {
+            || Bounds::new(576.0, 44.0, 168.0, 80.0),
+            || RectStyle {
                 fill: Some(FillStyle::Solid(PURPLE)),
                 stroke: None,
                 radius: BorderRadius::all(40.0),
@@ -123,8 +123,8 @@ fn shapes_section() -> View {
         )
         .view(),
         Text::new(
-            "pill radius",
-            Bounds::new(576.0, 48.0, 168.0, 72.0),
+            || "pill radius".to_string(),
+            || Bounds::new(576.0, 48.0, 168.0, 72.0),
             TextStyle::new(13.0, WHITE),
         )
         .view(),
@@ -135,8 +135,8 @@ fn colors_section() -> View {
     let mut children: Vec<View> = Vec::new();
     children.push(
         Text::new(
-            "Colors",
-            Bounds::new(24.0, 148.0, 200.0, 20.0),
+            || "Colors".to_string(),
+            || Bounds::new(24.0, 148.0, 200.0, 20.0),
             TextStyle::new(12.0, MUTED),
         )
         .view(),
@@ -148,8 +148,8 @@ fn colors_section() -> View {
         let x = 24.0 + i as f32 * 116.0;
         children.push(
             Rect::new(
-                Bounds::new(x, 172.0, 100.0, 44.0),
-                RectStyle {
+                move || Bounds::new(x, 172.0, 100.0, 44.0),
+                move || RectStyle {
                     fill: Some(FillStyle::Solid(color)),
                     stroke: None,
                     radius: BorderRadius::all(6.0),
@@ -159,8 +159,8 @@ fn colors_section() -> View {
         );
         children.push(
             Text::new(
-                label,
-                Bounds::new(x, 176.0, 100.0, 36.0),
+                || label.to_string(),
+                move || Bounds::new(x, 176.0, 100.0, 36.0),
                 TextStyle::new(11.0, WHITE),
             )
             .view(),
@@ -173,38 +173,38 @@ fn colors_section() -> View {
 fn typography_section() -> View {
     View::group([
         Text::new(
-            "Typography",
-            Bounds::new(24.0, 240.0, 300.0, 20.0),
+            || "Typography".to_string(),
+            || Bounds::new(24.0, 240.0, 300.0, 20.0),
             TextStyle::new(12.0, MUTED),
         )
         .view(),
         Text::new(
-            "Small — 12px — The quick brown fox",
-            Bounds::new(24.0, 262.0, 600.0, 20.0),
+            || "Small — 12px — The quick brown fox".to_string(),
+            || Bounds::new(24.0, 262.0, 600.0, 20.0),
             TextStyle::new(12.0, DARK),
         )
         .view(),
         Text::new(
-            "Regular — 14px — The quick brown fox",
-            Bounds::new(24.0, 286.0, 600.0, 22.0),
+            || "Regular — 14px — The quick brown fox".to_string(),
+            || Bounds::new(24.0, 286.0, 600.0, 22.0),
             TextStyle::new(14.0, DARK),
         )
         .view(),
         Text::new(
-            "Medium — 18px — The quick brown fox",
-            Bounds::new(24.0, 312.0, 600.0, 26.0),
+            || "Medium — 18px — The quick brown fox".to_string(),
+            || Bounds::new(24.0, 312.0, 600.0, 26.0),
             TextStyle::new(18.0, DARK),
         )
         .view(),
         Text::new(
-            "Large — 24px — The quick brown fox",
-            Bounds::new(24.0, 342.0, 700.0, 32.0),
+            || "Large — 24px — The quick brown fox".to_string(),
+            || Bounds::new(24.0, 342.0, 700.0, 32.0),
             TextStyle::new(24.0, DARK),
         )
         .view(),
         Text::new(
-            "Display — 32px",
-            Bounds::new(24.0, 378.0, 500.0, 42.0),
+            || "Display — 32px".to_string(),
+            || Bounds::new(24.0, 378.0, 500.0, 42.0),
             TextStyle::new(32.0, PRIMARY),
         )
         .view(),
@@ -214,14 +214,14 @@ fn typography_section() -> View {
 fn cards_section() -> View {
     View::group([
         Text::new(
-            "Cards",
-            Bounds::new(24.0, 440.0, 200.0, 20.0),
+            || "Cards".to_string(),
+            || Bounds::new(24.0, 440.0, 200.0, 20.0),
             TextStyle::new(12.0, MUTED),
         )
         .view(),
         Rect::new(
-            Bounds::new(24.0, 464.0, 368.0, 110.0),
-            RectStyle {
+            || Bounds::new(24.0, 464.0, 368.0, 110.0),
+            || RectStyle {
                 fill: Some(FillStyle::Solid(DARK)),
                 stroke: None,
                 radius: BorderRadius::all(10.0),
@@ -229,20 +229,20 @@ fn cards_section() -> View {
         )
         .view(),
         Text::new(
-            "Dark Card",
-            Bounds::new(40.0, 478.0, 340.0, 24.0),
+            || "Dark Card".to_string(),
+            || Bounds::new(40.0, 478.0, 340.0, 24.0),
             TextStyle::new(16.0, WHITE),
         )
         .view(),
         Text::new(
-            "White text on a dark background.",
-            Bounds::new(40.0, 508.0, 340.0, 52.0),
+            || "White text on a dark background.".to_string(),
+            || Bounds::new(40.0, 508.0, 340.0, 52.0),
             TextStyle::new(13.0, MUTED),
         )
         .view(),
         Rect::new(
-            Bounds::new(408.0, 464.0, 368.0, 110.0),
-            RectStyle {
+            || Bounds::new(408.0, 464.0, 368.0, 110.0),
+            || RectStyle {
                 fill: Some(FillStyle::Solid(WHITE)),
                 stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
                 radius: BorderRadius::all(10.0),
@@ -250,14 +250,14 @@ fn cards_section() -> View {
         )
         .view(),
         Text::new(
-            "Light Card",
-            Bounds::new(424.0, 478.0, 340.0, 24.0),
+            || "Light Card".to_string(),
+            || Bounds::new(424.0, 478.0, 340.0, 24.0),
             TextStyle::new(16.0, DARK),
         )
         .view(),
         Text::new(
-            "Dark text on a white background.",
-            Bounds::new(424.0, 508.0, 340.0, 52.0),
+            || "Dark text on a white background.".to_string(),
+            || Bounds::new(424.0, 508.0, 340.0, 52.0),
             TextStyle::new(13.0, MUTED),
         )
         .view(),
@@ -267,44 +267,53 @@ fn cards_section() -> View {
 fn images_section(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<ImageData>) -> View {
     View::group([
         Text::new(
-            "Images",
-            Bounds::new(24.0, 600.0, 200.0, 20.0),
+            || "Images".to_string(),
+            || Bounds::new(24.0, 600.0, 200.0, 20.0),
             TextStyle::new(12.0, MUTED),
         )
         .view(),
         Image::new(
-            gradient,
-            Bounds::new(24.0, 624.0, 128.0, 128.0),
+            {
+                let g = gradient.clone();
+                move || g.clone()
+            },
+            || Bounds::new(24.0, 624.0, 128.0, 128.0),
             ImageFilter::Linear,
         )
         .view(),
         Text::new(
-            "gradient",
-            Bounds::new(24.0, 756.0, 128.0, 16.0),
+            || "gradient".to_string(),
+            || Bounds::new(24.0, 756.0, 128.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
         Image::new(
-            checker,
-            Bounds::new(172.0, 624.0, 192.0, 192.0),
+            {
+                let c = checker.clone();
+                move || c.clone()
+            },
+            || Bounds::new(172.0, 624.0, 192.0, 192.0),
             ImageFilter::Nearest,
         )
         .view(),
         Text::new(
-            "checker (scaled)",
-            Bounds::new(172.0, 820.0, 192.0, 16.0),
+            || "checker (scaled)".to_string(),
+            || Bounds::new(172.0, 820.0, 192.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
         Image::new(
-            alpha,
-            Bounds::new(384.0, 624.0, 128.0, 128.0),
+            {
+                let a = alpha.clone();
+                move || a.clone()
+            },
+            || Bounds::new(384.0, 624.0, 128.0, 128.0),
             ImageFilter::Nearest,
         )
         .view(),
         Text::new(
-            "alpha blend",
-            Bounds::new(384.0, 756.0, 128.0, 16.0),
+            || "alpha blend".to_string(),
+            || Bounds::new(384.0, 756.0, 128.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
@@ -316,8 +325,8 @@ fn lines_section() -> View {
 
     children.push(
         Text::new(
-            "Lines",
-            Bounds::new(24.0, 860.0, 200.0, 20.0),
+            || "Lines".to_string(),
+            || Bounds::new(24.0, 860.0, 200.0, 20.0),
             TextStyle::new(12.0, MUTED),
         )
         .view(),
@@ -325,8 +334,8 @@ fn lines_section() -> View {
 
     children.push(
         Text::new(
-            "Width",
-            Bounds::new(24.0, 884.0, 60.0, 16.0),
+            || "Width".to_string(),
+            || Bounds::new(24.0, 884.0, 60.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
@@ -343,17 +352,17 @@ fn lines_section() -> View {
     for &(w, label) in width_examples {
         children.push(
             Text::new(
-                label,
-                Bounds::new(24.0, cy - 8.0, 56.0, 16.0),
+                || label.to_string(),
+                move || Bounds::new(24.0, cy - 8.0, 56.0, 16.0),
                 TextStyle::new(11.0, MUTED),
             )
             .view(),
         );
         children.push(
             Line::new(
-                Point::new(88.0, cy),
-                Point::new(360.0, cy),
-                LineStyle::new(PRIMARY, w),
+                move || Point::new(88.0, cy),
+                move || Point::new(360.0, cy),
+                move || LineStyle::new(PRIMARY, w),
             )
             .view(),
         );
@@ -362,8 +371,8 @@ fn lines_section() -> View {
 
     children.push(
         Text::new(
-            "Color",
-            Bounds::new(420.0, 884.0, 60.0, 16.0),
+            || "Color".to_string(),
+            || Bounds::new(420.0, 884.0, 60.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
@@ -379,16 +388,16 @@ fn lines_section() -> View {
         let y = 906.0 + i as f32 * 24.0;
         children.push(
             Line::new(
-                Point::new(420.0, y),
-                Point::new(680.0, y),
-                LineStyle::new(color, 3.0),
+                move || Point::new(420.0, y),
+                move || Point::new(680.0, y),
+                move || LineStyle::new(color, 3.0),
             )
             .view(),
         );
         children.push(
             Text::new(
-                label,
-                Bounds::new(688.0, y - 8.0, 80.0, 16.0),
+                || label.to_string(),
+                move || Bounds::new(688.0, y - 8.0, 80.0, 16.0),
                 TextStyle::new(11.0, color),
             )
             .view(),
@@ -397,17 +406,17 @@ fn lines_section() -> View {
 
     children.push(
         Text::new(
-            "Separator & chart",
-            Bounds::new(24.0, 1020.0, 300.0, 16.0),
+            || "Separator & chart".to_string(),
+            || Bounds::new(24.0, 1020.0, 300.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
     children.push(
         Line::new(
-            Point::new(24.0, 1040.0),
-            Point::new(760.0, 1040.0),
-            LineStyle::new(CARD_BORDER, 1.0),
+            || Point::new(24.0, 1040.0),
+            || Point::new(760.0, 1040.0),
+            || LineStyle::new(CARD_BORDER, 1.0),
         )
         .view(),
     );
@@ -418,17 +427,17 @@ fn lines_section() -> View {
     let ax_right = 400.0f32;
     children.push(
         Line::new(
-            Point::new(ax, ct),
-            Point::new(ax, cb),
-            LineStyle::new(MUTED, 1.0),
+            move || Point::new(ax, ct),
+            move || Point::new(ax, cb),
+            || LineStyle::new(MUTED, 1.0),
         )
         .view(),
     );
     children.push(
         Line::new(
-            Point::new(ax, cb),
-            Point::new(ax_right, cb),
-            LineStyle::new(MUTED, 1.0),
+            move || Point::new(ax, cb),
+            move || Point::new(ax_right, cb),
+            || LineStyle::new(MUTED, 1.0),
         )
         .view(),
     );
@@ -440,25 +449,25 @@ fn lines_section() -> View {
     for i in 0..4 {
         children.push(
             Line::new(
-                Point::new(data_x[i], s1[i]),
-                Point::new(data_x[i + 1], s1[i + 1]),
-                LineStyle::new(PRIMARY, 2.0),
+                move || Point::new(data_x[i], s1[i]),
+                move || Point::new(data_x[i + 1], s1[i + 1]),
+                || LineStyle::new(PRIMARY, 2.0),
             )
             .view(),
         );
         children.push(
             Line::new(
-                Point::new(data_x[i], s2[i]),
-                Point::new(data_x[i + 1], s2[i + 1]),
-                LineStyle::new(SUCCESS, 2.0),
+                move || Point::new(data_x[i], s2[i]),
+                move || Point::new(data_x[i + 1], s2[i + 1]),
+                || LineStyle::new(SUCCESS, 2.0),
             )
             .view(),
         );
         children.push(
             Line::new(
-                Point::new(data_x[i], s3[i]),
-                Point::new(data_x[i + 1], s3[i + 1]),
-                LineStyle::new(DANGER, 2.0),
+                move || Point::new(data_x[i], s3[i]),
+                move || Point::new(data_x[i + 1], s3[i + 1]),
+                || LineStyle::new(DANGER, 2.0),
             )
             .view(),
         );
@@ -466,8 +475,8 @@ fn lines_section() -> View {
 
     children.push(
         Text::new(
-            "Diagonals",
-            Bounds::new(460.0, 1044.0, 120.0, 16.0),
+            || "Diagonals".to_string(),
+            || Bounds::new(460.0, 1044.0, 120.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
@@ -485,9 +494,9 @@ fn lines_section() -> View {
     for &(tx, ty, color) in fan_tips {
         children.push(
             Line::new(
-                Point::new(fan_cx, fan_cy),
-                Point::new(tx, ty),
-                LineStyle::new(color, 2.0).with_cap(LineCap::Round),
+                move || Point::new(fan_cx, fan_cy),
+                move || Point::new(tx, ty),
+                move || LineStyle::new(color, 2.0).with_cap(LineCap::Round),
             )
             .view(),
         );
@@ -502,39 +511,43 @@ fn paths_section() -> View {
 
     children.push(
         Line::new(
-            Point::new(24.0, Y0),
-            Point::new(760.0, Y0),
-            LineStyle::new(CARD_BORDER, 1.0),
+            || Point::new(24.0, Y0),
+            || Point::new(760.0, Y0),
+            || LineStyle::new(CARD_BORDER, 1.0),
         )
         .view(),
     );
     children.push(
         Text::new(
-            "Paths",
-            Bounds::new(24.0, Y0 + 12.0, 200.0, 20.0),
+            || "Paths".to_string(),
+            || Bounds::new(24.0, Y0 + 12.0, 200.0, 20.0),
             TextStyle::new(12.0, MUTED),
         )
         .view(),
     );
     children.push(
         Text::new(
-            "Polygon shapes",
-            Bounds::new(24.0, Y0 + 36.0, 300.0, 16.0),
+            || "Polygon shapes".to_string(),
+            || Bounds::new(24.0, Y0 + 36.0, 300.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
 
+    let triangle_data = Rc::new(
+        PathData::new()
+            .move_to(Point::new(99.0, Y0 + 56.0))
+            .line_to(Point::new(159.0, Y0 + 166.0))
+            .line_to(Point::new(39.0, Y0 + 166.0))
+            .close(),
+    );
     children.push(
         Path::new(
-            Rc::new(
-                PathData::new()
-                    .move_to(Point::new(99.0, Y0 + 56.0))
-                    .line_to(Point::new(159.0, Y0 + 166.0))
-                    .line_to(Point::new(39.0, Y0 + 166.0))
-                    .close(),
-            ),
-            PathStyle {
+            {
+                let d = triangle_data.clone();
+                move || d.clone()
+            },
+            || PathStyle {
                 fill: Some(FillStyle::Solid(PRIMARY)),
                 stroke: None,
                 fill_rule: FillRule::Winding,
@@ -544,8 +557,8 @@ fn paths_section() -> View {
     );
     children.push(
         Text::new(
-            "triangle",
-            Bounds::new(24.0, Y0 + 176.0, 150.0, 16.0),
+            || "triangle".to_string(),
+            || Bounds::new(24.0, Y0 + 176.0, 150.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
@@ -568,10 +581,14 @@ fn paths_section() -> View {
             };
         }
         path = path.close();
+        let star_data = Rc::new(path);
         children.push(
             Path::new(
-                Rc::new(path),
-                PathStyle {
+                {
+                    let d = star_data.clone();
+                    move || d.clone()
+                },
+                || PathStyle {
                     fill: Some(FillStyle::Solid(DANGER)),
                     stroke: Some(Stroke::new(DARK, 1.0)),
                     fill_rule: FillRule::Winding,
@@ -581,30 +598,34 @@ fn paths_section() -> View {
         );
         children.push(
             Text::new(
-                "star (fill + stroke)",
-                Bounds::new(199.0, Y0 + 176.0, 200.0, 16.0),
+                || "star (fill + stroke)".to_string(),
+                || Bounds::new(199.0, Y0 + 176.0, 200.0, 16.0),
                 TextStyle::new(11.0, MUTED),
             )
             .view(),
         );
     }
 
+    let evenodd_data = Rc::new(
+        PathData::new()
+            .move_to(Point::new(384.0, Y0 + 58.0))
+            .line_to(Point::new(564.0, Y0 + 58.0))
+            .line_to(Point::new(564.0, Y0 + 168.0))
+            .line_to(Point::new(384.0, Y0 + 168.0))
+            .close()
+            .move_to(Point::new(414.0, Y0 + 88.0))
+            .line_to(Point::new(534.0, Y0 + 88.0))
+            .line_to(Point::new(534.0, Y0 + 138.0))
+            .line_to(Point::new(414.0, Y0 + 138.0))
+            .close(),
+    );
     children.push(
         Path::new(
-            Rc::new(
-                PathData::new()
-                    .move_to(Point::new(384.0, Y0 + 58.0))
-                    .line_to(Point::new(564.0, Y0 + 58.0))
-                    .line_to(Point::new(564.0, Y0 + 168.0))
-                    .line_to(Point::new(384.0, Y0 + 168.0))
-                    .close()
-                    .move_to(Point::new(414.0, Y0 + 88.0))
-                    .line_to(Point::new(534.0, Y0 + 88.0))
-                    .line_to(Point::new(534.0, Y0 + 138.0))
-                    .line_to(Point::new(414.0, Y0 + 138.0))
-                    .close(),
-            ),
-            PathStyle {
+            {
+                let d = evenodd_data.clone();
+                move || d.clone()
+            },
+            || PathStyle {
                 fill: Some(FillStyle::Solid(PURPLE)),
                 stroke: None,
                 fill_rule: FillRule::EvenOdd,
@@ -614,8 +635,8 @@ fn paths_section() -> View {
     );
     children.push(
         Text::new(
-            "even-odd fill",
-            Bounds::new(374.0, Y0 + 176.0, 200.0, 16.0),
+            || "even-odd fill".to_string(),
+            || Bounds::new(374.0, Y0 + 176.0, 200.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
@@ -623,21 +644,25 @@ fn paths_section() -> View {
 
     children.push(
         Text::new(
-            "Bézier curves",
-            Bounds::new(24.0, Y0 + 212.0, 300.0, 16.0),
+            || "Bézier curves".to_string(),
+            || Bounds::new(24.0, Y0 + 212.0, 300.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
 
+    let quad_data = Rc::new(
+        PathData::new()
+            .move_to(Point::new(24.0, Y0 + 308.0))
+            .quad_to(Point::new(164.0, Y0 + 238.0), Point::new(304.0, Y0 + 308.0)),
+    );
     children.push(
         Path::new(
-            Rc::new(
-                PathData::new()
-                    .move_to(Point::new(24.0, Y0 + 308.0))
-                    .quad_to(Point::new(164.0, Y0 + 238.0), Point::new(304.0, Y0 + 308.0)),
-            ),
-            PathStyle {
+            {
+                let d = quad_data.clone();
+                move || d.clone()
+            },
+            || PathStyle {
                 fill: None,
                 stroke: Some(Stroke::new(WARNING, 3.0).with_cap(LineCap::Round)),
                 fill_rule: FillRule::Winding,
@@ -647,25 +672,29 @@ fn paths_section() -> View {
     );
     children.push(
         Text::new(
-            "quad_to arch",
-            Bounds::new(24.0, Y0 + 318.0, 200.0, 16.0),
+            || "quad_to arch".to_string(),
+            || Bounds::new(24.0, Y0 + 318.0, 200.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
 
+    let cubic_data = Rc::new(
+        PathData::new()
+            .move_to(Point::new(334.0, Y0 + 248.0))
+            .cubic_to(
+                Point::new(404.0, Y0 + 248.0),
+                Point::new(334.0, Y0 + 308.0),
+                Point::new(404.0, Y0 + 308.0),
+            ),
+    );
     children.push(
         Path::new(
-            Rc::new(
-                PathData::new()
-                    .move_to(Point::new(334.0, Y0 + 248.0))
-                    .cubic_to(
-                        Point::new(404.0, Y0 + 248.0),
-                        Point::new(334.0, Y0 + 308.0),
-                        Point::new(404.0, Y0 + 308.0),
-                    ),
-            ),
-            PathStyle {
+            {
+                let d = cubic_data.clone();
+                move || d.clone()
+            },
+            || PathStyle {
                 fill: None,
                 stroke: Some(Stroke::new(SUCCESS, 3.0).with_cap(LineCap::Round)),
                 fill_rule: FillRule::Winding,
@@ -675,31 +704,35 @@ fn paths_section() -> View {
     );
     children.push(
         Text::new(
-            "cubic_to S-curve",
-            Bounds::new(320.0, Y0 + 318.0, 200.0, 16.0),
+            || "cubic_to S-curve".to_string(),
+            || Bounds::new(320.0, Y0 + 318.0, 200.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
 
+    let petal_data = Rc::new(
+        PathData::new()
+            .move_to(Point::new(540.0, Y0 + 243.0))
+            .cubic_to(
+                Point::new(610.0, Y0 + 243.0),
+                Point::new(610.0, Y0 + 313.0),
+                Point::new(540.0, Y0 + 313.0),
+            )
+            .cubic_to(
+                Point::new(470.0, Y0 + 313.0),
+                Point::new(470.0, Y0 + 243.0),
+                Point::new(540.0, Y0 + 243.0),
+            )
+            .close(),
+    );
     children.push(
         Path::new(
-            Rc::new(
-                PathData::new()
-                    .move_to(Point::new(540.0, Y0 + 243.0))
-                    .cubic_to(
-                        Point::new(610.0, Y0 + 243.0),
-                        Point::new(610.0, Y0 + 313.0),
-                        Point::new(540.0, Y0 + 313.0),
-                    )
-                    .cubic_to(
-                        Point::new(470.0, Y0 + 313.0),
-                        Point::new(470.0, Y0 + 243.0),
-                        Point::new(540.0, Y0 + 243.0),
-                    )
-                    .close(),
-            ),
-            PathStyle {
+            {
+                let d = petal_data.clone();
+                move || d.clone()
+            },
+            || PathStyle {
                 fill: Some(FillStyle::Solid(Color::rgba(0.97, 0.72, 0.18, 0.75))),
                 stroke: Some(Stroke::new(WARNING, 1.5)),
                 fill_rule: FillRule::Winding,
@@ -709,8 +742,8 @@ fn paths_section() -> View {
     );
     children.push(
         Text::new(
-            "closed cubic (petal)",
-            Bounds::new(470.0, Y0 + 318.0, 200.0, 16.0),
+            || "closed cubic (petal)".to_string(),
+            || Bounds::new(470.0, Y0 + 318.0, 200.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
@@ -718,23 +751,27 @@ fn paths_section() -> View {
 
     children.push(
         Text::new(
-            "Stroke style",
-            Bounds::new(24.0, Y0 + 354.0, 300.0, 16.0),
+            || "Stroke style".to_string(),
+            || Bounds::new(24.0, Y0 + 354.0, 300.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
 
+    let butt_data = Rc::new(
+        PathData::new()
+            .move_to(Point::new(24.0, Y0 + 410.0))
+            .line_to(Point::new(100.0, Y0 + 390.0))
+            .line_to(Point::new(176.0, Y0 + 430.0))
+            .line_to(Point::new(252.0, Y0 + 390.0)),
+    );
     children.push(
         Path::new(
-            Rc::new(
-                PathData::new()
-                    .move_to(Point::new(24.0, Y0 + 410.0))
-                    .line_to(Point::new(100.0, Y0 + 390.0))
-                    .line_to(Point::new(176.0, Y0 + 430.0))
-                    .line_to(Point::new(252.0, Y0 + 390.0)),
-            ),
-            PathStyle {
+            {
+                let d = butt_data.clone();
+                move || d.clone()
+            },
+            || PathStyle {
                 fill: None,
                 stroke: Some(Stroke::new(PRIMARY, 8.0)),
                 fill_rule: FillRule::Winding,
@@ -744,23 +781,27 @@ fn paths_section() -> View {
     );
     children.push(
         Text::new(
-            "Butt / Miter (default)",
-            Bounds::new(24.0, Y0 + 448.0, 230.0, 16.0),
+            || "Butt / Miter (default)".to_string(),
+            || Bounds::new(24.0, Y0 + 448.0, 230.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
     );
 
+    let round_data = Rc::new(
+        PathData::new()
+            .move_to(Point::new(324.0, Y0 + 410.0))
+            .line_to(Point::new(400.0, Y0 + 390.0))
+            .line_to(Point::new(476.0, Y0 + 430.0))
+            .line_to(Point::new(552.0, Y0 + 390.0)),
+    );
     children.push(
         Path::new(
-            Rc::new(
-                PathData::new()
-                    .move_to(Point::new(324.0, Y0 + 410.0))
-                    .line_to(Point::new(400.0, Y0 + 390.0))
-                    .line_to(Point::new(476.0, Y0 + 430.0))
-                    .line_to(Point::new(552.0, Y0 + 390.0)),
-            ),
-            PathStyle {
+            {
+                let d = round_data.clone();
+                move || d.clone()
+            },
+            || PathStyle {
                 fill: None,
                 stroke: Some(
                     Stroke::new(DANGER, 8.0)
@@ -774,8 +815,8 @@ fn paths_section() -> View {
     );
     children.push(
         Text::new(
-            "Round cap / Round join",
-            Bounds::new(324.0, Y0 + 448.0, 240.0, 16.0),
+            || "Round cap / Round join".to_string(),
+            || Bounds::new(324.0, Y0 + 448.0, 240.0, 16.0),
             TextStyle::new(11.0, MUTED),
         )
         .view(),
@@ -784,44 +825,44 @@ fn paths_section() -> View {
     View::group(children)
 }
 
-struct SandboxRootComponent {
-    scroll_y: RwSignal<f32>,
-    window_width: RwSignal<f32>,
-    window_height: RwSignal<f32>,
+struct ScrollableContent {
     gradient: Rc<ImageData>,
     checker: Rc<ImageData>,
     alpha: Rc<ImageData>,
+}
+
+impl Component for ScrollableContent {
+    fn view(&self) -> View {
+        static_content(
+            self.gradient.clone(),
+            self.checker.clone(),
+            self.alpha.clone(),
+        )
+    }
+
+    fn on_event(&mut self, _: &Event) -> EventResult {
+        EventResult::Ignored
+    }
+}
+
+struct SandboxRootComponent {
+    window_width: RwSignal<f32>,
+    window_height: RwSignal<f32>,
+    scroll_area: ScrollArea,
     widget_panel: TranslateGroup,
 }
 
 impl Component for SandboxRootComponent {
     fn view(&self) -> View {
-        let scroll_y = self.scroll_y.get();
-        let window_width = self.window_width.get();
-        let window_height = self.window_height.get();
-
-        let scrollable = View::Clip {
-            rect: Bounds::new(0.0, 0.0, f32::MAX, window_height),
-            children: vec![View::Translate {
-                tx: 0.0,
-                ty: -scroll_y,
-                children: vec![static_content(
-                    self.gradient.clone(),
-                    self.checker.clone(),
-                    self.alpha.clone(),
-                )],
-            }],
-        };
-
         let widget_label = Text::new(
-            "Reactive Widgets",
-            Bounds::new(PANEL_X, PANEL_Y - 18.0, PANEL_W, 14.0),
+            || "Reactive Widgets".to_string(),
+            || Bounds::new(PANEL_X, PANEL_Y - 18.0, PANEL_W, 14.0),
             TextStyle::new(11.0, MUTED),
         )
         .view();
         let panel_bg = Rect::new(
-            Bounds::new(PANEL_X, PANEL_Y, PANEL_W, PANEL_H),
-            RectStyle {
+            || Bounds::new(PANEL_X, PANEL_Y, PANEL_W, PANEL_H),
+            || RectStyle {
                 fill: Some(FillStyle::Solid(DARK)),
                 stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
                 radius: BorderRadius::all(8.0),
@@ -829,51 +870,24 @@ impl Component for SandboxRootComponent {
         )
         .view();
 
-        let scrollbar = if CONTENT_HEIGHT > window_height {
-            let bar_h = (window_height / CONTENT_HEIGHT * window_height).max(24.0);
-            let max_scroll = (CONTENT_HEIGHT - window_height).max(1.0);
-            let bar_y = (scroll_y / max_scroll) * (window_height - bar_h);
-            Rect::new(
-                Bounds::new(window_width - 8.0, bar_y, 6.0, bar_h),
-                RectStyle {
-                    fill: Some(FillStyle::Solid(MUTED)),
-                    stroke: None,
-                    radius: BorderRadius::all(3.0),
-                },
-            )
-            .view()
-        } else {
-            View::Empty
-        };
-
         View::Group(vec![
             widget_label,
-            scrollable,
+            self.scroll_area.view(),
             panel_bg,
             self.widget_panel.view(),
-            scrollbar,
         ])
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let mut handled = self.widget_panel.on_event(event);
-
-        if let Event::Scrolled { delta } = event {
-            let dy = match delta {
-                ScrollDelta::Lines { y, .. } => *y * 20.0,
-                ScrollDelta::Pixels { y, .. } => *y,
-            };
-            let window_height = self.window_height.get();
-            let max_scroll = (CONTENT_HEIGHT - window_height).max(0.0);
-            let new_scroll = (self.scroll_y.get() - dy).clamp(0.0, max_scroll);
-            self.scroll_y.set(new_scroll);
-            handled = EventResult::Handled;
-        }
+        let handled = self
+            .widget_panel
+            .on_event(event)
+            .or(self.scroll_area.on_event(event));
 
         if let Event::WindowResized { width, height } = event {
             self.window_width.set(*width as f32);
             self.window_height.set(*height as f32);
-            handled = EventResult::Handled;
+            return EventResult::Handled;
         }
 
         handled
@@ -884,7 +898,6 @@ struct SandboxRoot;
 
 impl App for SandboxRoot {
     fn root(&self) -> Box<dyn Component> {
-        let scroll_y = create_rw_signal(0.0f32);
         let window_width = create_rw_signal(800.0f32);
         let window_height = create_rw_signal(600.0f32);
 
@@ -896,7 +909,7 @@ impl App for SandboxRoot {
 
         let ((count_label, btn_inc, btn_dec), _) = with_context(WidgetCtx::new(), || {
             let c = count.clone();
-            let count_label = Label::dynamic(
+            let count_label = Label::new(
                 move || format!("Count: {}", c.get()),
                 LayoutStyle::new().width(PANEL_W - 16.0).height(24.0),
                 TextStyle::new(14.0, WHITE),
@@ -943,16 +956,25 @@ impl App for SandboxRoot {
             )
             .on_click(move || c.set(c.get() - 1));
 
+        let ww = window_width.clone();
+        let wh = window_height.clone();
+        let scroll_area = ScrollArea::new(
+            move || Bounds::new(0.0, 0.0, ww.get(), wh.get()),
+            CONTENT_HEIGHT,
+            vec![Box::new(ScrollableContent {
+                gradient: gradient_image,
+                checker: checker_image,
+                alpha: alpha_image,
+            })],
+        );
+
         Box::new(SandboxRootComponent {
-            scroll_y,
             window_width,
             window_height,
-            gradient: gradient_image,
-            checker: checker_image,
-            alpha: alpha_image,
-            widget_panel: TranslateGroup::static_offset(
-                PANEL_X,
-                PANEL_Y,
+            scroll_area,
+            widget_panel: TranslateGroup::new(
+                || PANEL_X,
+                || PANEL_Y,
                 vec![Box::new(WidgetPanel {
                     count_label,
                     btn_inc,

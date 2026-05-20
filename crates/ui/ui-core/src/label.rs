@@ -15,15 +15,6 @@ pub struct Label {
 
 impl Label {
     pub fn new(
-        text: impl Into<String>,
-        layout: LayoutStyle,
-        style: TextStyle,
-    ) -> Result<Self, LayoutError> {
-        let s: Rc<str> = Rc::from(text.into());
-        Self::build(move || Rc::clone(&s), layout, style)
-    }
-
-    pub fn dynamic(
         text: impl Fn() -> String + 'static,
         layout: LayoutStyle,
         style: TextStyle,
@@ -77,7 +68,7 @@ mod tests {
     fn label_view_returns_text_command() {
         with_context(WidgetCtx::new(), || {
             let label = Label::new(
-                "Hello",
+                || "Hello".to_string(),
                 LayoutStyle::new(),
                 TextStyle::new(16.0, Color::WHITE),
             )
@@ -91,7 +82,7 @@ mod tests {
     fn label_view_reacts_to_rect_change() {
         with_context(WidgetCtx::new(), || {
             let label = Label::new(
-                "Hi",
+                || "Hi".to_string(),
                 LayoutStyle::new().width(120.0).height(40.0),
                 TextStyle::new(14.0, Color::BLACK),
             )
