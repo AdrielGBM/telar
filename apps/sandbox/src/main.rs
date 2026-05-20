@@ -4,8 +4,8 @@ use rsx::{
     App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Event, EventResult,
     FillRule, FillStyle, Image, ImageData, ImageFilter, Label, LayoutStyle, Line, LineCap,
     LineJoin, LineStyle, Path, PathData, PathStyle, Point, Rect, RectStyle, RwSignal, ScrollDelta,
-    Stroke, SubtreeSlot, Text, TextStyle, TranslateGroup, View, WidgetCtx, WindowConfig,
-    compute_layout, create_rw_signal, new_container, with_context,
+    Stroke, Text, TextStyle, TranslateGroup, View, WidgetCtx, WindowConfig, compute_layout,
+    create_rw_signal, new_container, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -48,36 +48,20 @@ impl Component for WidgetPanel {
     }
 }
 
-struct StaticContent {
-    gradient: Rc<ImageData>,
-    checker: Rc<ImageData>,
-    alpha: Rc<ImageData>,
-}
-
-impl Component for StaticContent {
-    fn view(&self) -> View {
-        View::group([
-            shapes_section(),
-            colors_section(),
-            typography_section(),
-            cards_section(),
-            images_section(
-                self.gradient.clone(),
-                self.checker.clone(),
-                self.alpha.clone(),
-            ),
-            lines_section(),
-            paths_section(),
-        ])
-    }
-
-    fn on_event(&mut self, _: &Event) -> EventResult {
-        EventResult::Ignored
-    }
+fn static_content(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<ImageData>) -> View {
+    View::group([
+        shapes_section(),
+        colors_section(),
+        typography_section(),
+        cards_section(),
+        images_section(gradient, checker, alpha),
+        lines_section(),
+        paths_section(),
+    ])
 }
 
 fn shapes_section() -> View {
-    View::Group(vec![
+    View::group([
         Text::new(
             "Shapes",
             Bounds::new(24.0, 20.0, 200.0, 20.0),
@@ -183,11 +167,11 @@ fn colors_section() -> View {
         );
     }
 
-    View::Group(children)
+    View::group(children)
 }
 
 fn typography_section() -> View {
-    View::Group(vec![
+    View::group([
         Text::new(
             "Typography",
             Bounds::new(24.0, 240.0, 300.0, 20.0),
@@ -228,7 +212,7 @@ fn typography_section() -> View {
 }
 
 fn cards_section() -> View {
-    View::Group(vec![
+    View::group([
         Text::new(
             "Cards",
             Bounds::new(24.0, 440.0, 200.0, 20.0),
@@ -281,7 +265,7 @@ fn cards_section() -> View {
 }
 
 fn images_section(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<ImageData>) -> View {
-    View::Group(vec![
+    View::group([
         Text::new(
             "Images",
             Bounds::new(24.0, 600.0, 200.0, 20.0),
@@ -509,7 +493,7 @@ fn lines_section() -> View {
         );
     }
 
-    View::Group(children)
+    View::group(children)
 }
 
 fn paths_section() -> View {
@@ -797,14 +781,16 @@ fn paths_section() -> View {
         .view(),
     );
 
-    View::Group(children)
+    View::group(children)
 }
 
 struct SandboxRootComponent {
     scroll_y: RwSignal<f32>,
     window_width: RwSignal<f32>,
     window_height: RwSignal<f32>,
-    static_content: SubtreeSlot,
+    gradient: Rc<ImageData>,
+    checker: Rc<ImageData>,
+    alpha: Rc<ImageData>,
     widget_panel: TranslateGroup,
 }
 
@@ -819,7 +805,11 @@ impl Component for SandboxRootComponent {
             children: vec![View::Translate {
                 tx: 0.0,
                 ty: -scroll_y,
-                children: vec![View::Subtree(self.static_content.handle())],
+                children: vec![static_content(
+                    self.gradient.clone(),
+                    self.checker.clone(),
+                    self.alpha.clone(),
+                )],
             }],
         };
 
@@ -957,11 +947,9 @@ impl App for SandboxRoot {
             scroll_y,
             window_width,
             window_height,
-            static_content: SubtreeSlot::new(StaticContent {
-                gradient: gradient_image,
-                checker: checker_image,
-                alpha: alpha_image,
-            }),
+            gradient: gradient_image,
+            checker: checker_image,
+            alpha: alpha_image,
             widget_panel: TranslateGroup::static_offset(
                 PANEL_X,
                 PANEL_Y,
