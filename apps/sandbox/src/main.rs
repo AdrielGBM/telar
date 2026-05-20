@@ -4,8 +4,8 @@ use rsx::{
     App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Event, EventResult,
     FillRule, FillStyle, Image, ImageData, ImageFilter, Label, LayoutStyle, Line, LineCap,
     LineJoin, LineStyle, Path, PathData, PathStyle, Point, Rect, RectStyle, RwSignal, ScrollDelta,
-    Stroke, SubtreeSlot, Text, TextStyle, View, WidgetCtx, WindowConfig, compute_layout,
-    create_rw_signal, new_container, with_context,
+    Stroke, SubtreeSlot, Text, TextStyle, TranslateGroup, View, WidgetCtx, WindowConfig,
+    compute_layout, create_rw_signal, new_container, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -45,39 +45,6 @@ impl Component for WidgetPanel {
         self.btn_inc
             .on_event(event)
             .or(self.btn_dec.on_event(event))
-    }
-}
-
-fn panel_relative_event(event: &Event, dx: f64, dy: f64) -> Option<Event> {
-    match event {
-        Event::PointerMoved { x, y, source } => Some(Event::PointerMoved {
-            x: x - dx,
-            y: y - dy,
-            source: source.clone(),
-        }),
-        Event::PointerPressed {
-            x,
-            y,
-            button,
-            source,
-        } => Some(Event::PointerPressed {
-            x: x - dx,
-            y: y - dy,
-            button: button.clone(),
-            source: source.clone(),
-        }),
-        Event::PointerReleased {
-            x,
-            y,
-            button,
-            source,
-        } => Some(Event::PointerReleased {
-            x: x - dx,
-            y: y - dy,
-            button: button.clone(),
-            source: source.clone(),
-        }),
-        _ => None,
     }
 }
 
@@ -838,13 +805,11 @@ struct SandboxRootComponent {
     window_width: RwSignal<f32>,
     window_height: RwSignal<f32>,
     static_content: SubtreeSlot,
-    widget_panel: SubtreeSlot,
+    widget_panel: TranslateGroup,
 }
 
 impl Component for SandboxRootComponent {
     fn view(&self) -> View {
-        let _widget_ver = self.widget_panel.version().get();
-
         let scroll_y = self.scroll_y.get();
         let window_width = self.window_width.get();
         let window_height = self.window_height.get();
@@ -865,7 +830,7 @@ impl Component for SandboxRootComponent {
         )
         .view();
         let panel_bg = Rect::new(
-            Bounds::new(0.0, 0.0, PANEL_W, PANEL_H),
+            Bounds::new(PANEL_X, PANEL_Y, PANEL_W, PANEL_H),
             RectStyle {
                 fill: Some(FillStyle::Solid(DARK)),
                 stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
@@ -873,11 +838,6 @@ impl Component for SandboxRootComponent {
             },
         )
         .view();
-        let widget_area = View::Translate {
-            tx: PANEL_X,
-            ty: PANEL_Y,
-            children: vec![panel_bg, View::Subtree(self.widget_panel.handle())],
-        };
 
         let scrollbar = if CONTENT_HEIGHT > window_height {
             let bar_h = (window_height / CONTENT_HEIGHT * window_height).max(24.0);
@@ -896,17 +856,17 @@ impl Component for SandboxRootComponent {
             View::Empty
         };
 
-        View::Group(vec![widget_label, scrollable, widget_area, scrollbar])
+        View::Group(vec![
+            widget_label,
+            scrollable,
+            panel_bg,
+            self.widget_panel.view(),
+            scrollbar,
+        ])
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let mut handled = EventResult::Ignored;
-
-        if let Some(rel) = panel_relative_event(event, PANEL_X as f64, PANEL_Y as f64)
-            && self.widget_panel.on_event(&rel) == EventResult::Handled
-        {
-            handled = EventResult::Handled;
-        }
+        let mut handled = self.widget_panel.on_event(event);
 
         if let Event::Scrolled { delta } = event {
             let dy = match delta {
@@ -1002,11 +962,15 @@ impl App for SandboxRoot {
                 checker: checker_image,
                 alpha: alpha_image,
             }),
-            widget_panel: SubtreeSlot::new(WidgetPanel {
-                count_label,
-                btn_inc,
-                btn_dec,
-            }),
+            widget_panel: TranslateGroup::static_offset(
+                PANEL_X,
+                PANEL_Y,
+                vec![Box::new(WidgetPanel {
+                    count_label,
+                    btn_inc,
+                    btn_dec,
+                })],
+            ),
         })
     }
 
