@@ -16,5 +16,5 @@ pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use renderer::RenderBackend;
 pub use style::{
     FillRule, FillStyle, GradientStop, LineCap, LineJoin, LineStyle, LinearGradient, PathStyle,
-    RadialGradient, RectStyle, TextStyle,
+    RadialGradient, RectStyle, Shadow, TextStyle,
 };

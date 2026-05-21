@@ -4,11 +4,21 @@ use crate::{BorderRadius, Color, Point, Stroke};
 pub struct TextStyle {
     pub font_size: f32,
     pub color: Color,
+    pub shadow: Option<Shadow>,
 }
 
 impl TextStyle {
     pub fn new(font_size: f32, color: Color) -> Self {
-        Self { font_size, color }
+        Self {
+            font_size,
+            color,
+            shadow: None,
+        }
+    }
+
+    pub fn with_shadow(mut self, shadow: Shadow) -> Self {
+        self.shadow = Some(shadow);
+        self
     }
 }
 
@@ -132,10 +142,37 @@ pub enum FillRule {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Shadow {
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub blur_radius: f32,
+    pub spread: f32,
+    pub color: Color,
+}
+
+impl Shadow {
+    pub fn new(offset_x: f32, offset_y: f32, blur_radius: f32, color: Color) -> Self {
+        Self {
+            offset_x,
+            offset_y,
+            blur_radius,
+            spread: 0.0,
+            color,
+        }
+    }
+
+    pub fn with_spread(mut self, spread: f32) -> Self {
+        self.spread = spread;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RectStyle {
     pub fill: Option<FillStyle>,
     pub stroke: Option<Stroke>,
     pub radius: BorderRadius,
+    pub shadow: Option<Shadow>,
 }
 
 impl Default for RectStyle {
@@ -144,6 +181,7 @@ impl Default for RectStyle {
             fill: None,
             stroke: None,
             radius: BorderRadius::default(),
+            shadow: None,
         }
     }
 }
@@ -163,6 +201,11 @@ impl RectStyle {
         self.radius = radius;
         self
     }
+
+    pub fn with_shadow(mut self, shadow: Shadow) -> Self {
+        self.shadow = Some(shadow);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -170,6 +213,7 @@ pub struct PathStyle {
     pub fill: Option<FillStyle>,
     pub stroke: Option<Stroke>,
     pub fill_rule: FillRule,
+    pub shadow: Option<Shadow>,
 }
 
 impl Default for PathStyle {
@@ -178,6 +222,7 @@ impl Default for PathStyle {
             fill: None,
             stroke: None,
             fill_rule: FillRule::default(),
+            shadow: None,
         }
     }
 }
@@ -195,6 +240,11 @@ impl PathStyle {
 
     pub fn with_fill_rule(mut self, rule: FillRule) -> Self {
         self.fill_rule = rule;
+        self
+    }
+
+    pub fn with_shadow(mut self, shadow: Shadow) -> Self {
+        self.shadow = Some(shadow);
         self
     }
 }
@@ -280,5 +330,21 @@ mod tests {
     #[test]
     fn fill_rule_default_is_winding() {
         assert_eq!(FillRule::default(), FillRule::Winding);
+    }
+
+    #[test]
+    fn shadow_new_stores_fields_and_zero_spread() {
+        let shadow = Shadow::new(2.0, 4.0, 8.0, Color::BLACK);
+        assert_eq!(shadow.offset_x, 2.0);
+        assert_eq!(shadow.offset_y, 4.0);
+        assert_eq!(shadow.blur_radius, 8.0);
+        assert_eq!(shadow.spread, 0.0);
+        assert_eq!(shadow.color, Color::BLACK);
+    }
+
+    #[test]
+    fn shadow_with_spread_sets_spread() {
+        let shadow = Shadow::new(0.0, 0.0, 4.0, Color::RED).with_spread(6.0);
+        assert_eq!(shadow.spread, 6.0);
     }
 }

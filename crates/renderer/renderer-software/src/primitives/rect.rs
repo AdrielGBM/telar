@@ -1,4 +1,4 @@
-use renderer_core::{BorderRadius, Rect, RectStyle};
+use renderer_core::{BorderRadius, Rect, RectStyle, Shadow};
 
 use crate::primitives::{fill_to_paint, to_skia_color};
 
@@ -59,6 +59,79 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     pb.finish()
 }
 
+fn draw_rect_shadow(
+    pixmap: &mut tiny_skia::Pixmap,
+    rect: Rect,
+    shadow: Shadow,
+    radius: BorderRadius,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+) {
+    let sigma = shadow.blur_radius / 2.0;
+    let padding = (sigma * 3.0).ceil() as i32 + 1;
+    let spread = shadow.spread;
+
+    let shadow_rect = Rect::new(
+        rect.x + shadow.offset_x - spread,
+        rect.y + shadow.offset_y - spread,
+        rect.width + 2.0 * spread,
+        rect.height + 2.0 * spread,
+    );
+    let shadow_radius = BorderRadius {
+        top_left: (radius.top_left + spread).max(0.0),
+        top_right: (radius.top_right + spread).max(0.0),
+        bottom_right: (radius.bottom_right + spread).max(0.0),
+        bottom_left: (radius.bottom_left + spread).max(0.0),
+    };
+
+    let tmp_x = (shadow_rect.x - padding as f32).floor() as i32;
+    let tmp_y = (shadow_rect.y - padding as f32).floor() as i32;
+    let tmp_w = (shadow_rect.width + 2.0 * padding as f32).ceil() as u32 + 1;
+    let tmp_h = (shadow_rect.height + 2.0 * padding as f32).ceil() as u32 + 1;
+    if tmp_w == 0 || tmp_h == 0 {
+        return;
+    }
+
+    let Some(mut tmp) = tiny_skia::Pixmap::new(tmp_w, tmp_h) else {
+        return;
+    };
+
+    let local_rect = Rect::new(
+        shadow_rect.x - tmp_x as f32,
+        shadow_rect.y - tmp_y as f32,
+        shadow_rect.width,
+        shadow_rect.height,
+    );
+    if let Some(path) = build_rect_path(local_rect, shadow_radius) {
+        let mut paint = tiny_skia::Paint::default();
+        paint.set_color(crate::primitives::to_skia_color(shadow.color));
+        paint.anti_alias = true;
+        tmp.fill_path(
+            &path,
+            &paint,
+            tiny_skia::FillRule::Winding,
+            tiny_skia::Transform::identity(),
+            None,
+        );
+    }
+
+    if sigma >= 0.5 {
+        crate::primitives::gaussian_blur(tmp.data_mut(), tmp_w, tmp_h, sigma);
+    }
+
+    pixmap.draw_pixmap(
+        tmp_x,
+        tmp_y,
+        tmp.as_ref(),
+        &tiny_skia::PixmapPaint {
+            blend_mode: tiny_skia::BlendMode::SourceOver,
+            ..Default::default()
+        },
+        transform,
+        clip,
+    );
+}
+
 pub(crate) fn draw_rect(
     pixmap: &mut tiny_skia::Pixmap,
     rect: Rect,
@@ -66,6 +139,10 @@ pub(crate) fn draw_rect(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
 ) {
+    if let Some(shadow) = style.shadow {
+        draw_rect_shadow(pixmap, rect, shadow, style.radius, transform, clip);
+    }
+
     if let Some(fill_style) = style.fill {
         if let Some(path) = build_rect_path(rect, style.radius) {
             let paint = fill_to_paint(fill_style, transform);

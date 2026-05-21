@@ -2,7 +2,7 @@ use renderer_core::{Rect, TextStyle};
 use renderer_text::{ATLAS_SIZE, GlyphAtlas};
 use wgpu::{Device, Queue};
 
-use super::InstancePipeline;
+use super::{InstancePipeline, MSAA_SAMPLES};
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -137,7 +137,7 @@ impl TextPipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: 4,
+                count: MSAA_SAMPLES,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },

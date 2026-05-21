@@ -1,15 +1,18 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, ImageFilter, Rect, RenderBackend, RendererError};
 
+use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
+use crate::blur::BlurPipeline;
+use crate::composite::CompositePipeline;
 use crate::primitives::image::{ImageInstance, ImagePipeline};
 use crate::primitives::layer::LayerPipeline;
 use crate::primitives::line::{LineInstance, LinePipeline};
 use crate::primitives::path::{PathFillData, PathPipeline, PathTessCache, PathVertex};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
-use crate::primitives::{Viewport, create_viewport_bgl};
+use crate::primitives::{MSAA_SAMPLES, Viewport, create_viewport_bgl};
 
 fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
     caps.formats
@@ -58,6 +61,33 @@ enum DrawStep {
     EndLayer {
         bind_group: wgpu::BindGroup,
     },
+    ShadowPlaceholder {
+        op_idx: usize,
+    },
+    PathShadowPlaceholder {
+        op_idx: usize,
+    },
+    CompositeShadow {
+        bind_group: wgpu::BindGroup,
+    },
+}
+
+struct ShadowOp {
+    instance_start: u32,
+    instance_end: u32,
+    sigma: f32,
+    tex_w: u32,
+    tex_h: u32,
+    dest: [f32; 4],
+}
+
+struct PathShadowOp {
+    index_start: u32,
+    index_end: u32,
+    sigma: f32,
+    tex_w: u32,
+    tex_h: u32,
+    dest: [f32; 4],
 }
 
 #[inline]
@@ -120,6 +150,15 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_steps: Vec<DrawStep>,
     path_pipeline: PathPipeline,
     layer_pipeline: LayerPipeline,
+    viewport_bgl: wgpu::BindGroupLayout,
+    blur_pipeline: BlurPipeline,
+    composite_pipeline: CompositePipeline,
+    pending_shadow_instances: Vec<TextInstance>,
+    pending_shadow_ops: Vec<ShadowOp>,
+    pending_shadow_path_vertices: Vec<PathVertex>,
+    pending_shadow_path_indices: Vec<u32>,
+    pending_shadow_path_fill_data: Vec<PathFillData>,
+    pending_path_shadow_ops: Vec<PathShadowOp>,
     pending_path_vertices: Vec<PathVertex>,
     pending_path_indices: Vec<u32>,
     pending_path_fill_data: Vec<PathFillData>,
@@ -199,6 +238,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let image_pipeline = ImagePipeline::new(&device, surface_format, &viewport_bgl);
         let path_pipeline = PathPipeline::new(&device, surface_format, &viewport_bgl);
         let layer_pipeline = LayerPipeline::new(&device, surface_format);
+        let blur_pipeline = BlurPipeline::new(&device, surface_format);
+        let composite_pipeline =
+            CompositePipeline::new(&device, surface_format, MSAA_SAMPLES, &viewport_bgl);
         let path_tess_cache = PathTessCache::new();
 
         Ok(Self {
@@ -215,6 +257,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             image_pipeline,
             path_pipeline,
             layer_pipeline,
+            viewport_bgl,
+            blur_pipeline,
+            composite_pipeline,
+            pending_shadow_instances: Vec::new(),
+            pending_shadow_ops: Vec::new(),
+            pending_shadow_path_vertices: Vec::new(),
+            pending_shadow_path_indices: Vec::new(),
+            pending_shadow_path_fill_data: Vec::new(),
+            pending_path_shadow_ops: Vec::new(),
             text_shaper: renderer_text::TextShaper::new(),
             surface_format,
             present_mode,
@@ -264,7 +315,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 4,
+            sample_count: MSAA_SAMPLES,
             dimension: wgpu::TextureDimension::D2,
             format: self.surface_format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -287,6 +338,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.batch_image_key = None;
         self.batch_image_start = None;
         self.batch_image_bind_group = None;
+        self.pending_shadow_instances.clear();
+        self.pending_shadow_ops.clear();
+        self.pending_shadow_path_vertices.clear();
+        self.pending_shadow_path_indices.clear();
+        self.pending_shadow_path_fill_data.clear();
+        self.pending_path_shadow_ops.clear();
     }
 
     fn flush_rect(&mut self) {
@@ -387,15 +444,64 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
-                    if self.batch_text_start.is_none() {
-                        self.batch_text_start = Some(self.pending_text_instances.len() as u32);
-                    }
                     let translated = Rect::new(
                         rect.x + state.cum_tx,
                         rect.y + state.cum_ty,
                         rect.width,
                         rect.height,
                     );
+                    if let Some(shadow) = style.shadow {
+                        self.flush_text();
+
+                        let s = shadow.blur_radius / 2.0;
+                        let box_r = (s * 1.5).round().max(1.0);
+                        let sigma = (box_r * (box_r + 1.0)).sqrt();
+                        let padding = (sigma * 3.0).ceil() as u32 + 2;
+                        let shadow_rect = Rect::new(
+                            translated.x + shadow.offset_x,
+                            translated.y + shadow.offset_y,
+                            translated.width,
+                            translated.height,
+                        );
+                        let origin_x = shadow_rect.x - padding as f32;
+                        let origin_y = shadow_rect.y - padding as f32;
+                        let tex_w = (shadow_rect.width.ceil() as u32 + 2 * padding).max(1);
+                        let tex_h = (shadow_rect.height.ceil() as u32 + 2 * padding).max(1);
+
+                        let shadow_style = renderer_core::TextStyle {
+                            color: shadow.color,
+                            shadow: None,
+                            ..style
+                        };
+                        let mut shadow_instances = crate::primitives::text::prepare_text(
+                            &mut self.text_shaper,
+                            &*text,
+                            shadow_rect,
+                            &shadow_style,
+                        );
+                        for inst in &mut shadow_instances {
+                            inst.dest_rect[0] -= origin_x;
+                            inst.dest_rect[1] -= origin_y;
+                        }
+                        let instance_start = self.pending_shadow_instances.len() as u32;
+                        self.pending_shadow_instances.extend(shadow_instances);
+                        let instance_end = self.pending_shadow_instances.len() as u32;
+
+                        self.pending_shadow_ops.push(ShadowOp {
+                            instance_start,
+                            instance_end,
+                            sigma,
+                            tex_w,
+                            tex_h,
+                            dest: [origin_x, origin_y, tex_w as f32, tex_h as f32],
+                        });
+                        self.pending_steps.push(DrawStep::ShadowPlaceholder {
+                            op_idx: self.pending_shadow_ops.len() - 1,
+                        });
+                    }
+                    if self.batch_text_start.is_none() {
+                        self.batch_text_start = Some(self.pending_text_instances.len() as u32);
+                    }
                     let instances = crate::primitives::text::prepare_text(
                         &mut self.text_shaper,
                         &*text,
@@ -445,6 +551,80 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
                 DrawCommand::Path { data, style } => {
                     self.flush_all();
+
+                    if let Some(shadow) = style.shadow {
+                        let shadow_fill = style
+                            .fill
+                            .map(|_| renderer_core::FillStyle::Solid(shadow.color));
+                        let shadow_stroke = style.stroke.map(|s| renderer_core::Stroke {
+                            color: shadow.color,
+                            ..s
+                        });
+                        let shadow_style = renderer_core::PathStyle {
+                            fill: shadow_fill,
+                            stroke: shadow_stroke,
+                            fill_rule: style.fill_rule,
+                            shadow: None,
+                        };
+
+                        let sv_start = self.pending_shadow_path_vertices.len();
+                        let si_start = self.pending_shadow_path_indices.len() as u32;
+                        crate::primitives::path::prepare_path(
+                            &mut self.path_tess_cache,
+                            &data,
+                            &shadow_style,
+                            &mut self.pending_shadow_path_vertices,
+                            &mut self.pending_shadow_path_indices,
+                            &mut self.pending_shadow_path_fill_data,
+                        );
+                        let si_end = self.pending_shadow_path_indices.len() as u32;
+
+                        if si_end > si_start {
+                            let (mut min_x, mut min_y, mut max_x, mut max_y) =
+                                (f32::MAX, f32::MAX, f32::MIN_POSITIVE, f32::MIN_POSITIVE);
+                            for v in &self.pending_shadow_path_vertices[sv_start..] {
+                                min_x = min_x.min(v.position[0]);
+                                min_y = min_y.min(v.position[1]);
+                                max_x = max_x.max(v.position[0]);
+                                max_y = max_y.max(v.position[1]);
+                            }
+
+                            let world_min_x = min_x + state.cum_tx + shadow.offset_x;
+                            let world_min_y = min_y + state.cum_ty + shadow.offset_y;
+                            let world_max_x = max_x + state.cum_tx + shadow.offset_x;
+                            let world_max_y = max_y + state.cum_ty + shadow.offset_y;
+
+                            let s = shadow.blur_radius / 2.0;
+                            let box_r = (s * 1.5).round().max(1.0);
+                            let sigma = (box_r * (box_r + 1.0)).sqrt();
+                            let padding = (sigma * 3.0).ceil() as u32 + 2;
+
+                            let origin_x = world_min_x - padding as f32;
+                            let origin_y = world_min_y - padding as f32;
+                            let tex_w =
+                                ((world_max_x - world_min_x).ceil() as u32 + 2 * padding).max(1);
+                            let tex_h =
+                                ((world_max_y - world_min_y).ceil() as u32 + 2 * padding).max(1);
+
+                            for v in &mut self.pending_shadow_path_vertices[sv_start..] {
+                                v.position[0] += state.cum_tx + shadow.offset_x - origin_x;
+                                v.position[1] += state.cum_ty + shadow.offset_y - origin_y;
+                            }
+
+                            self.pending_path_shadow_ops.push(PathShadowOp {
+                                index_start: si_start,
+                                index_end: si_end,
+                                sigma,
+                                tex_w,
+                                tex_h,
+                                dest: [origin_x, origin_y, tex_w as f32, tex_h as f32],
+                            });
+                            self.pending_steps.push(DrawStep::PathShadowPlaceholder {
+                                op_idx: self.pending_path_shadow_ops.len() - 1,
+                            });
+                        }
+                    }
+
                     let vertex_start = self.pending_path_vertices.len();
                     let index_start = self.pending_path_indices.len() as u32;
                     let fill_data_start = self.pending_path_fill_data.len();
@@ -639,6 +819,255 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 0,
                 bytemuck::cast_slice(&self.pending_path_fill_data),
             );
+        }
+
+        let has_text_shadows =
+            !self.pending_shadow_ops.is_empty() && !self.pending_shadow_instances.is_empty();
+        let has_path_shadows = !self.pending_path_shadow_ops.is_empty();
+
+        let (shadow_results, path_shadow_results): (
+            Vec<Option<wgpu::BindGroup>>,
+            Vec<Option<wgpu::BindGroup>>,
+        ) = if has_text_shadows || has_path_shadows {
+            let shadow_buf_opt = if has_text_shadows {
+                Some(
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("rsx-shadow-instances"),
+                            contents: bytemuck::cast_slice(&self.pending_shadow_instances),
+                            usage: wgpu::BufferUsages::STORAGE,
+                        }),
+                )
+            } else {
+                None
+            };
+            let shadow_instances_bg_opt = shadow_buf_opt.as_ref().map(|buf| {
+                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("rsx-shadow-instances-bg"),
+                    layout: &self.text_pipeline.instances.instances_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buf.as_entire_binding(),
+                    }],
+                })
+            });
+
+            let shadow_path_vb_opt = if has_path_shadows {
+                Some(
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("rsx-shadow-path-vb"),
+                            contents: bytemuck::cast_slice(&self.pending_shadow_path_vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        }),
+                )
+            } else {
+                None
+            };
+            let shadow_path_ib_opt = if has_path_shadows {
+                Some(
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("rsx-shadow-path-ib"),
+                            contents: bytemuck::cast_slice(&self.pending_shadow_path_indices),
+                            usage: wgpu::BufferUsages::INDEX,
+                        }),
+                )
+            } else {
+                None
+            };
+            let shadow_path_fd_bg_opt = if has_path_shadows {
+                let fd_buf = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("rsx-shadow-path-fd"),
+                        contents: bytemuck::cast_slice(&self.pending_shadow_path_fill_data),
+                        usage: wgpu::BufferUsages::STORAGE,
+                    });
+                let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("rsx-shadow-path-fd-bg"),
+                    layout: &self.path_pipeline.fill_data.bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: fd_buf.as_entire_binding(),
+                    }],
+                });
+                Some(bg)
+            } else {
+                None
+            };
+
+            let mut pre_encoder =
+                self.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("rsx-shadow-pre-encoder"),
+                    });
+
+            let mut text_results: Vec<Option<wgpu::BindGroup>> = Vec::new();
+            let mut path_results: Vec<Option<wgpu::BindGroup>> = Vec::new();
+
+            if has_text_shadows {
+                let shadow_instances_bg = shadow_instances_bg_opt.unwrap();
+                for op in &self.pending_shadow_ops {
+                    let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
+                        self.layer_pipeline
+                            .create_layer_textures(&self.device, op.tex_w, op.tex_h);
+
+                    let vp_data: [f32; 4] = [op.tex_w as f32, op.tex_h as f32, 0.0, 0.0];
+                    let vp_buf =
+                        self.device
+                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("rsx-shadow-vp"),
+                                contents: bytemuck::bytes_of(&vp_data),
+                                usage: wgpu::BufferUsages::UNIFORM,
+                            });
+                    let shadow_vp_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("rsx-shadow-vp-bg"),
+                        layout: &self.viewport_bgl,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: vp_buf.as_entire_binding(),
+                        }],
+                    });
+
+                    {
+                        let mut pass = pre_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("rsx-shadow-capture"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &cap_msaa_view,
+                                resolve_target: Some(&cap_resolve_view),
+                                depth_slice: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                            occlusion_query_set: None,
+                            timestamp_writes: None,
+                            multiview_mask: None,
+                        });
+                        pass.set_pipeline(&self.text_pipeline.pipeline);
+                        pass.set_bind_group(0, &shadow_vp_bg, &[]);
+                        pass.set_bind_group(1, &shadow_instances_bg, &[]);
+                        pass.set_bind_group(2, &self.text_pipeline.atlas_bind_group, &[]);
+                        pass.draw(0..6, op.instance_start..op.instance_end);
+                    }
+
+                    let (_, blurred_view) = self.blur_pipeline.apply(
+                        &self.device,
+                        &mut pre_encoder,
+                        &cap_resolve_view,
+                        op.tex_w,
+                        op.tex_h,
+                        op.sigma,
+                    );
+                    let bg = self.composite_pipeline.create_bind_group(
+                        &self.device,
+                        &blurred_view,
+                        op.dest,
+                        1.0,
+                    );
+                    text_results.push(Some(bg));
+                    drop((cap_msaa_texture, cap_msaa_view, cap_resolve_texture));
+                }
+            }
+
+            if has_path_shadows {
+                let shadow_path_vb = shadow_path_vb_opt.unwrap();
+                let shadow_path_ib = shadow_path_ib_opt.unwrap();
+                let shadow_path_fd_bg = shadow_path_fd_bg_opt.unwrap();
+                for op in &self.pending_path_shadow_ops {
+                    let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
+                        self.layer_pipeline
+                            .create_layer_textures(&self.device, op.tex_w, op.tex_h);
+
+                    let vp_data: [f32; 4] = [op.tex_w as f32, op.tex_h as f32, 0.0, 0.0];
+                    let vp_buf =
+                        self.device
+                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("rsx-shadow-path-vp"),
+                                contents: bytemuck::bytes_of(&vp_data),
+                                usage: wgpu::BufferUsages::UNIFORM,
+                            });
+                    let shadow_vp_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("rsx-shadow-path-vp-bg"),
+                        layout: &self.viewport_bgl,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: vp_buf.as_entire_binding(),
+                        }],
+                    });
+
+                    {
+                        let mut pass = pre_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("rsx-shadow-path-capture"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &cap_msaa_view,
+                                resolve_target: Some(&cap_resolve_view),
+                                depth_slice: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                            occlusion_query_set: None,
+                            timestamp_writes: None,
+                            multiview_mask: None,
+                        });
+                        pass.set_pipeline(&self.path_pipeline.pipeline);
+                        pass.set_bind_group(0, &shadow_vp_bg, &[]);
+                        pass.set_bind_group(1, &shadow_path_fd_bg, &[]);
+                        pass.set_vertex_buffer(0, shadow_path_vb.slice(..));
+                        pass.set_index_buffer(shadow_path_ib.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(op.index_start..op.index_end, 0, 0..1);
+                    }
+
+                    let (_, blurred_view) = self.blur_pipeline.apply(
+                        &self.device,
+                        &mut pre_encoder,
+                        &cap_resolve_view,
+                        op.tex_w,
+                        op.tex_h,
+                        op.sigma,
+                    );
+                    let bg = self.composite_pipeline.create_bind_group(
+                        &self.device,
+                        &blurred_view,
+                        op.dest,
+                        1.0,
+                    );
+                    path_results.push(Some(bg));
+                    drop((cap_msaa_texture, cap_msaa_view, cap_resolve_texture));
+                }
+            }
+
+            self.queue.submit(std::iter::once(pre_encoder.finish()));
+            (text_results, path_results)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
+        let (mut shadow_results, mut path_shadow_results) = (shadow_results, path_shadow_results);
+        for step in &mut self.pending_steps {
+            match step {
+                DrawStep::ShadowPlaceholder { op_idx } => {
+                    if let Some(entry) = shadow_results.get_mut(*op_idx) {
+                        if let Some(bg) = entry.take() {
+                            *step = DrawStep::CompositeShadow { bind_group: bg };
+                        }
+                    }
+                }
+                DrawStep::PathShadowPlaceholder { op_idx } => {
+                    if let Some(entry) = path_shadow_results.get_mut(*op_idx) {
+                        if let Some(bg) = entry.take() {
+                            *step = DrawStep::CompositeShadow { bind_group: bg };
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
 
         let surface_view = output
@@ -852,6 +1281,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     render_pass.set_scissor_rect(x, y, w, h);
                                 }
                             },
+                            DrawStep::CompositeShadow { bind_group } => {
+                                render_pass.set_pipeline(&self.composite_pipeline.pipeline);
+                                render_pass.set_bind_group(1, bind_group, &[]);
+                                render_pass.draw(0..6, 0..1);
+                            }
+                            DrawStep::ShadowPlaceholder { .. }
+                            | DrawStep::PathShadowPlaceholder { .. } => {}
                             DrawStep::BeginLayer { .. } | DrawStep::EndLayer { .. } => {
                                 unreachable!("layer boundaries are split into segments")
                             }

@@ -13,6 +13,8 @@ use lyon::tessellation::{
 use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 use wgpu::Device;
 
+use super::MSAA_SAMPLES;
+
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct PathFillData {
@@ -543,7 +545,7 @@ impl PathPipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: 4,
+                count: MSAA_SAMPLES,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },

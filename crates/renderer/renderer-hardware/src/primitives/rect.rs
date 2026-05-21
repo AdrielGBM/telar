@@ -1,7 +1,7 @@
 use renderer_core::{Rect, RectStyle};
 use wgpu::Device;
 
-use super::InstancePipeline;
+use super::{InstancePipeline, MSAA_SAMPLES};
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -23,6 +23,11 @@ pub(crate) struct RectInstance {
     pub stroke_color: [f32; 4],
     pub stroke_width: f32,
     pub _pad: [f32; 3],
+    // shadow (offset 208)
+    pub shadow_color: [f32; 4],
+    pub shadow_offset: [f32; 2],
+    pub shadow_blur: f32,
+    pub shadow_spread: f32,
 }
 
 // Typical frame has 100–200 rects; doubles on overflow, so reallocations are rare after warmup.
@@ -79,7 +84,7 @@ impl RectPipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: 4,
+                count: MSAA_SAMPLES,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
@@ -168,6 +173,16 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, tx: f32, ty: f32) -> R
         None => ([0.0; 4], 0.0),
     };
 
+    let (shadow_color, shadow_offset, shadow_blur, shadow_spread) = match style.shadow {
+        Some(s) => (
+            s.color.to_array(),
+            [s.offset_x, s.offset_y],
+            s.blur_radius,
+            s.spread,
+        ),
+        None => ([0.0f32; 4], [0.0f32; 2], 0.0f32, 0.0f32),
+    };
+
     RectInstance {
         rect: [rect.x, rect.y, rect.width, rect.height],
         radii: [
@@ -189,5 +204,9 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, tx: f32, ty: f32) -> R
         stroke_color,
         stroke_width,
         _pad: [0.0; 3],
+        shadow_color,
+        shadow_offset,
+        shadow_blur,
+        shadow_spread,
     }
 }

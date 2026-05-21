@@ -26,7 +26,7 @@ pub use reactive_core::{
 pub use renderer_core::{
     BorderRadius, Color, FillRule, FillStyle, GradientStop, ImageData, ImageFilter, LineCap,
     LineJoin, LineStyle, LinearGradient, PathData, PathStyle, PathVerb, Point, RadialGradient,
-    Rect as Bounds, RectStyle, Stroke, TextStyle,
+    Rect as Bounds, RectStyle, Shadow, Stroke, TextStyle,
 };
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{

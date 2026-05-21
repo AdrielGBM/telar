@@ -1,24 +1,36 @@
 use wgpu::util::DeviceExt;
 
-use super::MSAA_SAMPLES;
-
-pub(crate) struct LayerPipeline {
-    pub(crate) pipeline: wgpu::RenderPipeline,
-    pub(crate) sampler: wgpu::Sampler,
-    pub(crate) bgl: wgpu::BindGroupLayout,
-    target_format: wgpu::TextureFormat,
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
+struct CompositeParamsRaw {
+    rect: [f32; 4],
+    alpha: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
-impl LayerPipeline {
-    pub(crate) fn new(device: &wgpu::Device, target_format: wgpu::TextureFormat) -> Self {
-        let shader_source = include_str!("layer.wgsl");
+pub(crate) struct CompositePipeline {
+    pub(crate) pipeline: wgpu::RenderPipeline,
+    sampler: wgpu::Sampler,
+    pub(crate) bgl: wgpu::BindGroupLayout,
+}
+
+impl CompositePipeline {
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        msaa_samples: u32,
+        viewport_bgl: &wgpu::BindGroupLayout,
+    ) -> Self {
+        let shader_source = include_str!("composite.wgsl");
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("rsx-layer-shader"),
+            label: Some("rsx-composite-shader"),
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("rsx-layer-sampler"),
+            label: Some("rsx-composite-sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
@@ -27,7 +39,7 @@ impl LayerPipeline {
         });
 
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-layer-bgl"),
+            label: Some("rsx-composite-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -47,7 +59,7 @@ impl LayerPipeline {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -59,13 +71,13 @@ impl LayerPipeline {
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("rsx-layer-pipeline-layout"),
-            bind_group_layouts: &[Some(&bgl)],
+            label: Some("rsx-composite-pipeline-layout"),
+            bind_group_layouts: &[Some(viewport_bgl), Some(&bgl)],
             immediate_size: 0,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("rsx-layer-pipeline"),
+            label: Some("rsx-composite-pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -77,7 +89,7 @@ impl LayerPipeline {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
+                    format,
                     blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -89,7 +101,7 @@ impl LayerPipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: MSAA_SAMPLES,
+                count: msaa_samples,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
@@ -101,72 +113,35 @@ impl LayerPipeline {
             pipeline,
             sampler,
             bgl,
-            target_format,
         }
-    }
-
-    pub(crate) fn create_layer_textures(
-        &self,
-        device: &wgpu::Device,
-        width: u32,
-        height: u32,
-    ) -> (
-        wgpu::Texture,
-        wgpu::TextureView,
-        wgpu::Texture,
-        wgpu::TextureView,
-    ) {
-        let msaa = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-layer-msaa"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 4,
-            dimension: wgpu::TextureDimension::D2,
-            format: self.target_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        let msaa_view = msaa.create_view(&wgpu::TextureViewDescriptor::default());
-        let resolve = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-layer-resolve"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: self.target_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let resolve_view = resolve.create_view(&wgpu::TextureViewDescriptor::default());
-        (msaa, msaa_view, resolve, resolve_view)
     }
 
     pub(crate) fn create_bind_group(
         &self,
         device: &wgpu::Device,
-        texture_view: &wgpu::TextureView,
-        opacity: f32,
+        view: &wgpu::TextureView,
+        rect: [f32; 4],
+        alpha: f32,
     ) -> wgpu::BindGroup {
-        let opacity_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("rsx-layer-opacity"),
-            contents: bytemuck::bytes_of(&opacity),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        let params = CompositeParamsRaw {
+            rect,
+            alpha,
+            _pad0: 0.0,
+            _pad1: 0.0,
+            _pad2: 0.0,
+        };
+        let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("rsx-composite-params"),
+            contents: bytemuck::bytes_of(&params),
+            usage: wgpu::BufferUsages::UNIFORM,
         });
         device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-layer-bind-group"),
+            label: Some("rsx-composite-bind-group"),
             layout: &self.bgl,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(texture_view),
+                    resource: wgpu::BindingResource::TextureView(view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -174,7 +149,7 @@ impl LayerPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: opacity_buf.as_entire_binding(),
+                    resource: params_buf.as_entire_binding(),
                 },
             ],
         })

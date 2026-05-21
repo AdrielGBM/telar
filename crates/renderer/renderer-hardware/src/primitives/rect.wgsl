@@ -21,6 +21,10 @@ struct RectInstance {
     _pad_0: f32,
     _pad_1: f32,
     _pad_2: f32,
+    shadow_color: vec4<f32>,
+    shadow_offset: vec2<f32>,
+    shadow_blur: f32,
+    shadow_spread: f32,
 }
 
 @group(1) @binding(0) var<storage, read> instances: array<RectInstance>;
@@ -41,17 +45,40 @@ fn vs_main(
     let inst = instances[instance_index];
     let uv = quad_uv(vertex_index);
 
-    let px = inst.rect.x + uv.x * inst.rect.z;
-    let py = inst.rect.y + uv.y * inst.rect.w;
+    
+    let has_shadow = inst.shadow_color.a > 0.0;
+    let shadow_ext = select(0.0, inst.shadow_blur * 2.5 + inst.shadow_spread, has_shadow);
+    let sx = select(0.0, inst.shadow_offset.x, has_shadow);
+    let sy = select(0.0, inst.shadow_offset.y, has_shadow);
+
+    let ext_left   = min(inst.rect.x, inst.rect.x + sx - shadow_ext);
+    let ext_top    = min(inst.rect.y, inst.rect.y + sy - shadow_ext);
+    let ext_right  = max(inst.rect.x + inst.rect.z, inst.rect.x + inst.rect.z + sx + shadow_ext);
+    let ext_bottom = max(inst.rect.y + inst.rect.w, inst.rect.y + inst.rect.w + sy + shadow_ext);
+    let ext_w = ext_right - ext_left;
+    let ext_h = ext_bottom - ext_top;
+
+    let px = ext_left + uv.x * ext_w;
+    let py = ext_top  + uv.y * ext_h;
     let ndc = to_ndc(px, py);
+
+    let orig_cx = inst.rect.x + inst.rect.z * 0.5;
+    let orig_cy = inst.rect.y + inst.rect.w * 0.5;
 
     var out: VertexOutput;
     out.clip_position = vec4<f32>(ndc.x, ndc.y, 0.0, 1.0);
-    out.local_pos = vec2<f32>((uv.x - 0.5) * inst.rect.z, (uv.y - 0.5) * inst.rect.w);
-    out.half_size = vec2<f32>(inst.rect.z * 0.5, inst.rect.w * 0.5);
-    out.world_pos = vec2<f32>(px, py);
+    out.local_pos  = vec2<f32>(px - orig_cx, py - orig_cy);
+    out.half_size  = vec2<f32>(inst.rect.z * 0.5, inst.rect.w * 0.5);
+    out.world_pos  = vec2<f32>(px, py);
     out.instance_index = instance_index;
     return out;
+}
+
+fn erfc_approx(x: f32) -> f32 {
+    let t = 1.0 / (1.0 + 0.3275911 * abs(x));
+    let r = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+    let p = r * exp(-x * x);
+    return select(2.0 - p, p, x >= 0.0);
 }
 
 fn sdf_rounded_rect(p: vec2<f32>, b: vec2<f32>, radii: vec4<f32>) -> f32 {
@@ -112,12 +139,36 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         stroke_mask = 0.0;
     }
 
-    let out_a = fill_mask + stroke_mask * (1.0 - fill_mask);
-    if out_a < 0.001 {
-        discard;
+    let main_a = fill_mask + stroke_mask * (1.0 - fill_mask);
+    let main_rgb = select(
+        vec3<f32>(0.0),
+        (fill_color.rgb * fill_mask + inst.stroke_color.rgb * stroke_mask * (1.0 - fill_mask)) / main_a,
+        main_a > 0.001
+    );
+
+    var shadow_a = 0.0;
+    var shadow_rgb = vec3<f32>(0.0);
+    if inst.shadow_color.a > 0.0 {
+        let shadow_center = vec2<f32>(
+            inst.rect.x + inst.rect.z * 0.5 + inst.shadow_offset.x,
+            inst.rect.y + inst.rect.w * 0.5 + inst.shadow_offset.y,
+        );
+        let spread = inst.shadow_spread;
+        let shadow_half = max(in.half_size + spread, vec2<f32>(0.0));
+        let max_r = min(shadow_half.x, shadow_half.y);
+        let shadow_radii = clamp(inst.radii + spread, vec4<f32>(0.0), vec4<f32>(max_r));
+        let shadow_local = in.world_pos - shadow_center;
+        let shadow_dist = sdf_rounded_rect(shadow_local, shadow_half, shadow_radii);
+
+        let sigma = max(inst.shadow_blur * 0.75, 0.5);
+        shadow_a = inst.shadow_color.a * 0.5 * erfc_approx(shadow_dist / (sigma * 1.41421356));
+        shadow_rgb = inst.shadow_color.rgb;
     }
 
-    let out_rgb = (fill_color.rgb * fill_mask
-        + inst.stroke_color.rgb * stroke_mask * (1.0 - fill_mask)) / out_a;
-    return vec4<f32>(out_rgb, out_a);
+    let final_a = main_a + shadow_a * (1.0 - main_a);
+    if final_a < 0.001 {
+        discard;
+    }
+    let final_rgb = (main_rgb * main_a + shadow_rgb * shadow_a * (1.0 - main_a)) / final_a;
+    return vec4<f32>(final_rgb, final_a);
 }
