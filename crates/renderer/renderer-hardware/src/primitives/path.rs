@@ -15,9 +15,155 @@ use wgpu::Device;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct PathFillData {
+    pub fill_type: u32,
+    pub _pad: [u32; 3],
+    pub fill_color: [f32; 4],
+    pub grad_p0: [f32; 2],
+    pub grad_p1: [f32; 2],
+    pub grad_radius: f32,
+    pub grad_stop_count: u32,
+    pub _pad2: [f32; 2],
+    pub grad_positions: [f32; 4],
+    pub grad_colors: [[f32; 4]; 4],
+}
+
+impl PathFillData {
+    pub(crate) fn from_fill_style(fill: renderer_core::FillStyle) -> Self {
+        match fill {
+            renderer_core::FillStyle::Solid(c) => Self {
+                fill_type: 0,
+                _pad: [0; 3],
+                fill_color: c.to_array(),
+                grad_p0: [0.0; 2],
+                grad_p1: [0.0; 2],
+                grad_radius: 0.0,
+                grad_stop_count: 0,
+                _pad2: [0.0; 2],
+                grad_positions: [0.0; 4],
+                grad_colors: [[0.0; 4]; 4],
+            },
+            renderer_core::FillStyle::LinearGradient(g) => {
+                let mut positions = [0.0f32; 4];
+                let mut colors = [[0.0f32; 4]; 4];
+                for i in 0..g.stop_count as usize {
+                    positions[i] = g.stops[i].position;
+                    colors[i] = g.stops[i].color.to_array();
+                }
+                Self {
+                    fill_type: 1,
+                    _pad: [0; 3],
+                    fill_color: [0.0; 4],
+                    grad_p0: [g.start.x, g.start.y],
+                    grad_p1: [g.end.x, g.end.y],
+                    grad_radius: 0.0,
+                    grad_stop_count: g.stop_count as u32,
+                    _pad2: [0.0; 2],
+                    grad_positions: positions,
+                    grad_colors: colors,
+                }
+            }
+            renderer_core::FillStyle::RadialGradient(g) => {
+                let mut positions = [0.0f32; 4];
+                let mut colors = [[0.0f32; 4]; 4];
+                for i in 0..g.stop_count as usize {
+                    positions[i] = g.stops[i].position;
+                    colors[i] = g.stops[i].color.to_array();
+                }
+                Self {
+                    fill_type: 2,
+                    _pad: [0; 3],
+                    fill_color: [0.0; 4],
+                    grad_p0: [g.center.x, g.center.y],
+                    grad_p1: [0.0; 2],
+                    grad_radius: g.radius,
+                    grad_stop_count: g.stop_count as u32,
+                    _pad2: [0.0; 2],
+                    grad_positions: positions,
+                    grad_colors: colors,
+                }
+            }
+        }
+    }
+
+    pub(crate) fn from_solid(color: renderer_core::Color) -> Self {
+        Self::from_fill_style(renderer_core::FillStyle::Solid(color))
+    }
+}
+
+pub(crate) struct FillDataBuffer {
+    pub bgl: wgpu::BindGroupLayout,
+    pub bind_group: wgpu::BindGroup,
+    pub buffer: wgpu::Buffer,
+    capacity: usize,
+}
+
+impl FillDataBuffer {
+    const INITIAL_CAPACITY: usize = 64;
+
+    pub(crate) fn new(device: &wgpu::Device) -> Self {
+        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("rsx-path-fill-bgl"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let (buffer, bind_group) = Self::create_buffer_and_bg(device, &bgl, Self::INITIAL_CAPACITY);
+        Self {
+            bgl,
+            bind_group,
+            buffer,
+            capacity: Self::INITIAL_CAPACITY,
+        }
+    }
+
+    fn create_buffer_and_bg(
+        device: &wgpu::Device,
+        bgl: &wgpu::BindGroupLayout,
+        capacity: usize,
+    ) -> (wgpu::Buffer, wgpu::BindGroup) {
+        let size = (std::mem::size_of::<PathFillData>() * capacity.max(1)) as u64;
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("rsx-path-fill-buf"),
+            size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("rsx-path-fill-bg"),
+            layout: bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        (buffer, bind_group)
+    }
+
+    pub(crate) fn ensure_capacity(&mut self, device: &wgpu::Device, count: usize) {
+        if count > self.capacity {
+            let new_cap = (count * 2).max(self.capacity * 2);
+            let (buffer, bind_group) = Self::create_buffer_and_bg(device, &self.bgl, new_cap);
+            self.buffer = buffer;
+            self.bind_group = bind_group;
+            self.capacity = new_cap;
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct PathVertex {
     pub position: [f32; 2],
-    pub color: [f32; 4],
+    pub fill_index: u32,
+    pub _pad: u32,
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
@@ -97,7 +243,7 @@ impl PathTessCache {
 // returns true on first touch this frame; caller pushes a fresh lru entry only then
 fn emit_cached_geom(
     geom: &mut CachedGeom,
-    color: renderer_core::Color,
+    fill_index: u32,
     current_frame: u64,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,
@@ -106,12 +252,12 @@ fn emit_cached_geom(
     if touched {
         geom.last_frame = current_frame;
     }
-    let color_array = color.to_array();
     let vertex_base = out_vertices.len() as u32;
     for &pos in &geom.positions {
         out_vertices.push(PathVertex {
             position: pos,
-            color: color_array,
+            fill_index,
+            _pad: 0,
         });
     }
     for &idx in &geom.indices {
@@ -168,6 +314,7 @@ pub(crate) fn prepare_path(
     style: &PathStyle,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,
+    out_fill_data: &mut Vec<PathFillData>,
 ) {
     let current_frame = cache.frame;
     let ptr = Rc::as_ptr(data) as usize;
@@ -219,14 +366,12 @@ pub(crate) fn prepare_path(
             }
         }
 
+        let fill_data_entry = PathFillData::from_fill_style(fill_style);
+        out_fill_data.push(fill_data_entry);
+        let fill_index = (out_fill_data.len() - 1) as u32;
+
         if let Some(geom) = cache.fill.get_mut(&fill_key) {
-            if emit_cached_geom(
-                geom,
-                fill_style.color(),
-                current_frame,
-                out_vertices,
-                out_indices,
-            ) {
+            if emit_cached_geom(geom, fill_index, current_frame, out_vertices, out_indices) {
                 cache.fill_lru.push_back((fill_key, current_frame));
             }
         }
@@ -281,7 +426,15 @@ pub(crate) fn prepare_path(
         }
 
         if let Some(geom) = cache.stroke.get_mut(&stroke_key) {
-            if emit_cached_geom(geom, s.color, current_frame, out_vertices, out_indices) {
+            let stroke_fill_index = out_fill_data.len() as u32;
+            out_fill_data.push(PathFillData::from_solid(s.color));
+            if emit_cached_geom(
+                geom,
+                stroke_fill_index,
+                current_frame,
+                out_vertices,
+                out_indices,
+            ) {
                 cache.stroke_lru.push_back((stroke_key, current_frame));
             }
         }
@@ -310,6 +463,7 @@ pub(crate) struct PathPipeline {
     vertex_capacity: usize,
     index_capacity: usize,
     pub(crate) pipeline: wgpu::RenderPipeline,
+    pub(crate) fill_data: FillDataBuffer,
 }
 
 impl PathPipeline {
@@ -341,9 +495,11 @@ impl PathPipeline {
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
+        let fill_data = FillDataBuffer::new(device);
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-path-pipeline-layout"),
-            bind_group_layouts: &[Some(viewport_bgl)],
+            bind_group_layouts: &[Some(viewport_bgl), Some(&fill_data.bgl)],
             immediate_size: 0,
         });
 
@@ -365,7 +521,7 @@ impl PathPipeline {
                         wgpu::VertexAttribute {
                             offset: 8,
                             shader_location: 1,
-                            format: wgpu::VertexFormat::Float32x4,
+                            format: wgpu::VertexFormat::Uint32,
                         },
                     ],
                 }],
@@ -401,6 +557,7 @@ impl PathPipeline {
             vertex_capacity: INITIAL_VERTEX_CAPACITY,
             index_capacity: INITIAL_INDEX_CAPACITY,
             pipeline,
+            fill_data,
         }
     }
 

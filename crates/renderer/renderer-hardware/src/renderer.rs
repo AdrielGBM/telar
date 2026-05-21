@@ -4,8 +4,9 @@ use renderer_core::{Color, DrawCommand, ImageFilter, Rect, RenderBackend, Render
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
 
 use crate::primitives::image::{ImageInstance, ImagePipeline};
+use crate::primitives::layer::LayerPipeline;
 use crate::primitives::line::{LineInstance, LinePipeline};
-use crate::primitives::path::{PathPipeline, PathTessCache, PathVertex};
+use crate::primitives::path::{PathFillData, PathPipeline, PathTessCache, PathVertex};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
 use crate::primitives::{Viewport, create_viewport_bgl};
@@ -47,6 +48,15 @@ enum DrawStep {
     },
     SetScissor {
         rect: Option<renderer_core::Rect>,
+    },
+    BeginLayer {
+        msaa_texture: wgpu::Texture,
+        msaa_view: wgpu::TextureView,
+        resolve_texture: wgpu::Texture,
+        resolve_view: wgpu::TextureView,
+    },
+    EndLayer {
+        bind_group: wgpu::BindGroup,
     },
 }
 
@@ -109,8 +119,10 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_image_instances: Vec<ImageInstance>,
     pending_steps: Vec<DrawStep>,
     path_pipeline: PathPipeline,
+    layer_pipeline: LayerPipeline,
     pending_path_vertices: Vec<PathVertex>,
     pending_path_indices: Vec<u32>,
+    pending_path_fill_data: Vec<PathFillData>,
     path_tess_cache: PathTessCache,
     msaa_texture: Option<wgpu::Texture>,
     batch_rect_start: Option<u32>,
@@ -186,6 +198,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let line_pipeline = LinePipeline::new(&device, surface_format, &viewport_bgl);
         let image_pipeline = ImagePipeline::new(&device, surface_format, &viewport_bgl);
         let path_pipeline = PathPipeline::new(&device, surface_format, &viewport_bgl);
+        let layer_pipeline = LayerPipeline::new(&device, surface_format);
         let path_tess_cache = PathTessCache::new();
 
         Ok(Self {
@@ -201,6 +214,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             line_pipeline,
             image_pipeline,
             path_pipeline,
+            layer_pipeline,
             text_shaper: renderer_text::TextShaper::new(),
             surface_format,
             present_mode,
@@ -214,6 +228,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_steps: Vec::new(),
             pending_path_vertices: Vec::new(),
             pending_path_indices: Vec::new(),
+            pending_path_fill_data: Vec::new(),
             path_tess_cache,
             msaa_texture: None,
             batch_rect_start: None,
@@ -265,6 +280,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.pending_steps.clear();
         self.pending_path_vertices.clear();
         self.pending_path_indices.clear();
+        self.pending_path_fill_data.clear();
         self.batch_rect_start = None;
         self.batch_text_start = None;
         self.batch_line_start = None;
@@ -336,6 +352,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
     fn submit(&mut self, commands: Vec<DrawCommand>) -> Result<(), RendererError> {
         let mut state = renderer_core::DrawState::new();
+        let mut layer_blit_stack: Vec<wgpu::BindGroup> = Vec::new();
 
         for cmd in commands {
             match cmd {
@@ -358,7 +375,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         rect.width,
                         rect.height,
                     );
-                    let inst = crate::primitives::rect::prepare_rect(translated, &style);
+                    let inst = crate::primitives::rect::prepare_rect(
+                        translated,
+                        &style,
+                        state.cum_tx,
+                        state.cum_ty,
+                    );
                     self.pending_instances.push(inst);
                 }
                 DrawCommand::Text { text, rect, style } => {
@@ -425,16 +447,24 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_all();
                     let vertex_start = self.pending_path_vertices.len();
                     let index_start = self.pending_path_indices.len() as u32;
+                    let fill_data_start = self.pending_path_fill_data.len();
                     crate::primitives::path::prepare_path(
                         &mut self.path_tess_cache,
                         &data,
                         &style,
                         &mut self.pending_path_vertices,
                         &mut self.pending_path_indices,
+                        &mut self.pending_path_fill_data,
                     );
                     for v in &mut self.pending_path_vertices[vertex_start..] {
                         v.position[0] += state.cum_tx;
                         v.position[1] += state.cum_ty;
+                    }
+                    for fd in &mut self.pending_path_fill_data[fill_data_start..] {
+                        fd.grad_p0[0] += state.cum_tx;
+                        fd.grad_p0[1] += state.cum_ty;
+                        fd.grad_p1[0] += state.cum_tx;
+                        fd.grad_p1[1] += state.cum_ty;
                     }
                     let index_end = self.pending_path_indices.len() as u32;
                     if index_end > index_start {
@@ -462,6 +492,28 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
                 DrawCommand::PopTransform => {
                     state.pop_transform();
+                }
+                DrawCommand::PushLayer { opacity } => {
+                    self.flush_all();
+                    let (msaa_texture, msaa_view, resolve_texture, resolve_view) = self
+                        .layer_pipeline
+                        .create_layer_textures(&self.device, self.width.max(1), self.height.max(1));
+                    let bind_group =
+                        self.layer_pipeline
+                            .create_bind_group(&self.device, &resolve_view, opacity);
+                    layer_blit_stack.push(bind_group);
+                    self.pending_steps.push(DrawStep::BeginLayer {
+                        msaa_texture,
+                        msaa_view,
+                        resolve_texture,
+                        resolve_view,
+                    });
+                }
+                DrawCommand::PopLayer => {
+                    self.flush_all();
+                    if let Some(bind_group) = layer_blit_stack.pop() {
+                        self.pending_steps.push(DrawStep::EndLayer { bind_group });
+                    }
                 }
             }
         }
@@ -578,7 +630,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             );
         }
 
-        let view = output
+        if !self.pending_path_fill_data.is_empty() {
+            self.path_pipeline
+                .fill_data
+                .ensure_capacity(&self.device, self.pending_path_fill_data.len());
+            self.queue.write_buffer(
+                &self.path_pipeline.fill_data.buffer,
+                0,
+                bytemuck::cast_slice(&self.pending_path_fill_data),
+            );
+        }
+
+        let surface_view = output
             .texture
             .create_view(&TextureViewDescriptor::default());
 
@@ -599,11 +662,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             });
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rsx-render-pass"),
+            let _init = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("rsx-main-init"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &msaa_view,
-                    resolve_target: Some(&view),
+                    resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: load_op,
@@ -615,90 +678,300 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 timestamp_writes: None,
                 multiview_mask: None,
             });
+        }
 
-            render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
+        enum Segment {
+            Draw(Vec<DrawStep>),
+            BeginLayer {
+                msaa_texture: wgpu::Texture,
+                msaa_view: wgpu::TextureView,
+                resolve_texture: wgpu::Texture,
+                resolve_view: wgpu::TextureView,
+            },
+            EndLayer(wgpu::BindGroup),
+        }
 
-            for step in &self.pending_steps {
-                match step {
-                    DrawStep::RectBatch { start, end } => {
-                        render_pass.set_pipeline(&self.rect_pipeline.pipeline);
-                        render_pass.set_bind_group(
-                            1,
-                            &self.rect_pipeline.instances.instances_bind_group,
-                            &[],
-                        );
-                        render_pass.draw(0..6, *start..*end);
+        let steps = std::mem::take(&mut self.pending_steps);
+        let mut segments: Vec<Segment> = Vec::new();
+        let mut current_draw: Vec<DrawStep> = Vec::new();
+        for step in steps {
+            match step {
+                DrawStep::BeginLayer {
+                    msaa_texture,
+                    msaa_view: lmv,
+                    resolve_texture,
+                    resolve_view: lrv,
+                } => {
+                    if !current_draw.is_empty() {
+                        segments.push(Segment::Draw(std::mem::take(&mut current_draw)));
                     }
-                    DrawStep::TextBatch { start, end } => {
-                        render_pass.set_pipeline(&self.text_pipeline.pipeline);
-                        render_pass.set_bind_group(
-                            1,
-                            &self.text_pipeline.instances.instances_bind_group,
-                            &[],
-                        );
-                        render_pass.set_bind_group(2, &self.text_pipeline.atlas_bind_group, &[]);
-                        render_pass.draw(0..6, *start..*end);
+                    segments.push(Segment::BeginLayer {
+                        msaa_texture,
+                        msaa_view: lmv,
+                        resolve_texture,
+                        resolve_view: lrv,
+                    });
+                }
+                DrawStep::EndLayer { bind_group } => {
+                    if !current_draw.is_empty() {
+                        segments.push(Segment::Draw(std::mem::take(&mut current_draw)));
                     }
-                    DrawStep::LineBatch { start, end } => {
-                        render_pass.set_pipeline(&self.line_pipeline.pipeline);
-                        render_pass.set_bind_group(
-                            1,
-                            &self.line_pipeline.instances.instances_bind_group,
-                            &[],
-                        );
-                        render_pass.draw(0..6, *start..*end);
-                    }
-                    DrawStep::ImageBatch {
-                        start,
-                        end,
-                        bind_group,
-                    } => {
-                        render_pass.set_pipeline(&self.image_pipeline.pipeline);
-                        render_pass.set_bind_group(
-                            1,
-                            &self.image_pipeline.instances.instances_bind_group,
-                            &[],
-                        );
-                        render_pass.set_bind_group(2, bind_group, &[]);
-                        render_pass.draw(0..6, *start..*end);
-                    }
-                    DrawStep::PathDraw {
-                        index_start,
-                        index_end,
-                    } => {
-                        render_pass.set_pipeline(&self.path_pipeline.pipeline);
-                        render_pass
-                            .set_vertex_buffer(0, self.path_pipeline.vertex_buffer.slice(..));
-                        render_pass.set_index_buffer(
-                            self.path_pipeline.index_buffer.slice(..),
-                            wgpu::IndexFormat::Uint32,
-                        );
-                        render_pass.draw_indexed(*index_start..*index_end, 0, 0..1);
-                    }
-                    DrawStep::SetScissor { rect } => match rect {
-                        None => {
-                            render_pass.set_scissor_rect(0, 0, self.width, self.height);
+                    segments.push(Segment::EndLayer(bind_group));
+                }
+                other => current_draw.push(other),
+            }
+        }
+        if !current_draw.is_empty() {
+            segments.push(Segment::Draw(current_draw));
+        }
+
+        // Each entry: (msaa_texture, msaa_view, resolve_texture, resolve_view)
+        let mut layer_stack: Vec<(
+            wgpu::Texture,
+            wgpu::TextureView,
+            wgpu::Texture,
+            wgpu::TextureView,
+        )> = Vec::new();
+
+        for segment in segments {
+            match segment {
+                Segment::Draw(draw_steps) => {
+                    let attach_view: &wgpu::TextureView =
+                        if let Some((_, lv, _, _)) = layer_stack.last() {
+                            lv
+                        } else {
+                            &msaa_view
+                        };
+
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("rsx-render-pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: attach_view,
+                            resolve_target: None,
+                            depth_slice: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                        multiview_mask: None,
+                    });
+
+                    render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
+
+                    for step in &draw_steps {
+                        match step {
+                            DrawStep::RectBatch { start, end } => {
+                                render_pass.set_pipeline(&self.rect_pipeline.pipeline);
+                                render_pass.set_bind_group(
+                                    1,
+                                    &self.rect_pipeline.instances.instances_bind_group,
+                                    &[],
+                                );
+                                render_pass.draw(0..6, *start..*end);
+                            }
+                            DrawStep::TextBatch { start, end } => {
+                                render_pass.set_pipeline(&self.text_pipeline.pipeline);
+                                render_pass.set_bind_group(
+                                    1,
+                                    &self.text_pipeline.instances.instances_bind_group,
+                                    &[],
+                                );
+                                render_pass.set_bind_group(
+                                    2,
+                                    &self.text_pipeline.atlas_bind_group,
+                                    &[],
+                                );
+                                render_pass.draw(0..6, *start..*end);
+                            }
+                            DrawStep::LineBatch { start, end } => {
+                                render_pass.set_pipeline(&self.line_pipeline.pipeline);
+                                render_pass.set_bind_group(
+                                    1,
+                                    &self.line_pipeline.instances.instances_bind_group,
+                                    &[],
+                                );
+                                render_pass.draw(0..6, *start..*end);
+                            }
+                            DrawStep::ImageBatch {
+                                start,
+                                end,
+                                bind_group,
+                            } => {
+                                render_pass.set_pipeline(&self.image_pipeline.pipeline);
+                                render_pass.set_bind_group(
+                                    1,
+                                    &self.image_pipeline.instances.instances_bind_group,
+                                    &[],
+                                );
+                                render_pass.set_bind_group(2, bind_group, &[]);
+                                render_pass.draw(0..6, *start..*end);
+                            }
+                            DrawStep::PathDraw {
+                                index_start,
+                                index_end,
+                            } => {
+                                render_pass.set_pipeline(&self.path_pipeline.pipeline);
+                                render_pass.set_bind_group(
+                                    1,
+                                    &self.path_pipeline.fill_data.bind_group,
+                                    &[],
+                                );
+                                render_pass.set_vertex_buffer(
+                                    0,
+                                    self.path_pipeline.vertex_buffer.slice(..),
+                                );
+                                render_pass.set_index_buffer(
+                                    self.path_pipeline.index_buffer.slice(..),
+                                    wgpu::IndexFormat::Uint32,
+                                );
+                                render_pass.draw_indexed(*index_start..*index_end, 0, 0..1);
+                            }
+                            DrawStep::SetScissor { rect } => match rect {
+                                None => {
+                                    render_pass.set_scissor_rect(0, 0, self.width, self.height);
+                                }
+                                Some(r) => {
+                                    let x = (r.x.max(0.0).floor() as u32)
+                                        .min(self.width.saturating_sub(1));
+                                    let y = (r.y.max(0.0).floor() as u32)
+                                        .min(self.height.saturating_sub(1));
+                                    let right = ((r.x + r.width).ceil() as u32).min(self.width);
+                                    let bottom = ((r.y + r.height).ceil() as u32).min(self.height);
+                                    let w = right
+                                        .saturating_sub(x)
+                                        .max(1)
+                                        .min(self.width.saturating_sub(x));
+                                    let h = bottom
+                                        .saturating_sub(y)
+                                        .max(1)
+                                        .min(self.height.saturating_sub(y));
+                                    render_pass.set_scissor_rect(x, y, w, h);
+                                }
+                            },
+                            DrawStep::BeginLayer { .. } | DrawStep::EndLayer { .. } => {
+                                unreachable!("layer boundaries are split into segments")
+                            }
                         }
-                        Some(r) => {
-                            let x = (r.x.max(0.0).floor() as u32).min(self.width.saturating_sub(1));
-                            let y =
-                                (r.y.max(0.0).floor() as u32).min(self.height.saturating_sub(1));
+                    }
+                }
 
-                            let right = ((r.x + r.width).ceil() as u32).min(self.width);
-                            let bottom = ((r.y + r.height).ceil() as u32).min(self.height);
-                            let w = right
-                                .saturating_sub(x)
-                                .max(1)
-                                .min(self.width.saturating_sub(x));
-                            let h = bottom
-                                .saturating_sub(y)
-                                .max(1)
-                                .min(self.height.saturating_sub(y));
-                            render_pass.set_scissor_rect(x, y, w, h);
-                        }
-                    },
+                Segment::BeginLayer {
+                    msaa_texture,
+                    msaa_view: layer_msaa_view,
+                    resolve_texture,
+                    resolve_view,
+                } => {
+                    // Clear the new layer's MSAA texture.
+                    {
+                        let _clear = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("rsx-layer-clear"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &layer_msaa_view,
+                                resolve_target: None,
+                                depth_slice: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                                        r: 0.0,
+                                        g: 0.0,
+                                        b: 0.0,
+                                        a: 0.0,
+                                    }),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                            occlusion_query_set: None,
+                            timestamp_writes: None,
+                            multiview_mask: None,
+                        });
+                    }
+                    layer_stack.push((
+                        msaa_texture,
+                        layer_msaa_view,
+                        resolve_texture,
+                        resolve_view,
+                    ));
+                }
+
+                Segment::EndLayer(bind_group) => {
+                    let (l_msaa_tex, l_msaa_view, l_resolve_tex, l_resolve_view) = layer_stack
+                        .pop()
+                        .expect("layer_stack underflow on EndLayer");
+
+                    {
+                        let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("rsx-layer-resolve"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &l_msaa_view,
+                                resolve_target: Some(&l_resolve_view),
+                                depth_slice: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Load,
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                            occlusion_query_set: None,
+                            timestamp_writes: None,
+                            multiview_mask: None,
+                        });
+                    }
+
+                    let parent_view: &wgpu::TextureView =
+                        if let Some((_, pv, _, _)) = layer_stack.last() {
+                            pv
+                        } else {
+                            &msaa_view
+                        };
+
+                    {
+                        let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("rsx-layer-blit"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: parent_view,
+                                resolve_target: None,
+                                depth_slice: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Load,
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                            occlusion_query_set: None,
+                            timestamp_writes: None,
+                            multiview_mask: None,
+                        });
+                        blit.set_pipeline(&self.layer_pipeline.pipeline);
+                        blit.set_bind_group(0, &bind_group, &[]);
+                        blit.draw(0..6, 0..1);
+                    }
+
+                    drop((l_msaa_tex, l_msaa_view, l_resolve_tex, l_resolve_view));
                 }
             }
+        }
+
+        {
+            let _final = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("rsx-final-resolve"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &msaa_view,
+                    resolve_target: Some(&surface_view),
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

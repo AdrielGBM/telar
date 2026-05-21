@@ -113,7 +113,7 @@ mod tests {
 
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerButton, PointerSource};
-    use renderer_core::{Color, DrawCommand};
+    use renderer_core::{Color, DrawCommand, FillStyle};
 
     use super::*;
     use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
@@ -264,7 +264,9 @@ mod tests {
         if let View::Group(children) = view {
             if let View::Primitive(DrawCommand::Rect { style, .. }) = &children[0] {
                 if let Some(fill) = style.fill {
-                    return fill.color();
+                    if let FillStyle::Solid(color) = fill {
+                        return color;
+                    }
                 }
             }
         }

@@ -24,8 +24,9 @@ pub use reactive_core::{
 };
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    BorderRadius, Color, FillRule, FillStyle, ImageData, ImageFilter, LineCap, LineJoin, LineStyle,
-    PathData, PathStyle, PathVerb, Point, Rect as Bounds, RectStyle, Stroke, TextStyle,
+    BorderRadius, Color, FillRule, FillStyle, GradientStop, ImageData, ImageFilter, LineCap,
+    LineJoin, LineStyle, LinearGradient, PathData, PathStyle, PathVerb, Point, RadialGradient,
+    Rect as Bounds, RectStyle, Stroke, TextStyle,
 };
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{

@@ -13,6 +13,10 @@ pub enum View {
         rect: Rect,
         children: Vec<View>,
     },
+    Layer {
+        opacity: f32,
+        children: Vec<View>,
+    },
 }
 
 impl View {

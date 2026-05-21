@@ -3,9 +3,9 @@ use std::rc::Rc;
 use rsx::{
     App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Event, EventResult,
     FillRule, FillStyle, Image, ImageData, ImageFilter, Label, LayoutStyle, Line, LineCap,
-    LineJoin, LineStyle, Path, PathData, PathStyle, Point, Rect, RectStyle, RwSignal, ScrollArea,
-    Stroke, Text, TextStyle, TranslateGroup, View, WidgetCtx, WindowConfig, compute_layout,
-    create_rw_signal, new_container, with_context,
+    LineJoin, LineStyle, LinearGradient, Path, PathData, PathStyle, Point, RadialGradient, Rect,
+    RectStyle, RwSignal, ScrollArea, Stroke, Text, TextStyle, TranslateGroup, View, WidgetCtx,
+    WindowConfig, compute_layout, create_rw_signal, new_container, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -19,7 +19,7 @@ const MUTED: Color = Color::rgba(0.50, 0.50, 0.60, 1.0);
 const WHITE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
 const CARD_BORDER: Color = Color::rgba(0.80, 0.80, 0.88, 1.0);
 
-const CONTENT_HEIGHT: f32 = 1700.0;
+const CONTENT_HEIGHT: f32 = 2600.0;
 
 const PANEL_X: f32 = 614.0;
 const PANEL_Y: f32 = 40.0;
@@ -57,6 +57,8 @@ fn static_content(gradient: Rc<ImageData>, checker: Rc<ImageData>, alpha: Rc<Ima
         images_section(gradient, checker, alpha),
         lines_section(),
         paths_section(),
+        gradients_section(),
+        layers_section(),
     ])
 }
 
@@ -821,6 +823,627 @@ fn paths_section() -> View {
         )
         .view(),
     );
+
+    View::group(children)
+}
+
+fn gradients_section() -> View {
+    const Y0: f32 = 1680.0;
+    let mut children: Vec<View> = Vec::new();
+
+    // separator + header
+    children.push(
+        Line::new(
+            || Point::new(24.0, Y0),
+            || Point::new(760.0, Y0),
+            || LineStyle::new(CARD_BORDER, 1.0),
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "Gradients".to_string(),
+            || Bounds::new(24.0, Y0 + 12.0, 200.0, 20.0),
+            || TextStyle::new(12.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Text::new(
+            || "Linear — Rect".to_string(),
+            || Bounds::new(24.0, Y0 + 40.0, 300.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(24.0, Y0 + 60.0, 168.0, 80.0),
+            || RectStyle {
+                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    Point::new(24.0, Y0 + 100.0),
+                    Point::new(192.0, Y0 + 100.0),
+                    &[
+                        (0.0, Color::rgba(0.92, 0.27, 0.27, 1.0)),
+                        (1.0, Color::rgba(0.24, 0.47, 0.98, 1.0)),
+                    ],
+                ))),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "horizontal".to_string(),
+            || Bounds::new(24.0, Y0 + 146.0, 168.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(208.0, Y0 + 60.0, 168.0, 80.0),
+            || RectStyle {
+                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    Point::new(292.0, Y0 + 60.0),
+                    Point::new(292.0, Y0 + 140.0),
+                    &[(0.0, PURPLE), (1.0, SUCCESS)],
+                ))),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "vertical".to_string(),
+            || Bounds::new(208.0, Y0 + 146.0, 168.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(392.0, Y0 + 60.0, 168.0, 80.0),
+            || RectStyle {
+                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    Point::new(392.0, Y0 + 60.0),
+                    Point::new(560.0, Y0 + 140.0),
+                    &[(0.0, WARNING), (1.0, DARK)],
+                ))),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "diagonal".to_string(),
+            || Bounds::new(392.0, Y0 + 146.0, 168.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(576.0, Y0 + 60.0, 168.0, 80.0),
+            || RectStyle {
+                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    Point::new(576.0, Y0 + 100.0),
+                    Point::new(744.0, Y0 + 100.0),
+                    &[
+                        (0.0, DARK),
+                        (0.5, Color::rgba(0.20, 0.75, 0.90, 1.0)),
+                        (1.0, WHITE),
+                    ],
+                ))),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "3 stops".to_string(),
+            || Bounds::new(576.0, Y0 + 146.0, 168.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Text::new(
+            || "Radial — Rect".to_string(),
+            || Bounds::new(24.0, Y0 + 180.0, 300.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(24.0, Y0 + 200.0, 168.0, 80.0),
+            || RectStyle {
+                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                    Point::new(108.0, Y0 + 240.0),
+                    70.0,
+                    &[(0.0, PRIMARY), (1.0, Color::rgba(0.24, 0.47, 0.98, 0.0))],
+                ))),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "center burst".to_string(),
+            || Bounds::new(24.0, Y0 + 286.0, 168.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(208.0, Y0 + 200.0, 168.0, 80.0),
+            || RectStyle {
+                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                    Point::new(292.0, Y0 + 240.0),
+                    40.0,
+                    &[(0.0, DANGER), (1.0, WARNING)],
+                ))),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "tight radius".to_string(),
+            || Bounds::new(208.0, Y0 + 286.0, 168.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(392.0, Y0 + 200.0, 168.0, 80.0),
+            || RectStyle {
+                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                    Point::new(476.0, Y0 + 240.0),
+                    80.0,
+                    &[(0.0, WHITE), (0.45, PURPLE), (1.0, DARK)],
+                ))),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "3 stops".to_string(),
+            || Bounds::new(392.0, Y0 + 286.0, 168.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(576.0, Y0 + 200.0, 168.0, 80.0),
+            || RectStyle {
+                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                    Point::new(576.0, Y0 + 200.0),
+                    180.0,
+                    &[(0.0, SUCCESS), (1.0, DARK)],
+                ))),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "off-center".to_string(),
+            || Bounds::new(576.0, Y0 + 286.0, 168.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Text::new(
+            || "Gradients — Path".to_string(),
+            || Bounds::new(24.0, Y0 + 318.0, 300.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    let tri = Rc::new(
+        PathData::new()
+            .move_to(Point::new(99.0, Y0 + 338.0))
+            .line_to(Point::new(174.0, Y0 + 468.0))
+            .line_to(Point::new(24.0, Y0 + 468.0))
+            .close(),
+    );
+    children.push(
+        Path::new(
+            {
+                let d = tri.clone();
+                move || d.clone()
+            },
+            || PathStyle {
+                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    Point::new(99.0, Y0 + 338.0),
+                    Point::new(99.0, Y0 + 468.0),
+                    &[(0.0, DANGER), (1.0, WARNING)],
+                ))),
+                stroke: None,
+                fill_rule: FillRule::Winding,
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "triangle linear".to_string(),
+            || Bounds::new(24.0, Y0 + 476.0, 180.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    let cx = 292.0f32;
+    let cy = Y0 + 403.0;
+    let outer = 65.0f32;
+    let inner = 26.0f32;
+    let mut star_path = PathData::new();
+    for i in 0..10usize {
+        let angle = std::f32::consts::TAU * i as f32 / 10.0 - std::f32::consts::FRAC_PI_2;
+        let r = if i % 2 == 0 { outer } else { inner };
+        let p = Point::new(cx + r * angle.cos(), cy + r * angle.sin());
+        star_path = if i == 0 {
+            star_path.move_to(p)
+        } else {
+            star_path.line_to(p)
+        };
+    }
+    let star_path = Rc::new(star_path.close());
+    children.push(
+        Path::new(
+            {
+                let d = star_path.clone();
+                move || d.clone()
+            },
+            move || PathStyle {
+                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                    Point::new(cx, cy),
+                    outer,
+                    &[(0.0, WHITE), (0.5, PURPLE), (1.0, DARK)],
+                ))),
+                stroke: Some(Stroke::new(DARK, 1.0)),
+                fill_rule: FillRule::Winding,
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "star radial".to_string(),
+            || Bounds::new(224.0, Y0 + 476.0, 180.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    let petal = Rc::new(
+        PathData::new()
+            .move_to(Point::new(476.0, Y0 + 338.0))
+            .cubic_to(
+                Point::new(556.0, Y0 + 338.0),
+                Point::new(556.0, Y0 + 468.0),
+                Point::new(476.0, Y0 + 468.0),
+            )
+            .cubic_to(
+                Point::new(396.0, Y0 + 468.0),
+                Point::new(396.0, Y0 + 338.0),
+                Point::new(476.0, Y0 + 338.0),
+            )
+            .close(),
+    );
+    children.push(
+        Path::new(
+            {
+                let d = petal.clone();
+                move || d.clone()
+            },
+            || PathStyle {
+                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    Point::new(396.0, Y0 + 338.0),
+                    Point::new(556.0, Y0 + 468.0),
+                    &[
+                        (0.0, SUCCESS),
+                        (0.5, Color::rgba(0.20, 0.75, 0.90, 1.0)),
+                        (1.0, PRIMARY),
+                    ],
+                ))),
+                stroke: Some(Stroke::new(DARK, 1.5)),
+                fill_rule: FillRule::Winding,
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "petal linear 3-stop".to_string(),
+            || Bounds::new(396.0, Y0 + 476.0, 180.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    let rings = Rc::new(
+        PathData::new()
+            .move_to(Point::new(600.0, Y0 + 338.0))
+            .line_to(Point::new(760.0, Y0 + 338.0))
+            .line_to(Point::new(760.0, Y0 + 468.0))
+            .line_to(Point::new(600.0, Y0 + 468.0))
+            .close()
+            .move_to(Point::new(624.0, Y0 + 362.0))
+            .line_to(Point::new(736.0, Y0 + 362.0))
+            .line_to(Point::new(736.0, Y0 + 444.0))
+            .line_to(Point::new(624.0, Y0 + 444.0))
+            .close(),
+    );
+    children.push(
+        Path::new(
+            {
+                let d = rings.clone();
+                move || d.clone()
+            },
+            || PathStyle {
+                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    Point::new(600.0, Y0 + 403.0),
+                    Point::new(760.0, Y0 + 403.0),
+                    &[(0.0, DANGER), (1.0, PURPLE)],
+                ))),
+                stroke: None,
+                fill_rule: FillRule::EvenOdd,
+            },
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "even-odd + linear".to_string(),
+            || Bounds::new(600.0, Y0 + 476.0, 180.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    View::group(children)
+}
+
+fn layers_section() -> View {
+    const Y0: f32 = 2200.0;
+    let mut children: Vec<View> = Vec::new();
+
+    children.push(
+        Line::new(
+            || Point::new(24.0, Y0),
+            || Point::new(760.0, Y0),
+            || LineStyle::new(CARD_BORDER, 1.0),
+        )
+        .view(),
+    );
+    children.push(
+        Text::new(
+            || "Layers (PushLayer / PopLayer)".to_string(),
+            || Bounds::new(24.0, Y0 + 12.0, 400.0, 20.0),
+            || TextStyle::new(12.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Text::new(
+            || "Opacity — same red rect at 1.0 / 0.6 / 0.3 / 0.1".to_string(),
+            || Bounds::new(24.0, Y0 + 40.0, 500.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    for (i, &opacity) in [1.0f32, 0.6, 0.3, 0.1].iter().enumerate() {
+        let x = 24.0 + i as f32 * 184.0;
+        children.push(View::Layer {
+            opacity,
+            children: vec![
+                Rect::new(
+                    move || Bounds::new(x, Y0 + 60.0, 168.0, 80.0),
+                    || RectStyle {
+                        fill: Some(FillStyle::Solid(DANGER)),
+                        stroke: None,
+                        radius: BorderRadius::all(8.0),
+                    },
+                )
+                .view(),
+                Text::new(
+                    move || format!("{opacity:.1}"),
+                    move || Bounds::new(x, Y0 + 64.0, 168.0, 72.0),
+                    || TextStyle::new(18.0, WHITE),
+                )
+                .view(),
+            ],
+        });
+    }
+
+    children.push(
+        Text::new(
+            || "Overlapping colored layers at 0.7 opacity".to_string(),
+            || Bounds::new(24.0, Y0 + 164.0, 500.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(
+        Rect::new(
+            || Bounds::new(24.0, Y0 + 184.0, 368.0, 180.0),
+            || RectStyle {
+                fill: Some(FillStyle::Solid(DARK)),
+                stroke: None,
+                radius: BorderRadius::all(8.0),
+            },
+        )
+        .view(),
+    );
+
+    children.push(View::Layer {
+        opacity: 0.7,
+        children: vec![
+            Rect::new(
+                || Bounds::new(40.0, Y0 + 200.0, 180.0, 120.0),
+                || RectStyle {
+                    fill: Some(FillStyle::Solid(PRIMARY)),
+                    stroke: None,
+                    radius: BorderRadius::all(8.0),
+                },
+            )
+            .view(),
+        ],
+    });
+
+    children.push(View::Layer {
+        opacity: 0.7,
+        children: vec![
+            Rect::new(
+                || Bounds::new(120.0, Y0 + 240.0, 180.0, 120.0),
+                || RectStyle {
+                    fill: Some(FillStyle::Solid(SUCCESS)),
+                    stroke: None,
+                    radius: BorderRadius::all(8.0),
+                },
+            )
+            .view(),
+        ],
+    });
+
+    children.push(View::Layer {
+        opacity: 0.7,
+        children: vec![
+            Rect::new(
+                || Bounds::new(200.0, Y0 + 220.0, 180.0, 120.0),
+                || RectStyle {
+                    fill: Some(FillStyle::Solid(DANGER)),
+                    stroke: None,
+                    radius: BorderRadius::all(8.0),
+                },
+            )
+            .view(),
+        ],
+    });
+
+    children.push(
+        Text::new(
+            || "Layer (0.8) wrapping a gradient rect + text".to_string(),
+            || Bounds::new(420.0, Y0 + 164.0, 360.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(View::Layer {
+        opacity: 0.8,
+        children: vec![
+            Rect::new(
+                || Bounds::new(420.0, Y0 + 184.0, 320.0, 180.0),
+                || RectStyle {
+                    fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                        Point::new(420.0, Y0 + 274.0),
+                        Point::new(740.0, Y0 + 274.0),
+                        &[(0.0, PRIMARY), (0.5, PURPLE), (1.0, DANGER)],
+                    ))),
+                    stroke: None,
+                    radius: BorderRadius::all(12.0),
+                },
+            )
+            .view(),
+            Text::new(
+                || "gradient + layer".to_string(),
+                || Bounds::new(420.0, Y0 + 254.0, 320.0, 60.0),
+                || TextStyle::new(18.0, WHITE),
+            )
+            .view(),
+        ],
+    });
+
+    children.push(
+        Text::new(
+            || "Nested layers: outer 0.6, inner 0.5 → combined ~0.3".to_string(),
+            || Bounds::new(24.0, Y0 + 390.0, 500.0, 16.0),
+            || TextStyle::new(11.0, MUTED),
+        )
+        .view(),
+    );
+
+    children.push(View::Layer {
+        opacity: 0.6,
+        children: vec![
+            Rect::new(
+                || Bounds::new(24.0, Y0 + 410.0, 340.0, 120.0),
+                || RectStyle {
+                    fill: Some(FillStyle::Solid(PRIMARY)),
+                    stroke: None,
+                    radius: BorderRadius::all(8.0),
+                },
+            )
+            .view(),
+            View::Layer {
+                opacity: 0.5,
+                children: vec![
+                    Rect::new(
+                        || Bounds::new(60.0, Y0 + 430.0, 260.0, 80.0),
+                        || RectStyle {
+                            fill: Some(FillStyle::Solid(DANGER)),
+                            stroke: None,
+                            radius: BorderRadius::all(6.0),
+                        },
+                    )
+                    .view(),
+                    Text::new(
+                        || "inner 0.5".to_string(),
+                        || Bounds::new(60.0, Y0 + 434.0, 260.0, 72.0),
+                        || TextStyle::new(14.0, WHITE),
+                    )
+                    .view(),
+                ],
+            },
+            Text::new(
+                || "outer 0.6".to_string(),
+                || Bounds::new(24.0, Y0 + 414.0, 340.0, 20.0),
+                || TextStyle::new(11.0, Color::rgba(1.0, 1.0, 1.0, 0.7)),
+            )
+            .view(),
+        ],
+    });
 
     View::group(children)
 }

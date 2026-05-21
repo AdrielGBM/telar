@@ -8,7 +8,18 @@ use super::InstancePipeline;
 pub(crate) struct RectInstance {
     pub rect: [f32; 4],
     pub radii: [f32; 4],
+    // fill
+    pub fill_type: u32,
+    pub _pad_ft: [u32; 3],
     pub fill_color: [f32; 4],
+    pub grad_p0: [f32; 2],
+    pub grad_p1: [f32; 2],
+    pub grad_radius: f32,
+    pub grad_stop_count: u32,
+    pub _pad_g: [f32; 2],
+    pub grad_positions: [f32; 4],
+    pub grad_colors: [[f32; 4]; 4],
+    // stroke
     pub stroke_color: [f32; 4],
     pub stroke_width: f32,
     pub _pad: [f32; 3],
@@ -83,15 +94,80 @@ impl RectPipeline {
     }
 }
 
-pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle) -> RectInstance {
-    let fill_color = match style.fill {
-        Some(renderer_core::FillStyle::Solid(c)) => c.to_array(),
-        None => [0.0; 4],
+pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, tx: f32, ty: f32) -> RectInstance {
+    let (
+        fill_type,
+        fill_color,
+        grad_p0,
+        grad_p1,
+        grad_radius,
+        grad_stop_count,
+        grad_positions,
+        grad_colors,
+    ) = match style.fill {
+        Some(renderer_core::FillStyle::Solid(c)) => (
+            0u32,
+            c.to_array(),
+            [0.0f32; 2],
+            [0.0f32; 2],
+            0.0f32,
+            0u32,
+            [0.0f32; 4],
+            [[0.0f32; 4]; 4],
+        ),
+        Some(renderer_core::FillStyle::LinearGradient(g)) => {
+            let mut positions = [0.0f32; 4];
+            let mut colors = [[0.0f32; 4]; 4];
+            for i in 0..g.stop_count as usize {
+                positions[i] = g.stops[i].position;
+                colors[i] = g.stops[i].color.to_array();
+            }
+            (
+                1u32,
+                [0.0; 4],
+                [g.start.x + tx, g.start.y + ty],
+                [g.end.x + tx, g.end.y + ty],
+                0.0,
+                g.stop_count as u32,
+                positions,
+                colors,
+            )
+        }
+        Some(renderer_core::FillStyle::RadialGradient(g)) => {
+            let mut positions = [0.0f32; 4];
+            let mut colors = [[0.0f32; 4]; 4];
+            for i in 0..g.stop_count as usize {
+                positions[i] = g.stops[i].position;
+                colors[i] = g.stops[i].color.to_array();
+            }
+            (
+                2u32,
+                [0.0; 4],
+                [g.center.x + tx, g.center.y + ty],
+                [0.0, 0.0],
+                g.radius,
+                g.stop_count as u32,
+                positions,
+                colors,
+            )
+        }
+        None => (
+            0u32,
+            [0.0; 4],
+            [0.0; 2],
+            [0.0; 2],
+            0.0,
+            0u32,
+            [0.0; 4],
+            [[0.0; 4]; 4],
+        ),
     };
+
     let (stroke_color, stroke_width) = match style.stroke {
         Some(s) => (s.color.to_array(), s.width),
         None => ([0.0; 4], 0.0),
     };
+
     RectInstance {
         rect: [rect.x, rect.y, rect.width, rect.height],
         radii: [
@@ -100,7 +176,16 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle) -> RectInstance {
             style.radius.bottom_right,
             style.radius.bottom_left,
         ],
+        fill_type,
+        _pad_ft: [0; 3],
         fill_color,
+        grad_p0,
+        grad_p1,
+        grad_radius,
+        grad_stop_count,
+        _pad_g: [0.0; 2],
+        grad_positions,
+        grad_colors,
         stroke_color,
         stroke_width,
         _pad: [0.0; 3],

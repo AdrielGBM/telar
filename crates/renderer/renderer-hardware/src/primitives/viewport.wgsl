@@ -19,3 +19,30 @@ fn quad_uv(vertex_index: u32) -> vec2<f32> {
     );
     return offsets[vertex_index];
 }
+
+fn sample_gradient(
+    t: f32,
+    positions: vec4<f32>,
+    colors: array<vec4<f32>, 4>,
+    stop_count: u32,
+) -> vec4<f32> {
+    let tc = clamp(t, 0.0, 1.0);
+    if stop_count == 0u { return vec4<f32>(0.0); }
+    if stop_count == 1u { return colors[0]; }
+    var result = colors[0];
+    for (var i = 1u; i < stop_count; i++) {
+        let p0 = positions[i - 1u];
+        let p1 = positions[i];
+        if tc <= p1 {
+            if p1 <= p0 {
+                result = colors[i - 1u];
+            } else {
+                let local_t = (tc - p0) / (p1 - p0);
+                result = mix(colors[i - 1u], colors[i], local_t);
+            }
+            return result;
+        }
+        result = colors[i];
+    }
+    return result;
+}

@@ -102,11 +102,12 @@ where
 
         let mut state = renderer_core::DrawState::new();
         let mut clip_mask: Option<tiny_skia::Mask> = None;
+        let mut layer_stack: Vec<(tiny_skia::Pixmap, f32)> = Vec::new();
 
         for cmd in commands {
-            let Some(pixmap) = &mut self.pixmap else {
+            if self.pixmap.is_none() {
                 break;
-            };
+            }
             let transform = tiny_skia::Transform::from_translate(state.cum_tx, state.cum_ty);
             match cmd {
                 DrawCommand::Rect { rect, style } => {
@@ -116,6 +117,11 @@ where
                     {
                         continue;
                     }
+                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                        top
+                    } else {
+                        self.pixmap.as_mut().unwrap()
+                    };
                     crate::primitives::rect::draw_rect(
                         pixmap,
                         rect,
@@ -125,6 +131,11 @@ where
                     );
                 }
                 DrawCommand::Text { text, rect, style } => {
+                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                        top
+                    } else {
+                        self.pixmap.as_mut().unwrap()
+                    };
                     crate::primitives::text::draw_text(
                         pixmap,
                         &mut self.text_shaper,
@@ -136,6 +147,11 @@ where
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
+                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                        top
+                    } else {
+                        self.pixmap.as_mut().unwrap()
+                    };
                     crate::primitives::image::draw_image(
                         pixmap,
                         &data,
@@ -147,6 +163,11 @@ where
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
+                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                        top
+                    } else {
+                        self.pixmap.as_mut().unwrap()
+                    };
                     crate::primitives::line::draw_line(
                         pixmap,
                         p1,
@@ -157,6 +178,11 @@ where
                     );
                 }
                 DrawCommand::Path { data, style } => {
+                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                        top
+                    } else {
+                        self.pixmap.as_mut().unwrap()
+                    };
                     crate::primitives::path::draw_path(
                         pixmap,
                         &data,
@@ -178,6 +204,32 @@ where
                 }
                 DrawCommand::PopTransform => {
                     state.pop_transform();
+                }
+                DrawCommand::PushLayer { opacity } => {
+                    if let Some(layer) = tiny_skia::Pixmap::new(self.width, self.height) {
+                        layer_stack.push((layer, opacity));
+                    }
+                }
+                DrawCommand::PopLayer => {
+                    if let Some((layer, opacity)) = layer_stack.pop() {
+                        let target = if let Some((top, _)) = layer_stack.last_mut() {
+                            top
+                        } else {
+                            self.pixmap.as_mut().unwrap()
+                        };
+                        target.draw_pixmap(
+                            0,
+                            0,
+                            layer.as_ref(),
+                            &tiny_skia::PixmapPaint {
+                                opacity,
+                                blend_mode: tiny_skia::BlendMode::SourceOver,
+                                quality: tiny_skia::FilterQuality::Nearest,
+                            },
+                            tiny_skia::Transform::identity(),
+                            None,
+                        );
+                    }
                 }
             }
         }

@@ -1,4 +1,5 @@
 pub(crate) mod image;
+pub(crate) mod layer;
 pub(crate) mod line;
 pub(crate) mod path;
 pub(crate) mod rect;
@@ -47,7 +48,7 @@ impl<I: bytemuck::Pod> InstancePipeline<I> {
             label: Some(&format!("rsx-{label}-instances-bgl")),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,

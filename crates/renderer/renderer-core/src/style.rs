@@ -1,4 +1,4 @@
-use crate::{BorderRadius, Color, Stroke};
+use crate::{BorderRadius, Color, Point, Stroke};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextStyle {
@@ -13,16 +13,70 @@ impl TextStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum FillStyle {
-    Solid(Color),
+pub struct GradientStop {
+    pub position: f32,
+    pub color: Color,
 }
 
-impl FillStyle {
-    pub fn color(&self) -> Color {
-        match self {
-            Self::Solid(c) => *c,
+impl GradientStop {
+    pub fn new(position: f32, color: Color) -> Self {
+        Self { position, color }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LinearGradient {
+    pub start: Point,
+    pub end: Point,
+    pub stops: [GradientStop; 4],
+    pub stop_count: u8,
+}
+
+impl LinearGradient {
+    pub fn new(start: Point, end: Point, stops: &[(f32, Color)]) -> Self {
+        let stop_count = stops.len().min(4) as u8;
+        let mut arr = [GradientStop::new(0.0, Color::TRANSPARENT); 4];
+        for (i, &(position, color)) in stops.iter().take(4).enumerate() {
+            arr[i] = GradientStop::new(position, color);
+        }
+        Self {
+            start,
+            end,
+            stops: arr,
+            stop_count,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RadialGradient {
+    pub center: Point,
+    pub radius: f32,
+    pub stops: [GradientStop; 4],
+    pub stop_count: u8,
+}
+
+impl RadialGradient {
+    pub fn new(center: Point, radius: f32, stops: &[(f32, Color)]) -> Self {
+        let stop_count = stops.len().min(4) as u8;
+        let mut arr = [GradientStop::new(0.0, Color::TRANSPARENT); 4];
+        for (i, &(position, color)) in stops.iter().take(4).enumerate() {
+            arr[i] = GradientStop::new(position, color);
+        }
+        Self {
+            center,
+            radius,
+            stops: arr,
+            stop_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FillStyle {
+    Solid(Color),
+    LinearGradient(LinearGradient),
+    RadialGradient(RadialGradient),
 }
 
 impl From<Color> for FillStyle {
@@ -150,17 +204,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fill_style_solid_color_returns_color() {
-        let color = Color::RED;
-        let fill = FillStyle::Solid(color);
-        assert_eq!(fill.color(), color);
-    }
-
-    #[test]
     fn fill_style_from_color_creates_solid() {
         let color = Color::GREEN;
         let fill: FillStyle = color.into();
         assert_eq!(fill, FillStyle::Solid(color));
+    }
+
+    #[test]
+    fn linear_gradient_new_stores_stops() {
+        let p1 = Point::new(0.0, 0.0);
+        let p2 = Point::new(1.0, 0.0);
+        let g = LinearGradient::new(p1, p2, &[(0.0, Color::BLACK), (1.0, Color::WHITE)]);
+        assert_eq!(g.stop_count, 2);
+        assert_eq!(g.stops[0].color, Color::BLACK);
+        assert_eq!(g.stops[1].color, Color::WHITE);
+    }
+
+    #[test]
+    fn linear_gradient_new_truncates_to_four() {
+        let p = Point::new(0.0, 0.0);
+        let stops: Vec<(f32, Color)> = (0..6).map(|i| (i as f32 / 5.0, Color::BLACK)).collect();
+        let g = LinearGradient::new(p, p, &stops);
+        assert_eq!(g.stop_count, 4);
+    }
+
+    #[test]
+    fn radial_gradient_new_stores_stops() {
+        let c = Point::new(0.5, 0.5);
+        let g = RadialGradient::new(c, 1.0, &[(0.0, Color::RED), (1.0, Color::TRANSPARENT)]);
+        assert_eq!(g.stop_count, 2);
+        assert_eq!(g.stops[0].color, Color::RED);
     }
 
     #[test]

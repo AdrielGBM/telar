@@ -28,6 +28,13 @@ pub fn flatten_view(root: View) -> Vec<DrawCommand> {
                 }
                 out.push(DrawCommand::PushClip { rect });
             }
+            View::Layer { opacity, children } => {
+                stack.push(View::Primitive(DrawCommand::PopLayer));
+                for child in children.into_iter().rev() {
+                    stack.push(child);
+                }
+                out.push(DrawCommand::PushLayer { opacity });
+            }
         }
     }
     out

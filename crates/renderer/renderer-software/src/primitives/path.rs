@@ -1,6 +1,6 @@
 use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 
-use crate::primitives::to_skia_color;
+use crate::primitives::{fill_to_paint, to_skia_color};
 
 fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
     let mut pb = tiny_skia::PathBuilder::new();
@@ -46,9 +46,7 @@ pub(crate) fn draw_path(
     };
 
     if let Some(fill_style) = style.fill {
-        let mut paint = tiny_skia::Paint::default();
-        paint.set_color(to_skia_color(fill_style.color()));
-        paint.anti_alias = true;
+        let paint = fill_to_paint(fill_style, transform);
         let rule = match style.fill_rule {
             FillRule::Winding => tiny_skia::FillRule::Winding,
             FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,

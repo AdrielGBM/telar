@@ -1,6 +1,6 @@
-use renderer_core::{BorderRadius, FillStyle, Rect, RectStyle};
+use renderer_core::{BorderRadius, Rect, RectStyle};
 
-use crate::primitives::to_skia_color;
+use crate::primitives::{fill_to_paint, to_skia_color};
 
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
     let x = rect.x;
@@ -68,12 +68,7 @@ pub(crate) fn draw_rect(
 ) {
     if let Some(fill_style) = style.fill {
         if let Some(path) = build_rect_path(rect, style.radius) {
-            let color = match fill_style {
-                FillStyle::Solid(c) => c,
-            };
-            let mut paint = tiny_skia::Paint::default();
-            paint.set_color(to_skia_color(color));
-            paint.anti_alias = true;
+            let paint = fill_to_paint(fill_style, transform);
             pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, clip);
         }
     }

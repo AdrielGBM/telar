@@ -15,5 +15,6 @@ pub use geometry::{BorderRadius, PathData, PathVerb, Point, Rect, Stroke, inters
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use renderer::RenderBackend;
 pub use style::{
-    FillRule, FillStyle, LineCap, LineJoin, LineStyle, PathStyle, RectStyle, TextStyle,
+    FillRule, FillStyle, GradientStop, LineCap, LineJoin, LineStyle, LinearGradient, PathStyle,
+    RadialGradient, RectStyle, TextStyle,
 };

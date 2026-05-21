@@ -64,4 +64,8 @@ pub enum DrawCommand {
         ty: f32,
     },
     PopTransform,
+    PushLayer {
+        opacity: f32,
+    },
+    PopLayer,
 }
