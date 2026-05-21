@@ -1,4 +1,9 @@
-use taffy::{Dimension, Display, FlexDirection, LengthPercentage, LengthPercentageAuto, Style};
+use taffy::{
+    Dimension, Display, FlexDirection, GridAutoFlow, GridPlacement, LengthPercentage,
+    LengthPercentageAuto, Style,
+};
+
+use crate::track::Track;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AvailableSpace {
@@ -152,6 +157,89 @@ impl LayoutStyle {
 
     pub fn justify_content(mut self, value: JustifyContent) -> Self {
         self.inner.justify_content = Some(value.into());
+        self
+    }
+
+    pub fn display_grid(mut self) -> Self {
+        self.inner.display = Display::Grid;
+        self
+    }
+
+    pub fn grid_template_columns(mut self, tracks: Vec<Track>) -> Self {
+        self.inner.grid_template_columns = tracks
+            .into_iter()
+            .map(|t| t.into_template_component())
+            .collect();
+        self
+    }
+
+    pub fn grid_template_rows(mut self, tracks: Vec<Track>) -> Self {
+        self.inner.grid_template_rows = tracks
+            .into_iter()
+            .map(|t| t.into_template_component())
+            .collect();
+        self
+    }
+
+    pub fn grid_auto_rows(mut self, tracks: Vec<Track>) -> Self {
+        self.inner.grid_auto_rows = tracks.into_iter().map(|t| t.into_auto_track()).collect();
+        self
+    }
+
+    pub fn grid_auto_columns(mut self, tracks: Vec<Track>) -> Self {
+        self.inner.grid_auto_columns = tracks.into_iter().map(|t| t.into_auto_track()).collect();
+        self
+    }
+
+    pub fn grid_auto_flow_row(mut self) -> Self {
+        self.inner.grid_auto_flow = GridAutoFlow::Row;
+        self
+    }
+
+    pub fn grid_auto_flow_column(mut self) -> Self {
+        self.inner.grid_auto_flow = GridAutoFlow::Column;
+        self
+    }
+
+    pub fn grid_auto_flow_row_dense(mut self) -> Self {
+        self.inner.grid_auto_flow = GridAutoFlow::RowDense;
+        self
+    }
+
+    pub fn grid_auto_flow_column_dense(mut self) -> Self {
+        self.inner.grid_auto_flow = GridAutoFlow::ColumnDense;
+        self
+    }
+
+    pub fn grid_column(mut self, start: i16, end: i16) -> Self {
+        self.inner.grid_column = taffy::geometry::Line {
+            start: taffy::style_helpers::line(start),
+            end: taffy::style_helpers::line(end),
+        };
+        self
+    }
+
+    pub fn grid_row(mut self, start: i16, end: i16) -> Self {
+        self.inner.grid_row = taffy::geometry::Line {
+            start: taffy::style_helpers::line(start),
+            end: taffy::style_helpers::line(end),
+        };
+        self
+    }
+
+    pub fn grid_column_span(mut self, n: u16) -> Self {
+        self.inner.grid_column = taffy::geometry::Line {
+            start: GridPlacement::Span(n),
+            end: GridPlacement::Auto,
+        };
+        self
+    }
+
+    pub fn grid_row_span(mut self, n: u16) -> Self {
+        self.inner.grid_row = taffy::geometry::Line {
+            start: GridPlacement::Span(n),
+            end: GridPlacement::Auto,
+        };
         self
     }
 }

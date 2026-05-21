@@ -6,6 +6,7 @@ use platform_core::{Event, PointerButton};
 use renderer_core::{BorderRadius, Color, DrawCommand, RectStyle, TextStyle};
 use ui_tree::{Component, EventResult, View};
 
+use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Button {
@@ -51,26 +52,36 @@ impl Button {
 
 impl Component for Button {
     fn view(&self) -> View {
-        let rect = self.leaf.rect.get();
+        let r = self.leaf.rect.get();
         let color = if self.hovered.get() {
             self.hover_bg
         } else {
             self.bg
         };
+        let local = renderer_core::Rect {
+            x: 0.0,
+            y: 0.0,
+            width: r.width,
+            height: r.height,
+        };
 
-        View::group([
-            View::Primitive(DrawCommand::Rect {
-                rect,
-                style: RectStyle::default()
-                    .with_fill(color)
-                    .with_radius(BorderRadius::all(4.0)),
-            }),
-            View::Primitive(DrawCommand::Text {
-                text: Rc::clone(&self.label),
-                rect,
-                style: self.text_style,
-            }),
-        ])
+        View::Translate {
+            tx: r.x,
+            ty: r.y,
+            children: vec![View::group([
+                View::Primitive(DrawCommand::Rect {
+                    rect: local,
+                    style: RectStyle::default()
+                        .with_fill(color)
+                        .with_radius(BorderRadius::all(4.0)),
+                }),
+                View::Primitive(DrawCommand::Text {
+                    text: Rc::clone(&self.label),
+                    rect: local,
+                    style: self.text_style,
+                }),
+            ])],
+        }
     }
 
     // NOTE: expects coords pre-adjusted to layout space; callers are responsible for subtracting any PushTransform offsets. DPI normalization (physical → logical pixels) is handled upstream by platform-winit before events are emitted.
@@ -103,6 +114,12 @@ impl Component for Button {
             }
             _ => EventResult::Ignored,
         }
+    }
+}
+
+impl LayoutItem for Button {
+    fn layout_node(&self) -> NodeId {
+        self.leaf.node
     }
 }
 
@@ -144,18 +161,23 @@ mod tests {
     fn button_view_renders_two_primitives() {
         let (button, _ctx) = make_button_with_rect();
         let view = button.view();
-        if let View::Group(children) = view {
-            assert_eq!(children.len(), 2);
-            assert!(matches!(
-                &children[0],
-                View::Primitive(DrawCommand::Rect { .. })
-            ));
-            assert!(matches!(
-                &children[1],
-                View::Primitive(DrawCommand::Text { .. })
-            ));
+        if let View::Translate { children, .. } = view {
+            assert_eq!(children.len(), 1);
+            if let View::Group(inner) = &children[0] {
+                assert_eq!(inner.len(), 2);
+                assert!(matches!(
+                    &inner[0],
+                    View::Primitive(DrawCommand::Rect { .. })
+                ));
+                assert!(matches!(
+                    &inner[1],
+                    View::Primitive(DrawCommand::Text { .. })
+                ));
+            } else {
+                panic!("expected Group inside Translate");
+            }
         } else {
-            panic!("expected Group");
+            panic!("expected Translate");
         }
     }
 
@@ -261,11 +283,13 @@ mod tests {
     }
 
     fn rect_fill_color(view: &View) -> Color {
-        if let View::Group(children) = view {
-            if let View::Primitive(DrawCommand::Rect { style, .. }) = &children[0] {
-                if let Some(fill) = style.fill {
-                    if let FillStyle::Solid(color) = fill {
-                        return color;
+        if let View::Translate { children, .. } = view {
+            if let View::Group(inner) = &children[0] {
+                if let View::Primitive(DrawCommand::Rect { style, .. }) = &inner[0] {
+                    if let Some(fill) = style.fill {
+                        if let FillStyle::Solid(color) = fill {
+                            return color;
+                        }
                     }
                 }
             }

@@ -5,6 +5,7 @@ use platform_core::Event;
 use renderer_core::{DrawCommand, TextStyle};
 use ui_tree::{Component, EventResult, View};
 
+use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Label {
@@ -34,17 +35,32 @@ impl Label {
 
 impl Component for Label {
     fn view(&self) -> View {
-        let rect = self.leaf.rect.get();
+        let r = self.leaf.rect.get();
         let text = (self.text)();
-        View::Primitive(DrawCommand::Text {
-            text,
-            rect,
-            style: self.style,
-        })
+        View::Translate {
+            tx: r.x,
+            ty: r.y,
+            children: vec![View::Primitive(DrawCommand::Text {
+                text,
+                rect: renderer_core::Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: r.width,
+                    height: r.height,
+                },
+                style: self.style,
+            })],
+        }
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {
         EventResult::Ignored
+    }
+}
+
+impl LayoutItem for Label {
+    fn layout_node(&self) -> NodeId {
+        self.leaf.node
     }
 }
 
@@ -66,7 +82,13 @@ mod tests {
             )
             .unwrap();
             let view = label.view();
-            assert!(matches!(view, View::Primitive(DrawCommand::Text { .. })));
+            assert!(matches!(view, View::Translate { children: _, .. }));
+            if let View::Translate { children, .. } = view {
+                assert!(matches!(
+                    children[0],
+                    View::Primitive(DrawCommand::Text { .. })
+                ));
+            }
         });
     }
 
@@ -95,11 +117,15 @@ mod tests {
             .unwrap();
 
             let view = label.view();
-            if let View::Primitive(DrawCommand::Text { rect, .. }) = view {
-                assert_eq!(rect.width, 120.0);
-                assert_eq!(rect.height, 40.0);
+            if let View::Translate { children, .. } = view {
+                if let View::Primitive(DrawCommand::Text { rect, .. }) = &children[0] {
+                    assert_eq!(rect.width, 120.0);
+                    assert_eq!(rect.height, 40.0);
+                } else {
+                    panic!("expected Text command inside Translate");
+                }
             } else {
-                panic!("expected Text command");
+                panic!("expected Translate");
             }
         });
     }
