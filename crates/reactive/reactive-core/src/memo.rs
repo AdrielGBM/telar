@@ -45,14 +45,6 @@ impl<T: Clone + 'static> Memo<T> {
             MemoState::Computing => panic!("reactive cycle detected in memo"),
         }
     }
-
-    pub fn try_get(&self) -> Option<T> {
-        self.track();
-        match &self.inner.borrow().state {
-            MemoState::Ready(v) => Some(v.clone()),
-            MemoState::Computing => None,
-        }
-    }
 }
 
 impl<T: 'static> Memo<T> {
@@ -62,15 +54,6 @@ impl<T: 'static> Memo<T> {
         match &borrow.state {
             MemoState::Ready(v) => f(v),
             MemoState::Computing => panic!("reactive cycle detected in memo"),
-        }
-    }
-
-    pub fn try_with<R>(&self, f: impl FnOnce(&T) -> R) -> Option<R> {
-        self.track();
-        let borrow = self.inner.borrow();
-        match &borrow.state {
-            MemoState::Ready(v) => Some(f(v)),
-            MemoState::Computing => None,
         }
     }
 

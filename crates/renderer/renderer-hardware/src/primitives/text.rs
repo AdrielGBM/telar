@@ -1,4 +1,5 @@
-use renderer_core::{Rect, TextStyle};
+use geometry_core::Rect;
+use renderer_core::TextStyle;
 use renderer_text::{ATLAS_SIZE, GlyphAtlas};
 use wgpu::{Device, Queue};
 
@@ -13,9 +14,6 @@ pub(crate) struct TextInstance {
     pub color: [f32; 4],
 }
 
-// Typical frame has 100–200 text runs; doubles on overflow, so reallocations are rare after warmup.
-pub(crate) const INITIAL_TEXT_CAPACITY: usize = 256;
-
 pub(crate) struct TextPipeline {
     pub(crate) instances: InstancePipeline<TextInstance>,
     pub(crate) pipeline: wgpu::RenderPipeline,
@@ -29,8 +27,7 @@ impl TextPipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
     ) -> Self {
-        let instances =
-            InstancePipeline::<TextInstance>::new(device, "text", INITIAL_TEXT_CAPACITY);
+        let instances = InstancePipeline::<TextInstance>::new(device, "text", 256);
 
         let atlas_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-text-atlas-bgl"),

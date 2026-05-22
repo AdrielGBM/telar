@@ -1,6 +1,6 @@
-use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
+use renderer_core::{FillRule, PathData, PathStyle, PathVerb};
 
-use crate::primitives::{fill_to_paint, to_skia_color};
+use crate::primitives::{fill_to_paint, to_skia_color, to_skia_line_cap, to_skia_line_join};
 
 fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
     let mut pb = tiny_skia::PathBuilder::new();
@@ -16,22 +16,6 @@ fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
         }
     }
     pb.finish()
-}
-
-fn to_skia_line_cap(cap: LineCap) -> tiny_skia::LineCap {
-    match cap {
-        LineCap::Butt => tiny_skia::LineCap::Butt,
-        LineCap::Round => tiny_skia::LineCap::Round,
-        LineCap::Square => tiny_skia::LineCap::Square,
-    }
-}
-
-fn to_skia_line_join(join: LineJoin) -> tiny_skia::LineJoin {
-    match join {
-        LineJoin::Miter => tiny_skia::LineJoin::Miter,
-        LineJoin::Round => tiny_skia::LineJoin::Round,
-        LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
-    }
 }
 
 pub(crate) fn draw_path(
@@ -99,7 +83,7 @@ pub(crate) fn draw_path(
     }
 
     if let Some(fill_style) = style.fill {
-        let paint = fill_to_paint(fill_style, transform);
+        let paint = fill_to_paint(fill_style);
         let rule = match style.fill_rule {
             FillRule::Winding => tiny_skia::FillRule::Winding,
             FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,

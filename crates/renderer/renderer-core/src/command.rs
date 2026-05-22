@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use crate::{
-    ImageData, ImageFilter, LineStyle, PathData, PathStyle, Point, Rect, RectStyle, TextStyle,
-};
+use geometry_core::{Point, Rect};
+
+use crate::{ImageData, ImageFilter, LineStyle, PathData, PathStyle, RectStyle, TextStyle};
 
 #[derive(Debug, Clone)]
 pub enum DrawCommand {

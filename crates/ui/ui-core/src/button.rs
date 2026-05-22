@@ -54,7 +54,7 @@ impl Component for Button {
         } else {
             self.bg
         };
-        let local = renderer_core::Rect {
+        let local = geometry_core::Rect {
             x: 0.0,
             y: 0.0,
             width: r.width,

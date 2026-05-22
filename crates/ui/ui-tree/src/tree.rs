@@ -49,7 +49,6 @@ pub struct ComponentTree {
 
 impl ComponentTree {
     pub fn new<C: Component + 'static>(component: C) -> Self {
-        component.on_mount();
         Self {
             slots: vec![ComponentSlot::new(component)],
             cached: RefCell::new(Vec::new()),
@@ -57,7 +56,6 @@ impl ComponentTree {
     }
 
     pub fn add<C: Component + 'static>(&mut self, component: C) {
-        component.on_mount();
         self.slots.push(ComponentSlot::new(component));
     }
 
@@ -89,18 +87,11 @@ impl ComponentTree {
     }
 }
 
-impl Drop for ComponentTree {
-    fn drop(&mut self) {
-        for slot in &self.slots {
-            slot.component.borrow().on_unmount();
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use geometry_core::Rect;
     use reactive_core::create_rw_signal;
-    use renderer_core::{Color, Rect, RectStyle};
+    use renderer_core::{Color, RectStyle};
 
     use super::*;
     use crate::view::View;
@@ -158,36 +149,5 @@ mod tests {
 
         signal.set(0);
         assert_eq!(tree.commands().len(), 0);
-    }
-
-    struct Lifecycle {
-        log: Rc<RefCell<Vec<&'static str>>>,
-    }
-
-    impl Component for Lifecycle {
-        fn view(&self) -> View {
-            View::Empty
-        }
-
-        fn on_mount(&self) {
-            self.log.borrow_mut().push("mount");
-        }
-
-        fn on_unmount(&self) {
-            self.log.borrow_mut().push("unmount");
-        }
-    }
-
-    #[test]
-    fn tree_lifecycle() {
-        let log: Rc<RefCell<Vec<&'static str>>> = Rc::new(RefCell::new(Vec::new()));
-        {
-            let tree = ComponentTree::new(Lifecycle {
-                log: Rc::clone(&log),
-            });
-            assert_eq!(*log.borrow(), vec!["mount"]);
-            assert!(tree.commands().is_empty());
-        }
-        assert_eq!(*log.borrow(), vec!["mount", "unmount"]);
     }
 }

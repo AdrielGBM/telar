@@ -1,8 +1,14 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use rsx::config::{RendererBackend, RsxConfig};
+use rsx::config::RendererBackend;
 use serde::Deserialize;
+
+#[derive(Deserialize, Default)]
+struct RsxConfig {
+    #[serde(default)]
+    pub backend: Option<RendererBackend>,
+}
 
 #[derive(Deserialize, Default)]
 struct CargoWorkspace {
@@ -111,7 +117,7 @@ fn load_config(args: &[String]) -> RsxConfig {
 
 pub fn run(args: Vec<String>) {
     let config = load_config(&args);
-    let backend_value = match config.renderer.backend {
+    let backend_value = match config.backend.unwrap_or_default() {
         RendererBackend::Auto => "auto",
         RendererBackend::Hardware => "hardware",
         RendererBackend::Software => "software",

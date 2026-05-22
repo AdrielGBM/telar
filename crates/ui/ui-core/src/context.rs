@@ -1,9 +1,9 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, NodeId};
 use reactive_core::{ReadSignal, RwSignal, batch, create_rw_signal};
-use renderer_core::Rect;
 
 thread_local! {
     static CURRENT_CTX: RefCell<Option<WidgetCtx>> = const { RefCell::new(None) };
@@ -117,8 +117,8 @@ impl Default for WidgetCtx {
 
 #[cfg(test)]
 mod tests {
+    use geometry_core::Rect;
     use layout_core::LayoutStyle;
-    use renderer_core::Rect;
 
     use super::*;
 

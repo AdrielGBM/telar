@@ -1,4 +1,6 @@
-use crate::geometry::{Rect, intersect_rects};
+use geometry_core::Rect;
+
+use crate::geometry::intersect_rects;
 
 pub struct DrawState {
     clip_stack: Vec<Rect>,

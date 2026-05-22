@@ -13,7 +13,7 @@ use lyon::tessellation::{
 use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 use wgpu::Device;
 
-use super::MSAA_SAMPLES;
+use super::{MSAA_SAMPLES, encode_fill_style};
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -32,59 +32,18 @@ pub(crate) struct PathFillData {
 
 impl PathFillData {
     pub(crate) fn from_fill_style(fill: renderer_core::FillStyle) -> Self {
-        match fill {
-            renderer_core::FillStyle::Solid(c) => Self {
-                fill_type: 0,
-                _pad: [0; 3],
-                fill_color: c.to_array(),
-                grad_p0: [0.0; 2],
-                grad_p1: [0.0; 2],
-                grad_radius: 0.0,
-                grad_stop_count: 0,
-                _pad2: [0.0; 2],
-                grad_positions: [0.0; 4],
-                grad_colors: [[0.0; 4]; 4],
-            },
-            renderer_core::FillStyle::LinearGradient(g) => {
-                let mut positions = [0.0f32; 4];
-                let mut colors = [[0.0f32; 4]; 4];
-                for i in 0..g.stop_count as usize {
-                    positions[i] = g.stops[i].position;
-                    colors[i] = g.stops[i].color.to_array();
-                }
-                Self {
-                    fill_type: 1,
-                    _pad: [0; 3],
-                    fill_color: [0.0; 4],
-                    grad_p0: [g.start.x, g.start.y],
-                    grad_p1: [g.end.x, g.end.y],
-                    grad_radius: 0.0,
-                    grad_stop_count: g.stop_count as u32,
-                    _pad2: [0.0; 2],
-                    grad_positions: positions,
-                    grad_colors: colors,
-                }
-            }
-            renderer_core::FillStyle::RadialGradient(g) => {
-                let mut positions = [0.0f32; 4];
-                let mut colors = [[0.0f32; 4]; 4];
-                for i in 0..g.stop_count as usize {
-                    positions[i] = g.stops[i].position;
-                    colors[i] = g.stops[i].color.to_array();
-                }
-                Self {
-                    fill_type: 2,
-                    _pad: [0; 3],
-                    fill_color: [0.0; 4],
-                    grad_p0: [g.center.x, g.center.y],
-                    grad_p1: [0.0; 2],
-                    grad_radius: g.radius,
-                    grad_stop_count: g.stop_count as u32,
-                    _pad2: [0.0; 2],
-                    grad_positions: positions,
-                    grad_colors: colors,
-                }
-            }
+        let enc = encode_fill_style(&fill, 0.0, 0.0);
+        Self {
+            fill_type: enc.fill_type,
+            _pad: [0; 3],
+            fill_color: enc.fill_color,
+            grad_p0: enc.grad_p0,
+            grad_p1: enc.grad_p1,
+            grad_radius: enc.grad_radius,
+            grad_stop_count: enc.grad_stop_count,
+            _pad2: [0.0; 2],
+            grad_positions: enc.grad_positions,
+            grad_colors: enc.grad_colors,
         }
     }
 
@@ -101,8 +60,6 @@ pub(crate) struct FillDataBuffer {
 }
 
 impl FillDataBuffer {
-    const INITIAL_CAPACITY: usize = 64;
-
     pub(crate) fn new(device: &wgpu::Device) -> Self {
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-path-fill-bgl"),
@@ -117,12 +74,12 @@ impl FillDataBuffer {
                 count: None,
             }],
         });
-        let (buffer, bind_group) = Self::create_buffer_and_bg(device, &bgl, Self::INITIAL_CAPACITY);
+        let (buffer, bind_group) = Self::create_buffer_and_bg(device, &bgl, 64);
         Self {
             bgl,
             bind_group,
             buffer,
-            capacity: Self::INITIAL_CAPACITY,
+            capacity: 64,
         }
     }
 
@@ -474,19 +431,16 @@ impl PathPipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
     ) -> Self {
-        const INITIAL_VERTEX_CAPACITY: usize = 1024;
-        const INITIAL_INDEX_CAPACITY: usize = 3072;
-
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rsx-path-vb"),
-            size: (std::mem::size_of::<PathVertex>() * INITIAL_VERTEX_CAPACITY) as u64,
+            size: (std::mem::size_of::<PathVertex>() * 1024) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rsx-path-ib"),
-            size: (std::mem::size_of::<u32>() * INITIAL_INDEX_CAPACITY) as u64,
+            size: (std::mem::size_of::<u32>() * 3072) as u64,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -556,8 +510,8 @@ impl PathPipeline {
         Self {
             vertex_buffer,
             index_buffer,
-            vertex_capacity: INITIAL_VERTEX_CAPACITY,
-            index_capacity: INITIAL_INDEX_CAPACITY,
+            vertex_capacity: 1024,
+            index_capacity: 3072,
             pipeline,
             fill_data,
         }

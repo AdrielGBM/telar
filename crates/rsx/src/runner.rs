@@ -61,7 +61,6 @@ impl EventHandler<WinitWindow> for AppHandler {
             self.pending_restart = false;
             self.backend = self
                 .prefs
-                .renderer
                 .backend
                 .unwrap_or_else(config::compile_time_backend);
             match create_renderer(self.backend, window) {
@@ -123,10 +122,7 @@ fn create_renderer(
 
 pub fn run_app_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
     let prefs = UserPrefs::load(app_name);
-    let backend = prefs
-        .renderer
-        .backend
-        .unwrap_or_else(config::compile_time_backend);
+    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
 
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,

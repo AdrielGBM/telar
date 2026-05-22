@@ -24,11 +24,11 @@ impl<'a> AppCtx<'a> {
     }
 
     pub fn renderer_backend(&self) -> Option<RendererBackend> {
-        self.prefs.renderer.backend
+        self.prefs.backend
     }
 
     pub fn set_renderer_backend(&mut self, backend: RendererBackend) {
-        self.prefs.renderer.backend = Some(backend);
+        self.prefs.backend = Some(backend);
         *self.pending_restart = true;
         if let Err(e) = self.prefs.save(self.app_name) {
             tracing::warn!("Could not save preferences: {e}");
@@ -36,7 +36,7 @@ impl<'a> AppCtx<'a> {
     }
 
     pub fn reset_renderer_backend(&mut self) {
-        self.prefs.renderer.backend = None;
+        self.prefs.backend = None;
         *self.pending_restart = true;
         if let Err(e) = self.prefs.save(self.app_name) {
             tracing::warn!("Could not save preferences: {e}");

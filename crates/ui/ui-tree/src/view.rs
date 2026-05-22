@@ -1,4 +1,5 @@
-use renderer_core::{DrawCommand, Rect};
+use geometry_core::Rect;
+use renderer_core::DrawCommand;
 
 pub enum View {
     Empty,

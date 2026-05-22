@@ -38,7 +38,7 @@ impl Component for Label {
             ty: r.y,
             children: vec![View::Primitive(DrawCommand::Text {
                 text,
-                rect: renderer_core::Rect {
+                rect: geometry_core::Rect {
                     x: 0.0,
                     y: 0.0,
                     width: r.width,

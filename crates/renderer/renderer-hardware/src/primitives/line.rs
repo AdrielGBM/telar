@@ -1,4 +1,5 @@
-use renderer_core::{LineCap, LineStyle, Point};
+use geometry_core::Point;
+use renderer_core::{LineCap, LineStyle};
 use wgpu::Device;
 
 use super::{InstancePipeline, MSAA_SAMPLES};
@@ -14,9 +15,6 @@ pub(crate) struct LineInstance {
     pub _pad: [f32; 2],
 }
 
-// Typical frame has 100–200 line segments; doubles on overflow, so reallocations are rare after warmup.
-const INITIAL_LINE_CAPACITY: usize = 256;
-
 pub(crate) struct LinePipeline {
     pub(crate) instances: InstancePipeline<LineInstance>,
     pub(crate) pipeline: wgpu::RenderPipeline,
@@ -28,8 +26,7 @@ impl LinePipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
     ) -> Self {
-        let instances =
-            InstancePipeline::<LineInstance>::new(device, "line", INITIAL_LINE_CAPACITY);
+        let instances = InstancePipeline::<LineInstance>::new(device, "line", 256);
 
         let shader_source = [include_str!("viewport.wgsl"), include_str!("line.wgsl")].concat();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

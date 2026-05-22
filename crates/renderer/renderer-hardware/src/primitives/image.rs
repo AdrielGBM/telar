@@ -30,9 +30,6 @@ pub(crate) struct ImagePipeline {
     current_frame: u64,
 }
 
-// UI frames rarely contain more than a few images; 16 is a reasonable cold-start value. UI frames rarely contain more than a few images; 16 is a reasonable cold-start value.
-const INITIAL_IMAGE_CAPACITY: usize = 16;
-
 // Approximately 1 second at 60 fps; GPU textures are expensive so evict aggressively.
 const IMAGE_GPU_MAX_AGE_FRAMES: u64 = 60;
 
@@ -42,8 +39,7 @@ impl ImagePipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
     ) -> Self {
-        let instances =
-            InstancePipeline::<ImageInstance>::new(device, "image", INITIAL_IMAGE_CAPACITY);
+        let instances = InstancePipeline::<ImageInstance>::new(device, "image", 16);
 
         let texture_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-image-texture-bgl"),
@@ -243,7 +239,7 @@ fn create_sampler(device: &Device, filter: wgpu::FilterMode) -> wgpu::Sampler {
     })
 }
 
-pub(crate) fn prepare_image(rect: renderer_core::Rect) -> ImageInstance {
+pub(crate) fn prepare_image(rect: geometry_core::Rect) -> ImageInstance {
     ImageInstance {
         dest_rect: [rect.x, rect.y, rect.width, rect.height],
     }

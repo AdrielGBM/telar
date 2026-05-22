@@ -64,15 +64,6 @@ impl<T: 'static> WriteSignal<T> {
     }
 }
 
-impl<T: Eq + 'static> WriteSignal<T> {
-    pub fn set_if_changed(&self, value: T) {
-        if self.inner.borrow().value != value {
-            self.inner.borrow_mut().value = value;
-            notify(&self.inner);
-        }
-    }
-}
-
 pub struct RwSignal<T: 'static> {
     inner: Rc<RefCell<SignalInner<T>>>,
 }
@@ -123,15 +114,6 @@ impl<T: Clone + 'static> RwSignal<T> {
     pub fn get(&self) -> T {
         track(&self.inner);
         self.inner.borrow().value.clone()
-    }
-}
-
-impl<T: Eq + 'static> RwSignal<T> {
-    pub fn set_if_changed(&self, value: T) {
-        if self.inner.borrow().value != value {
-            self.inner.borrow_mut().value = value;
-            notify(&self.inner);
-        }
     }
 }
 

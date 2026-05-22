@@ -1,4 +1,5 @@
-use renderer_core::{BorderRadius, LineCap, LineJoin, Rect, RectStyle, Shadow};
+use geometry_core::Rect;
+use renderer_core::{BorderRadius, LineCap, LineJoin, RectStyle, Shadow};
 
 use crate::primitives::{fill_to_paint, to_skia_color};
 
@@ -145,7 +146,7 @@ pub(crate) fn draw_rect(
 
     if let Some(fill_style) = style.fill {
         if let Some(path) = build_rect_path(rect, style.radius) {
-            let paint = fill_to_paint(fill_style, transform);
+            let paint = fill_to_paint(fill_style);
             pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, clip);
         }
     }

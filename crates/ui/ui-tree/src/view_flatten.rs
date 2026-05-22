@@ -42,7 +42,8 @@ pub fn flatten_view(root: View) -> Vec<DrawCommand> {
 
 #[cfg(test)]
 mod tests {
-    use renderer_core::{Color, Rect, RectStyle};
+    use geometry_core::Rect;
+    use renderer_core::{Color, RectStyle};
 
     use super::*;
 

@@ -27,3 +27,4 @@ services-core = { workspace = true }
 layout-core = { workspace = true }
 ui-core = { workspace = true }
 tracing = { workspace = true }
+geometry-core = { workspace = true }

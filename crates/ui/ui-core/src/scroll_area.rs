@@ -1,6 +1,7 @@
+use geometry_core::Rect;
 use platform_core::{Event, ScrollDelta};
 use reactive_core::{RwSignal, create_rw_signal};
-use renderer_core::{BorderRadius, Color, DrawCommand, Rect, RectStyle};
+use renderer_core::{BorderRadius, Color, DrawCommand, RectStyle};
 use ui_tree::{Component, EventResult, View};
 
 use crate::pointer::{dispatch_to_children, offset_pointer, pointer_coords};
@@ -89,8 +90,8 @@ impl Component for ScrollArea {
 
 #[cfg(test)]
 mod tests {
+    use geometry_core::Rect;
     use platform_core::{PointerSource, ScrollDelta};
-    use renderer_core::Rect;
 
     use super::*;
 

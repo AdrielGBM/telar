@@ -1876,6 +1876,7 @@ name = "renderer-hardware"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "geometry-core",
  "lyon",
  "pollster",
  "raw-window-handle",
@@ -1889,6 +1890,7 @@ dependencies = [
 name = "renderer-software"
 version = "0.1.0"
 dependencies = [
+ "geometry-core",
  "raw-window-handle",
  "renderer-core",
  "renderer-text",
@@ -1903,6 +1905,7 @@ dependencies = [
  "clru",
  "cosmic-text",
  "etagere",
+ "geometry-core",
  "renderer-core",
 ]
 
@@ -1917,6 +1920,7 @@ name = "rsx"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "geometry-core",
  "layout-core",
  "platform-core",
  "platform-winit",
@@ -2562,6 +2566,7 @@ dependencies = [
 name = "ui-core"
 version = "0.1.0"
 dependencies = [
+ "geometry-core",
  "layout-core",
  "platform-core",
  "reactive-core",
@@ -2573,6 +2578,7 @@ dependencies = [
 name = "ui-tree"
 version = "0.1.0"
 dependencies = [
+ "geometry-core",
  "platform-core",
  "reactive-core",
  "renderer-core",

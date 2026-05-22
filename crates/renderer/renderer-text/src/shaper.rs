@@ -4,7 +4,8 @@ use cosmic_text::{
     SwashContent,
 };
 use etagere::{AllocId, AtlasAllocator, size2};
-use renderer_core::{Color, Rect, TextStyle, premultiply_rgba};
+use geometry_core::Rect;
+use renderer_core::{Color, TextStyle, premultiply_rgba};
 use std::collections::{HashMap, VecDeque};
 use std::num::NonZeroUsize;
 

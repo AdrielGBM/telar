@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use renderer_core::{ImageData, ImageFilter, Rect, premultiply_rgba};
+use geometry_core::Rect;
+use renderer_core::{ImageData, ImageFilter, premultiply_rgba};
 
 pub(crate) type ImageCache = HashMap<u64, (Rc<ImageData>, tiny_skia::Pixmap)>;
 

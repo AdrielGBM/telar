@@ -1,4 +1,6 @@
-use crate::{BorderRadius, Color, Point, Stroke};
+use geometry_core::Point;
+
+use crate::{BorderRadius, Color, Stroke};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextStyle {

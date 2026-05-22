@@ -5,13 +5,7 @@ use crate::config::RendererBackend;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct UserPrefs {
-    #[serde(default)]
-    pub renderer: RendererPrefs,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct RendererPrefs {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<RendererBackend>,
 }
 

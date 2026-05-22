@@ -14,10 +14,23 @@ pub(crate) fn to_skia_color(color: renderer_core::Color) -> tiny_skia::Color {
     .expect("channels clamped to [0,1]")
 }
 
-pub(crate) fn fill_to_paint(
-    fill: renderer_core::FillStyle,
-    _transform: tiny_skia::Transform,
-) -> tiny_skia::Paint<'static> {
+pub(crate) fn to_skia_line_cap(cap: renderer_core::LineCap) -> tiny_skia::LineCap {
+    match cap {
+        renderer_core::LineCap::Butt => tiny_skia::LineCap::Butt,
+        renderer_core::LineCap::Round => tiny_skia::LineCap::Round,
+        renderer_core::LineCap::Square => tiny_skia::LineCap::Square,
+    }
+}
+
+pub(crate) fn to_skia_line_join(join: renderer_core::LineJoin) -> tiny_skia::LineJoin {
+    match join {
+        renderer_core::LineJoin::Miter => tiny_skia::LineJoin::Miter,
+        renderer_core::LineJoin::Round => tiny_skia::LineJoin::Round,
+        renderer_core::LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
+    }
+}
+
+pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<'static> {
     let mut paint = tiny_skia::Paint::default();
     paint.anti_alias = true;
     match fill {

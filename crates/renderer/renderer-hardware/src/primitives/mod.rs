@@ -6,6 +6,68 @@ pub(crate) mod path;
 pub(crate) mod rect;
 pub(crate) mod text;
 
+pub(super) struct EncodedFill {
+    pub fill_type: u32,
+    pub fill_color: [f32; 4],
+    pub grad_p0: [f32; 2],
+    pub grad_p1: [f32; 2],
+    pub grad_radius: f32,
+    pub grad_stop_count: u32,
+    pub grad_positions: [f32; 4],
+    pub grad_colors: [[f32; 4]; 4],
+}
+
+pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, tx: f32, ty: f32) -> EncodedFill {
+    match fill {
+        renderer_core::FillStyle::Solid(c) => EncodedFill {
+            fill_type: 0,
+            fill_color: c.to_array(),
+            grad_p0: [0.0; 2],
+            grad_p1: [0.0; 2],
+            grad_radius: 0.0,
+            grad_stop_count: 0,
+            grad_positions: [0.0; 4],
+            grad_colors: [[0.0; 4]; 4],
+        },
+        renderer_core::FillStyle::LinearGradient(g) => {
+            let mut positions = [0.0f32; 4];
+            let mut colors = [[0.0f32; 4]; 4];
+            for i in 0..g.stop_count as usize {
+                positions[i] = g.stops[i].position;
+                colors[i] = g.stops[i].color.to_array();
+            }
+            EncodedFill {
+                fill_type: 1,
+                fill_color: [0.0; 4],
+                grad_p0: [g.start.x + tx, g.start.y + ty],
+                grad_p1: [g.end.x + tx, g.end.y + ty],
+                grad_radius: 0.0,
+                grad_stop_count: g.stop_count as u32,
+                grad_positions: positions,
+                grad_colors: colors,
+            }
+        }
+        renderer_core::FillStyle::RadialGradient(g) => {
+            let mut positions = [0.0f32; 4];
+            let mut colors = [[0.0f32; 4]; 4];
+            for i in 0..g.stop_count as usize {
+                positions[i] = g.stops[i].position;
+                colors[i] = g.stops[i].color.to_array();
+            }
+            EncodedFill {
+                fill_type: 2,
+                fill_color: [0.0; 4],
+                grad_p0: [g.center.x + tx, g.center.y + ty],
+                grad_p1: [0.0; 2],
+                grad_radius: g.radius,
+                grad_stop_count: g.stop_count as u32,
+                grad_positions: positions,
+                grad_colors: colors,
+            }
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Viewport {

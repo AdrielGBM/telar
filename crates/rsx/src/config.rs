@@ -9,18 +9,6 @@ pub enum RendererBackend {
     Software,
 }
 
-#[derive(Deserialize, Default)]
-pub struct RendererConfig {
-    #[serde(default)]
-    pub backend: RendererBackend,
-}
-
-#[derive(Deserialize, Default)]
-pub struct RsxConfig {
-    #[serde(default)]
-    pub renderer: RendererConfig,
-}
-
 pub fn compile_time_backend() -> RendererBackend {
     match option_env!("RSX_RENDERER_BACKEND") {
         Some("hardware") => RendererBackend::Hardware,

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::num::NonZeroU32;
 
+use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, DrawCommand, Rect, RenderBackend, RendererError};
+use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
 use renderer_text::TextShaper;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;

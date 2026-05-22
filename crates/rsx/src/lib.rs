@@ -9,12 +9,13 @@ pub mod app;
 pub mod runner;
 
 pub use app_context::AppCtx;
-pub use config::{RendererBackend, RendererConfig, RsxConfig};
+pub use config::RendererBackend;
 pub use prefs::UserPrefs;
 pub use window_signals::WindowSignals;
 
 #[cfg(feature = "runtime")]
 pub use app::App;
+pub use geometry_core::{Point, Rect as Bounds};
 pub use layout_core::{
     AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, Track,
 };
@@ -27,8 +28,8 @@ pub use reactive_core::{
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, Color, DrawCommand, FillRule, FillStyle, GradientStop, ImageData, ImageFilter,
-    LineCap, LineJoin, LineStyle, LinearGradient, PathData, PathStyle, PathVerb, Point,
-    RadialGradient, Rect as Bounds, RectStyle, Shadow, Stroke, TextStyle,
+    LineCap, LineJoin, LineStyle, LinearGradient, PathData, PathStyle, PathVerb, RadialGradient,
+    RectStyle, Shadow, Stroke, TextStyle,
 };
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{

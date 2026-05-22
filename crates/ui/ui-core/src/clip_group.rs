@@ -1,5 +1,5 @@
+use geometry_core::Rect;
 use platform_core::Event;
-use renderer_core::Rect;
 use ui_tree::{Component, EventResult, View};
 
 use crate::pointer::{dispatch_to_children, pointer_coords};

@@ -1,8 +1,9 @@
 use std::rc::Rc;
 
+use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use renderer_core::{DrawCommand, ImageData, ImageFilter, Rect};
+use renderer_core::{DrawCommand, ImageData, ImageFilter};
 use ui_tree::{Component, EventResult, View};
 
 use crate::layout_item::LayoutItem;

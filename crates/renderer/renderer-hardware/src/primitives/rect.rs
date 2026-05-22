@@ -1,7 +1,8 @@
-use renderer_core::{Rect, RectStyle};
+use geometry_core::Rect;
+use renderer_core::RectStyle;
 use wgpu::Device;
 
-use super::{InstancePipeline, MSAA_SAMPLES};
+use super::{InstancePipeline, MSAA_SAMPLES, encode_fill_style};
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -30,9 +31,6 @@ pub(crate) struct RectInstance {
     pub shadow_spread: f32,
 }
 
-// Typical frame has 100–200 rects; doubles on overflow, so reallocations are rare after warmup.
-pub(crate) const INITIAL_RECT_CAPACITY: usize = 256;
-
 pub(crate) struct RectPipeline {
     pub(crate) instances: InstancePipeline<RectInstance>,
     pub(crate) pipeline: wgpu::RenderPipeline,
@@ -44,8 +42,7 @@ impl RectPipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
     ) -> Self {
-        let instances =
-            InstancePipeline::<RectInstance>::new(device, "rect", INITIAL_RECT_CAPACITY);
+        let instances = InstancePipeline::<RectInstance>::new(device, "rect", 256);
 
         let shader_source = [include_str!("viewport.wgsl"), include_str!("rect.wgsl")].concat();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -100,73 +97,20 @@ impl RectPipeline {
 }
 
 pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, tx: f32, ty: f32) -> RectInstance {
-    let (
-        fill_type,
-        fill_color,
-        grad_p0,
-        grad_p1,
-        grad_radius,
-        grad_stop_count,
-        grad_positions,
-        grad_colors,
-    ) = match style.fill {
-        Some(renderer_core::FillStyle::Solid(c)) => (
-            0u32,
-            c.to_array(),
-            [0.0f32; 2],
-            [0.0f32; 2],
-            0.0f32,
-            0u32,
-            [0.0f32; 4],
-            [[0.0f32; 4]; 4],
-        ),
-        Some(renderer_core::FillStyle::LinearGradient(g)) => {
-            let mut positions = [0.0f32; 4];
-            let mut colors = [[0.0f32; 4]; 4];
-            for i in 0..g.stop_count as usize {
-                positions[i] = g.stops[i].position;
-                colors[i] = g.stops[i].color.to_array();
-            }
-            (
-                1u32,
-                [0.0; 4],
-                [g.start.x + tx, g.start.y + ty],
-                [g.end.x + tx, g.end.y + ty],
-                0.0,
-                g.stop_count as u32,
-                positions,
-                colors,
-            )
-        }
-        Some(renderer_core::FillStyle::RadialGradient(g)) => {
-            let mut positions = [0.0f32; 4];
-            let mut colors = [[0.0f32; 4]; 4];
-            for i in 0..g.stop_count as usize {
-                positions[i] = g.stops[i].position;
-                colors[i] = g.stops[i].color.to_array();
-            }
-            (
-                2u32,
-                [0.0; 4],
-                [g.center.x + tx, g.center.y + ty],
-                [0.0, 0.0],
-                g.radius,
-                g.stop_count as u32,
-                positions,
-                colors,
-            )
-        }
-        None => (
-            0u32,
-            [0.0; 4],
-            [0.0; 2],
-            [0.0; 2],
-            0.0,
-            0u32,
-            [0.0; 4],
-            [[0.0; 4]; 4],
-        ),
-    };
+    let encoded = style
+        .fill
+        .as_ref()
+        .map(|fill| encode_fill_style(fill, tx, ty))
+        .unwrap_or(super::EncodedFill {
+            fill_type: 0,
+            fill_color: [0.0; 4],
+            grad_p0: [0.0; 2],
+            grad_p1: [0.0; 2],
+            grad_radius: 0.0,
+            grad_stop_count: 0,
+            grad_positions: [0.0; 4],
+            grad_colors: [[0.0; 4]; 4],
+        });
 
     let (stroke_color, stroke_width) = match style.stroke {
         Some(s) => (s.color.to_array(), s.width),
@@ -191,16 +135,16 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, tx: f32, ty: f32) -> R
             style.radius.bottom_right,
             style.radius.bottom_left,
         ],
-        fill_type,
+        fill_type: encoded.fill_type,
         _pad_ft: [0; 3],
-        fill_color,
-        grad_p0,
-        grad_p1,
-        grad_radius,
-        grad_stop_count,
+        fill_color: encoded.fill_color,
+        grad_p0: encoded.grad_p0,
+        grad_p1: encoded.grad_p1,
+        grad_radius: encoded.grad_radius,
+        grad_stop_count: encoded.grad_stop_count,
         _pad_g: [0.0; 2],
-        grad_positions,
-        grad_colors,
+        grad_positions: encoded.grad_positions,
+        grad_colors: encoded.grad_colors,
         stroke_color,
         stroke_width,
         _pad: [0.0; 3],

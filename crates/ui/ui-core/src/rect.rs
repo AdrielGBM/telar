@@ -1,6 +1,7 @@
+use geometry_core::Rect as Bounds;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use renderer_core::{DrawCommand, Rect as Bounds, RectStyle};
+use renderer_core::{DrawCommand, RectStyle};
 use ui_tree::{Component, EventResult, View};
 
 use crate::layout_item::LayoutItem;

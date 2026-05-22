@@ -1,6 +1,5 @@
 use crate::Color;
-
-pub use geometry_core::{Point, Rect};
+use geometry_core::{Point, Rect};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BorderRadius {

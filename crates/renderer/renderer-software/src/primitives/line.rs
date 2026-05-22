@@ -1,6 +1,7 @@
-use renderer_core::{LineCap, LineStyle, Point};
+use geometry_core::Point;
+use renderer_core::LineStyle;
 
-use crate::primitives::to_skia_color;
+use crate::primitives::{to_skia_color, to_skia_line_cap};
 
 pub(crate) fn draw_line(
     pixmap: &mut tiny_skia::Pixmap,
@@ -19,14 +20,9 @@ pub(crate) fn draw_line(
     paint.set_color(to_skia_color(style.color));
     paint.anti_alias = true;
 
-    let line_cap = match style.cap {
-        LineCap::Butt => tiny_skia::LineCap::Butt,
-        LineCap::Round => tiny_skia::LineCap::Round,
-        LineCap::Square => tiny_skia::LineCap::Square,
-    };
     let stroke = tiny_skia::Stroke {
         width: style.width,
-        line_cap,
+        line_cap: to_skia_line_cap(style.cap),
         ..Default::default()
     };
 

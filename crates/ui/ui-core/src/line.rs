@@ -1,5 +1,6 @@
+use geometry_core::Point;
 use platform_core::Event;
-use renderer_core::{DrawCommand, LineStyle, Point};
+use renderer_core::{DrawCommand, LineStyle};
 use ui_tree::{Component, EventResult, View};
 
 pub struct Line {

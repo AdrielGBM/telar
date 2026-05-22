@@ -1,5 +1,6 @@
+use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, DrawCommand, ImageFilter, Rect, RenderBackend, RendererError};
+use renderer_core::{Color, DrawCommand, ImageFilter, RenderBackend, RendererError};
 
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
@@ -50,7 +51,7 @@ enum DrawStep {
         index_end: u32,
     },
     SetScissor {
-        rect: Option<renderer_core::Rect>,
+        rect: Option<Rect>,
     },
     BeginLayer {
         msaa_texture: wgpu::Texture,
@@ -517,7 +518,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_line_start.is_none() {
                         self.batch_line_start = Some(self.pending_line_instances.len() as u32);
                     }
-                    use renderer_core::Point;
+                    use geometry_core::Point;
                     let tp1 = Point::new(p1.x + state.cum_tx, p1.y + state.cum_ty);
                     let tp2 = Point::new(p2.x + state.cum_tx, p2.y + state.cum_ty);
                     self.pending_line_instances

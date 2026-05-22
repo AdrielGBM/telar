@@ -1,4 +1,5 @@
-use renderer_core::{Rect, TextStyle};
+use geometry_core::Rect;
+use renderer_core::TextStyle;
 
 pub(crate) fn draw_text(
     pixmap: &mut tiny_skia::Pixmap,
