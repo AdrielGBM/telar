@@ -124,7 +124,7 @@ impl LayerPipeline {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 4,
+            sample_count: MSAA_SAMPLES,
             dimension: wgpu::TextureDimension::D2,
             format: self.target_format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

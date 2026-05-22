@@ -44,17 +44,6 @@ impl DrawState {
             self.cum_ty -= ty;
         }
     }
-
-    pub fn current_clip(&self) -> Option<Rect> {
-        self.clip_stack.last().copied()
-    }
-
-    pub fn reset(&mut self) {
-        self.clip_stack.clear();
-        self.translate_stack.clear();
-        self.cum_tx = 0.0;
-        self.cum_ty = 0.0;
-    }
 }
 
 impl Default for DrawState {

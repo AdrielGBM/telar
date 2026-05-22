@@ -8,10 +8,10 @@ mod renderer;
 mod style;
 
 pub use color::Color;
-pub use command::{DrawCommand, DrawNode};
+pub use command::DrawCommand;
 pub use draw_state::DrawState;
 pub use error::RendererError;
-pub use geometry::{BorderRadius, PathData, PathVerb, Point, Rect, Stroke, intersect_rects};
+pub use geometry::{BorderRadius, PathData, PathVerb, Point, Rect, Stroke};
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use renderer::RenderBackend;
 pub use style::{

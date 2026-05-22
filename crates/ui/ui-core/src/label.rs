@@ -27,10 +27,6 @@ impl Label {
             leaf,
         })
     }
-
-    pub fn layout_node(&self) -> NodeId {
-        self.leaf.node
-    }
 }
 
 impl Component for Label {
@@ -71,6 +67,7 @@ mod tests {
 
     use super::*;
     use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
+    use crate::layout_item::LayoutItem;
 
     #[test]
     fn label_view_returns_text_command() {

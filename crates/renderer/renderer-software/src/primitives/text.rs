@@ -11,7 +11,7 @@ pub(crate) fn draw_text(
 ) {
     if let Some(shadow) = style.shadow {
         let shadow_style = TextStyle::new(style.font_size, shadow.color);
-        let (_key, shadow_pixels, tex_w, tex_h) = shaper.rasterize(text, rect, &shadow_style);
+        let (shadow_pixels, tex_w, tex_h) = shaper.rasterize(text, rect, &shadow_style);
         if tex_w > 0 && tex_h > 0 {
             let sigma = shadow.blur_radius / 2.0;
             let padding = (sigma * 3.0).ceil() as i32 + 1;
@@ -51,7 +51,7 @@ pub(crate) fn draw_text(
         }
     }
 
-    let (_key, pixels, tex_width, tex_height) = shaper.rasterize(text, rect, style);
+    let (pixels, tex_width, tex_height) = shaper.rasterize(text, rect, style);
     if tex_width == 0 || tex_height == 0 {
         return;
     }

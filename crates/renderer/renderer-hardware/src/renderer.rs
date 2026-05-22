@@ -581,7 +581,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                         if si_end > si_start {
                             let (mut min_x, mut min_y, mut max_x, mut max_y) =
-                                (f32::MAX, f32::MAX, f32::MIN_POSITIVE, f32::MIN_POSITIVE);
+                                (f32::MAX, f32::MAX, f32::NEG_INFINITY, f32::NEG_INFINITY);
                             for v in &self.pending_shadow_path_vertices[sv_start..] {
                                 min_x = min_x.min(v.position[0]);
                                 min_y = min_y.min(v.position[1]);

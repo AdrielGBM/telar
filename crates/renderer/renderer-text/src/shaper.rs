@@ -91,15 +91,6 @@ impl GlyphAtlas {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.pixels.fill(0);
-        self.entries.clear();
-        self.allocator.clear();
-        self.lru_queue.clear();
-        self.lru_counter = 0;
-        self.dirty = true;
-    }
-
     fn insert(
         &mut self,
         key: GlyphKey,
@@ -185,8 +176,8 @@ impl WeightScale<TextCacheKey, Vec<u8>> for PixelCacheScale {
 const PIXEL_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;
 
 pub struct TextShaper {
-    pub font_system: FontSystem,
-    pub swash_cache: SwashCache,
+    font_system: FontSystem,
+    swash_cache: SwashCache,
     pub atlas: GlyphAtlas,
     pixel_cache:
         CLruCache<TextCacheKey, Vec<u8>, std::collections::hash_map::RandomState, PixelCacheScale>,
@@ -364,12 +355,7 @@ impl TextShaper {
         result
     }
 
-    pub fn rasterize(
-        &mut self,
-        text: &str,
-        rect: Rect,
-        style: &TextStyle,
-    ) -> (TextCacheKey, Vec<u8>, u32, u32) {
+    pub fn rasterize(&mut self, text: &str, rect: Rect, style: &TextStyle) -> (Vec<u8>, u32, u32) {
         let font_size = style.font_size;
         let color = style.color;
         let width = rect.width.ceil() as u32;
@@ -378,11 +364,11 @@ impl TextShaper {
         let key = make_text_cache_key(text, font_size, width, height, color);
 
         if width == 0 || height == 0 {
-            return (key, Vec::new(), 0, 0);
+            return (Vec::new(), 0, 0);
         }
 
         if let Some(cached) = self.pixel_cache.get(&key) {
-            return (key, cached.clone(), width, height);
+            return (cached.clone(), width, height);
         }
 
         let rgba = color.to_rgba8();
@@ -428,7 +414,7 @@ impl TextShaper {
             .put_with_weight(key.clone(), pixels.clone())
             .ok();
 
-        (key, pixels, width, height)
+        (pixels, width, height)
     }
 }
 

@@ -1,9 +1,8 @@
 mod button;
 mod clip_group;
+mod container;
 mod context;
 mod drawing_area;
-mod flex_container;
-mod grid_container;
 mod image;
 mod label;
 mod layout_item;
@@ -18,10 +17,9 @@ mod translate_group;
 
 pub use button::Button;
 pub use clip_group::ClipGroup;
+pub use container::Container;
 pub use context::{WidgetCtx, compute_layout, new_container, register_leaf, with_context};
 pub use drawing_area::DrawingArea;
-pub use flex_container::FlexContainer;
-pub use grid_container::GridContainer;
 pub use image::Image;
 pub use label::Label;
 pub use layout_item::LayoutItem;

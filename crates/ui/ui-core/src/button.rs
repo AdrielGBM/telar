@@ -44,10 +44,6 @@ impl Button {
         self.hover_bg = hover_bg;
         self
     }
-
-    pub fn layout_node(&self) -> NodeId {
-        self.leaf.node
-    }
 }
 
 impl Component for Button {
@@ -134,6 +130,7 @@ mod tests {
 
     use super::*;
     use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
+    use crate::layout_item::LayoutItem;
 
     fn make_button_with_rect() -> (Button, WidgetCtx) {
         let (result, ctx) = with_context(WidgetCtx::new(), || {

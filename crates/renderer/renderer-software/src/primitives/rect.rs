@@ -1,4 +1,4 @@
-use renderer_core::{BorderRadius, Rect, RectStyle, Shadow};
+use renderer_core::{BorderRadius, LineCap, LineJoin, Rect, RectStyle, Shadow};
 
 use crate::primitives::{fill_to_paint, to_skia_color};
 
@@ -170,6 +170,16 @@ pub(crate) fn draw_rect(
             paint.anti_alias = true;
             let stroke = tiny_skia::Stroke {
                 width: s.width,
+                line_cap: match s.cap {
+                    LineCap::Butt => tiny_skia::LineCap::Butt,
+                    LineCap::Round => tiny_skia::LineCap::Round,
+                    LineCap::Square => tiny_skia::LineCap::Square,
+                },
+                line_join: match s.join {
+                    LineJoin::Miter => tiny_skia::LineJoin::Miter,
+                    LineJoin::Round => tiny_skia::LineJoin::Round,
+                    LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
+                },
                 ..Default::default()
             };
             pixmap.stroke_path(&path, &paint, &stroke, transform, clip);

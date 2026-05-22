@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use rsx::{
-    App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, DrawCommand, DrawingArea,
-    Event, EventResult, FillRule, FillStyle, FlexContainer, GridContainer, Image, ImageData,
-    ImageFilter, Label, LayoutError, LayoutItem, LayoutStyle, Line, LineCap, LineJoin, LineStyle,
-    LinearGradient, Path, PathData, PathStyle, Point, RadialGradient, RectStyle, RwSignal,
-    ScrollArea, Shadow, Stroke, Text, TextStyle, Track, TranslateGroup, View, WidgetCtx,
-    WindowConfig, compute_layout, create_rw_signal, with_context,
+    App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Container, DrawCommand,
+    DrawingArea, Event, EventResult, FillRule, FillStyle, Image, ImageData, ImageFilter, Label,
+    LayoutError, LayoutItem, LayoutStyle, Line, LineCap, LineJoin, LineStyle, LinearGradient, Path,
+    PathData, PathStyle, Point, RadialGradient, RectStyle, RwSignal, ScrollArea, Shadow, Stroke,
+    Text, TextStyle, Track, TranslateGroup, View, WidgetCtx, WindowConfig, compute_layout,
+    create_rw_signal, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -28,20 +28,6 @@ const PANEL_Y: f32 = 40.0;
 const PANEL_W: f32 = 160.0;
 const PANEL_H: f32 = 128.0;
 
-struct WidgetPanel {
-    container: FlexContainer,
-}
-
-impl Component for WidgetPanel {
-    fn view(&self) -> View {
-        self.container.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        self.container.on_event(event)
-    }
-}
-
 fn heading(label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::new(
         move || label.to_string(),
@@ -55,7 +41,7 @@ fn build_content(
     gradient: Rc<ImageData>,
     checker: Rc<ImageData>,
     alpha: Rc<ImageData>,
-) -> Result<FlexContainer, LayoutError> {
+) -> Result<Container, LayoutError> {
     let sections: Vec<Box<dyn LayoutItem>> = vec![
         Box::new(shapes_section()?) as Box<dyn LayoutItem>,
         Box::new(colors_section()?) as Box<dyn LayoutItem>,
@@ -70,7 +56,7 @@ fn build_content(
         Box::new(grid_section()?) as Box<dyn LayoutItem>,
     ];
 
-    FlexContainer::new(
+    Container::new(
         LayoutStyle::new()
             .flex_column()
             .width(CONTENT_WIDTH)
@@ -113,8 +99,8 @@ fn shape_card(
     )
 }
 
-fn shapes_section() -> Result<FlexContainer, LayoutError> {
-    let cards = FlexContainer::new(
+fn shapes_section() -> Result<Container, LayoutError> {
+    let cards = Container::new(
         LayoutStyle::new().flex_row().gap(16.0),
         vec![
             Box::new(shape_card(
@@ -160,7 +146,7 @@ fn shapes_section() -> Result<FlexContainer, LayoutError> {
         ],
     )?;
 
-    FlexContainer::new(
+    Container::new(
         LayoutStyle::new().flex_column().gap(8.0),
         vec![heading("Shapes")?, Box::new(cards) as Box<dyn LayoutItem>],
     )
@@ -200,7 +186,7 @@ fn color_swatch(color: Color, label: &'static str) -> Result<DrawingArea, Layout
     )
 }
 
-fn colors_section() -> Result<FlexContainer, LayoutError> {
+fn colors_section() -> Result<Container, LayoutError> {
     let swatches = [PRIMARY, SUCCESS, DANGER, WARNING, PURPLE, DARK];
     let labels = ["primary", "success", "danger", "warning", "purple", "dark"];
 
@@ -209,9 +195,9 @@ fn colors_section() -> Result<FlexContainer, LayoutError> {
         row_children.push(Box::new(color_swatch(color, label)?) as Box<dyn LayoutItem>);
     }
 
-    let row = FlexContainer::new(LayoutStyle::new().flex_row().gap(16.0), row_children)?;
+    let row = Container::new(LayoutStyle::new().flex_row().gap(16.0), row_children)?;
 
-    FlexContainer::new(
+    Container::new(
         LayoutStyle::new().flex_column().gap(8.0),
         vec![heading("Colors")?, Box::new(row) as Box<dyn LayoutItem>],
     )
@@ -233,8 +219,8 @@ fn type_line(
     Ok(Box::new(text) as Box<dyn LayoutItem>)
 }
 
-fn typography_section() -> Result<FlexContainer, LayoutError> {
-    FlexContainer::new(
+fn typography_section() -> Result<Container, LayoutError> {
+    Container::new(
         LayoutStyle::new().flex_column().gap(8.0),
         vec![
             heading("Typography")?,
@@ -291,8 +277,8 @@ fn info_card(
     )
 }
 
-fn cards_section() -> Result<FlexContainer, LayoutError> {
-    let row = FlexContainer::new(
+fn cards_section() -> Result<Container, LayoutError> {
+    let row = Container::new(
         LayoutStyle::new().flex_row().gap(16.0),
         vec![
             Box::new(info_card(
@@ -320,7 +306,7 @@ fn cards_section() -> Result<FlexContainer, LayoutError> {
         ],
     )?;
 
-    FlexContainer::new(
+    Container::new(
         LayoutStyle::new().flex_column().gap(8.0),
         vec![heading("Cards")?, Box::new(row) as Box<dyn LayoutItem>],
     )
@@ -331,7 +317,7 @@ fn image_with_label(
     filter: ImageFilter,
     size: f32,
     label: &'static str,
-) -> Result<FlexContainer, LayoutError> {
+) -> Result<Container, LayoutError> {
     let image = Image::new(
         {
             let d = data.clone();
@@ -346,7 +332,7 @@ fn image_with_label(
         || TextStyle::new(11.0, MUTED),
     )?;
 
-    FlexContainer::new(
+    Container::new(
         LayoutStyle::new().flex_column().gap(4.0),
         vec![
             Box::new(image) as Box<dyn LayoutItem>,
@@ -359,8 +345,8 @@ fn images_section(
     gradient: Rc<ImageData>,
     checker: Rc<ImageData>,
     alpha: Rc<ImageData>,
-) -> Result<FlexContainer, LayoutError> {
-    let row = FlexContainer::new(
+) -> Result<Container, LayoutError> {
+    let row = Container::new(
         LayoutStyle::new().flex_row().gap(20.0),
         vec![
             Box::new(image_with_label(
@@ -384,7 +370,7 @@ fn images_section(
         ],
     )?;
 
-    FlexContainer::new(
+    Container::new(
         LayoutStyle::new().flex_column().gap(8.0),
         vec![heading("Images")?, Box::new(row) as Box<dyn LayoutItem>],
     )
@@ -1933,8 +1919,8 @@ fn grid_cell(color: Color, label: &'static str) -> Result<DrawingArea, LayoutErr
     })
 }
 
-fn grid_section() -> Result<FlexContainer, LayoutError> {
-    let auto_grid = GridContainer::new(
+fn grid_section() -> Result<Container, LayoutError> {
+    let auto_grid = Container::new(
         LayoutStyle::new()
             .display_grid()
             .grid_template_columns(vec![Track::repeat(3, Track::fr(1.0))])
@@ -1980,7 +1966,7 @@ fn grid_section() -> Result<FlexContainer, LayoutError> {
             ])
         },
     )?;
-    let explicit_grid = GridContainer::new(
+    let explicit_grid = Container::new(
         LayoutStyle::new()
             .display_grid()
             .grid_template_columns(vec![Track::fr(1.0), Track::fr(1.0), Track::fr(1.0)])
@@ -1992,7 +1978,7 @@ fn grid_section() -> Result<FlexContainer, LayoutError> {
         ],
     )?;
 
-    let inner_grid = GridContainer::new(
+    let inner_grid = Container::new(
         LayoutStyle::new()
             .display_grid()
             .grid_template_columns(vec![Track::fr(1.0), Track::fr(1.0)])
@@ -2017,7 +2003,7 @@ fn grid_section() -> Result<FlexContainer, LayoutError> {
             style: TextStyle::new(13.0, MUTED),
         })
     })?;
-    let nested_row = FlexContainer::new(
+    let nested_row = Container::new(
         LayoutStyle::new().flex_row().gap(16.0),
         vec![
             Box::new(side_label) as Box<dyn LayoutItem>,
@@ -2025,7 +2011,7 @@ fn grid_section() -> Result<FlexContainer, LayoutError> {
         ],
     )?;
 
-    FlexContainer::new(
+    Container::new(
         LayoutStyle::new().flex_column().gap(16.0),
         vec![
             heading("Grid")?,
@@ -2033,7 +2019,7 @@ fn grid_section() -> Result<FlexContainer, LayoutError> {
             Box::new(auto_grid) as Box<dyn LayoutItem>,
             heading("Explicit placement (grid_column_span)")?,
             Box::new(explicit_grid) as Box<dyn LayoutItem>,
-            heading("Nested in FlexContainer")?,
+            heading("Nested in Container")?,
             Box::new(nested_row) as Box<dyn LayoutItem>,
         ],
     )
@@ -2428,20 +2414,6 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
     )
 }
 
-struct ScrollableContent {
-    content: FlexContainer,
-}
-
-impl Component for ScrollableContent {
-    fn view(&self) -> View {
-        self.content.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        self.content.on_event(event)
-    }
-}
-
 struct SandboxRootComponent {
     window_width: RwSignal<f32>,
     window_height: RwSignal<f32>,
@@ -2507,12 +2479,12 @@ impl App for SandboxRoot {
                 )
                 .on_click(move || c.set(c.get() - 1));
 
-            let btn_row = FlexContainer::row(vec![
+            let btn_row = Container::row(vec![
                 Box::new(btn_inc) as Box<dyn LayoutItem>,
                 Box::new(btn_dec) as Box<dyn LayoutItem>,
             ])?;
 
-            let widget_panel = FlexContainer::new(
+            let widget_panel = Container::new(
                 LayoutStyle::new()
                     .flex_column()
                     .width(PANEL_W)
@@ -2553,20 +2525,14 @@ impl App for SandboxRoot {
         let scroll_area = ScrollArea::new(
             move || Bounds::new(0.0, 0.0, ww.get(), wh.get()),
             CONTENT_HEIGHT,
-            vec![Box::new(ScrollableContent { content })],
+            vec![Box::new(content)],
         );
 
         Box::new(SandboxRootComponent {
             window_width,
             window_height,
             scroll_area,
-            widget_panel: TranslateGroup::new(
-                || PANEL_X,
-                || PANEL_Y,
-                vec![Box::new(WidgetPanel {
-                    container: widget_panel,
-                })],
-            ),
+            widget_panel: TranslateGroup::new(|| PANEL_X, || PANEL_Y, vec![Box::new(widget_panel)]),
         })
     }
 
