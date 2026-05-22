@@ -1,13 +1,9 @@
 [package]
-name = "ui-core"
+name = "layout-reactive"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 geometry-core = { workspace = true }
 layout-core = { workspace = true }
-layout-reactive = { workspace = true }
-platform-core = { workspace = true }
 reactive-core = { workspace = true }
-renderer-core = { workspace = true }
-ui-tree = { workspace = true }

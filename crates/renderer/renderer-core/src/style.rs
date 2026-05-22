@@ -1,6 +1,42 @@
 use geometry_core::Point;
 
-use crate::{BorderRadius, Color, Stroke};
+use crate::Color;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BorderRadius {
+    pub top_left: f32,
+    pub top_right: f32,
+    pub bottom_right: f32,
+    pub bottom_left: f32,
+}
+
+impl BorderRadius {
+    pub fn all(radius: f32) -> Self {
+        Self {
+            top_left: radius,
+            top_right: radius,
+            bottom_right: radius,
+            bottom_left: radius,
+        }
+    }
+
+    pub fn zero() -> Self {
+        Self::all(0.0)
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.top_left == 0.0
+            && self.top_right == 0.0
+            && self.bottom_right == 0.0
+            && self.bottom_left == 0.0
+    }
+}
+
+impl Default for BorderRadius {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextStyle {
@@ -36,6 +72,7 @@ impl GradientStop {
     }
 }
 
+/// A linear gradient from `start` to `end` with up to 4 color stops. The maximum of 4 stops is a deliberate design choice to preserve the `Copy` bound (fixed-size arrays are `Copy`; `Vec` is not). If more than 4 stops are provided to [`LinearGradient::new`], the excess stops are silently truncated. Use `stop_count` to know how many stops are actually active.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LinearGradient {
     pub start: Point,
@@ -60,6 +97,7 @@ impl LinearGradient {
     }
 }
 
+/// A radial gradient emanating from `center` with the given `radius` and up to 4 color stops. The maximum of 4 stops is a deliberate design choice to preserve the `Copy` bound (fixed-size arrays are `Copy`; `Vec` is not). If more than 4 stops are provided to [`RadialGradient::new`], the excess stops are silently truncated. Use `stop_count` to know how many stops are actually active.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RadialGradient {
     pub center: Point,
@@ -141,6 +179,36 @@ pub enum FillRule {
     #[default]
     Winding,
     EvenOdd,
+}
+
+/// Stroke style for shapes that have corners: paths and rects. Includes `join` to control how corners are rendered. For simple line segments (no corners), use [`LineStyle`] instead.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Stroke {
+    pub color: Color,
+    pub width: f32,
+    pub cap: LineCap,
+    pub join: LineJoin,
+}
+
+impl Stroke {
+    pub fn new(color: Color, width: f32) -> Self {
+        Self {
+            color,
+            width,
+            cap: LineCap::default(),
+            join: LineJoin::default(),
+        }
+    }
+
+    pub fn with_cap(mut self, cap: LineCap) -> Self {
+        self.cap = cap;
+        self
+    }
+
+    pub fn with_join(mut self, join: LineJoin) -> Self {
+        self.join = join;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -348,5 +416,80 @@ mod tests {
     fn shadow_with_spread_sets_spread() {
         let shadow = Shadow::new(0.0, 0.0, 4.0, Color::RED).with_spread(6.0);
         assert_eq!(shadow.spread, 6.0);
+    }
+
+    #[test]
+    fn border_radius_all_sets_all_corners_equal() {
+        let br = BorderRadius::all(8.0);
+        assert_eq!(br.top_left, 8.0);
+        assert_eq!(br.top_right, 8.0);
+        assert_eq!(br.bottom_right, 8.0);
+        assert_eq!(br.bottom_left, 8.0);
+    }
+
+    #[test]
+    fn border_radius_zero_all_corners_are_zero() {
+        let br = BorderRadius::zero();
+        assert_eq!(br.top_left, 0.0);
+        assert_eq!(br.top_right, 0.0);
+        assert_eq!(br.bottom_right, 0.0);
+        assert_eq!(br.bottom_left, 0.0);
+    }
+
+    #[test]
+    fn border_radius_zero_is_zero() {
+        assert!(BorderRadius::zero().is_zero());
+    }
+
+    #[test]
+    fn border_radius_non_zero_is_not_zero() {
+        assert!(!BorderRadius::all(1.0).is_zero());
+    }
+
+    #[test]
+    fn border_radius_default_is_zero() {
+        assert!(BorderRadius::default().is_zero());
+    }
+
+    #[test]
+    fn border_radius_partial_non_zero_is_not_zero() {
+        let br = BorderRadius {
+            top_left: 5.0,
+            top_right: 0.0,
+            bottom_right: 0.0,
+            bottom_left: 0.0,
+        };
+        assert!(!br.is_zero());
+    }
+
+    #[test]
+    fn stroke_new_stores_color_and_width() {
+        let s = Stroke::new(Color::RED, 3.0);
+        assert_eq!(s.color, Color::RED);
+        assert_eq!(s.width, 3.0);
+    }
+
+    #[test]
+    fn stroke_new_defaults_cap_to_butt() {
+        let s = Stroke::new(Color::BLACK, 1.0);
+        assert_eq!(s.cap, LineCap::Butt);
+    }
+
+    #[test]
+    fn stroke_new_defaults_join_to_miter() {
+        let s = Stroke::new(Color::BLACK, 1.0);
+        assert_eq!(s.join, LineJoin::Miter);
+    }
+
+    #[test]
+    fn stroke_with_cap_sets_cap() {
+        let s = Stroke::new(Color::BLACK, 1.0).with_cap(LineCap::Square);
+        assert_eq!(s.cap, LineCap::Square);
+    }
+
+    #[test]
+    fn stroke_with_join_sets_join() {
+        let s = Stroke::new(Color::BLACK, 1.0).with_join(LineJoin::Bevel);
+        assert_eq!(s.join, LineJoin::Bevel);
     }
 }

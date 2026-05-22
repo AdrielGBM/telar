@@ -19,6 +19,18 @@ impl Rect {
     pub fn contains(&self, x: f32, y: f32) -> bool {
         x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
+
+    pub fn intersect(&self, other: Rect) -> Option<Rect> {
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let right = (self.x + self.width).min(other.x + other.width);
+        let bottom = (self.y + self.height).min(other.y + other.height);
+        if right > x && bottom > y {
+            Some(Rect::new(x, y, right - x, bottom - y))
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for Rect {
@@ -47,5 +59,23 @@ mod tests {
         assert_eq!(r.y, 0.0);
         assert_eq!(r.width, 0.0);
         assert_eq!(r.height, 0.0);
+    }
+
+    #[test]
+    fn rect_intersect_overlapping() {
+        let a = Rect::new(0.0, 0.0, 10.0, 10.0);
+        let b = Rect::new(5.0, 5.0, 10.0, 10.0);
+        let result = a.intersect(b).unwrap();
+        assert_eq!(result.x, 5.0);
+        assert_eq!(result.y, 5.0);
+        assert_eq!(result.width, 5.0);
+        assert_eq!(result.height, 5.0);
+    }
+
+    #[test]
+    fn rect_intersect_non_overlapping() {
+        let a = Rect::new(0.0, 0.0, 5.0, 5.0);
+        let b = Rect::new(10.0, 10.0, 5.0, 5.0);
+        assert!(a.intersect(b).is_none());
     }
 }

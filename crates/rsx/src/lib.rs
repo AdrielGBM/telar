@@ -1,6 +1,10 @@
-pub mod app_context;
 pub mod config;
+
+#[cfg(feature = "runtime")]
+pub mod app_context;
+#[cfg(feature = "runtime")]
 pub mod prefs;
+#[cfg(feature = "runtime")]
 pub mod window_signals;
 
 #[cfg(feature = "runtime")]
@@ -8,9 +12,13 @@ pub mod app;
 #[cfg(feature = "runtime")]
 pub mod runner;
 
+pub use config::{RendererBackend, compile_time_backend};
+
+#[cfg(feature = "runtime")]
 pub use app_context::AppCtx;
-pub use config::RendererBackend;
+#[cfg(feature = "runtime")]
 pub use prefs::UserPrefs;
+#[cfg(feature = "runtime")]
 pub use window_signals::WindowSignals;
 
 #[cfg(feature = "runtime")]
@@ -33,9 +41,9 @@ pub use renderer_core::{
 };
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{
-    Button, ClipGroup, Component, ComponentTree, Container, DrawingArea, EventResult, Image, Label,
-    LayoutItem, LayoutLeaf, Line, Path, Rect, ScrollArea, Text, TranslateGroup, View, WidgetCtx,
-    compute_layout, new_container, register_leaf, track_layout, with_context,
+    Button, ClipGroup, Component, ComponentTree, Container, DrawingArea, EventResult, Image,
+    LayoutItem, LayoutLeaf, Line, NodeId, Path, Rect, ScrollArea, Text, TranslateGroup, View,
+    WidgetCtx, compute_layout, new_container, register_leaf, track_layout, with_context,
 };
 
 #[cfg(feature = "runtime")]

@@ -977,6 +977,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "layout-reactive"
+version = "0.1.0"
+dependencies = [
+ "geometry-core",
+ "layout-core",
+ "reactive-core",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1868,6 +1877,7 @@ name = "renderer-core"
 version = "0.1.0"
 dependencies = [
  "geometry-core",
+ "serde",
  "thiserror 2.0.18",
 ]
 
@@ -2568,6 +2578,7 @@ version = "0.1.0"
 dependencies = [
  "geometry-core",
  "layout-core",
+ "layout-reactive",
  "platform-core",
  "reactive-core",
  "renderer-core",

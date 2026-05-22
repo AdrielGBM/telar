@@ -11,6 +11,7 @@ members = [
     "crates/services/services-core",
     "crates/geometry/geometry-core",
     "crates/layout/layout-core",
+    "crates/layout/layout-reactive",
     "crates/ui/ui-core",
     "crates/ui/ui-tree",
     "crates/rsx",
@@ -41,6 +42,7 @@ reactive-core = { path = "crates/reactive/reactive-core" }
 services-core = { path = "crates/services/services-core" }
 geometry-core = { path = "crates/geometry/geometry-core" }
 layout-core = { path = "crates/layout/layout-core" }
+layout-reactive = { path = "crates/layout/layout-reactive" }
 ui-core = { path = "crates/ui/ui-core" }
 ui-tree = { path = "crates/ui/ui-tree" }
 rsx = { path = "crates/rsx" }

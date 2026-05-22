@@ -4,7 +4,6 @@ mod container;
 mod context;
 mod drawing_area;
 mod image;
-mod label;
 mod layout_item;
 mod layout_leaf;
 mod line;
@@ -19,11 +18,10 @@ pub use button::Button;
 pub use clip_group::ClipGroup;
 pub use container::Container;
 pub use context::{
-    WidgetCtx, compute_layout, new_container, register_leaf, track_layout, with_context,
+    NodeId, WidgetCtx, compute_layout, new_container, register_leaf, track_layout, with_context,
 };
 pub use drawing_area::DrawingArea;
 pub use image::Image;
-pub use label::Label;
 pub use layout_item::LayoutItem;
 pub use layout_leaf::LayoutLeaf;
 pub use line::Line;

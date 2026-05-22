@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use rsx::config::RendererBackend;
+use rsx::RendererBackend;
 use serde::Deserialize;
 
 #[derive(Deserialize, Default)]

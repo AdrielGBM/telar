@@ -20,6 +20,7 @@ struct AppHandler {
     pending_restart: bool,
     _flush_notify: Option<FlushNotifyHandle>,
     window_signals: Option<WindowSignals>,
+    app_name: String,
 }
 
 impl EventHandler<WinitWindow> for AppHandler {
@@ -57,6 +58,21 @@ impl EventHandler<WinitWindow> for AppHandler {
     }
 
     fn on_redraw(&mut self, window: &WinitWindow) {
+        let mut redraw_requested = false;
+        {
+            let mut ctx = crate::app_context::AppCtx {
+                app_name: &self.app_name,
+                prefs: &mut self.prefs,
+                pending_restart: &mut self.pending_restart,
+                redraw_requested: &mut redraw_requested,
+                window_signals: self.window_signals.as_ref(),
+            };
+            self.app.on_frame(&mut ctx);
+        }
+        if redraw_requested {
+            window.request_redraw();
+        }
+
         if self.pending_restart {
             self.pending_restart = false;
             self.backend = self
@@ -142,6 +158,7 @@ pub fn run_app_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
             pending_restart: false,
             _flush_notify: None,
             window_signals: None,
+            app_name: app_name.to_owned(),
         },
     ) {
         tracing::error!("Event loop exited with error: {e}");

@@ -1,7 +1,5 @@
 use geometry_core::Rect;
 
-use crate::geometry::intersect_rects;
-
 pub struct DrawState {
     clip_stack: Vec<Rect>,
     translate_stack: Vec<(f32, f32)>,
@@ -23,7 +21,7 @@ impl DrawState {
         let effective = self
             .clip_stack
             .last()
-            .and_then(|&current| intersect_rects(current, rect))
+            .and_then(|&current| current.intersect(rect))
             .unwrap_or(rect);
         self.clip_stack.push(effective);
         effective

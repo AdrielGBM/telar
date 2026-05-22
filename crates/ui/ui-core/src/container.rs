@@ -59,24 +59,24 @@ mod tests {
 
     use super::*;
     use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
-    use crate::label::Label;
+    use crate::text::Text;
 
     fn make_container_with_labels() -> (Container, WidgetCtx) {
         with_context(WidgetCtx::new(), || {
             let text_style = TextStyle::new(14.0, Color::WHITE);
-            let label_a = Label::new(
+            let text_a = Text::new(
                 || "A".to_string(),
                 LayoutStyle::new().width(50.0).height(20.0),
-                text_style,
+                move || text_style,
             )
             .unwrap();
-            let label_b = Label::new(
+            let text_b = Text::new(
                 || "B".to_string(),
                 LayoutStyle::new().width(50.0).height(20.0),
-                text_style,
+                move || text_style,
             )
             .unwrap();
-            let container = Container::row(vec![Box::new(label_a), Box::new(label_b)]).unwrap();
+            let container = Container::row(vec![Box::new(text_a), Box::new(text_b)]).unwrap();
             let root = new_container(
                 LayoutStyle::new().flex_row().width(200.0).height(100.0),
                 &[container.layout_node()],

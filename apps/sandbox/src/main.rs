@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use rsx::{
     App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Container, DrawCommand,
-    DrawingArea, Event, EventResult, FillRule, FillStyle, Image, ImageData, ImageFilter, Label,
+    DrawingArea, Event, EventResult, FillRule, FillStyle, Image, ImageData, ImageFilter,
     LayoutError, LayoutItem, LayoutStyle, Line, LineCap, LineJoin, LineStyle, LinearGradient, Path,
     PathData, PathStyle, Point, RadialGradient, RectStyle, RwSignal, ScrollArea, Shadow, Stroke,
     Text, TextStyle, Track, TranslateGroup, View, WidgetCtx, WindowConfig, compute_layout,
@@ -2456,10 +2456,10 @@ impl App for SandboxRoot {
 
         let (build, _) = with_context(WidgetCtx::new(), || {
             let c = count.clone();
-            let count_label = Label::new(
+            let count_label = Text::new(
                 move || format!("Count: {}", c.get()),
                 LayoutStyle::new().width(PANEL_W - 16.0).height(24.0),
-                TextStyle::new(14.0, WHITE),
+                || TextStyle::new(14.0, WHITE),
             )?;
 
             let c = count.clone();

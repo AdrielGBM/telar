@@ -2,8 +2,8 @@ mod color;
 mod command;
 mod draw_state;
 mod error;
-mod geometry;
 mod image;
+mod path;
 mod renderer;
 mod style;
 
@@ -11,10 +11,10 @@ pub use color::Color;
 pub use command::DrawCommand;
 pub use draw_state::DrawState;
 pub use error::RendererError;
-pub use geometry::{BorderRadius, PathData, PathVerb, Stroke};
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
+pub use path::{PathData, PathVerb};
 pub use renderer::RenderBackend;
 pub use style::{
-    FillRule, FillStyle, GradientStop, LineCap, LineJoin, LineStyle, LinearGradient, PathStyle,
-    RadialGradient, RectStyle, Shadow, TextStyle,
+    BorderRadius, FillRule, FillStyle, GradientStop, LineCap, LineJoin, LineStyle, LinearGradient,
+    PathStyle, RadialGradient, RectStyle, Shadow, Stroke, TextStyle,
 };

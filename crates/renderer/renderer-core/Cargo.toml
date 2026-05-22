@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 geometry-core = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
