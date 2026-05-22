@@ -21,7 +21,6 @@ const WHITE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
 const CARD_BORDER: Color = Color::rgba(0.80, 0.80, 0.88, 1.0);
 
 const CONTENT_WIDTH: f32 = 784.0;
-const CONTENT_HEIGHT: f32 = 4500.0;
 
 const PANEL_X: f32 = 614.0;
 const PANEL_Y: f32 = 40.0;
@@ -2509,24 +2508,24 @@ impl App for SandboxRoot {
                 alpha_image.clone(),
             )?;
 
+            let content_node = content.layout_node();
+            let ww = window_width.clone();
+            let wh = window_height.clone();
+            let scroll_area = ScrollArea::new(
+                move || Bounds::new(0.0, 0.0, ww.get(), wh.get()),
+                Box::new(content),
+            );
+
             compute_layout(
-                content.layout_node(),
+                content_node,
                 AvailableSpace::Definite(CONTENT_WIDTH),
                 AvailableSpace::MaxContent,
             )?;
 
-            Ok::<_, LayoutError>((widget_panel, content))
+            Ok::<_, LayoutError>((widget_panel, scroll_area))
         });
 
-        let (widget_panel, content) = build.expect("layout failed");
-
-        let ww = window_width.clone();
-        let wh = window_height.clone();
-        let scroll_area = ScrollArea::new(
-            move || Bounds::new(0.0, 0.0, ww.get(), wh.get()),
-            CONTENT_HEIGHT,
-            vec![Box::new(content)],
-        );
+        let (widget_panel, scroll_area) = build.expect("layout failed");
 
         Box::new(SandboxRootComponent {
             window_width,

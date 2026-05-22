@@ -1,29 +1,28 @@
 use geometry_core::Rect;
 use platform_core::{Event, ScrollDelta};
-use reactive_core::{RwSignal, create_rw_signal};
+use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
 use renderer_core::{BorderRadius, Color, DrawCommand, RectStyle};
 use ui_tree::{Component, EventResult, View};
 
-use crate::pointer::{dispatch_to_children, offset_pointer, pointer_coords};
+use crate::context::track_layout;
+use crate::layout_item::LayoutItem;
+use crate::pointer::{offset_pointer, pointer_coords};
 
 pub struct ScrollArea {
     viewport: Box<dyn Fn() -> Rect>,
-    content_height: f32,
+    content_size: ReadSignal<Rect>,
     scroll_y: RwSignal<f32>,
-    children: Vec<Box<dyn Component>>,
+    content: Box<dyn LayoutItem>,
 }
 
 impl ScrollArea {
-    pub fn new(
-        viewport: impl Fn() -> Rect + 'static,
-        content_height: f32,
-        children: Vec<Box<dyn Component>>,
-    ) -> Self {
+    pub fn new(viewport: impl Fn() -> Rect + 'static, content: Box<dyn LayoutItem>) -> Self {
+        let content_size = track_layout(content.layout_node());
         Self {
             viewport: Box::new(viewport),
-            content_height,
+            content_size,
             scroll_y: create_rw_signal(0.0),
-            children,
+            content,
         }
     }
 }
@@ -32,21 +31,20 @@ impl Component for ScrollArea {
     fn view(&self) -> View {
         let vp = (self.viewport)();
         let scroll_y = self.scroll_y.get();
-
-        let content_views: Vec<View> = self.children.iter().map(|c| c.view()).collect();
+        let content_height = self.content_size.get().height;
 
         let scrollable = View::Clip {
             rect: vp,
             children: vec![View::Translate {
                 tx: vp.x,
                 ty: vp.y - scroll_y,
-                children: content_views,
+                children: vec![self.content.view()],
             }],
         };
 
-        let bar = if self.content_height > vp.height {
-            let bar_h = (vp.height / self.content_height * vp.height).max(24.0);
-            let max_scroll = (self.content_height - vp.height).max(1.0);
+        let bar = if content_height > vp.height {
+            let bar_h = (vp.height / content_height * vp.height).max(24.0);
+            let max_scroll = (content_height - vp.height).max(1.0);
             let bar_y = vp.y + (scroll_y / max_scroll) * (vp.height - bar_h);
             View::Primitive(DrawCommand::Rect {
                 rect: Rect::new(vp.x + vp.width - 8.0, bar_y, 6.0, bar_h),
@@ -63,13 +61,14 @@ impl Component for ScrollArea {
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         let vp = (self.viewport)();
+        let content_height = self.content_size.get().height;
 
         if let Event::Scrolled { delta } = event {
             let dy = match delta {
                 ScrollDelta::Lines { y, .. } => *y * 20.0,
                 ScrollDelta::Pixels { y, .. } => *y,
             };
-            let max_scroll = (self.content_height - vp.height).max(0.0);
+            let max_scroll = (content_height - vp.height).max(0.0);
             let new_y = (self.scroll_y.get() - dy).clamp(0.0, max_scroll);
             self.scroll_y.set(new_y);
             return EventResult::Handled;
@@ -84,19 +83,61 @@ impl Component for ScrollArea {
         let scroll_y = self.scroll_y.get() as f64;
         let adjusted = offset_pointer(event, -(vp.x as f64), -(vp.y as f64) + scroll_y);
         let effective = adjusted.as_ref().unwrap_or(event);
-        dispatch_to_children(&mut self.children, effective)
+        self.content.on_event(effective)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use geometry_core::Rect;
-    use platform_core::{PointerSource, ScrollDelta};
+    use layout_core::{AvailableSpace, LayoutStyle, NodeId};
+    use platform_core::{Event, PointerSource, ScrollDelta};
+    use ui_tree::{Component, EventResult, View};
 
     use super::*;
+    use crate::context::{WidgetCtx, compute_layout, with_context};
+    use crate::drawing_area::DrawingArea;
+    use crate::layout_item::LayoutItem;
+    use crate::layout_leaf::LayoutLeaf;
 
     fn make_scroll_area() -> ScrollArea {
-        ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), 1000.0, vec![])
+        let (sa, _ctx) = with_context(WidgetCtx::new(), || {
+            let content =
+                DrawingArea::new(LayoutStyle::new().width(400.0).height(1000.0), |_, _| {
+                    View::Empty
+                })
+                .unwrap();
+            let node = content.layout_node();
+            let sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+            compute_layout(
+                node,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::MaxContent,
+            )
+            .unwrap();
+            sa
+        });
+        sa
+    }
+
+    fn make_scroll_area_small() -> ScrollArea {
+        let (sa, _ctx) = with_context(WidgetCtx::new(), || {
+            let content =
+                DrawingArea::new(LayoutStyle::new().width(400.0).height(200.0), |_, _| {
+                    View::Empty
+                })
+                .unwrap();
+            let node = content.layout_node();
+            let sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+            compute_layout(
+                node,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::MaxContent,
+            )
+            .unwrap();
+            sa
+        });
+        sa
     }
 
     #[test]
@@ -164,8 +205,7 @@ mod tests {
 
     #[test]
     fn view_no_scrollbar_when_content_fits() {
-        let mut sa = make_scroll_area();
-        sa.content_height = 200.0;
+        let sa = make_scroll_area_small();
         let view = sa.view();
         if let View::Group(children) = view {
             assert!(matches!(&children[1], View::Empty));
@@ -182,10 +222,11 @@ mod tests {
         let captured_y: Rc<Cell<f64>> = Rc::new(Cell::new(-1.0));
         let captured_y_clone = captured_y.clone();
 
-        struct CapturingComponent {
+        struct CapturingItem {
+            leaf: LayoutLeaf,
             out: Rc<Cell<f64>>,
         }
-        impl Component for CapturingComponent {
+        impl Component for CapturingItem {
             fn view(&self) -> View {
                 View::Empty
             }
@@ -198,15 +239,34 @@ mod tests {
                 }
             }
         }
+        impl LayoutItem for CapturingItem {
+            fn layout_node(&self) -> NodeId {
+                self.leaf.node
+            }
+        }
 
-        let mut sa = ScrollArea {
-            viewport: Box::new(|| Rect::new(100.0, 50.0, 400.0, 300.0)),
-            content_height: 1000.0,
-            scroll_y: create_rw_signal(100.0),
-            children: vec![Box::new(CapturingComponent {
+        let (mut sa, _ctx) = with_context(WidgetCtx::new(), || {
+            let leaf =
+                LayoutLeaf::register(LayoutStyle::new().width(400.0).height(1000.0)).unwrap();
+            let node = leaf.node;
+            let content = CapturingItem {
+                leaf,
                 out: captured_y_clone,
-            })],
-        };
+            };
+            let sa = ScrollArea::new(|| Rect::new(100.0, 50.0, 400.0, 300.0), Box::new(content));
+            compute_layout(
+                node,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::MaxContent,
+            )
+            .unwrap();
+            sa
+        });
+
+        // Set scroll_y to 100 via a scroll event
+        sa.on_event(&Event::Scrolled {
+            delta: ScrollDelta::Pixels { x: 0.0, y: -100.0 },
+        });
 
         sa.on_event(&Event::PointerMoved {
             x: 150.0,

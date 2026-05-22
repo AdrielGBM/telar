@@ -18,7 +18,9 @@ mod translate_group;
 pub use button::Button;
 pub use clip_group::ClipGroup;
 pub use container::Container;
-pub use context::{WidgetCtx, compute_layout, new_container, register_leaf, with_context};
+pub use context::{
+    WidgetCtx, compute_layout, new_container, register_leaf, track_layout, with_context,
+};
 pub use drawing_area::DrawingArea;
 pub use image::Image;
 pub use label::Label;

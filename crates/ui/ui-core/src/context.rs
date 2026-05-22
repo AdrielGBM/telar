@@ -58,6 +58,15 @@ pub fn compute_layout(
     })
 }
 
+pub fn track_layout(node: NodeId) -> ReadSignal<Rect> {
+    CURRENT_CTX.with(|c| {
+        c.borrow_mut()
+            .as_mut()
+            .expect("no active WidgetCtx — call within with_context()")
+            .track_layout(node)
+    })
+}
+
 pub struct WidgetCtx {
     engine: LayoutEngine,
     registry: HashMap<NodeId, RwSignal<Rect>>,
@@ -106,6 +115,16 @@ impl WidgetCtx {
             });
         });
         walk_result
+    }
+
+    pub fn track_layout(&mut self, node: NodeId) -> ReadSignal<Rect> {
+        if let Some(existing) = self.registry.get(&node) {
+            existing.read_only()
+        } else {
+            let signal = create_rw_signal(Rect::default());
+            self.registry.insert(node, signal.clone());
+            signal.read_only()
+        }
     }
 }
 
