@@ -7,6 +7,6 @@ edition = "2024"
 renderer-core = { workspace = true }
 softbuffer = "0.4"
 raw-window-handle = { workspace = true }
-tiny-skia = "0.12.0"
+tiny-skia = { version = "0.12.0", features = ["simd"] }
 renderer-text = { workspace = true }
 geometry-core = { workspace = true }
