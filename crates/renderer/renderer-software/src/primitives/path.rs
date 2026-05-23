@@ -1,6 +1,12 @@
+use geometry_core::Rect;
 use renderer_core::{FillRule, PathData, PathStyle, PathVerb};
 
 use crate::primitives::{fill_to_paint, to_skia_color, to_skia_line_cap, to_skia_line_join};
+
+fn overlaps_clip(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
+    let Some(clip) = clip else { return true };
+    x + w > clip.x && y + h > clip.y && x < clip.x + clip.width && y < clip.y + clip.height
+}
 
 fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
     let mut pb = tiny_skia::PathBuilder::new();
@@ -24,6 +30,7 @@ pub(crate) fn draw_path(
     style: &PathStyle,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
+    current_clip_rect: Option<Rect>,
     blur_scratch: &mut Vec<u8>,
 ) {
     let Some(path) = build_skia_path(data) else {
@@ -34,52 +41,66 @@ pub(crate) fn draw_path(
         let b = path.bounds();
         let sigma = shadow.blur_radius / 2.0;
         let padding = (sigma * 3.0).ceil() as i32 + 2;
-        let tmp_w = (b.width().ceil() as i32 + 2 * padding + 4).max(1) as u32;
-        let tmp_h = (b.height().ceil() as i32 + 2 * padding + 4).max(1) as u32;
-        if let Some(mut tmp) = tiny_skia::Pixmap::new(tmp_w, tmp_h) {
-            let dx = -b.x() + padding as f32;
-            let dy = -b.y() + padding as f32;
-            let shifted = tiny_skia::Transform::from_translate(dx, dy);
-            let shadow_paint = {
-                let mut p = tiny_skia::Paint::default();
-                p.set_color(crate::primitives::to_skia_color(shadow.color));
-                p.anti_alias = true;
-                p
-            };
-            if style.fill.is_some() {
-                let rule = match style.fill_rule {
-                    FillRule::Winding => tiny_skia::FillRule::Winding,
-                    FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
+
+        // Guard the expensive shadow blur path: skip when shadow bounds fall fully outside the clip rect.
+        let shadow_x = b.x() + shadow.offset_x - padding as f32;
+        let shadow_y = b.y() + shadow.offset_y - padding as f32;
+        let shadow_w = b.width() + 2.0 * padding as f32 + 4.0;
+        let shadow_h = b.height() + 2.0 * padding as f32 + 4.0;
+        if overlaps_clip(shadow_x, shadow_y, shadow_w, shadow_h, current_clip_rect) {
+            let tmp_w = (b.width().ceil() as i32 + 2 * padding + 4).max(1) as u32;
+            let tmp_h = (b.height().ceil() as i32 + 2 * padding + 4).max(1) as u32;
+            if let Some(mut tmp) = tiny_skia::Pixmap::new(tmp_w, tmp_h) {
+                let dx = -b.x() + padding as f32;
+                let dy = -b.y() + padding as f32;
+                let shifted = tiny_skia::Transform::from_translate(dx, dy);
+                let shadow_paint = {
+                    let mut p = tiny_skia::Paint::default();
+                    p.set_color(crate::primitives::to_skia_color(shadow.color));
+                    p.anti_alias = true;
+                    p
                 };
-                tmp.fill_path(&path, &shadow_paint, rule, shifted, None);
+                if style.fill.is_some() {
+                    let rule = match style.fill_rule {
+                        FillRule::Winding => tiny_skia::FillRule::Winding,
+                        FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
+                    };
+                    tmp.fill_path(&path, &shadow_paint, rule, shifted, None);
+                }
+                if let Some(s) = style.stroke {
+                    let stroke = tiny_skia::Stroke {
+                        width: s.width,
+                        line_cap: to_skia_line_cap(s.cap),
+                        line_join: to_skia_line_join(s.join),
+                        ..Default::default()
+                    };
+                    tmp.stroke_path(&path, &shadow_paint, &stroke, shifted, None);
+                }
+                if sigma >= 0.5 {
+                    crate::primitives::gaussian_blur(
+                        tmp.data_mut(),
+                        tmp_w,
+                        tmp_h,
+                        sigma,
+                        blur_scratch,
+                    );
+                }
+                let shadow_offset_x = shadow.offset_x;
+                let shadow_offset_y = shadow.offset_y;
+                let draw_x = (b.x() + shadow_offset_x) as i32 - padding;
+                let draw_y = (b.y() + shadow_offset_y) as i32 - padding;
+                pixmap.draw_pixmap(
+                    draw_x,
+                    draw_y,
+                    tmp.as_ref(),
+                    &tiny_skia::PixmapPaint {
+                        blend_mode: tiny_skia::BlendMode::SourceOver,
+                        ..Default::default()
+                    },
+                    transform,
+                    clip,
+                );
             }
-            if let Some(s) = style.stroke {
-                let stroke = tiny_skia::Stroke {
-                    width: s.width,
-                    line_cap: to_skia_line_cap(s.cap),
-                    line_join: to_skia_line_join(s.join),
-                    ..Default::default()
-                };
-                tmp.stroke_path(&path, &shadow_paint, &stroke, shifted, None);
-            }
-            if sigma >= 0.5 {
-                crate::primitives::gaussian_blur(tmp.data_mut(), tmp_w, tmp_h, sigma, blur_scratch);
-            }
-            let shadow_offset_x = shadow.offset_x;
-            let shadow_offset_y = shadow.offset_y;
-            let draw_x = (b.x() + shadow_offset_x) as i32 - padding;
-            let draw_y = (b.y() + shadow_offset_y) as i32 - padding;
-            pixmap.draw_pixmap(
-                draw_x,
-                draw_y,
-                tmp.as_ref(),
-                &tiny_skia::PixmapPaint {
-                    blend_mode: tiny_skia::BlendMode::SourceOver,
-                    ..Default::default()
-                },
-                transform,
-                clip,
-            );
         }
     }
 

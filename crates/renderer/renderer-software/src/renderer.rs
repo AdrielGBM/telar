@@ -10,25 +10,95 @@ use tiny_skia::Pixmap;
 
 use crate::primitives::image::ImageCache;
 
-fn repaint_mask(mask: &mut tiny_skia::Mask, rect: Rect, width: u32, height: u32) {
-    mask.data_mut().fill(0);
-    let x = rect.x.max(0.0);
-    let y = rect.y.max(0.0);
-    let right = (rect.x + rect.width).min(width as f32);
-    let bottom = (rect.y + rect.height).min(height as f32);
-    let w = (right - x).max(0.0);
-    let h = (bottom - y).max(0.0);
-    if let Some(r) = tiny_skia::Rect::from_xywh(x, y, w, h) {
-        let mut pb = tiny_skia::PathBuilder::new();
-        pb.push_rect(r);
-        if let Some(path) = pb.finish() {
-            mask.fill_path(
-                &path,
-                tiny_skia::FillRule::Winding,
-                false,
-                tiny_skia::Transform::identity(),
-            );
+fn overlaps_clip(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
+    let Some(clip) = clip else { return true };
+    x + w > clip.x && y + h > clip.y && x < clip.x + clip.width && y < clip.y + clip.height
+}
+
+fn path_data_bounds(data: &renderer_core::PathData) -> Option<(f32, f32, f32, f32)> {
+    use renderer_core::PathVerb;
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    let mut include = |x: f32, y: f32| {
+        if x < min_x {
+            min_x = x;
         }
+        if y < min_y {
+            min_y = y;
+        }
+        if x > max_x {
+            max_x = x;
+        }
+        if y > max_y {
+            max_y = y;
+        }
+    };
+    for v in data.verbs() {
+        match v {
+            PathVerb::MoveTo(p) | PathVerb::LineTo(p) => include(p.x, p.y),
+            PathVerb::QuadTo { ctrl, to } => {
+                include(ctrl.x, ctrl.y);
+                include(to.x, to.y);
+            }
+            PathVerb::CubicTo { ctrl1, ctrl2, to } => {
+                include(ctrl1.x, ctrl1.y);
+                include(ctrl2.x, ctrl2.y);
+                include(to.x, to.y);
+            }
+            PathVerb::Close => {}
+        }
+    }
+    if min_x.is_finite() && min_y.is_finite() {
+        Some((min_x, min_y, max_x - min_x, max_y - min_y))
+    } else {
+        None
+    }
+}
+
+fn clamp_to_pixels(rect: Rect, width: u32, height: u32) -> Option<(u32, u32, u32, u32)> {
+    let x0 = rect.x.floor().max(0.0) as i64;
+    let y0 = rect.y.floor().max(0.0) as i64;
+    let x1 = (rect.x + rect.width).ceil().max(0.0) as i64;
+    let y1 = (rect.y + rect.height).ceil().max(0.0) as i64;
+    let x0 = x0.min(width as i64) as u32;
+    let y0 = y0.min(height as i64) as u32;
+    let x1 = x1.min(width as i64) as u32;
+    let y1 = y1.min(height as i64) as u32;
+    if x1 > x0 && y1 > y0 {
+        Some((x0, y0, x1, y1))
+    } else {
+        None
+    }
+}
+
+fn fill_mask_region(data: &mut [u8], stride: usize, region: (u32, u32, u32, u32), value: u8) {
+    let (x0, y0, x1, y1) = region;
+    let row_len = (x1 - x0) as usize;
+    for y in y0..y1 {
+        let start = y as usize * stride + x0 as usize;
+        data[start..start + row_len].fill(value);
+    }
+}
+
+// Updates the 1-bit clip mask in place. Only touches rows/cols within the union of the previous and new clip rects, avoiding the full-buffer zero (~2MB at 1080p) that would otherwise run on every PushClip/PopClip. Writes 0xFF directly because clip rects are axis-aligned and the existing fill_path used anti_alias=false (binary mask).
+fn repaint_mask(
+    mask: &mut tiny_skia::Mask,
+    new_rect: Rect,
+    prev_rect: Option<Rect>,
+    width: u32,
+    height: u32,
+) {
+    let stride = width as usize;
+    let data = mask.data_mut();
+    if let Some(prev) = prev_rect {
+        if let Some(region) = clamp_to_pixels(prev, width, height) {
+            fill_mask_region(data, stride, region, 0);
+        }
+    }
+    if let Some(region) = clamp_to_pixels(new_rect, width, height) {
+        fill_mask_region(data, stride, region, 0xFF);
     }
 }
 
@@ -44,8 +114,11 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     blur_scratch: Vec<u8>,
     pixmap_pool: Vec<tiny_skia::Pixmap>,
     clip_mask_buf: Option<tiny_skia::Mask>,
+    // Last region written as 0xFF into clip_mask_buf. Tracked across frames so the next PushClip can zero stale bits left by the previous frame without re-zeroing the whole mask.
+    clip_mask_dirty: Option<Rect>,
     draw_state: renderer_core::DrawState,
     shadow_cache: lru::LruCache<(u32, u32, u32, u32, u32, u32, u32, u32, u32), tiny_skia::Pixmap>,
+    text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     layer_stack: Vec<(tiny_skia::Pixmap, f32)>,
 }
 
@@ -76,9 +149,13 @@ where
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
             clip_mask_buf: None,
+            clip_mask_dirty: None,
             draw_state: renderer_core::DrawState::new(),
             shadow_cache: lru::LruCache::new(
                 std::num::NonZeroUsize::new(crate::limits::SHADOW_CACHE_MAX_ENTRIES).unwrap(),
+            ),
+            text_pixmap_cache: lru::LruCache::new(
+                std::num::NonZeroUsize::new(crate::limits::TEXT_PIXMAP_CACHE_MAX_ENTRIES).unwrap(),
             ),
             layer_stack: Vec::new(),
         })
@@ -96,6 +173,7 @@ where
             self.height = height;
             self.pixmap = Pixmap::new(width, height);
             self.clip_mask_buf = tiny_skia::Mask::new(width, height);
+            self.clip_mask_dirty = None;
             self.pixmap_pool.clear();
             if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
                 self.surface
@@ -141,6 +219,9 @@ where
                     {
                         continue;
                     }
+                    if !overlaps_clip(rect.x, rect.y, rect.width, rect.height, current_clip_rect) {
+                        continue;
+                    }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -163,6 +244,9 @@ where
                     );
                 }
                 DrawCommand::Text { text, rect, style } => {
+                    if !overlaps_clip(rect.x, rect.y, rect.width, rect.height, current_clip_rect) {
+                        continue;
+                    }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -181,10 +265,15 @@ where
                         &style,
                         transform,
                         clip,
+                        current_clip_rect,
                         &mut self.blur_scratch,
+                        &mut self.text_pixmap_cache,
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
+                    if !overlaps_clip(rect.x, rect.y, rect.width, rect.height, current_clip_rect) {
+                        continue;
+                    }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -206,6 +295,13 @@ where
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
+                    let min_x = p1.x.min(p2.x);
+                    let min_y = p1.y.min(p2.y);
+                    let w = (p1.x.max(p2.x) - min_x).max(0.0);
+                    let h = (p1.y.max(p2.y) - min_y).max(0.0);
+                    if !overlaps_clip(min_x, min_y, w, h, current_clip_rect) {
+                        continue;
+                    }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -219,6 +315,11 @@ where
                     crate::primitives::line::draw_line(pixmap, p1, p2, style, transform, clip);
                 }
                 DrawCommand::Path { data, style } => {
+                    if let Some((bx, by, bw, bh)) = path_data_bounds(&data) {
+                        if !overlaps_clip(bx, by, bw, bh, current_clip_rect) {
+                            continue;
+                        }
+                    }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -235,28 +336,43 @@ where
                         &style,
                         transform,
                         clip,
+                        current_clip_rect,
                         &mut self.blur_scratch,
                     );
                 }
                 DrawCommand::PushClip { rect } => {
+                    let prev_dirty = self.clip_mask_dirty;
                     let effective = self.draw_state.push_clip(rect);
                     current_clip_rect = Some(effective);
                     if let Some(ref mut m) = self.clip_mask_buf {
-                        repaint_mask(m, effective, self.width, self.height);
+                        repaint_mask(m, effective, prev_dirty, self.width, self.height);
                     }
+                    self.clip_mask_dirty = Some(effective);
                     clip_active = true;
                 }
                 DrawCommand::PopClip => {
+                    let prev_dirty = self.clip_mask_dirty;
                     let effective = self.draw_state.pop_clip();
                     match effective {
                         Some(r) => {
                             current_clip_rect = Some(r);
                             if let Some(ref mut m) = self.clip_mask_buf {
-                                repaint_mask(m, r, self.width, self.height);
+                                repaint_mask(m, r, prev_dirty, self.width, self.height);
                             }
+                            self.clip_mask_dirty = Some(r);
                             clip_active = true;
                         }
                         None => {
+                            if let (Some(ref mut m), Some(prev_rect)) =
+                                (self.clip_mask_buf.as_mut(), prev_dirty)
+                            {
+                                if let Some(region) =
+                                    clamp_to_pixels(prev_rect, self.width, self.height)
+                                {
+                                    fill_mask_region(m.data_mut(), self.width as usize, region, 0);
+                                }
+                            }
+                            self.clip_mask_dirty = None;
                             current_clip_rect = None;
                             clip_active = false;
                         }

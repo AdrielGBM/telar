@@ -450,21 +450,19 @@ impl TextShaper {
             &mut self.swash_cache,
             cosmic_color,
             |bx, by, bw, bh, color| {
-                for row in 0..bh as usize {
-                    for col in 0..bw as usize {
-                        let px = bx + col as i32;
-                        let py = by + row as i32;
-                        if px >= 0
-                            && py >= 0
-                            && (px as usize) < width as usize
-                            && (py as usize) < height as usize
-                        {
-                            let idx = (py as usize * width as usize + px as usize) * 4;
-                            pixels[idx] = color.r();
-                            pixels[idx + 1] = color.g();
-                            pixels[idx + 2] = color.b();
-                            pixels[idx + 3] = color.a();
-                        }
+                let col_start = ((-bx).max(0)) as usize;
+                let col_end = ((width as i32 - bx).max(0) as usize).min(bw as usize);
+                let row_start = ((-by).max(0)) as usize;
+                let row_end = ((height as i32 - by).max(0) as usize).min(bh as usize);
+                for row in row_start..row_end {
+                    for col in col_start..col_end {
+                        let px = (bx + col as i32) as usize;
+                        let py = (by + row as i32) as usize;
+                        let idx = (py * width as usize + px) * 4;
+                        pixels[idx] = color.r();
+                        pixels[idx + 1] = color.g();
+                        pixels[idx + 2] = color.b();
+                        pixels[idx + 3] = color.a();
                     }
                 }
             },
@@ -518,21 +516,19 @@ impl TextShaper {
             &mut self.swash_cache,
             white,
             |bx, by, bw, bh, color| {
-                for row in 0..bh as usize {
-                    for col in 0..bw as usize {
-                        let px = bx + col as i32;
-                        let py = by + row as i32;
-                        if px >= 0
-                            && py >= 0
-                            && (px as usize) < width as usize
-                            && (py as usize) < height as usize
-                        {
-                            let idx = (py as usize * width as usize + px as usize) * 4;
-                            pixels[idx] = color.r();
-                            pixels[idx + 1] = color.g();
-                            pixels[idx + 2] = color.b();
-                            pixels[idx + 3] = color.a();
-                        }
+                let col_start = ((-bx).max(0)) as usize;
+                let col_end = ((width as i32 - bx).max(0) as usize).min(bw as usize);
+                let row_start = ((-by).max(0)) as usize;
+                let row_end = ((height as i32 - by).max(0) as usize).min(bh as usize);
+                for row in row_start..row_end {
+                    for col in col_start..col_end {
+                        let px = (bx + col as i32) as usize;
+                        let py = (by + row as i32) as usize;
+                        let idx = (py * width as usize + px) * 4;
+                        pixels[idx] = color.r();
+                        pixels[idx + 1] = color.g();
+                        pixels[idx + 2] = color.b();
+                        pixels[idx + 3] = color.a();
                     }
                 }
             },

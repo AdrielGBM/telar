@@ -18,3 +18,7 @@ pub const TEXT_ALPHA_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;
 /// Maximum number of shaped-glyph-position lists held in the shaping cache.
 /// TODO: switch to byte-based budget (see performance.md §8.4).
 pub const TEXT_SHAPING_CACHE_CAPACITY: usize = 2048;
+
+/// Maximum number of tiny_skia::Pixmaps cached for text rasterizations.
+/// Mirrors the keys of the text pixel cache; sized to cover the in-flight text elements rather than the full texture cache (which is byte-budgeted).
+pub const TEXT_PIXMAP_CACHE_MAX_ENTRIES: usize = 256;

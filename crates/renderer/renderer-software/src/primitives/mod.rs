@@ -40,8 +40,9 @@ pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<
             paint.set_color(to_skia_color(c));
         }
         renderer_core::FillStyle::LinearGradient(g) => {
-            let mut stops = arrayvec::ArrayVec::<tiny_skia::GradientStop, 4>::new();
-            for s in &g.stops[..g.stop_count as usize] {
+            let n = g.stop_count as usize;
+            let mut stops = Vec::with_capacity(n);
+            for s in &g.stops[..n] {
                 stops.push(tiny_skia::GradientStop::new(
                     s.position,
                     to_skia_color(s.color),
@@ -50,7 +51,7 @@ pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<
             if let Some(shader) = tiny_skia::LinearGradient::new(
                 tiny_skia::Point::from_xy(g.start.x, g.start.y),
                 tiny_skia::Point::from_xy(g.end.x, g.end.y),
-                stops.into_iter().collect::<Vec<_>>(),
+                stops,
                 tiny_skia::SpreadMode::Pad,
                 tiny_skia::Transform::identity(),
             ) {
@@ -58,8 +59,9 @@ pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<
             }
         }
         renderer_core::FillStyle::RadialGradient(g) => {
-            let mut stops = arrayvec::ArrayVec::<tiny_skia::GradientStop, 4>::new();
-            for s in &g.stops[..g.stop_count as usize] {
+            let n = g.stop_count as usize;
+            let mut stops = Vec::with_capacity(n);
+            for s in &g.stops[..n] {
                 stops.push(tiny_skia::GradientStop::new(
                     s.position,
                     to_skia_color(s.color),
@@ -70,7 +72,7 @@ pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<
                 0.0,
                 tiny_skia::Point::from_xy(g.center.x, g.center.y),
                 g.radius,
-                stops.into_iter().collect::<Vec<_>>(),
+                stops,
                 tiny_skia::SpreadMode::Pad,
                 tiny_skia::Transform::identity(),
             ) {
@@ -140,22 +142,34 @@ fn box_blur_v(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut Ve
         return;
     }
     for x in 0..w {
-        for c in 0..4usize {
-            let initial_end = (r + 1).min(h);
-            let mut sum: u32 = (0..initial_end)
-                .map(|yi| data[(yi * w + x) * 4 + c] as u32)
-                .sum();
-            let mut count: u32 = initial_end as u32;
-            for y in 0..h {
-                scratch[(y * w + x) * 4 + c] = (sum / count) as u8;
-                if y + r + 1 < h {
-                    sum += data[((y + r + 1) * w + x) * 4 + c] as u32;
-                    count += 1;
+        let initial_end = (r + 1).min(h);
+        // Accumulate all 4 channels together so each column is walked once instead of 4 times.
+        let mut sum = [0u32; 4];
+        for yi in 0..initial_end {
+            let base = (yi * w + x) * 4;
+            for c in 0..4 {
+                sum[c] += data[base + c] as u32;
+            }
+        }
+        let mut count = initial_end as u32;
+        for y in 0..h {
+            let out_base = (y * w + x) * 4;
+            for c in 0..4 {
+                scratch[out_base + c] = (sum[c] / count) as u8;
+            }
+            if y + r + 1 < h {
+                let add_base = ((y + r + 1) * w + x) * 4;
+                for c in 0..4 {
+                    sum[c] += data[add_base + c] as u32;
                 }
-                if y >= r {
-                    sum -= data[((y - r) * w + x) * 4 + c] as u32;
-                    count -= 1;
+                count += 1;
+            }
+            if y >= r {
+                let sub_base = ((y - r) * w + x) * 4;
+                for c in 0..4 {
+                    sum[c] -= data[sub_base + c] as u32;
                 }
+                count -= 1;
             }
         }
     }
