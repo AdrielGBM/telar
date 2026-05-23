@@ -151,29 +151,34 @@ impl TextPipeline {
     }
 
     pub(crate) fn sync_atlas(&self, queue: &Queue, atlas: &mut GlyphAtlas) {
-        if !atlas.dirty {
-            return;
+        // Collect the dirty rects into a local vec so the mutable borrow from `drain_dirty_rects()` is released before we read `atlas.pixels`.
+        let dirty: Vec<[u32; 4]> = atlas.drain_dirty_rects().collect();
+        for [x, y, w, h] in dirty {
+            if w == 0 || h == 0 {
+                continue;
+            }
+            // Upload only the dirty sub-rectangle. By providing the source slice starting at the (x, y) pixel and using the FULL atlas row stride for bytes_per_row, wgpu reads `w` pixels per row for `h` rows starting at (x, y) — the correct sub-rect upload pattern.
+            let offset = ((y as usize * ATLAS_SIZE as usize) + x as usize) * 4;
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.atlas_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d { x, y, z: 0 },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &atlas.pixels[offset..],
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * ATLAS_SIZE),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
+            );
         }
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &self.atlas_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &atlas.pixels,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * ATLAS_SIZE),
-                rows_per_image: Some(ATLAS_SIZE),
-            },
-            wgpu::Extent3d {
-                width: ATLAS_SIZE,
-                height: ATLAS_SIZE,
-                depth_or_array_layers: 1,
-            },
-        );
-        atlas.dirty = false;
     }
 }
 
@@ -182,15 +187,14 @@ pub(crate) fn prepare_text(
     text: &str,
     rect: Rect,
     style: &TextStyle,
-) -> Vec<TextInstance> {
-    let glyphs = shaper.layout_glyphs(text, rect, style);
-    glyphs
-        .iter()
-        .map(|g| TextInstance {
-            dest_rect: g.dest_rect,
-            uv_min: g.uv_min,
-            uv_max: g.uv_max,
-            color: g.color,
-        })
-        .collect()
+    out: &mut Vec<TextInstance>,
+) {
+    let mut glyphs: Vec<renderer_text::GlyphInfo> = Vec::new();
+    shaper.layout_glyphs(text, rect, style, &mut glyphs);
+    out.extend(glyphs.iter().map(|g| TextInstance {
+        dest_rect: g.dest_rect,
+        uv_min: g.uv_min,
+        uv_max: g.uv_max,
+        color: g.color,
+    }));
 }

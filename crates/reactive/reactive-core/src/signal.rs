@@ -1,13 +1,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 
 use crate::runtime::{self, EffectId};
 
 pub(crate) struct SignalInner<T> {
     pub(crate) value: T,
-    pub(crate) subscribers: SmallVec<[EffectId; 4]>,
+    pub(crate) subscribers: FxHashSet<EffectId>,
 }
 pub struct ReadSignal<T: 'static> {
     pub(crate) inner: Rc<RefCell<SignalInner<T>>>,
@@ -120,7 +121,7 @@ impl<T: Clone + 'static> RwSignal<T> {
 pub fn create_signal<T: 'static>(value: T) -> (ReadSignal<T>, WriteSignal<T>) {
     let inner = Rc::new(RefCell::new(SignalInner {
         value,
-        subscribers: SmallVec::new(),
+        subscribers: FxHashSet::default(),
     }));
     (
         ReadSignal {
@@ -134,32 +135,31 @@ pub fn create_rw_signal<T: 'static>(value: T) -> RwSignal<T> {
     RwSignal {
         inner: Rc::new(RefCell::new(SignalInner {
             value,
-            subscribers: SmallVec::new(),
+            subscribers: FxHashSet::default(),
         })),
     }
 }
 
 fn track<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
     if let Some(id) = runtime::current_observer() {
-        let mut inner = inner.borrow_mut();
-        if !inner.subscribers.contains(&id) {
-            inner.subscribers.push(id);
-        }
+        inner.borrow_mut().subscribers.insert(id);
     }
 }
 
 pub(crate) fn notify<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
-    let subs: Vec<EffectId> = inner.borrow().subscribers.iter().copied().collect();
-    let mut dead = Vec::new();
+    let subs: SmallVec<[EffectId; 8]> = inner.borrow().subscribers.iter().copied().collect();
+    let mut dead: FxHashSet<EffectId> = FxHashSet::default();
     for id in subs {
         if runtime::is_alive(id) {
             runtime::schedule(id);
         } else {
-            dead.push(id);
+            dead.insert(id);
         }
     }
     if !dead.is_empty() {
         let mut inner = inner.borrow_mut();
-        inner.subscribers.retain(|x| !dead.contains(x));
+        dead.iter().for_each(|id| {
+            inner.subscribers.remove(id);
+        });
     }
 }

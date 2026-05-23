@@ -8,22 +8,38 @@ use geometry_core::Rect;
 use renderer_core::{Color, TextStyle, premultiply_rgba};
 use std::collections::{HashMap, VecDeque};
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ShapingCacheKey {
-    pub text: String,
+    pub text_hash: u64,
     pub font_size_bits: u32,
     pub width: u32,
-    pub height: u32,
+    // height removed — shaping only depends on wrap width, not container height
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextCacheKey {
-    pub text: String,
+    pub text_hash: u64,
     pub font_size_bits: u32,
     pub width: u32,
     pub height: u32,
     pub color_packed: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct AlphaCacheKey {
+    text_hash: u64,
+    font_size_bits: u32,
+    width: u32,
+    height: u32,
+}
+
+fn hash_text(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut h);
+    h.finish()
 }
 
 pub fn make_text_cache_key(
@@ -36,7 +52,7 @@ pub fn make_text_cache_key(
     let rgba = color.to_rgba8();
     let color_packed = u32::from_le_bytes(rgba);
     TextCacheKey {
-        text: text.to_owned(),
+        text_hash: hash_text(text),
         font_size_bits: font_size.to_bits(),
         width,
         height,
@@ -73,7 +89,7 @@ pub const ATLAS_SIZE: u32 = 2048;
 
 pub struct GlyphAtlas {
     pub pixels: Vec<u8>,
-    pub dirty: bool,
+    pub dirty_rects: Vec<[u32; 4]>,
     entries: HashMap<GlyphKey, AtlasEntry>,
     allocator: AtlasAllocator,
     lru_queue: VecDeque<(GlyphKey, u64)>,
@@ -84,12 +100,16 @@ impl GlyphAtlas {
     pub fn new() -> Self {
         Self {
             pixels: vec![0u8; (ATLAS_SIZE * ATLAS_SIZE * 4) as usize],
-            dirty: true,
+            dirty_rects: Vec::new(),
             entries: HashMap::new(),
             allocator: AtlasAllocator::new(size2(ATLAS_SIZE as i32, ATLAS_SIZE as i32)),
             lru_queue: VecDeque::new(),
             lru_counter: 0,
         }
+    }
+
+    pub fn drain_dirty_rects(&mut self) -> std::vec::Drain<'_, [u32; 4]> {
+        self.dirty_rects.drain(..)
     }
 
     fn insert(
@@ -132,7 +152,7 @@ impl GlyphAtlas {
         };
         self.entries.insert(key, entry);
         self.lru_queue.push_back((key, stamp));
-        self.dirty = true;
+        self.dirty_rects.push([ax, ay, w, h]);
         Some(entry)
     }
 
@@ -152,7 +172,6 @@ impl GlyphAtlas {
                 if entry.lru_gen == stamp {
                     self.allocator.deallocate(entry.alloc_id);
                     self.entries.remove(&key);
-                    self.dirty = true;
                     return true;
                 }
             }
@@ -168,8 +187,15 @@ impl Default for GlyphAtlas {
 }
 
 struct PixelCacheScale;
-impl WeightScale<TextCacheKey, Vec<u8>> for PixelCacheScale {
-    fn weight(&self, _key: &TextCacheKey, value: &Vec<u8>) -> usize {
+impl WeightScale<TextCacheKey, Arc<[u8]>> for PixelCacheScale {
+    fn weight(&self, _key: &TextCacheKey, value: &Arc<[u8]>) -> usize {
+        value.len().max(1)
+    }
+}
+
+struct AlphaCacheScale;
+impl WeightScale<AlphaCacheKey, Arc<[u8]>> for AlphaCacheScale {
+    fn weight(&self, _key: &AlphaCacheKey, value: &Arc<[u8]>) -> usize {
         value.len().max(1)
     }
 }
@@ -180,9 +206,19 @@ pub struct TextShaper {
     font_system: FontSystem,
     swash_cache: SwashCache,
     pub atlas: GlyphAtlas,
-    pixel_cache:
-        CLruCache<TextCacheKey, Vec<u8>, std::collections::hash_map::RandomState, PixelCacheScale>,
-    shaping_cache: CLruCache<ShapingCacheKey, Vec<(CacheKey, i32, i32)>>,
+    pixel_cache: CLruCache<
+        TextCacheKey,
+        Arc<[u8]>,
+        std::collections::hash_map::RandomState,
+        PixelCacheScale,
+    >,
+    alpha_pixel_cache: CLruCache<
+        AlphaCacheKey,
+        Arc<[u8]>,
+        std::collections::hash_map::RandomState,
+        AlphaCacheScale,
+    >,
+    shaping_cache: CLruCache<ShapingCacheKey, std::sync::Arc<Vec<(CacheKey, i32, i32)>>>,
 }
 
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
@@ -204,49 +240,62 @@ impl TextShaper {
                 CLruCacheConfig::new(NonZeroUsize::new(PIXEL_CACHE_BUDGET_BYTES).unwrap())
                     .with_scale(PixelCacheScale),
             ),
+            alpha_pixel_cache: CLruCache::with_config(
+                CLruCacheConfig::new(NonZeroUsize::new(PIXEL_CACHE_BUDGET_BYTES).unwrap())
+                    .with_scale(AlphaCacheScale),
+            ),
             shaping_cache: CLruCache::new(NonZeroUsize::new(2048).unwrap()),
         }
     }
 
-    pub fn layout_glyphs(&mut self, text: &str, rect: Rect, style: &TextStyle) -> Vec<GlyphInfo> {
+    pub fn layout_glyphs(
+        &mut self,
+        text: &str,
+        rect: Rect,
+        style: &TextStyle,
+        out: &mut Vec<GlyphInfo>,
+    ) {
+        out.clear();
+
         let font_size = style.font_size;
         let color = style.color;
         let width = rect.width.ceil() as u32;
         let height = rect.height.ceil() as u32;
 
         if width == 0 || height == 0 || text.is_empty() {
-            return Vec::new();
+            return;
         }
 
         let tint = color.to_array();
         let identity_tint = [1.0, 1.0, 1.0, 1.0];
 
         let shaping_key = ShapingCacheKey {
-            text: text.to_owned(),
+            text_hash: hash_text(text),
             font_size_bits: font_size.to_bits(),
             width,
-            height,
         };
 
-        let positions = if let Some(cached) = self.shaping_cache.get(&shaping_key) {
-            cached.clone()
-        } else {
-            let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
-            let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
-            for run in buffer.layout_runs() {
-                for glyph in run.glyphs.iter() {
-                    let physical = glyph.physical((0., run.line_y), 1.0);
-                    pos.push((physical.cache_key, physical.x, physical.y));
+        let positions: std::sync::Arc<Vec<(CacheKey, i32, i32)>> =
+            if let Some(cached) = self.shaping_cache.get(&shaping_key) {
+                cached.clone()
+            } else {
+                let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+                let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
+                for run in buffer.layout_runs() {
+                    for glyph in run.glyphs.iter() {
+                        let physical = glyph.physical((0., run.line_y), 1.0);
+                        pos.push((physical.cache_key, physical.x, physical.y));
+                    }
                 }
-            }
-            drop(buffer);
-            let _ = self.shaping_cache.put(shaping_key, pos.clone());
-            pos
-        };
+                drop(buffer);
+                let arc = std::sync::Arc::new(pos);
+                let _ = self.shaping_cache.put(shaping_key, arc.clone());
+                arc
+            };
 
-        let mut result = Vec::with_capacity(positions.len());
+        out.reserve(positions.len());
 
-        for (cache_key, px, py) in positions {
+        for &(cache_key, px, py) in positions.iter() {
             let glyph_key = GlyphKey { cache_key };
 
             if let Some(entry) = self.atlas.get_and_touch(&glyph_key) {
@@ -257,7 +306,7 @@ impl TextShaper {
                 } else {
                     tint
                 };
-                result.push(GlyphInfo {
+                out.push(GlyphInfo {
                     dest_rect: [
                         screen_x,
                         screen_y,
@@ -345,18 +394,21 @@ impl TextShaper {
             let screen_x = rect.x + px as f32 + pl as f32;
             let screen_y = rect.y + py as f32 - pt as f32;
             let glyph_color = if is_color_glyph { identity_tint } else { tint };
-            result.push(GlyphInfo {
+            out.push(GlyphInfo {
                 dest_rect: [screen_x, screen_y, w as f32, h as f32],
                 uv_min: entry.uv_min,
                 uv_max: entry.uv_max,
                 color: glyph_color,
             });
         }
-
-        result
     }
 
-    pub fn rasterize(&mut self, text: &str, rect: Rect, style: &TextStyle) -> (Vec<u8>, u32, u32) {
+    pub fn rasterize(
+        &mut self,
+        text: &str,
+        rect: Rect,
+        style: &TextStyle,
+    ) -> (Arc<[u8]>, u32, u32) {
         let font_size = style.font_size;
         let color = style.color;
         let width = rect.width.ceil() as u32;
@@ -365,11 +417,11 @@ impl TextShaper {
         let key = make_text_cache_key(text, font_size, width, height, color);
 
         if width == 0 || height == 0 {
-            return (Vec::new(), 0, 0);
+            return (Arc::from([].as_slice()), 0, 0);
         }
 
         if let Some(cached) = self.pixel_cache.get(&key) {
-            return (cached.clone(), width, height);
+            return (Arc::clone(cached), width, height);
         }
 
         let rgba = color.to_rgba8();
@@ -411,11 +463,72 @@ impl TextShaper {
         }
 
         premultiply_rgba(&mut pixels);
-        self.pixel_cache
-            .put_with_weight(key.clone(), pixels.clone())
-            .ok();
+        let arc: Arc<[u8]> = Arc::from(pixels.into_boxed_slice());
+        let _ = self.pixel_cache.put_with_weight(key, arc.clone());
 
-        (pixels, width, height)
+        (arc, width, height)
+    }
+
+    pub fn rasterize_alpha(
+        &mut self,
+        text: &str,
+        rect: Rect,
+        style: &TextStyle,
+    ) -> (Arc<[u8]>, u32, u32) {
+        let font_size = style.font_size;
+        let width = rect.width.ceil() as u32;
+        let height = rect.height.ceil() as u32;
+
+        if width == 0 || height == 0 {
+            return (Arc::from([].as_slice()), 0, 0);
+        }
+
+        let key = AlphaCacheKey {
+            text_hash: hash_text(text),
+            font_size_bits: font_size.to_bits(),
+            width,
+            height,
+        };
+
+        if let Some(cached) = self.alpha_pixel_cache.get(&key) {
+            return (Arc::clone(cached), width, height);
+        }
+
+        let white = CosmicColor::rgba(255, 255, 255, 255);
+
+        let mut buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+
+        let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
+        buffer.draw(
+            &mut self.font_system,
+            &mut self.swash_cache,
+            white,
+            |bx, by, bw, bh, color| {
+                for row in 0..bh as usize {
+                    for col in 0..bw as usize {
+                        let px = bx + col as i32;
+                        let py = by + row as i32;
+                        if px >= 0
+                            && py >= 0
+                            && (px as usize) < width as usize
+                            && (py as usize) < height as usize
+                        {
+                            let idx = (py as usize * width as usize + px as usize) * 4;
+                            pixels[idx] = color.r();
+                            pixels[idx + 1] = color.g();
+                            pixels[idx + 2] = color.b();
+                            pixels[idx + 3] = color.a();
+                        }
+                    }
+                }
+            },
+        );
+
+        premultiply_rgba(&mut pixels);
+        let arc: Arc<[u8]> = Arc::from(pixels.into_boxed_slice());
+        let _ = self.alpha_pixel_cache.put_with_weight(key, arc.clone());
+
+        (arc, width, height)
     }
 }
 

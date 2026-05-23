@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
 
 use platform_core::Event;
@@ -6,12 +6,14 @@ use reactive_core::{Effect, batch, create_effect};
 use renderer_core::DrawCommand;
 
 use crate::component::{Component, EventResult};
+use crate::view::View;
 use crate::view_flatten;
 
 struct ComponentSlot {
     component: Rc<RefCell<Box<dyn Component>>>,
     commands: Rc<RefCell<Vec<DrawCommand>>>,
     dirty: Rc<Cell<bool>>,
+    _stack: Rc<RefCell<Vec<View>>>,
     _effect: Effect,
 }
 
@@ -20,16 +22,17 @@ impl ComponentSlot {
         let component = Rc::new(RefCell::new(Box::new(component) as Box<dyn Component>));
         let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
         let dirty = Rc::new(Cell::new(true));
+        let stack: Rc<RefCell<Vec<View>>> = Default::default();
 
         let comp_clone = Rc::clone(&component);
         let cmds_clone = Rc::clone(&commands);
         let dirty_clone = Rc::clone(&dirty);
+        let stack_clone = Rc::clone(&stack);
         let _effect = create_effect(move || {
             let view = comp_clone.borrow().view();
-            let flat = view_flatten::flatten_view(view);
             let mut cmds = cmds_clone.borrow_mut();
-            cmds.clear();
-            cmds.extend(flat);
+            let mut stk = stack_clone.borrow_mut();
+            view_flatten::flatten_view(view, &mut cmds, &mut stk);
             dirty_clone.set(true);
         });
 
@@ -37,6 +40,7 @@ impl ComponentSlot {
             component,
             commands,
             dirty,
+            _stack: stack,
             _effect,
         }
     }
@@ -59,7 +63,7 @@ impl ComponentTree {
         self.slots.push(ComponentSlot::new(component));
     }
 
-    pub fn commands(&self) -> Vec<DrawCommand> {
+    pub fn commands(&self) -> Ref<'_, Vec<DrawCommand>> {
         let any_dirty = self.slots.iter().any(|s| s.dirty.get());
         if any_dirty {
             let mut cached = self.cached.borrow_mut();
@@ -68,10 +72,8 @@ impl ComponentTree {
                 cached.extend(slot.commands.borrow().iter().cloned());
                 slot.dirty.set(false);
             }
-            cached.clone()
-        } else {
-            self.cached.borrow().clone()
         }
+        self.cached.borrow()
     }
 
     pub fn on_event(&mut self, event: &Event) -> EventResult {

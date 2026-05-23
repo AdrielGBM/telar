@@ -24,6 +24,7 @@ pub(crate) fn draw_path(
     style: &PathStyle,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
+    blur_scratch: &mut Vec<u8>,
 ) {
     let Some(path) = build_skia_path(data) else {
         return;
@@ -62,7 +63,7 @@ pub(crate) fn draw_path(
                 tmp.stroke_path(&path, &shadow_paint, &stroke, shifted, None);
             }
             if sigma >= 0.5 {
-                crate::primitives::gaussian_blur(tmp.data_mut(), tmp_w, tmp_h, sigma);
+                crate::primitives::gaussian_blur(tmp.data_mut(), tmp_w, tmp_h, sigma, blur_scratch);
             }
             let shadow_offset_x = shadow.offset_x;
             let shadow_offset_y = shadow.offset_y;

@@ -15,6 +15,8 @@ pub(crate) struct BlurPipeline {
     sampler: wgpu::Sampler,
     bgl: wgpu::BindGroupLayout,
     format: TextureFormat,
+    // Pool of intermediate textures keyed by (width, height). The intermediate is rewritten every horizontal pass (loaded with Clear), so leftover contents from a previous use are harmless.
+    intermediate_pool: Vec<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
 }
 
 impl BlurPipeline {
@@ -110,11 +112,12 @@ impl BlurPipeline {
             sampler,
             bgl,
             format,
+            intermediate_pool: Vec::new(),
         }
     }
 
     pub(crate) fn apply(
-        &self,
+        &mut self,
         device: &Device,
         encoder: &mut wgpu::CommandEncoder,
         src_view: &wgpu::TextureView,
@@ -125,21 +128,31 @@ impl BlurPipeline {
         let texture_usage =
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
 
-        let intermediate = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-blur-intermediate"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: self.format,
-            usage: texture_usage,
-            view_formats: &[],
-        });
-        let intermediate_view = intermediate.create_view(&wgpu::TextureViewDescriptor::default());
+        let (intermediate, intermediate_view) = if let Some(pos) = self
+            .intermediate_pool
+            .iter()
+            .position(|(_, _, w, h)| *w == width && *h == height)
+        {
+            let (t, v, _, _) = self.intermediate_pool.remove(pos);
+            (t, v)
+        } else {
+            let t = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("rsx-blur-intermediate"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: self.format,
+                usage: texture_usage,
+                view_formats: &[],
+            });
+            let v = t.create_view(&wgpu::TextureViewDescriptor::default());
+            (t, v)
+        };
 
         let output = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rsx-blur-output"),
@@ -234,6 +247,10 @@ impl BlurPipeline {
             pass.set_bind_group(0, &bg, &[]);
             pass.draw(0..6, 0..1);
         }
+
+        // Return the intermediate texture to the pool for reuse on the next blur call. The horizontal pass uses Clear on load, so any stale contents from a previous call are overwritten.
+        self.intermediate_pool
+            .push((intermediate, intermediate_view, width, height));
 
         (output, output_view)
     }

@@ -1,9 +1,9 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, NodeId};
 use reactive_core::{ReadSignal, RwSignal, batch, create_rw_signal};
+use rustc_hash::FxHashMap;
 
 thread_local! {
     static CURRENT_CTX: RefCell<Option<WidgetCtx>> = const { RefCell::new(None) };
@@ -68,14 +68,14 @@ pub fn track_layout(node: NodeId) -> ReadSignal<Rect> {
 
 pub struct WidgetCtx {
     engine: LayoutEngine,
-    registry: HashMap<NodeId, RwSignal<Rect>>,
+    registry: FxHashMap<NodeId, RwSignal<Rect>>,
 }
 
 impl WidgetCtx {
     pub fn new() -> Self {
         Self {
             engine: LayoutEngine::new(),
-            registry: HashMap::new(),
+            registry: FxHashMap::default(),
         }
     }
 
@@ -103,6 +103,9 @@ impl WidgetCtx {
         width: AvailableSpace,
         height: AvailableSpace,
     ) -> Result<(), LayoutError> {
+        if !self.engine.is_dirty(root) {
+            return Ok(());
+        }
         self.engine.compute(root, width, height)?;
         let registry = &self.registry;
         let mut walk_result = Ok(());

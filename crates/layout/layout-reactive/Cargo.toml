@@ -7,3 +7,4 @@ edition = "2024"
 geometry-core = { workspace = true }
 layout-core = { workspace = true }
 reactive-core = { workspace = true }
+rustc-hash = { workspace = true }

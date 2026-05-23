@@ -37,6 +37,7 @@ raw-window-handle = "0.6"
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"
 tracing = "0.1.44"
+rustc-hash = "2.1.2"
 
 platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }
@@ -51,4 +52,4 @@ layout-core = { path = "crates/layout/layout-core" }
 layout-reactive = { path = "crates/layout/layout-reactive" }
 ui-core = { path = "crates/ui/ui-core" }
 ui-tree = { path = "crates/ui/ui-tree" }
-rsx = { path = "crates/rsx" }
+rsx = { path = "crates/rsx", default-features = false }

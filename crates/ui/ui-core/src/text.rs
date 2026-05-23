@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use geometry_core::Rect;
@@ -10,7 +11,8 @@ use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Text {
-    content: Box<dyn Fn() -> Rc<str>>,
+    content_fn: Box<dyn Fn() -> String>,
+    cached_content: RefCell<(String, Rc<str>)>,
     style: Box<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
 }
@@ -23,7 +25,8 @@ impl Text {
     ) -> Result<Self, LayoutError> {
         let leaf = LayoutLeaf::register(style)?;
         Ok(Self {
-            content: Box::new(move || Rc::from(content_fn())),
+            content_fn: Box::new(content_fn),
+            cached_content: RefCell::new((String::new(), Rc::from(""))),
             style: Box::new(style_fn),
             leaf,
         })
@@ -33,11 +36,22 @@ impl Text {
 impl Component for Text {
     fn view(&self) -> View {
         let r = self.leaf.rect.get();
+        let text: Rc<str> = {
+            let new_str = (self.content_fn)();
+            let mut cache = self.cached_content.borrow_mut();
+            if cache.0 != new_str {
+                let rc = Rc::from(new_str.as_str());
+                *cache = (new_str, Rc::clone(&rc));
+                rc
+            } else {
+                Rc::clone(&cache.1)
+            }
+        };
         View::Translate {
             tx: r.x,
             ty: r.y,
             children: vec![View::Primitive(DrawCommand::Text {
-                text: (self.content)(),
+                text,
                 rect: Rect {
                     x: 0.0,
                     y: 0.0,

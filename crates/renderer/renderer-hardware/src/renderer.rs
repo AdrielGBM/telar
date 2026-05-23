@@ -45,6 +45,8 @@ enum DrawStep {
         start: u32,
         end: u32,
         bind_group: wgpu::BindGroup,
+        // Sort key used by the image-batching pre-pass in end_frame to bring same-image batches together within a run of consecutive ImageBatch steps. Preserves z-order relative to non-image steps.
+        key: (u64, ImageFilter),
     },
     PathDraw {
         index_start: u32,
@@ -110,16 +112,20 @@ fn flush_image_batch(
     pending_steps: &mut Vec<DrawStep>,
     batch_image_start: &mut Option<u32>,
     batch_image_bind_group: &mut Option<wgpu::BindGroup>,
+    batch_image_key: &mut Option<(u64, ImageFilter)>,
     pending_image_instances_len: u32,
 ) {
-    if let (Some(start), Some(bind_group)) =
-        (batch_image_start.take(), batch_image_bind_group.take())
-    {
+    if let (Some(start), Some(bind_group), Some(key)) = (
+        batch_image_start.take(),
+        batch_image_bind_group.take(),
+        *batch_image_key,
+    ) {
         if pending_image_instances_len > start {
             pending_steps.push(DrawStep::ImageBatch {
                 start,
                 end: pending_image_instances_len,
                 bind_group,
+                key,
             });
         }
     }
@@ -171,6 +177,23 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     batch_image_key: Option<(u64, ImageFilter)>,
     batch_image_start: Option<u32>,
     batch_image_bind_group: Option<wgpu::BindGroup>,
+    draw_state: renderer_core::DrawState,
+    layer_texture_pool: Vec<(
+        wgpu::Texture,
+        wgpu::TextureView,
+        wgpu::Texture,
+        wgpu::TextureView,
+        u32,
+        u32,
+    )>,
+    shadow_capture_pool: Vec<(
+        wgpu::Texture,
+        wgpu::TextureView,
+        wgpu::Texture,
+        wgpu::TextureView,
+        u32,
+        u32,
+    )>,
     _window: std::sync::Arc<W>,
 }
 
@@ -289,6 +312,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             batch_image_key: None,
             batch_image_start: None,
             batch_image_bind_group: None,
+            draw_state: renderer_core::DrawState::new(),
+            layer_texture_pool: Vec::new(),
+            shadow_capture_pool: Vec::new(),
             _window: window,
         })
     }
@@ -348,6 +374,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn flush_rect(&mut self) {
+        if self.batch_rect_start.is_none() {
+            return;
+        }
         flush_batch(
             &mut self.pending_steps,
             &mut self.batch_rect_start,
@@ -357,6 +386,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn flush_text(&mut self) {
+        if self.batch_text_start.is_none() {
+            return;
+        }
         flush_batch(
             &mut self.pending_steps,
             &mut self.batch_text_start,
@@ -366,6 +398,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn flush_line(&mut self) {
+        if self.batch_line_start.is_none() {
+            return;
+        }
         flush_batch(
             &mut self.pending_steps,
             &mut self.batch_line_start,
@@ -375,10 +410,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn flush_image(&mut self) {
+        if self.batch_image_start.is_none() {
+            return;
+        }
         flush_image_batch(
             &mut self.pending_steps,
             &mut self.batch_image_start,
             &mut self.batch_image_bind_group,
+            &mut self.batch_image_key,
             self.pending_image_instances.len() as u32,
         );
     }
@@ -396,6 +435,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 {
     fn begin_frame(&mut self, width: u32, height: u32) -> Result<(), RendererError> {
         if width != self.width || height != self.height || self.config.is_none() {
+            // Pooled layer textures are sized to the previous surface dimensions and would be unusable at the new size; drop them so we don't leak GPU memory for textures we will never reuse.
+            self.layer_texture_pool.clear();
             self.width = width;
             self.height = height;
             if width > 0 && height > 0 {
@@ -408,8 +449,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         Ok(())
     }
 
-    fn submit(&mut self, commands: Vec<DrawCommand>) -> Result<(), RendererError> {
-        let mut state = renderer_core::DrawState::new();
+    fn submit(&mut self, commands: &[DrawCommand]) -> Result<(), RendererError> {
+        self.draw_state.reset();
         let mut layer_blit_stack: Vec<wgpu::BindGroup> = Vec::new();
 
         for cmd in commands {
@@ -428,16 +469,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.batch_rect_start = Some(self.pending_instances.len() as u32);
                     }
                     let translated = Rect::new(
-                        rect.x + state.cum_tx,
-                        rect.y + state.cum_ty,
+                        rect.x + self.draw_state.cum_tx,
+                        rect.y + self.draw_state.cum_ty,
                         rect.width,
                         rect.height,
                     );
                     let inst = crate::primitives::rect::prepare_rect(
                         translated,
                         &style,
-                        state.cum_tx,
-                        state.cum_ty,
+                        self.draw_state.cum_tx,
+                        self.draw_state.cum_ty,
                     );
                     self.pending_instances.push(inst);
                 }
@@ -446,8 +487,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_line();
                     self.flush_image();
                     let translated = Rect::new(
-                        rect.x + state.cum_tx,
-                        rect.y + state.cum_ty,
+                        rect.x + self.draw_state.cum_tx,
+                        rect.y + self.draw_state.cum_ty,
                         rect.width,
                         rect.height,
                     );
@@ -472,21 +513,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let shadow_style = renderer_core::TextStyle {
                             color: shadow.color,
                             shadow: None,
-                            ..style
+                            ..*style
                         };
-                        let mut shadow_instances = crate::primitives::text::prepare_text(
+                        let instance_start = self.pending_shadow_instances.len() as u32;
+                        crate::primitives::text::prepare_text(
                             &mut self.text_shaper,
                             &*text,
                             shadow_rect,
                             &shadow_style,
+                            &mut self.pending_shadow_instances,
                         );
-                        for inst in &mut shadow_instances {
+                        let instance_end = self.pending_shadow_instances.len() as u32;
+                        for inst in &mut self.pending_shadow_instances[instance_start as usize..] {
                             inst.dest_rect[0] -= origin_x;
                             inst.dest_rect[1] -= origin_y;
                         }
-                        let instance_start = self.pending_shadow_instances.len() as u32;
-                        self.pending_shadow_instances.extend(shadow_instances);
-                        let instance_end = self.pending_shadow_instances.len() as u32;
 
                         self.pending_shadow_ops.push(ShadowOp {
                             instance_start,
@@ -503,13 +544,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_text_start.is_none() {
                         self.batch_text_start = Some(self.pending_text_instances.len() as u32);
                     }
-                    let instances = crate::primitives::text::prepare_text(
+                    crate::primitives::text::prepare_text(
                         &mut self.text_shaper,
                         &*text,
                         translated,
                         &style,
+                        &mut self.pending_text_instances,
                     );
-                    self.pending_text_instances.extend(instances);
                 }
                 DrawCommand::Line { p1, p2, style } => {
                     self.flush_rect();
@@ -519,16 +560,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.batch_line_start = Some(self.pending_line_instances.len() as u32);
                     }
                     use geometry_core::Point;
-                    let tp1 = Point::new(p1.x + state.cum_tx, p1.y + state.cum_ty);
-                    let tp2 = Point::new(p2.x + state.cum_tx, p2.y + state.cum_ty);
+                    let tp1 =
+                        Point::new(p1.x + self.draw_state.cum_tx, p1.y + self.draw_state.cum_ty);
+                    let tp2 =
+                        Point::new(p2.x + self.draw_state.cum_tx, p2.y + self.draw_state.cum_ty);
                     self.pending_line_instances
-                        .push(crate::primitives::line::prepare_line(tp1, tp2, style));
+                        .push(crate::primitives::line::prepare_line(tp1, tp2, *style));
                 }
                 DrawCommand::Image { data, rect, filter } => {
                     self.flush_rect();
                     self.flush_text();
                     self.flush_line();
-                    let key = (data.id, filter);
+                    let key = (data.id, *filter);
                     if self.batch_image_start.is_none() || self.batch_image_key != Some(key) {
                         self.flush_image();
                         self.batch_image_key = Some(key);
@@ -538,12 +581,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 &self.device,
                                 &self.queue,
                                 &data,
-                                filter,
+                                *filter,
                             ));
                     }
                     let translated = Rect::new(
-                        rect.x + state.cum_tx,
-                        rect.y + state.cum_ty,
+                        rect.x + self.draw_state.cum_tx,
+                        rect.y + self.draw_state.cum_ty,
                         rect.width,
                         rect.height,
                     );
@@ -590,10 +633,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 max_y = max_y.max(v.position[1]);
                             }
 
-                            let world_min_x = min_x + state.cum_tx + shadow.offset_x;
-                            let world_min_y = min_y + state.cum_ty + shadow.offset_y;
-                            let world_max_x = max_x + state.cum_tx + shadow.offset_x;
-                            let world_max_y = max_y + state.cum_ty + shadow.offset_y;
+                            let world_min_x = min_x + self.draw_state.cum_tx + shadow.offset_x;
+                            let world_min_y = min_y + self.draw_state.cum_ty + shadow.offset_y;
+                            let world_max_x = max_x + self.draw_state.cum_tx + shadow.offset_x;
+                            let world_max_y = max_y + self.draw_state.cum_ty + shadow.offset_y;
 
                             let s = shadow.blur_radius / 2.0;
                             let box_r = (s * 1.5).round().max(1.0);
@@ -608,8 +651,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 ((world_max_y - world_min_y).ceil() as u32 + 2 * padding).max(1);
 
                             for v in &mut self.pending_shadow_path_vertices[sv_start..] {
-                                v.position[0] += state.cum_tx + shadow.offset_x - origin_x;
-                                v.position[1] += state.cum_ty + shadow.offset_y - origin_y;
+                                v.position[0] +=
+                                    self.draw_state.cum_tx + shadow.offset_x - origin_x;
+                                v.position[1] +=
+                                    self.draw_state.cum_ty + shadow.offset_y - origin_y;
                             }
 
                             self.pending_path_shadow_ops.push(PathShadowOp {
@@ -638,14 +683,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &mut self.pending_path_fill_data,
                     );
                     for v in &mut self.pending_path_vertices[vertex_start..] {
-                        v.position[0] += state.cum_tx;
-                        v.position[1] += state.cum_ty;
+                        v.position[0] += self.draw_state.cum_tx;
+                        v.position[1] += self.draw_state.cum_ty;
                     }
                     for fd in &mut self.pending_path_fill_data[fill_data_start..] {
-                        fd.grad_p0[0] += state.cum_tx;
-                        fd.grad_p0[1] += state.cum_ty;
-                        fd.grad_p1[0] += state.cum_tx;
-                        fd.grad_p1[1] += state.cum_ty;
+                        fd.grad_p0[0] += self.draw_state.cum_tx;
+                        fd.grad_p0[1] += self.draw_state.cum_ty;
+                        fd.grad_p1[0] += self.draw_state.cum_tx;
+                        fd.grad_p1[1] += self.draw_state.cum_ty;
                     }
                     let index_end = self.pending_path_indices.len() as u32;
                     if index_end > index_start {
@@ -657,31 +702,44 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
                 DrawCommand::PushClip { rect } => {
                     self.flush_all();
-                    let effective = state.push_clip(rect);
+                    let effective = self.draw_state.push_clip(*rect);
                     self.pending_steps.push(DrawStep::SetScissor {
                         rect: Some(effective),
                     });
                 }
                 DrawCommand::PopClip => {
                     self.flush_all();
-                    let effective = state.pop_clip();
+                    let effective = self.draw_state.pop_clip();
                     self.pending_steps
                         .push(DrawStep::SetScissor { rect: effective });
                 }
                 DrawCommand::PushTransform { tx, ty } => {
-                    state.push_transform(tx, ty);
+                    self.draw_state.push_transform(*tx, *ty);
                 }
                 DrawCommand::PopTransform => {
-                    state.pop_transform();
+                    self.draw_state.pop_transform();
                 }
                 DrawCommand::PushLayer { opacity } => {
                     self.flush_all();
-                    let (msaa_texture, msaa_view, resolve_texture, resolve_view) = self
-                        .layer_pipeline
-                        .create_layer_textures(&self.device, self.width.max(1), self.height.max(1));
-                    let bind_group =
-                        self.layer_pipeline
-                            .create_bind_group(&self.device, &resolve_view, opacity);
+                    let w = self.width.max(1);
+                    let h = self.height.max(1);
+                    let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
+                        if let Some(pos) = self
+                            .layer_texture_pool
+                            .iter()
+                            .position(|(_, _, _, _, pw, ph)| *pw == w && *ph == h)
+                        {
+                            let (mt, mv, rt, rv, _, _) = self.layer_texture_pool.remove(pos);
+                            (mt, mv, rt, rv)
+                        } else {
+                            self.layer_pipeline
+                                .create_layer_textures(&self.device, w, h)
+                        };
+                    let bind_group = self.layer_pipeline.create_bind_group(
+                        &self.device,
+                        &resolve_view,
+                        *opacity,
+                    );
                     layer_blit_stack.push(bind_group);
                     self.pending_steps.push(DrawStep::BeginLayer {
                         msaa_texture,
@@ -911,8 +969,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 let shadow_instances_bg = shadow_instances_bg_opt.unwrap();
                 for op in &self.pending_shadow_ops {
                     let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
-                        self.layer_pipeline
-                            .create_layer_textures(&self.device, op.tex_w, op.tex_h);
+                        if let Some(pos) = self
+                            .shadow_capture_pool
+                            .iter()
+                            .position(|(_, _, _, _, w, h)| *w == op.tex_w && *h == op.tex_h)
+                        {
+                            let (mt, mv, rt, rv, _, _) = self.shadow_capture_pool.remove(pos);
+                            (mt, mv, rt, rv)
+                        } else {
+                            self.layer_pipeline.create_layer_textures(
+                                &self.device,
+                                op.tex_w,
+                                op.tex_h,
+                            )
+                        };
 
                     let vp_data: [f32; 4] = [op.tex_w as f32, op.tex_h as f32, 0.0, 0.0];
                     let vp_buf =
@@ -970,7 +1040,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         1.0,
                     );
                     text_results.push(Some(bg));
-                    drop((cap_msaa_texture, cap_msaa_view, cap_resolve_texture));
+                    // Return the shadow capture textures to the pool. The composite bind group keeps the resolve texture's GPU resource alive via wgpu's internal Arc, so it is safe to push the texture handle back for reuse.
+                    self.shadow_capture_pool.push((
+                        cap_msaa_texture,
+                        cap_msaa_view,
+                        cap_resolve_texture,
+                        cap_resolve_view,
+                        op.tex_w,
+                        op.tex_h,
+                    ));
                 }
             }
 
@@ -980,8 +1058,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 let shadow_path_fd_bg = shadow_path_fd_bg_opt.unwrap();
                 for op in &self.pending_path_shadow_ops {
                     let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
-                        self.layer_pipeline
-                            .create_layer_textures(&self.device, op.tex_w, op.tex_h);
+                        if let Some(pos) = self
+                            .shadow_capture_pool
+                            .iter()
+                            .position(|(_, _, _, _, w, h)| *w == op.tex_w && *h == op.tex_h)
+                        {
+                            let (mt, mv, rt, rv, _, _) = self.shadow_capture_pool.remove(pos);
+                            (mt, mv, rt, rv)
+                        } else {
+                            self.layer_pipeline.create_layer_textures(
+                                &self.device,
+                                op.tex_w,
+                                op.tex_h,
+                            )
+                        };
 
                     let vp_data: [f32; 4] = [op.tex_w as f32, op.tex_h as f32, 0.0, 0.0];
                     let vp_buf =
@@ -1040,7 +1130,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         1.0,
                     );
                     path_results.push(Some(bg));
-                    drop((cap_msaa_texture, cap_msaa_view, cap_resolve_texture));
+                    // Return the shadow capture textures to the pool. The composite bind group keeps the resolve texture's GPU resource alive via wgpu's internal Arc, so it is safe to push the texture handle back for reuse.
+                    self.shadow_capture_pool.push((
+                        cap_msaa_texture,
+                        cap_msaa_view,
+                        cap_resolve_texture,
+                        cap_resolve_view,
+                        op.tex_w,
+                        op.tex_h,
+                    ));
                 }
             }
 
@@ -1068,6 +1166,40 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     }
                 }
                 _ => {}
+            }
+        }
+
+        // Image-batching pre-pass: stable-sort each run of consecutive ImageBatch steps by (id, filter) so non-adjacent draws of the same image become adjacent. This is safe for z-order because the reorder is confined to a single run with no intervening non-image steps.
+        {
+            let steps = &mut self.pending_steps;
+            let mut i = 0;
+            while i < steps.len() {
+                if matches!(steps[i], DrawStep::ImageBatch { .. }) {
+                    let mut j = i + 1;
+                    while j < steps.len() && matches!(steps[j], DrawStep::ImageBatch { .. }) {
+                        j += 1;
+                    }
+                    if j - i > 1 {
+                        // ImageFilter is not Ord; map it to a u8 for sorting.
+                        let filter_ord = |f: ImageFilter| match f {
+                            ImageFilter::Nearest => 0u8,
+                            ImageFilter::Linear => 1u8,
+                        };
+                        steps[i..j].sort_by(|a, b| {
+                            let (ka, kb) = match (a, b) {
+                                (
+                                    DrawStep::ImageBatch { key: ka, .. },
+                                    DrawStep::ImageBatch { key: kb, .. },
+                                ) => (*ka, *kb),
+                                _ => unreachable!(),
+                            };
+                            (ka.0, filter_ord(ka.1)).cmp(&(kb.0, filter_ord(kb.1)))
+                        });
+                    }
+                    i = j;
+                } else {
+                    i += 1;
+                }
             }
         }
 
@@ -1111,7 +1243,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         enum Segment {
-            Draw(Vec<DrawStep>),
+            Draw {
+                start: usize,
+                end: usize,
+            },
             BeginLayer {
                 msaa_texture: wgpu::Texture,
                 msaa_view: wgpu::TextureView,
@@ -1121,20 +1256,33 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             EndLayer(wgpu::BindGroup),
         }
 
-        let steps = std::mem::take(&mut self.pending_steps);
+        let mut steps = std::mem::take(&mut self.pending_steps);
         let mut segments: Vec<Segment> = Vec::new();
-        let mut current_draw: Vec<DrawStep> = Vec::new();
-        for step in steps {
-            match step {
+        // Walk the flat `steps` list and emit Segment::Draw entries with index ranges instead of cloning slices into per-segment Vecs. Layer-boundary steps are extracted in place using std::mem::replace so we don't need to move the ownership-bearing variants (BeginLayer/EndLayer) out of the vector while still preserving the original positions for slicing.
+        let mut current_start: usize = 0;
+        for i in 0..steps.len() {
+            let is_boundary = matches!(
+                steps[i],
+                DrawStep::BeginLayer { .. } | DrawStep::EndLayer { .. }
+            );
+            if !is_boundary {
+                continue;
+            }
+            if i > current_start {
+                segments.push(Segment::Draw {
+                    start: current_start,
+                    end: i,
+                });
+            }
+            // Replace with a cheap placeholder so we can take ownership of the boundary's resources without disturbing surrounding indices.
+            let taken = std::mem::replace(&mut steps[i], DrawStep::SetScissor { rect: None });
+            match taken {
                 DrawStep::BeginLayer {
                     msaa_texture,
                     msaa_view: lmv,
                     resolve_texture,
                     resolve_view: lrv,
                 } => {
-                    if !current_draw.is_empty() {
-                        segments.push(Segment::Draw(std::mem::take(&mut current_draw)));
-                    }
                     segments.push(Segment::BeginLayer {
                         msaa_texture,
                         msaa_view: lmv,
@@ -1143,19 +1291,19 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     });
                 }
                 DrawStep::EndLayer { bind_group } => {
-                    if !current_draw.is_empty() {
-                        segments.push(Segment::Draw(std::mem::take(&mut current_draw)));
-                    }
                     segments.push(Segment::EndLayer(bind_group));
                 }
-                other => current_draw.push(other),
+                _ => unreachable!(),
             }
+            current_start = i + 1;
         }
-        if !current_draw.is_empty() {
-            segments.push(Segment::Draw(current_draw));
+        if current_start < steps.len() {
+            segments.push(Segment::Draw {
+                start: current_start,
+                end: steps.len(),
+            });
         }
 
-        // Each entry: (msaa_texture, msaa_view, resolve_texture, resolve_view)
         let mut layer_stack: Vec<(
             wgpu::Texture,
             wgpu::TextureView,
@@ -1163,21 +1311,47 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             wgpu::TextureView,
         )> = Vec::new();
 
-        for segment in segments {
+        // Track which draw segments should inline their MSAA resolve into the drawing pass (because the next segment is EndLayer). When this flag is set, the draw pass's resolve_target is the current layer's resolve view, and the subsequent EndLayer skips its dedicated resolve pass.
+        let mut inline_resolve_targets: Vec<bool> = vec![false; segments.len()];
+        for i in 0..segments.len() {
+            if let (Segment::Draw { .. }, Some(Segment::EndLayer(_))) =
+                (&segments[i], segments.get(i + 1))
+            {
+                inline_resolve_targets[i] = true;
+            }
+        }
+
+        // Track which EndLayer segments already had their resolve performed by the preceding draw pass — those skip the dedicated resolve pass.
+        let mut endlayer_resolve_done: Vec<bool> = vec![false; segments.len()];
+        for i in 0..segments.len() {
+            if matches!(segments[i], Segment::EndLayer(_)) && i > 0 && inline_resolve_targets[i - 1]
+            {
+                endlayer_resolve_done[i] = true;
+            }
+        }
+
+        for (seg_idx, segment) in segments.into_iter().enumerate() {
             match segment {
-                Segment::Draw(draw_steps) => {
+                Segment::Draw { start, end } => {
+                    let draw_steps = &steps[start..end];
+                    let inline_resolve = inline_resolve_targets[seg_idx];
                     let attach_view: &wgpu::TextureView =
                         if let Some((_, lv, _, _)) = layer_stack.last() {
                             lv
                         } else {
                             &msaa_view
                         };
+                    let resolve_view_opt: Option<&wgpu::TextureView> = if inline_resolve {
+                        layer_stack.last().map(|(_, _, _, rv)| rv)
+                    } else {
+                        None
+                    };
 
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("rsx-render-pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: attach_view,
-                            resolve_target: None,
+                            resolve_target: resolve_view_opt,
                             depth_slice: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Load,
@@ -1192,7 +1366,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                     render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
 
-                    for step in &draw_steps {
+                    for step in draw_steps {
                         match step {
                             DrawStep::RectBatch { start, end } => {
                                 render_pass.set_pipeline(&self.rect_pipeline.pipeline);
@@ -1230,6 +1404,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 start,
                                 end,
                                 bind_group,
+                                key: _,
                             } => {
                                 render_pass.set_pipeline(&self.image_pipeline.pipeline);
                                 render_pass.set_bind_group(
@@ -1302,7 +1477,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     resolve_texture,
                     resolve_view,
                 } => {
-                    // Clear the new layer's MSAA texture.
                     {
                         let _clear = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("rsx-layer-clear"),
@@ -1339,7 +1513,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         .pop()
                         .expect("layer_stack underflow on EndLayer");
 
-                    {
+                    // If the preceding draw pass set its resolve_target to this layer's resolve view, the MSAA resolve already happened when that pass ended — skip the dedicated resolve pass.
+                    if !endlayer_resolve_done[seg_idx] {
                         let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("rsx-layer-resolve"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1387,7 +1562,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         blit.draw(0..6, 0..1);
                     }
 
-                    drop((l_msaa_tex, l_msaa_view, l_resolve_tex, l_resolve_view));
+                    // Return the layer textures to the pool instead of dropping them so the next PushLayer can reuse them.
+                    self.layer_texture_pool.push((
+                        l_msaa_tex,
+                        l_msaa_view,
+                        l_resolve_tex,
+                        l_resolve_view,
+                        self.width,
+                        self.height,
+                    ));
                 }
             }
         }

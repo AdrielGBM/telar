@@ -93,8 +93,10 @@ impl EventHandler<WinitWindow> for AppHandler {
             return;
         }
         let clear = self.app.clear_color();
-        let commands = self.tree.as_ref().map(|t| t.commands()).unwrap_or_default();
-        if let Err(e) = renderer.as_mut().submit(commands) {
+        let commands_ref = self.tree.as_ref().map(|t| t.commands());
+        let slice: &[renderer_core::DrawCommand] =
+            commands_ref.as_deref().map(|r| r.as_slice()).unwrap_or(&[]);
+        if let Err(e) = renderer.as_mut().submit(slice) {
             tracing::error!("submit failed: {e}");
             return;
         }

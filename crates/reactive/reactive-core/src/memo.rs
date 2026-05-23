@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 
 use crate::runtime::{self, EffectId};
@@ -12,7 +13,7 @@ enum MemoState<T> {
 
 struct MemoInner<T> {
     state: MemoState<T>,
-    subscribers: SmallVec<[EffectId; 4]>,
+    subscribers: FxHashSet<EffectId>,
     effect_id: EffectId,
 }
 
@@ -59,20 +60,17 @@ impl<T: 'static> Memo<T> {
 
     fn track(&self) {
         if let Some(id) = runtime::current_observer() {
-            let mut inner = self.inner.borrow_mut();
-            if !inner.subscribers.contains(&id) {
-                inner.subscribers.push(id);
-            }
+            self.inner.borrow_mut().subscribers.insert(id);
         }
     }
 }
 
-pub fn create_memo<T: 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
+pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
     use std::rc::Weak;
 
     let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {
         state: MemoState::Computing,
-        subscribers: SmallVec::new(),
+        subscribers: FxHashSet::default(),
         effect_id: 0,
     }));
 
@@ -84,21 +82,32 @@ pub fn create_memo<T: 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
         };
         inner.borrow_mut().state = MemoState::Computing;
         let new_value = f();
-        let subs: Vec<EffectId> = {
+        let subs: SmallVec<[EffectId; 8]> = {
             let mut memo = inner.borrow_mut();
+            let changed = match &memo.state {
+                MemoState::Ready(old) => old != &new_value,
+                _ => true,
+            };
             memo.state = MemoState::Ready(new_value);
-            memo.subscribers.iter().copied().collect()
+            if changed {
+                memo.subscribers.iter().copied().collect()
+            } else {
+                SmallVec::new()
+            }
         };
-        let mut dead = Vec::new();
+        let mut dead: FxHashSet<EffectId> = FxHashSet::default();
         for id in subs {
             if runtime::is_alive(id) {
                 runtime::schedule(id);
             } else {
-                dead.push(id);
+                dead.insert(id);
             }
         }
         if !dead.is_empty() {
-            inner.borrow_mut().subscribers.retain(|x| !dead.contains(x));
+            let mut memo = inner.borrow_mut();
+            dead.iter().for_each(|id| {
+                memo.subscribers.remove(id);
+            });
         }
     });
 

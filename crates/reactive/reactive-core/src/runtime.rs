@@ -104,14 +104,24 @@ pub(crate) fn schedule(id: EffectId) {
 }
 
 pub(crate) fn run_effect(id: EffectId) {
-    if !RUNTIME.with(|rt| rt.borrow().effects.contains(id)) {
-        return;
-    }
-    let f = RUNTIME.with(|rt| rt.borrow().effects.get(id).map(|e| Rc::clone(&e.f)));
+    let f = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        if !rt.effects.contains(id) {
+            return None;
+        }
+        let f = Rc::clone(&rt.effects[id].f);
+        rt.observer_stack.push(id);
+        Some(f)
+    });
     if let Some(f) = f {
-        RUNTIME.with(|rt| rt.borrow_mut().observer_stack.push(id));
+        struct PopGuard;
+        impl Drop for PopGuard {
+            fn drop(&mut self) {
+                RUNTIME.with(|rt| rt.borrow_mut().observer_stack.pop());
+            }
+        }
+        let _guard = PopGuard;
         f();
-        RUNTIME.with(|rt| rt.borrow_mut().observer_stack.pop());
     }
 }
 
@@ -131,7 +141,7 @@ fn flush() {
             if pending.is_empty() {
                 RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
                 if did_work {
-                    let cbs: Vec<Rc<dyn Fn()>> = RUNTIME.with(|rt| {
+                    let cbs: smallvec::SmallVec<[Rc<dyn Fn()>; 2]> = RUNTIME.with(|rt| {
                         rt.borrow()
                             .on_flush
                             .iter()
