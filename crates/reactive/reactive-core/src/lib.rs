@@ -10,7 +10,7 @@ mod signal;
 
 pub use effect::{Effect, create_effect};
 pub use memo::{Memo, create_memo};
-pub use runtime::{FlushNotifyHandle, batch, set_flush_notify};
+pub use runtime::{FlushNotifyHandle, batch, begin_batch, end_batch, set_flush_notify};
 pub use signal::{ReadSignal, RwSignal, WriteSignal, create_rw_signal, create_signal};
 
 #[cfg(test)]

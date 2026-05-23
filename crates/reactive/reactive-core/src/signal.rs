@@ -116,6 +116,10 @@ impl<T: Clone + 'static> RwSignal<T> {
         track(&self.inner);
         self.inner.borrow().value.clone()
     }
+
+    pub fn peek(&self) -> T {
+        self.inner.borrow().value.clone()
+    }
 }
 
 pub fn create_signal<T: 'static>(value: T) -> (ReadSignal<T>, WriteSignal<T>) {
@@ -148,18 +152,18 @@ fn track<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
 
 pub(crate) fn notify<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
     let subs: SmallVec<[EffectId; 8]> = inner.borrow().subscribers.iter().copied().collect();
-    let mut dead: FxHashSet<EffectId> = FxHashSet::default();
+    let mut dead: Option<Vec<EffectId>> = None;
     for id in subs {
         if runtime::is_alive(id) {
             runtime::schedule(id);
         } else {
-            dead.insert(id);
+            dead.get_or_insert_with(Vec::new).push(id);
         }
     }
-    if !dead.is_empty() {
+    if let Some(dead) = dead {
         let mut inner = inner.borrow_mut();
-        dead.iter().for_each(|id| {
-            inner.subscribers.remove(id);
-        });
+        for id in dead {
+            inner.subscribers.remove(&id);
+        }
     }
 }

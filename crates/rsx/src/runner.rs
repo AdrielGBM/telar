@@ -1,6 +1,6 @@
 use platform_core::{Event, EventHandler, Platform, Window, WindowConfig};
 use platform_winit::{WinitPlatform, WinitWindow};
-use reactive_core::{FlushNotifyHandle, set_flush_notify};
+use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
 use renderer_software::SoftwareRenderer;
@@ -86,7 +86,8 @@ impl EventHandler<WinitWindow> for AppHandler {
         let Some(renderer) = &mut self.renderer else {
             return;
         };
-        if let Err(e) = renderer.begin_frame(window.width(), window.height()) {
+        let (w, h) = window.size();
+        if let Err(e) = renderer.begin_frame(w, h) {
             tracing::error!("begin_frame failed: {e}");
             return;
         }
@@ -104,6 +105,14 @@ impl EventHandler<WinitWindow> for AppHandler {
     }
 
     fn on_suspend(&mut self) {}
+
+    fn new_events(&mut self) {
+        begin_batch();
+    }
+
+    fn about_to_wait(&mut self) {
+        end_batch();
+    }
 }
 
 fn create_renderer(

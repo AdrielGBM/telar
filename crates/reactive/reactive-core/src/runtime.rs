@@ -1,6 +1,7 @@
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::rc::Rc;
+
+use rustc_hash::FxHashSet;
 
 pub(crate) type EffectId = usize;
 
@@ -13,7 +14,7 @@ struct Runtime {
     effects: slab::Slab<EffectEntry>,
     batch_depth: usize,
     pending: Vec<EffectId>,
-    pending_set: HashSet<EffectId>,
+    pending_set: FxHashSet<EffectId>,
     on_flush: Vec<(u64, Rc<dyn Fn()>)>,
     next_flush_notify_id: u64,
     flushing: bool,
@@ -25,7 +26,7 @@ thread_local! {
         effects: slab::Slab::new(),
         batch_depth: 0,
         pending: Vec::new(),
-        pending_set: HashSet::new(),
+        pending_set: FxHashSet::default(),
         on_flush: Vec::new(),
         next_flush_notify_id: 0,
         flushing: false,
@@ -185,4 +186,19 @@ pub fn batch<R>(f: impl FnOnce() -> R) -> R {
         flush();
     }
     result
+}
+
+pub fn begin_batch() {
+    RUNTIME.with(|rt| rt.borrow_mut().batch_depth += 1);
+}
+
+pub fn end_batch() {
+    let should_flush = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        rt.batch_depth -= 1;
+        rt.batch_depth == 0 && !rt.pending.is_empty()
+    });
+    if should_flush {
+        flush();
+    }
 }

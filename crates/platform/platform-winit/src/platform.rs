@@ -4,7 +4,8 @@ use platform_core::{
 };
 use winit::application::ApplicationHandler;
 use winit::event::{
-    ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, Touch, TouchPhase, WindowEvent,
+    ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, StartCause, Touch, TouchPhase,
+    WindowEvent,
 };
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{Key as WinitKey, NamedKey as WinitNamedKey};
@@ -34,6 +35,14 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
 }
 
 impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
+        self.handler.new_events();
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        self.handler.about_to_wait();
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let attrs = WindowAttributes::default()
             .with_title(self.config.title.as_str())

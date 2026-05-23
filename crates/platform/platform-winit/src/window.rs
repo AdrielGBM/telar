@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use platform_core::{Window as PlatformWindow};
+use platform_core::Window as PlatformWindow;
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
@@ -32,5 +32,12 @@ impl PlatformWindow for WinitWindow {
 
     fn request_redraw(&self) {
         self.0.request_redraw();
+    }
+}
+
+impl WinitWindow {
+    pub fn size(&self) -> (u32, u32) {
+        let s = self.0.inner_size();
+        (s.width, s.height)
     }
 }
