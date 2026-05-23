@@ -6,8 +6,9 @@ use cosmic_text::{
 use etagere::{AllocId, AtlasAllocator, size2};
 use geometry_core::Rect;
 use renderer_core::{Color, TextStyle, premultiply_rgba};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHasher};
 use std::collections::VecDeque;
+use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -37,8 +38,7 @@ struct AlphaCacheKey {
 }
 
 fn hash_text(text: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut h = FxHasher::default();
     text.hash(&mut h);
     h.finish()
 }
@@ -222,18 +222,8 @@ pub struct TextShaper {
     font_system: FontSystem,
     swash_cache: SwashCache,
     pub atlas: GlyphAtlas,
-    pixel_cache: CLruCache<
-        TextCacheKey,
-        Arc<[u8]>,
-        std::collections::hash_map::RandomState,
-        PixelCacheScale,
-    >,
-    alpha_pixel_cache: CLruCache<
-        AlphaCacheKey,
-        Arc<[u8]>,
-        std::collections::hash_map::RandomState,
-        AlphaCacheScale,
-    >,
+    pixel_cache: CLruCache<TextCacheKey, Arc<[u8]>, FxBuildHasher, PixelCacheScale>,
+    alpha_pixel_cache: CLruCache<AlphaCacheKey, Arc<[u8]>, FxBuildHasher, AlphaCacheScale>,
     shaping_cache: CLruCache<ShapingCacheKey, std::sync::Arc<Vec<(CacheKey, i32, i32)>>>,
 }
 
@@ -258,10 +248,12 @@ impl TextShaper {
             atlas: GlyphAtlas::new(),
             pixel_cache: CLruCache::with_config(
                 CLruCacheConfig::new(NonZeroUsize::new(config.pixel_cache_budget_bytes).unwrap())
+                    .with_hasher(FxBuildHasher::default())
                     .with_scale(PixelCacheScale),
             ),
             alpha_pixel_cache: CLruCache::with_config(
                 CLruCacheConfig::new(NonZeroUsize::new(config.alpha_cache_budget_bytes).unwrap())
+                    .with_hasher(FxBuildHasher::default())
                     .with_scale(AlphaCacheScale),
             ),
             shaping_cache: CLruCache::new(

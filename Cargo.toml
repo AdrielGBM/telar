@@ -37,6 +37,7 @@ raw-window-handle = "0.6"
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"
 tracing = "0.1.44"
+bytemuck = "1.25.0"
 rustc-hash = "2.1.2"
 wide = "0.7"
 

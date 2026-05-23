@@ -12,4 +12,5 @@ renderer-text = { workspace = true }
 geometry-core = { workspace = true }
 arrayvec = { version = "0.7.6", default-features = false }
 lru = "0.18.0"
+bytemuck = { workspace = true }
 rustc-hash = { workspace = true }

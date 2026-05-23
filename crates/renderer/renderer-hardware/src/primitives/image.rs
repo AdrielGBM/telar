@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use renderer_core::{ImageData, ImageFilter};
@@ -26,7 +26,7 @@ pub(crate) struct ImagePipeline {
     texture_bgl: wgpu::BindGroupLayout,
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
-    texture_cache: HashMap<(usize, ImageFilter), GpuImage>,
+    texture_cache: FxHashMap<(usize, ImageFilter), GpuImage>,
     current_frame: u64,
 }
 
@@ -121,7 +121,7 @@ impl ImagePipeline {
             texture_bgl,
             sampler_nearest,
             sampler_linear,
-            texture_cache: HashMap::new(),
+            texture_cache: FxHashMap::default(),
             current_frame: 0,
         }
     }

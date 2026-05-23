@@ -45,7 +45,8 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     pixmap_pool: Vec<tiny_skia::Pixmap>,
     clip_mask_buf: Option<tiny_skia::Mask>,
     draw_state: renderer_core::DrawState,
-    shadow_cache: lru::LruCache<(u32, u32, u32, u32, u32), tiny_skia::Pixmap>,
+    shadow_cache: lru::LruCache<(u32, u32, u32, u32, u32, u32, u32, u32, u32), tiny_skia::Pixmap>,
+    layer_stack: Vec<(tiny_skia::Pixmap, f32)>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -79,6 +80,7 @@ where
             shadow_cache: lru::LruCache::new(
                 std::num::NonZeroUsize::new(crate::limits::SHADOW_CACHE_MAX_ENTRIES).unwrap(),
             ),
+            layer_stack: Vec::new(),
         })
     }
 }
@@ -121,7 +123,7 @@ where
         self.draw_state.reset();
         let mut clip_active: bool = false;
         let mut current_clip_rect: Option<Rect> = None;
-        let mut layer_stack: Vec<(tiny_skia::Pixmap, f32)> = Vec::new();
+        self.layer_stack.clear();
 
         for cmd in commands {
             if self.pixmap.is_none() {
@@ -139,7 +141,7 @@ where
                     {
                         continue;
                     }
-                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -161,7 +163,7 @@ where
                     );
                 }
                 DrawCommand::Text { text, rect, style } => {
-                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -183,7 +185,7 @@ where
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -204,7 +206,7 @@ where
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -217,7 +219,7 @@ where
                     crate::primitives::line::draw_line(pixmap, p1, p2, style, transform, clip);
                 }
                 DrawCommand::Path { data, style } => {
-                    let pixmap = if let Some((top, _)) = layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -274,12 +276,12 @@ where
                         .or_else(|| tiny_skia::Pixmap::new(self.width, self.height));
                     if let Some(mut l) = layer {
                         l.fill(tiny_skia::Color::TRANSPARENT);
-                        layer_stack.push((l, opacity));
+                        self.layer_stack.push((l, opacity));
                     }
                 }
                 DrawCommand::PopLayer => {
-                    if let Some((layer, opacity)) = layer_stack.pop() {
-                        let target = if let Some((top, _)) = layer_stack.last_mut() {
+                    if let Some((layer, opacity)) = self.layer_stack.pop() {
+                        let target = if let Some((top, _)) = self.layer_stack.last_mut() {
                             top
                         } else {
                             self.pixmap.as_mut().unwrap()
@@ -312,8 +314,9 @@ where
             // SAFETY: Pixel format conversion. tiny-skia stores pixels as RGBA in little-endian byte order: [R, G, B, A, ...]. softbuffer::Buffer accepts u32 pixels in platform-native endianness. On little-endian platforms: u32(0x00RRGGBB) → bytes [B, G, R, 0] in memory → correct. On big-endian platforms: u32(0x00RRGGBB) → bytes [0, R, G, B] in memory → incorrect. This code is only correct on little-endian.
             #[cfg(target_endian = "little")]
             {
-                for (dst, chunk) in buffer.iter_mut().zip(pixmap.data().chunks_exact(4)) {
-                    *dst = ((chunk[0] as u32) << 16) | ((chunk[1] as u32) << 8) | chunk[2] as u32;
+                let src: &[u32] = bytemuck::cast_slice(pixmap.data());
+                for (dst, &src_px) in buffer.iter_mut().zip(src.iter()) {
+                    *dst = (src_px >> 8) & 0x00FF_FFFF;
                 }
             }
             #[cfg(target_endian = "big")]

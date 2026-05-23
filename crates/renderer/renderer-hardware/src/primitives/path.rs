@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::collections::VecDeque;
 use std::rc::{Rc, Weak};
 
@@ -149,8 +149,8 @@ struct CachedGeom {
 }
 
 pub(crate) struct PathTessCache {
-    fill: HashMap<FillGeomKey, CachedGeom>,
-    stroke: HashMap<StrokeGeomKey, CachedGeom>,
+    fill: FxHashMap<FillGeomKey, CachedGeom>,
+    stroke: FxHashMap<StrokeGeomKey, CachedGeom>,
     fill_lru: VecDeque<(FillGeomKey, u64)>,
     stroke_lru: VecDeque<(StrokeGeomKey, u64)>,
     frame: u64,
@@ -159,8 +159,8 @@ pub(crate) struct PathTessCache {
 impl PathTessCache {
     pub(crate) fn new() -> Self {
         Self {
-            fill: HashMap::new(),
-            stroke: HashMap::new(),
+            fill: FxHashMap::default(),
+            stroke: FxHashMap::default(),
             fill_lru: VecDeque::new(),
             stroke_lru: VecDeque::new(),
             frame: 0,

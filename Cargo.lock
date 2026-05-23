@@ -1908,6 +1908,7 @@ dependencies = [
  "raw-window-handle",
  "renderer-core",
  "renderer-text",
+ "rustc-hash 2.1.2",
  "tracing",
  "wgpu",
 ]
@@ -1917,6 +1918,7 @@ name = "renderer-software"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
+ "bytemuck",
  "geometry-core",
  "lru",
  "raw-window-handle",

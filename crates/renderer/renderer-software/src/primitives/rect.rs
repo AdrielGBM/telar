@@ -67,7 +67,10 @@ fn draw_rect_shadow(
     radius: BorderRadius,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
-    shadow_cache: &mut lru::LruCache<(u32, u32, u32, u32, u32), tiny_skia::Pixmap>,
+    shadow_cache: &mut lru::LruCache<
+        (u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        tiny_skia::Pixmap,
+    >,
     blur_scratch: &mut Vec<u8>,
 ) {
     let sigma = shadow.blur_radius / 2.0;
@@ -95,15 +98,18 @@ fn draw_rect_shadow(
         return;
     }
 
-    // Cache key: (rect_w, rect_h, spread_bits, blur_radius_bits, color_rgba8). The cached pixmap depends only on rect size, spread, blur radius, and color (the corner radius is also a factor; we approximate by including only spread here because radius is already implicitly captured by the rect dimensions in typical use). For correctness, include radius components in the key too.
     let [cr, cg, cb, ca] = shadow.color.to_rgba8();
     let color_rgba8 = u32::from_le_bytes([cr, cg, cb, ca]);
-    let cache_key: (u32, u32, u32, u32, u32) = (
+    let cache_key: (u32, u32, u32, u32, u32, u32, u32, u32, u32) = (
         rect.width.ceil() as u32,
         rect.height.ceil() as u32,
         shadow.spread.to_bits(),
         shadow.blur_radius.to_bits(),
         color_rgba8,
+        radius.top_left.to_bits(),
+        radius.top_right.to_bits(),
+        radius.bottom_right.to_bits(),
+        radius.bottom_left.to_bits(),
     );
 
     if let Some(cached) = shadow_cache.get(&cache_key) {
@@ -148,19 +154,20 @@ fn draw_rect_shadow(
         crate::primitives::gaussian_blur(tmp.data_mut(), tmp_w, tmp_h, sigma, blur_scratch);
     }
 
-    let _ = shadow_cache.put(cache_key, tmp.clone());
-
-    pixmap.draw_pixmap(
-        tmp_x,
-        tmp_y,
-        tmp.as_ref(),
-        &tiny_skia::PixmapPaint {
-            blend_mode: tiny_skia::BlendMode::SourceOver,
-            ..Default::default()
-        },
-        transform,
-        clip,
-    );
+    shadow_cache.put(cache_key, tmp);
+    if let Some(cached) = shadow_cache.get(&cache_key) {
+        pixmap.draw_pixmap(
+            tmp_x,
+            tmp_y,
+            cached.as_ref(),
+            &tiny_skia::PixmapPaint {
+                blend_mode: tiny_skia::BlendMode::SourceOver,
+                ..Default::default()
+            },
+            transform,
+            clip,
+        );
+    }
 }
 
 pub(crate) fn draw_rect(
@@ -170,7 +177,10 @@ pub(crate) fn draw_rect(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
     current_clip_rect: Option<Rect>,
-    shadow_cache: &mut lru::LruCache<(u32, u32, u32, u32, u32), tiny_skia::Pixmap>,
+    shadow_cache: &mut lru::LruCache<
+        (u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        tiny_skia::Pixmap,
+    >,
     blur_scratch: &mut Vec<u8>,
 ) {
     if let Some(shadow) = style.shadow {
