@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use geometry_core::Rect;
 use renderer_core::{ImageData, ImageFilter, premultiply_rgba};
+use rustc_hash::FxHashMap;
 
-pub(crate) type ImageCache = HashMap<u64, (Rc<ImageData>, tiny_skia::Pixmap)>;
+pub(crate) type ImageCache = FxHashMap<u64, (Rc<ImageData>, tiny_skia::Pixmap)>;
 
 /// Maximum simultaneous cached images. Entries beyond this limit are evicted after dead-reference cleanup to prevent unbounded memory growth.
 const IMAGE_CACHE_MAX_ENTRIES: usize = 256;

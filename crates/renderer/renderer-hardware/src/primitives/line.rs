@@ -80,6 +80,7 @@ impl LinePipeline {
     }
 }
 
+#[inline]
 pub(crate) fn prepare_line(p1: Point, p2: Point, style: LineStyle) -> LineInstance {
     let cap = match style.cap {
         LineCap::Butt => 0.0f32,

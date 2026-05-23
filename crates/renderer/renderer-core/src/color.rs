@@ -110,6 +110,7 @@ impl Color {
         Self::rgba(r + m, g + m, b + m, a)
     }
 
+    #[inline]
     pub fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
@@ -125,6 +126,7 @@ impl Color {
         }
     }
 
+    #[inline]
     pub fn to_rgba8(self) -> [u8; 4] {
         [
             (self.r * 255.0).clamp(0.0, 255.0) as u8,

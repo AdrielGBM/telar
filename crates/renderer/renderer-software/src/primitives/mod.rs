@@ -4,6 +4,7 @@ pub(crate) mod path;
 pub(crate) mod rect;
 pub(crate) mod text;
 
+#[inline(always)]
 pub(crate) fn to_skia_color(color: renderer_core::Color) -> tiny_skia::Color {
     tiny_skia::Color::from_rgba(
         color.r.clamp(0.0, 1.0),
@@ -30,6 +31,7 @@ pub(crate) fn to_skia_line_join(join: renderer_core::LineJoin) -> tiny_skia::Lin
     }
 }
 
+#[inline]
 pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<'static> {
     let mut paint = tiny_skia::Paint::default();
     paint.anti_alias = true;

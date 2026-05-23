@@ -1,13 +1,15 @@
+use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
+use reactive_core::ReadSignal;
 use ui_tree::{Component, EventResult, View};
 
-use crate::context::new_container;
+use crate::context::{new_container, track_layout};
 use crate::layout_item::LayoutItem;
 
 pub struct Container {
     node: NodeId,
-    children: Vec<Box<dyn LayoutItem>>,
+    children: Vec<(Box<dyn LayoutItem>, ReadSignal<Rect>)>,
 }
 
 impl Container {
@@ -17,6 +19,13 @@ impl Container {
     ) -> Result<Self, LayoutError> {
         let child_nodes = children.iter().map(|c| c.layout_node()).collect::<Vec<_>>();
         let node = new_container(style, &child_nodes)?;
+        let children = children
+            .into_iter()
+            .map(|c| {
+                let rect = track_layout(c.layout_node());
+                (c, rect)
+            })
+            .collect();
         Ok(Container { node, children })
     }
 
@@ -37,12 +46,23 @@ impl LayoutItem for Container {
 
 impl Component for Container {
     fn view(&self) -> View {
-        let child_views: Vec<View> = self.children.iter().map(|c| c.view()).collect();
+        let child_views: Vec<View> = self.children.iter().map(|(c, _)| c.view()).collect();
         View::group(child_views)
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        for child in &mut self.children {
+        let pointer_pos: Option<(f32, f32)> = match event {
+            Event::PointerMoved { x, y, .. } => Some((*x as f32, *y as f32)),
+            Event::PointerPressed { x, y, .. } => Some((*x as f32, *y as f32)),
+            Event::PointerReleased { x, y, .. } => Some((*x as f32, *y as f32)),
+            _ => None,
+        };
+        for (child, rect_signal) in &mut self.children {
+            if let Some((px, py)) = pointer_pos {
+                if !rect_signal.get().contains(px, py) {
+                    continue;
+                }
+            }
             if child.on_event(event) == EventResult::Handled {
                 return EventResult::Handled;
             }

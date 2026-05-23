@@ -1894,6 +1894,7 @@ version = "0.1.0"
 dependencies = [
  "geometry-core",
  "thiserror 2.0.18",
+ "wide",
 ]
 
 [[package]]
@@ -1921,6 +1922,7 @@ dependencies = [
  "raw-window-handle",
  "renderer-core",
  "renderer-text",
+ "rustc-hash 2.1.2",
  "softbuffer",
  "tiny-skia 0.12.0",
 ]
@@ -1934,6 +1936,7 @@ dependencies = [
  "etagere",
  "geometry-core",
  "renderer-core",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -2026,6 +2029,15 @@ name = "rustversion"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
+
+[[package]]
+name = "safe_arch"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96b02de82ddbe1b636e6170c21be622223aea188ef2e139be0a5b219ec215323"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "same-file"
@@ -3036,6 +3048,16 @@ dependencies = [
  "log",
  "raw-window-handle",
  "web-sys",
+]
+
+[[package]]
+name = "wide"
+version = "0.7.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce5da8ecb62bcd8ec8b7ea19f69a51275e91299be594ea5cc6ef7819e16cd03"
+dependencies = [
+ "bytemuck",
+ "safe_arch",
 ]
 
 [[package]]

@@ -10,7 +10,7 @@ use crate::view::View;
 use crate::view_flatten;
 
 struct ComponentSlot {
-    component: Rc<RefCell<Box<dyn Component>>>,
+    component: Rc<RefCell<dyn Component>>,
     commands: Rc<RefCell<Vec<DrawCommand>>>,
     dirty: Rc<Cell<bool>>,
     _stack: Rc<RefCell<Vec<View>>>,
@@ -19,7 +19,7 @@ struct ComponentSlot {
 
 impl ComponentSlot {
     fn new<C: Component + 'static>(component: C) -> Self {
-        let component = Rc::new(RefCell::new(Box::new(component) as Box<dyn Component>));
+        let component: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(component));
         let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
         let dirty = Rc::new(Cell::new(true));
         let stack: Rc<RefCell<Vec<View>>> = Default::default();
@@ -30,10 +30,14 @@ impl ComponentSlot {
         let stack_clone = Rc::clone(&stack);
         let _effect = create_effect(move || {
             let view = comp_clone.borrow().view();
-            let mut cmds = cmds_clone.borrow_mut();
             let mut stk = stack_clone.borrow_mut();
-            view_flatten::flatten_view(view, &mut cmds, &mut stk);
-            dirty_clone.set(true);
+            let mut new_cmds: Vec<DrawCommand> = Vec::new();
+            view_flatten::flatten_view(view, &mut new_cmds, &mut stk);
+            let mut cmds = cmds_clone.borrow_mut();
+            if *cmds != new_cmds {
+                *cmds = new_cmds;
+                dirty_clone.set(true);
+            }
         });
 
         ComponentSlot {

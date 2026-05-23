@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
 use renderer_text::TextShaper;
+use rustc_hash::FxHashMap;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
@@ -67,7 +67,7 @@ where
             pixmap: None,
             text_shaper: TextShaper::new(),
             pending_commands: Vec::new(),
-            image_cache: HashMap::new(),
+            image_cache: FxHashMap::default(),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
             clip_mask_buf: None,

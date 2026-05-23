@@ -9,3 +9,4 @@ cosmic-text = "0.19.0"
 etagere = "0.3.0"
 geometry-core = { workspace = true }
 renderer-core = { workspace = true }
+rustc-hash = { workspace = true }

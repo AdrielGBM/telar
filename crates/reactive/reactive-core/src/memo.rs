@@ -76,7 +76,7 @@ pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<
 
     let weak: Weak<RefCell<MemoInner<T>>> = Rc::downgrade(&inner);
 
-    let effect_f: Rc<dyn Fn()> = Rc::new(move || {
+    let effect_f: Box<dyn Fn()> = Box::new(move || {
         let Some(inner) = weak.upgrade() else {
             return;
         };
@@ -111,7 +111,7 @@ pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<
         }
     });
 
-    let effect_id = runtime::register_effect(Rc::clone(&effect_f));
+    let effect_id = runtime::register_effect(effect_f);
     inner.borrow_mut().effect_id = effect_id;
 
     runtime::run_effect(effect_id);

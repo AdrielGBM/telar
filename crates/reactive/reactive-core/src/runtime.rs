@@ -5,7 +5,7 @@ use std::rc::Rc;
 pub(crate) type EffectId = usize;
 
 pub(crate) struct EffectEntry {
-    pub(crate) f: Rc<dyn Fn()>,
+    pub(crate) f: Box<dyn Fn()>,
 }
 
 struct Runtime {
@@ -64,7 +64,7 @@ pub(crate) fn current_observer() -> Option<EffectId> {
     RUNTIME.with(|rt| rt.borrow().observer_stack.last().copied())
 }
 
-pub(crate) fn register_effect(f: Rc<dyn Fn()>) -> EffectId {
+pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         rt.effects.insert(EffectEntry { f })
@@ -104,16 +104,17 @@ pub(crate) fn schedule(id: EffectId) {
 }
 
 pub(crate) fn run_effect(id: EffectId) {
-    let f = RUNTIME.with(|rt| {
+    let ptr = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         if !rt.effects.contains(id) {
             return None;
         }
-        let f = Rc::clone(&rt.effects[id].f);
+        // SAFETY: The slab owns this Box. No effect closure in this codebase captures its own Effect handle, so deregistration cannot happen during execution.
+        let ptr: *const dyn Fn() = &*rt.effects[id].f;
         rt.observer_stack.push(id);
-        Some(f)
+        Some(ptr)
     });
-    if let Some(f) = f {
+    if let Some(ptr) = ptr {
         struct PopGuard;
         impl Drop for PopGuard {
             fn drop(&mut self) {
@@ -121,7 +122,7 @@ pub(crate) fn run_effect(id: EffectId) {
             }
         }
         let _guard = PopGuard;
-        f();
+        unsafe { (*ptr)() };
     }
 }
 

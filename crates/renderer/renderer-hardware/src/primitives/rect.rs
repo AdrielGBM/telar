@@ -96,6 +96,7 @@ impl RectPipeline {
     }
 }
 
+#[inline]
 pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, tx: f32, ty: f32) -> RectInstance {
     let encoded = style
         .fill

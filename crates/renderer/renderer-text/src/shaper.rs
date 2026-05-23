@@ -6,7 +6,8 @@ use cosmic_text::{
 use etagere::{AllocId, AtlasAllocator, size2};
 use geometry_core::Rect;
 use renderer_core::{Color, TextStyle, premultiply_rgba};
-use std::collections::{HashMap, VecDeque};
+use rustc_hash::FxHashMap;
+use std::collections::VecDeque;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -42,6 +43,7 @@ fn hash_text(text: &str) -> u64 {
     h.finish()
 }
 
+#[inline]
 pub fn make_text_cache_key(
     text: &str,
     font_size: f32,
@@ -90,7 +92,7 @@ pub const ATLAS_SIZE: u32 = 2048;
 pub struct GlyphAtlas {
     pub pixels: Vec<u8>,
     pub dirty_rects: Vec<[u32; 4]>,
-    entries: HashMap<GlyphKey, AtlasEntry>,
+    entries: FxHashMap<GlyphKey, AtlasEntry>,
     allocator: AtlasAllocator,
     lru_queue: VecDeque<(GlyphKey, u64)>,
     lru_counter: u64,
@@ -101,7 +103,7 @@ impl GlyphAtlas {
         Self {
             pixels: vec![0u8; (ATLAS_SIZE * ATLAS_SIZE * 4) as usize],
             dirty_rects: Vec::new(),
-            entries: HashMap::new(),
+            entries: FxHashMap::default(),
             allocator: AtlasAllocator::new(size2(ATLAS_SIZE as i32, ATLAS_SIZE as i32)),
             lru_queue: VecDeque::new(),
             lru_counter: 0,

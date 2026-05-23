@@ -239,6 +239,7 @@ fn create_sampler(device: &Device, filter: wgpu::FilterMode) -> wgpu::Sampler {
     })
 }
 
+#[inline]
 pub(crate) fn prepare_image(rect: geometry_core::Rect) -> ImageInstance {
     ImageInstance {
         dest_rect: [rect.x, rect.y, rect.width, rect.height],

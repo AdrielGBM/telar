@@ -17,6 +17,7 @@ impl DrawState {
         }
     }
 
+    #[inline]
     pub fn push_clip(&mut self, rect: Rect) -> Rect {
         let effective = self
             .clip_stack
@@ -27,17 +28,20 @@ impl DrawState {
         effective
     }
 
+    #[inline]
     pub fn pop_clip(&mut self) -> Option<Rect> {
         self.clip_stack.pop();
         self.clip_stack.last().copied()
     }
 
+    #[inline]
     pub fn push_transform(&mut self, tx: f32, ty: f32) {
         self.translate_stack.push((tx, ty));
         self.cum_tx += tx;
         self.cum_ty += ty;
     }
 
+    #[inline]
     pub fn pop_transform(&mut self) {
         if let Some((tx, ty)) = self.translate_stack.pop() {
             self.cum_tx -= tx;
