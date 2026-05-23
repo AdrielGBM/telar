@@ -202,7 +202,21 @@ impl WeightScale<AlphaCacheKey, Arc<[u8]>> for AlphaCacheScale {
     }
 }
 
-const PIXEL_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;
+pub struct TextShaperConfig {
+    pub pixel_cache_budget_bytes: usize,
+    pub alpha_cache_budget_bytes: usize,
+    pub shaping_cache_capacity: usize,
+}
+
+impl Default for TextShaperConfig {
+    fn default() -> Self {
+        Self {
+            pixel_cache_budget_bytes: 64 * 1024 * 1024,
+            alpha_cache_budget_bytes: 64 * 1024 * 1024,
+            shaping_cache_capacity: 2048,
+        }
+    }
+}
 
 pub struct TextShaper {
     font_system: FontSystem,
@@ -234,19 +248,25 @@ fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: 
 
 impl TextShaper {
     pub fn new() -> Self {
+        Self::with_config(TextShaperConfig::default())
+    }
+
+    pub fn with_config(config: TextShaperConfig) -> Self {
         Self {
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
             atlas: GlyphAtlas::new(),
             pixel_cache: CLruCache::with_config(
-                CLruCacheConfig::new(NonZeroUsize::new(PIXEL_CACHE_BUDGET_BYTES).unwrap())
+                CLruCacheConfig::new(NonZeroUsize::new(config.pixel_cache_budget_bytes).unwrap())
                     .with_scale(PixelCacheScale),
             ),
             alpha_pixel_cache: CLruCache::with_config(
-                CLruCacheConfig::new(NonZeroUsize::new(PIXEL_CACHE_BUDGET_BYTES).unwrap())
+                CLruCacheConfig::new(NonZeroUsize::new(config.alpha_cache_budget_bytes).unwrap())
                     .with_scale(AlphaCacheScale),
             ),
-            shaping_cache: CLruCache::new(NonZeroUsize::new(2048).unwrap()),
+            shaping_cache: CLruCache::new(
+                NonZeroUsize::new(config.shaping_cache_capacity).unwrap(),
+            ),
         }
     }
 

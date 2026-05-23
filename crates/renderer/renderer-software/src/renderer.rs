@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
-use renderer_text::TextShaper;
+use renderer_text::{TextShaper, TextShaperConfig};
 use rustc_hash::FxHashMap;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
@@ -65,14 +65,20 @@ where
             width: 0,
             height: 0,
             pixmap: None,
-            text_shaper: TextShaper::new(),
+            text_shaper: TextShaper::with_config(TextShaperConfig {
+                pixel_cache_budget_bytes: crate::limits::TEXT_PIXEL_CACHE_BUDGET_BYTES,
+                alpha_cache_budget_bytes: crate::limits::TEXT_ALPHA_CACHE_BUDGET_BYTES,
+                shaping_cache_capacity: crate::limits::TEXT_SHAPING_CACHE_CAPACITY,
+            }),
             pending_commands: Vec::new(),
             image_cache: FxHashMap::default(),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
             clip_mask_buf: None,
             draw_state: renderer_core::DrawState::new(),
-            shadow_cache: lru::LruCache::new(std::num::NonZeroUsize::new(64).unwrap()),
+            shadow_cache: lru::LruCache::new(
+                std::num::NonZeroUsize::new(crate::limits::SHADOW_CACHE_MAX_ENTRIES).unwrap(),
+            ),
         })
     }
 }
