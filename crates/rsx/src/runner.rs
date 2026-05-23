@@ -44,16 +44,14 @@ impl EventHandler<WinitWindow> for AppHandler {
         true
     }
 
-    fn on_event(&mut self, event: Event, window: &WinitWindow) {
+    fn on_event(&mut self, event: Event, _window: &WinitWindow) {
         if let Event::WindowResized { width, height } = &event {
             if let Some(ref signals) = self.window_signals {
                 signals.update(*width as f32, *height as f32);
             }
         }
         if let Some(tree) = &mut self.tree {
-            if tree.on_event(&event).is_handled() {
-                window.request_redraw();
-            }
+            tree.on_event(&event);
         }
     }
 

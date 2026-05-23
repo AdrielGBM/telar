@@ -46,8 +46,7 @@ impl LayoutItem for Container {
 
 impl Component for Container {
     fn view(&self) -> View {
-        let child_views: Vec<View> = self.children.iter().map(|(c, _)| c.view()).collect();
-        View::group(child_views)
+        View::group(self.children.iter().map(|(c, _)| c.view()))
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {

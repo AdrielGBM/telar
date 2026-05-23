@@ -113,7 +113,7 @@ mod tests {
 
     impl Component for Fixed {
         fn view(&self) -> View {
-            View::Group(vec![
+            View::group([
                 View::Primitive(sample_rect(0.0)),
                 View::Primitive(sample_rect(20.0)),
             ])
@@ -134,10 +134,7 @@ mod tests {
     impl Component for Counter {
         fn view(&self) -> View {
             let n = self.value.get();
-            let children: Vec<View> = (0..n)
-                .map(|i| View::Primitive(sample_rect(i as f32 * 10.0)))
-                .collect();
-            View::Group(children)
+            View::group((0..n).map(|i| View::Primitive(sample_rect(i as f32 * 10.0))))
         }
     }
 

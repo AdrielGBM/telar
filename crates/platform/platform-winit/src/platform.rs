@@ -222,7 +222,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                     }
                     _ => return,
                 };
-                let modifiers = self.modifiers.clone();
+                let modifiers = self.modifiers;
                 let ev = match event.state {
                     ElementState::Pressed => platform_core::Event::KeyPressed { key, modifiers },
                     ElementState::Released => platform_core::Event::KeyReleased { key, modifiers },

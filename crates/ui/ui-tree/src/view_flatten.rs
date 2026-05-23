@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn flatten_group_of_empties() {
-        let view = View::Group(vec![View::Empty, View::Empty, View::Empty]);
+        let view = View::group([View::Empty, View::Empty, View::Empty]);
         let mut out = Vec::new();
         let mut stack = Vec::new();
         flatten_view(view, &mut out, &mut stack);
@@ -73,12 +73,12 @@ mod tests {
 
     #[test]
     fn flatten_nested_groups() {
-        let view = View::Group(vec![
+        let view = View::group([
             View::Primitive(sample_rect()),
-            View::Group(vec![
+            View::group([
                 View::Primitive(sample_rect()),
                 View::Empty,
-                View::Group(vec![View::Primitive(sample_rect())]),
+                View::group([View::Primitive(sample_rect())]),
             ]),
             View::Primitive(sample_rect()),
         ]);

@@ -36,7 +36,7 @@ pub enum Key {
     Named(NamedKey),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ModifiersState {
     pub shift: bool,
     pub ctrl: bool,
