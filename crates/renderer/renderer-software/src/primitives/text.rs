@@ -1,5 +1,10 @@
+use std::hash::{Hash, Hasher};
+use std::num::NonZeroUsize;
+
+use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
 use renderer_core::{Color, TextStyle};
+use rustc_hash::{FxBuildHasher, FxHasher};
 
 fn tint_premultiplied(pixels: &mut [u8], color: Color) {
     let [r, g, b, a] = color.to_rgba8();
@@ -16,6 +21,37 @@ fn overlaps_clip(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
     x + w > clip.x && y + h > clip.y && x < clip.x + clip.width && y < clip.y + clip.height
 }
 
+fn hash_text(text: &str) -> u64 {
+    let mut h = FxHasher::default();
+    text.hash(&mut h);
+    h.finish()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct TextShadowCacheKey {
+    pub text_hash: u64,
+    pub font_size_bits: u32,
+    pub tex_w: u32,
+    pub tex_h: u32,
+    pub shadow_color: u32,
+    pub blur_radius_bits: u32,
+}
+
+pub(crate) type TextShadowCache = CLruCache<
+    TextShadowCacheKey,
+    tiny_skia::Pixmap,
+    FxBuildHasher,
+    crate::primitives::image::PixmapByteScale,
+>;
+
+pub(crate) fn new_text_shadow_cache(budget_bytes: usize) -> TextShadowCache {
+    CLruCache::with_config(
+        CLruCacheConfig::new(NonZeroUsize::new(budget_bytes.max(1)).unwrap())
+            .with_hasher(FxBuildHasher::default())
+            .with_scale(crate::primitives::image::PixmapByteScale),
+    )
+}
+
 pub(crate) fn draw_text(
     pixmap: &mut tiny_skia::Pixmap,
     shaper: &mut renderer_text::TextShaper,
@@ -27,6 +63,7 @@ pub(crate) fn draw_text(
     current_clip_rect: Option<Rect>,
     blur_scratch: &mut Vec<u8>,
     text_pixmap_cache: &mut lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
+    text_shadow_cache: &mut TextShadowCache,
 ) {
     if let Some(shadow) = style.shadow {
         let (arc, tex_w, tex_h) = shaper.rasterize_alpha(text, rect, style);
@@ -40,40 +77,57 @@ pub(crate) fn draw_text(
             let shadow_w = tex_w as f32 + 2.0 * padding as f32 + 2.0;
             let shadow_h = tex_h as f32 + 2.0 * padding as f32 + 2.0;
             if overlaps_clip(shadow_x, shadow_y, shadow_w, shadow_h, current_clip_rect) {
-                let mut shadow_pixels = arc.to_vec();
-                tint_premultiplied(&mut shadow_pixels, shadow.color);
+                let [sr, sg, sb, sa] = shadow.color.to_rgba8();
+                let shadow_key = TextShadowCacheKey {
+                    text_hash: hash_text(text),
+                    font_size_bits: style.font_size.to_bits(),
+                    tex_w,
+                    tex_h,
+                    shadow_color: u32::from_le_bytes([sr, sg, sb, sa]),
+                    blur_radius_bits: shadow.blur_radius.to_bits(),
+                };
 
-                let tmp_w = tex_w + 2 * padding as u32 + 2;
-                let tmp_h = tex_h + 2 * padding as u32 + 2;
-                if let Some(mut tmp) = tiny_skia::Pixmap::new(tmp_w, tmp_h) {
-                    if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
-                        if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size) {
-                            tmp.draw_pixmap(
-                                padding,
-                                padding,
-                                src.as_ref(),
-                                &tiny_skia::PixmapPaint {
-                                    blend_mode: tiny_skia::BlendMode::SourceOver,
-                                    ..Default::default()
-                                },
-                                tiny_skia::Transform::identity(),
-                                None,
+                if text_shadow_cache.get(&shadow_key).is_none() {
+                    let tmp_w = tex_w + 2 * padding as u32 + 2;
+                    let tmp_h = tex_h + 2 * padding as u32 + 2;
+                    if let Some(mut tmp) = tiny_skia::Pixmap::new(tmp_w, tmp_h) {
+                        let mut shadow_pixels = arc.to_vec();
+                        tint_premultiplied(&mut shadow_pixels, shadow.color);
+                        if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
+                            if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size) {
+                                tmp.draw_pixmap(
+                                    padding,
+                                    padding,
+                                    src.as_ref(),
+                                    &tiny_skia::PixmapPaint {
+                                        blend_mode: tiny_skia::BlendMode::SourceOver,
+                                        ..Default::default()
+                                    },
+                                    tiny_skia::Transform::identity(),
+                                    None,
+                                );
+                            }
+                        }
+                        if sigma >= 0.5 {
+                            crate::primitives::gaussian_blur(
+                                tmp.data_mut(),
+                                tmp_w,
+                                tmp_h,
+                                sigma,
+                                blur_scratch,
                             );
                         }
+                        text_shadow_cache
+                            .put_with_weight(shadow_key.clone(), tmp)
+                            .ok();
                     }
-                    if sigma >= 0.5 {
-                        crate::primitives::gaussian_blur(
-                            tmp.data_mut(),
-                            tmp_w,
-                            tmp_h,
-                            sigma,
-                            blur_scratch,
-                        );
-                    }
+                }
+
+                if let Some(shadow_pixmap) = text_shadow_cache.get(&shadow_key) {
                     pixmap.draw_pixmap(
                         rect.x as i32 + shadow.offset_x as i32 - padding,
                         rect.y as i32 + shadow.offset_y as i32 - padding,
-                        tmp.as_ref(),
+                        shadow_pixmap.as_ref(),
                         &tiny_skia::PixmapPaint {
                             blend_mode: tiny_skia::BlendMode::SourceOver,
                             ..Default::default()
@@ -84,17 +138,28 @@ pub(crate) fn draw_text(
                 }
             }
 
-            let mut text_pixels = arc.to_vec();
-            tint_premultiplied(&mut text_pixels, style.color);
-
-            let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) else {
-                return;
+            // Draw text body — check text_pixmap_cache first to avoid re-tinting alpha buffer
+            let body_key = renderer_text::make_text_cache_key(
+                text,
+                style.font_size,
+                tex_w,
+                tex_h,
+                style.color,
+            );
+            let paint = tiny_skia::PixmapPaint {
+                blend_mode: tiny_skia::BlendMode::SourceOver,
+                ..Default::default()
             };
-            if let Some(src) = tiny_skia::Pixmap::from_vec(text_pixels, size) {
-                let paint = tiny_skia::PixmapPaint {
-                    blend_mode: tiny_skia::BlendMode::SourceOver,
-                    ..Default::default()
-                };
+            if text_pixmap_cache.get(&body_key).is_none() {
+                let mut body_pixels = arc.to_vec();
+                tint_premultiplied(&mut body_pixels, style.color);
+                if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
+                    if let Some(src) = tiny_skia::Pixmap::from_vec(body_pixels, size) {
+                        text_pixmap_cache.put(body_key.clone(), src);
+                    }
+                }
+            }
+            if let Some(src) = text_pixmap_cache.get(&body_key) {
                 pixmap.draw_pixmap(
                     rect.x as i32,
                     rect.y as i32,

@@ -10,6 +10,7 @@ use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
 use crate::primitives::image::{ImageCache, PixmapByteScale, ShadowCache};
+use crate::primitives::text::{TextShadowCache, new_text_shadow_cache};
 
 fn overlaps_clip(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
     let Some(clip) = clip else { return true };
@@ -83,6 +84,149 @@ fn fill_mask_region(data: &mut [u8], stride: usize, region: (u32, u32, u32, u32)
     }
 }
 
+// --- Dirty-rect helpers ---
+
+fn expand_for_shadow(
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    s: renderer_core::Shadow,
+) -> (f32, f32, f32, f32) {
+    let sigma = s.blur_radius / 2.0;
+    let pad = (sigma * 3.0).ceil() + 1.0 + s.spread;
+    let x0 = x + s.offset_x.min(0.0) - pad;
+    let y0 = y + s.offset_y.min(0.0) - pad;
+    let x1 = x + w + s.offset_x.max(0.0) + pad;
+    let y1 = y + h + s.offset_y.max(0.0) + pad;
+    (x0, y0, x1 - x0, y1 - y0)
+}
+
+fn command_visual_rect(cmd: &DrawCommand, tx: f32, ty: f32) -> Option<Rect> {
+    match cmd {
+        DrawCommand::Rect(p) => {
+            let (x, y, w, h) = if let Some(s) = p.style.shadow {
+                expand_for_shadow(p.rect.x + tx, p.rect.y + ty, p.rect.width, p.rect.height, s)
+            } else {
+                (p.rect.x + tx, p.rect.y + ty, p.rect.width, p.rect.height)
+            };
+            Some(Rect {
+                x,
+                y,
+                width: w,
+                height: h,
+            })
+        }
+        DrawCommand::Text(p) => {
+            let (x, y, w, h) = if let Some(s) = p.style.shadow {
+                expand_for_shadow(p.rect.x + tx, p.rect.y + ty, p.rect.width, p.rect.height, s)
+            } else {
+                (p.rect.x + tx, p.rect.y + ty, p.rect.width, p.rect.height)
+            };
+            Some(Rect {
+                x,
+                y,
+                width: w,
+                height: h,
+            })
+        }
+        DrawCommand::Image { rect, .. } => Some(Rect {
+            x: rect.x + tx,
+            y: rect.y + ty,
+            width: rect.width,
+            height: rect.height,
+        }),
+        DrawCommand::Line { p1, p2, style } => {
+            let half = style.width / 2.0 + 1.0;
+            let x0 = p1.x.min(p2.x) + tx - half;
+            let y0 = p1.y.min(p2.y) + ty - half;
+            let x1 = p1.x.max(p2.x) + tx + half;
+            let y1 = p1.y.max(p2.y) + ty + half;
+            Some(Rect {
+                x: x0,
+                y: y0,
+                width: x1 - x0,
+                height: y1 - y0,
+            })
+        }
+        DrawCommand::Path(p) => path_data_bounds(&p.data).map(|(bx, by, bw, bh)| Rect {
+            x: bx + tx,
+            y: by + ty,
+            width: bw,
+            height: bh,
+        }),
+        _ => None,
+    }
+}
+
+fn rect_overlaps(a: Rect, b: Rect) -> bool {
+    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+}
+
+fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
+    Some(match acc {
+        None => r,
+        Some(a) => {
+            let x = a.x.min(r.x);
+            let y = a.y.min(r.y);
+            let x2 = (a.x + a.width).max(r.x + r.width);
+            let y2 = (a.y + a.height).max(r.y + r.height);
+            Rect {
+                x,
+                y,
+                width: x2 - x,
+                height: y2 - y,
+            }
+        }
+    })
+}
+
+// Walks the command list while simulating PushTransform/PopTransform to produce the on-screen bounding rect for each command (None for state-only commands like clips and transforms).
+fn screen_rects_with_transforms(cmds: &[DrawCommand]) -> Vec<Option<Rect>> {
+    let mut result = Vec::with_capacity(cmds.len());
+    let mut tx_stack: Vec<(f32, f32)> = vec![(0.0, 0.0)];
+    for cmd in cmds {
+        let &(cum_tx, cum_ty) = tx_stack.last().unwrap();
+        match cmd {
+            DrawCommand::PushTransform { tx, ty } => {
+                tx_stack.push((cum_tx + tx, cum_ty + ty));
+                result.push(None);
+            }
+            DrawCommand::PopTransform => {
+                if tx_stack.len() > 1 {
+                    tx_stack.pop();
+                }
+                result.push(None);
+            }
+            _ => result.push(command_visual_rect(cmd, cum_tx, cum_ty)),
+        }
+    }
+    result
+}
+
+// Returns the union of on-screen bounds for all commands whose value or on-screen position changed between frames. Returns None when a full re-render is needed (e.g. different command count).
+fn compute_dirty_rect(new_cmds: &[DrawCommand], old_cmds: &[DrawCommand]) -> Option<Rect> {
+    if new_cmds.len() != old_cmds.len() {
+        return None;
+    }
+    let new_rects = screen_rects_with_transforms(new_cmds);
+    let old_rects = screen_rects_with_transforms(old_cmds);
+    let mut dirty: Option<Rect> = None;
+    for i in 0..new_cmds.len() {
+        let cmd_differs = new_cmds[i] != old_cmds[i];
+        let rect_differs = new_rects[i] != old_rects[i];
+        if cmd_differs || rect_differs {
+            if let Some(r) = new_rects[i] {
+                dirty = union_opt_rect(dirty, r);
+            }
+            if let Some(r) = old_rects[i] {
+                dirty = union_opt_rect(dirty, r);
+            }
+        }
+    }
+    dirty
+}
+
 // Updates the 1-bit clip mask in place. Only touches rows/cols within the union of the previous and new clip rects, avoiding the full-buffer zero (~2MB at 1080p) that would otherwise run on every PushClip/PopClip. Writes 0xFF directly because clip rects are axis-aligned and the existing fill_path used anti_alias=false (binary mask).
 fn repaint_mask(
     mask: &mut tiny_skia::Mask,
@@ -119,7 +263,11 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     draw_state: renderer_core::DrawState,
     shadow_cache: ShadowCache,
     text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
+    text_shadow_cache: TextShadowCache,
     layer_stack: Vec<(tiny_skia::Pixmap, f32)>,
+    // Previous frame state for skip-if-identical and dirty-rect optimizations.
+    prev_commands: Vec<DrawCommand>,
+    prev_clear_color: Option<Color>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -162,8 +310,40 @@ where
             text_pixmap_cache: lru::LruCache::new(
                 std::num::NonZeroUsize::new(budget.text_pixmap_cache_entries).unwrap(),
             ),
+            text_shadow_cache: new_text_shadow_cache(budget.text_shadow_cache_bytes),
             layer_stack: Vec::new(),
+            prev_commands: Vec::new(),
+            prev_clear_color: None,
         })
+    }
+    fn present_pixmap(&mut self) -> Result<(), RendererError> {
+        let Some(pixmap) = &self.pixmap else {
+            return Ok(());
+        };
+        if self.width == 0 || self.height == 0 {
+            return Ok(());
+        }
+        if let Ok(mut buffer) = self.surface.buffer_mut() {
+            // Pixel format conversion: tiny-skia stores pixels as premultiplied RGBA bytes [R, G, B, A, ...]. softbuffer expects u32 pixels as 0x00RRGGBB in native endianness. On little-endian, the bytemuck cast gives 0xAABBGGRR per pixel; swap_bytes() reorders to 0xRRGGBBAA and >> 8 drops the alpha byte to yield 0x00RRGGBB.
+            #[cfg(target_endian = "little")]
+            {
+                let src: &[u32] = bytemuck::cast_slice(pixmap.data());
+                for (dst, &src_px) in buffer.iter_mut().zip(src.iter()) {
+                    *dst = src_px.swap_bytes() >> 8;
+                }
+            }
+            #[cfg(target_endian = "big")]
+            {
+                compile_error!(
+                    "softbuffer pixel format conversion not implemented for big-endian platforms. \
+                              Please file an issue or implement proper endian-aware conversion."
+                );
+            }
+            buffer
+                .present()
+                .map_err(|e| RendererError::Present(e.to_string()))?;
+        }
+        Ok(())
     }
 }
 
@@ -180,6 +360,8 @@ where
             self.clip_mask_buf = tiny_skia::Mask::new(width, height);
             self.clip_mask_dirty = None;
             self.pixmap_pool.clear();
+            self.prev_commands.clear();
+            self.prev_clear_color = None;
             if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
                 self.surface
                     .resize(w, h)
@@ -194,8 +376,64 @@ where
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
+        // Optimization 1: skip the entire render when nothing changed; just re-present the existing pixmap.
+        if commands == self.prev_commands.as_slice() && clear_color == self.prev_clear_color {
+            return self.present_pixmap();
+        }
+
+        // Optimization 3: compute the on-screen union of all changed commands so we can clear only that region.
+        let dirty_rect = if self.prev_commands.is_empty() {
+            None // first frame → full clear
+        } else {
+            compute_dirty_rect(commands, &self.prev_commands)
+        };
+
+        self.prev_commands.clear();
+        self.prev_commands.extend(commands.iter().cloned());
+        self.prev_clear_color = clear_color;
+
+        // Clear: either the dirty region only, or the full pixmap when a structural change forces a full re-render.
+        //
+        // IMPORTANT: compute both the tiny-skia clear rect and the geometry rect used for command-skipping
+        // from the same clamped bounds. The naive (dr.x-1).max(0) / dr.width+2 formula shifts the rect
+        // right/down when dr has negative coordinates (off-screen content), so fill_rect would clear a
+        // larger on-screen area than `dr` describes — causing commands outside `dr` to have their pixels
+        // cleared and then be skipped, which makes them disappear.
+        let skip_rect: Option<Rect> = match dirty_rect {
+            Some(dr) if dr.width > 0.0 && dr.height > 0.0 => {
+                let x0 = (dr.x - 1.0).max(0.0);
+                let y0 = (dr.y - 1.0).max(0.0);
+                let x1 = (dr.x + dr.width + 1.0).min(self.width as f32);
+                let y1 = (dr.y + dr.height + 1.0).min(self.height as f32);
+                if x1 > x0 && y1 > y0 {
+                    Some(Rect {
+                        x: x0,
+                        y: y0,
+                        width: x1 - x0,
+                        height: y1 - y0,
+                    })
+                } else {
+                    // Dirty region is entirely off-screen — nothing visible changed.
+                    return self.present_pixmap();
+                }
+            }
+            _ => None,
+        };
+
         if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
-            pixmap.fill(crate::primitives::to_skia_color(color));
+            if let Some(sr) = skip_rect {
+                let skia_rect = tiny_skia::Rect::from_xywh(sr.x, sr.y, sr.width, sr.height);
+                if let Some(r) = skia_rect {
+                    let mut paint = tiny_skia::Paint::default();
+                    paint.set_color(crate::primitives::to_skia_color(color));
+                    paint.blend_mode = tiny_skia::BlendMode::Source;
+                    pixmap.fill_rect(r, &paint, tiny_skia::Transform::identity(), None);
+                } else {
+                    pixmap.fill(crate::primitives::to_skia_color(color));
+                }
+            } else {
+                pixmap.fill(crate::primitives::to_skia_color(color));
+            }
         }
 
         self.draw_state.reset();
@@ -211,6 +449,21 @@ where
                 self.draw_state.cum_tx,
                 self.draw_state.cum_ty,
             );
+
+            // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region.
+            // Use skip_rect (the actual clamped on-screen clear bounds) so that the skip check is
+            // consistent with what fill_rect actually cleared.
+            // State commands (PushTransform, PushClip, PushLayer, etc.) return None and are always executed.
+            if let Some(sr) = skip_rect {
+                if let Some(vr) =
+                    command_visual_rect(cmd, self.draw_state.cum_tx, self.draw_state.cum_ty)
+                {
+                    if !rect_overlaps(vr, sr) {
+                        continue;
+                    }
+                }
+            }
+
             match cmd {
                 DrawCommand::Rect(p) => {
                     if p.rect.width <= 0.0
@@ -280,6 +533,7 @@ where
                         current_clip_rect,
                         &mut self.blur_scratch,
                         &mut self.text_pixmap_cache,
+                        &mut self.text_shadow_cache,
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
@@ -432,32 +686,6 @@ where
             }
         }
 
-        let Some(pixmap) = &self.pixmap else {
-            return Ok(());
-        };
-        if self.width == 0 || self.height == 0 {
-            return Ok(());
-        }
-        if let Ok(mut buffer) = self.surface.buffer_mut() {
-            // Pixel format conversion: tiny-skia stores pixels as premultiplied RGBA bytes [R, G, B, A, ...]. softbuffer expects u32 pixels as 0x00RRGGBB in native endianness. On little-endian, the bytemuck cast gives 0xAABBGGRR per pixel; swap_bytes() reorders to 0xRRGGBBAA and >> 8 drops the alpha byte to yield 0x00RRGGBB.
-            #[cfg(target_endian = "little")]
-            {
-                let src: &[u32] = bytemuck::cast_slice(pixmap.data());
-                for (dst, &src_px) in buffer.iter_mut().zip(src.iter()) {
-                    *dst = src_px.swap_bytes() >> 8;
-                }
-            }
-            #[cfg(target_endian = "big")]
-            {
-                compile_error!(
-                    "softbuffer pixel format conversion not implemented for big-endian platforms. \
-                              Please file an issue or implement proper endian-aware conversion."
-                );
-            }
-            buffer
-                .present()
-                .map_err(|e| RendererError::Present(e.to_string()))?;
-        }
-        Ok(())
+        self.present_pixmap()
     }
 }

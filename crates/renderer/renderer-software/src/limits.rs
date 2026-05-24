@@ -19,3 +19,6 @@ pub const TEXT_SHAPING_CACHE_BUDGET_BYTES: usize = 24 * 1024 * 1024;
 /// Maximum number of tiny_skia::Pixmaps cached for text rasterizations.
 /// Mirrors the keys of the text pixel cache; sized to cover the in-flight text elements rather than the full texture cache (which is byte-budgeted).
 pub const TEXT_PIXMAP_CACHE_MAX_ENTRIES: usize = 256;
+
+/// Byte budget for pre-blurred text shadow pixmaps. Avoids re-running the Gaussian blur every frame for text with shadows. Shadow size is proportional to text bounding box; budget matches the shadow rect cache.
+pub const TEXT_SHADOW_CACHE_BUDGET_BYTES: usize = 32 * 1024 * 1024;

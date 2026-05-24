@@ -8,6 +8,7 @@ pub struct RendererBudget {
     pub text_alpha_cache_bytes: usize,
     pub text_shaping_cache_bytes: usize,
     pub text_pixmap_cache_entries: usize,
+    pub text_shadow_cache_bytes: usize,
 }
 
 impl Default for RendererBudget {
@@ -19,6 +20,7 @@ impl Default for RendererBudget {
             text_alpha_cache_bytes: TEXT_ALPHA_CACHE_BUDGET_BYTES,
             text_shaping_cache_bytes: TEXT_SHAPING_CACHE_BUDGET_BYTES,
             text_pixmap_cache_entries: TEXT_PIXMAP_CACHE_MAX_ENTRIES,
+            text_shadow_cache_bytes: TEXT_SHADOW_CACHE_BUDGET_BYTES,
         }
     }
 }
