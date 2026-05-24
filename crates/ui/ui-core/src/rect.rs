@@ -1,7 +1,7 @@
 use geometry_core::Rect as Bounds;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use renderer_core::{DrawCommand, RectStyle};
+use renderer_core::{DrawCommand, RectPayload, RectStyle};
 use ui_tree::{Component, EventResult, View};
 
 use crate::layout_item::LayoutItem;
@@ -32,7 +32,7 @@ impl Component for Rect {
         View::Translate {
             tx: r.x,
             ty: r.y,
-            children: vec![View::Primitive(DrawCommand::Rect {
+            children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,
                     y: 0.0,
@@ -40,7 +40,7 @@ impl Component for Rect {
                     height: r.height,
                 },
                 style,
-            })],
+            })))],
         }
     }
 

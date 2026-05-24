@@ -127,7 +127,11 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
-    pub fn new(display: D, window: W) -> Result<Self, RendererError> {
+    pub fn new(
+        display: D,
+        window: W,
+        budget: crate::RendererBudget,
+    ) -> Result<Self, RendererError> {
         let context = Context::new(display).map_err(|e| {
             RendererError::Backend(format!("softbuffer context creation failed: {}", e))
         })?;
@@ -140,25 +144,23 @@ where
             height: 0,
             pixmap: None,
             text_shaper: TextShaper::with_config(TextShaperConfig {
-                pixel_cache_budget_bytes: crate::limits::TEXT_PIXEL_CACHE_BUDGET_BYTES,
-                alpha_cache_budget_bytes: crate::limits::TEXT_ALPHA_CACHE_BUDGET_BYTES,
-                shaping_cache_capacity: crate::limits::TEXT_SHAPING_CACHE_CAPACITY,
+                pixel_cache_budget_bytes: budget.text_pixel_cache_bytes,
+                alpha_cache_budget_bytes: budget.text_alpha_cache_bytes,
+                shaping_cache_budget_bytes: budget.text_shaping_cache_bytes,
             }),
-            image_cache: crate::primitives::image::new_image_cache(),
+            image_cache: crate::primitives::image::new_image_cache(budget.image_cache_bytes),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
             clip_mask_buf: None,
             clip_mask_dirty: None,
             draw_state: renderer_core::DrawState::new(),
             shadow_cache: CLruCache::with_config(
-                CLruCacheConfig::new(
-                    NonZeroUsize::new(crate::limits::SHADOW_CACHE_BUDGET_BYTES).unwrap(),
-                )
-                .with_hasher(FxBuildHasher::default())
-                .with_scale(PixmapByteScale),
+                CLruCacheConfig::new(NonZeroUsize::new(budget.shadow_cache_bytes).unwrap())
+                    .with_hasher(FxBuildHasher::default())
+                    .with_scale(PixmapByteScale),
             ),
             text_pixmap_cache: lru::LruCache::new(
-                std::num::NonZeroUsize::new(crate::limits::TEXT_PIXMAP_CACHE_MAX_ENTRIES).unwrap(),
+                std::num::NonZeroUsize::new(budget.text_pixmap_cache_entries).unwrap(),
             ),
             layer_stack: Vec::new(),
         })
@@ -210,14 +212,20 @@ where
                 self.draw_state.cum_ty,
             );
             match cmd {
-                DrawCommand::Rect { rect, style } => {
-                    if rect.width <= 0.0
-                        || rect.height <= 0.0
-                        || (style.fill.is_none() && style.stroke.is_none())
+                DrawCommand::Rect(p) => {
+                    if p.rect.width <= 0.0
+                        || p.rect.height <= 0.0
+                        || (p.style.fill.is_none() && p.style.stroke.is_none())
                     {
                         continue;
                     }
-                    if !overlaps_clip(rect.x, rect.y, rect.width, rect.height, current_clip_rect) {
+                    if !overlaps_clip(
+                        p.rect.x,
+                        p.rect.y,
+                        p.rect.width,
+                        p.rect.height,
+                        current_clip_rect,
+                    ) {
                         continue;
                     }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
@@ -232,8 +240,8 @@ where
                     };
                     crate::primitives::rect::draw_rect(
                         pixmap,
-                        *rect,
-                        style,
+                        p.rect,
+                        &p.style,
                         transform,
                         clip,
                         current_clip_rect,
@@ -241,8 +249,14 @@ where
                         &mut self.blur_scratch,
                     );
                 }
-                DrawCommand::Text { text, rect, style } => {
-                    if !overlaps_clip(rect.x, rect.y, rect.width, rect.height, current_clip_rect) {
+                DrawCommand::Text(p) => {
+                    if !overlaps_clip(
+                        p.rect.x,
+                        p.rect.y,
+                        p.rect.width,
+                        p.rect.height,
+                        current_clip_rect,
+                    ) {
                         continue;
                     }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
@@ -258,9 +272,9 @@ where
                     crate::primitives::text::draw_text(
                         pixmap,
                         &mut self.text_shaper,
-                        text,
-                        *rect,
-                        style,
+                        &p.text,
+                        p.rect,
+                        &p.style,
                         transform,
                         clip,
                         current_clip_rect,
@@ -312,8 +326,8 @@ where
                     };
                     crate::primitives::line::draw_line(pixmap, *p1, *p2, *style, transform, clip);
                 }
-                DrawCommand::Path { data, style } => {
-                    if let Some((bx, by, bw, bh)) = path_data_bounds(data) {
+                DrawCommand::Path(p) => {
+                    if let Some((bx, by, bw, bh)) = path_data_bounds(&p.data) {
                         if !overlaps_clip(bx, by, bw, bh, current_clip_rect) {
                             continue;
                         }
@@ -330,8 +344,8 @@ where
                     };
                     crate::primitives::path::draw_path(
                         pixmap,
-                        data,
-                        style,
+                        &p.data,
+                        &p.style,
                         transform,
                         clip,
                         current_clip_rect,

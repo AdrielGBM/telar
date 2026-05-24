@@ -105,16 +105,16 @@ impl ComponentTree {
 mod tests {
     use geometry_core::Rect;
     use reactive_core::create_rw_signal;
-    use renderer_core::{Color, RectStyle};
+    use renderer_core::{Color, RectPayload, RectStyle};
 
     use super::*;
     use crate::view::View;
 
     fn sample_rect(x: f32) -> DrawCommand {
-        DrawCommand::Rect {
+        DrawCommand::Rect(Box::new(RectPayload {
             rect: Rect::new(x, 0.0, 10.0, 10.0),
             style: RectStyle::default().with_fill(Color::BLACK),
-        }
+        }))
     }
 
     struct Fixed;

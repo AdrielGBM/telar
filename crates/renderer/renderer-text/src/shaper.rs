@@ -202,10 +202,17 @@ impl WeightScale<AlphaCacheKey, Arc<[u8]>> for AlphaCacheScale {
     }
 }
 
+struct ShapingCacheScale;
+impl WeightScale<ShapingCacheKey, Arc<Vec<(CacheKey, i32, i32)>>> for ShapingCacheScale {
+    fn weight(&self, _key: &ShapingCacheKey, value: &Arc<Vec<(CacheKey, i32, i32)>>) -> usize {
+        value.len().saturating_mul(24).max(1)
+    }
+}
+
 pub struct TextShaperConfig {
     pub pixel_cache_budget_bytes: usize,
     pub alpha_cache_budget_bytes: usize,
-    pub shaping_cache_capacity: usize,
+    pub shaping_cache_budget_bytes: usize,
 }
 
 impl Default for TextShaperConfig {
@@ -213,7 +220,7 @@ impl Default for TextShaperConfig {
         Self {
             pixel_cache_budget_bytes: 64 * 1024 * 1024,
             alpha_cache_budget_bytes: 64 * 1024 * 1024,
-            shaping_cache_capacity: 2048,
+            shaping_cache_budget_bytes: 24 * 1024 * 1024,
         }
     }
 }
@@ -224,7 +231,12 @@ pub struct TextShaper {
     pub atlas: GlyphAtlas,
     pixel_cache: CLruCache<TextCacheKey, Arc<[u8]>, FxBuildHasher, PixelCacheScale>,
     alpha_pixel_cache: CLruCache<AlphaCacheKey, Arc<[u8]>, FxBuildHasher, AlphaCacheScale>,
-    shaping_cache: CLruCache<ShapingCacheKey, std::sync::Arc<Vec<(CacheKey, i32, i32)>>>,
+    shaping_cache: CLruCache<
+        ShapingCacheKey,
+        Arc<Vec<(CacheKey, i32, i32)>>,
+        FxBuildHasher,
+        ShapingCacheScale,
+    >,
 }
 
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
@@ -256,8 +268,10 @@ impl TextShaper {
                     .with_hasher(FxBuildHasher::default())
                     .with_scale(AlphaCacheScale),
             ),
-            shaping_cache: CLruCache::new(
-                NonZeroUsize::new(config.shaping_cache_capacity).unwrap(),
+            shaping_cache: CLruCache::with_config(
+                CLruCacheConfig::new(NonZeroUsize::new(config.shaping_cache_budget_bytes).unwrap())
+                    .with_hasher(FxBuildHasher::default())
+                    .with_scale(ShapingCacheScale),
             ),
         }
     }
@@ -303,7 +317,7 @@ impl TextShaper {
                 }
                 drop(buffer);
                 let arc = std::sync::Arc::new(pos);
-                let _ = self.shaping_cache.put(shaping_key, arc.clone());
+                let _ = self.shaping_cache.put_with_weight(shaping_key, arc.clone());
                 arc
             };
 

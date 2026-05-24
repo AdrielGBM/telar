@@ -6,8 +6,6 @@ use geometry_core::Rect;
 use renderer_core::{ImageData, ImageFilter, premultiply_rgba};
 use rustc_hash::FxBuildHasher;
 
-use crate::limits::IMAGE_CACHE_BUDGET_BYTES;
-
 pub(crate) struct PixmapByteScale;
 
 impl<K> WeightScale<K, tiny_skia::Pixmap> for PixmapByteScale {
@@ -24,9 +22,9 @@ pub(crate) type ShadowCacheKey = (u32, u32, u32, u32, u32, u32, u32, u32, u32);
 pub(crate) type ShadowCache =
     CLruCache<ShadowCacheKey, tiny_skia::Pixmap, FxBuildHasher, PixmapByteScale>;
 
-pub(crate) fn new_image_cache() -> ImageCache {
+pub(crate) fn new_image_cache(budget_bytes: usize) -> ImageCache {
     CLruCache::with_config(
-        CLruCacheConfig::new(NonZeroUsize::new(IMAGE_CACHE_BUDGET_BYTES).unwrap())
+        CLruCacheConfig::new(NonZeroUsize::new(budget_bytes).unwrap())
             .with_hasher(FxBuildHasher::default())
             .with_scale(PixmapByteScale),
     )

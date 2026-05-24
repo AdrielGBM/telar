@@ -70,15 +70,15 @@ pub fn flatten_view(root: View, out: &mut Vec<DrawCommand>, stack: &mut Vec<View
 #[cfg(test)]
 mod tests {
     use geometry_core::Rect;
-    use renderer_core::{Color, RectStyle};
+    use renderer_core::{Color, RectPayload, RectStyle};
 
     use super::*;
 
     fn sample_rect() -> DrawCommand {
-        DrawCommand::Rect {
+        DrawCommand::Rect(Box::new(RectPayload {
             rect: Rect::new(0.0, 0.0, 10.0, 10.0),
             style: RectStyle::default().with_fill(Color::BLACK),
-        }
+        }))
     }
 
     #[test]

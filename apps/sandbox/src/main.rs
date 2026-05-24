@@ -4,9 +4,9 @@ use rsx::{
     App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Container, DrawCommand,
     DrawingArea, Event, EventResult, FillRule, FillStyle, Image, ImageData, ImageFilter,
     LayoutError, LayoutItem, LayoutStyle, Line, LineCap, LineJoin, LineStyle, LinearGradient, Path,
-    PathData, PathStyle, Point, RadialGradient, RectStyle, RwSignal, ScrollArea, Shadow, Stroke,
-    Text, TextStyle, Track, TranslateGroup, View, WidgetCtx, WindowConfig, compute_layout,
-    create_rw_signal, with_context,
+    PathData, PathStyle, Point, RadialGradient, RectPayload, RectStyle, RwSignal, ScrollArea,
+    Shadow, Stroke, Text, TextPayload, TextStyle, Track, TranslateGroup, View, WidgetCtx,
+    WindowConfig, compute_layout, create_rw_signal, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -74,7 +74,7 @@ fn shape_card(
         LayoutStyle::new().width(168.0).height(80.0),
         move |_w, _h| {
             View::group([
-                View::Primitive(DrawCommand::Rect {
+                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Bounds {
                         x: 0.0,
                         y: 0.0,
@@ -82,8 +82,8 @@ fn shape_card(
                         height: 80.0,
                     },
                     style: style.clone(),
-                }),
-                View::Primitive(DrawCommand::Text {
+                }))),
+                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(label),
                     rect: Bounds {
                         x: 0.0,
@@ -92,7 +92,7 @@ fn shape_card(
                         height: 72.0,
                     },
                     style: TextStyle::new(13.0, label_color),
-                }),
+                }))),
             ])
         },
     )
@@ -156,7 +156,7 @@ fn color_swatch(color: Color, label: &'static str) -> Result<DrawingArea, Layout
         LayoutStyle::new().width(100.0).height(44.0),
         move |_w, _h| {
             View::group([
-                View::Primitive(DrawCommand::Rect {
+                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Bounds {
                         x: 0.0,
                         y: 0.0,
@@ -169,8 +169,8 @@ fn color_swatch(color: Color, label: &'static str) -> Result<DrawingArea, Layout
                         radius: BorderRadius::all(6.0),
                         shadow: None,
                     },
-                }),
-                View::Primitive(DrawCommand::Text {
+                }))),
+                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(label),
                     rect: Bounds {
                         x: 0.0,
@@ -179,7 +179,7 @@ fn color_swatch(color: Color, label: &'static str) -> Result<DrawingArea, Layout
                         height: 36.0,
                     },
                     style: TextStyle::new(11.0, WHITE),
-                }),
+                }))),
             ])
         },
     )
@@ -242,7 +242,7 @@ fn info_card(
         LayoutStyle::new().width(368.0).height(110.0),
         move |_w, _h| {
             View::group([
-                View::Primitive(DrawCommand::Rect {
+                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Bounds {
                         x: 0.0,
                         y: 0.0,
@@ -250,8 +250,8 @@ fn info_card(
                         height: 110.0,
                     },
                     style: bg.clone(),
-                }),
-                View::Primitive(DrawCommand::Text {
+                }))),
+                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(title),
                     rect: Bounds {
                         x: 16.0,
@@ -260,8 +260,8 @@ fn info_card(
                         height: 24.0,
                     },
                     style: TextStyle::new(16.0, title_color),
-                }),
-                View::Primitive(DrawCommand::Text {
+                }))),
+                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(body),
                     rect: Bounds {
                         x: 16.0,
@@ -270,7 +270,7 @@ fn info_card(
                         height: 52.0,
                     },
                     style: TextStyle::new(13.0, MUTED),
-                }),
+                }))),
             ])
         },
     )
@@ -389,7 +389,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Lines"),
                 rect: Bounds {
                     x: 0.0,
@@ -398,9 +398,9 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                     height: 20.0,
                 },
                 style: TextStyle::new(12.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Width"),
                 rect: Bounds {
                     x: 0.0,
@@ -409,7 +409,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let width_examples: &[(f32, &str)] = &[
                 (1.0, "1 px"),
@@ -420,7 +420,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
             ];
             let mut cy = 62.0f32;
             for &(w, label) in width_examples {
-                children.push(View::Primitive(DrawCommand::Text {
+                children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(label),
                     rect: Bounds {
                         x: 0.0,
@@ -429,7 +429,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                         height: 16.0,
                     },
                     style: TextStyle::new(11.0, MUTED),
-                }));
+                }))));
                 children.push(
                     Line::new(
                         move || Point::new(64.0, cy),
@@ -441,7 +441,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                 cy += w.max(2.0) + 18.0;
             }
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Color"),
                 rect: Bounds {
                     x: 396.0,
@@ -450,7 +450,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
             let color_examples: &[(Color, &str)] = &[
                 (PRIMARY, "primary"),
                 (SUCCESS, "success"),
@@ -468,7 +468,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                     )
                     .view(),
                 );
-                children.push(View::Primitive(DrawCommand::Text {
+                children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(label),
                     rect: Bounds {
                         x: 664.0,
@@ -477,10 +477,10 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                         height: 16.0,
                     },
                     style: TextStyle::new(11.0, color),
-                }));
+                }))));
             }
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Separator & chart"),
                 rect: Bounds {
                     x: 0.0,
@@ -489,7 +489,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
             children.push(
                 Line::new(
                     || Point::new(0.0, 196.0),
@@ -551,7 +551,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                 );
             }
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Diagonals"),
                 rect: Bounds {
                     x: 436.0,
@@ -560,7 +560,7 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
             let fan_cx = 566.0f32;
             let fan_cy = 266.0f32;
             let fan_tips: &[(f32, f32, Color)] = &[
@@ -601,7 +601,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Paths"),
                 rect: Bounds {
                     x: 0.0,
@@ -610,8 +610,8 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 20.0,
                 },
                 style: TextStyle::new(12.0, MUTED),
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Polygon shapes"),
                 rect: Bounds {
                     x: 0.0,
@@ -620,7 +620,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let triangle_data = Rc::new(
                 PathData::new()
@@ -644,7 +644,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("triangle"),
                 rect: Bounds {
                     x: 0.0,
@@ -653,7 +653,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             {
                 let cx = 245.0f32;
@@ -689,7 +689,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     )
                     .view(),
                 );
-                children.push(View::Primitive(DrawCommand::Text {
+                children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("star (fill + stroke)"),
                     rect: Bounds {
                         x: 175.0,
@@ -698,7 +698,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                         height: 16.0,
                     },
                     style: TextStyle::new(11.0, MUTED),
-                }));
+                }))));
             }
 
             let evenodd_data = Rc::new(
@@ -729,7 +729,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("even-odd fill"),
                 rect: Bounds {
                     x: 350.0,
@@ -738,9 +738,9 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Bézier curves"),
                 rect: Bounds {
                     x: 0.0,
@@ -749,7 +749,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let quad_data = Rc::new(
                 PathData::new()
@@ -771,7 +771,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("quad_to arch"),
                 rect: Bounds {
                     x: 0.0,
@@ -780,7 +780,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let cubic_data = Rc::new(PathData::new().move_to(Point::new(310.0, 248.0)).cubic_to(
                 Point::new(380.0, 248.0),
@@ -802,7 +802,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("cubic_to S-curve"),
                 rect: Bounds {
                     x: 296.0,
@@ -811,7 +811,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let petal_data = Rc::new(
                 PathData::new()
@@ -843,7 +843,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("closed cubic (petal)"),
                 rect: Bounds {
                     x: 446.0,
@@ -852,9 +852,9 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Stroke style"),
                 rect: Bounds {
                     x: 0.0,
@@ -863,7 +863,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let butt_data = Rc::new(
                 PathData::new()
@@ -887,7 +887,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Butt / Miter (default)"),
                 rect: Bounds {
                     x: 0.0,
@@ -896,7 +896,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let round_data = Rc::new(
                 PathData::new()
@@ -924,7 +924,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Round cap / Round join"),
                 rect: Bounds {
                     x: 300.0,
@@ -933,9 +933,9 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Path shadows"),
                 rect: Bounds {
                     x: 0.0,
@@ -944,7 +944,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             const K: f32 = 0.5523;
             let (cx1, cy1, r1) = (76.0_f32, 570.0_f32, 44.0_f32);
@@ -992,7 +992,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("drop shadow"),
                 rect: Bounds {
                     x: 32.0,
@@ -1001,7 +1001,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let star_shadow_data = Rc::new({
                 let cx = 272.0_f32;
@@ -1042,7 +1042,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("glow"),
                 rect: Bounds {
                     x: 248.0,
@@ -1051,7 +1051,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let (cx3, cy3, r3) = (468.0_f32, 570.0_f32, 44.0_f32);
             let diamond_data = Rc::new(
@@ -1081,7 +1081,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("hard offset"),
                 rect: Bounds {
                     x: 428.0,
@@ -1090,7 +1090,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let wave_data = Rc::new(
                 PathData::new()
@@ -1125,7 +1125,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("stroke shadow"),
                 rect: Bounds {
                     x: 600.0,
@@ -1134,7 +1134,7 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             View::group(children)
         },
@@ -1155,7 +1155,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Gradients"),
                 rect: Bounds {
                     x: 0.0,
@@ -1164,9 +1164,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 20.0,
                 },
                 style: TextStyle::new(12.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Linear — Rect"),
                 rect: Bounds {
                     x: 0.0,
@@ -1175,9 +1175,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,
                     y: 60.0,
@@ -1197,8 +1197,8 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("horizontal"),
                 rect: Bounds {
                     x: 0.0,
@@ -1207,9 +1207,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 184.0,
                     y: 60.0,
@@ -1226,8 +1226,8 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("vertical"),
                 rect: Bounds {
                     x: 184.0,
@@ -1236,9 +1236,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 368.0,
                     y: 60.0,
@@ -1255,8 +1255,8 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("diagonal"),
                 rect: Bounds {
                     x: 368.0,
@@ -1265,9 +1265,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 552.0,
                     y: 60.0,
@@ -1288,8 +1288,8 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("3 stops"),
                 rect: Bounds {
                     x: 552.0,
@@ -1298,9 +1298,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Radial — Rect"),
                 rect: Bounds {
                     x: 0.0,
@@ -1309,9 +1309,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,
                     y: 200.0,
@@ -1328,8 +1328,8 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("center burst"),
                 rect: Bounds {
                     x: 0.0,
@@ -1338,9 +1338,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 184.0,
                     y: 200.0,
@@ -1357,8 +1357,8 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("tight radius"),
                 rect: Bounds {
                     x: 184.0,
@@ -1367,9 +1367,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 368.0,
                     y: 200.0,
@@ -1386,8 +1386,8 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("3 stops"),
                 rect: Bounds {
                     x: 368.0,
@@ -1396,9 +1396,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 552.0,
                     y: 200.0,
@@ -1415,8 +1415,8 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("off-center"),
                 rect: Bounds {
                     x: 552.0,
@@ -1425,9 +1425,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Gradients — Path"),
                 rect: Bounds {
                     x: 0.0,
@@ -1436,7 +1436,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let tri = Rc::new(
                 PathData::new()
@@ -1464,7 +1464,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("triangle linear"),
                 rect: Bounds {
                     x: 0.0,
@@ -1473,7 +1473,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let cx = 268.0f32;
             let cy = 403.0f32;
@@ -1510,7 +1510,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("star radial"),
                 rect: Bounds {
                     x: 200.0,
@@ -1519,7 +1519,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let petal = Rc::new(
                 PathData::new()
@@ -1559,7 +1559,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("petal linear 3-stop"),
                 rect: Bounds {
                     x: 372.0,
@@ -1568,7 +1568,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let rings = Rc::new(
                 PathData::new()
@@ -1602,7 +1602,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("even-odd + linear"),
                 rect: Bounds {
                     x: 576.0,
@@ -1611,7 +1611,7 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             View::group(children)
         },
@@ -1632,7 +1632,7 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Layers (PushLayer / PopLayer)"),
                 rect: Bounds {
                     x: 0.0,
@@ -1641,9 +1641,9 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                     height: 20.0,
                 },
                 style: TextStyle::new(12.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Opacity — same red rect at 1.0 / 0.6 / 0.3 / 0.1"),
                 rect: Bounds {
                     x: 0.0,
@@ -1652,14 +1652,14 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             for (i, &opacity) in [1.0f32, 0.6, 0.3, 0.1].iter().enumerate() {
                 let x = i as f32 * 184.0;
                 children.push(View::Layer {
                     opacity,
                     children: vec![
-                        View::Primitive(DrawCommand::Rect {
+                        View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                             rect: Bounds {
                                 x,
                                 y: 60.0,
@@ -1672,8 +1672,8 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                                 radius: BorderRadius::all(8.0),
                                 shadow: None,
                             },
-                        }),
-                        View::Primitive(DrawCommand::Text {
+                        }))),
+                        View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                             text: Rc::from(format!("{opacity:.1}")),
                             rect: Bounds {
                                 x,
@@ -1682,12 +1682,12 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                                 height: 72.0,
                             },
                             style: TextStyle::new(18.0, WHITE),
-                        }),
+                        }))),
                     ],
                 });
             }
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Overlapping colored layers at 0.7 opacity"),
                 rect: Bounds {
                     x: 0.0,
@@ -1696,9 +1696,9 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,
                     y: 184.0,
@@ -1711,11 +1711,11 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
+            }))));
 
             children.push(View::Layer {
                 opacity: 0.7,
-                children: vec![View::Primitive(DrawCommand::Rect {
+                children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Bounds {
                         x: 16.0,
                         y: 200.0,
@@ -1728,12 +1728,12 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                         radius: BorderRadius::all(8.0),
                         shadow: None,
                     },
-                })],
+                })))],
             });
 
             children.push(View::Layer {
                 opacity: 0.7,
-                children: vec![View::Primitive(DrawCommand::Rect {
+                children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Bounds {
                         x: 96.0,
                         y: 240.0,
@@ -1746,12 +1746,12 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                         radius: BorderRadius::all(8.0),
                         shadow: None,
                     },
-                })],
+                })))],
             });
 
             children.push(View::Layer {
                 opacity: 0.7,
-                children: vec![View::Primitive(DrawCommand::Rect {
+                children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Bounds {
                         x: 176.0,
                         y: 220.0,
@@ -1764,10 +1764,10 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                         radius: BorderRadius::all(8.0),
                         shadow: None,
                     },
-                })],
+                })))],
             });
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Layer (0.8) wrapping a gradient rect + text"),
                 rect: Bounds {
                     x: 396.0,
@@ -1776,12 +1776,12 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             children.push(View::Layer {
                 opacity: 0.8,
                 children: vec![
-                    View::Primitive(DrawCommand::Rect {
+                    View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Bounds {
                             x: 396.0,
                             y: 184.0,
@@ -1798,8 +1798,8 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                             radius: BorderRadius::all(12.0),
                             shadow: None,
                         },
-                    }),
-                    View::Primitive(DrawCommand::Text {
+                    }))),
+                    View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                         text: Rc::from("gradient + layer"),
                         rect: Bounds {
                             x: 396.0,
@@ -1808,11 +1808,11 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                             height: 60.0,
                         },
                         style: TextStyle::new(18.0, WHITE),
-                    }),
+                    }))),
                 ],
             });
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Nested layers: outer 0.6, inner 0.5 → combined ~0.3"),
                 rect: Bounds {
                     x: 0.0,
@@ -1821,12 +1821,12 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             children.push(View::Layer {
                 opacity: 0.6,
                 children: vec![
-                    View::Primitive(DrawCommand::Rect {
+                    View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Bounds {
                             x: 0.0,
                             y: 410.0,
@@ -1839,11 +1839,11 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                             radius: BorderRadius::all(8.0),
                             shadow: None,
                         },
-                    }),
+                    }))),
                     View::Layer {
                         opacity: 0.5,
                         children: vec![
-                            View::Primitive(DrawCommand::Rect {
+                            View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                                 rect: Bounds {
                                     x: 36.0,
                                     y: 430.0,
@@ -1856,8 +1856,8 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                                     radius: BorderRadius::all(6.0),
                                     shadow: None,
                                 },
-                            }),
-                            View::Primitive(DrawCommand::Text {
+                            }))),
+                            View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                                 text: Rc::from("inner 0.5"),
                                 rect: Bounds {
                                     x: 36.0,
@@ -1866,10 +1866,10 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                                     height: 72.0,
                                 },
                                 style: TextStyle::new(14.0, WHITE),
-                            }),
+                            }))),
                         ],
                     },
-                    View::Primitive(DrawCommand::Text {
+                    View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                         text: Rc::from("outer 0.6"),
                         rect: Bounds {
                             x: 0.0,
@@ -1878,7 +1878,7 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
                             height: 20.0,
                         },
                         style: TextStyle::new(11.0, Color::rgba(1.0, 1.0, 1.0, 0.7)),
-                    }),
+                    }))),
                 ],
             });
 
@@ -1890,7 +1890,7 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
 fn grid_cell(color: Color, label: &'static str) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(LayoutStyle::new().height(72.0), move |w, h| {
         View::group([
-            View::Primitive(DrawCommand::Rect {
+            View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,
                     y: 0.0,
@@ -1903,8 +1903,8 @@ fn grid_cell(color: Color, label: &'static str) -> Result<DrawingArea, LayoutErr
                     radius: BorderRadius::all(6.0),
                     shadow: None,
                 },
-            }),
-            View::Primitive(DrawCommand::Text {
+            }))),
+            View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from(label),
                 rect: Bounds {
                     x: 0.0,
@@ -1913,7 +1913,7 @@ fn grid_cell(color: Color, label: &'static str) -> Result<DrawingArea, LayoutErr
                     height: h,
                 },
                 style: TextStyle::new(13.0, WHITE),
-            }),
+            }))),
         ])
     })
 }
@@ -1938,7 +1938,7 @@ fn grid_section() -> Result<Container, LayoutError> {
         LayoutStyle::new().height(48.0).grid_column_span(3),
         |w, h| {
             View::group([
-                View::Primitive(DrawCommand::Rect {
+                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Bounds {
                         x: 0.0,
                         y: 0.0,
@@ -1951,8 +1951,8 @@ fn grid_section() -> Result<Container, LayoutError> {
                         radius: BorderRadius::all(6.0),
                         shadow: None,
                     },
-                }),
-                View::Primitive(DrawCommand::Text {
+                }))),
+                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("header — span 3"),
                     rect: Bounds {
                         x: 0.0,
@@ -1961,7 +1961,7 @@ fn grid_section() -> Result<Container, LayoutError> {
                         height: h,
                     },
                     style: TextStyle::new(13.0, WHITE),
-                }),
+                }))),
             ])
         },
     )?;
@@ -1991,7 +1991,7 @@ fn grid_section() -> Result<Container, LayoutError> {
         ],
     )?;
     let side_label = DrawingArea::new(LayoutStyle::new().width(180.0), |w, h| {
-        View::Primitive(DrawCommand::Text {
+        View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Grid nested\ninside flex →"),
             rect: Bounds {
                 x: 0.0,
@@ -2000,7 +2000,7 @@ fn grid_section() -> Result<Container, LayoutError> {
                 height: h,
             },
             style: TextStyle::new(13.0, MUTED),
-        })
+        })))
     })?;
     let nested_row = Container::new(
         LayoutStyle::new().flex_row().gap(16.0),
@@ -2038,7 +2038,7 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Shadows"),
                 rect: Bounds {
                     x: 0.0,
@@ -2047,9 +2047,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 20.0,
                 },
                 style: TextStyle::new(12.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Rect shadows — offset / blur / spread"),
                 rect: Bounds {
                     x: 0.0,
@@ -2058,9 +2058,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,
                     y: 60.0,
@@ -2078,8 +2078,8 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                         Color::rgba(0.0, 0.0, 0.0, 0.25),
                     )),
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("soft (0, 4, 12)"),
                 rect: Bounds {
                     x: 0.0,
@@ -2088,9 +2088,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 176.0,
                     y: 60.0,
@@ -2103,8 +2103,8 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: Some(Shadow::new(4.0, 8.0, 4.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("offset (4, 8, 4)"),
                 rect: Bounds {
                     x: 176.0,
@@ -2113,9 +2113,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 352.0,
                     y: 60.0,
@@ -2133,8 +2133,8 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                         Color::rgba(0.24, 0.47, 0.98, 0.5),
                     )),
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("colored primary"),
                 rect: Bounds {
                     x: 352.0,
@@ -2143,9 +2143,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 528.0,
                     y: 60.0,
@@ -2161,8 +2161,8 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                             .with_spread(4.0),
                     ),
                 },
-            }));
-            children.push(View::Primitive(DrawCommand::Text {
+            }))));
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("spread +4"),
                 rect: Bounds {
                     x: 528.0,
@@ -2171,9 +2171,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Colored shadows on dark cards"),
                 rect: Bounds {
                     x: 0.0,
@@ -2182,7 +2182,7 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             let card_colors: &[(Color, Color, &str)] = &[
                 (PRIMARY, Color::rgba(0.24, 0.47, 0.98, 0.6), "primary glow"),
@@ -2192,7 +2192,7 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
             ];
             for (i, &(card_color, shadow_color, label)) in card_colors.iter().enumerate() {
                 let x = i as f32 * 184.0;
-                children.push(View::Primitive(DrawCommand::Rect {
+                children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Bounds {
                         x,
                         y: 196.0,
@@ -2205,8 +2205,8 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                         radius: BorderRadius::all(10.0),
                         shadow: Some(Shadow::new(0.0, 8.0, 20.0, shadow_color)),
                     },
-                }));
-                children.push(View::Primitive(DrawCommand::Text {
+                }))));
+                children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(label),
                     rect: Bounds {
                         x,
@@ -2215,10 +2215,10 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                         height: 72.0,
                     },
                     style: TextStyle::new(12.0, WHITE),
-                }));
+                }))));
             }
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Text shadows"),
                 rect: Bounds {
                     x: 0.0,
@@ -2227,9 +2227,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Rect {
+            children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,
                     y: 332.0,
@@ -2242,9 +2242,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     radius: BorderRadius::all(8.0),
                     shadow: None,
                 },
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Drop shadow"),
                 rect: Bounds {
                     x: 16.0,
@@ -2258,9 +2258,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     5.0,
                     Color::rgba(0.0, 0.0, 0.0, 0.35),
                 )),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Color glow"),
                 rect: Bounds {
                     x: 216.0,
@@ -2274,9 +2274,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     8.0,
                     Color::rgba(0.24, 0.47, 0.98, 0.6),
                 )),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Hard offset"),
                 rect: Bounds {
                     x: 436.0,
@@ -2290,9 +2290,9 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     1.0,
                     Color::rgba(0.92, 0.27, 0.27, 0.7),
                 )),
-            }));
+            }))));
 
-            children.push(View::Primitive(DrawCommand::Text {
+            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("Shadow inside layer"),
                 rect: Bounds {
                     x: 0.0,
@@ -2301,12 +2301,12 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                     height: 16.0,
                 },
                 style: TextStyle::new(11.0, MUTED),
-            }));
+            }))));
 
             children.push(View::Layer {
                 opacity: 1.0,
                 children: vec![
-                    View::Primitive(DrawCommand::Rect {
+                    View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Bounds {
                             x: 0.0,
                             y: 472.0,
@@ -2324,8 +2324,8 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                                 Color::rgba(0.0, 0.0, 0.0, 0.2),
                             )),
                         },
-                    }),
-                    View::Primitive(DrawCommand::Text {
+                    }))),
+                    View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                         text: Rc::from("layer opacity 1.0"),
                         rect: Bounds {
                             x: 16.0,
@@ -2334,14 +2334,14 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                             height: 20.0,
                         },
                         style: TextStyle::new(12.0, DARK),
-                    }),
+                    }))),
                 ],
             });
 
             children.push(View::Layer {
                 opacity: 0.7,
                 children: vec![
-                    View::Primitive(DrawCommand::Rect {
+                    View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Bounds {
                             x: 240.0,
                             y: 472.0,
@@ -2359,8 +2359,8 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                                 Color::rgba(0.24, 0.47, 0.98, 0.5),
                             )),
                         },
-                    }),
-                    View::Primitive(DrawCommand::Text {
+                    }))),
+                    View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                         text: Rc::from("layer opacity 0.7"),
                         rect: Bounds {
                             x: 256.0,
@@ -2369,14 +2369,14 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                             height: 20.0,
                         },
                         style: TextStyle::new(12.0, DARK),
-                    }),
+                    }))),
                 ],
             });
 
             children.push(View::Layer {
                 opacity: 0.4,
                 children: vec![
-                    View::Primitive(DrawCommand::Rect {
+                    View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Bounds {
                             x: 480.0,
                             y: 472.0,
@@ -2394,8 +2394,8 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                                 Color::rgba(0.6, 0.28, 0.98, 0.6),
                             )),
                         },
-                    }),
-                    View::Primitive(DrawCommand::Text {
+                    }))),
+                    View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                         text: Rc::from("layer opacity 0.4"),
                         rect: Bounds {
                             x: 496.0,
@@ -2404,7 +2404,7 @@ fn shadows_section() -> Result<DrawingArea, LayoutError> {
                             height: 20.0,
                         },
                         style: TextStyle::new(12.0, DARK),
-                    }),
+                    }))),
                 ],
             });
 

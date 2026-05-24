@@ -4,17 +4,30 @@ use geometry_core::{Point, Rect};
 
 use crate::{ImageData, ImageFilter, LineStyle, PathData, PathStyle, RectStyle, TextStyle};
 
+// Boxed to keep DrawCommand at 40 bytes; RectStyle is ~180 bytes on its own and would otherwise dominate the enum size, hurting cache utilization across the command buffer.
+#[derive(Debug, Clone)]
+pub struct RectPayload {
+    pub rect: Rect,
+    pub style: RectStyle,
+}
+
+#[derive(Debug, Clone)]
+pub struct TextPayload {
+    pub text: Rc<str>,
+    pub rect: Rect,
+    pub style: TextStyle,
+}
+
+#[derive(Debug, Clone)]
+pub struct PathPayload {
+    pub data: Rc<PathData>,
+    pub style: PathStyle,
+}
+
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
-    Rect {
-        rect: Rect,
-        style: RectStyle,
-    },
-    Text {
-        text: Rc<str>,
-        rect: Rect,
-        style: TextStyle,
-    },
+    Rect(Box<RectPayload>),
+    Text(Box<TextPayload>),
     Image {
         data: Rc<ImageData>,
         rect: Rect,
@@ -25,10 +38,7 @@ pub enum DrawCommand {
         p2: Point,
         style: LineStyle,
     },
-    Path {
-        data: Rc<PathData>,
-        style: PathStyle,
-    },
+    Path(Box<PathPayload>),
     PushClip {
         rect: Rect,
     },
@@ -44,31 +54,29 @@ pub enum DrawCommand {
     PopLayer,
 }
 
+impl PartialEq for RectPayload {
+    fn eq(&self, other: &Self) -> bool {
+        self.rect == other.rect && self.style == other.style
+    }
+}
+
+impl PartialEq for TextPayload {
+    fn eq(&self, other: &Self) -> bool {
+        *self.text == *other.text && self.rect == other.rect && self.style == other.style
+    }
+}
+
+impl PartialEq for PathPayload {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.data, &other.data) && self.style == other.style
+    }
+}
+
 impl PartialEq for DrawCommand {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (
-                DrawCommand::Rect {
-                    rect: r1,
-                    style: s1,
-                },
-                DrawCommand::Rect {
-                    rect: r2,
-                    style: s2,
-                },
-            ) => r1 == r2 && s1 == s2,
-            (
-                DrawCommand::Text {
-                    text: t1,
-                    rect: r1,
-                    style: s1,
-                },
-                DrawCommand::Text {
-                    text: t2,
-                    rect: r2,
-                    style: s2,
-                },
-            ) => **t1 == **t2 && r1 == r2 && s1 == s2,
+            (DrawCommand::Rect(a), DrawCommand::Rect(b)) => a == b,
+            (DrawCommand::Text(a), DrawCommand::Text(b)) => a == b,
             (
                 DrawCommand::Image {
                     data: d1,
@@ -93,16 +101,7 @@ impl PartialEq for DrawCommand {
                     style: s2,
                 },
             ) => p1a == p1b && p2a == p2b && s1 == s2,
-            (
-                DrawCommand::Path {
-                    data: d1,
-                    style: s1,
-                },
-                DrawCommand::Path {
-                    data: d2,
-                    style: s2,
-                },
-            ) => Rc::ptr_eq(d1, d2) && s1 == s2,
+            (DrawCommand::Path(a), DrawCommand::Path(b)) => a == b,
             (DrawCommand::PushClip { rect: r1 }, DrawCommand::PushClip { rect: r2 }) => r1 == r2,
             (DrawCommand::PopClip, DrawCommand::PopClip) => true,
             (

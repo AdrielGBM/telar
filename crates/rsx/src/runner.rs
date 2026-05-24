@@ -3,7 +3,7 @@ use platform_winit::{WinitPlatform, WinitWindow};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
-use renderer_software::SoftwareRenderer;
+use renderer_software::{RendererBudget, SoftwareRenderer};
 use ui_core::ComponentTree;
 
 use crate::app::App;
@@ -132,7 +132,7 @@ fn create_renderer(
                 tracing::warn!(
                     "Hardware renderer unavailable ({e}), falling back to software renderer"
                 );
-                SoftwareRenderer::new(window.clone(), window.clone())
+                SoftwareRenderer::new(window.clone(), window.clone(), RendererBudget::default())
                     .map(|r| Box::new(r) as Box<dyn RenderBackend>)
             }
         },
@@ -142,7 +142,7 @@ fn create_renderer(
         }),
         RendererBackend::Software => {
             tracing::info!("Using software renderer");
-            SoftwareRenderer::new(window.clone(), window.clone())
+            SoftwareRenderer::new(window.clone(), window.clone(), RendererBudget::default())
                 .map(|r| Box::new(r) as Box<dyn RenderBackend>)
         }
     }

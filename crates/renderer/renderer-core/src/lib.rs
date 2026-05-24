@@ -8,7 +8,7 @@ mod renderer;
 mod style;
 
 pub use color::Color;
-pub use command::DrawCommand;
+pub use command::{DrawCommand, PathPayload, RectPayload, TextPayload};
 pub use draw_state::DrawState;
 pub use error::RendererError;
 pub use image::{ImageData, ImageFilter, premultiply_rgba};

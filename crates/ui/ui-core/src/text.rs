@@ -4,7 +4,7 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use renderer_core::{DrawCommand, TextStyle};
+use renderer_core::{DrawCommand, TextPayload, TextStyle};
 use ui_tree::{Component, EventResult, View};
 
 use crate::layout_item::LayoutItem;
@@ -50,7 +50,7 @@ impl Component for Text {
         View::Translate {
             tx: r.x,
             ty: r.y,
-            children: vec![View::Primitive(DrawCommand::Text {
+            children: vec![View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text,
                 rect: Rect {
                     x: 0.0,
@@ -59,7 +59,7 @@ impl Component for Text {
                     height: r.height,
                 },
                 style: (self.style)(),
-            })],
+            })))],
         }
     }
 

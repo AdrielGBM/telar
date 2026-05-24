@@ -3,7 +3,9 @@ use std::rc::Rc;
 
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, PointerButton};
-use renderer_core::{BorderRadius, Color, DrawCommand, RectStyle, TextStyle};
+use renderer_core::{
+    BorderRadius, Color, DrawCommand, RectPayload, RectStyle, TextPayload, TextStyle,
+};
 use ui_tree::{Component, EventResult, View};
 
 use crate::layout_item::LayoutItem;
@@ -65,17 +67,17 @@ impl Component for Button {
             tx: r.x,
             ty: r.y,
             children: vec![View::group([
-                View::Primitive(DrawCommand::Rect {
+                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: local,
                     style: RectStyle::default()
                         .with_fill(color)
                         .with_radius(BorderRadius::all(4.0)),
-                }),
-                View::Primitive(DrawCommand::Text {
+                }))),
+                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::clone(&self.label),
                     rect: local,
                     style: self.text_style,
-                }),
+                }))),
             ])],
         }
     }
@@ -162,14 +164,8 @@ mod tests {
             assert_eq!(children.len(), 1);
             if let View::Group(inner) = &children[0] {
                 assert_eq!(inner.len(), 2);
-                assert!(matches!(
-                    &inner[0],
-                    View::Primitive(DrawCommand::Rect { .. })
-                ));
-                assert!(matches!(
-                    &inner[1],
-                    View::Primitive(DrawCommand::Text { .. })
-                ));
+                assert!(matches!(&inner[0], View::Primitive(DrawCommand::Rect(_))));
+                assert!(matches!(&inner[1], View::Primitive(DrawCommand::Text(_))));
             } else {
                 panic!("expected Group inside Translate");
             }
@@ -282,8 +278,8 @@ mod tests {
     fn rect_fill_color(view: &View) -> Color {
         if let View::Translate { children, .. } = view {
             if let View::Group(inner) = &children[0] {
-                if let View::Primitive(DrawCommand::Rect { style, .. }) = &inner[0] {
-                    if let Some(fill) = style.fill {
+                if let View::Primitive(DrawCommand::Rect(p)) = &inner[0] {
+                    if let Some(fill) = p.style.fill {
                         if let FillStyle::Solid(color) = fill {
                             return color;
                         }

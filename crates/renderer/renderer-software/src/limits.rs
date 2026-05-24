@@ -13,9 +13,8 @@ pub const TEXT_PIXEL_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;
 /// Byte budget for the alpha-only raster cache used for text shadows.
 pub const TEXT_ALPHA_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;
 
-/// Maximum number of shaped-glyph-position lists held in the shaping cache.
-/// TODO: switch to byte-based budget (see performance.md §8.4).
-pub const TEXT_SHAPING_CACHE_CAPACITY: usize = 2048;
+/// Byte budget for the glyph position-list shaping cache. Each entry is Arc<Vec<(CacheKey, i32, i32)>>; position lists (24 bytes each) scale with text length. A 500-word paragraph = ~12 KB; 2048 entries ≈ 24 MiB uncapped, so byte-weighted LRU bounds memory predictably.
+pub const TEXT_SHAPING_CACHE_BUDGET_BYTES: usize = 24 * 1024 * 1024;
 
 /// Maximum number of tiny_skia::Pixmaps cached for text rasterizations.
 /// Mirrors the keys of the text pixel cache; sized to cover the in-flight text elements rather than the full texture cache (which is byte-budgeted).

@@ -1,7 +1,7 @@
 use geometry_core::Rect;
 use platform_core::{Event, ScrollDelta};
 use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
-use renderer_core::{BorderRadius, Color, DrawCommand, RectStyle};
+use renderer_core::{BorderRadius, Color, DrawCommand, RectPayload, RectStyle};
 use ui_tree::{Component, EventResult, View};
 
 use crate::context::track_layout;
@@ -46,12 +46,12 @@ impl Component for ScrollArea {
             let bar_h = (vp.height / content_height * vp.height).max(24.0);
             let max_scroll = (content_height - vp.height).max(1.0);
             let bar_y = vp.y + (scroll_y / max_scroll) * (vp.height - bar_h);
-            View::Primitive(DrawCommand::Rect {
+            View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Rect::new(vp.x + vp.width - 8.0, bar_y, 6.0, bar_h),
                 style: RectStyle::default()
                     .with_fill(Color::rgba(0.5, 0.5, 0.6, 0.6))
                     .with_radius(BorderRadius::all(3.0)),
-            })
+            })))
         } else {
             View::Empty
         };
@@ -196,7 +196,7 @@ mod tests {
             assert!(matches!(&children[0], View::Clip { .. }));
             assert!(matches!(
                 &children[1],
-                View::Primitive(DrawCommand::Rect { .. })
+                View::Primitive(DrawCommand::Rect(_))
             ));
         } else {
             panic!("expected Group");

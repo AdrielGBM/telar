@@ -459,10 +459,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         for cmd in commands {
             match cmd {
-                DrawCommand::Rect { rect, style } => {
-                    if rect.width <= 0.0
-                        || rect.height <= 0.0
-                        || (style.fill.is_none() && style.stroke.is_none())
+                DrawCommand::Rect(p) => {
+                    if p.rect.width <= 0.0
+                        || p.rect.height <= 0.0
+                        || (p.style.fill.is_none() && p.style.stroke.is_none())
                     {
                         continue;
                     }
@@ -473,30 +473,30 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.batch_rect_start = Some(self.pending_instances.len() as u32);
                     }
                     let translated = Rect::new(
-                        rect.x + self.draw_state.cum_tx,
-                        rect.y + self.draw_state.cum_ty,
-                        rect.width,
-                        rect.height,
+                        p.rect.x + self.draw_state.cum_tx,
+                        p.rect.y + self.draw_state.cum_ty,
+                        p.rect.width,
+                        p.rect.height,
                     );
                     let inst = crate::primitives::rect::prepare_rect(
                         translated,
-                        &style,
+                        &p.style,
                         self.draw_state.cum_tx,
                         self.draw_state.cum_ty,
                     );
                     self.pending_instances.push(inst);
                 }
-                DrawCommand::Text { text, rect, style } => {
+                DrawCommand::Text(p) => {
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
                     let translated = Rect::new(
-                        rect.x + self.draw_state.cum_tx,
-                        rect.y + self.draw_state.cum_ty,
-                        rect.width,
-                        rect.height,
+                        p.rect.x + self.draw_state.cum_tx,
+                        p.rect.y + self.draw_state.cum_ty,
+                        p.rect.width,
+                        p.rect.height,
                     );
-                    if let Some(shadow) = style.shadow {
+                    if let Some(shadow) = p.style.shadow {
                         self.flush_text();
 
                         let s = shadow.blur_radius / 2.0;
@@ -517,12 +517,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let shadow_style = renderer_core::TextStyle {
                             color: shadow.color,
                             shadow: None,
-                            ..*style
+                            ..p.style
                         };
                         let instance_start = self.pending_shadow_instances.len() as u32;
                         crate::primitives::text::prepare_text(
                             &mut self.text_shaper,
-                            &*text,
+                            &p.text,
                             shadow_rect,
                             &shadow_style,
                             &mut self.pending_shadow_instances,
@@ -550,9 +550,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     }
                     crate::primitives::text::prepare_text(
                         &mut self.text_shaper,
-                        &*text,
+                        &p.text,
                         translated,
-                        &style,
+                        &p.style,
                         &mut self.pending_text_instances,
                     );
                 }
@@ -597,21 +597,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.pending_image_instances
                         .push(crate::primitives::image::prepare_image(translated));
                 }
-                DrawCommand::Path { data, style } => {
+                DrawCommand::Path(p) => {
                     self.flush_all();
 
-                    if let Some(shadow) = style.shadow {
-                        let shadow_fill = style
+                    if let Some(shadow) = p.style.shadow {
+                        let shadow_fill = p
+                            .style
                             .fill
                             .map(|_| renderer_core::FillStyle::Solid(shadow.color));
-                        let shadow_stroke = style.stroke.map(|s| renderer_core::Stroke {
+                        let shadow_stroke = p.style.stroke.map(|s| renderer_core::Stroke {
                             color: shadow.color,
                             ..s
                         });
                         let shadow_style = renderer_core::PathStyle {
                             fill: shadow_fill,
                             stroke: shadow_stroke,
-                            fill_rule: style.fill_rule,
+                            fill_rule: p.style.fill_rule,
                             shadow: None,
                         };
 
@@ -619,7 +620,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let si_start = self.pending_shadow_path_indices.len() as u32;
                         crate::primitives::path::prepare_path(
                             &mut self.path_tess_cache,
-                            &data,
+                            &p.data,
                             &shadow_style,
                             &mut self.pending_shadow_path_vertices,
                             &mut self.pending_shadow_path_indices,
@@ -680,8 +681,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     let fill_data_start = self.pending_path_fill_data.len();
                     crate::primitives::path::prepare_path(
                         &mut self.path_tess_cache,
-                        &data,
-                        &style,
+                        &p.data,
+                        &p.style,
                         &mut self.pending_path_vertices,
                         &mut self.pending_path_indices,
                         &mut self.pending_path_fill_data,
