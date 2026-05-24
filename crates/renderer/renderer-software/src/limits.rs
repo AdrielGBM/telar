@@ -1,13 +1,11 @@
 // Cache budget constants for the software renderer.
 // Edit this file to tune all cache memory limits from one place.
 
-/// Maximum number of decoded image pixmaps held in memory.
-/// TODO: switch to byte-based budget (see performance.md §8.1).
-pub const IMAGE_CACHE_MAX_ENTRIES: usize = 256;
+/// Byte budget for the decoded image pixmap cache. A single 4K RGBA image is ~33 MiB, so an entry-count cap would let the cache grow into the gigabytes; a byte budget bounds memory regardless of image size.
+pub const IMAGE_CACHE_BUDGET_BYTES: usize = 256 * 1024 * 1024;
 
-/// Maximum number of precomputed shadow pixmaps held in memory.
-/// TODO: switch to byte-based budget (see performance.md §8.1).
-pub const SHADOW_CACHE_MAX_ENTRIES: usize = 64;
+/// Byte budget for the precomputed shadow pixmap cache. Large widget shadows at 1080p can exceed 8 MiB, so an entry-count cap is not a meaningful memory bound.
+pub const SHADOW_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;
 
 /// Byte budget for the colored-text raster cache (width × height × 4 bytes per entry).
 pub const TEXT_PIXEL_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;

@@ -1,6 +1,7 @@
 use geometry_core::Rect;
 use renderer_core::{BorderRadius, LineCap, LineJoin, RectStyle, Shadow};
 
+use crate::primitives::image::ShadowCache;
 use crate::primitives::{fill_to_paint, to_skia_color};
 
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
@@ -67,10 +68,7 @@ fn draw_rect_shadow(
     radius: BorderRadius,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
-    shadow_cache: &mut lru::LruCache<
-        (u32, u32, u32, u32, u32, u32, u32, u32, u32),
-        tiny_skia::Pixmap,
-    >,
+    shadow_cache: &mut ShadowCache,
     blur_scratch: &mut Vec<u8>,
 ) {
     let sigma = shadow.blur_radius / 2.0;
@@ -100,7 +98,7 @@ fn draw_rect_shadow(
 
     let [cr, cg, cb, ca] = shadow.color.to_rgba8();
     let color_rgba8 = u32::from_le_bytes([cr, cg, cb, ca]);
-    let cache_key: (u32, u32, u32, u32, u32, u32, u32, u32, u32) = (
+    let cache_key: crate::primitives::image::ShadowCacheKey = (
         rect.width.ceil() as u32,
         rect.height.ceil() as u32,
         shadow.spread.to_bits(),
@@ -154,7 +152,7 @@ fn draw_rect_shadow(
         crate::primitives::gaussian_blur(tmp.data_mut(), tmp_w, tmp_h, sigma, blur_scratch);
     }
 
-    shadow_cache.put(cache_key, tmp);
+    let _ = shadow_cache.put_with_weight(cache_key, tmp);
     if let Some(cached) = shadow_cache.get(&cache_key) {
         pixmap.draw_pixmap(
             tmp_x,
@@ -177,10 +175,7 @@ pub(crate) fn draw_rect(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
     current_clip_rect: Option<Rect>,
-    shadow_cache: &mut lru::LruCache<
-        (u32, u32, u32, u32, u32, u32, u32, u32, u32),
-        tiny_skia::Pixmap,
-    >,
+    shadow_cache: &mut ShadowCache,
     blur_scratch: &mut Vec<u8>,
 ) {
     if let Some(shadow) = style.shadow {

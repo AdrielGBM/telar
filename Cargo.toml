@@ -40,6 +40,7 @@ tracing = "0.1.44"
 bytemuck = "1.25.0"
 rustc-hash = "2.1.2"
 wide = "0.7"
+clru = "0.6.3"
 
 platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }

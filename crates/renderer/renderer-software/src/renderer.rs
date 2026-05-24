@@ -1,14 +1,15 @@
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroUsize};
 
+use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
 use renderer_text::{TextShaper, TextShaperConfig};
-use rustc_hash::FxHashMap;
+use rustc_hash::FxBuildHasher;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
-use crate::primitives::image::ImageCache;
+use crate::primitives::image::{ImageCache, PixmapByteScale, ShadowCache};
 
 fn overlaps_clip(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
     let Some(clip) = clip else { return true };
@@ -116,7 +117,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     // Last region written as 0xFF into clip_mask_buf. Tracked across frames so the next PushClip can zero stale bits left by the previous frame without re-zeroing the whole mask.
     clip_mask_dirty: Option<Rect>,
     draw_state: renderer_core::DrawState,
-    shadow_cache: lru::LruCache<(u32, u32, u32, u32, u32, u32, u32, u32, u32), tiny_skia::Pixmap>,
+    shadow_cache: ShadowCache,
     text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     layer_stack: Vec<(tiny_skia::Pixmap, f32)>,
 }
@@ -143,14 +144,18 @@ where
                 alpha_cache_budget_bytes: crate::limits::TEXT_ALPHA_CACHE_BUDGET_BYTES,
                 shaping_cache_capacity: crate::limits::TEXT_SHAPING_CACHE_CAPACITY,
             }),
-            image_cache: FxHashMap::default(),
+            image_cache: crate::primitives::image::new_image_cache(),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
             clip_mask_buf: None,
             clip_mask_dirty: None,
             draw_state: renderer_core::DrawState::new(),
-            shadow_cache: lru::LruCache::new(
-                std::num::NonZeroUsize::new(crate::limits::SHADOW_CACHE_MAX_ENTRIES).unwrap(),
+            shadow_cache: CLruCache::with_config(
+                CLruCacheConfig::new(
+                    NonZeroUsize::new(crate::limits::SHADOW_CACHE_BUDGET_BYTES).unwrap(),
+                )
+                .with_hasher(FxBuildHasher::default())
+                .with_scale(PixmapByteScale),
             ),
             text_pixmap_cache: lru::LruCache::new(
                 std::num::NonZeroUsize::new(crate::limits::TEXT_PIXMAP_CACHE_MAX_ENTRIES).unwrap(),
@@ -179,7 +184,6 @@ where
                     .map_err(|e| RendererError::Resize(e.to_string()))?;
             }
         }
-        crate::primitives::image::evict_cache(&mut self.image_cache);
         Ok(())
     }
 

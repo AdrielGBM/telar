@@ -1,23 +1,35 @@
+use std::num::NonZeroUsize;
 use std::rc::Rc;
 
+use clru::{CLruCache, CLruCacheConfig, WeightScale};
 use geometry_core::Rect;
 use renderer_core::{ImageData, ImageFilter, premultiply_rgba};
-use rustc_hash::FxHashMap;
+use rustc_hash::FxBuildHasher;
 
-pub(crate) type ImageCache = FxHashMap<u64, (Rc<ImageData>, tiny_skia::Pixmap)>;
+use crate::limits::IMAGE_CACHE_BUDGET_BYTES;
 
-use crate::limits::IMAGE_CACHE_MAX_ENTRIES;
+pub(crate) struct PixmapByteScale;
 
-/// Evicts unused cached images. The cache holds one Rc clone per entry. When strong_count == 1, no external holder remains, making the entry safe to evict. If still over `IMAGE_CACHE_MAX_ENTRIES` after that pass, arbitrary live entries are removed as a safety valve.
-pub(crate) fn evict_cache(cache: &mut ImageCache) {
-    cache.retain(|_, (rc, _)| Rc::strong_count(rc) > 1);
-    while cache.len() > IMAGE_CACHE_MAX_ENTRIES {
-        if let Some(&key) = cache.keys().next() {
-            cache.remove(&key);
-        } else {
-            break;
-        }
+impl<K> WeightScale<K, tiny_skia::Pixmap> for PixmapByteScale {
+    fn weight(&self, _key: &K, value: &tiny_skia::Pixmap) -> usize {
+        value.data().len().max(1)
     }
+}
+
+pub(crate) type ImageCache = CLruCache<u64, tiny_skia::Pixmap, FxBuildHasher, PixmapByteScale>;
+
+/// Composite cache key for shadow pixmaps: (width, height, spread, blur_radius, color_rgba8, radius_tl, radius_tr, radius_br, radius_bl). Bits are packed as `to_bits()` for floats so equality is byte-exact.
+pub(crate) type ShadowCacheKey = (u32, u32, u32, u32, u32, u32, u32, u32, u32);
+
+pub(crate) type ShadowCache =
+    CLruCache<ShadowCacheKey, tiny_skia::Pixmap, FxBuildHasher, PixmapByteScale>;
+
+pub(crate) fn new_image_cache() -> ImageCache {
+    CLruCache::with_config(
+        CLruCacheConfig::new(NonZeroUsize::new(IMAGE_CACHE_BUDGET_BYTES).unwrap())
+            .with_hasher(FxBuildHasher::default())
+            .with_scale(PixmapByteScale),
+    )
 }
 
 pub(crate) fn draw_image(
@@ -31,7 +43,7 @@ pub(crate) fn draw_image(
 ) {
     let key = data.id;
 
-    let entry = cache.entry(key).or_insert_with(|| {
+    if cache.get(&key).is_none() {
         let size = tiny_skia::IntSize::from_wh(data.width, data.height);
         let src_pixmap = size.and_then(|s| {
             let mut pixels = data.pixels.clone();
@@ -40,14 +52,16 @@ pub(crate) fn draw_image(
         });
         let fallback = src_pixmap
             .unwrap_or_else(|| tiny_skia::Pixmap::new(1, 1).expect("1x1 pixmap always valid"));
-        (Rc::clone(data), fallback)
-    });
-
-    if entry.1.width() != data.width || entry.1.height() != data.height {
-        return;
+        cache.put_with_weight(key, fallback).ok();
     }
 
-    let src_pixmap = &entry.1;
+    let Some(src_pixmap) = cache.get(&key) else {
+        return;
+    };
+
+    if src_pixmap.width() != data.width || src_pixmap.height() != data.height {
+        return;
+    }
 
     let scale_x = rect.width / data.width as f32;
     let scale_y = rect.height / data.height as f32;
