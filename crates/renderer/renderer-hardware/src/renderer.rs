@@ -45,7 +45,7 @@ enum DrawStep {
         start: u32,
         end: u32,
         bind_group: wgpu::BindGroup,
-        // Sort key used by the image-batching pre-pass in end_frame to bring same-image batches together within a run of consecutive ImageBatch steps. Preserves z-order relative to non-image steps.
+        // Sort key used by the image-batching pre-pass in render_frame to bring same-image batches together within a run of consecutive ImageBatch steps. Preserves z-order relative to non-image steps.
         key: (u64, ImageFilter),
     },
     PathDraw {
@@ -449,7 +449,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         Ok(())
     }
 
-    fn submit(&mut self, commands: &[DrawCommand]) -> Result<(), RendererError> {
+    fn render_frame(
+        &mut self,
+        commands: &[DrawCommand],
+        clear_color: Option<Color>,
+    ) -> Result<(), RendererError> {
         self.draw_state.reset();
         let mut layer_blit_stack: Vec<wgpu::BindGroup> = Vec::new();
 
@@ -758,10 +762,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         self.flush_all();
-        Ok(())
-    }
 
-    fn end_frame(&mut self, clear_color: Option<Color>) -> Result<(), RendererError> {
         let load_op = if let Some(c) = clear_color {
             wgpu::LoadOp::Clear(wgpu::Color {
                 r: c.r as f64,

@@ -86,6 +86,13 @@ impl EventHandler<WinitWindow> for AppHandler {
         let Some(renderer) = &mut self.renderer else {
             return;
         };
+
+        // skip rendering entirely when no component slot has changed since the last frame
+        let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
+        if !tree_dirty {
+            return;
+        }
+
         let (w, h) = window.size();
         if let Err(e) = renderer.begin_frame(w, h) {
             tracing::error!("begin_frame failed: {e}");
@@ -95,12 +102,8 @@ impl EventHandler<WinitWindow> for AppHandler {
         let commands_ref = self.tree.as_ref().map(|t| t.commands());
         let slice: &[renderer_core::DrawCommand] =
             commands_ref.as_deref().map(|r| r.as_slice()).unwrap_or(&[]);
-        if let Err(e) = renderer.as_mut().submit(slice) {
-            tracing::error!("submit failed: {e}");
-            return;
-        }
-        if let Err(e) = renderer.as_mut().end_frame(clear) {
-            tracing::error!("end_frame failed: {e}");
+        if let Err(e) = renderer.as_mut().render_frame(slice, clear) {
+            tracing::error!("render_frame failed: {e}");
         }
     }
 

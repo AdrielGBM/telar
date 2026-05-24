@@ -31,11 +31,9 @@ impl ComponentSlot {
         let _effect = create_effect(move || {
             let view = comp_clone.borrow().view();
             let mut stk = stack_clone.borrow_mut();
-            let mut new_cmds: Vec<DrawCommand> = Vec::new();
-            view_flatten::flatten_view(view, &mut new_cmds, &mut stk);
             let mut cmds = cmds_clone.borrow_mut();
-            if *cmds != new_cmds {
-                *cmds = new_cmds;
+            let changed = view_flatten::flatten_view(view, &mut *cmds, &mut *stk);
+            if changed {
                 dirty_clone.set(true);
             }
         });
@@ -67,7 +65,17 @@ impl ComponentTree {
         self.slots.push(ComponentSlot::new(component));
     }
 
+    pub fn is_dirty(&self) -> bool {
+        self.slots.iter().any(|s| s.dirty.get())
+    }
+
     pub fn commands(&self) -> Ref<'_, Vec<DrawCommand>> {
+        // single-slot fast path: flatten_view already wrote into the slot vec in-place,
+        // so we can return a ref to it directly without copying into `cached`
+        if let [slot] = self.slots.as_slice() {
+            slot.dirty.set(false);
+            return slot.commands.borrow();
+        }
         let any_dirty = self.slots.iter().any(|s| s.dirty.get());
         if any_dirty {
             let mut cached = self.cached.borrow_mut();

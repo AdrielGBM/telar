@@ -109,7 +109,6 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     height: u32,
     pub(crate) pixmap: Option<Pixmap>,
     pub(crate) text_shaper: TextShaper,
-    pending_commands: Vec<DrawCommand>,
     image_cache: ImageCache,
     blur_scratch: Vec<u8>,
     pixmap_pool: Vec<tiny_skia::Pixmap>,
@@ -144,7 +143,6 @@ where
                 alpha_cache_budget_bytes: crate::limits::TEXT_ALPHA_CACHE_BUDGET_BYTES,
                 shaping_cache_capacity: crate::limits::TEXT_SHAPING_CACHE_CAPACITY,
             }),
-            pending_commands: Vec::new(),
             image_cache: FxHashMap::default(),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
@@ -182,21 +180,17 @@ where
             }
         }
         crate::primitives::image::evict_cache(&mut self.image_cache);
-        self.pending_commands.clear();
         Ok(())
     }
 
-    fn submit(&mut self, commands: &[DrawCommand]) -> Result<(), RendererError> {
-        self.pending_commands = commands.to_vec();
-        Ok(())
-    }
-
-    fn end_frame(&mut self, clear_color: Option<Color>) -> Result<(), RendererError> {
+    fn render_frame(
+        &mut self,
+        commands: &[DrawCommand],
+        clear_color: Option<Color>,
+    ) -> Result<(), RendererError> {
         if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
             pixmap.fill(crate::primitives::to_skia_color(color));
         }
-
-        let commands = std::mem::take(&mut self.pending_commands);
 
         self.draw_state.reset();
         let mut clip_active: bool = false;
@@ -234,8 +228,8 @@ where
                     };
                     crate::primitives::rect::draw_rect(
                         pixmap,
-                        rect,
-                        &style,
+                        *rect,
+                        style,
                         transform,
                         clip,
                         current_clip_rect,
@@ -260,9 +254,9 @@ where
                     crate::primitives::text::draw_text(
                         pixmap,
                         &mut self.text_shaper,
-                        &*text,
-                        rect,
-                        &style,
+                        text,
+                        *rect,
+                        style,
                         transform,
                         clip,
                         current_clip_rect,
@@ -286,10 +280,10 @@ where
                     };
                     crate::primitives::image::draw_image(
                         pixmap,
-                        &data,
+                        data,
                         &mut self.image_cache,
-                        rect,
-                        filter,
+                        *rect,
+                        *filter,
                         transform,
                         clip,
                     );
@@ -312,10 +306,10 @@ where
                     } else {
                         None
                     };
-                    crate::primitives::line::draw_line(pixmap, p1, p2, style, transform, clip);
+                    crate::primitives::line::draw_line(pixmap, *p1, *p2, *style, transform, clip);
                 }
                 DrawCommand::Path { data, style } => {
-                    if let Some((bx, by, bw, bh)) = path_data_bounds(&data) {
+                    if let Some((bx, by, bw, bh)) = path_data_bounds(data) {
                         if !overlaps_clip(bx, by, bw, bh, current_clip_rect) {
                             continue;
                         }
@@ -332,8 +326,8 @@ where
                     };
                     crate::primitives::path::draw_path(
                         pixmap,
-                        &data,
-                        &style,
+                        data,
+                        style,
                         transform,
                         clip,
                         current_clip_rect,
@@ -342,7 +336,7 @@ where
                 }
                 DrawCommand::PushClip { rect } => {
                     let prev_dirty = self.clip_mask_dirty;
-                    let effective = self.draw_state.push_clip(rect);
+                    let effective = self.draw_state.push_clip(*rect);
                     current_clip_rect = Some(effective);
                     if let Some(ref mut m) = self.clip_mask_buf {
                         repaint_mask(m, effective, prev_dirty, self.width, self.height);
@@ -379,7 +373,7 @@ where
                     }
                 }
                 DrawCommand::PushTransform { tx, ty } => {
-                    self.draw_state.push_transform(tx, ty);
+                    self.draw_state.push_transform(*tx, *ty);
                 }
                 DrawCommand::PopTransform => {
                     self.draw_state.pop_transform();
@@ -392,7 +386,7 @@ where
                         .or_else(|| tiny_skia::Pixmap::new(self.width, self.height));
                     if let Some(mut l) = layer {
                         l.fill(tiny_skia::Color::TRANSPARENT);
-                        self.layer_stack.push((l, opacity));
+                        self.layer_stack.push((l, *opacity));
                     }
                 }
                 DrawCommand::PopLayer => {

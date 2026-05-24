@@ -1,4 +1,4 @@
-use taffy::TaffyTree;
+use taffy::{TaffyTree, TraversePartialTree};
 
 use crate::error::LayoutError;
 use crate::style::{AvailableSpace, LayoutStyle};
@@ -77,11 +77,12 @@ impl LayoutEngine {
             offset_y: f32,
         }
 
-        let mut stack = vec![StackEntry {
+        let mut stack = Vec::with_capacity(64);
+        stack.push(StackEntry {
             node: root,
             offset_x: 0.0,
             offset_y: 0.0,
-        }];
+        });
 
         while let Some(entry) = stack.pop() {
             let layout = self.tree.layout(entry.node).map_err(LayoutError::from)?;
@@ -93,7 +94,7 @@ impl LayoutEngine {
                 geometry_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
             );
 
-            let children = self.tree.children(entry.node).map_err(LayoutError::from)?;
+            let children: Vec<NodeId> = self.tree.child_ids(entry.node).collect();
             for child in children.into_iter().rev() {
                 stack.push(StackEntry {
                     node: child,

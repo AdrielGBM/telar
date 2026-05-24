@@ -2,14 +2,33 @@ use renderer_core::DrawCommand;
 
 use crate::view::View;
 
-pub fn flatten_view(root: View, out: &mut Vec<DrawCommand>, stack: &mut Vec<View>) {
-    out.clear();
+pub fn flatten_view(root: View, out: &mut Vec<DrawCommand>, stack: &mut Vec<View>) -> bool {
     stack.clear();
     stack.push(root);
+    let mut pos: usize = 0;
+    let mut changed = false;
+
+    // emit_cmd checks the slot at `pos` before overwriting to avoid marking changed spuriously
+    macro_rules! emit_cmd {
+        ($cmd:expr) => {{
+            let cmd = $cmd;
+            if pos < out.len() {
+                if out[pos] != cmd {
+                    out[pos] = cmd;
+                    changed = true;
+                }
+            } else {
+                out.push(cmd);
+                changed = true;
+            }
+            pos += 1;
+        }};
+    }
+
     while let Some(view) = stack.pop() {
         match view {
             View::Empty => {}
-            View::Primitive(cmd) => out.push(cmd),
+            View::Primitive(cmd) => emit_cmd!(cmd),
             View::Group(children) => {
                 for child in children.into_iter().rev() {
                     stack.push(child);
@@ -20,24 +39,32 @@ pub fn flatten_view(root: View, out: &mut Vec<DrawCommand>, stack: &mut Vec<View
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
-                out.push(DrawCommand::PushTransform { tx, ty });
+                emit_cmd!(DrawCommand::PushTransform { tx, ty });
             }
             View::Clip { rect, children } => {
                 stack.push(View::Primitive(DrawCommand::PopClip));
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
-                out.push(DrawCommand::PushClip { rect });
+                emit_cmd!(DrawCommand::PushClip { rect });
             }
             View::Layer { opacity, children } => {
                 stack.push(View::Primitive(DrawCommand::PopLayer));
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
-                out.push(DrawCommand::PushLayer { opacity });
+                emit_cmd!(DrawCommand::PushLayer { opacity });
             }
         }
     }
+
+    // truncate stale tail entries left over from a previous longer output
+    if pos != out.len() {
+        out.truncate(pos);
+        changed = true;
+    }
+
+    changed
 }
 
 #[cfg(test)]
