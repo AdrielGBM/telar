@@ -439,12 +439,12 @@ where
             return Ok(());
         }
         if let Ok(mut buffer) = self.surface.buffer_mut() {
-            // SAFETY: Pixel format conversion. tiny-skia stores pixels as RGBA in little-endian byte order: [R, G, B, A, ...]. softbuffer::Buffer accepts u32 pixels in platform-native endianness. On little-endian platforms: u32(0x00RRGGBB) → bytes [B, G, R, 0] in memory → correct. On big-endian platforms: u32(0x00RRGGBB) → bytes [0, R, G, B] in memory → incorrect. This code is only correct on little-endian.
+            // Pixel format conversion: tiny-skia stores pixels as premultiplied RGBA bytes [R, G, B, A, ...]. softbuffer expects u32 pixels as 0x00RRGGBB in native endianness. On little-endian, the bytemuck cast gives 0xAABBGGRR per pixel; swap_bytes() reorders to 0xRRGGBBAA and >> 8 drops the alpha byte to yield 0x00RRGGBB.
             #[cfg(target_endian = "little")]
             {
                 let src: &[u32] = bytemuck::cast_slice(pixmap.data());
                 for (dst, &src_px) in buffer.iter_mut().zip(src.iter()) {
-                    *dst = (src_px >> 8) & 0x00FF_FFFF;
+                    *dst = src_px.swap_bytes() >> 8;
                 }
             }
             #[cfg(target_endian = "big")]
