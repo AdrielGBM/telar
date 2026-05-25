@@ -1,74 +1,63 @@
-use std::cell::RefCell;
-
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, NodeId};
-use reactive_core::{ReadSignal, RwSignal, batch, create_rw_signal};
+use reactive_core::{RwSignal, batch, create_rw_signal};
 use rustc_hash::FxHashMap;
 
-thread_local! {
-    static CURRENT_CTX: RefCell<Option<WidgetCtx>> = const { RefCell::new(None) };
+pub fn register_leaf(
+    ctx: &mut WidgetCtx,
+    style: LayoutStyle,
+) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
+    ctx.register_leaf(style)
 }
 
-pub fn with_context<R>(ctx: WidgetCtx, f: impl FnOnce() -> R) -> (R, WidgetCtx) {
-    CURRENT_CTX.with(|c| {
-        assert!(
-            c.borrow().is_none(),
-            "nested with_context calls are not supported"
-        );
-        *c.borrow_mut() = Some(ctx);
-    });
-    let result = f();
-    let ctx = CURRENT_CTX.with(|c| {
-        c.borrow_mut()
-            .take()
-            .expect("WidgetCtx was taken during with_context closure")
-    });
-    (result, ctx)
-}
-
-pub fn register_leaf(style: LayoutStyle) -> Result<(NodeId, ReadSignal<Rect>), LayoutError> {
-    CURRENT_CTX.with(|c| {
-        c.borrow_mut()
-            .as_mut()
-            .expect("no active WidgetCtx — call within with_context()")
-            .register_leaf(style)
-    })
-}
-
-pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, LayoutError> {
-    CURRENT_CTX.with(|c| {
-        c.borrow_mut()
-            .as_mut()
-            .expect("no active WidgetCtx — call within with_context()")
-            .new_container(style, children)
-    })
+pub fn new_container(
+    ctx: &mut WidgetCtx,
+    style: LayoutStyle,
+    children: &[NodeId],
+) -> Result<NodeId, LayoutError> {
+    ctx.new_container(style, children)
 }
 
 pub fn compute_layout(
+    ctx: &mut WidgetCtx,
     root: NodeId,
     width: AvailableSpace,
     height: AvailableSpace,
 ) -> Result<(), LayoutError> {
-    CURRENT_CTX.with(|c| {
-        c.borrow_mut()
-            .as_mut()
-            .expect("no active WidgetCtx — call within with_context()")
-            .compute(root, width, height)
-    })
+    ctx.compute(root, width, height)
 }
 
-pub fn track_layout(node: NodeId) -> ReadSignal<Rect> {
-    CURRENT_CTX.with(|c| {
-        c.borrow_mut()
-            .as_mut()
-            .expect("no active WidgetCtx — call within with_context()")
-            .track_layout(node)
-    })
+pub fn track_layout(ctx: &WidgetCtx, node: NodeId) -> Option<RwSignal<Rect>> {
+    ctx.track_layout(node)
+}
+
+pub fn update_style(
+    ctx: &mut WidgetCtx,
+    node: NodeId,
+    style: LayoutStyle,
+) -> Result<(), LayoutError> {
+    ctx.update_style_for(node, style)
+}
+
+pub fn mark_dirty(ctx: &mut WidgetCtx, node: NodeId) -> Result<(), LayoutError> {
+    ctx.mark_dirty_node(node)
+}
+
+pub fn with_context<F, R>(ctx: WidgetCtx, f: F) -> (R, WidgetCtx)
+where
+    F: FnOnce(&mut WidgetCtx) -> R,
+{
+    let mut ctx = ctx;
+    let result = f(&mut ctx);
+    (result, ctx)
 }
 
 pub struct WidgetCtx {
     engine: LayoutEngine,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
+    // Guards against recursive compute(): an effect that reads a layout signal and calls compute_layout() again creates a re-layout cycle caught immediately in debug builds.
+    #[cfg(debug_assertions)]
+    is_computing: bool,
 }
 
 impl WidgetCtx {
@@ -76,17 +65,19 @@ impl WidgetCtx {
         Self {
             engine: LayoutEngine::new(),
             registry: FxHashMap::default(),
+            #[cfg(debug_assertions)]
+            is_computing: false,
         }
     }
 
     pub fn register_leaf(
         &mut self,
         style: LayoutStyle,
-    ) -> Result<(NodeId, ReadSignal<Rect>), LayoutError> {
+    ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
         let node = self.engine.new_leaf(style)?;
         let signal = create_rw_signal(Rect::default());
         self.registry.insert(node, signal.clone());
-        Ok((node, signal.read_only()))
+        Ok((node, signal))
     }
 
     pub fn new_container(
@@ -94,7 +85,10 @@ impl WidgetCtx {
         style: LayoutStyle,
         children: &[NodeId],
     ) -> Result<NodeId, LayoutError> {
-        self.engine.new_container(style, children)
+        let node = self.engine.new_container(style, children)?;
+        let signal = create_rw_signal(Rect::default());
+        self.registry.insert(node, signal);
+        Ok(node)
     }
 
     pub fn compute(
@@ -106,29 +100,52 @@ impl WidgetCtx {
         if !self.engine.is_dirty(root) {
             return Ok(());
         }
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                !self.is_computing,
+                "[rsx layout] cycle detected: compute_layout() called recursively. \
+                 An effect is reading a layout signal and then calling compute_layout() again inside its body. \
+                 This causes an infinite re-layout loop (capped by MAX_FLUSH_ITERATIONS). \
+                 Move style mutations outside of layout-observing effects."
+            );
+            self.is_computing = true;
+        }
         self.engine.compute(root, width, height)?;
         let registry = &self.registry;
         let mut walk_result = Ok(());
         batch(|| {
             walk_result = self.engine.walk(root, &mut |node_id, rect| {
                 if let Some(sig) = registry.get(&node_id) {
-                    if sig.peek() != rect {
-                        sig.set(rect);
+                    if sig.peek() == rect {
+                        return false; // position unchanged, skip entire subtree
                     }
+                    sig.set(rect);
                 }
+                true
             });
         });
+        #[cfg(debug_assertions)]
+        {
+            self.is_computing = false;
+        }
         walk_result
     }
 
-    pub fn track_layout(&mut self, node: NodeId) -> ReadSignal<Rect> {
-        if let Some(existing) = self.registry.get(&node) {
-            existing.read_only()
-        } else {
-            let signal = create_rw_signal(Rect::default());
-            self.registry.insert(node, signal.clone());
-            signal.read_only()
-        }
+    pub fn track_layout(&self, node: NodeId) -> Option<RwSignal<Rect>> {
+        self.registry.get(&node).cloned()
+    }
+
+    pub fn update_style_for(
+        &mut self,
+        node: NodeId,
+        style: LayoutStyle,
+    ) -> Result<(), LayoutError> {
+        self.engine.set_style(node, style)
+    }
+
+    pub fn mark_dirty_node(&mut self, node: NodeId) -> Result<(), LayoutError> {
+        self.engine.mark_dirty(node)
     }
 }
 
@@ -147,48 +164,47 @@ mod tests {
 
     #[test]
     fn ctx_register_leaf_returns_ok() {
-        with_context(WidgetCtx::new(), || {
-            let result = register_leaf(LayoutStyle::new());
-            assert!(result.is_ok());
-        });
+        let mut ctx = WidgetCtx::new();
+        let result = register_leaf(&mut ctx, LayoutStyle::new());
+        assert!(result.is_ok());
     }
 
     #[test]
     fn ctx_new_container_returns_ok() {
-        with_context(WidgetCtx::new(), || {
-            let leaf_result = register_leaf(LayoutStyle::new());
-            assert!(leaf_result.is_ok());
-            let (leaf, _) = leaf_result.unwrap();
-            let container_result = new_container(LayoutStyle::new(), &[leaf]);
-            assert!(container_result.is_ok());
-        });
+        let mut ctx = WidgetCtx::new();
+        let leaf_result = register_leaf(&mut ctx, LayoutStyle::new());
+        assert!(leaf_result.is_ok());
+        let (leaf, _) = leaf_result.unwrap();
+        let container_result = new_container(&mut ctx, LayoutStyle::new(), &[leaf]);
+        assert!(container_result.is_ok());
     }
 
     #[test]
     fn ctx_register_leaf_returns_zero_rect() {
-        with_context(WidgetCtx::new(), || {
-            let (_node, rect) = register_leaf(LayoutStyle::new()).unwrap();
-            assert_eq!(rect.get(), Rect::default());
-        });
+        let mut ctx = WidgetCtx::new();
+        let (_node, rect) = register_leaf(&mut ctx, LayoutStyle::new()).unwrap();
+        assert_eq!(rect.get(), Rect::default());
     }
 
     #[test]
     fn ctx_compute_updates_rect() {
-        with_context(WidgetCtx::new(), || {
-            let (leaf, rect) = register_leaf(LayoutStyle::new().width(100.0).height(50.0)).unwrap();
-            let root = new_container(
-                LayoutStyle::new().flex_row().width(200.0).height(100.0),
-                &[leaf],
-            )
-            .unwrap();
-            compute_layout(
-                root,
-                AvailableSpace::Definite(200.0),
-                AvailableSpace::Definite(100.0),
-            )
-            .unwrap();
-            assert_eq!(rect.get().width, 100.0);
-            assert_eq!(rect.get().height, 50.0);
-        });
+        let mut ctx = WidgetCtx::new();
+        let (leaf, rect) =
+            register_leaf(&mut ctx, LayoutStyle::new().width(100.0).height(50.0)).unwrap();
+        let root = new_container(
+            &mut ctx,
+            LayoutStyle::new().flex_row().width(200.0).height(100.0),
+            &[leaf],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        assert_eq!(rect.get().width, 100.0);
+        assert_eq!(rect.get().height, 50.0);
     }
 }

@@ -117,9 +117,8 @@ fn compute_layer_bboxes(
     result
 }
 
-// Shifts pixel rows inside `clip` by `delta_ty` pixels in place. After the shift the newly
-// exposed rows still contain stale data and must be cleared + re-rendered by the caller.
-fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_ty: f32) {
+// Shifts rows (Y scroll) or columns (X scroll) inside `clip` in place; the two are mutually exclusive. The newly exposed strip is left stale and must be re-rendered by the caller.
+fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, delta_ty: f32) {
     let width = pixmap.width() as usize;
     let height = pixmap.height() as usize;
     let x0 = (clip.x.floor() as usize).min(width);
@@ -129,38 +128,70 @@ fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_ty: f32) {
     if x0 >= x1 || y0 >= y1 {
         return;
     }
-    let row_bytes = (x1 - x0) * 4;
-    let delta = delta_ty.round() as i64;
-    if delta == 0 {
-        return;
-    }
     let data = pixmap.data_mut();
-    if delta < 0 {
-        // Content moved up: write to a lower row, read from a higher row → top-to-bottom is safe.
-        let shift = (-delta) as usize;
-        for dst_y in y0..y1 {
-            let src_y = dst_y + shift;
-            if src_y >= y1 {
-                break;
+    let dy = delta_ty.round() as i64;
+    let dx = delta_tx.round() as i64;
+    if dy != 0 {
+        let row_bytes = (x1 - x0) * 4;
+        if dy < 0 {
+            // Content moved up: write to a lower row, read from a higher row → top-to-bottom is safe.
+            let shift = (-dy) as usize;
+            for dst_y in y0..y1 {
+                let src_y = dst_y + shift;
+                if src_y >= y1 {
+                    break;
+                }
+                let src_off = (src_y * width + x0) * 4;
+                let dst_off = (dst_y * width + x0) * 4;
+                data.copy_within(src_off..src_off + row_bytes, dst_off);
             }
-            let src_off = (src_y * width + x0) * 4;
-            let dst_off = (dst_y * width + x0) * 4;
-            data.copy_within(src_off..src_off + row_bytes, dst_off);
+        } else {
+            // Content moved down: write to a higher row, read from a lower row → bottom-to-top is safe.
+            let shift = dy as usize;
+            for dst_y in (y0..y1).rev() {
+                if dst_y < y0 + shift {
+                    break;
+                }
+                let src_y = dst_y - shift;
+                if src_y < y0 {
+                    break;
+                }
+                let src_off = (src_y * width + x0) * 4;
+                let dst_off = (dst_y * width + x0) * 4;
+                data.copy_within(src_off..src_off + row_bytes, dst_off);
+            }
         }
-    } else {
-        // Content moved down: write to a higher row, read from a lower row → bottom-to-top is safe.
-        let shift = delta as usize;
-        for dst_y in (y0..y1).rev() {
-            if dst_y < y0 + shift {
-                break;
+    } else if dx != 0 {
+        if dx < 0 {
+            // Content moved left: read from a higher column, write to a lower column → left-to-right is safe.
+            let shift = (-dx) as usize;
+            for y in y0..y1 {
+                let row_base = y * width;
+                for dst_x in x0..x1 {
+                    let src_x = dst_x + shift;
+                    if src_x >= x1 {
+                        break;
+                    }
+                    let src_off = (row_base + src_x) * 4;
+                    let dst_off = (row_base + dst_x) * 4;
+                    data.copy_within(src_off..src_off + 4, dst_off);
+                }
             }
-            let src_y = dst_y - shift;
-            if src_y < y0 {
-                break;
+        } else {
+            // Content moved right: read from a lower column, write to a higher column → right-to-left is safe.
+            let shift = dx as usize;
+            for y in y0..y1 {
+                let row_base = y * width;
+                for dst_x in (x0..x1).rev() {
+                    if dst_x < x0 + shift {
+                        break;
+                    }
+                    let src_x = dst_x - shift;
+                    let src_off = (row_base + src_x) * 4;
+                    let dst_off = (row_base + dst_x) * 4;
+                    data.copy_within(src_off..src_off + 4, dst_off);
+                }
             }
-            let src_off = (src_y * width + x0) * 4;
-            let dst_off = (dst_y * width + x0) * 4;
-            data.copy_within(src_off..src_off + row_bytes, dst_off);
         }
     }
 }
@@ -173,6 +204,9 @@ fn repaint_mask(
     width: u32,
     height: u32,
 ) {
+    if prev_rect == Some(new_rect) {
+        return;
+    }
     let stride = width as usize;
     let data = mask.data_mut();
     if let Some(prev) = prev_rect {
@@ -331,7 +365,12 @@ where
         };
         if let Some(ref sb) = maybe_scroll {
             if let Some(pixmap) = &mut self.pixmap {
-                apply_scroll_blit(pixmap, sb.scroll_clip, sb.delta_ty as f32);
+                apply_scroll_blit(
+                    pixmap,
+                    sb.scroll_clip,
+                    sb.delta_tx as f32,
+                    sb.delta_ty as f32,
+                );
             }
         }
 

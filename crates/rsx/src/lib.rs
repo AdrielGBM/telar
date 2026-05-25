@@ -43,7 +43,8 @@ pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, wit
 pub use ui_core::{
     Button, ClipGroup, Component, ComponentTree, Container, DrawingArea, EventResult, Image,
     LayoutItem, LayoutLeaf, Line, NodeId, Path, Rect, ScrollArea, Text, TranslateGroup, View,
-    WidgetCtx, compute_layout, new_container, register_leaf, track_layout, with_context,
+    WidgetCtx, compute_layout, mark_dirty, new_container, register_leaf, track_layout,
+    update_style, with_context,
 };
 
 #[cfg(feature = "runtime")]

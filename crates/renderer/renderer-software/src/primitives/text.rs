@@ -207,14 +207,18 @@ pub(crate) fn draw_text(
         return;
     }
 
-    let (pixels_arc, w, h) = shaper.rasterize(text, rect, style);
+    // Use rasterize_alpha so the shaper's alpha cache is keyed without color — color changes tint
+    // the cached alpha pixmap instead of triggering a full re-rasterize.
+    let (pixels_arc, w, h) = shaper.rasterize_alpha(text, rect, style);
     if w == 0 || h == 0 {
         return;
     }
     let Some(size) = tiny_skia::IntSize::from_wh(w, h) else {
         return;
     };
-    let Some(src) = tiny_skia::Pixmap::from_vec(pixels_arc.to_vec(), size) else {
+    let mut tinted = pixels_arc.to_vec();
+    tint_premultiplied(&mut tinted, style.color);
+    let Some(src) = tiny_skia::Pixmap::from_vec(tinted, size) else {
         return;
     };
     pixmap.draw_pixmap(

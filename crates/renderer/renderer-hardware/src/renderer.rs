@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use geometry_core::Rect;
@@ -18,10 +19,7 @@ use crate::primitives::text::{TextInstance, TextPipeline};
 use crate::primitives::{MSAA_SAMPLES, Viewport, create_viewport_bgl};
 
 fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
-    // Prefer Rgba8Unorm first: it has wider MSAA driver support on Linux/Vulkan
-    // (some Mesa drivers spuriously return VK_ERROR_OUT_OF_DEVICE_MEMORY for
-    // Bgra8Unorm MSAA textures). Fall back to Bgra8Unorm, then whatever the
-    // driver reports first.
+    // Prefer Rgba8Unorm first: wider MSAA support on Linux/Vulkan; some Mesa drivers error on Bgra8Unorm MSAA textures. Fall back to Bgra8Unorm, then driver default.
     caps.formats
         .iter()
         .find(|f| matches!(f, wgpu::TextureFormat::Rgba8Unorm))
@@ -51,7 +49,6 @@ enum DrawStep {
         start: u32,
         end: u32,
         bind_group: wgpu::BindGroup,
-        // Sort key used by the image-batching pre-pass in render_frame to bring same-image batches together within a run of consecutive ImageBatch steps. Preserves z-order relative to non-image steps.
         key: (u64, ImageFilter),
     },
     PathDraw {
@@ -66,7 +63,6 @@ enum DrawStep {
         msaa_view: wgpu::TextureView,
         resolve_texture: wgpu::Texture,
         resolve_view: wgpu::TextureView,
-        // Per-layer viewport bind group (size = layer texture dims, offset = layer origin)
         viewport_bind_group: wgpu::BindGroup,
         width: u32,
         height: u32,
@@ -126,6 +122,26 @@ struct PathShadowOp {
     tex_w: u32,
     tex_h: u32,
     dest: [f32; 4],
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ShadowCacheKey {
+    instance_start: u32,
+    instance_count: u32,
+    sigma_bits: u32,
+    tex_w: u32,
+    tex_h: u32,
+    instances_hash: u64,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct PathShadowCacheKey {
+    index_start: u32,
+    index_count: u32,
+    sigma_bits: u32,
+    tex_w: u32,
+    tex_h: u32,
+    geometry_hash: u64,
 }
 
 #[inline]
@@ -229,14 +245,13 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
         u32,
         u32,
     )>,
-    // Task 2: retained rendering — non-MSAA texture that holds the last resolved frame.
+    shadow_resolved_cache: HashMap<ShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
+    path_shadow_resolved_cache: HashMap<PathShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
+    // Non-MSAA presentation texture holding the last resolved frame. Used both as the idle-frame fast-path source (blit when commands are unchanged) and as the MSAA resolve target each active frame.
     retained_texture: Option<wgpu::Texture>,
     retained_view: Option<wgpu::TextureView>,
-    // Previous frame commands used by scroll-blit detection.
     prev_commands: Vec<DrawCommand>,
-    // Non-MSAA pipeline for blitting retained_texture → surface.
     retained_blit_pipeline: crate::composite::CompositePipeline,
-    // Task 3: hashes of last uploaded instance batches for geometry dirty tracking.
     prev_rect_hash: u64,
     prev_text_hash: u64,
     prev_line_hash: u64,
@@ -310,18 +325,41 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }],
         });
 
-        let rect_pipeline = RectPipeline::new(&device, surface_format, &viewport_bgl);
-        let text_pipeline = TextPipeline::new(&device, surface_format, &viewport_bgl);
-        let line_pipeline = LinePipeline::new(&device, surface_format, &viewport_bgl);
+        // Create all Send-safe pipelines in parallel; on Vulkan/Metal this reduces startup from ~8 serial compilations to ~1 critical path. ImagePipeline (Rc<> cache) must be created on this thread.
+        let (
+            rect_pipeline,
+            text_pipeline,
+            line_pipeline,
+            path_pipeline,
+            layer_pipeline,
+            blur_pipeline,
+            composite_pipeline,
+            retained_blit_pipeline,
+        ) = std::thread::scope(|s| {
+            let t_rect = s.spawn(|| RectPipeline::new(&device, surface_format, &viewport_bgl));
+            let t_text = s.spawn(|| TextPipeline::new(&device, surface_format, &viewport_bgl));
+            let t_line = s.spawn(|| LinePipeline::new(&device, surface_format, &viewport_bgl));
+            let t_path = s.spawn(|| PathPipeline::new(&device, surface_format, &viewport_bgl));
+            let t_layer = s.spawn(|| LayerPipeline::new(&device, surface_format));
+            let t_blur = s.spawn(|| BlurPipeline::new(&device, surface_format));
+            let t_composite = s.spawn(|| {
+                CompositePipeline::new(&device, surface_format, MSAA_SAMPLES, &viewport_bgl)
+            });
+            let t_retained =
+                s.spawn(|| CompositePipeline::new(&device, surface_format, 1, &viewport_bgl));
+            (
+                t_rect.join().unwrap(),
+                t_text.join().unwrap(),
+                t_line.join().unwrap(),
+                t_path.join().unwrap(),
+                t_layer.join().unwrap(),
+                t_blur.join().unwrap(),
+                t_composite.join().unwrap(),
+                t_retained.join().unwrap(),
+            )
+        });
+        // ImagePipeline holds an Rc<> cache and is not Send; create after the parallel scope.
         let image_pipeline = ImagePipeline::new(&device, surface_format, &viewport_bgl);
-        let path_pipeline = PathPipeline::new(&device, surface_format, &viewport_bgl);
-        let layer_pipeline = LayerPipeline::new(&device, surface_format);
-        let blur_pipeline = BlurPipeline::new(&device, surface_format);
-        let composite_pipeline =
-            CompositePipeline::new(&device, surface_format, MSAA_SAMPLES, &viewport_bgl);
-        // Non-MSAA pipeline used exclusively for blitting retained_texture → surface.
-        let retained_blit_pipeline =
-            CompositePipeline::new(&device, surface_format, 1, &viewport_bgl);
         let path_tess_cache = PathTessCache::new();
 
         Ok(Self {
@@ -372,6 +410,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             draw_state: renderer_core::DrawState::new(),
             layer_texture_pool: Vec::new(),
             shadow_capture_pool: Vec::new(),
+            shadow_resolved_cache: HashMap::new(),
+            path_shadow_resolved_cache: HashMap::new(),
             retained_texture: None,
             retained_view: None,
             prev_commands: Vec::new(),
@@ -413,7 +453,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         }));
-        // Retained texture: non-MSAA, receives the resolved MSAA frame each tick.
         let retained = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rsx-retained"),
             size: wgpu::Extent3d {
@@ -538,14 +577,87 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
+        // Idle-frame fast path: skip full pipeline and blit retained texture when commands and viewport are unchanged.
+        if !self.prev_commands.is_empty()
+            && commands == self.prev_commands.as_slice()
+            && !self.viewport_dirty
+            && self.config.is_some()
+            && self.width > 0
+            && self.height > 0
+        {
+            if let Some(retained_view) = self.retained_view.as_ref() {
+                let output = match self.surface.get_current_texture() {
+                    wgpu::CurrentSurfaceTexture::Success(t)
+                    | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+                    wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                        if let Some(config) = &self.config.clone() {
+                            self.surface.configure(&self.device, config);
+                        }
+                        self.clear_pending();
+                        return Ok(());
+                    }
+                    other => {
+                        self.clear_pending();
+                        return Err(RendererError::Present(format!("surface error: {other:?}")));
+                    }
+                };
+                let surface_view = output
+                    .texture
+                    .create_view(&TextureViewDescriptor::default());
+                let retained_bg = self.retained_blit_pipeline.create_bind_group(
+                    &self.device,
+                    retained_view,
+                    [0.0, 0.0, self.width as f32, self.height as f32],
+                    1.0,
+                );
+                let mut encoder =
+                    self.device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("rsx-idle-blit"),
+                        });
+                {
+                    let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("rsx-idle-blit-pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &surface_view,
+                            resolve_target: None,
+                            depth_slice: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                        multiview_mask: None,
+                    });
+                    blit.set_pipeline(&self.retained_blit_pipeline.pipeline);
+                    blit.set_bind_group(0, &self.viewport_bind_group, &[]);
+                    blit.set_bind_group(1, &retained_bg, &[]);
+                    blit.draw(0..6, 0..1);
+                }
+                self.queue.submit(std::iter::once(encoder.finish()));
+                output.present();
+                self.clear_pending();
+                return Ok(());
+            }
+        }
+
         self.draw_state.reset();
-        // Task 2: detect scroll blit (used for culling scroll-frame instances to exposed band).
         let scroll_blit = renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands);
-        // Task 1: current effective scissor (screen-space) for frustum culling.
+        let dirty_scissor: Option<Rect> =
+            if clear_color.is_none() && scroll_blit.is_none() && !self.prev_commands.is_empty() {
+                renderer_core::dirty::compute_dirty_rect(
+                    commands,
+                    &self.prev_commands,
+                    renderer_core::culling::command_visual_rect,
+                )
+            } else {
+                None
+            };
         let mut current_scissor: Option<Rect> = None;
-        // Stack so PushLayer resets the scissor inside layer bounds and PopLayer restores it.
-        let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new();
-        // Task 4: deferred layer texture creation — bounds accumulated while processing commands.
+        let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new(); // saves/restores current_scissor across PushLayer/PopLayer; layers disable frustum culling inside their bounds
         let mut layer_accum_stack: Vec<LayerAccum> = Vec::new();
         let layer_blit_stack: Vec<wgpu::BindGroup> = Vec::new();
 
@@ -558,7 +670,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     {
                         continue;
                     }
-                    // Task 1: frustum culling against current scissor.
                     if let Some(bounds) = renderer_core::culling::command_visual_rect(
                         cmd,
                         self.draw_state.cum_tx,
@@ -573,7 +684,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         ) {
                             continue;
                         }
-                        // Task 2: for scroll frames only render the exposed/dirty bands.
+                        if let Some(ds) = dirty_scissor {
+                            if !renderer_core::culling::overlaps(
+                                bounds.x,
+                                bounds.y,
+                                bounds.width,
+                                bounds.height,
+                                Some(ds),
+                            ) {
+                                continue;
+                            }
+                        }
                         if let Some(ref sb) = scroll_blit {
                             let in_exp = renderer_core::culling::overlaps(
                                 bounds.x,
@@ -595,7 +716,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 continue;
                             }
                         }
-                        // Task 4: accumulate layer content bounds.
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
                                 Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
@@ -622,7 +742,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.pending_instances.push(inst);
                 }
                 DrawCommand::Text(p) => {
-                    // Task 1: frustum culling against current scissor.
                     if let Some(bounds) = renderer_core::culling::command_visual_rect(
                         cmd,
                         self.draw_state.cum_tx,
@@ -637,7 +756,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         ) {
                             continue;
                         }
-                        // Task 2: scroll-blit culling.
+                        if let Some(ds) = dirty_scissor {
+                            if !renderer_core::culling::overlaps(
+                                bounds.x,
+                                bounds.y,
+                                bounds.width,
+                                bounds.height,
+                                Some(ds),
+                            ) {
+                                continue;
+                            }
+                        }
                         if let Some(ref sb) = scroll_blit {
                             let in_exp = renderer_core::culling::overlaps(
                                 bounds.x,
@@ -659,7 +788,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 continue;
                             }
                         }
-                        // Task 4: accumulate layer content bounds.
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
                                 Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
@@ -735,7 +863,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    // Task 1: frustum culling against current scissor.
                     if let Some(bounds) = renderer_core::culling::command_visual_rect(
                         cmd,
                         self.draw_state.cum_tx,
@@ -750,7 +877,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         ) {
                             continue;
                         }
-                        // Task 2: scroll-blit culling.
+                        if let Some(ds) = dirty_scissor {
+                            if !renderer_core::culling::overlaps(
+                                bounds.x,
+                                bounds.y,
+                                bounds.width,
+                                bounds.height,
+                                Some(ds),
+                            ) {
+                                continue;
+                            }
+                        }
                         if let Some(ref sb) = scroll_blit {
                             let in_exp = renderer_core::culling::overlaps(
                                 bounds.x,
@@ -772,7 +909,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 continue;
                             }
                         }
-                        // Task 4: accumulate layer content bounds.
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
                                 Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
@@ -793,7 +929,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         .push(crate::primitives::line::prepare_line(tp1, tp2, *style));
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    // Task 1: frustum culling against current scissor.
                     if let Some(bounds) = renderer_core::culling::command_visual_rect(
                         cmd,
                         self.draw_state.cum_tx,
@@ -808,7 +943,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         ) {
                             continue;
                         }
-                        // Task 2: scroll-blit culling.
+                        if let Some(ds) = dirty_scissor {
+                            if !renderer_core::culling::overlaps(
+                                bounds.x,
+                                bounds.y,
+                                bounds.width,
+                                bounds.height,
+                                Some(ds),
+                            ) {
+                                continue;
+                            }
+                        }
                         if let Some(ref sb) = scroll_blit {
                             let in_exp = renderer_core::culling::overlaps(
                                 bounds.x,
@@ -830,7 +975,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 continue;
                             }
                         }
-                        // Task 4: accumulate layer content bounds.
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
                                 Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
@@ -862,7 +1006,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         .push(crate::primitives::image::prepare_image(translated));
                 }
                 DrawCommand::Path(p) => {
-                    // Task 1: frustum culling against current scissor.
                     if let Some(bounds) = renderer_core::culling::command_visual_rect(
                         cmd,
                         self.draw_state.cum_tx,
@@ -877,7 +1020,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         ) {
                             continue;
                         }
-                        // Task 2: scroll-blit culling.
                         if let Some(ref sb) = scroll_blit {
                             let in_exp = renderer_core::culling::overlaps(
                                 bounds.x,
@@ -899,7 +1041,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 continue;
                             }
                         }
-                        // Task 4: accumulate layer content bounds.
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
                                 Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
@@ -1015,7 +1156,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 DrawCommand::PushClip { rect } => {
                     self.flush_all();
                     let effective = self.draw_state.push_clip(*rect);
-                    // Task 1: track effective scissor for frustum culling.
                     current_scissor = Some(effective);
                     self.pending_steps.push(DrawStep::SetScissor {
                         rect: Some(effective),
@@ -1024,7 +1164,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 DrawCommand::PopClip => {
                     self.flush_all();
                     let effective = self.draw_state.pop_clip();
-                    // Task 1: restore scissor for frustum culling.
                     current_scissor = effective;
                     self.pending_steps
                         .push(DrawStep::SetScissor { rect: effective });
@@ -1037,9 +1176,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
                 DrawCommand::PushLayer { opacity } => {
                     self.flush_all();
-                    // Task 4: defer texture creation; accumulate bounds from enclosed commands.
-                    // Save the outer scissor and disable frustum culling inside the layer so
-                    // content isn't accidentally culled by an outer PushClip.
+                    // Disable frustum culling inside the layer to avoid incorrect culling by an outer PushClip; save scissor for restore at PopLayer.
                     scissor_layer_stack.push(current_scissor);
                     current_scissor = None;
                     layer_accum_stack.push(LayerAccum {
@@ -1050,11 +1187,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
                 DrawCommand::PopLayer => {
                     self.flush_all();
-                    // Task 1: restore scissor from before this layer.
                     current_scissor = scissor_layer_stack.pop().flatten();
                     if let Some(accum) = layer_accum_stack.pop() {
-                        // Use accumulated bounds for a compact layer texture; fall back to full
-                        // window size if nothing was drawn inside the layer.
+                        // Use accumulated bounds for a compact layer texture; fall back to full window size if nothing was drawn inside the layer.
                         let (offset_x, offset_y, tex_w, tex_h) = if let Some(b) = accum.bounds {
                             let ox = b.x.floor().max(0.0);
                             let oy = b.y.floor().max(0.0);
@@ -1079,8 +1214,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     tex_h,
                                 )
                             };
-                        // Per-layer viewport: pixel coords in window space are transformed by
-                        // subtracting the layer origin before dividing by the layer size.
+                        // Per-layer viewport: subtract layer origin from pixel coords before dividing by layer size.
                         let layer_vp = Viewport {
                             size: [tex_w as f32, tex_h as f32],
                             offset: [offset_x, offset_y],
@@ -1101,16 +1235,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     resource: layer_vp_buf.as_entire_binding(),
                                 }],
                             });
-                        // Composite bind group uses window-absolute dest rect; the parent viewport
-                        // (passed as bind group 0 at render time) converts it to correct NDC.
+                        // Composite bind group uses window-absolute dest rect; parent viewport (set 0) converts it to NDC.
                         let composite_bg = self.composite_pipeline.create_bind_group(
                             &self.device,
                             &resolve_view,
                             [offset_x, offset_y, tex_w as f32, tex_h as f32],
                             accum.opacity,
                         );
-                        // Insert BeginLayer at the position recorded when PushLayer was seen,
-                        // so all enclosed draw steps fall inside the layer segment boundaries.
+                        // Insert BeginLayer at the position saved by PushLayer so enclosed steps fall inside layer segment boundaries.
                         self.pending_steps.insert(
                             accum.begin_step_idx,
                             DrawStep::BeginLayer {
@@ -1127,7 +1259,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             bind_group: composite_bg,
                         });
                     }
-                    let _ = layer_blit_stack; // kept to satisfy borrow checker; unused after Task 4
+                    let _ = layer_blit_stack; // suppresses unused variable warning
                 }
             }
         }
@@ -1180,7 +1312,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             .sync_atlas(&self.queue, &mut self.text_shaper.atlas);
 
         if !self.pending_instances.is_empty() {
-            // Task 3: skip upload when geometry is identical to the previous frame.
             let h = hash_instances(&self.pending_instances);
             if h != self.prev_rect_hash {
                 self.rect_pipeline
@@ -1192,11 +1323,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     bytemuck::cast_slice(&self.pending_instances),
                 );
                 self.prev_rect_hash = h;
-            } else {
-                // Data unchanged; ensure the buffer still has enough capacity.
-                self.rect_pipeline
-                    .instances
-                    .ensure_capacity(&self.device, self.pending_instances.len());
             }
         } else {
             self.prev_rect_hash = 0;
@@ -1214,10 +1340,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     bytemuck::cast_slice(&self.pending_text_instances),
                 );
                 self.prev_text_hash = h;
-            } else {
-                self.text_pipeline
-                    .instances
-                    .ensure_capacity(&self.device, self.pending_text_instances.len());
             }
         } else {
             self.prev_text_hash = 0;
@@ -1235,10 +1357,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     bytemuck::cast_slice(&self.pending_line_instances),
                 );
                 self.prev_line_hash = h;
-            } else {
-                self.line_pipeline
-                    .instances
-                    .ensure_capacity(&self.device, self.pending_line_instances.len());
             }
         } else {
             self.prev_line_hash = 0;
@@ -1256,10 +1374,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     bytemuck::cast_slice(&self.pending_image_instances),
                 );
                 self.prev_image_hash = h;
-            } else {
-                self.image_pipeline
-                    .instances
-                    .ensure_capacity(&self.device, self.pending_image_instances.len());
             }
         } else {
             self.prev_image_hash = 0;
@@ -1382,6 +1496,32 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             if has_text_shadows {
                 let shadow_instances_bg = shadow_instances_bg_opt.unwrap();
                 for op in &self.pending_shadow_ops {
+                    let instance_count = op.instance_end - op.instance_start;
+                    let instances_hash = hash_instances(
+                        &self.pending_shadow_instances
+                            [op.instance_start as usize..op.instance_end as usize],
+                    );
+                    let key = ShadowCacheKey {
+                        instance_start: op.instance_start,
+                        instance_count,
+                        sigma_bits: op.sigma.to_bits(),
+                        tex_w: op.tex_w,
+                        tex_h: op.tex_h,
+                        instances_hash,
+                    };
+
+                    if let Some((_, cached_view)) = self.shadow_resolved_cache.get(&key) {
+                        // Cache hit: reuse the final blurred texture, skip render + blur
+                        let bg = self.composite_pipeline.create_bind_group(
+                            &self.device,
+                            cached_view,
+                            op.dest,
+                            1.0,
+                        );
+                        text_results.push(Some(bg));
+                        continue;
+                    }
+
                     let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
                         if let Some(pos) = self
                             .shadow_capture_pool
@@ -1439,7 +1579,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         pass.draw(0..6, op.instance_start..op.instance_end);
                     }
 
-                    let (_, blurred_view) = self.blur_pipeline.apply(
+                    let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
                         &self.device,
                         &mut pre_encoder,
                         &cap_resolve_view,
@@ -1454,7 +1594,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         1.0,
                     );
                     text_results.push(Some(bg));
-                    // Return the shadow capture textures to the pool. The composite bind group keeps the resolve texture's GPU resource alive via wgpu's internal Arc, so it is safe to push the texture handle back for reuse.
+                    // Evict cache if over capacity, then store the final blurred texture for reuse on future identical shadows
+                    if self.shadow_resolved_cache.len() >= 128 {
+                        self.shadow_resolved_cache.clear();
+                    }
+                    self.shadow_resolved_cache
+                        .insert(key, (blurred_texture, blurred_view));
+                    // Return MSAA textures to pool; the blurred resolved texture is now owned by the cache
                     self.shadow_capture_pool.push((
                         cap_msaa_texture,
                         cap_msaa_view,
@@ -1471,6 +1617,38 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 let shadow_path_ib = shadow_path_ib_opt.unwrap();
                 let shadow_path_fd_bg = shadow_path_fd_bg_opt.unwrap();
                 for op in &self.pending_path_shadow_ops {
+                    let index_count = op.index_end - op.index_start;
+                    let geometry_hash = {
+                        let verts = &self.pending_shadow_path_vertices;
+                        let idxs = &self.pending_shadow_path_indices
+                            [op.index_start as usize..op.index_end as usize];
+                        let h = hash_instances(verts);
+                        let mut hasher = DefaultHasher::new();
+                        h.hash(&mut hasher);
+                        hash_instances(idxs).hash(&mut hasher);
+                        hasher.finish()
+                    };
+                    let path_key = PathShadowCacheKey {
+                        index_start: op.index_start,
+                        index_count,
+                        sigma_bits: op.sigma.to_bits(),
+                        tex_w: op.tex_w,
+                        tex_h: op.tex_h,
+                        geometry_hash,
+                    };
+
+                    if let Some((_, cached_view)) = self.path_shadow_resolved_cache.get(&path_key) {
+                        // Cache hit: reuse the final blurred texture, skip render + blur
+                        let bg = self.composite_pipeline.create_bind_group(
+                            &self.device,
+                            cached_view,
+                            op.dest,
+                            1.0,
+                        );
+                        path_results.push(Some(bg));
+                        continue;
+                    }
+
                     let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
                         if let Some(pos) = self
                             .shadow_capture_pool
@@ -1529,7 +1707,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         pass.draw_indexed(op.index_start..op.index_end, 0, 0..1);
                     }
 
-                    let (_, blurred_view) = self.blur_pipeline.apply(
+                    let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
                         &self.device,
                         &mut pre_encoder,
                         &cap_resolve_view,
@@ -1544,7 +1722,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         1.0,
                     );
                     path_results.push(Some(bg));
-                    // Return the shadow capture textures to the pool. The composite bind group keeps the resolve texture's GPU resource alive via wgpu's internal Arc, so it is safe to push the texture handle back for reuse.
+                    // Evict cache if over capacity, then store the final blurred texture for reuse on future identical shadows
+                    if self.path_shadow_resolved_cache.len() >= 128 {
+                        self.path_shadow_resolved_cache.clear();
+                    }
+                    self.path_shadow_resolved_cache
+                        .insert(path_key, (blurred_texture, blurred_view));
+                    // Return MSAA textures to pool; the blurred resolved texture is now owned by the cache
                     self.shadow_capture_pool.push((
                         cap_msaa_texture,
                         cap_msaa_view,
@@ -1674,13 +1858,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 width: u32,
                 height: u32,
             },
-            // Task 4: replaces EndLayer; composites via dest-rect pipeline instead of full-screen.
             EndLayerComposite(wgpu::BindGroup),
         }
 
         let mut steps = std::mem::take(&mut self.pending_steps);
         let mut segments: Vec<Segment> = Vec::new();
-        // Walk the flat `steps` list and emit Segment::Draw entries with index ranges instead of cloning slices into per-segment Vecs. Layer-boundary steps are extracted in place using std::mem::replace so we don't need to move the ownership-bearing variants (BeginLayer/EndLayerComposite) out of the vector while still preserving the original positions for slicing.
+        // Walk steps emitting Segment::Draw with index ranges; extract layer-boundary steps in place via std::mem::replace to avoid moving ownership-bearing variants.
         let mut current_start: usize = 0;
         for i in 0..steps.len() {
             let is_boundary = matches!(
@@ -1696,7 +1879,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     end: i,
                 });
             }
-            // Replace with a cheap placeholder so we can take ownership of the boundary's resources without disturbing surrounding indices.
             let taken = std::mem::replace(&mut steps[i], DrawStep::SetScissor { rect: None });
             match taken {
                 DrawStep::BeginLayer {
@@ -1732,8 +1914,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             });
         }
 
-        // Task 4: layer_stack now carries the per-layer viewport bind group, width, and height so
-        // the correct coordinate system is used when drawing into or compositing from each layer.
         let mut layer_stack: Vec<(
             wgpu::Texture,
             wgpu::TextureView, // msaa view (render target)
@@ -1744,7 +1924,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             u32,               // layer texture height
         )> = Vec::new();
 
-        // Track which draw segments should inline their MSAA resolve into the drawing pass (because the next segment is EndLayerComposite). When this flag is set, the draw pass's resolve_target is the current layer's resolve view, and the subsequent EndLayerComposite skips its dedicated resolve pass.
+        // Marks draw segments preceding EndLayerComposite to inline MSAA resolve into the drawing pass, skipping the dedicated resolve pass.
         let mut inline_resolve_targets: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
             if let (Segment::Draw { .. }, Some(Segment::EndLayerComposite(_))) =
@@ -1754,7 +1934,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             }
         }
 
-        // Track which EndLayerComposite segments already had their resolve performed by the preceding draw pass — those skip the dedicated resolve pass.
+        // Marks EndLayerComposite segments whose resolve was already inlined by the preceding draw pass.
         let mut endlayer_resolve_done: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
             if matches!(segments[i], Segment::EndLayerComposite(_))
@@ -1770,7 +1950,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 Segment::Draw { start, end } => {
                     let draw_steps = &steps[start..end];
                     let inline_resolve = inline_resolve_targets[seg_idx];
-                    // Task 4: use per-layer viewport bind group when inside a layer.
                     let attach_view: &wgpu::TextureView =
                         if let Some((_, lv, _, _, _, _, _)) = layer_stack.last() {
                             lv
@@ -1800,7 +1979,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         multiview_mask: None,
                     });
 
-                    // Task 4: use the innermost layer's per-layer viewport when inside a layer.
                     let active_vp_bg = if let Some((_, _, _, _, vp_bg, _, _)) = layer_stack.last() {
                         vp_bg
                     } else {
@@ -1877,28 +2055,36 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 );
                                 render_pass.draw_indexed(*index_start..*index_end, 0, 0..1);
                             }
-                            DrawStep::SetScissor { rect } => match rect {
-                                None => {
-                                    render_pass.set_scissor_rect(0, 0, self.width, self.height);
+                            DrawStep::SetScissor { rect } => {
+                                let clipped_rect = match (*rect, dirty_scissor) {
+                                    (r, None) => r,
+                                    (None, Some(ds)) => Some(ds),
+                                    (Some(r), Some(ds)) => r.intersect(ds).or(Some(r)),
+                                };
+                                match clipped_rect {
+                                    None => {
+                                        render_pass.set_scissor_rect(0, 0, self.width, self.height);
+                                    }
+                                    Some(r) => {
+                                        let x = (r.x.max(0.0).floor() as u32)
+                                            .min(self.width.saturating_sub(1));
+                                        let y = (r.y.max(0.0).floor() as u32)
+                                            .min(self.height.saturating_sub(1));
+                                        let right = ((r.x + r.width).ceil() as u32).min(self.width);
+                                        let bottom =
+                                            ((r.y + r.height).ceil() as u32).min(self.height);
+                                        let w = right
+                                            .saturating_sub(x)
+                                            .max(1)
+                                            .min(self.width.saturating_sub(x));
+                                        let h = bottom
+                                            .saturating_sub(y)
+                                            .max(1)
+                                            .min(self.height.saturating_sub(y));
+                                        render_pass.set_scissor_rect(x, y, w, h);
+                                    }
                                 }
-                                Some(r) => {
-                                    let x = (r.x.max(0.0).floor() as u32)
-                                        .min(self.width.saturating_sub(1));
-                                    let y = (r.y.max(0.0).floor() as u32)
-                                        .min(self.height.saturating_sub(1));
-                                    let right = ((r.x + r.width).ceil() as u32).min(self.width);
-                                    let bottom = ((r.y + r.height).ceil() as u32).min(self.height);
-                                    let w = right
-                                        .saturating_sub(x)
-                                        .max(1)
-                                        .min(self.width.saturating_sub(x));
-                                    let h = bottom
-                                        .saturating_sub(y)
-                                        .max(1)
-                                        .min(self.height.saturating_sub(y));
-                                    render_pass.set_scissor_rect(x, y, w, h);
-                                }
-                            },
+                            }
                             DrawStep::CompositeShadow { bind_group } => {
                                 render_pass.set_pipeline(&self.composite_pipeline.pipeline);
                                 render_pass.set_bind_group(1, bind_group, &[]);
@@ -1989,9 +2175,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             &msaa_view
                         };
 
-                    // The composite bind group was created with composite_pipeline's BGL (viewport at
-                    // set 0, composite params at set 1), so we must use composite_pipeline here, not
-                    // layer_pipeline which has a single-set layout incompatible with that BGL.
+                    // composite_pipeline must be used here (not layer_pipeline): its BGL expects viewport at set 0 and composite params at set 1, incompatible with layer_pipeline's single-set layout.
                     let parent_vp_bg: &wgpu::BindGroup =
                         if let Some((_, _, _, _, vp_bg, _, _)) = layer_stack.last() {
                             vp_bg
@@ -2054,7 +2238,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             });
         }
 
-        // Blit retained_texture (resolved frame) → swapchain surface; non-MSAA full-screen pass.
         {
             let retained_bg = self.retained_blit_pipeline.create_bind_group(
                 &self.device,
@@ -2086,6 +2269,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+        self.prev_commands = commands.to_vec();
         self.clear_pending();
         Ok(())
     }

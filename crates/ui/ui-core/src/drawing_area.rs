@@ -11,10 +11,11 @@ pub struct DrawingArea {
 
 impl DrawingArea {
     pub fn new(
+        ctx: &mut crate::context::WidgetCtx,
         style: LayoutStyle,
         draw_fn: impl Fn(f32, f32) -> View + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(style)?;
+        let leaf = LayoutLeaf::register(ctx, style)?;
         Ok(Self {
             leaf,
             draw_fn: Box::new(draw_fn),

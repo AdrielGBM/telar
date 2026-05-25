@@ -51,6 +51,7 @@ impl ComponentSlot {
 pub struct ComponentTree {
     slots: Vec<ComponentSlot>,
     cached: RefCell<Vec<DrawCommand>>,
+    slot_starts: RefCell<Vec<usize>>,
 }
 
 impl ComponentTree {
@@ -58,11 +59,13 @@ impl ComponentTree {
         Self {
             slots: vec![ComponentSlot::new(component)],
             cached: RefCell::new(Vec::new()),
+            slot_starts: RefCell::new(Vec::new()),
         }
     }
 
     pub fn add<C: Component + 'static>(&mut self, component: C) {
         self.slots.push(ComponentSlot::new(component));
+        self.slot_starts.borrow_mut().clear();
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -79,10 +82,40 @@ impl ComponentTree {
         let any_dirty = self.slots.iter().any(|s| s.dirty.get());
         if any_dirty {
             let mut cached = self.cached.borrow_mut();
-            cached.clear();
-            for slot in &self.slots {
-                cached.extend(slot.commands.borrow().iter().cloned());
-                slot.dirty.set(false);
+            let mut starts = self.slot_starts.borrow_mut();
+            if starts.len() != self.slots.len() {
+                // Full rebuild when slot count changed or on first use.
+                cached.clear();
+                starts.clear();
+                for slot in &self.slots {
+                    starts.push(cached.len());
+                    cached.extend(slot.commands.borrow().iter().cloned());
+                    slot.dirty.set(false);
+                }
+            } else {
+                // Incremental: splice only dirty slots, leaving clean slots untouched.
+                let mut offset: isize = 0;
+                for (i, slot) in self.slots.iter().enumerate() {
+                    if slot.dirty.get() {
+                        let start = (starts[i] as isize + offset) as usize;
+                        let end = if i + 1 < self.slots.len() {
+                            (starts[i + 1] as isize + offset) as usize
+                        } else {
+                            cached.len()
+                        };
+                        let new_cmds: Vec<DrawCommand> =
+                            slot.commands.borrow().iter().cloned().collect();
+                        let delta = new_cmds.len() as isize - (end - start) as isize;
+                        cached.splice(start..end, new_cmds);
+                        offset += delta;
+                        slot.dirty.set(false);
+                    }
+                }
+                let mut off = 0;
+                for (i, slot) in self.slots.iter().enumerate() {
+                    starts[i] = off;
+                    off += slot.commands.borrow().len();
+                }
             }
         }
         self.cached.borrow()

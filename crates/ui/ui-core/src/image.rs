@@ -17,11 +17,12 @@ pub struct Image {
 
 impl Image {
     pub fn new(
+        ctx: &mut crate::context::WidgetCtx,
         data_fn: impl Fn() -> Rc<ImageData> + 'static,
         style: LayoutStyle,
         filter_fn: impl Fn() -> ImageFilter + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(style)?;
+        let leaf = LayoutLeaf::register(ctx, style)?;
         Ok(Self {
             data: Box::new(data_fn),
             leaf,

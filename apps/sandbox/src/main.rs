@@ -27,8 +27,9 @@ const PANEL_Y: f32 = 40.0;
 const PANEL_W: f32 = 160.0;
 const PANEL_H: f32 = 128.0;
 
-fn heading(label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn heading(ctx: &mut WidgetCtx, label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::new(
+        ctx,
         move || label.to_string(),
         LayoutStyle::new().width(CONTENT_WIDTH - 48.0).height(20.0),
         || TextStyle::new(12.0, MUTED),
@@ -37,25 +38,26 @@ fn heading(label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 fn build_content(
+    ctx: &mut WidgetCtx,
     gradient: Rc<ImageData>,
     checker: Rc<ImageData>,
     alpha: Rc<ImageData>,
 ) -> Result<Container, LayoutError> {
-    let sections: Vec<Box<dyn LayoutItem>> = vec![
-        Box::new(shapes_section()?) as Box<dyn LayoutItem>,
-        Box::new(colors_section()?) as Box<dyn LayoutItem>,
-        Box::new(typography_section()?) as Box<dyn LayoutItem>,
-        Box::new(cards_section()?) as Box<dyn LayoutItem>,
-        Box::new(images_section(gradient, checker, alpha)?) as Box<dyn LayoutItem>,
-        Box::new(lines_section()?) as Box<dyn LayoutItem>,
-        Box::new(paths_section()?) as Box<dyn LayoutItem>,
-        Box::new(gradients_section()?) as Box<dyn LayoutItem>,
-        Box::new(layers_section()?) as Box<dyn LayoutItem>,
-        Box::new(shadows_section()?) as Box<dyn LayoutItem>,
-        Box::new(grid_section()?) as Box<dyn LayoutItem>,
-    ];
+    let s1 = Box::new(shapes_section(ctx)?) as Box<dyn LayoutItem>;
+    let s2 = Box::new(colors_section(ctx)?) as Box<dyn LayoutItem>;
+    let s3 = Box::new(typography_section(ctx)?) as Box<dyn LayoutItem>;
+    let s4 = Box::new(cards_section(ctx)?) as Box<dyn LayoutItem>;
+    let s5 = Box::new(images_section(ctx, gradient, checker, alpha)?) as Box<dyn LayoutItem>;
+    let s6 = Box::new(lines_section(ctx)?) as Box<dyn LayoutItem>;
+    let s7 = Box::new(paths_section(ctx)?) as Box<dyn LayoutItem>;
+    let s8 = Box::new(gradients_section(ctx)?) as Box<dyn LayoutItem>;
+    let s9 = Box::new(layers_section(ctx)?) as Box<dyn LayoutItem>;
+    let s10 = Box::new(shadows_section(ctx)?) as Box<dyn LayoutItem>;
+    let s11 = Box::new(grid_section(ctx)?) as Box<dyn LayoutItem>;
+    let sections = vec![s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11];
 
     Container::new(
+        ctx,
         LayoutStyle::new()
             .flex_column()
             .width(CONTENT_WIDTH)
@@ -66,11 +68,13 @@ fn build_content(
 }
 
 fn shape_card(
+    ctx: &mut WidgetCtx,
     style: RectStyle,
     label: &'static str,
     label_color: Color,
 ) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(
+        ctx,
         LayoutStyle::new().width(168.0).height(80.0),
         move |_w, _h| {
             View::group([
@@ -98,61 +102,71 @@ fn shape_card(
     )
 }
 
-fn shapes_section() -> Result<Container, LayoutError> {
+fn shapes_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
+    let sc1 = Box::new(shape_card(
+        ctx,
+        RectStyle {
+            fill: Some(FillStyle::Solid(PRIMARY)),
+            stroke: None,
+            radius: BorderRadius::all(8.0),
+            shadow: None,
+        },
+        "fill",
+        WHITE,
+    )?) as Box<dyn LayoutItem>;
+    let sc2 = Box::new(shape_card(
+        ctx,
+        RectStyle {
+            fill: None,
+            stroke: Some(Stroke::new(DANGER, 2.0)),
+            radius: BorderRadius::all(8.0),
+            shadow: None,
+        },
+        "stroke",
+        DANGER,
+    )?) as Box<dyn LayoutItem>;
+    let sc3 = Box::new(shape_card(
+        ctx,
+        RectStyle {
+            fill: Some(FillStyle::Solid(SUCCESS)),
+            stroke: Some(Stroke::new(DARK, 1.5)),
+            radius: BorderRadius::zero(),
+            shadow: None,
+        },
+        "fill + stroke",
+        WHITE,
+    )?) as Box<dyn LayoutItem>;
+    let sc4 = Box::new(shape_card(
+        ctx,
+        RectStyle {
+            fill: Some(FillStyle::Solid(PURPLE)),
+            stroke: None,
+            radius: BorderRadius::all(40.0),
+            shadow: None,
+        },
+        "pill radius",
+        WHITE,
+    )?) as Box<dyn LayoutItem>;
     let cards = Container::new(
+        ctx,
         LayoutStyle::new().flex_row().gap(16.0),
-        vec![
-            Box::new(shape_card(
-                RectStyle {
-                    fill: Some(FillStyle::Solid(PRIMARY)),
-                    stroke: None,
-                    radius: BorderRadius::all(8.0),
-                    shadow: None,
-                },
-                "fill",
-                WHITE,
-            )?) as Box<dyn LayoutItem>,
-            Box::new(shape_card(
-                RectStyle {
-                    fill: None,
-                    stroke: Some(Stroke::new(DANGER, 2.0)),
-                    radius: BorderRadius::all(8.0),
-                    shadow: None,
-                },
-                "stroke",
-                DANGER,
-            )?) as Box<dyn LayoutItem>,
-            Box::new(shape_card(
-                RectStyle {
-                    fill: Some(FillStyle::Solid(SUCCESS)),
-                    stroke: Some(Stroke::new(DARK, 1.5)),
-                    radius: BorderRadius::zero(),
-                    shadow: None,
-                },
-                "fill + stroke",
-                WHITE,
-            )?) as Box<dyn LayoutItem>,
-            Box::new(shape_card(
-                RectStyle {
-                    fill: Some(FillStyle::Solid(PURPLE)),
-                    stroke: None,
-                    radius: BorderRadius::all(40.0),
-                    shadow: None,
-                },
-                "pill radius",
-                WHITE,
-            )?) as Box<dyn LayoutItem>,
-        ],
+        vec![sc1, sc2, sc3, sc4],
     )?;
-
+    let h = heading(ctx, "Shapes")?;
     Container::new(
+        ctx,
         LayoutStyle::new().flex_column().gap(8.0),
-        vec![heading("Shapes")?, Box::new(cards) as Box<dyn LayoutItem>],
+        vec![h, Box::new(cards) as Box<dyn LayoutItem>],
     )
 }
 
-fn color_swatch(color: Color, label: &'static str) -> Result<DrawingArea, LayoutError> {
+fn color_swatch(
+    ctx: &mut WidgetCtx,
+    color: Color,
+    label: &'static str,
+) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(
+        ctx,
         LayoutStyle::new().width(100.0).height(44.0),
         move |_w, _h| {
             View::group([
@@ -185,30 +199,33 @@ fn color_swatch(color: Color, label: &'static str) -> Result<DrawingArea, Layout
     )
 }
 
-fn colors_section() -> Result<Container, LayoutError> {
+fn colors_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
     let swatches = [PRIMARY, SUCCESS, DANGER, WARNING, PURPLE, DARK];
     let labels = ["primary", "success", "danger", "warning", "purple", "dark"];
 
     let mut row_children: Vec<Box<dyn LayoutItem>> = Vec::new();
     for (&color, &label) in swatches.iter().zip(labels.iter()) {
-        row_children.push(Box::new(color_swatch(color, label)?) as Box<dyn LayoutItem>);
+        row_children.push(Box::new(color_swatch(ctx, color, label)?) as Box<dyn LayoutItem>);
     }
 
-    let row = Container::new(LayoutStyle::new().flex_row().gap(16.0), row_children)?;
-
+    let row = Container::new(ctx, LayoutStyle::new().flex_row().gap(16.0), row_children)?;
+    let h = heading(ctx, "Colors")?;
     Container::new(
+        ctx,
         LayoutStyle::new().flex_column().gap(8.0),
-        vec![heading("Colors")?, Box::new(row) as Box<dyn LayoutItem>],
+        vec![h, Box::new(row) as Box<dyn LayoutItem>],
     )
 }
 
 fn type_line(
+    ctx: &mut WidgetCtx,
     label: &'static str,
     size: f32,
     color: Color,
     height: f32,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::new(
+        ctx,
         move || label.to_string(),
         LayoutStyle::new()
             .width(CONTENT_WIDTH - 48.0)
@@ -218,27 +235,35 @@ fn type_line(
     Ok(Box::new(text) as Box<dyn LayoutItem>)
 }
 
-fn typography_section() -> Result<Container, LayoutError> {
+fn typography_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
+    let h = heading(ctx, "Typography")?;
+    let t1 = type_line(ctx, "Small — 12px — The quick brown fox", 12.0, DARK, 20.0)?;
+    let t2 = type_line(
+        ctx,
+        "Regular — 14px — The quick brown fox",
+        14.0,
+        DARK,
+        22.0,
+    )?;
+    let t3 = type_line(ctx, "Medium — 18px — The quick brown fox", 18.0, DARK, 26.0)?;
+    let t4 = type_line(ctx, "Large — 24px — The quick brown fox", 24.0, DARK, 32.0)?;
+    let t5 = type_line(ctx, "Display — 32px", 32.0, PRIMARY, 42.0)?;
     Container::new(
+        ctx,
         LayoutStyle::new().flex_column().gap(8.0),
-        vec![
-            heading("Typography")?,
-            type_line("Small — 12px — The quick brown fox", 12.0, DARK, 20.0)?,
-            type_line("Regular — 14px — The quick brown fox", 14.0, DARK, 22.0)?,
-            type_line("Medium — 18px — The quick brown fox", 18.0, DARK, 26.0)?,
-            type_line("Large — 24px — The quick brown fox", 24.0, DARK, 32.0)?,
-            type_line("Display — 32px", 32.0, PRIMARY, 42.0)?,
-        ],
+        vec![h, t1, t2, t3, t4, t5],
     )
 }
 
 fn info_card(
+    ctx: &mut WidgetCtx,
     bg: RectStyle,
     title: &'static str,
     title_color: Color,
     body: &'static str,
 ) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(
+        ctx,
         LayoutStyle::new().width(368.0).height(110.0),
         move |_w, _h| {
             View::group([
@@ -276,48 +301,49 @@ fn info_card(
     )
 }
 
-fn cards_section() -> Result<Container, LayoutError> {
-    let row = Container::new(
-        LayoutStyle::new().flex_row().gap(16.0),
-        vec![
-            Box::new(info_card(
-                RectStyle {
-                    fill: Some(FillStyle::Solid(DARK)),
-                    stroke: None,
-                    radius: BorderRadius::all(10.0),
-                    shadow: None,
-                },
-                "Dark Card",
-                WHITE,
-                "White text on a dark background.",
-            )?) as Box<dyn LayoutItem>,
-            Box::new(info_card(
-                RectStyle {
-                    fill: Some(FillStyle::Solid(WHITE)),
-                    stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
-                    radius: BorderRadius::all(10.0),
-                    shadow: None,
-                },
-                "Light Card",
-                DARK,
-                "Dark text on a white background.",
-            )?) as Box<dyn LayoutItem>,
-        ],
-    )?;
-
+fn cards_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
+    let c1 = Box::new(info_card(
+        ctx,
+        RectStyle {
+            fill: Some(FillStyle::Solid(DARK)),
+            stroke: None,
+            radius: BorderRadius::all(10.0),
+            shadow: None,
+        },
+        "Dark Card",
+        WHITE,
+        "White text on a dark background.",
+    )?) as Box<dyn LayoutItem>;
+    let c2 = Box::new(info_card(
+        ctx,
+        RectStyle {
+            fill: Some(FillStyle::Solid(WHITE)),
+            stroke: Some(Stroke::new(CARD_BORDER, 1.0)),
+            radius: BorderRadius::all(10.0),
+            shadow: None,
+        },
+        "Light Card",
+        DARK,
+        "Dark text on a white background.",
+    )?) as Box<dyn LayoutItem>;
+    let row = Container::new(ctx, LayoutStyle::new().flex_row().gap(16.0), vec![c1, c2])?;
+    let h = heading(ctx, "Cards")?;
     Container::new(
+        ctx,
         LayoutStyle::new().flex_column().gap(8.0),
-        vec![heading("Cards")?, Box::new(row) as Box<dyn LayoutItem>],
+        vec![h, Box::new(row) as Box<dyn LayoutItem>],
     )
 }
 
 fn image_with_label(
+    ctx: &mut WidgetCtx,
     data: Rc<ImageData>,
     filter: ImageFilter,
     size: f32,
     label: &'static str,
 ) -> Result<Container, LayoutError> {
     let image = Image::new(
+        ctx,
         {
             let d = data.clone();
             move || d.clone()
@@ -326,12 +352,14 @@ fn image_with_label(
         move || filter,
     )?;
     let label = Text::new(
+        ctx,
         move || label.to_string(),
         LayoutStyle::new().width(size).height(16.0),
         || TextStyle::new(11.0, MUTED),
     )?;
 
     Container::new(
+        ctx,
         LayoutStyle::new().flex_column().gap(4.0),
         vec![
             Box::new(image) as Box<dyn LayoutItem>,
@@ -341,42 +369,48 @@ fn image_with_label(
 }
 
 fn images_section(
+    ctx: &mut WidgetCtx,
     gradient: Rc<ImageData>,
     checker: Rc<ImageData>,
     alpha: Rc<ImageData>,
 ) -> Result<Container, LayoutError> {
+    let i1 = Box::new(image_with_label(
+        ctx,
+        gradient,
+        ImageFilter::Linear,
+        128.0,
+        "gradient",
+    )?) as Box<dyn LayoutItem>;
+    let i2 = Box::new(image_with_label(
+        ctx,
+        checker,
+        ImageFilter::Nearest,
+        192.0,
+        "checker (scaled)",
+    )?) as Box<dyn LayoutItem>;
+    let i3 = Box::new(image_with_label(
+        ctx,
+        alpha,
+        ImageFilter::Nearest,
+        128.0,
+        "alpha blend",
+    )?) as Box<dyn LayoutItem>;
     let row = Container::new(
+        ctx,
         LayoutStyle::new().flex_row().gap(20.0),
-        vec![
-            Box::new(image_with_label(
-                gradient,
-                ImageFilter::Linear,
-                128.0,
-                "gradient",
-            )?) as Box<dyn LayoutItem>,
-            Box::new(image_with_label(
-                checker,
-                ImageFilter::Nearest,
-                192.0,
-                "checker (scaled)",
-            )?) as Box<dyn LayoutItem>,
-            Box::new(image_with_label(
-                alpha,
-                ImageFilter::Nearest,
-                128.0,
-                "alpha blend",
-            )?) as Box<dyn LayoutItem>,
-        ],
+        vec![i1, i2, i3],
     )?;
-
+    let h = heading(ctx, "Images")?;
     Container::new(
+        ctx,
         LayoutStyle::new().flex_column().gap(8.0),
-        vec![heading("Images")?, Box::new(row) as Box<dyn LayoutItem>],
+        vec![h, Box::new(row) as Box<dyn LayoutItem>],
     )
 }
 
-fn lines_section() -> Result<DrawingArea, LayoutError> {
+fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(
+        ctx,
         LayoutStyle::new().width(CONTENT_WIDTH).height(330.0),
         |_w, _h| {
             let mut children: Vec<View> = Vec::new();
@@ -587,8 +621,9 @@ fn lines_section() -> Result<DrawingArea, LayoutError> {
     )
 }
 
-fn paths_section() -> Result<DrawingArea, LayoutError> {
+fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(
+        ctx,
         LayoutStyle::new().width(CONTENT_WIDTH).height(660.0),
         |_w, _h| {
             let mut children: Vec<View> = Vec::new();
@@ -1141,8 +1176,9 @@ fn paths_section() -> Result<DrawingArea, LayoutError> {
     )
 }
 
-fn gradients_section() -> Result<DrawingArea, LayoutError> {
+fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(
+        ctx,
         LayoutStyle::new().width(CONTENT_WIDTH).height(520.0),
         |_w, _h| {
             let mut children: Vec<View> = Vec::new();
@@ -1618,8 +1654,9 @@ fn gradients_section() -> Result<DrawingArea, LayoutError> {
     )
 }
 
-fn layers_section() -> Result<DrawingArea, LayoutError> {
+fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(
+        ctx,
         LayoutStyle::new().width(CONTENT_WIDTH).height(560.0),
         |_w, _h| {
             let mut children: Vec<View> = Vec::new();
@@ -1887,8 +1924,12 @@ fn layers_section() -> Result<DrawingArea, LayoutError> {
     )
 }
 
-fn grid_cell(color: Color, label: &'static str) -> Result<DrawingArea, LayoutError> {
-    DrawingArea::new(LayoutStyle::new().height(72.0), move |w, h| {
+fn grid_cell(
+    ctx: &mut WidgetCtx,
+    color: Color,
+    label: &'static str,
+) -> Result<DrawingArea, LayoutError> {
+    DrawingArea::new(ctx, LayoutStyle::new().height(72.0), move |w, h| {
         View::group([
             View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
@@ -1918,23 +1959,24 @@ fn grid_cell(color: Color, label: &'static str) -> Result<DrawingArea, LayoutErr
     })
 }
 
-fn grid_section() -> Result<Container, LayoutError> {
+fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
+    let gc1 = Box::new(grid_cell(ctx, PRIMARY, "1")?) as Box<dyn LayoutItem>;
+    let gc2 = Box::new(grid_cell(ctx, SUCCESS, "2")?) as Box<dyn LayoutItem>;
+    let gc3 = Box::new(grid_cell(ctx, DANGER, "3")?) as Box<dyn LayoutItem>;
+    let gc4 = Box::new(grid_cell(ctx, WARNING, "4")?) as Box<dyn LayoutItem>;
+    let gc5 = Box::new(grid_cell(ctx, PURPLE, "5")?) as Box<dyn LayoutItem>;
+    let gc6 = Box::new(grid_cell(ctx, DARK, "6")?) as Box<dyn LayoutItem>;
     let auto_grid = Container::new(
+        ctx,
         LayoutStyle::new()
             .display_grid()
             .grid_template_columns(vec![Track::repeat(3, Track::fr(1.0))])
             .gap(12.0),
-        vec![
-            Box::new(grid_cell(PRIMARY, "1")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(SUCCESS, "2")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(DANGER, "3")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(WARNING, "4")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(PURPLE, "5")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(DARK, "6")?) as Box<dyn LayoutItem>,
-        ],
+        vec![gc1, gc2, gc3, gc4, gc5, gc6],
     )?;
 
     let header = DrawingArea::new(
+        ctx,
         LayoutStyle::new().height(48.0).grid_column_span(3),
         |w, h| {
             View::group([
@@ -1965,32 +2007,31 @@ fn grid_section() -> Result<Container, LayoutError> {
             ])
         },
     )?;
+    let gca = Box::new(grid_cell(ctx, SUCCESS, "A")?) as Box<dyn LayoutItem>;
+    let gcb = Box::new(grid_cell(ctx, DANGER, "B")?) as Box<dyn LayoutItem>;
     let explicit_grid = Container::new(
+        ctx,
         LayoutStyle::new()
             .display_grid()
             .grid_template_columns(vec![Track::fr(1.0), Track::fr(1.0), Track::fr(1.0)])
             .gap(12.0),
-        vec![
-            Box::new(header) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(SUCCESS, "A")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(DANGER, "B")?) as Box<dyn LayoutItem>,
-        ],
+        vec![Box::new(header) as Box<dyn LayoutItem>, gca, gcb],
     )?;
 
+    let gcg1 = Box::new(grid_cell(ctx, PRIMARY, "G1")?) as Box<dyn LayoutItem>;
+    let gcg2 = Box::new(grid_cell(ctx, SUCCESS, "G2")?) as Box<dyn LayoutItem>;
+    let gcg3 = Box::new(grid_cell(ctx, DANGER, "G3")?) as Box<dyn LayoutItem>;
+    let gcg4 = Box::new(grid_cell(ctx, WARNING, "G4")?) as Box<dyn LayoutItem>;
     let inner_grid = Container::new(
+        ctx,
         LayoutStyle::new()
             .display_grid()
             .grid_template_columns(vec![Track::fr(1.0), Track::fr(1.0)])
             .flex_grow(1.0)
             .gap(8.0),
-        vec![
-            Box::new(grid_cell(PRIMARY, "G1")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(SUCCESS, "G2")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(DANGER, "G3")?) as Box<dyn LayoutItem>,
-            Box::new(grid_cell(WARNING, "G4")?) as Box<dyn LayoutItem>,
-        ],
+        vec![gcg1, gcg2, gcg3, gcg4],
     )?;
-    let side_label = DrawingArea::new(LayoutStyle::new().width(180.0), |w, h| {
+    let side_label = DrawingArea::new(ctx, LayoutStyle::new().width(180.0), |w, h| {
         View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Grid nested\ninside flex →"),
             rect: Bounds {
@@ -2003,6 +2044,7 @@ fn grid_section() -> Result<Container, LayoutError> {
         })))
     })?;
     let nested_row = Container::new(
+        ctx,
         LayoutStyle::new().flex_row().gap(16.0),
         vec![
             Box::new(side_label) as Box<dyn LayoutItem>,
@@ -2010,22 +2052,28 @@ fn grid_section() -> Result<Container, LayoutError> {
         ],
     )?;
 
+    let h1 = heading(ctx, "Grid")?;
+    let h2 = heading(ctx, "Auto-placed (repeat(3, 1fr))")?;
+    let h3 = heading(ctx, "Explicit placement (grid_column_span)")?;
+    let h4 = heading(ctx, "Nested in Container")?;
     Container::new(
+        ctx,
         LayoutStyle::new().flex_column().gap(16.0),
         vec![
-            heading("Grid")?,
-            heading("Auto-placed (repeat(3, 1fr))")?,
+            h1,
+            h2,
             Box::new(auto_grid) as Box<dyn LayoutItem>,
-            heading("Explicit placement (grid_column_span)")?,
+            h3,
             Box::new(explicit_grid) as Box<dyn LayoutItem>,
-            heading("Nested in Container")?,
+            h4,
             Box::new(nested_row) as Box<dyn LayoutItem>,
         ],
     )
 }
 
-fn shadows_section() -> Result<DrawingArea, LayoutError> {
+fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(
+        ctx,
         LayoutStyle::new().width(CONTENT_WIDTH).height(640.0),
         |_w, _h| {
             let mut children: Vec<View> = Vec::new();
@@ -2454,16 +2502,17 @@ impl App for SandboxRoot {
 
         let count = create_rw_signal(0i32);
 
-        let (build, _) = with_context(WidgetCtx::new(), || {
+        let (build, _) = with_context(WidgetCtx::new(), |ctx| {
             let c = count.clone();
             let count_label = Text::new(
+                ctx,
                 move || format!("Count: {}", c.get()),
                 LayoutStyle::new().width(PANEL_W - 16.0).height(24.0),
                 || TextStyle::new(14.0, WHITE),
             )?;
 
             let c = count.clone();
-            let btn_inc = Button::new("+")?
+            let btn_inc = Button::new(ctx, "+")?
                 .with_bg(
                     Color::from_rgb_u8(34, 197, 94),
                     Color::from_rgb_u8(22, 163, 74),
@@ -2471,19 +2520,23 @@ impl App for SandboxRoot {
                 .on_click(move || c.set(c.get() + 1));
 
             let c = count.clone();
-            let btn_dec = Button::new("-")?
+            let btn_dec = Button::new(ctx, "-")?
                 .with_bg(
                     Color::from_rgb_u8(239, 68, 68),
                     Color::from_rgb_u8(220, 38, 38),
                 )
                 .on_click(move || c.set(c.get() - 1));
 
-            let btn_row = Container::row(vec![
-                Box::new(btn_inc) as Box<dyn LayoutItem>,
-                Box::new(btn_dec) as Box<dyn LayoutItem>,
-            ])?;
+            let btn_row = Container::row(
+                ctx,
+                vec![
+                    Box::new(btn_inc) as Box<dyn LayoutItem>,
+                    Box::new(btn_dec) as Box<dyn LayoutItem>,
+                ],
+            )?;
 
             let widget_panel = Container::new(
+                ctx,
                 LayoutStyle::new()
                     .flex_column()
                     .width(PANEL_W)
@@ -2497,12 +2550,14 @@ impl App for SandboxRoot {
             )?;
 
             compute_layout(
+                ctx,
                 widget_panel.layout_node(),
                 AvailableSpace::Definite(PANEL_W),
                 AvailableSpace::Definite(PANEL_H),
             )?;
 
             let content = build_content(
+                ctx,
                 gradient_image.clone(),
                 checker_image.clone(),
                 alpha_image.clone(),
@@ -2512,11 +2567,13 @@ impl App for SandboxRoot {
             let ww = window_width.clone();
             let wh = window_height.clone();
             let scroll_area = ScrollArea::new(
+                ctx,
                 move || Bounds::new(0.0, 0.0, ww.get(), wh.get()),
                 Box::new(content),
             );
 
             compute_layout(
+                ctx,
                 content_node,
                 AvailableSpace::Definite(CONTENT_WIDTH),
                 AvailableSpace::MaxContent,

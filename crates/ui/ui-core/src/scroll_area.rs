@@ -1,23 +1,28 @@
 use geometry_core::Rect;
 use platform_core::{Event, ScrollDelta};
-use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
+use reactive_core::{RwSignal, create_rw_signal};
 use renderer_core::{BorderRadius, Color, DrawCommand, RectPayload, RectStyle};
 use ui_tree::{Component, EventResult, View};
 
-use crate::context::track_layout;
+use crate::context::{WidgetCtx, track_layout};
 use crate::layout_item::LayoutItem;
 use crate::pointer::{offset_pointer, pointer_coords};
 
 pub struct ScrollArea {
     viewport: Box<dyn Fn() -> Rect>,
-    content_size: ReadSignal<Rect>,
+    content_size: RwSignal<Rect>,
     scroll_y: RwSignal<f32>,
     content: Box<dyn LayoutItem>,
 }
 
 impl ScrollArea {
-    pub fn new(viewport: impl Fn() -> Rect + 'static, content: Box<dyn LayoutItem>) -> Self {
-        let content_size = track_layout(content.layout_node());
+    pub fn new(
+        ctx: &WidgetCtx,
+        viewport: impl Fn() -> Rect + 'static,
+        content: Box<dyn LayoutItem>,
+    ) -> Self {
+        let content_size =
+            track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
         Self {
             viewport: Box::new(viewport),
             content_size,
@@ -101,15 +106,17 @@ mod tests {
     use crate::layout_leaf::LayoutLeaf;
 
     fn make_scroll_area() -> ScrollArea {
-        let (sa, _ctx) = with_context(WidgetCtx::new(), || {
-            let content =
-                DrawingArea::new(LayoutStyle::new().width(400.0).height(1000.0), |_, _| {
-                    View::Empty
-                })
-                .unwrap();
+        let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
+            let content = DrawingArea::new(
+                ctx,
+                LayoutStyle::new().width(400.0).height(1000.0),
+                |_, _| View::Empty,
+            )
+            .unwrap();
             let node = content.layout_node();
-            let sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+            let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
             compute_layout(
+                ctx,
                 node,
                 AvailableSpace::Definite(400.0),
                 AvailableSpace::MaxContent,
@@ -121,15 +128,17 @@ mod tests {
     }
 
     fn make_scroll_area_small() -> ScrollArea {
-        let (sa, _ctx) = with_context(WidgetCtx::new(), || {
-            let content =
-                DrawingArea::new(LayoutStyle::new().width(400.0).height(200.0), |_, _| {
-                    View::Empty
-                })
-                .unwrap();
+        let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
+            let content = DrawingArea::new(
+                ctx,
+                LayoutStyle::new().width(400.0).height(200.0),
+                |_, _| View::Empty,
+            )
+            .unwrap();
             let node = content.layout_node();
-            let sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+            let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
             compute_layout(
+                ctx,
                 node,
                 AvailableSpace::Definite(400.0),
                 AvailableSpace::MaxContent,
@@ -245,16 +254,21 @@ mod tests {
             }
         }
 
-        let (mut sa, _ctx) = with_context(WidgetCtx::new(), || {
+        let (mut sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
             let leaf =
-                LayoutLeaf::register(LayoutStyle::new().width(400.0).height(1000.0)).unwrap();
+                LayoutLeaf::register(ctx, LayoutStyle::new().width(400.0).height(1000.0)).unwrap();
             let node = leaf.node;
             let content = CapturingItem {
                 leaf,
                 out: captured_y_clone,
             };
-            let sa = ScrollArea::new(|| Rect::new(100.0, 50.0, 400.0, 300.0), Box::new(content));
+            let sa = ScrollArea::new(
+                ctx,
+                || Rect::new(100.0, 50.0, 400.0, 300.0),
+                Box::new(content),
+            );
             compute_layout(
+                ctx,
                 node,
                 AvailableSpace::Definite(400.0),
                 AvailableSpace::MaxContent,

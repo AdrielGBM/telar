@@ -18,7 +18,8 @@ pub use button::Button;
 pub use clip_group::ClipGroup;
 pub use container::Container;
 pub use context::{
-    NodeId, WidgetCtx, compute_layout, new_container, register_leaf, track_layout, with_context,
+    NodeId, WidgetCtx, compute_layout, mark_dirty, new_container, register_leaf, track_layout,
+    update_style, with_context,
 };
 pub use drawing_area::DrawingArea;
 pub use image::Image;

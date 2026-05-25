@@ -2,13 +2,15 @@ use geometry_core::Rect;
 
 use crate::{DrawCommand, culling};
 
-/// When a pure Y-scroll is detected, this describes what changed.
+/// When a pure axis-aligned scroll is detected, this describes what changed.
 pub struct ScrollBlit {
     /// The clipping rect that encloses the scrollable content.
     pub scroll_clip: Rect,
-    /// How many pixels the content shifted (negative = content moved up = scroll down).
+    /// Horizontal pixel shift (negative = content moved left = scroll right). Zero for Y-only scrolls.
+    pub delta_tx: i32,
+    /// Vertical pixel shift (negative = content moved up = scroll down). Zero for X-only scrolls.
     pub delta_ty: i32,
-    /// The band of newly exposed pixels that must be re-rendered.
+    /// The strip of newly exposed pixels that must be re-rendered (horizontal band for Y scrolls, vertical band for X scrolls).
     pub exposed_band: Rect,
     /// Bounds of any other changed elements outside the scroll clip (e.g. scrollbar).
     pub extra_dirty: Option<Rect>,
@@ -101,9 +103,7 @@ pub fn compute_dirty_rect(
     dirty
 }
 
-/// Detect whether the only change between two command slices is a pure Y-axis
-/// translation of scrollable content within a fixed clip. Returns a ScrollBlit
-/// descriptor if scroll blit can be applied, or None otherwise.
+/// Detect whether the only change between two command slices is a pure axis-aligned (X-only or Y-only) translation of scrollable content within a fixed clip.
 pub fn detect_scroll_blit(
     new_cmds: &[DrawCommand],
     old_cmds: &[DrawCommand],
@@ -114,17 +114,21 @@ pub fn detect_scroll_blit(
 
     let n = new_cmds.len();
 
-    // Find the first position where commands differ; must be a PushTransform with only ty changed.
+    // Find the first position where commands differ; must be a PushTransform with only one axis changed.
     let scroll_idx = new_cmds
         .iter()
         .zip(old_cmds.iter())
         .position(|(nc, oc)| nc != oc)?;
 
-    let (new_ty, old_ty) = match (&new_cmds[scroll_idx], &old_cmds[scroll_idx]) {
+    let (delta_tx_f, delta_ty_f) = match (&new_cmds[scroll_idx], &old_cmds[scroll_idx]) {
         (
             DrawCommand::PushTransform { tx: ntx, ty: nty },
             DrawCommand::PushTransform { tx: otx, ty: oty },
-        ) if ntx == otx => (*nty, *oty),
+        ) if ntx == otx => (0.0f32, nty - oty), // pure Y-scroll
+        (
+            DrawCommand::PushTransform { tx: ntx, ty: nty },
+            DrawCommand::PushTransform { tx: otx, ty: oty },
+        ) if nty == oty => (ntx - otx, 0.0f32), // pure X-scroll
         _ => return None,
     };
 
@@ -148,11 +152,14 @@ pub fn detect_scroll_blit(
 
     let scroll_clip = *clip_stack.last()?;
 
-    let delta_ty_f = new_ty - old_ty;
+    let delta_tx = delta_tx_f as i32;
     let delta_ty = delta_ty_f as i32;
 
     // No savings from blitting if the entire clip would need repaint.
-    if (delta_ty.abs() as f32) >= scroll_clip.height {
+    if delta_tx != 0 && (delta_tx.abs() as f32) >= scroll_clip.width {
+        return None;
+    }
+    if delta_ty != 0 && (delta_ty.abs() as f32) >= scroll_clip.height {
         return None;
     }
 
@@ -185,7 +192,22 @@ pub fn detect_scroll_blit(
         }
     }
 
-    let exposed_band = if delta_ty < 0 {
+    let exposed_band = if delta_tx != 0 {
+        if delta_tx < 0 {
+            // Content moved left (scrolled right): the right strip is newly exposed.
+            let band_w = (-delta_tx) as f32;
+            Rect::new(
+                scroll_clip.x + scroll_clip.width - band_w,
+                scroll_clip.y,
+                band_w,
+                scroll_clip.height,
+            )
+        } else {
+            // Content moved right (scrolled left): the left strip is newly exposed.
+            let band_w = delta_tx as f32;
+            Rect::new(scroll_clip.x, scroll_clip.y, band_w, scroll_clip.height)
+        }
+    } else if delta_ty < 0 {
         // Content moved up (scrolled down): the bottom band is newly exposed.
         let band_h = (-delta_ty) as f32;
         Rect::new(
@@ -247,6 +269,7 @@ pub fn detect_scroll_blit(
 
     Some(ScrollBlit {
         scroll_clip,
+        delta_tx,
         delta_ty,
         exposed_band,
         extra_dirty,

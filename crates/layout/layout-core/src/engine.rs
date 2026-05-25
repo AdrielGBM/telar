@@ -36,6 +36,10 @@ impl LayoutEngine {
             .map_err(LayoutError::from)
     }
 
+    pub fn mark_dirty(&mut self, node: NodeId) -> Result<(), LayoutError> {
+        self.tree.mark_dirty(node).map_err(LayoutError::from)
+    }
+
     pub fn compute(
         &mut self,
         root: NodeId,
@@ -69,7 +73,7 @@ impl LayoutEngine {
 
     pub fn walk<F>(&self, root: NodeId, f: &mut F) -> Result<(), LayoutError>
     where
-        F: FnMut(NodeId, geometry_core::Rect),
+        F: FnMut(NodeId, geometry_core::Rect) -> bool,
     {
         struct StackEntry {
             node: NodeId,
@@ -89,18 +93,20 @@ impl LayoutEngine {
             let abs_x = entry.offset_x + layout.location.x;
             let abs_y = entry.offset_y + layout.location.y;
 
-            f(
+            let descend = f(
                 entry.node,
                 geometry_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
             );
 
-            let children: Vec<NodeId> = self.tree.child_ids(entry.node).collect();
-            for child in children.into_iter().rev() {
-                stack.push(StackEntry {
-                    node: child,
-                    offset_x: abs_x,
-                    offset_y: abs_y,
-                });
+            if descend {
+                let children: Vec<NodeId> = self.tree.child_ids(entry.node).collect();
+                for child in children.into_iter().rev() {
+                    stack.push(StackEntry {
+                        node: child,
+                        offset_x: abs_x,
+                        offset_y: abs_y,
+                    });
+                }
             }
         }
         Ok(())

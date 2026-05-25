@@ -19,11 +19,12 @@ pub struct Text {
 
 impl Text {
     pub fn new(
+        ctx: &mut crate::context::WidgetCtx,
         content_fn: impl Fn() -> String + 'static,
         style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(style)?;
+        let leaf = LayoutLeaf::register(ctx, style)?;
         Ok(Self {
             content_fn: Box::new(content_fn),
             cached_content: RefCell::new((String::new(), Rc::from(""))),

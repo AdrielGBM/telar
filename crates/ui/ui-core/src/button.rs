@@ -23,8 +23,11 @@ pub struct Button {
 }
 
 impl Button {
-    pub fn new(label: impl Into<String>) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(LayoutStyle::new().height(36.0))?;
+    pub fn new(
+        ctx: &mut crate::context::WidgetCtx,
+        label: impl Into<String>,
+    ) -> Result<Self, LayoutError> {
+        let leaf = LayoutLeaf::register(ctx, LayoutStyle::new().height(36.0))?;
         Ok(Self {
             label: Rc::from(label.into()),
             leaf,
@@ -131,34 +134,34 @@ mod tests {
     use renderer_core::{Color, DrawCommand, FillStyle};
 
     use super::*;
-    use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
+    use crate::context::{WidgetCtx, compute_layout, new_container};
     use crate::layout_item::LayoutItem;
 
-    fn make_button_with_rect() -> (Button, WidgetCtx) {
-        let (result, ctx) = with_context(WidgetCtx::new(), || {
-            let button = Button::new("OK").unwrap();
-            let root = new_container(
-                layout_core::LayoutStyle::new()
-                    .flex_column()
-                    .width(200.0)
-                    .height(100.0),
-                &[button.layout_node()],
-            )
-            .unwrap();
-            compute_layout(
-                root,
-                AvailableSpace::Definite(200.0),
-                AvailableSpace::Definite(100.0),
-            )
-            .unwrap();
-            button
-        });
-        (result, ctx)
+    fn make_button_with_rect() -> Button {
+        let mut ctx = WidgetCtx::new();
+        let button = Button::new(&mut ctx, "OK").unwrap();
+        let root = new_container(
+            &mut ctx,
+            layout_core::LayoutStyle::new()
+                .flex_column()
+                .width(200.0)
+                .height(100.0),
+            &[button.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        button
     }
 
     #[test]
     fn button_view_renders_two_primitives() {
-        let (button, _ctx) = make_button_with_rect();
+        let button = make_button_with_rect();
         let view = button.view();
         if let View::Translate { children, .. } = view {
             assert_eq!(children.len(), 1);
@@ -176,7 +179,7 @@ mod tests {
 
     #[test]
     fn button_on_event_hover_changes_color() {
-        let (mut button, _ctx) = make_button_with_rect();
+        let mut button = make_button_with_rect();
 
         // No hover initially
         let view_normal = button.view();
@@ -207,26 +210,26 @@ mod tests {
     fn button_on_event_click_calls_callback() {
         let flag = Rc::new(Cell::new(false));
         let flag_clone = flag.clone();
-        let (mut button, _ctx) = with_context(WidgetCtx::new(), || {
-            let button = Button::new("OK")
-                .unwrap()
-                .on_click(move || flag_clone.set(true));
-            let root = new_container(
-                layout_core::LayoutStyle::new()
-                    .flex_column()
-                    .width(200.0)
-                    .height(100.0),
-                &[button.layout_node()],
-            )
-            .unwrap();
-            compute_layout(
-                root,
-                AvailableSpace::Definite(200.0),
-                AvailableSpace::Definite(100.0),
-            )
-            .unwrap();
-            button
-        });
+        let mut ctx = WidgetCtx::new();
+        let mut button = Button::new(&mut ctx, "OK")
+            .unwrap()
+            .on_click(move || flag_clone.set(true));
+        let root = new_container(
+            &mut ctx,
+            layout_core::LayoutStyle::new()
+                .flex_column()
+                .width(200.0)
+                .height(100.0),
+            &[button.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
 
         let result = button.on_event(&Event::PointerPressed {
             x: 1.0,
@@ -243,26 +246,26 @@ mod tests {
     fn button_on_event_click_outside_does_nothing() {
         let flag = Rc::new(Cell::new(false));
         let flag_clone = flag.clone();
-        let (mut button, _ctx) = with_context(WidgetCtx::new(), || {
-            let button = Button::new("OK")
-                .unwrap()
-                .on_click(move || flag_clone.set(true));
-            let root = new_container(
-                layout_core::LayoutStyle::new()
-                    .flex_column()
-                    .width(200.0)
-                    .height(100.0),
-                &[button.layout_node()],
-            )
-            .unwrap();
-            compute_layout(
-                root,
-                AvailableSpace::Definite(200.0),
-                AvailableSpace::Definite(100.0),
-            )
-            .unwrap();
-            button
-        });
+        let mut ctx = WidgetCtx::new();
+        let mut button = Button::new(&mut ctx, "OK")
+            .unwrap()
+            .on_click(move || flag_clone.set(true));
+        let root = new_container(
+            &mut ctx,
+            layout_core::LayoutStyle::new()
+                .flex_column()
+                .width(200.0)
+                .height(100.0),
+            &[button.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
 
         let result = button.on_event(&Event::PointerPressed {
             x: 9999.0,
