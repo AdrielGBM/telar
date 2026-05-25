@@ -668,14 +668,19 @@ where
                 }
                 DrawCommand::PopLayer => {
                     if let Some((layer, opacity, ox, oy)) = self.layer_stack.pop() {
+                        let (parent_ox, parent_oy) = self
+                            .layer_stack
+                            .last()
+                            .map(|(_, _, pox, poy)| (*pox, *poy))
+                            .unwrap_or((0, 0));
                         let target = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                             top
                         } else {
                             self.pixmap.as_mut().unwrap()
                         };
                         target.draw_pixmap(
-                            ox,
-                            oy,
+                            ox - parent_ox,
+                            oy - parent_oy,
                             layer.as_ref(),
                             &tiny_skia::PixmapPaint {
                                 opacity,
