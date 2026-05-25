@@ -88,62 +88,50 @@ pub(crate) fn draw_path(
                 color: [sc_r, sc_g, sc_b, sc_a],
             };
 
-            if path_shadow_cache.get(&cache_key).is_none() {
-                let dx = -b.x() + padding as f32;
-                let dy = -b.y() + padding as f32;
-                let shifted = tiny_skia::Transform::from_translate(dx, dy);
-                let shadow_paint = {
-                    let mut p = tiny_skia::Paint::default();
-                    p.set_color(crate::primitives::to_skia_color(shadow.color));
-                    p.anti_alias = true;
-                    p
-                };
-                let fill_rule = style.fill_rule;
-                let stroke_style = style.stroke;
-                let has_fill = style.fill.is_some();
-                if let Some(tmp) = crate::primitives::render_shadow_pixmap(
-                    tmp_w,
-                    tmp_h,
-                    shadow.blur_radius,
-                    blur_scratch,
-                    |tmp_pmap| {
-                        if has_fill {
-                            let rule = match fill_rule {
-                                FillRule::Winding => tiny_skia::FillRule::Winding,
-                                FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
-                            };
-                            tmp_pmap.fill_path(&path, &shadow_paint, rule, shifted, None);
-                        }
-                        if let Some(s) = stroke_style {
-                            let stroke = tiny_skia::Stroke {
-                                width: s.width,
-                                line_cap: to_skia_line_cap(s.cap),
-                                line_join: to_skia_line_join(s.join),
-                                ..Default::default()
-                            };
-                            tmp_pmap.stroke_path(&path, &shadow_paint, &stroke, shifted, None);
-                        }
-                    },
-                ) {
-                    path_shadow_cache
-                        .put_with_weight(cache_key.clone(), tmp)
-                        .ok();
-                }
-            }
+            let dx = -b.x() + padding as f32;
+            let dy = -b.y() + padding as f32;
+            let shifted = tiny_skia::Transform::from_translate(dx, dy);
+            let shadow_paint = {
+                let mut p = tiny_skia::Paint::default();
+                p.set_color(crate::primitives::to_skia_color(shadow.color));
+                p.anti_alias = true;
+                p
+            };
+            let fill_rule = style.fill_rule;
+            let stroke_style = style.stroke;
+            let has_fill = style.fill.is_some();
 
-            if let Some(cached) = path_shadow_cache.get(&cache_key) {
-                pixmap.draw_pixmap(
-                    draw_x,
-                    draw_y,
-                    cached.as_ref(),
-                    &tiny_skia::PixmapPaint {
-                        blend_mode: tiny_skia::BlendMode::SourceOver,
-                        ..Default::default()
-                    },
-                    transform,
-                    clip,
-                );
-            }
+            crate::primitives::blit_cached_shadow(
+                pixmap,
+                path_shadow_cache,
+                cache_key,
+                draw_x,
+                draw_y,
+                tmp_w,
+                tmp_h,
+                shadow.blur_radius,
+                blur_scratch,
+                transform,
+                clip,
+                |tmp_pmap| {
+                    if has_fill {
+                        let rule = match fill_rule {
+                            FillRule::Winding => tiny_skia::FillRule::Winding,
+                            FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
+                        };
+                        tmp_pmap.fill_path(&path, &shadow_paint, rule, shifted, None);
+                    }
+                    if let Some(s) = stroke_style {
+                        let stroke = tiny_skia::Stroke {
+                            width: s.width,
+                            line_cap: to_skia_line_cap(s.cap),
+                            line_join: to_skia_line_join(s.join),
+                            ..Default::default()
+                        };
+                        tmp_pmap.stroke_path(&path, &shadow_paint, &stroke, shifted, None);
+                    }
+                },
+            );
         }
     }
 

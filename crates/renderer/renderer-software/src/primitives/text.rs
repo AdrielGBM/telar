@@ -87,55 +87,42 @@ pub(crate) fn draw_text(
                     blur_radius_bits: shadow.blur_radius.to_bits(),
                 };
 
-                if text_shadow_cache.get(&shadow_key).is_none() {
-                    let tmp_w = tex_w + 2 * padding as u32 + 2;
-                    let tmp_h = tex_h + 2 * padding as u32 + 2;
-                    let shadow_color = shadow.color;
-                    if let Some(tmp) = crate::primitives::render_shadow_pixmap(
-                        tmp_w,
-                        tmp_h,
-                        shadow.blur_radius,
-                        blur_scratch,
-                        |tmp_pmap| {
-                            let mut shadow_pixels = arc.to_vec();
-                            tint_premultiplied(&mut shadow_pixels, shadow_color);
-                            if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
-                                if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size)
-                                {
-                                    tmp_pmap.draw_pixmap(
-                                        padding,
-                                        padding,
-                                        src.as_ref(),
-                                        &tiny_skia::PixmapPaint {
-                                            blend_mode: tiny_skia::BlendMode::SourceOver,
-                                            ..Default::default()
-                                        },
-                                        tiny_skia::Transform::identity(),
-                                        None,
-                                    );
-                                }
-                            }
-                        },
-                    ) {
-                        text_shadow_cache
-                            .put_with_weight(shadow_key.clone(), tmp)
-                            .ok();
-                    }
-                }
+                let tmp_w = tex_w + 2 * padding as u32 + 2;
+                let tmp_h = tex_h + 2 * padding as u32 + 2;
+                let shadow_color = shadow.color;
 
-                if let Some(shadow_pixmap) = text_shadow_cache.get(&shadow_key) {
-                    pixmap.draw_pixmap(
-                        rect.x as i32 + shadow.offset_x as i32 - padding,
-                        rect.y as i32 + shadow.offset_y as i32 - padding,
-                        shadow_pixmap.as_ref(),
-                        &tiny_skia::PixmapPaint {
-                            blend_mode: tiny_skia::BlendMode::SourceOver,
-                            ..Default::default()
-                        },
-                        transform,
-                        clip,
-                    );
-                }
+                crate::primitives::blit_cached_shadow(
+                    pixmap,
+                    text_shadow_cache,
+                    shadow_key,
+                    rect.x as i32 + shadow.offset_x as i32 - padding,
+                    rect.y as i32 + shadow.offset_y as i32 - padding,
+                    tmp_w,
+                    tmp_h,
+                    shadow.blur_radius,
+                    blur_scratch,
+                    transform,
+                    clip,
+                    |tmp_pmap| {
+                        let mut shadow_pixels = arc.to_vec();
+                        tint_premultiplied(&mut shadow_pixels, shadow_color);
+                        if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
+                            if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size) {
+                                tmp_pmap.draw_pixmap(
+                                    padding,
+                                    padding,
+                                    src.as_ref(),
+                                    &tiny_skia::PixmapPaint {
+                                        blend_mode: tiny_skia::BlendMode::SourceOver,
+                                        ..Default::default()
+                                    },
+                                    tiny_skia::Transform::identity(),
+                                    None,
+                                );
+                            }
+                        }
+                    },
+                );
             }
 
             let body_key = renderer_text::make_text_cache_key(

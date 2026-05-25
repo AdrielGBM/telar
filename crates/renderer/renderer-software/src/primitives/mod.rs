@@ -99,6 +99,46 @@ pub(crate) fn render_shadow_pixmap(
     Some(pixmap)
 }
 
+/// Ensures a shadow pixmap is in `cache` under `key`. If absent, renders it via `draw_fn`.
+/// Then blits it onto `pixmap` at `(blit_x, blit_y)`.
+pub(crate) fn blit_cached_shadow<K, H, S>(
+    pixmap: &mut tiny_skia::Pixmap,
+    cache: &mut clru::CLruCache<K, tiny_skia::Pixmap, H, S>,
+    key: K,
+    blit_x: i32,
+    blit_y: i32,
+    tmp_w: u32,
+    tmp_h: u32,
+    blur_radius: f32,
+    blur_scratch: &mut Vec<u8>,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+    draw_fn: impl FnOnce(&mut tiny_skia::Pixmap),
+) where
+    K: std::hash::Hash + Eq + Clone,
+    H: std::hash::BuildHasher,
+    S: clru::WeightScale<K, tiny_skia::Pixmap>,
+{
+    if cache.get(&key).is_none() {
+        if let Some(tmp) = render_shadow_pixmap(tmp_w, tmp_h, blur_radius, blur_scratch, draw_fn) {
+            cache.put_with_weight(key.clone(), tmp).ok();
+        }
+    }
+    if let Some(cached) = cache.get(&key) {
+        pixmap.draw_pixmap(
+            blit_x,
+            blit_y,
+            cached.as_ref(),
+            &tiny_skia::PixmapPaint {
+                blend_mode: tiny_skia::BlendMode::SourceOver,
+                ..Default::default()
+            },
+            transform,
+            clip,
+        );
+    }
+}
+
 pub(crate) fn gaussian_blur(
     data: &mut [u8],
     width: u32,

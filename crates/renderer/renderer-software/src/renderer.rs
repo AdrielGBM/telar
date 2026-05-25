@@ -60,6 +60,63 @@ fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
     })
 }
 
+fn compute_layer_bboxes(
+    commands: &[DrawCommand],
+    window_w: u32,
+    window_h: u32,
+) -> Vec<Option<(i32, i32, u32, u32)>> {
+    let mut result = vec![None; commands.len()];
+    let mut stack: Vec<(usize, Option<Rect>)> = Vec::new();
+    let mut cum_tx = 0.0f32;
+    let mut cum_ty = 0.0f32;
+    let mut transform_stack: Vec<(f32, f32)> = Vec::new();
+
+    for (idx, cmd) in commands.iter().enumerate() {
+        match cmd {
+            DrawCommand::PushTransform { tx, ty } => {
+                transform_stack.push((cum_tx, cum_ty));
+                cum_tx += tx;
+                cum_ty += ty;
+            }
+            DrawCommand::PopTransform => {
+                if let Some((prev_tx, prev_ty)) = transform_stack.pop() {
+                    cum_tx = prev_tx;
+                    cum_ty = prev_ty;
+                }
+            }
+            DrawCommand::PushLayer { .. } => {
+                stack.push((idx, None));
+            }
+            DrawCommand::PopLayer => {
+                if let Some((push_idx, accumulated)) = stack.pop() {
+                    let (ox, oy, bw, bh) = if let Some(bbox) = accumulated {
+                        let x0 = bbox.x.floor().max(0.0).min(window_w as f32) as i32;
+                        let y0 = bbox.y.floor().max(0.0).min(window_h as f32) as i32;
+                        let x1 = (bbox.x + bbox.width).ceil().max(0.0).min(window_w as f32) as i32;
+                        let y1 = (bbox.y + bbox.height).ceil().max(0.0).min(window_h as f32) as i32;
+                        let w = (x1 - x0).max(1) as u32;
+                        let h = (y1 - y0).max(1) as u32;
+                        (x0, y0, w, h)
+                    } else {
+                        (0, 0, window_w, window_h)
+                    };
+                    result[push_idx] = Some((ox, oy, bw, bh));
+                }
+            }
+            _ => {
+                if let Some(vr) = renderer_core::culling::command_visual_rect(cmd, cum_tx, cum_ty) {
+                    if !stack.is_empty() {
+                        let last_idx = stack.len() - 1;
+                        stack[last_idx].1 = union_opt_rect(stack[last_idx].1, vr);
+                    }
+                }
+            }
+        }
+    }
+
+    result
+}
+
 // Shifts pixel rows inside `clip` by `delta_ty` pixels in place. After the shift the newly
 // exposed rows still contain stale data and must be cleared + re-rendered by the caller.
 fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_ty: f32) {
@@ -146,7 +203,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     text_shadow_cache: TextShadowCache,
     path_shadow_cache: PathShadowCache,
-    layer_stack: Vec<(tiny_skia::Pixmap, f32)>,
+    layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32)>,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
     prev_commands: Vec<DrawCommand>,
     prev_clear_color: Option<Color>,
@@ -349,13 +406,23 @@ where
         let mut current_clip_rect: Option<Rect> = None;
         self.layer_stack.clear();
 
-        for cmd in commands {
+        let layer_bboxes = compute_layer_bboxes(commands, self.width, self.height);
+
+        for (cmd_idx, cmd) in commands.iter().enumerate() {
             if self.pixmap.is_none() {
                 break;
             }
+
+            let inside_layer = !self.layer_stack.is_empty();
+            let (layer_ox, layer_oy) = self
+                .layer_stack
+                .last()
+                .map(|(_, _, ox, oy)| (*ox, *oy))
+                .unwrap_or((0, 0));
+
             let transform = tiny_skia::Transform::from_translate(
-                self.draw_state.cum_tx,
-                self.draw_state.cum_ty,
+                self.draw_state.cum_tx - layer_ox as f32,
+                self.draw_state.cum_ty - layer_oy as f32,
             );
 
             // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region.
@@ -391,12 +458,12 @@ where
                     ) {
                         continue;
                     }
-                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
-                        top
+                    let pixmap = if let Some((layer, _, _, _)) = self.layer_stack.last_mut() {
+                        layer
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active {
+                    let clip = if clip_active && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -421,12 +488,12 @@ where
                     ) {
                         continue;
                     }
-                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active {
+                    let clip = if clip_active && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -455,12 +522,12 @@ where
                     ) {
                         continue;
                     }
-                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active {
+                    let clip = if clip_active && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -489,12 +556,12 @@ where
                     ) {
                         continue;
                     }
-                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active {
+                    let clip = if clip_active && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -521,12 +588,12 @@ where
                             continue;
                         }
                     }
-                    let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active {
+                    let clip = if clip_active && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -587,26 +654,28 @@ where
                     self.draw_state.pop_transform();
                 }
                 DrawCommand::PushLayer { opacity } => {
+                    let (ox, oy, bw, bh) =
+                        layer_bboxes[cmd_idx].unwrap_or((0, 0, self.width, self.height));
                     let layer = self
                         .pixmap_pool
                         .pop()
-                        .filter(|p| p.width() >= self.width && p.height() >= self.height)
-                        .or_else(|| tiny_skia::Pixmap::new(self.width, self.height));
+                        .filter(|p| p.width() == bw && p.height() == bh)
+                        .or_else(|| tiny_skia::Pixmap::new(bw, bh));
                     if let Some(mut l) = layer {
                         l.fill(tiny_skia::Color::TRANSPARENT);
-                        self.layer_stack.push((l, *opacity));
+                        self.layer_stack.push((l, *opacity, ox, oy));
                     }
                 }
                 DrawCommand::PopLayer => {
-                    if let Some((layer, opacity)) = self.layer_stack.pop() {
-                        let target = if let Some((top, _)) = self.layer_stack.last_mut() {
+                    if let Some((layer, opacity, ox, oy)) = self.layer_stack.pop() {
+                        let target = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                             top
                         } else {
                             self.pixmap.as_mut().unwrap()
                         };
                         target.draw_pixmap(
-                            0,
-                            0,
+                            ox,
+                            oy,
                             layer.as_ref(),
                             &tiny_skia::PixmapPaint {
                                 opacity,

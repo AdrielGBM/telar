@@ -110,32 +110,25 @@ fn draw_rect_shadow(
         radius.bottom_left.to_bits(),
     );
 
-    if let Some(cached) = shadow_cache.get(&cache_key) {
-        pixmap.draw_pixmap(
-            tmp_x,
-            tmp_y,
-            cached.as_ref(),
-            &tiny_skia::PixmapPaint {
-                blend_mode: tiny_skia::BlendMode::SourceOver,
-                ..Default::default()
-            },
-            transform,
-            clip,
-        );
-        return;
-    }
-
     let local_rect = Rect::new(
         shadow_rect.x - tmp_x as f32,
         shadow_rect.y - tmp_y as f32,
         shadow_rect.width,
         shadow_rect.height,
     );
-    if let Some(tmp) = crate::primitives::render_shadow_pixmap(
+
+    crate::primitives::blit_cached_shadow(
+        pixmap,
+        shadow_cache,
+        cache_key,
+        tmp_x,
+        tmp_y,
         tmp_w,
         tmp_h,
         shadow.blur_radius,
         blur_scratch,
+        transform,
+        clip,
         |tmp_pmap| {
             if let Some(path) = build_rect_path(local_rect, shadow_radius) {
                 let mut paint = tiny_skia::Paint::default();
@@ -150,22 +143,7 @@ fn draw_rect_shadow(
                 );
             }
         },
-    ) {
-        let _ = shadow_cache.put_with_weight(cache_key, tmp);
-    }
-    if let Some(cached) = shadow_cache.get(&cache_key) {
-        pixmap.draw_pixmap(
-            tmp_x,
-            tmp_y,
-            cached.as_ref(),
-            &tiny_skia::PixmapPaint {
-                blend_mode: tiny_skia::BlendMode::SourceOver,
-                ..Default::default()
-            },
-            transform,
-            clip,
-        );
-    }
+    );
 }
 
 pub(crate) fn draw_rect(
