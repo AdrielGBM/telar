@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use clru::{CLruCache, CLruCacheConfig, WeightScale};
 use geometry_core::Rect;
-use renderer_core::{ImageData, ImageFilter, premultiply_rgba};
+use renderer_core::{ImageData, ImageFilter};
 use rustc_hash::FxBuildHasher;
 
 pub(crate) struct PixmapByteScale;
@@ -43,11 +43,7 @@ pub(crate) fn draw_image(
 
     if cache.get(&key).is_none() {
         let size = tiny_skia::IntSize::from_wh(data.width, data.height);
-        let src_pixmap = size.and_then(|s| {
-            let mut pixels = data.pixels.clone();
-            premultiply_rgba(&mut pixels);
-            tiny_skia::Pixmap::from_vec(pixels, s)
-        });
+        let src_pixmap = size.and_then(|s| tiny_skia::Pixmap::from_vec(data.pixels.clone(), s));
         let fallback = src_pixmap
             .unwrap_or_else(|| tiny_skia::Pixmap::new(1, 1).expect("1x1 pixmap always valid"));
         cache.put_with_weight(key, fallback).ok();

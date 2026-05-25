@@ -10,54 +10,8 @@ use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
 use crate::primitives::image::{ImageCache, PixmapByteScale, ShadowCache};
+use crate::primitives::path::{PathShadowCache, new_path_shadow_cache};
 use crate::primitives::text::{TextShadowCache, new_text_shadow_cache};
-
-fn overlaps_clip(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
-    let Some(clip) = clip else { return true };
-    x + w > clip.x && y + h > clip.y && x < clip.x + clip.width && y < clip.y + clip.height
-}
-
-fn path_data_bounds(data: &renderer_core::PathData) -> Option<(f32, f32, f32, f32)> {
-    use renderer_core::PathVerb;
-    let mut min_x = f32::INFINITY;
-    let mut min_y = f32::INFINITY;
-    let mut max_x = f32::NEG_INFINITY;
-    let mut max_y = f32::NEG_INFINITY;
-    let mut include = |x: f32, y: f32| {
-        if x < min_x {
-            min_x = x;
-        }
-        if y < min_y {
-            min_y = y;
-        }
-        if x > max_x {
-            max_x = x;
-        }
-        if y > max_y {
-            max_y = y;
-        }
-    };
-    for v in data.verbs() {
-        match v {
-            PathVerb::MoveTo(p) | PathVerb::LineTo(p) => include(p.x, p.y),
-            PathVerb::QuadTo { ctrl, to } => {
-                include(ctrl.x, ctrl.y);
-                include(to.x, to.y);
-            }
-            PathVerb::CubicTo { ctrl1, ctrl2, to } => {
-                include(ctrl1.x, ctrl1.y);
-                include(ctrl2.x, ctrl2.y);
-                include(to.x, to.y);
-            }
-            PathVerb::Close => {}
-        }
-    }
-    if min_x.is_finite() && min_y.is_finite() {
-        Some((min_x, min_y, max_x - min_x, max_y - min_y))
-    } else {
-        None
-    }
-}
 
 fn clamp_to_pixels(rect: Rect, width: u32, height: u32) -> Option<(u32, u32, u32, u32)> {
     let x0 = rect.x.floor().max(0.0) as i64;
@@ -84,81 +38,6 @@ fn fill_mask_region(data: &mut [u8], stride: usize, region: (u32, u32, u32, u32)
     }
 }
 
-// --- Dirty-rect helpers ---
-
-fn expand_for_shadow(
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    s: renderer_core::Shadow,
-) -> (f32, f32, f32, f32) {
-    let sigma = s.blur_radius / 2.0;
-    let pad = (sigma * 3.0).ceil() + 1.0 + s.spread;
-    let x0 = x + s.offset_x.min(0.0) - pad;
-    let y0 = y + s.offset_y.min(0.0) - pad;
-    let x1 = x + w + s.offset_x.max(0.0) + pad;
-    let y1 = y + h + s.offset_y.max(0.0) + pad;
-    (x0, y0, x1 - x0, y1 - y0)
-}
-
-fn command_visual_rect(cmd: &DrawCommand, tx: f32, ty: f32) -> Option<Rect> {
-    match cmd {
-        DrawCommand::Rect(p) => {
-            let (x, y, w, h) = if let Some(s) = p.style.shadow {
-                expand_for_shadow(p.rect.x + tx, p.rect.y + ty, p.rect.width, p.rect.height, s)
-            } else {
-                (p.rect.x + tx, p.rect.y + ty, p.rect.width, p.rect.height)
-            };
-            Some(Rect {
-                x,
-                y,
-                width: w,
-                height: h,
-            })
-        }
-        DrawCommand::Text(p) => {
-            let (x, y, w, h) = if let Some(s) = p.style.shadow {
-                expand_for_shadow(p.rect.x + tx, p.rect.y + ty, p.rect.width, p.rect.height, s)
-            } else {
-                (p.rect.x + tx, p.rect.y + ty, p.rect.width, p.rect.height)
-            };
-            Some(Rect {
-                x,
-                y,
-                width: w,
-                height: h,
-            })
-        }
-        DrawCommand::Image { rect, .. } => Some(Rect {
-            x: rect.x + tx,
-            y: rect.y + ty,
-            width: rect.width,
-            height: rect.height,
-        }),
-        DrawCommand::Line { p1, p2, style } => {
-            let half = style.width / 2.0 + 1.0;
-            let x0 = p1.x.min(p2.x) + tx - half;
-            let y0 = p1.y.min(p2.y) + ty - half;
-            let x1 = p1.x.max(p2.x) + tx + half;
-            let y1 = p1.y.max(p2.y) + ty + half;
-            Some(Rect {
-                x: x0,
-                y: y0,
-                width: x1 - x0,
-                height: y1 - y0,
-            })
-        }
-        DrawCommand::Path(p) => path_data_bounds(&p.data).map(|(bx, by, bw, bh)| Rect {
-            x: bx + tx,
-            y: by + ty,
-            width: bw,
-            height: bh,
-        }),
-        _ => None,
-    }
-}
-
 fn rect_overlaps(a: Rect, b: Rect) -> bool {
     a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 }
@@ -181,50 +60,52 @@ fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
     })
 }
 
-// Walks the command list while simulating PushTransform/PopTransform to produce the on-screen bounding rect for each command (None for state-only commands like clips and transforms).
-fn screen_rects_with_transforms(cmds: &[DrawCommand]) -> Vec<Option<Rect>> {
-    let mut result = Vec::with_capacity(cmds.len());
-    let mut tx_stack: Vec<(f32, f32)> = vec![(0.0, 0.0)];
-    for cmd in cmds {
-        let &(cum_tx, cum_ty) = tx_stack.last().unwrap();
-        match cmd {
-            DrawCommand::PushTransform { tx, ty } => {
-                tx_stack.push((cum_tx + tx, cum_ty + ty));
-                result.push(None);
+// Shifts pixel rows inside `clip` by `delta_ty` pixels in place. After the shift the newly
+// exposed rows still contain stale data and must be cleared + re-rendered by the caller.
+fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_ty: f32) {
+    let width = pixmap.width() as usize;
+    let height = pixmap.height() as usize;
+    let x0 = (clip.x.floor() as usize).min(width);
+    let y0 = (clip.y.floor() as usize).min(height);
+    let x1 = ((clip.x + clip.width).ceil() as usize).min(width);
+    let y1 = ((clip.y + clip.height).ceil() as usize).min(height);
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let row_bytes = (x1 - x0) * 4;
+    let delta = delta_ty.round() as i64;
+    if delta == 0 {
+        return;
+    }
+    let data = pixmap.data_mut();
+    if delta < 0 {
+        // Content moved up: write to a lower row, read from a higher row → top-to-bottom is safe.
+        let shift = (-delta) as usize;
+        for dst_y in y0..y1 {
+            let src_y = dst_y + shift;
+            if src_y >= y1 {
+                break;
             }
-            DrawCommand::PopTransform => {
-                if tx_stack.len() > 1 {
-                    tx_stack.pop();
-                }
-                result.push(None);
+            let src_off = (src_y * width + x0) * 4;
+            let dst_off = (dst_y * width + x0) * 4;
+            data.copy_within(src_off..src_off + row_bytes, dst_off);
+        }
+    } else {
+        // Content moved down: write to a higher row, read from a lower row → bottom-to-top is safe.
+        let shift = delta as usize;
+        for dst_y in (y0..y1).rev() {
+            if dst_y < y0 + shift {
+                break;
             }
-            _ => result.push(command_visual_rect(cmd, cum_tx, cum_ty)),
+            let src_y = dst_y - shift;
+            if src_y < y0 {
+                break;
+            }
+            let src_off = (src_y * width + x0) * 4;
+            let dst_off = (dst_y * width + x0) * 4;
+            data.copy_within(src_off..src_off + row_bytes, dst_off);
         }
     }
-    result
-}
-
-// Returns the union of on-screen bounds for all commands whose value or on-screen position changed between frames. Returns None when a full re-render is needed (e.g. different command count).
-fn compute_dirty_rect(new_cmds: &[DrawCommand], old_cmds: &[DrawCommand]) -> Option<Rect> {
-    if new_cmds.len() != old_cmds.len() {
-        return None;
-    }
-    let new_rects = screen_rects_with_transforms(new_cmds);
-    let old_rects = screen_rects_with_transforms(old_cmds);
-    let mut dirty: Option<Rect> = None;
-    for i in 0..new_cmds.len() {
-        let cmd_differs = new_cmds[i] != old_cmds[i];
-        let rect_differs = new_rects[i] != old_rects[i];
-        if cmd_differs || rect_differs {
-            if let Some(r) = new_rects[i] {
-                dirty = union_opt_rect(dirty, r);
-            }
-            if let Some(r) = old_rects[i] {
-                dirty = union_opt_rect(dirty, r);
-            }
-        }
-    }
-    dirty
 }
 
 // Updates the 1-bit clip mask in place. Only touches rows/cols within the union of the previous and new clip rects, avoiding the full-buffer zero (~2MB at 1080p) that would otherwise run on every PushClip/PopClip. Writes 0xFF directly because clip rects are axis-aligned and the existing fill_path used anti_alias=false (binary mask).
@@ -264,6 +145,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     shadow_cache: ShadowCache,
     text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     text_shadow_cache: TextShadowCache,
+    path_shadow_cache: PathShadowCache,
     layer_stack: Vec<(tiny_skia::Pixmap, f32)>,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
     prev_commands: Vec<DrawCommand>,
@@ -311,8 +193,9 @@ where
                 std::num::NonZeroUsize::new(budget.text_pixmap_cache_entries).unwrap(),
             ),
             text_shadow_cache: new_text_shadow_cache(budget.text_shadow_cache_bytes),
+            path_shadow_cache: new_path_shadow_cache(budget.path_shadow_cache_bytes),
             layer_stack: Vec::new(),
-            prev_commands: Vec::new(),
+            prev_commands: Vec::with_capacity(256),
             prev_clear_color: None,
         })
     }
@@ -381,11 +264,36 @@ where
             return self.present_pixmap();
         }
 
+        // Optimization 2: scroll blit. When the only change is a single PushTransform ty-shift (a
+        // scroll event), shift the existing pixel rows in place and only re-render the exposed band
+        // plus any out-of-clip overlays that changed (e.g. the scrollbar).
+        let maybe_scroll = if !self.prev_commands.is_empty() {
+            renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands)
+        } else {
+            None
+        };
+        if let Some(ref sb) = maybe_scroll {
+            if let Some(pixmap) = &mut self.pixmap {
+                apply_scroll_blit(pixmap, sb.scroll_clip, sb.delta_ty as f32);
+            }
+        }
+
         // Optimization 3: compute the on-screen union of all changed commands so we can clear only that region.
-        let dirty_rect = if self.prev_commands.is_empty() {
+        let dirty_rect = if let Some(ref sb) = maybe_scroll {
+            // Scroll blit case: only re-render the newly exposed band and any changed overlays.
+            let base = sb.exposed_band;
+            Some(match sb.extra_dirty {
+                Some(ed) => union_opt_rect(Some(base), ed).unwrap(),
+                None => base,
+            })
+        } else if self.prev_commands.is_empty() {
             None // first frame → full clear
         } else {
-            compute_dirty_rect(commands, &self.prev_commands)
+            renderer_core::dirty::compute_dirty_rect(
+                commands,
+                &self.prev_commands,
+                renderer_core::culling::command_visual_rect,
+            )
         };
 
         self.prev_commands.clear();
@@ -455,9 +363,11 @@ where
             // consistent with what fill_rect actually cleared.
             // State commands (PushTransform, PushClip, PushLayer, etc.) return None and are always executed.
             if let Some(sr) = skip_rect {
-                if let Some(vr) =
-                    command_visual_rect(cmd, self.draw_state.cum_tx, self.draw_state.cum_ty)
-                {
+                if let Some(vr) = renderer_core::culling::command_visual_rect(
+                    cmd,
+                    self.draw_state.cum_tx,
+                    self.draw_state.cum_ty,
+                ) {
                     if !rect_overlaps(vr, sr) {
                         continue;
                     }
@@ -472,9 +382,9 @@ where
                     {
                         continue;
                     }
-                    if !overlaps_clip(
-                        p.rect.x,
-                        p.rect.y,
+                    if !renderer_core::culling::overlaps(
+                        p.rect.x + self.draw_state.cum_tx,
+                        p.rect.y + self.draw_state.cum_ty,
                         p.rect.width,
                         p.rect.height,
                         current_clip_rect,
@@ -497,15 +407,14 @@ where
                         &p.style,
                         transform,
                         clip,
-                        current_clip_rect,
                         &mut self.shadow_cache,
                         &mut self.blur_scratch,
                     );
                 }
                 DrawCommand::Text(p) => {
-                    if !overlaps_clip(
-                        p.rect.x,
-                        p.rect.y,
+                    if !renderer_core::culling::overlaps(
+                        p.rect.x + self.draw_state.cum_tx,
+                        p.rect.y + self.draw_state.cum_ty,
                         p.rect.width,
                         p.rect.height,
                         current_clip_rect,
@@ -537,7 +446,13 @@ where
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    if !overlaps_clip(rect.x, rect.y, rect.width, rect.height, current_clip_rect) {
+                    if !renderer_core::culling::overlaps(
+                        rect.x + self.draw_state.cum_tx,
+                        rect.y + self.draw_state.cum_ty,
+                        rect.width,
+                        rect.height,
+                        current_clip_rect,
+                    ) {
                         continue;
                     }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
@@ -565,7 +480,13 @@ where
                     let min_y = p1.y.min(p2.y);
                     let w = (p1.x.max(p2.x) - min_x).max(0.0);
                     let h = (p1.y.max(p2.y) - min_y).max(0.0);
-                    if !overlaps_clip(min_x, min_y, w, h, current_clip_rect) {
+                    if !renderer_core::culling::overlaps(
+                        min_x + self.draw_state.cum_tx,
+                        min_y + self.draw_state.cum_ty,
+                        w,
+                        h,
+                        current_clip_rect,
+                    ) {
                         continue;
                     }
                     let pixmap = if let Some((top, _)) = self.layer_stack.last_mut() {
@@ -578,11 +499,25 @@ where
                     } else {
                         None
                     };
-                    crate::primitives::line::draw_line(pixmap, *p1, *p2, *style, transform, clip);
+                    crate::primitives::line::draw_line(
+                        pixmap,
+                        *p1,
+                        *p2,
+                        *style,
+                        transform,
+                        clip,
+                        current_clip_rect,
+                    );
                 }
                 DrawCommand::Path(p) => {
-                    if let Some((bx, by, bw, bh)) = path_data_bounds(&p.data) {
-                        if !overlaps_clip(bx, by, bw, bh, current_clip_rect) {
+                    if let Some(b) = p.data.bounds() {
+                        if !renderer_core::culling::overlaps(
+                            b.x + self.draw_state.cum_tx,
+                            b.y + self.draw_state.cum_ty,
+                            b.width,
+                            b.height,
+                            current_clip_rect,
+                        ) {
                             continue;
                         }
                     }
@@ -604,6 +539,7 @@ where
                         clip,
                         current_clip_rect,
                         &mut self.blur_scratch,
+                        &mut self.path_shadow_cache,
                     );
                 }
                 DrawCommand::PushClip { rect } => {
@@ -654,7 +590,7 @@ where
                     let layer = self
                         .pixmap_pool
                         .pop()
-                        .filter(|p| p.width() == self.width && p.height() == self.height)
+                        .filter(|p| p.width() >= self.width && p.height() >= self.height)
                         .or_else(|| tiny_skia::Pixmap::new(self.width, self.height));
                     if let Some(mut l) = layer {
                         l.fill(tiny_skia::Color::TRANSPARENT);

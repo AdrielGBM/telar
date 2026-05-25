@@ -128,6 +128,11 @@ impl BlurPipeline {
         let texture_usage =
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
 
+        // Extract field references before the closure so rustc counts them as reads.
+        let pipeline = &self.pipeline;
+        let bgl = &self.bgl;
+        let sampler = &self.sampler;
+
         let (intermediate, intermediate_view) = if let Some(pos) = self
             .intermediate_pool
             .iter()
@@ -184,7 +189,7 @@ impl BlurPipeline {
             });
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("rsx-blur-bind-group"),
-                layout: &self.bgl,
+                layout: bgl,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -192,7 +197,7 @@ impl BlurPipeline {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        resource: wgpu::BindingResource::Sampler(sampler),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
@@ -220,7 +225,7 @@ impl BlurPipeline {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            pass.set_pipeline(&self.pipeline);
+            pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bg, &[]);
             pass.draw(0..6, 0..1);
         }
@@ -243,7 +248,7 @@ impl BlurPipeline {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            pass.set_pipeline(&self.pipeline);
+            pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bg, &[]);
             pass.draw(0..6, 0..1);
         }

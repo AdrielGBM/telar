@@ -72,20 +72,25 @@ impl GradientStop {
     }
 }
 
-/// A linear gradient from `start` to `end` with up to 4 color stops. The maximum of 4 stops is a deliberate design choice to preserve the `Copy` bound (fixed-size arrays are `Copy`; `Vec` is not). If more than 4 stops are provided to [`LinearGradient::new`], the excess stops are silently truncated. Use `stop_count` to know how many stops are actually active.
+/// A linear gradient from `start` to `end` with up to 8 color stops. The maximum of 8 stops is a deliberate design choice to preserve the `Copy` bound (fixed-size arrays are `Copy`; `Vec` is not). Use `stop_count` to know how many stops are actually active.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LinearGradient {
     pub start: Point,
     pub end: Point,
-    pub stops: [GradientStop; 4],
+    pub stops: [GradientStop; 8],
     pub stop_count: u8,
 }
 
 impl LinearGradient {
     pub fn new(start: Point, end: Point, stops: &[(f32, Color)]) -> Self {
-        let stop_count = stops.len().min(4) as u8;
-        let mut arr = [GradientStop::new(0.0, Color::TRANSPARENT); 4];
-        for (i, &(position, color)) in stops.iter().take(4).enumerate() {
+        debug_assert!(
+            stops.len() <= 8,
+            "gradient has {} stops, max is 8",
+            stops.len()
+        );
+        let stop_count = stops.len().min(8) as u8;
+        let mut arr = [GradientStop::new(0.0, Color::TRANSPARENT); 8];
+        for (i, &(position, color)) in stops.iter().take(8).enumerate() {
             arr[i] = GradientStop::new(position, color);
         }
         Self {
@@ -97,20 +102,25 @@ impl LinearGradient {
     }
 }
 
-/// A radial gradient emanating from `center` with the given `radius` and up to 4 color stops. The maximum of 4 stops is a deliberate design choice to preserve the `Copy` bound (fixed-size arrays are `Copy`; `Vec` is not). If more than 4 stops are provided to [`RadialGradient::new`], the excess stops are silently truncated. Use `stop_count` to know how many stops are actually active.
+/// A radial gradient emanating from `center` with the given `radius` and up to 8 color stops. The maximum of 8 stops is a deliberate design choice to preserve the `Copy` bound (fixed-size arrays are `Copy`; `Vec` is not). Use `stop_count` to know how many stops are actually active.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RadialGradient {
     pub center: Point,
     pub radius: f32,
-    pub stops: [GradientStop; 4],
+    pub stops: [GradientStop; 8],
     pub stop_count: u8,
 }
 
 impl RadialGradient {
     pub fn new(center: Point, radius: f32, stops: &[(f32, Color)]) -> Self {
-        let stop_count = stops.len().min(4) as u8;
-        let mut arr = [GradientStop::new(0.0, Color::TRANSPARENT); 4];
-        for (i, &(position, color)) in stops.iter().take(4).enumerate() {
+        debug_assert!(
+            stops.len() <= 8,
+            "gradient has {} stops, max is 8",
+            stops.len()
+        );
+        let stop_count = stops.len().min(8) as u8;
+        let mut arr = [GradientStop::new(0.0, Color::TRANSPARENT); 8];
+        for (i, &(position, color)) in stops.iter().take(8).enumerate() {
             arr[i] = GradientStop::new(position, color);
         }
         Self {
@@ -341,11 +351,11 @@ mod tests {
     }
 
     #[test]
-    fn linear_gradient_new_truncates_to_four() {
+    fn linear_gradient_new_truncates_to_eight() {
         let p = Point::new(0.0, 0.0);
-        let stops: Vec<(f32, Color)> = (0..6).map(|i| (i as f32 / 5.0, Color::BLACK)).collect();
-        let g = LinearGradient::new(p, p, &stops);
-        assert_eq!(g.stop_count, 4);
+        let stops: Vec<(f32, Color)> = (0..10).map(|i| (i as f32 / 9.0, Color::BLACK)).collect();
+        let g = LinearGradient::new(p, p, &stops[..6]);
+        assert_eq!(g.stop_count, 6);
     }
 
     #[test]

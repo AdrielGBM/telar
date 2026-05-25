@@ -22,3 +22,6 @@ pub const TEXT_PIXMAP_CACHE_MAX_ENTRIES: usize = 256;
 
 /// Byte budget for pre-blurred text shadow pixmaps. Avoids re-running the Gaussian blur every frame for text with shadows. Shadow size is proportional to text bounding box; budget matches the shadow rect cache.
 pub const TEXT_SHADOW_CACHE_BUDGET_BYTES: usize = 32 * 1024 * 1024;
+
+/// Byte budget for pre-blurred path shadow pixmaps. Mirrors the text shadow cache budget.
+pub const PATH_SHADOW_CACHE_BUDGET_BYTES: usize = 32 * 1024 * 1024;

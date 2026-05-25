@@ -72,7 +72,7 @@ pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, tx: f32, ty: f3
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Viewport {
     pub size: [f32; 2],
-    pub _pad: [f32; 2],
+    pub offset: [f32; 2],
 }
 
 pub(crate) fn create_viewport_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {

@@ -16,11 +16,6 @@ fn tint_premultiplied(pixels: &mut [u8], color: Color) {
     }
 }
 
-fn overlaps_clip(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
-    let Some(clip) = clip else { return true };
-    x + w > clip.x && y + h > clip.y && x < clip.x + clip.width && y < clip.y + clip.height
-}
-
 fn hash_text(text: &str) -> u64 {
     let mut h = FxHasher::default();
     text.hash(&mut h);
@@ -71,12 +66,17 @@ pub(crate) fn draw_text(
             let sigma = shadow.blur_radius / 2.0;
             let padding = (sigma * 3.0).ceil() as i32 + 1;
 
-            // Guard the expensive shadow blur path: skip when the shadow's pixel-space bounds are fully outside the current clip rect. Text glyphs are still drawn below if the body rect is visible.
             let shadow_x = rect.x + shadow.offset_x - padding as f32;
             let shadow_y = rect.y + shadow.offset_y - padding as f32;
             let shadow_w = tex_w as f32 + 2.0 * padding as f32 + 2.0;
             let shadow_h = tex_h as f32 + 2.0 * padding as f32 + 2.0;
-            if overlaps_clip(shadow_x, shadow_y, shadow_w, shadow_h, current_clip_rect) {
+            if renderer_core::culling::overlaps(
+                shadow_x,
+                shadow_y,
+                shadow_w,
+                shadow_h,
+                current_clip_rect,
+            ) {
                 let [sr, sg, sb, sa] = shadow.color.to_rgba8();
                 let shadow_key = TextShadowCacheKey {
                     text_hash: hash_text(text),
@@ -90,33 +90,33 @@ pub(crate) fn draw_text(
                 if text_shadow_cache.get(&shadow_key).is_none() {
                     let tmp_w = tex_w + 2 * padding as u32 + 2;
                     let tmp_h = tex_h + 2 * padding as u32 + 2;
-                    if let Some(mut tmp) = tiny_skia::Pixmap::new(tmp_w, tmp_h) {
-                        let mut shadow_pixels = arc.to_vec();
-                        tint_premultiplied(&mut shadow_pixels, shadow.color);
-                        if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
-                            if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size) {
-                                tmp.draw_pixmap(
-                                    padding,
-                                    padding,
-                                    src.as_ref(),
-                                    &tiny_skia::PixmapPaint {
-                                        blend_mode: tiny_skia::BlendMode::SourceOver,
-                                        ..Default::default()
-                                    },
-                                    tiny_skia::Transform::identity(),
-                                    None,
-                                );
+                    let shadow_color = shadow.color;
+                    if let Some(tmp) = crate::primitives::render_shadow_pixmap(
+                        tmp_w,
+                        tmp_h,
+                        shadow.blur_radius,
+                        blur_scratch,
+                        |tmp_pmap| {
+                            let mut shadow_pixels = arc.to_vec();
+                            tint_premultiplied(&mut shadow_pixels, shadow_color);
+                            if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
+                                if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size)
+                                {
+                                    tmp_pmap.draw_pixmap(
+                                        padding,
+                                        padding,
+                                        src.as_ref(),
+                                        &tiny_skia::PixmapPaint {
+                                            blend_mode: tiny_skia::BlendMode::SourceOver,
+                                            ..Default::default()
+                                        },
+                                        tiny_skia::Transform::identity(),
+                                        None,
+                                    );
+                                }
                             }
-                        }
-                        if sigma >= 0.5 {
-                            crate::primitives::gaussian_blur(
-                                tmp.data_mut(),
-                                tmp_w,
-                                tmp_h,
-                                sigma,
-                                blur_scratch,
-                            );
-                        }
+                        },
+                    ) {
                         text_shadow_cache
                             .put_with_weight(shadow_key.clone(), tmp)
                             .ok();
@@ -138,7 +138,6 @@ pub(crate) fn draw_text(
                 }
             }
 
-            // Draw text body — check text_pixmap_cache first to avoid re-tinting alpha buffer
             let body_key = renderer_text::make_text_cache_key(
                 text,
                 style.font_size,
@@ -159,17 +158,35 @@ pub(crate) fn draw_text(
                     }
                 }
             }
-            if let Some(src) = text_pixmap_cache.get(&body_key) {
-                pixmap.draw_pixmap(
-                    rect.x as i32,
-                    rect.y as i32,
-                    src.as_ref(),
-                    &paint,
-                    transform,
-                    clip,
-                );
+            if renderer_core::culling::overlaps(
+                rect.x + transform.tx,
+                rect.y + transform.ty,
+                rect.width,
+                rect.height,
+                current_clip_rect,
+            ) {
+                if let Some(src) = text_pixmap_cache.get(&body_key) {
+                    pixmap.draw_pixmap(
+                        rect.x as i32,
+                        rect.y as i32,
+                        src.as_ref(),
+                        &paint,
+                        transform,
+                        clip,
+                    );
+                }
             }
         }
+        return;
+    }
+
+    if !renderer_core::culling::overlaps(
+        rect.x + transform.tx,
+        rect.y + transform.ty,
+        rect.width,
+        rect.height,
+        current_clip_rect,
+    ) {
         return;
     }
 

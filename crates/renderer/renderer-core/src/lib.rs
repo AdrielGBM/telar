@@ -1,5 +1,7 @@
 mod color;
 mod command;
+pub mod culling;
+pub mod dirty;
 mod draw_state;
 mod error;
 mod image;
@@ -9,6 +11,7 @@ mod style;
 
 pub use color::Color;
 pub use command::{DrawCommand, PathPayload, RectPayload, TextPayload};
+pub use dirty::ScrollBlit;
 pub use draw_state::DrawState;
 pub use error::RendererError;
 pub use image::{ImageData, ImageFilter, premultiply_rgba};

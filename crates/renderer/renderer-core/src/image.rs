@@ -14,7 +14,7 @@ pub enum ImageFilter {
 #[derive(Debug, Clone)]
 pub struct ImageData {
     pub id: u64,
-    /// RGBA8 pixels with straight (non-premultiplied) alpha.
+    /// RGBA8 pixels with premultiplied alpha. Premultiplication is applied automatically in `new()`.
     pub pixels: Vec<u8>,
     pub width: u32,
     pub height: u32,
@@ -27,6 +27,8 @@ impl ImageData {
             (width * height * 4) as usize,
             "pixels must be RGBA8: width * height * 4 bytes"
         );
+        let mut pixels = pixels;
+        premultiply_rgba(&mut pixels);
         Self {
             id: NEXT_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
             pixels,

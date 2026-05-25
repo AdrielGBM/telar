@@ -125,34 +125,34 @@ fn draw_rect_shadow(
         return;
     }
 
-    let Some(mut tmp) = tiny_skia::Pixmap::new(tmp_w, tmp_h) else {
-        return;
-    };
-
     let local_rect = Rect::new(
         shadow_rect.x - tmp_x as f32,
         shadow_rect.y - tmp_y as f32,
         shadow_rect.width,
         shadow_rect.height,
     );
-    if let Some(path) = build_rect_path(local_rect, shadow_radius) {
-        let mut paint = tiny_skia::Paint::default();
-        paint.set_color(crate::primitives::to_skia_color(shadow.color));
-        paint.anti_alias = true;
-        tmp.fill_path(
-            &path,
-            &paint,
-            tiny_skia::FillRule::Winding,
-            tiny_skia::Transform::identity(),
-            None,
-        );
+    if let Some(tmp) = crate::primitives::render_shadow_pixmap(
+        tmp_w,
+        tmp_h,
+        shadow.blur_radius,
+        blur_scratch,
+        |tmp_pmap| {
+            if let Some(path) = build_rect_path(local_rect, shadow_radius) {
+                let mut paint = tiny_skia::Paint::default();
+                paint.set_color(crate::primitives::to_skia_color(shadow.color));
+                paint.anti_alias = true;
+                tmp_pmap.fill_path(
+                    &path,
+                    &paint,
+                    tiny_skia::FillRule::Winding,
+                    tiny_skia::Transform::identity(),
+                    None,
+                );
+            }
+        },
+    ) {
+        let _ = shadow_cache.put_with_weight(cache_key, tmp);
     }
-
-    if sigma >= 0.5 {
-        crate::primitives::gaussian_blur(tmp.data_mut(), tmp_w, tmp_h, sigma, blur_scratch);
-    }
-
-    let _ = shadow_cache.put_with_weight(cache_key, tmp);
     if let Some(cached) = shadow_cache.get(&cache_key) {
         pixmap.draw_pixmap(
             tmp_x,
@@ -174,33 +174,20 @@ pub(crate) fn draw_rect(
     style: &RectStyle,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
-    current_clip_rect: Option<Rect>,
     shadow_cache: &mut ShadowCache,
     blur_scratch: &mut Vec<u8>,
 ) {
     if let Some(shadow) = style.shadow {
-        let sigma = shadow.blur_radius / 2.0;
-        let padding = (sigma * 3.0).ceil() as i32 + 1;
-        let spread = shadow.spread;
-        let sx = rect.x + shadow.offset_x - spread - padding as f32;
-        let sy = rect.y + shadow.offset_y - spread - padding as f32;
-        let sw = rect.width + 2.0 * spread + 2.0 * padding as f32 + 1.0;
-        let sh = rect.height + 2.0 * spread + 2.0 * padding as f32 + 1.0;
-        let skip = current_clip_rect
-            .map(|c| sx + sw < c.x || sy + sh < c.y || sx > c.x + c.width || sy > c.y + c.height)
-            .unwrap_or(false);
-        if !skip {
-            draw_rect_shadow(
-                pixmap,
-                rect,
-                shadow,
-                style.radius,
-                transform,
-                clip,
-                shadow_cache,
-                blur_scratch,
-            );
-        }
+        draw_rect_shadow(
+            pixmap,
+            rect,
+            shadow,
+            style.radius,
+            transform,
+            clip,
+            shadow_cache,
+            blur_scratch,
+        );
     }
 
     if let Some(fill_style) = style.fill {

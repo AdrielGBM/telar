@@ -4,6 +4,7 @@ use crate::limits::*;
 pub struct RendererBudget {
     pub image_cache_bytes: usize,
     pub shadow_cache_bytes: usize,
+    pub path_shadow_cache_bytes: usize,
     pub text_pixel_cache_bytes: usize,
     pub text_alpha_cache_bytes: usize,
     pub text_shaping_cache_bytes: usize,
@@ -16,6 +17,7 @@ impl Default for RendererBudget {
         Self {
             image_cache_bytes: IMAGE_CACHE_BUDGET_BYTES,
             shadow_cache_bytes: SHADOW_CACHE_BUDGET_BYTES,
+            path_shadow_cache_bytes: PATH_SHADOW_CACHE_BUDGET_BYTES,
             text_pixel_cache_bytes: TEXT_PIXEL_CACHE_BUDGET_BYTES,
             text_alpha_cache_bytes: TEXT_ALPHA_CACHE_BUDGET_BYTES,
             text_shaping_cache_bytes: TEXT_SHAPING_CACHE_BUDGET_BYTES,

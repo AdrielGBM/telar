@@ -554,6 +554,40 @@ impl TextShaper {
 
         (arc, width, height)
     }
+
+    pub fn measure_text(&mut self, text: &str, max_width: f32, font_size: f32) -> (f32, f32) {
+        if text.is_empty() {
+            return (0.0, 0.0);
+        }
+
+        let width_u32 = max_width.ceil() as u32;
+        if width_u32 == 0 {
+            return (0.0, 0.0);
+        }
+
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: max_width,
+            height: 100000.0,
+        };
+        let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+
+        let mut width: f32 = 0.0;
+        let mut height: f32 = 0.0;
+        let line_height = font_size * 1.2;
+
+        for run in buffer.layout_runs() {
+            height = (run.line_y + line_height) as f32;
+            for glyph in run.glyphs.iter() {
+                let physical = glyph.physical((0., run.line_y), 1.0);
+                let right_edge = (physical.x as f32 + glyph.w as f32).max(0.0_f32);
+                width = width.max(right_edge);
+            }
+        }
+
+        (width, height)
+    }
 }
 
 impl Default for TextShaper {

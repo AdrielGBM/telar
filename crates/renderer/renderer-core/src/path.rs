@@ -1,4 +1,4 @@
-use geometry_core::Point;
+use geometry_core::{Point, Rect};
 
 #[derive(Debug, Clone)]
 pub enum PathVerb {
@@ -19,6 +19,7 @@ pub enum PathVerb {
 #[derive(Debug, Clone, Default)]
 pub struct PathData {
     pub(crate) verbs: Vec<PathVerb>,
+    bounds_cache: std::cell::OnceCell<Option<Rect>>,
 }
 
 impl PathData {
@@ -32,27 +33,80 @@ impl PathData {
 
     pub fn move_to(mut self, p: Point) -> Self {
         self.verbs.push(PathVerb::MoveTo(p));
+        self.bounds_cache = std::cell::OnceCell::new();
         self
     }
 
     pub fn line_to(mut self, p: Point) -> Self {
         self.verbs.push(PathVerb::LineTo(p));
+        self.bounds_cache = std::cell::OnceCell::new();
         self
     }
 
     pub fn quad_to(mut self, ctrl: Point, to: Point) -> Self {
         self.verbs.push(PathVerb::QuadTo { ctrl, to });
+        self.bounds_cache = std::cell::OnceCell::new();
         self
     }
 
     pub fn cubic_to(mut self, ctrl1: Point, ctrl2: Point, to: Point) -> Self {
         self.verbs.push(PathVerb::CubicTo { ctrl1, ctrl2, to });
+        self.bounds_cache = std::cell::OnceCell::new();
         self
     }
 
     pub fn close(mut self) -> Self {
         self.verbs.push(PathVerb::Close);
+        self.bounds_cache = std::cell::OnceCell::new();
         self
+    }
+
+    pub fn bounds(&self) -> Option<Rect> {
+        *self.bounds_cache.get_or_init(|| {
+            let mut min_x = f32::INFINITY;
+            let mut min_y = f32::INFINITY;
+            let mut max_x = f32::NEG_INFINITY;
+            let mut max_y = f32::NEG_INFINITY;
+            let mut has_geometry = false;
+
+            for verb in &self.verbs {
+                match verb {
+                    PathVerb::MoveTo(p) | PathVerb::LineTo(p) => {
+                        min_x = min_x.min(p.x);
+                        min_y = min_y.min(p.y);
+                        max_x = max_x.max(p.x);
+                        max_y = max_y.max(p.y);
+                        has_geometry = true;
+                    }
+                    PathVerb::QuadTo { ctrl, to } => {
+                        // Bézier curves are bounded by their control polygon (convex hull property).
+                        for p in &[ctrl, to] {
+                            min_x = min_x.min(p.x);
+                            min_y = min_y.min(p.y);
+                            max_x = max_x.max(p.x);
+                            max_y = max_y.max(p.y);
+                        }
+                        has_geometry = true;
+                    }
+                    PathVerb::CubicTo { ctrl1, ctrl2, to } => {
+                        for p in &[ctrl1, ctrl2, to] {
+                            min_x = min_x.min(p.x);
+                            min_y = min_y.min(p.y);
+                            max_x = max_x.max(p.x);
+                            max_y = max_y.max(p.y);
+                        }
+                        has_geometry = true;
+                    }
+                    PathVerb::Close => {}
+                }
+            }
+
+            if has_geometry {
+                Some(Rect::new(min_x, min_y, max_x - min_x, max_y - min_y))
+            } else {
+                None
+            }
+        })
     }
 }
 

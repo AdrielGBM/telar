@@ -83,6 +83,22 @@ pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<
     paint
 }
 
+/// Creates a temporary pixmap of the given size, calls `draw_fn` to draw the shadow shape,
+/// then Gaussian-blurs the result. Returns None if pixmap allocation fails.
+pub(crate) fn render_shadow_pixmap(
+    width: u32,
+    height: u32,
+    blur_radius: f32,
+    blur_scratch: &mut Vec<u8>,
+    draw_fn: impl FnOnce(&mut tiny_skia::Pixmap),
+) -> Option<tiny_skia::Pixmap> {
+    let mut pixmap = tiny_skia::Pixmap::new(width, height)?;
+    draw_fn(&mut pixmap);
+    let sigma = blur_radius / 2.0;
+    gaussian_blur(pixmap.data_mut(), width, height, sigma, blur_scratch);
+    Some(pixmap)
+}
+
 pub(crate) fn gaussian_blur(
     data: &mut [u8],
     width: u32,
