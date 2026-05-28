@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use rsx::{
-    App, AvailableSpace, BorderRadius, Bounds, Button, Color, Component, Container, DrawCommand,
+    App, AvailableSpace, BorderRadius, Bounds, Color, Component, Container, DrawCommand,
     DrawingArea, Event, EventResult, FillRule, FillStyle, Image, ImageData, ImageFilter,
     LayoutError, LayoutItem, LayoutStyle, Line, LineCap, LineJoin, LineStyle, LinearGradient, Path,
     PathData, PathStyle, Point, RadialGradient, RectPayload, RectStyle, RwSignal, ScrollArea,
-    Shadow, Stroke, Text, TextPayload, TextStyle, Track, TranslateGroup, View, WidgetCtx,
-    WindowConfig, compute_layout, create_rw_signal, with_context,
+    Shadow, Stroke, Text, TextPayload, TextStyle, Track, View, WidgetCtx, WindowConfig,
+    compute_layout, create_rw_signal, with_context,
 };
 
 const SURFACE: Color = Color::rgba(0.95, 0.95, 0.97, 1.0);
@@ -21,11 +21,6 @@ const WHITE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
 const CARD_BORDER: Color = Color::rgba(0.80, 0.80, 0.88, 1.0);
 
 const CONTENT_WIDTH: f32 = 784.0;
-
-const PANEL_X: f32 = 614.0;
-const PANEL_Y: f32 = 40.0;
-const PANEL_W: f32 = 160.0;
-const PANEL_H: f32 = 128.0;
 
 fn heading(ctx: &mut WidgetCtx, label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::new(
@@ -2465,19 +2460,15 @@ struct SandboxRootComponent {
     window_width: RwSignal<f32>,
     window_height: RwSignal<f32>,
     scroll_area: ScrollArea,
-    widget_panel: TranslateGroup,
 }
 
 impl Component for SandboxRootComponent {
     fn view(&self) -> View {
-        View::Group(vec![self.scroll_area.view(), self.widget_panel.view()])
+        self.scroll_area.view()
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let handled = self
-            .widget_panel
-            .on_event(event)
-            .or(self.scroll_area.on_event(event));
+        let handled = self.scroll_area.on_event(event);
 
         if let Event::WindowResized { width, height } = event {
             self.window_width.set(*width as f32);
@@ -2500,62 +2491,7 @@ impl App for SandboxRoot {
         let checker_image = Rc::new(make_checker(128, 128, 16));
         let alpha_image = Rc::new(make_radial_alpha(128, 128));
 
-        let count = create_rw_signal(0i32);
-
         let (build, _) = with_context(WidgetCtx::new(), |ctx| {
-            let c = count.clone();
-            let count_label = Text::new(
-                ctx,
-                move || format!("Count: {}", c.get()),
-                LayoutStyle::new().width(PANEL_W - 16.0).height(24.0),
-                || TextStyle::new(14.0, WHITE),
-            )?;
-
-            let c = count.clone();
-            let btn_inc = Button::new(ctx, "+")?
-                .with_bg(
-                    Color::from_rgb_u8(34, 197, 94),
-                    Color::from_rgb_u8(22, 163, 74),
-                )
-                .on_click(move || c.set(c.get() + 1));
-
-            let c = count.clone();
-            let btn_dec = Button::new(ctx, "-")?
-                .with_bg(
-                    Color::from_rgb_u8(239, 68, 68),
-                    Color::from_rgb_u8(220, 38, 38),
-                )
-                .on_click(move || c.set(c.get() - 1));
-
-            let btn_row = Container::row(
-                ctx,
-                vec![
-                    Box::new(btn_inc) as Box<dyn LayoutItem>,
-                    Box::new(btn_dec) as Box<dyn LayoutItem>,
-                ],
-            )?;
-
-            let widget_panel = Container::new(
-                ctx,
-                LayoutStyle::new()
-                    .flex_column()
-                    .width(PANEL_W)
-                    .height(PANEL_H)
-                    .padding_all(8.0)
-                    .gap(8.0),
-                vec![
-                    Box::new(count_label) as Box<dyn LayoutItem>,
-                    Box::new(btn_row) as Box<dyn LayoutItem>,
-                ],
-            )?;
-
-            compute_layout(
-                ctx,
-                widget_panel.layout_node(),
-                AvailableSpace::Definite(PANEL_W),
-                AvailableSpace::Definite(PANEL_H),
-            )?;
-
             let content = build_content(
                 ctx,
                 gradient_image.clone(),
@@ -2579,16 +2515,15 @@ impl App for SandboxRoot {
                 AvailableSpace::MaxContent,
             )?;
 
-            Ok::<_, LayoutError>((widget_panel, scroll_area))
+            Ok::<_, LayoutError>(scroll_area)
         });
 
-        let (widget_panel, scroll_area) = build.expect("layout failed");
+        let scroll_area = build.expect("layout failed");
 
         Box::new(SandboxRootComponent {
             window_width,
             window_height,
             scroll_area,
-            widget_panel: TranslateGroup::new(|| PANEL_X, || PANEL_Y, vec![Box::new(widget_panel)]),
         })
     }
 
