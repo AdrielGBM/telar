@@ -430,6 +430,7 @@ impl PathPipeline {
         device: &Device,
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
+        cache: Option<&wgpu::PipelineCache>,
     ) -> Self {
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rsx-path-vb"),
@@ -504,7 +505,7 @@ impl PathPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache,
         });
 
         Self {

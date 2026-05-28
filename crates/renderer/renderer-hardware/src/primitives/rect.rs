@@ -9,7 +9,6 @@ use super::{InstancePipeline, MSAA_SAMPLES, encode_fill_style};
 pub(crate) struct RectInstance {
     pub rect: [f32; 4],
     pub radii: [f32; 4],
-    // fill
     pub fill_type: u32,
     pub _pad_ft: [u32; 3],
     pub fill_color: [f32; 4],
@@ -20,7 +19,6 @@ pub(crate) struct RectInstance {
     pub _pad_g: [f32; 2],
     pub grad_positions: [f32; 4],
     pub grad_colors: [[f32; 4]; 4],
-    // stroke
     pub stroke_color: [f32; 4],
     pub stroke_width: f32,
     pub _pad: [f32; 3],
@@ -41,6 +39,7 @@ impl RectPipeline {
         device: &Device,
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
+        cache: Option<&wgpu::PipelineCache>,
     ) -> Self {
         let instances = InstancePipeline::<RectInstance>::new(device, "rect", 256);
 
@@ -86,7 +85,7 @@ impl RectPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache,
         });
 
         Self {

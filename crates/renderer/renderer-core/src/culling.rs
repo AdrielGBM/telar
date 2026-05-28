@@ -55,11 +55,16 @@ pub fn command_visual_rect(cmd: &DrawCommand, cum_tx: f32, cum_ty: f32) -> Optio
             })
         }
         DrawCommand::Text(p) => {
+            // Glyphs can extend outside p.rect: ascenders above rect.y and line_height (font_size*1.2) may exceed rect.height. Expand the visual rect to cover the real glyph extent so that dirty-rect computation and culling never under-estimate the painted area.
+            let font_size = p.style.font_size;
+            let line_h = font_size * 1.2;
+            let ascender_overshoot = font_size * 0.25;
+            let extra_bottom = (line_h - p.rect.height).max(0.0);
             let r = Rect::new(
                 p.rect.x + cum_tx,
-                p.rect.y + cum_ty,
+                p.rect.y + cum_ty - ascender_overshoot,
                 p.rect.width,
-                p.rect.height,
+                p.rect.height + ascender_overshoot + extra_bottom,
             );
             Some(match p.style.shadow {
                 Some(s) => expand_for_shadow(r, s.blur_radius, s.spread, s.offset_x, s.offset_y),

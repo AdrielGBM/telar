@@ -5,12 +5,14 @@ edition = "2024"
 
 [features]
 default = ["runtime"]
+dev = ["runtime"]
 runtime = [
     "dep:platform-core",
     "dep:platform-winit",
     "dep:renderer-core",
     "dep:renderer-software",
     "dep:renderer-hardware",
+    "dep:rsx-devtools",
 ]
 
 [dependencies]
@@ -22,6 +24,7 @@ platform-winit = { workspace = true, optional = true }
 renderer-core = { workspace = true, optional = true }
 renderer-software = { workspace = true, optional = true }
 renderer-hardware = { workspace = true, optional = true }
+rsx-devtools = { workspace = true, optional = true }
 reactive-core = { workspace = true }
 services-core = { workspace = true }
 layout-core = { workspace = true }

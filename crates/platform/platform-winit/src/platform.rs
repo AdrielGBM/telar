@@ -7,7 +7,7 @@ use winit::event::{
     ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, StartCause, Touch, TouchPhase,
     WindowEvent,
 };
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key as WinitKey, NamedKey as WinitNamedKey};
 use winit::window::{WindowAttributes, WindowId};
 
@@ -32,15 +32,28 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     cursor_pos: (f64, f64),
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
+    // True only on WaitUntil timer expiry; gates keepalive request_redraw() so it doesn't fire on every event queue drain.
+    timer_fired: bool,
 }
 
 impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
-    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
+        self.timer_fired = matches!(cause, StartCause::ResumeTimeReached { .. });
         self.handler.new_events();
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        self.handler.about_to_wait();
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(d) = self.handler.about_to_wait() {
+            // Only request_redraw() on timer expiry, not every drain; reactive changes call it themselves via flush_notify.
+            if self.timer_fired {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            event_loop.set_control_flow(ControlFlow::WaitUntil(std::time::Instant::now() + d));
+        } else {
+            event_loop.set_control_flow(ControlFlow::Wait);
+        }
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -258,6 +271,7 @@ impl Platform for WinitPlatform {
             cursor_pos: (0.0, 0.0),
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
+            timer_fired: false,
         };
         self.event_loop
             .run_app(&mut runner)

@@ -67,7 +67,6 @@ enum DrawStep {
         width: u32,
         height: u32,
     },
-    // Composites layer resolve texture back to parent using the composite pipeline (supports compact textures via dest rect).
     EndLayerComposite {
         bind_group: wgpu::BindGroup,
     },
@@ -82,7 +81,6 @@ enum DrawStep {
     },
 }
 
-// Accumulated bounds of draw commands inside a deferred layer, resolved at PopLayer.
 struct LayerAccum {
     opacity: f32,
     begin_step_idx: usize,
@@ -260,11 +258,14 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
-    pub fn new(window: W) -> Result<Self, RendererError> {
-        pollster::block_on(Self::new_async(window))
+    pub fn new(window: W, cache_path: Option<&std::path::Path>) -> Result<Self, RendererError> {
+        pollster::block_on(Self::new_async(window, cache_path))
     }
 
-    pub async fn new_async(window: W) -> Result<Self, RendererError> {
+    pub async fn new_async(
+        window: W,
+        cache_path: Option<&std::path::Path>,
+    ) -> Result<Self, RendererError> {
         let window = std::sync::Arc::new(window);
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -285,15 +286,42 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .await
             .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
 
+        let pipeline_cache_feature = if adapter.features().contains(wgpu::Features::PIPELINE_CACHE)
+        {
+            wgpu::Features::PIPELINE_CACHE
+        } else {
+            wgpu::Features::empty()
+        };
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("rsx-hardware-renderer"),
-                required_features: wgpu::Features::empty(),
+                required_features: pipeline_cache_feature,
                 required_limits: wgpu::Limits::default(),
                 ..Default::default()
             })
             .await
             .map_err(|e| RendererError::Backend(format!("GPU device request failed: {}", e)))?;
+
+        // Returns None on non-Vulkan backends where pipeline caching is unsupported.
+        let (pipeline_cache, cache_file_path) = {
+            let adapter_info = adapter.get_info();
+            let key = wgpu::util::pipeline_cache_key(&adapter_info);
+            if let (Some(key), Some(base)) = (key, cache_path) {
+                let path = base.join(key);
+                let data = std::fs::read(&path).ok();
+                let cache = unsafe {
+                    device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
+                        label: Some("rsx-pipeline-cache"),
+                        data: data.as_deref(),
+                        fallback: true,
+                    })
+                };
+                (Some(cache), Some(path))
+            } else {
+                (None, None)
+            }
+        };
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = preferred_format(&surface_caps);
@@ -325,7 +353,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }],
         });
 
-        // Create all Send-safe pipelines in parallel; on Vulkan/Metal this reduces startup from ~8 serial compilations to ~1 critical path. ImagePipeline (Rc<> cache) must be created on this thread.
+        // Create all Send-safe pipelines in parallel; on Vulkan/Metal this reduces startup from ~8 serial compilations to ~1 critical path, ImagePipeline (Rc<> cache) must be created on this thread, and `pc` must be defined here (not inside the scope closure) so its lifetime covers the spawned threads.
+        let pc = pipeline_cache.as_ref();
         let (
             rect_pipeline,
             text_pipeline,
@@ -336,17 +365,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             composite_pipeline,
             retained_blit_pipeline,
         ) = std::thread::scope(|s| {
-            let t_rect = s.spawn(|| RectPipeline::new(&device, surface_format, &viewport_bgl));
-            let t_text = s.spawn(|| TextPipeline::new(&device, surface_format, &viewport_bgl));
-            let t_line = s.spawn(|| LinePipeline::new(&device, surface_format, &viewport_bgl));
-            let t_path = s.spawn(|| PathPipeline::new(&device, surface_format, &viewport_bgl));
+            let t_rect = s.spawn(|| RectPipeline::new(&device, surface_format, &viewport_bgl, pc));
+            let t_text = s.spawn(|| TextPipeline::new(&device, surface_format, &viewport_bgl, pc));
+            let t_line = s.spawn(|| LinePipeline::new(&device, surface_format, &viewport_bgl, pc));
+            let t_path = s.spawn(|| PathPipeline::new(&device, surface_format, &viewport_bgl, pc));
             let t_layer = s.spawn(|| LayerPipeline::new(&device, surface_format));
-            let t_blur = s.spawn(|| BlurPipeline::new(&device, surface_format));
+            let t_blur = s.spawn(|| BlurPipeline::new(&device, surface_format, pc));
             let t_composite = s.spawn(|| {
-                CompositePipeline::new(&device, surface_format, MSAA_SAMPLES, &viewport_bgl)
+                CompositePipeline::new(&device, surface_format, MSAA_SAMPLES, &viewport_bgl, pc)
             });
             let t_retained =
-                s.spawn(|| CompositePipeline::new(&device, surface_format, 1, &viewport_bgl));
+                s.spawn(|| CompositePipeline::new(&device, surface_format, 1, &viewport_bgl, pc));
             (
                 t_rect.join().unwrap(),
                 t_text.join().unwrap(),
@@ -359,8 +388,26 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             )
         });
         // ImagePipeline holds an Rc<> cache and is not Send; create after the parallel scope.
-        let image_pipeline = ImagePipeline::new(&device, surface_format, &viewport_bgl);
+        let image_pipeline = ImagePipeline::new(
+            &device,
+            surface_format,
+            &viewport_bgl,
+            pipeline_cache.as_ref(),
+        );
         let path_tess_cache = PathTessCache::new();
+
+        // Persist pipeline cache data so subsequent startups skip shader compilation.
+        if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path) {
+            if let Some(data) = cache.get_data() {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let tmp = path.with_extension("tmp");
+                if std::fs::write(&tmp, &data).is_ok() {
+                    let _ = std::fs::rename(&tmp, &path);
+                }
+            }
+        }
 
         Ok(Self {
             surface,
@@ -1189,7 +1236,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_all();
                     current_scissor = scissor_layer_stack.pop().flatten();
                     if let Some(accum) = layer_accum_stack.pop() {
-                        // Use accumulated bounds for a compact layer texture; fall back to full window size if nothing was drawn inside the layer.
                         let (offset_x, offset_y, tex_w, tex_h) = if let Some(b) = accum.bounds {
                             let ox = b.x.floor().max(0.0);
                             let oy = b.y.floor().max(0.0);
@@ -1214,7 +1260,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     tex_h,
                                 )
                             };
-                        // Per-layer viewport: subtract layer origin from pixel coords before dividing by layer size.
                         let layer_vp = Viewport {
                             size: [tex_w as f32, tex_h as f32],
                             offset: [offset_x, offset_y],
@@ -1242,7 +1287,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             [offset_x, offset_y, tex_w as f32, tex_h as f32],
                             accum.opacity,
                         );
-                        // Insert BeginLayer at the position saved by PushLayer so enclosed steps fall inside layer segment boundaries.
                         self.pending_steps.insert(
                             accum.begin_step_idx,
                             DrawStep::BeginLayer {
@@ -1511,7 +1555,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     };
 
                     if let Some((_, cached_view)) = self.shadow_resolved_cache.get(&key) {
-                        // Cache hit: reuse the final blurred texture, skip render + blur
                         let bg = self.composite_pipeline.create_bind_group(
                             &self.device,
                             cached_view,
@@ -1594,13 +1637,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         1.0,
                     );
                     text_results.push(Some(bg));
-                    // Evict cache if over capacity, then store the final blurred texture for reuse on future identical shadows
                     if self.shadow_resolved_cache.len() >= 128 {
                         self.shadow_resolved_cache.clear();
                     }
                     self.shadow_resolved_cache
                         .insert(key, (blurred_texture, blurred_view));
-                    // Return MSAA textures to pool; the blurred resolved texture is now owned by the cache
                     self.shadow_capture_pool.push((
                         cap_msaa_texture,
                         cap_msaa_view,
@@ -1638,7 +1679,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     };
 
                     if let Some((_, cached_view)) = self.path_shadow_resolved_cache.get(&path_key) {
-                        // Cache hit: reuse the final blurred texture, skip render + blur
                         let bg = self.composite_pipeline.create_bind_group(
                             &self.device,
                             cached_view,
@@ -1722,13 +1762,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         1.0,
                     );
                     path_results.push(Some(bg));
-                    // Evict cache if over capacity, then store the final blurred texture for reuse on future identical shadows
                     if self.path_shadow_resolved_cache.len() >= 128 {
                         self.path_shadow_resolved_cache.clear();
                     }
                     self.path_shadow_resolved_cache
                         .insert(path_key, (blurred_texture, blurred_view));
-                    // Return MSAA textures to pool; the blurred resolved texture is now owned by the cache
                     self.shadow_capture_pool.push((
                         cap_msaa_texture,
                         cap_msaa_view,
@@ -1934,7 +1972,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             }
         }
 
-        // Marks EndLayerComposite segments whose resolve was already inlined by the preceding draw pass.
         let mut endlayer_resolve_done: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
             if matches!(segments[i], Segment::EndLayerComposite(_))
@@ -2206,7 +2243,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         blit.draw(0..6, 0..1);
                     }
 
-                    // Return the layer textures to the pool instead of dropping them so the next PushLayer can reuse them.
                     self.layer_texture_pool.push((
                         l_msaa_tex,
                         l_msaa_view,

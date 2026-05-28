@@ -25,6 +25,7 @@ impl LinePipeline {
         device: &Device,
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
+        cache: Option<&wgpu::PipelineCache>,
     ) -> Self {
         let instances = InstancePipeline::<LineInstance>::new(device, "line", 256);
 
@@ -70,7 +71,7 @@ impl LinePipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache,
         });
 
         Self {

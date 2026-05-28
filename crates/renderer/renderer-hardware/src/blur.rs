@@ -20,7 +20,11 @@ pub(crate) struct BlurPipeline {
 }
 
 impl BlurPipeline {
-    pub(crate) fn new(device: &Device, format: TextureFormat) -> Self {
+    pub(crate) fn new(
+        device: &Device,
+        format: TextureFormat,
+        cache: Option<&wgpu::PipelineCache>,
+    ) -> Self {
         let shader_source = include_str!("blur.wgsl");
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rsx-blur-shader"),
@@ -104,7 +108,7 @@ impl BlurPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache,
         });
 
         Self {

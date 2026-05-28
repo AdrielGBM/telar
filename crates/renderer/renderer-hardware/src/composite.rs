@@ -22,6 +22,7 @@ impl CompositePipeline {
         format: wgpu::TextureFormat,
         msaa_samples: u32,
         viewport_bgl: &wgpu::BindGroupLayout,
+        cache: Option<&wgpu::PipelineCache>,
     ) -> Self {
         let shader_source = include_str!("composite.wgsl");
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -106,7 +107,7 @@ impl CompositePipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache,
         });
 
         Self {

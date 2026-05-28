@@ -24,11 +24,7 @@ fn union_rects(a: Rect, b: Rect) -> Rect {
     Rect::new(x, y, right - x, bottom - y)
 }
 
-/// Compare two consecutive DrawCommand slices and return the union of regions
-/// that changed visually. Returns None if a full re-render is required.
-///
-/// Requires the caller to provide a function that computes the on-screen
-/// bounding rect of a DrawCommand given cumulative translation offsets.
+/// Compare two consecutive DrawCommand slices and return the union of regions that changed visually; returns None if a full re-render is required and requires the caller to provide a function that computes the on-screen bounding rect of a DrawCommand given cumulative translation offsets.
 pub fn compute_dirty_rect(
     new_cmds: &[DrawCommand],
     old_cmds: &[DrawCommand],
@@ -77,6 +73,10 @@ pub fn compute_dirty_rect(
         }
 
         if new_cmd != old_cmd {
+            // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible due to the new clip require a full re-render.
+            if matches!(new_cmd, DrawCommand::PushClip { .. }) {
+                return None;
+            }
             if let Some(r) = visual_rect(new_cmd, new_cum_tx, new_cum_ty) {
                 dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
             }
@@ -84,9 +84,7 @@ pub fn compute_dirty_rect(
                 dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
             }
         } else {
-            // Content is identical but the on-screen position may have changed because a parent
-            // PushTransform changed. Capture both rects so that old pixels are cleared and the
-            // element is re-drawn at the new position.
+            // Content is identical but the on-screen position may have changed because a parent PushTransform changed. Capture both rects so that old pixels are cleared and the element is re-drawn at the new position.
             let new_r = visual_rect(new_cmd, new_cum_tx, new_cum_ty);
             let old_r = visual_rect(old_cmd, old_cum_tx, old_cum_ty);
             if new_r != old_r {
@@ -152,6 +150,14 @@ pub fn detect_scroll_blit(
 
     let scroll_clip = *clip_stack.last()?;
 
+    // apply_scroll_blit shifts every pixel row inside scroll_clip. Visual commands that sit before the scroll PushTransform (headers, separators, etc.) are always identical to their prev-frame counterparts (scroll_idx is the first diff), so they will never land in extra_dirty and will never be redrawn — their pixels drift with each scroll step until they disappear. Bail out to compute_dirty_rect when any such element exists.
+    if new_cmds[..scroll_idx]
+        .iter()
+        .any(|c| culling::command_visual_rect(c, 0.0, 0.0).is_some())
+    {
+        return None;
+    }
+
     let delta_tx = delta_tx_f as i32;
     let delta_ty = delta_ty_f as i32;
 
@@ -184,8 +190,7 @@ pub fn detect_scroll_blit(
 
     let pop_idx = pop_idx?;
 
-    // All commands inside the scroll region must be structurally identical; only the
-    // top-level translate may differ, so the blit is a valid optimisation.
+    // All commands inside the scroll region must be structurally identical; only the top-level translate may differ, so the blit is a valid optimisation.
     for j in (scroll_idx + 1)..pop_idx {
         if new_cmds[j] != old_cmds[j] {
             return None;
@@ -264,6 +269,9 @@ pub fn detect_scroll_blit(
             if let Some(r) = culling::command_visual_rect(&new_cmds[j], cum_tx, cum_ty) {
                 extra_dirty = Some(extra_dirty.map_or(r, |d| union_rects(d, r)));
             }
+        } else if culling::command_visual_rect(&new_cmds[j], cum_tx, cum_ty).is_some() {
+            // Unchanged visual after the scroll block: blit shifted its pixels but it won't land in extra_dirty, so it will never be redrawn at the correct position.
+            return None;
         }
     }
 
@@ -315,6 +323,26 @@ mod tests {
     }
 
     #[test]
+    fn compute_dirty_rect_clip_change_returns_none() {
+        // A changed PushClip must force a full re-render; elements inside the old/new clip boundary can't be expressed as a bounded dirty rect.
+        let old = vec![
+            DrawCommand::PushClip {
+                rect: Rect::new(0.0, 0.0, 100.0, 600.0),
+            },
+            rect_cmd(0.0, 100.0, 100.0, 20.0),
+            DrawCommand::PopClip,
+        ];
+        let new = vec![
+            DrawCommand::PushClip {
+                rect: Rect::new(0.0, 0.0, 100.0, 400.0),
+            },
+            rect_cmd(0.0, 100.0, 100.0, 20.0),
+            DrawCommand::PopClip,
+        ];
+        assert!(compute_dirty_rect(&new, &old, culling::command_visual_rect).is_none());
+    }
+
+    #[test]
     fn detect_scroll_blit_no_change_returns_none() {
         let cmds = vec![
             DrawCommand::PushClip {
@@ -326,6 +354,58 @@ mod tests {
             DrawCommand::PopClip,
         ];
         assert!(detect_scroll_blit(&cmds, &cmds).is_none());
+    }
+
+    #[test]
+    fn detect_scroll_blit_rejects_visual_before_scroll() {
+        // A visual element before the scroll PushTransform (e.g. a header) lives inside scroll_clip; apply_scroll_blit would shift its pixels without ever redrawing it.
+        let old = vec![
+            DrawCommand::PushClip {
+                rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+            },
+            rect_cmd(0.0, 0.0, 100.0, 30.0), // header — before scroll
+            DrawCommand::PushTransform { tx: 0.0, ty: -50.0 },
+            rect_cmd(0.0, 0.0, 100.0, 400.0),
+            DrawCommand::PopTransform,
+            DrawCommand::PopClip,
+        ];
+        let new = vec![
+            DrawCommand::PushClip {
+                rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+            },
+            rect_cmd(0.0, 0.0, 100.0, 30.0), // unchanged header
+            DrawCommand::PushTransform { tx: 0.0, ty: -60.0 }, // scrolled
+            rect_cmd(0.0, 0.0, 100.0, 400.0),
+            DrawCommand::PopTransform,
+            DrawCommand::PopClip,
+        ];
+        assert!(detect_scroll_blit(&new, &old).is_none());
+    }
+
+    #[test]
+    fn detect_scroll_blit_rejects_unchanged_visual_after_scroll() {
+        // An unchanged visual element after the scroll PopTransform (e.g. a footer) would have its pixels shifted by apply_scroll_blit and never redrawn.
+        let old = vec![
+            DrawCommand::PushClip {
+                rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+            },
+            DrawCommand::PushTransform { tx: 0.0, ty: -50.0 },
+            rect_cmd(0.0, 0.0, 100.0, 400.0),
+            DrawCommand::PopTransform,
+            rect_cmd(0.0, 170.0, 100.0, 30.0), // footer — after scroll, unchanged
+            DrawCommand::PopClip,
+        ];
+        let new = vec![
+            DrawCommand::PushClip {
+                rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+            },
+            DrawCommand::PushTransform { tx: 0.0, ty: -60.0 }, // scrolled
+            rect_cmd(0.0, 0.0, 100.0, 400.0),
+            DrawCommand::PopTransform,
+            rect_cmd(0.0, 170.0, 100.0, 30.0), // footer unchanged
+            DrawCommand::PopClip,
+        ];
+        assert!(detect_scroll_blit(&new, &old).is_none());
     }
 
     #[test]

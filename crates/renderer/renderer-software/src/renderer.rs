@@ -355,9 +355,7 @@ where
             return self.present_pixmap();
         }
 
-        // Optimization 2: scroll blit. When the only change is a single PushTransform ty-shift (a
-        // scroll event), shift the existing pixel rows in place and only re-render the exposed band
-        // plus any out-of-clip overlays that changed (e.g. the scrollbar).
+        // Optimization 2: scroll blit. When the only change is a single PushTransform ty-shift (a scroll event), shift the existing pixel rows in place and only re-render the exposed band plus any out-of-clip overlays that changed (e.g. the scrollbar).
         let maybe_scroll = if !self.prev_commands.is_empty() {
             renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands)
         } else {
@@ -396,13 +394,7 @@ where
         self.prev_commands.extend(commands.iter().cloned());
         self.prev_clear_color = clear_color;
 
-        // Clear: either the dirty region only, or the full pixmap when a structural change forces a full re-render.
-        //
-        // IMPORTANT: compute both the tiny-skia clear rect and the geometry rect used for command-skipping
-        // from the same clamped bounds. The naive (dr.x-1).max(0) / dr.width+2 formula shifts the rect
-        // right/down when dr has negative coordinates (off-screen content), so fill_rect would clear a
-        // larger on-screen area than `dr` describes — causing commands outside `dr` to have their pixels
-        // cleared and then be skipped, which makes them disappear.
+        // Clear either the dirty region only or the full pixmap when a structural change forces a full re-render; IMPORTANT: compute both the tiny-skia clear rect and the geometry rect used for command-skipping from the same clamped bounds because the naive (dr.x-1).max(0) / dr.width+2 formula shifts the rect right/down when dr has negative coordinates (off-screen content), so fill_rect would clear a larger on-screen area than `dr` describes — causing commands outside `dr` to have their pixels cleared and then be skipped, which makes them disappear.
         let skip_rect: Option<Rect> = match dirty_rect {
             Some(dr) if dr.width > 0.0 && dr.height > 0.0 => {
                 let x0 = (dr.x - 1.0).max(0.0);
@@ -410,12 +402,64 @@ where
                 let x1 = (dr.x + dr.width + 1.0).min(self.width as f32);
                 let y1 = (dr.y + dr.height + 1.0).min(self.height as f32);
                 if x1 > x0 && y1 > y0 {
-                    Some(Rect {
+                    // Expand skip_rect to fully contain every command it partially intersects: a partially-overlapping command is still fully redrawn, overwriting pixels of earlier commands that fall outside the region and won't be redrawn themselves.
+                    let mut sr = Rect {
                         x: x0,
                         y: y0,
                         width: x1 - x0,
                         height: y1 - y0,
-                    })
+                    };
+                    let mut cum_tx = 0.0f32;
+                    let mut cum_ty = 0.0f32;
+                    let mut tx_stk: Vec<(f32, f32)> = Vec::new();
+                    for cmd in commands.iter() {
+                        match cmd {
+                            DrawCommand::PushTransform { tx, ty } => {
+                                tx_stk.push((cum_tx, cum_ty));
+                                cum_tx += tx;
+                                cum_ty += ty;
+                            }
+                            DrawCommand::PopTransform => {
+                                if let Some((px, py)) = tx_stk.pop() {
+                                    cum_tx = px;
+                                    cum_ty = py;
+                                }
+                            }
+                            _ => {
+                                if let Some(vr) =
+                                    renderer_core::culling::command_visual_rect(cmd, cum_tx, cum_ty)
+                                {
+                                    if rect_overlaps(vr, sr) {
+                                        let nx = sr.x.min(vr.x);
+                                        let ny = sr.y.min(vr.y);
+                                        let nx2 = (sr.x + sr.width).max(vr.x + vr.width);
+                                        let ny2 = (sr.y + sr.height).max(vr.y + vr.height);
+                                        sr = Rect {
+                                            x: nx,
+                                            y: ny,
+                                            width: nx2 - nx,
+                                            height: ny2 - ny,
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Re-clamp to viewport after expansion.
+                    let fx0 = sr.x.max(0.0);
+                    let fy0 = sr.y.max(0.0);
+                    let fx1 = (sr.x + sr.width).min(self.width as f32);
+                    let fy1 = (sr.y + sr.height).min(self.height as f32);
+                    if fx1 > fx0 && fy1 > fy0 {
+                        Some(Rect {
+                            x: fx0,
+                            y: fy0,
+                            width: fx1 - fx0,
+                            height: fy1 - fy0,
+                        })
+                    } else {
+                        return self.present_pixmap();
+                    }
                 } else {
                     // Dirty region is entirely off-screen — nothing visible changed.
                     return self.present_pixmap();
@@ -464,10 +508,7 @@ where
                 self.draw_state.cum_ty - layer_oy as f32,
             );
 
-            // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region.
-            // Use skip_rect (the actual clamped on-screen clear bounds) so that the skip check is
-            // consistent with what fill_rect actually cleared.
-            // State commands (PushTransform, PushClip, PushLayer, etc.) return None and are always executed.
+            // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region, use skip_rect (the actual clamped on-screen clear bounds) so the skip check is consistent with what fill_rect actually cleared, and always execute state commands (PushTransform, PushClip, PushLayer, etc.) because they return None.
             if let Some(sr) = skip_rect {
                 if let Some(vr) = renderer_core::culling::command_visual_rect(
                     cmd,

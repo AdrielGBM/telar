@@ -116,12 +116,44 @@ fn load_config(args: &[String]) -> RsxConfig {
 }
 
 pub fn run(args: Vec<String>) {
+    match args.first().map(String::as_str) {
+        Some("dev") => run_dev(args[1..].to_vec()),
+        _ => run_passthrough(args),
+    }
+}
+
+fn inject_dev_feature(args: &mut Vec<String>) {
+    if let Some(pos) = args.iter().position(|a| a == "--features" || a == "-F") {
+        if pos + 1 < args.len() {
+            args[pos + 1] = format!("{},rsx/dev", args[pos + 1]);
+            return;
+        }
+    }
+    args.push("--features".to_string());
+    args.push("rsx/dev".to_string());
+}
+
+fn run_dev(args: Vec<String>) {
     let config = load_config(&args);
-    let backend_value = match config.backend.unwrap_or_default() {
-        RendererBackend::Auto => "auto",
-        RendererBackend::Hardware => "hardware",
-        RendererBackend::Software => "software",
-    };
+    let backend_value = backend_str(config.backend.unwrap_or_default());
+
+    let mut cargo_args = Vec::with_capacity(args.len() + 3);
+    cargo_args.push("run".to_string());
+    cargo_args.extend(args);
+    inject_dev_feature(&mut cargo_args);
+
+    let status = Command::new("cargo")
+        .args(&cargo_args)
+        .env("RSX_RENDERER_BACKEND", backend_value)
+        .status()
+        .expect("[cargo-rsx] failed to invoke cargo");
+
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+fn run_passthrough(args: Vec<String>) {
+    let config = load_config(&args);
+    let backend_value = backend_str(config.backend.unwrap_or_default());
 
     let status = Command::new("cargo")
         .args(&args)
@@ -130,4 +162,12 @@ pub fn run(args: Vec<String>) {
         .expect("[cargo-rsx] failed to invoke cargo");
 
     std::process::exit(status.code().unwrap_or(1));
+}
+
+fn backend_str(backend: RendererBackend) -> &'static str {
+    match backend {
+        RendererBackend::Auto => "auto",
+        RendererBackend::Hardware => "hardware",
+        RendererBackend::Software => "software",
+    }
 }

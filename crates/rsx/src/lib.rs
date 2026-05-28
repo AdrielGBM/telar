@@ -39,6 +39,8 @@ pub use renderer_core::{
     LineCap, LineJoin, LineStyle, LinearGradient, PathData, PathPayload, PathStyle, PathVerb,
     RadialGradient, RectPayload, RectStyle, Shadow, Stroke, TextPayload, TextStyle,
 };
+#[cfg(feature = "runtime")]
+pub use rsx_devtools::{DevAction, DevPlugin};
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use ui_core::{
     Button, ClipGroup, Component, ComponentTree, Container, DrawingArea, EventResult, Image,

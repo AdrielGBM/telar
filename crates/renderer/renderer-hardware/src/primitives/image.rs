@@ -38,6 +38,7 @@ impl ImagePipeline {
         device: &Device,
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
+        cache: Option<&wgpu::PipelineCache>,
     ) -> Self {
         let instances = InstancePipeline::<ImageInstance>::new(device, "image", 16);
 
@@ -112,7 +113,7 @@ impl ImagePipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache,
         });
 
         Self {

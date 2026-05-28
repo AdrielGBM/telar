@@ -30,7 +30,9 @@ pub trait EventHandler<W: Window> {
     fn on_redraw(&mut self, window: &W);
     fn on_suspend(&mut self) {}
     fn new_events(&mut self) {}
-    fn about_to_wait(&mut self) {}
+    fn about_to_wait(&mut self) -> Option<std::time::Duration> {
+        None
+    }
 }
 
 pub trait Platform {

@@ -1961,6 +1961,7 @@ dependencies = [
  "renderer-core",
  "renderer-hardware",
  "renderer-software",
+ "rsx-devtools",
  "serde",
  "services-core",
  "toml",
@@ -1971,6 +1972,15 @@ dependencies = [
 [[package]]
 name = "rsx-bundler"
 version = "0.1.0"
+
+[[package]]
+name = "rsx-devtools"
+version = "0.1.0"
+dependencies = [
+ "geometry-core",
+ "platform-core",
+ "renderer-core",
+]
 
 [[package]]
 name = "rsx-parser"

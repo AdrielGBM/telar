@@ -26,6 +26,7 @@ impl TextPipeline {
         device: &Device,
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
+        cache: Option<&wgpu::PipelineCache>,
     ) -> Self {
         let instances = InstancePipeline::<TextInstance>::new(device, "text", 256);
 
@@ -139,7 +140,7 @@ impl TextPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache,
         });
 
         Self {
