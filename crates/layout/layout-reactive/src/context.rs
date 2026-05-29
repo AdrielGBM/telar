@@ -117,10 +117,9 @@ impl WidgetCtx {
         batch(|| {
             walk_result = self.engine.walk(root, &mut |node_id, rect| {
                 if let Some(sig) = registry.get(&node_id) {
-                    if sig.peek() == rect {
-                        return false; // position unchanged, skip entire subtree
+                    if sig.peek() != rect {
+                        sig.set(rect);
                     }
-                    sig.set(rect);
                 }
                 true
             });

@@ -234,7 +234,10 @@ mod tests {
 
         let mut hits: Vec<(NodeId, geometry_core::Rect)> = Vec::new();
         engine
-            .walk(root, &mut |node, rect| hits.push((node, rect)))
+            .walk(root, &mut |node, rect| {
+                hits.push((node, rect));
+                true
+            })
             .unwrap();
 
         let inner_child_rect = hits
