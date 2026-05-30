@@ -50,6 +50,8 @@ pub enum DrawCommand {
     PopTransform,
     PushLayer {
         opacity: f32,
+        backdrop_blur: f32,
+        clip_radius: f32,
     },
     PopLayer,
 }
@@ -109,9 +111,18 @@ impl PartialEq for DrawCommand {
                 DrawCommand::PushTransform { tx: tx2, ty: ty2 },
             ) => tx1 == tx2 && ty1 == ty2,
             (DrawCommand::PopTransform, DrawCommand::PopTransform) => true,
-            (DrawCommand::PushLayer { opacity: o1 }, DrawCommand::PushLayer { opacity: o2 }) => {
-                o1 == o2
-            }
+            (
+                DrawCommand::PushLayer {
+                    opacity: o1,
+                    backdrop_blur: b1,
+                    clip_radius: cr1,
+                },
+                DrawCommand::PushLayer {
+                    opacity: o2,
+                    backdrop_blur: b2,
+                    clip_radius: cr2,
+                },
+            ) => o1 == o2 && b1 == b2 && cr1 == cr2,
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
             _ => false,
         }

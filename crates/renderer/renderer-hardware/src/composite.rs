@@ -5,9 +5,9 @@ use wgpu::util::DeviceExt;
 struct CompositeParamsRaw {
     rect: [f32; 4],
     alpha: f32,
+    clip_radius: f32,
     _pad0: f32,
     _pad1: f32,
-    _pad2: f32,
 }
 
 pub(crate) struct CompositePipeline {
@@ -123,13 +123,14 @@ impl CompositePipeline {
         view: &wgpu::TextureView,
         rect: [f32; 4],
         alpha: f32,
+        clip_radius: f32,
     ) -> wgpu::BindGroup {
         let params = CompositeParamsRaw {
             rect,
             alpha,
+            clip_radius,
             _pad0: 0.0,
             _pad1: 0.0,
-            _pad2: 0.0,
         };
         let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("rsx-composite-params"),

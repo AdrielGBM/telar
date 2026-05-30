@@ -66,6 +66,9 @@ enum DrawStep {
         viewport_bind_group: wgpu::BindGroup,
         width: u32,
         height: u32,
+        offset_x: f32,
+        offset_y: f32,
+        backdrop_blur: f32,
     },
     EndLayerComposite {
         bind_group: wgpu::BindGroup,
@@ -83,6 +86,8 @@ enum DrawStep {
 
 struct LayerAccum {
     opacity: f32,
+    backdrop_blur: f32,
+    clip_radius: f32,
     begin_step_idx: usize,
     bounds: Option<Rect>,
 }
@@ -600,6 +605,50 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 }
 
+fn fill_layer_alpha(style: &renderer_core::RectStyle) -> Option<f32> {
+    if style.radius.is_zero() || style.shadow.is_some() {
+        return None;
+    }
+    match style.fill {
+        Some(renderer_core::FillStyle::Solid(c)) if c.a > 0.0 && c.a < 1.0 => Some(c.a),
+        _ => None,
+    }
+}
+
+fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
+    if !commands
+        .iter()
+        .any(|cmd| matches!(cmd, DrawCommand::Rect(p) if fill_layer_alpha(&p.style).is_some()))
+    {
+        return None;
+    }
+    let mut result = Vec::with_capacity(commands.len() + 4);
+    for cmd in commands {
+        if let DrawCommand::Rect(p) = cmd {
+            if let Some(alpha) = fill_layer_alpha(&p.style) {
+                let mut opaque = (**p).clone();
+                if let Some(renderer_core::FillStyle::Solid(c)) = opaque.style.fill {
+                    opaque.style.fill =
+                        Some(renderer_core::FillStyle::Solid(renderer_core::Color {
+                            a: 1.0,
+                            ..c
+                        }));
+                }
+                result.push(DrawCommand::PushLayer {
+                    opacity: alpha,
+                    backdrop_blur: 0.0,
+                    clip_radius: 0.0,
+                });
+                result.push(DrawCommand::Rect(Box::new(opaque)));
+                result.push(DrawCommand::PopLayer);
+                continue;
+            }
+        }
+        result.push(cmd.clone());
+    }
+    Some(result)
+}
+
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
     for HardwareRenderer<W>
 {
@@ -656,6 +705,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     retained_view,
                     [0.0, 0.0, self.width as f32, self.height as f32],
                     1.0,
+                    0.0,
                 );
                 let mut encoder =
                     self.device
@@ -707,6 +757,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new(); // saves/restores current_scissor across PushLayer/PopLayer; layers disable frustum culling inside their bounds
         let mut layer_accum_stack: Vec<LayerAccum> = Vec::new();
         let layer_blit_stack: Vec<wgpu::BindGroup> = Vec::new();
+
+        let orig_commands = commands;
+        let expanded_commands = expand_fill_layers(commands);
+        let commands: &[DrawCommand] = expanded_commands.as_deref().unwrap_or(commands);
 
         for cmd in commands {
             match cmd {
@@ -1221,13 +1275,19 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 DrawCommand::PopTransform => {
                     self.draw_state.pop_transform();
                 }
-                DrawCommand::PushLayer { opacity } => {
+                DrawCommand::PushLayer {
+                    opacity,
+                    backdrop_blur,
+                    clip_radius,
+                } => {
                     self.flush_all();
                     // Disable frustum culling inside the layer to avoid incorrect culling by an outer PushClip; save scissor for restore at PopLayer.
                     scissor_layer_stack.push(current_scissor);
                     current_scissor = None;
                     layer_accum_stack.push(LayerAccum {
                         opacity: *opacity,
+                        backdrop_blur: *backdrop_blur,
+                        clip_radius: *clip_radius,
                         begin_step_idx: self.pending_steps.len(),
                         bounds: None,
                     });
@@ -1286,6 +1346,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             &resolve_view,
                             [offset_x, offset_y, tex_w as f32, tex_h as f32],
                             accum.opacity,
+                            accum.clip_radius,
                         );
                         self.pending_steps.insert(
                             accum.begin_step_idx,
@@ -1297,6 +1358,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 viewport_bind_group: layer_vp_bg,
                                 width: tex_w,
                                 height: tex_h,
+                                offset_x,
+                                offset_y,
+                                backdrop_blur: accum.backdrop_blur,
                             },
                         );
                         self.pending_steps.push(DrawStep::EndLayerComposite {
@@ -1560,6 +1624,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             cached_view,
                             op.dest,
                             1.0,
+                            0.0,
                         );
                         text_results.push(Some(bg));
                         continue;
@@ -1635,6 +1700,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &blurred_view,
                         op.dest,
                         1.0,
+                        0.0,
                     );
                     text_results.push(Some(bg));
                     if self.shadow_resolved_cache.len() >= 128 {
@@ -1684,6 +1750,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             cached_view,
                             op.dest,
                             1.0,
+                            0.0,
                         );
                         path_results.push(Some(bg));
                         continue;
@@ -1760,6 +1827,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &blurred_view,
                         op.dest,
                         1.0,
+                        0.0,
                     );
                     path_results.push(Some(bg));
                     if self.path_shadow_resolved_cache.len() >= 128 {
@@ -1895,6 +1963,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 viewport_bind_group: wgpu::BindGroup,
                 width: u32,
                 height: u32,
+                offset_x: f32,
+                offset_y: f32,
+                backdrop_blur: f32,
             },
             EndLayerComposite(wgpu::BindGroup),
         }
@@ -1927,6 +1998,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     viewport_bind_group,
                     width,
                     height,
+                    offset_x,
+                    offset_y,
+                    backdrop_blur,
                 } => {
                     segments.push(Segment::BeginLayer {
                         msaa_texture,
@@ -1936,6 +2010,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         viewport_bind_group,
                         width,
                         height,
+                        offset_x,
+                        offset_y,
+                        backdrop_blur,
                     });
                 }
                 DrawStep::EndLayerComposite { bind_group } => {
@@ -2144,6 +2221,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     viewport_bind_group,
                     width,
                     height,
+                    offset_x,
+                    offset_y,
+                    backdrop_blur,
                 } => {
                     {
                         let _clear = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -2168,6 +2248,149 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             multiview_mask: None,
                         });
                     }
+
+                    if backdrop_blur > 0.0 {
+                        // Resolve parent MSAA into a temp single-sample texture so it can be sampled.
+                        let (parent_w, parent_h) =
+                            if let Some((_, _, _, _, _, pw, ph)) = layer_stack.last() {
+                                (*pw, *ph)
+                            } else {
+                                (self.width, self.height)
+                            };
+                        let parent_msaa_view: &wgpu::TextureView =
+                            if let Some((_, pmv, _, _, _, _, _)) = layer_stack.last() {
+                                pmv
+                            } else {
+                                &msaa_view
+                            };
+
+                        let temp_resolve = self.device.create_texture(&wgpu::TextureDescriptor {
+                            label: Some("rsx-backdrop-resolve"),
+                            size: wgpu::Extent3d {
+                                width: parent_w.max(1),
+                                height: parent_h.max(1),
+                                depth_or_array_layers: 1,
+                            },
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: self.surface_format,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                | wgpu::TextureUsages::COPY_SRC,
+                            view_formats: &[],
+                        });
+                        let temp_resolve_view =
+                            temp_resolve.create_view(&wgpu::TextureViewDescriptor::default());
+
+                        {
+                            let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("rsx-backdrop-parent-resolve"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: parent_msaa_view,
+                                    resolve_target: Some(&temp_resolve_view),
+                                    depth_slice: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Load,
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                                occlusion_query_set: None,
+                                timestamp_writes: None,
+                                multiview_mask: None,
+                            });
+                        }
+
+                        let ox_px = offset_x.floor().max(0.0) as u32;
+                        let oy_px = offset_y.floor().max(0.0) as u32;
+                        let crop_w = width.min(parent_w.saturating_sub(ox_px));
+                        let crop_h = height.min(parent_h.saturating_sub(oy_px));
+
+                        let cropped = self.device.create_texture(&wgpu::TextureDescriptor {
+                            label: Some("rsx-backdrop-crop"),
+                            size: wgpu::Extent3d {
+                                width: crop_w.max(1),
+                                height: crop_h.max(1),
+                                depth_or_array_layers: 1,
+                            },
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: self.surface_format,
+                            usage: wgpu::TextureUsages::COPY_DST
+                                | wgpu::TextureUsages::TEXTURE_BINDING,
+                            view_formats: &[],
+                        });
+
+                        if crop_w > 0 && crop_h > 0 {
+                            encoder.copy_texture_to_texture(
+                                wgpu::TexelCopyTextureInfo {
+                                    texture: &temp_resolve,
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d {
+                                        x: ox_px,
+                                        y: oy_px,
+                                        z: 0,
+                                    },
+                                    aspect: wgpu::TextureAspect::All,
+                                },
+                                wgpu::TexelCopyTextureInfo {
+                                    texture: &cropped,
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d::ZERO,
+                                    aspect: wgpu::TextureAspect::All,
+                                },
+                                wgpu::Extent3d {
+                                    width: crop_w,
+                                    height: crop_h,
+                                    depth_or_array_layers: 1,
+                                },
+                            );
+                        }
+
+                        let cropped_view =
+                            cropped.create_view(&wgpu::TextureViewDescriptor::default());
+                        let (_blurred_tex, blurred_view) = self.blur_pipeline.apply(
+                            &self.device,
+                            &mut encoder,
+                            &cropped_view,
+                            crop_w.max(1),
+                            crop_h.max(1),
+                            backdrop_blur,
+                        );
+
+                        let backdrop_bg = self.composite_pipeline.create_bind_group(
+                            &self.device,
+                            &blurred_view,
+                            [offset_x, offset_y, crop_w as f32, crop_h as f32],
+                            1.0,
+                            0.0,
+                        );
+                        {
+                            let mut backdrop_pass =
+                                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("rsx-backdrop-composite"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view: &layer_msaa_view,
+                                        resolve_target: None,
+                                        depth_slice: None,
+                                        ops: wgpu::Operations {
+                                            load: wgpu::LoadOp::Load,
+                                            store: wgpu::StoreOp::Store,
+                                        },
+                                    })],
+                                    depth_stencil_attachment: None,
+                                    occlusion_query_set: None,
+                                    timestamp_writes: None,
+                                    multiview_mask: None,
+                                });
+                            backdrop_pass.set_pipeline(&self.composite_pipeline.pipeline);
+                            backdrop_pass.set_bind_group(0, &viewport_bind_group, &[]);
+                            backdrop_pass.set_bind_group(1, &backdrop_bg, &[]);
+                            backdrop_pass.draw(0..6, 0..1);
+                        }
+                    }
+
                     layer_stack.push((
                         msaa_texture,
                         layer_msaa_view,
@@ -2280,6 +2503,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 retained_view,
                 [0.0, 0.0, self.width as f32, self.height as f32],
                 1.0,
+                0.0,
             );
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rsx-retained-blit"),
@@ -2305,7 +2529,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
-        self.prev_commands = commands.to_vec();
+        self.prev_commands = orig_commands.to_vec();
         self.clear_pending();
         Ok(())
     }

@@ -53,7 +53,11 @@ pub fn flatten_view(root: View, out: &mut Vec<DrawCommand>, stack: &mut Vec<View
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
-                emit_cmd!(DrawCommand::PushLayer { opacity });
+                emit_cmd!(DrawCommand::PushLayer {
+                    opacity,
+                    backdrop_blur: 0.0,
+                    clip_radius: 0.0,
+                });
             }
         }
     }

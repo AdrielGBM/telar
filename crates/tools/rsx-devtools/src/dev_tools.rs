@@ -16,8 +16,9 @@ const PANEL_W: f32 = 200.0;
 const PANEL_H: f32 = 148.0;
 const GAP: f32 = 4.0;
 
-const BG: Color = Color::rgba(0.05, 0.05, 0.05, 1.0);
-const BADGE_BG: Color = Color::rgba(0.0, 0.0, 0.0, 1.0);
+const BG: Color = Color::rgba(0.05, 0.05, 0.05, 0.75);
+const BADGE_BG: Color = Color::rgba(0.0, 0.0, 0.0, 0.70);
+const BACKDROP_BLUR_SIGMA: f32 = 12.0;
 const GREEN: Color = Color::rgba(0.0, 1.0, 0.4, 1.0);
 const WHITE: Color = Color::rgba(0.9, 0.9, 0.9, 1.0);
 const GRAY: Color = Color::rgba(0.5, 0.5, 0.5, 1.0);
@@ -79,6 +80,13 @@ impl DevPlugin for DevTools {
         let mut cmds = Vec::with_capacity(base.len() + 16);
         cmds.extend_from_slice(base);
 
+        // Badge wrapped in a backdrop-blur layer so the semi-transparent fill samples a blurred copy of the underlying content.
+        cmds.push(DrawCommand::PushLayer {
+            opacity: 1.0,
+            backdrop_blur: BACKDROP_BLUR_SIGMA,
+            clip_radius: 4.0,
+        });
+
         // Badge background
         cmds.push(DrawCommand::Rect(Box::new(RectPayload {
             rect: self.badge_rect,
@@ -95,9 +103,18 @@ impl DevPlugin for DevTools {
             style: TextStyle::new(12.0, GREEN),
         })));
 
+        cmds.push(DrawCommand::PopLayer);
+
         if self.panel_open {
             let panel_x = window_w - PANEL_W - MARGIN;
             let panel_y = badge_y - PANEL_H - GAP;
+
+            // Panel wrapped in a backdrop-blur layer.
+            cmds.push(DrawCommand::PushLayer {
+                opacity: 1.0,
+                backdrop_blur: BACKDROP_BLUR_SIGMA,
+                clip_radius: 8.0,
+            });
 
             // Panel background
             cmds.push(DrawCommand::Rect(Box::new(RectPayload {
@@ -163,6 +180,8 @@ impl DevPlugin for DevTools {
                 ),
                 style: TextStyle::new(10.0, GRAY_DIM),
             })));
+
+            cmds.push(DrawCommand::PopLayer);
         }
 
         Cow::Owned(cmds)

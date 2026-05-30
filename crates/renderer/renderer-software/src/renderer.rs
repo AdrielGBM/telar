@@ -60,6 +60,59 @@ fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
     })
 }
 
+// Returns Some(fill_alpha) when the rect should be rendered via an intermediate layer to avoid
+// the AA-fringe artifact that occurs when geometric coverage × fill_alpha is less than fill_alpha
+// at the edges of a rounded rect, making the border bleed more than the interior.
+fn fill_layer_alpha(style: &renderer_core::RectStyle) -> Option<f32> {
+    // Skip when shadow is present: shadow.color.a controls shadow opacity independently and would
+    // be incorrectly scaled inside a fill-alpha layer.
+    if style.radius.is_zero() || style.shadow.is_some() {
+        return None;
+    }
+    match style.fill {
+        Some(renderer_core::FillStyle::Solid(c)) if c.a > 0.0 && c.a < 1.0 => Some(c.a),
+        _ => None,
+    }
+}
+
+// Expands each semi-transparent solid-fill rounded rect into PushLayer{opacity} + opaque Rect +
+// PopLayer. This separates geometric AA coverage from fill transparency so the renderer composites
+// them correctly: the layer captures the fully-opaque shape (correct AA edge), then composites the
+// whole layer at fill_alpha, avoiding the visible fringe on high-contrast backgrounds.
+fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
+    if !commands
+        .iter()
+        .any(|cmd| matches!(cmd, DrawCommand::Rect(p) if fill_layer_alpha(&p.style).is_some()))
+    {
+        return None;
+    }
+    let mut result = Vec::with_capacity(commands.len() + 4);
+    for cmd in commands {
+        if let DrawCommand::Rect(p) = cmd {
+            if let Some(alpha) = fill_layer_alpha(&p.style) {
+                let mut opaque = (**p).clone();
+                if let Some(renderer_core::FillStyle::Solid(c)) = opaque.style.fill {
+                    opaque.style.fill =
+                        Some(renderer_core::FillStyle::Solid(renderer_core::Color {
+                            a: 1.0,
+                            ..c
+                        }));
+                }
+                result.push(DrawCommand::PushLayer {
+                    opacity: alpha,
+                    backdrop_blur: 0.0,
+                    clip_radius: 0.0,
+                });
+                result.push(DrawCommand::Rect(Box::new(opaque)));
+                result.push(DrawCommand::PopLayer);
+                continue;
+            }
+        }
+        result.push(cmd.clone());
+    }
+    Some(result)
+}
+
 fn compute_layer_bboxes(
     commands: &[DrawCommand],
     window_w: u32,
@@ -237,7 +290,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     text_shadow_cache: TextShadowCache,
     path_shadow_cache: PathShadowCache,
-    layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32)>,
+    layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32, f32)>,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
     prev_commands: Vec<DrawCommand>,
     prev_clear_color: Option<Color>,
@@ -494,6 +547,9 @@ where
         let mut current_clip_rect: Option<Rect> = None;
         self.layer_stack.clear();
 
+        let expanded_commands = expand_fill_layers(commands);
+        let commands: &[DrawCommand] = expanded_commands.as_deref().unwrap_or(commands);
+
         let layer_bboxes = compute_layer_bboxes(commands, self.width, self.height);
 
         for (cmd_idx, cmd) in commands.iter().enumerate() {
@@ -505,7 +561,7 @@ where
             let (layer_ox, layer_oy) = self
                 .layer_stack
                 .last()
-                .map(|(_, _, ox, oy)| (*ox, *oy))
+                .map(|(_, _, ox, oy, _)| (*ox, *oy))
                 .unwrap_or((0, 0));
 
             let transform = tiny_skia::Transform::from_translate(
@@ -543,7 +599,7 @@ where
                     ) {
                         continue;
                     }
-                    let pixmap = if let Some((layer, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((layer, _, _, _, _)) = self.layer_stack.last_mut() {
                         layer
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -573,7 +629,7 @@ where
                     ) {
                         continue;
                     }
-                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -607,7 +663,7 @@ where
                     ) {
                         continue;
                     }
-                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -641,7 +697,7 @@ where
                     ) {
                         continue;
                     }
-                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -673,7 +729,7 @@ where
                             continue;
                         }
                     }
-                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -738,7 +794,11 @@ where
                 DrawCommand::PopTransform => {
                     self.draw_state.pop_transform();
                 }
-                DrawCommand::PushLayer { opacity } => {
+                DrawCommand::PushLayer {
+                    opacity,
+                    backdrop_blur,
+                    clip_radius,
+                } => {
                     let (ox, oy, bw, bh) =
                         layer_bboxes[cmd_idx].unwrap_or((0, 0, self.width, self.height));
                     let layer = self
@@ -747,18 +807,80 @@ where
                         .filter(|p| p.width() == bw && p.height() == bh)
                         .or_else(|| tiny_skia::Pixmap::new(bw, bh));
                     if let Some(mut l) = layer {
-                        l.fill(tiny_skia::Color::TRANSPARENT);
-                        self.layer_stack.push((l, *opacity, ox, oy));
+                        if *backdrop_blur > 0.0 {
+                            let (pox, poy) = self
+                                .layer_stack
+                                .last()
+                                .map(|(_, _, pox, poy, _)| (*pox, *poy))
+                                .unwrap_or((0, 0));
+                            let parent = if let Some((top, _, _, _, _)) = self.layer_stack.last() {
+                                top
+                            } else {
+                                self.pixmap.as_ref().unwrap()
+                            };
+                            l.fill(tiny_skia::Color::TRANSPARENT);
+                            l.draw_pixmap(
+                                pox - ox,
+                                poy - oy,
+                                parent.as_ref(),
+                                &tiny_skia::PixmapPaint {
+                                    opacity: 1.0,
+                                    blend_mode: tiny_skia::BlendMode::Source,
+                                    quality: tiny_skia::FilterQuality::Nearest,
+                                },
+                                tiny_skia::Transform::identity(),
+                                None,
+                            );
+                            crate::primitives::gaussian_blur(
+                                l.data_mut(),
+                                bw,
+                                bh,
+                                *backdrop_blur,
+                                &mut self.blur_scratch,
+                            );
+                        } else {
+                            l.fill(tiny_skia::Color::TRANSPARENT);
+                        }
+                        self.layer_stack.push((l, *opacity, ox, oy, *clip_radius));
                     }
                 }
                 DrawCommand::PopLayer => {
-                    if let Some((layer, opacity, ox, oy)) = self.layer_stack.pop() {
+                    if let Some((mut layer, opacity, ox, oy, clip_radius)) = self.layer_stack.pop()
+                    {
+                        if clip_radius > 0.0 {
+                            let w = layer.width() as f32;
+                            let h = layer.height() as f32;
+                            let r = clip_radius;
+                            let mut pb = tiny_skia::PathBuilder::new();
+                            pb.move_to(r, 0.0);
+                            pb.line_to(w - r, 0.0);
+                            pb.quad_to(w, 0.0, w, r);
+                            pb.line_to(w, h - r);
+                            pb.quad_to(w, h, w - r, h);
+                            pb.line_to(r, h);
+                            pb.quad_to(0.0, h, 0.0, h - r);
+                            pb.line_to(0.0, r);
+                            pb.quad_to(0.0, 0.0, r, 0.0);
+                            pb.close();
+                            if let Some(path) = pb.finish() {
+                                let mut paint = tiny_skia::Paint::default();
+                                paint.set_color(tiny_skia::Color::WHITE);
+                                paint.blend_mode = tiny_skia::BlendMode::DestinationIn;
+                                layer.fill_path(
+                                    &path,
+                                    &paint,
+                                    tiny_skia::FillRule::Winding,
+                                    tiny_skia::Transform::identity(),
+                                    None,
+                                );
+                            }
+                        }
                         let (parent_ox, parent_oy) = self
                             .layer_stack
                             .last()
-                            .map(|(_, _, pox, poy)| (*pox, *poy))
+                            .map(|(_, _, pox, poy, _)| (*pox, *poy))
                             .unwrap_or((0, 0));
-                        let target = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
+                        let target = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
                             top
                         } else {
                             self.pixmap.as_mut().unwrap()
