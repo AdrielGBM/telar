@@ -34,12 +34,12 @@ pub fn flatten_view(root: View, out: &mut Vec<DrawCommand>, stack: &mut Vec<View
                     stack.push(child);
                 }
             }
-            View::Translate { tx, ty, children } => {
-                stack.push(View::Primitive(DrawCommand::PopTransform));
+            View::Transform { matrix, children } => {
+                stack.push(View::Primitive(DrawCommand::PopMatrix));
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
-                emit_cmd!(DrawCommand::PushTransform { tx, ty });
+                emit_cmd!(DrawCommand::PushMatrix { matrix });
             }
             View::Clip { rect, children } => {
                 stack.push(View::Primitive(DrawCommand::PopClip));

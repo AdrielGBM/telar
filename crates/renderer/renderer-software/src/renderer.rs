@@ -120,21 +120,18 @@ fn compute_layer_bboxes(
 ) -> Vec<Option<(i32, i32, u32, u32)>> {
     let mut result = vec![None; commands.len()];
     let mut stack: Vec<(usize, Option<Rect>)> = Vec::new();
-    let mut cum_tx = 0.0f32;
-    let mut cum_ty = 0.0f32;
-    let mut transform_stack: Vec<(f32, f32)> = Vec::new();
+    let mut cum_matrix = renderer_core::IDENTITY_MATRIX;
+    let mut matrix_stack: Vec<[f32; 6]> = Vec::new();
 
     for (idx, cmd) in commands.iter().enumerate() {
         match cmd {
-            DrawCommand::PushTransform { tx, ty } => {
-                transform_stack.push((cum_tx, cum_ty));
-                cum_tx += tx;
-                cum_ty += ty;
+            DrawCommand::PushMatrix { matrix } => {
+                matrix_stack.push(cum_matrix);
+                cum_matrix = renderer_core::compose_matrix(cum_matrix, *matrix);
             }
-            DrawCommand::PopTransform => {
-                if let Some((prev_tx, prev_ty)) = transform_stack.pop() {
-                    cum_tx = prev_tx;
-                    cum_ty = prev_ty;
+            DrawCommand::PopMatrix => {
+                if let Some(prev) = matrix_stack.pop() {
+                    cum_matrix = prev;
                 }
             }
             DrawCommand::PushLayer { .. } => {
@@ -157,7 +154,7 @@ fn compute_layer_bboxes(
                 }
             }
             _ => {
-                if let Some(vr) = renderer_core::culling::command_visual_rect(cmd, cum_tx, cum_ty) {
+                if let Some(vr) = renderer_core::culling::command_visual_rect(cmd, cum_matrix) {
                     if !stack.is_empty() {
                         let last_idx = stack.len() - 1;
                         stack[last_idx].1 = union_opt_rect(stack[last_idx].1, vr);
@@ -463,25 +460,22 @@ where
                         width: x1 - x0,
                         height: y1 - y0,
                     };
-                    let mut cum_tx = 0.0f32;
-                    let mut cum_ty = 0.0f32;
-                    let mut tx_stk: Vec<(f32, f32)> = Vec::new();
+                    let mut sr_matrix = renderer_core::IDENTITY_MATRIX;
+                    let mut sr_matrix_stk: Vec<[f32; 6]> = Vec::new();
                     for cmd in commands.iter() {
                         match cmd {
-                            DrawCommand::PushTransform { tx, ty } => {
-                                tx_stk.push((cum_tx, cum_ty));
-                                cum_tx += tx;
-                                cum_ty += ty;
+                            DrawCommand::PushMatrix { matrix } => {
+                                sr_matrix_stk.push(sr_matrix);
+                                sr_matrix = renderer_core::compose_matrix(sr_matrix, *matrix);
                             }
-                            DrawCommand::PopTransform => {
-                                if let Some((px, py)) = tx_stk.pop() {
-                                    cum_tx = px;
-                                    cum_ty = py;
+                            DrawCommand::PopMatrix => {
+                                if let Some(prev) = sr_matrix_stk.pop() {
+                                    sr_matrix = prev;
                                 }
                             }
                             _ => {
                                 if let Some(vr) =
-                                    renderer_core::culling::command_visual_rect(cmd, cum_tx, cum_ty)
+                                    renderer_core::culling::command_visual_rect(cmd, sr_matrix)
                                 {
                                     if rect_overlaps(vr, sr) {
                                         let nx = sr.x.min(vr.x);
@@ -564,18 +558,21 @@ where
                 .map(|(_, _, ox, oy, _)| (*ox, *oy))
                 .unwrap_or((0, 0));
 
-            let transform = tiny_skia::Transform::from_translate(
-                self.draw_state.cum_tx - layer_ox as f32,
-                self.draw_state.cum_ty - layer_oy as f32,
+            let [ma, mb, mc, md, me, mf] = self.draw_state.cum_matrix;
+            let transform = tiny_skia::Transform::from_row(
+                ma,
+                mb,
+                mc,
+                md,
+                me - layer_ox as f32,
+                mf - layer_oy as f32,
             );
 
             // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region, use skip_rect (the actual clamped on-screen clear bounds) so the skip check is consistent with what fill_rect actually cleared, and always execute state commands (PushTransform, PushClip, PushLayer, etc.) because they return None.
             if let Some(sr) = skip_rect {
-                if let Some(vr) = renderer_core::culling::command_visual_rect(
-                    cmd,
-                    self.draw_state.cum_tx,
-                    self.draw_state.cum_ty,
-                ) {
+                if let Some(vr) =
+                    renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                {
                     if !rect_overlaps(vr, sr) {
                         continue;
                     }
@@ -590,11 +587,15 @@ where
                     {
                         continue;
                     }
+                    let (spr_x, spr_y) = self.draw_state.apply_point(p.rect.x, p.rect.y);
+                    let (spr_x2, spr_y2) = self
+                        .draw_state
+                        .apply_point(p.rect.x + p.rect.width, p.rect.y + p.rect.height);
                     if !renderer_core::culling::overlaps(
-                        p.rect.x + self.draw_state.cum_tx,
-                        p.rect.y + self.draw_state.cum_ty,
-                        p.rect.width,
-                        p.rect.height,
+                        spr_x.min(spr_x2),
+                        spr_y.min(spr_y2),
+                        (spr_x2 - spr_x).abs(),
+                        (spr_y2 - spr_y).abs(),
                         current_clip_rect,
                     ) {
                         continue;
@@ -620,11 +621,15 @@ where
                     );
                 }
                 DrawCommand::Text(p) => {
+                    let (spt_x, spt_y) = self.draw_state.apply_point(p.rect.x, p.rect.y);
+                    let (spt_x2, spt_y2) = self
+                        .draw_state
+                        .apply_point(p.rect.x + p.rect.width, p.rect.y + p.rect.height);
                     if !renderer_core::culling::overlaps(
-                        p.rect.x + self.draw_state.cum_tx,
-                        p.rect.y + self.draw_state.cum_ty,
-                        p.rect.width,
-                        p.rect.height,
+                        spt_x.min(spt_x2),
+                        spt_y.min(spt_y2),
+                        (spt_x2 - spt_x).abs(),
+                        (spt_y2 - spt_y).abs(),
                         current_clip_rect,
                     ) {
                         continue;
@@ -654,11 +659,15 @@ where
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
+                    let (spi_x, spi_y) = self.draw_state.apply_point(rect.x, rect.y);
+                    let (spi_x2, spi_y2) = self
+                        .draw_state
+                        .apply_point(rect.x + rect.width, rect.y + rect.height);
                     if !renderer_core::culling::overlaps(
-                        rect.x + self.draw_state.cum_tx,
-                        rect.y + self.draw_state.cum_ty,
-                        rect.width,
-                        rect.height,
+                        spi_x.min(spi_x2),
+                        spi_y.min(spi_y2),
+                        (spi_x2 - spi_x).abs(),
+                        (spi_y2 - spi_y).abs(),
                         current_clip_rect,
                     ) {
                         continue;
@@ -684,17 +693,13 @@ where
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    let min_x = p1.x.min(p2.x);
-                    let min_y = p1.y.min(p2.y);
-                    let w = (p1.x.max(p2.x) - min_x).max(0.0);
-                    let h = (p1.y.max(p2.y) - min_y).max(0.0);
-                    if !renderer_core::culling::overlaps(
-                        min_x + self.draw_state.cum_tx,
-                        min_y + self.draw_state.cum_ty,
-                        w,
-                        h,
-                        current_clip_rect,
-                    ) {
+                    let (lp1x, lp1y) = self.draw_state.apply_point(p1.x, p1.y);
+                    let (lp2x, lp2y) = self.draw_state.apply_point(p2.x, p2.y);
+                    let min_x = lp1x.min(lp2x);
+                    let min_y = lp1y.min(lp2y);
+                    let w = (lp1x.max(lp2x) - min_x).max(0.0);
+                    let h = (lp1y.max(lp2y) - min_y).max(0.0);
+                    if !renderer_core::culling::overlaps(min_x, min_y, w, h, current_clip_rect) {
                         continue;
                     }
                     let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
@@ -719,11 +724,14 @@ where
                 }
                 DrawCommand::Path(p) => {
                     if let Some(b) = p.data.bounds() {
+                        let (sp_x, sp_y) = self.draw_state.apply_point(b.x, b.y);
+                        let (sp_x2, sp_y2) =
+                            self.draw_state.apply_point(b.x + b.width, b.y + b.height);
                         if !renderer_core::culling::overlaps(
-                            b.x + self.draw_state.cum_tx,
-                            b.y + self.draw_state.cum_ty,
-                            b.width,
-                            b.height,
+                            sp_x.min(sp_x2),
+                            sp_y.min(sp_y2),
+                            (sp_x2 - sp_x).abs(),
+                            (sp_y2 - sp_y).abs(),
                             current_clip_rect,
                         ) {
                             continue;
@@ -788,11 +796,11 @@ where
                         }
                     }
                 }
-                DrawCommand::PushTransform { tx, ty } => {
-                    self.draw_state.push_transform(*tx, *ty);
+                DrawCommand::PushMatrix { matrix } => {
+                    self.draw_state.push_matrix(*matrix);
                 }
-                DrawCommand::PopTransform => {
-                    self.draw_state.pop_transform();
+                DrawCommand::PopMatrix => {
+                    self.draw_state.pop_matrix();
                 }
                 DrawCommand::PushLayer {
                     opacity,

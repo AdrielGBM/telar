@@ -9,6 +9,7 @@ mod paths;
 mod shadows;
 mod shapes;
 mod theme_section;
+mod transforms;
 mod typography;
 
 pub use cards::cards_section;
@@ -22,4 +23,5 @@ pub use paths::paths_section;
 pub use shadows::shadows_section;
 pub use shapes::shapes_section;
 pub use theme_section::theme_section;
+pub use transforms::transforms_section;
 pub use typography::typography_section;

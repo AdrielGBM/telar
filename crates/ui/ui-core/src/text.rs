@@ -48,9 +48,8 @@ impl Component for Text {
                 Rc::clone(&cache.1)
             }
         };
-        View::Translate {
-            tx: r.x,
-            ty: r.y,
+        View::Transform {
+            matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
             children: vec![View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text,
                 rect: Rect {

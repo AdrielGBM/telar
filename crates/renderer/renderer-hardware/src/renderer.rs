@@ -771,11 +771,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     {
                         continue;
                     }
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cum_tx,
-                        self.draw_state.cum_ty,
-                    ) {
+                    if let Some(bounds) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
                         if !renderer_core::culling::overlaps(
                             bounds.x,
                             bounds.y,
@@ -828,26 +826,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if self.batch_rect_start.is_none() {
                         self.batch_rect_start = Some(self.pending_instances.len() as u32);
                     }
-                    let translated = Rect::new(
-                        p.rect.x + self.draw_state.cum_tx,
-                        p.rect.y + self.draw_state.cum_ty,
-                        p.rect.width,
-                        p.rect.height,
-                    );
                     let inst = crate::primitives::rect::prepare_rect(
-                        translated,
+                        p.rect,
                         &p.style,
-                        self.draw_state.cum_tx,
-                        self.draw_state.cum_ty,
+                        self.draw_state.cum_matrix,
                     );
                     self.pending_instances.push(inst);
                 }
                 DrawCommand::Text(p) => {
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cum_tx,
-                        self.draw_state.cum_ty,
-                    ) {
+                    if let Some(bounds) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
                         if !renderer_core::culling::overlaps(
                             bounds.x,
                             bounds.y,
@@ -897,11 +886,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
+                    let (text_tx, text_ty) = self.draw_state.apply_point(p.rect.x, p.rect.y);
+                    let (text_tx2, text_ty2) = self
+                        .draw_state
+                        .apply_point(p.rect.x + p.rect.width, p.rect.y + p.rect.height);
                     let translated = Rect::new(
-                        p.rect.x + self.draw_state.cum_tx,
-                        p.rect.y + self.draw_state.cum_ty,
-                        p.rect.width,
-                        p.rect.height,
+                        text_tx,
+                        text_ty,
+                        (text_tx2 - text_tx).abs(),
+                        (text_ty2 - text_ty).abs(),
                     );
                     if let Some(shadow) = p.style.shadow {
                         self.flush_text();
@@ -964,11 +957,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cum_tx,
-                        self.draw_state.cum_ty,
-                    ) {
+                    if let Some(bounds) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
                         if !renderer_core::culling::overlaps(
                             bounds.x,
                             bounds.y,
@@ -1022,19 +1013,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.batch_line_start = Some(self.pending_line_instances.len() as u32);
                     }
                     use geometry_core::Point;
-                    let tp1 =
-                        Point::new(p1.x + self.draw_state.cum_tx, p1.y + self.draw_state.cum_ty);
-                    let tp2 =
-                        Point::new(p2.x + self.draw_state.cum_tx, p2.y + self.draw_state.cum_ty);
+                    let (lx1, ly1) = self.draw_state.apply_point(p1.x, p1.y);
+                    let (lx2, ly2) = self.draw_state.apply_point(p2.x, p2.y);
+                    let tp1 = Point::new(lx1, ly1);
+                    let tp2 = Point::new(lx2, ly2);
                     self.pending_line_instances
                         .push(crate::primitives::line::prepare_line(tp1, tp2, *style));
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cum_tx,
-                        self.draw_state.cum_ty,
-                    ) {
+                    if let Some(bounds) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
                         if !renderer_core::culling::overlaps(
                             bounds.x,
                             bounds.y,
@@ -1097,21 +1086,24 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 *filter,
                             ));
                     }
-                    let translated = Rect::new(
-                        rect.x + self.draw_state.cum_tx,
-                        rect.y + self.draw_state.cum_ty,
-                        rect.width,
-                        rect.height,
-                    );
+                    let (ix1, iy1) = self.draw_state.apply_point(rect.x, rect.y);
+                    let (ix2, iy2) = self.draw_state.apply_point(rect.x + rect.width, rect.y);
+                    let (ix3, iy3) = self.draw_state.apply_point(rect.x, rect.y + rect.height);
+                    let (ix4, iy4) = self
+                        .draw_state
+                        .apply_point(rect.x + rect.width, rect.y + rect.height);
+                    let imin_x = ix1.min(ix2).min(ix3).min(ix4);
+                    let imin_y = iy1.min(iy2).min(iy3).min(iy4);
+                    let imax_x = ix1.max(ix2).max(ix3).max(ix4);
+                    let imax_y = iy1.max(iy2).max(iy3).max(iy4);
+                    let translated = Rect::new(imin_x, imin_y, imax_x - imin_x, imax_y - imin_y);
                     self.pending_image_instances
                         .push(crate::primitives::image::prepare_image(translated));
                 }
                 DrawCommand::Path(p) => {
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cum_tx,
-                        self.draw_state.cum_ty,
-                    ) {
+                    if let Some(bounds) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
                         if !renderer_core::culling::overlaps(
                             bounds.x,
                             bounds.y,
@@ -1187,10 +1179,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 max_y = max_y.max(v.position[1]);
                             }
 
-                            let world_min_x = min_x + self.draw_state.cum_tx + shadow.offset_x;
-                            let world_min_y = min_y + self.draw_state.cum_ty + shadow.offset_y;
-                            let world_max_x = max_x + self.draw_state.cum_tx + shadow.offset_x;
-                            let world_max_y = max_y + self.draw_state.cum_ty + shadow.offset_y;
+                            let (wmin_x, wmin_y) = self.draw_state.apply_point(min_x, min_y);
+                            let (wmax_x, wmax_y) = self.draw_state.apply_point(max_x, max_y);
+                            let world_min_x = wmin_x.min(wmax_x) + shadow.offset_x;
+                            let world_min_y = wmin_y.min(wmax_y) + shadow.offset_y;
+                            let world_max_x = wmin_x.max(wmax_x) + shadow.offset_x;
+                            let world_max_y = wmin_y.max(wmax_y) + shadow.offset_y;
 
                             let s = shadow.blur_radius / 2.0;
                             let box_r = (s * 1.5).round().max(1.0);
@@ -1205,10 +1199,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 ((world_max_y - world_min_y).ceil() as u32 + 2 * padding).max(1);
 
                             for v in &mut self.pending_shadow_path_vertices[sv_start..] {
-                                v.position[0] +=
-                                    self.draw_state.cum_tx + shadow.offset_x - origin_x;
-                                v.position[1] +=
-                                    self.draw_state.cum_ty + shadow.offset_y - origin_y;
+                                let (wx, wy) =
+                                    self.draw_state.apply_point(v.position[0], v.position[1]);
+                                v.position[0] = wx + shadow.offset_x - origin_x;
+                                v.position[1] = wy + shadow.offset_y - origin_y;
                             }
 
                             self.pending_path_shadow_ops.push(PathShadowOp {
@@ -1237,14 +1231,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &mut self.pending_path_fill_data,
                     );
                     for v in &mut self.pending_path_vertices[vertex_start..] {
-                        v.position[0] += self.draw_state.cum_tx;
-                        v.position[1] += self.draw_state.cum_ty;
+                        let (wx, wy) = self.draw_state.apply_point(v.position[0], v.position[1]);
+                        v.position[0] = wx;
+                        v.position[1] = wy;
                     }
                     for fd in &mut self.pending_path_fill_data[fill_data_start..] {
-                        fd.grad_p0[0] += self.draw_state.cum_tx;
-                        fd.grad_p0[1] += self.draw_state.cum_ty;
-                        fd.grad_p1[0] += self.draw_state.cum_tx;
-                        fd.grad_p1[1] += self.draw_state.cum_ty;
+                        let (gx0, gy0) = self.draw_state.apply_point(fd.grad_p0[0], fd.grad_p0[1]);
+                        let (gx1, gy1) = self.draw_state.apply_point(fd.grad_p1[0], fd.grad_p1[1]);
+                        fd.grad_p0 = [gx0, gy0];
+                        fd.grad_p1 = [gx1, gy1];
                     }
                     let index_end = self.pending_path_indices.len() as u32;
                     if index_end > index_start {
@@ -1269,11 +1264,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.pending_steps
                         .push(DrawStep::SetScissor { rect: effective });
                 }
-                DrawCommand::PushTransform { tx, ty } => {
-                    self.draw_state.push_transform(*tx, *ty);
+                DrawCommand::PushMatrix { matrix } => {
+                    self.draw_state.push_matrix(*matrix);
                 }
-                DrawCommand::PopTransform => {
-                    self.draw_state.pop_transform();
+                DrawCommand::PopMatrix => {
+                    self.draw_state.pop_matrix();
                 }
                 DrawCommand::PushLayer {
                     opacity,

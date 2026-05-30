@@ -2,7 +2,7 @@ use crate::images::{make_checker, make_gradient, make_radial_alpha};
 use crate::sections::{
     cards_section, colors_section, gradients_section, grid_section, images_section, layers_section,
     lines_section, paths_section, shadows_section, shapes_section, theme_section,
-    typography_section,
+    transforms_section, typography_section,
 };
 use crate::theme::SandboxTheme;
 use rsx::{
@@ -30,7 +30,8 @@ fn build_content(
     let s9 = Box::new(layers_section(ctx)?) as Box<dyn LayoutItem>;
     let s10 = Box::new(shadows_section(ctx)?) as Box<dyn LayoutItem>;
     let s11 = Box::new(grid_section(ctx)?) as Box<dyn LayoutItem>;
-    let sections = vec![s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11];
+    let s12 = Box::new(transforms_section(ctx)?) as Box<dyn LayoutItem>;
+    let sections = vec![s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12];
 
     Container::new(
         ctx,

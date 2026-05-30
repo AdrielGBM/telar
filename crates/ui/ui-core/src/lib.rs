@@ -12,7 +12,7 @@ mod pointer;
 mod rect;
 mod scroll_area;
 mod text;
-mod translate_group;
+mod transform_group;
 
 pub use button::{Button, ButtonStyle};
 pub use clip_group::ClipGroup;
@@ -30,5 +30,5 @@ pub use path::Path;
 pub use rect::Rect;
 pub use scroll_area::ScrollArea;
 pub use text::Text;
-pub use translate_group::TranslateGroup;
+pub use transform_group::TransformGroup;
 pub use ui_tree::{Component, ComponentTree, EventResult, View};

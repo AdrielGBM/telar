@@ -30,9 +30,8 @@ impl Component for Rect {
     fn view(&self) -> View {
         let r = self.leaf.rect.get();
         let style = (self.style)();
-        View::Translate {
-            tx: r.x,
-            ty: r.y,
+        View::Transform {
+            matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
             children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,

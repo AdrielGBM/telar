@@ -1,6 +1,9 @@
 use geometry_core::Rect;
 
-use crate::{DrawCommand, culling};
+use crate::{
+    DrawCommand, culling,
+    draw_state::{IDENTITY_MATRIX, compose_matrix},
+};
 
 /// When a pure axis-aligned scroll is detected, this describes what changed.
 pub struct ScrollBlit {
@@ -24,49 +27,51 @@ fn union_rects(a: Rect, b: Rect) -> Rect {
     Rect::new(x, y, right - x, bottom - y)
 }
 
-/// Compare two consecutive DrawCommand slices and return the union of regions that changed visually; returns None if a full re-render is required and requires the caller to provide a function that computes the on-screen bounding rect of a DrawCommand given cumulative translation offsets.
+fn matrix_as_translation(m: &[f32; 6]) -> Option<(f32, f32)> {
+    if m[0] == 1.0 && m[1] == 0.0 && m[2] == 0.0 && m[3] == 1.0 {
+        Some((m[4], m[5]))
+    } else {
+        None
+    }
+}
+
+/// Compare two consecutive DrawCommand slices and return the union of regions that changed visually; returns None if a full re-render is required.
 pub fn compute_dirty_rect(
     new_cmds: &[DrawCommand],
     old_cmds: &[DrawCommand],
-    visual_rect: impl Fn(&DrawCommand, f32, f32) -> Option<Rect>,
+    visual_rect: impl Fn(&DrawCommand, [f32; 6]) -> Option<Rect>,
 ) -> Option<Rect> {
     if new_cmds.len() != old_cmds.len() {
         return None;
     }
 
     let mut dirty: Option<Rect> = None;
-    let mut new_tx_stack: Vec<(f32, f32)> = Vec::new();
-    let mut old_tx_stack: Vec<(f32, f32)> = Vec::new();
-    let mut new_cum_tx = 0.0f32;
-    let mut new_cum_ty = 0.0f32;
-    let mut old_cum_tx = 0.0f32;
-    let mut old_cum_ty = 0.0f32;
+    let mut new_matrix_stack: Vec<[f32; 6]> = Vec::new();
+    let mut old_matrix_stack: Vec<[f32; 6]> = Vec::new();
+    let mut new_matrix = IDENTITY_MATRIX;
+    let mut old_matrix = IDENTITY_MATRIX;
 
     for (new_cmd, old_cmd) in new_cmds.iter().zip(old_cmds.iter()) {
         match new_cmd {
-            DrawCommand::PushTransform { tx, ty } => {
-                new_tx_stack.push((*tx, *ty));
-                new_cum_tx += tx;
-                new_cum_ty += ty;
+            DrawCommand::PushMatrix { matrix } => {
+                new_matrix_stack.push(new_matrix);
+                new_matrix = compose_matrix(new_matrix, *matrix);
             }
-            DrawCommand::PopTransform => {
-                if let Some((tx, ty)) = new_tx_stack.pop() {
-                    new_cum_tx -= tx;
-                    new_cum_ty -= ty;
+            DrawCommand::PopMatrix => {
+                if let Some(prev) = new_matrix_stack.pop() {
+                    new_matrix = prev;
                 }
             }
             _ => {}
         }
         match old_cmd {
-            DrawCommand::PushTransform { tx, ty } => {
-                old_tx_stack.push((*tx, *ty));
-                old_cum_tx += tx;
-                old_cum_ty += ty;
+            DrawCommand::PushMatrix { matrix } => {
+                old_matrix_stack.push(old_matrix);
+                old_matrix = compose_matrix(old_matrix, *matrix);
             }
-            DrawCommand::PopTransform => {
-                if let Some((tx, ty)) = old_tx_stack.pop() {
-                    old_cum_tx -= tx;
-                    old_cum_ty -= ty;
+            DrawCommand::PopMatrix => {
+                if let Some(prev) = old_matrix_stack.pop() {
+                    old_matrix = prev;
                 }
             }
             _ => {}
@@ -77,16 +82,16 @@ pub fn compute_dirty_rect(
             if matches!(new_cmd, DrawCommand::PushClip { .. }) {
                 return None;
             }
-            if let Some(r) = visual_rect(new_cmd, new_cum_tx, new_cum_ty) {
+            if let Some(r) = visual_rect(new_cmd, new_matrix) {
                 dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
             }
-            if let Some(r) = visual_rect(old_cmd, old_cum_tx, old_cum_ty) {
+            if let Some(r) = visual_rect(old_cmd, old_matrix) {
                 dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
             }
         } else {
-            // Content is identical but the on-screen position may have changed because a parent PushTransform changed. Capture both rects so that old pixels are cleared and the element is re-drawn at the new position.
-            let new_r = visual_rect(new_cmd, new_cum_tx, new_cum_ty);
-            let old_r = visual_rect(old_cmd, old_cum_tx, old_cum_ty);
+            // Content is identical but the on-screen position may have changed because a parent PushMatrix changed. Capture both rects so that old pixels are cleared and the element is re-drawn at the new position.
+            let new_r = visual_rect(new_cmd, new_matrix);
+            let old_r = visual_rect(old_cmd, old_matrix);
             if new_r != old_r {
                 if let Some(r) = new_r {
                     dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
@@ -112,21 +117,20 @@ pub fn detect_scroll_blit(
 
     let n = new_cmds.len();
 
-    // Find the first position where commands differ; must be a PushTransform with only one axis changed.
+    // Find the first position where commands differ; must be a PushMatrix encoding a pure axis-aligned translation.
     let scroll_idx = new_cmds
         .iter()
         .zip(old_cmds.iter())
         .position(|(nc, oc)| nc != oc)?;
 
     let (delta_tx_f, delta_ty_f) = match (&new_cmds[scroll_idx], &old_cmds[scroll_idx]) {
-        (
-            DrawCommand::PushTransform { tx: ntx, ty: nty },
-            DrawCommand::PushTransform { tx: otx, ty: oty },
-        ) if ntx == otx => (0.0f32, nty - oty), // pure Y-scroll
-        (
-            DrawCommand::PushTransform { tx: ntx, ty: nty },
-            DrawCommand::PushTransform { tx: otx, ty: oty },
-        ) if nty == oty => (ntx - otx, 0.0f32), // pure X-scroll
+        (DrawCommand::PushMatrix { matrix: nm }, DrawCommand::PushMatrix { matrix: om }) => {
+            match (matrix_as_translation(nm), matrix_as_translation(om)) {
+                (Some((ntx, nty)), Some((otx, oty))) if ntx == otx => (0.0f32, nty - oty),
+                (Some((ntx, nty)), Some((otx, oty))) if nty == oty => (ntx - otx, 0.0f32),
+                _ => return None,
+            }
+        }
         _ => return None,
     };
 
@@ -153,7 +157,7 @@ pub fn detect_scroll_blit(
     // apply_scroll_blit shifts every pixel row inside scroll_clip. Visual commands that sit before the scroll PushTransform (headers, separators, etc.) are always identical to their prev-frame counterparts (scroll_idx is the first diff), so they will never land in extra_dirty and will never be redrawn — their pixels drift with each scroll step until they disappear. Bail out to compute_dirty_rect when any such element exists.
     if new_cmds[..scroll_idx]
         .iter()
-        .any(|c| culling::command_visual_rect(c, 0.0, 0.0).is_some())
+        .any(|c| culling::command_visual_rect(c, IDENTITY_MATRIX).is_some())
     {
         return None;
     }
@@ -169,14 +173,14 @@ pub fn detect_scroll_blit(
         return None;
     }
 
-    // Find the PopTransform that closes the scroll PushTransform.
+    // Find the PopMatrix that closes the scroll PushTransform; PushMatrix nesting also counts.
     let mut depth = 1i32;
     let mut pop_idx = None;
     let mut i = scroll_idx + 1;
     while i < n {
         match &new_cmds[i] {
-            DrawCommand::PushTransform { .. } => depth += 1,
-            DrawCommand::PopTransform => {
+            DrawCommand::PushMatrix { .. } => depth += 1,
+            DrawCommand::PopMatrix => {
                 depth -= 1;
                 if depth == 0 {
                     pop_idx = Some(i);
@@ -227,21 +231,18 @@ pub fn detect_scroll_blit(
         Rect::new(scroll_clip.x, scroll_clip.y, scroll_clip.width, band_h)
     };
 
-    // Reconstruct cumulative transform at the end of the scroll block.
-    let mut tx_stack: Vec<(f32, f32)> = Vec::new();
-    let mut cum_tx = 0.0f32;
-    let mut cum_ty = 0.0f32;
+    // Reconstruct cumulative matrix at the end of the scroll block.
+    let mut matrix_stack: Vec<[f32; 6]> = Vec::new();
+    let mut cum_matrix = IDENTITY_MATRIX;
     for cmd in new_cmds[..=pop_idx].iter() {
         match cmd {
-            DrawCommand::PushTransform { tx, ty } => {
-                tx_stack.push((*tx, *ty));
-                cum_tx += tx;
-                cum_ty += ty;
+            DrawCommand::PushMatrix { matrix } => {
+                matrix_stack.push(cum_matrix);
+                cum_matrix = compose_matrix(cum_matrix, *matrix);
             }
-            DrawCommand::PopTransform => {
-                if let Some((tx, ty)) = tx_stack.pop() {
-                    cum_tx -= tx;
-                    cum_ty -= ty;
+            DrawCommand::PopMatrix => {
+                if let Some(prev) = matrix_stack.pop() {
+                    cum_matrix = prev;
                 }
             }
             _ => {}
@@ -252,24 +253,22 @@ pub fn detect_scroll_blit(
     let mut extra_dirty: Option<Rect> = None;
     for j in (pop_idx + 1)..n {
         match &new_cmds[j] {
-            DrawCommand::PushTransform { tx, ty } => {
-                tx_stack.push((*tx, *ty));
-                cum_tx += tx;
-                cum_ty += ty;
+            DrawCommand::PushMatrix { matrix } => {
+                matrix_stack.push(cum_matrix);
+                cum_matrix = compose_matrix(cum_matrix, *matrix);
             }
-            DrawCommand::PopTransform => {
-                if let Some((tx, ty)) = tx_stack.pop() {
-                    cum_tx -= tx;
-                    cum_ty -= ty;
+            DrawCommand::PopMatrix => {
+                if let Some(prev) = matrix_stack.pop() {
+                    cum_matrix = prev;
                 }
             }
             _ => {}
         }
         if new_cmds[j] != old_cmds[j] {
-            if let Some(r) = culling::command_visual_rect(&new_cmds[j], cum_tx, cum_ty) {
+            if let Some(r) = culling::command_visual_rect(&new_cmds[j], cum_matrix) {
                 extra_dirty = Some(extra_dirty.map_or(r, |d| union_rects(d, r)));
             }
-        } else if culling::command_visual_rect(&new_cmds[j], cum_tx, cum_ty).is_some() {
+        } else if culling::command_visual_rect(&new_cmds[j], cum_matrix).is_some() {
             // Unchanged visual after the scroll block: blit shifted its pixels but it won't land in extra_dirty, so it will never be redrawn at the correct position.
             return None;
         }
@@ -311,9 +310,31 @@ mod tests {
     }
 
     #[test]
-    fn compute_dirty_rect_changed_rect() {
+    fn compute_dirty_rect_single_change() {
         let old = vec![rect_cmd(0.0, 0.0, 10.0, 10.0)];
-        let new = vec![rect_cmd(5.0, 5.0, 10.0, 10.0)];
+        let new = vec![rect_cmd(5.0, 0.0, 10.0, 10.0)];
+        let dirty = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
+        // must cover both positions
+        assert!(dirty.x <= 0.0);
+        assert!(dirty.x + dirty.width >= 15.0);
+    }
+
+    #[test]
+    fn compute_dirty_rect_translate_shift() {
+        let old = vec![
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            },
+            rect_cmd(0.0, 0.0, 10.0, 10.0),
+            DrawCommand::PopMatrix,
+        ];
+        let new = vec![
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 5.0, 5.0],
+            },
+            rect_cmd(0.0, 0.0, 10.0, 10.0),
+            DrawCommand::PopMatrix,
+        ];
         let dirty = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
         // must cover both positions
         assert!(dirty.x <= 0.0);
@@ -348,9 +369,11 @@ mod tests {
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
             },
-            DrawCommand::PushTransform { tx: 0.0, ty: -50.0 },
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -50.0],
+            },
             rect_cmd(0.0, 0.0, 100.0, 400.0),
-            DrawCommand::PopTransform,
+            DrawCommand::PopMatrix,
             DrawCommand::PopClip,
         ];
         assert!(detect_scroll_blit(&cmds, &cmds).is_none());
@@ -364,9 +387,11 @@ mod tests {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
             },
             rect_cmd(0.0, 0.0, 100.0, 30.0), // header — before scroll
-            DrawCommand::PushTransform { tx: 0.0, ty: -50.0 },
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -50.0],
+            },
             rect_cmd(0.0, 0.0, 100.0, 400.0),
-            DrawCommand::PopTransform,
+            DrawCommand::PopMatrix,
             DrawCommand::PopClip,
         ];
         let new = vec![
@@ -374,9 +399,11 @@ mod tests {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
             },
             rect_cmd(0.0, 0.0, 100.0, 30.0), // unchanged header
-            DrawCommand::PushTransform { tx: 0.0, ty: -60.0 }, // scrolled
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -60.0],
+            }, // scrolled
             rect_cmd(0.0, 0.0, 100.0, 400.0),
-            DrawCommand::PopTransform,
+            DrawCommand::PopMatrix,
             DrawCommand::PopClip,
         ];
         assert!(detect_scroll_blit(&new, &old).is_none());
@@ -384,14 +411,16 @@ mod tests {
 
     #[test]
     fn detect_scroll_blit_rejects_unchanged_visual_after_scroll() {
-        // An unchanged visual element after the scroll PopTransform (e.g. a footer) would have its pixels shifted by apply_scroll_blit and never redrawn.
+        // An unchanged visual element after the scroll PopMatrix (e.g. a footer) would have its pixels shifted by apply_scroll_blit and never redrawn.
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
             },
-            DrawCommand::PushTransform { tx: 0.0, ty: -50.0 },
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -50.0],
+            },
             rect_cmd(0.0, 0.0, 100.0, 400.0),
-            DrawCommand::PopTransform,
+            DrawCommand::PopMatrix,
             rect_cmd(0.0, 170.0, 100.0, 30.0), // footer — after scroll, unchanged
             DrawCommand::PopClip,
         ];
@@ -399,9 +428,11 @@ mod tests {
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
             },
-            DrawCommand::PushTransform { tx: 0.0, ty: -60.0 }, // scrolled
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -60.0],
+            }, // scrolled
             rect_cmd(0.0, 0.0, 100.0, 400.0),
-            DrawCommand::PopTransform,
+            DrawCommand::PopMatrix,
             rect_cmd(0.0, 170.0, 100.0, 30.0), // footer unchanged
             DrawCommand::PopClip,
         ];
@@ -414,18 +445,22 @@ mod tests {
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
             },
-            DrawCommand::PushTransform { tx: 0.0, ty: -50.0 },
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -50.0],
+            },
             rect_cmd(0.0, 0.0, 100.0, 400.0),
-            DrawCommand::PopTransform,
+            DrawCommand::PopMatrix,
             DrawCommand::PopClip,
         ];
         let new = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
             },
-            DrawCommand::PushTransform { tx: 0.0, ty: -60.0 },
+            DrawCommand::PushMatrix {
+                matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -60.0],
+            },
             rect_cmd(0.0, 0.0, 100.0, 400.0),
-            DrawCommand::PopTransform,
+            DrawCommand::PopMatrix,
             DrawCommand::PopClip,
         ];
         let blit = detect_scroll_blit(&new, &old).unwrap();

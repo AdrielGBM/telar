@@ -27,6 +27,9 @@ pub(crate) struct RectInstance {
     pub shadow_offset: [f32; 2],
     pub shadow_blur: f32,
     pub shadow_spread: f32,
+    // transform (offset 240)
+    pub transform: [f32; 6],
+    pub _pad_t: [f32; 2],
 }
 
 pub(crate) struct RectPipeline {
@@ -96,11 +99,11 @@ impl RectPipeline {
 }
 
 #[inline]
-pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, tx: f32, ty: f32) -> RectInstance {
+pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> RectInstance {
     let encoded = style
         .fill
         .as_ref()
-        .map(|fill| encode_fill_style(fill, tx, ty))
+        .map(|fill| encode_fill_style(fill, matrix))
         .unwrap_or(super::EncodedFill {
             fill_type: 0,
             fill_color: [0.0; 4],
@@ -152,5 +155,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, tx: f32, ty: f32) -> R
         shadow_offset,
         shadow_blur,
         shadow_spread,
+        transform: matrix,
+        _pad_t: [0.0; 2],
     }
 }

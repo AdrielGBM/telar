@@ -43,11 +43,10 @@ pub enum DrawCommand {
         rect: Rect,
     },
     PopClip,
-    PushTransform {
-        tx: f32,
-        ty: f32,
+    PushMatrix {
+        matrix: [f32; 6],
     },
-    PopTransform,
+    PopMatrix,
     PushLayer {
         opacity: f32,
         backdrop_blur: f32,
@@ -106,11 +105,10 @@ impl PartialEq for DrawCommand {
             (DrawCommand::Path(a), DrawCommand::Path(b)) => a == b,
             (DrawCommand::PushClip { rect: r1 }, DrawCommand::PushClip { rect: r2 }) => r1 == r2,
             (DrawCommand::PopClip, DrawCommand::PopClip) => true,
-            (
-                DrawCommand::PushTransform { tx: tx1, ty: ty1 },
-                DrawCommand::PushTransform { tx: tx2, ty: ty2 },
-            ) => tx1 == tx2 && ty1 == ty2,
-            (DrawCommand::PopTransform, DrawCommand::PopTransform) => true,
+            (DrawCommand::PushMatrix { matrix: m1 }, DrawCommand::PushMatrix { matrix: m2 }) => {
+                m1 == m2
+            }
+            (DrawCommand::PopMatrix, DrawCommand::PopMatrix) => true,
             (
                 DrawCommand::PushLayer {
                     opacity: o1,

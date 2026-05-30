@@ -32,7 +32,7 @@ pub(crate) struct PathFillData {
 
 impl PathFillData {
     pub(crate) fn from_fill_style(fill: renderer_core::FillStyle) -> Self {
-        let enc = encode_fill_style(&fill, 0.0, 0.0);
+        let enc = encode_fill_style(&fill, renderer_core::IDENTITY_MATRIX);
         Self {
             fill_type: enc.fill_type,
             _pad: [0; 3],

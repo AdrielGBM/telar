@@ -17,7 +17,11 @@ pub(super) struct EncodedFill {
     pub grad_colors: [[f32; 4]; 4],
 }
 
-pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, tx: f32, ty: f32) -> EncodedFill {
+pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, matrix: [f32; 6]) -> EncodedFill {
+    let ap = |x: f32, y: f32| -> [f32; 2] {
+        let [a, b, c, d, e, f] = matrix;
+        [a * x + c * y + e, b * x + d * y + f]
+    };
     match fill {
         renderer_core::FillStyle::Solid(c) => EncodedFill {
             fill_type: 0,
@@ -39,8 +43,8 @@ pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, tx: f32, ty: f3
             EncodedFill {
                 fill_type: 1,
                 fill_color: [0.0; 4],
-                grad_p0: [g.start.x + tx, g.start.y + ty],
-                grad_p1: [g.end.x + tx, g.end.y + ty],
+                grad_p0: ap(g.start.x, g.start.y),
+                grad_p1: ap(g.end.x, g.end.y),
                 grad_radius: 0.0,
                 grad_stop_count: g.stop_count as u32,
                 grad_positions: positions,
@@ -57,7 +61,7 @@ pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, tx: f32, ty: f3
             EncodedFill {
                 fill_type: 2,
                 fill_color: [0.0; 4],
-                grad_p0: [g.center.x + tx, g.center.y + ty],
+                grad_p0: ap(g.center.x, g.center.y),
                 grad_p1: [0.0; 2],
                 grad_radius: g.radius,
                 grad_stop_count: g.stop_count as u32,

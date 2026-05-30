@@ -5,9 +5,8 @@ pub enum View {
     Empty,
     Primitive(DrawCommand),
     Group(Vec<View>),
-    Translate {
-        tx: f32,
-        ty: f32,
+    Transform {
+        matrix: [f32; 6],
         children: Vec<View>,
     },
     Clip {

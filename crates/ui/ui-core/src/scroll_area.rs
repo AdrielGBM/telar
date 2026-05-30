@@ -58,9 +58,8 @@ impl Component for ScrollArea {
 
         let scrollable = View::Clip {
             rect: vp,
-            children: vec![View::Translate {
-                tx: vp.x - scroll_x,
-                ty: vp.y - scroll_y,
+            children: vec![View::Transform {
+                matrix: [1.0, 0.0, 0.0, 1.0, vp.x - scroll_x, vp.y - scroll_y],
                 children: vec![self.content.view()],
             }],
         };

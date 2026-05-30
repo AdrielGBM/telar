@@ -82,9 +82,8 @@ impl Component for Button {
             height: r.height,
         };
 
-        View::Translate {
-            tx: r.x,
-            ty: r.y,
+        View::Transform {
+            matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
             children: vec![View::group([
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: local,
@@ -179,7 +178,7 @@ mod tests {
     fn button_view_renders_two_primitives() {
         let button = make_button_with_rect();
         let view = button.view();
-        if let View::Translate { children, .. } = view {
+        if let View::Transform { children, .. } = view {
             assert_eq!(children.len(), 1);
             if let View::Group(inner) = &children[0] {
                 assert_eq!(inner.len(), 2);
@@ -295,7 +294,7 @@ mod tests {
     }
 
     fn rect_fill_color(view: &View) -> Color {
-        if let View::Translate { children, .. } = view {
+        if let View::Transform { children, .. } = view {
             if let View::Group(inner) = &children[0] {
                 if let View::Primitive(DrawCommand::Rect(p)) = &inner[0] {
                     if let Some(fill) = p.style.fill {

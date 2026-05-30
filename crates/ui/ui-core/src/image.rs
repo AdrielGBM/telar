@@ -34,9 +34,8 @@ impl Image {
 impl Component for Image {
     fn view(&self) -> View {
         let r = self.leaf.rect.get();
-        View::Translate {
-            tx: r.x,
-            ty: r.y,
+        View::Transform {
+            matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
             children: vec![View::Primitive(DrawCommand::Image {
                 data: (self.data)(),
                 rect: Rect {
