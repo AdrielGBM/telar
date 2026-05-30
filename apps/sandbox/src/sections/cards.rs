@@ -1,8 +1,8 @@
 use crate::theme::{SandboxTheme, heading};
 use rsx::{
-    BorderRadius, Bounds, Color, Container, DrawCommand, DrawingArea, FillStyle, LayoutError,
-    LayoutItem, LayoutStyle, RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View,
-    WidgetCtx, use_theme,
+    BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
+    Paint, Rect, RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View, WidgetCtx,
+    use_theme,
 };
 use std::rc::Rc;
 
@@ -19,7 +19,7 @@ pub fn info_card(
         move |_w, _h| {
             View::group([
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Bounds {
+                    rect: Rect {
                         x: 0.0,
                         y: 0.0,
                         width: 368.0,
@@ -29,7 +29,7 @@ pub fn info_card(
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(title),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 16.0,
                         y: 14.0,
                         width: 340.0,
@@ -39,7 +39,7 @@ pub fn info_card(
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(body),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 16.0,
                         y: 44.0,
                         width: 340.0,
@@ -56,10 +56,10 @@ pub fn cards_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
     let c1 = Box::new(info_card(
         ctx,
         || RectStyle {
-            fill: Some(FillStyle::Solid(use_theme::<SandboxTheme>().dark)),
+            fill: Some(Paint::Solid(use_theme::<SandboxTheme>().dark)),
             stroke: None,
-            radius: BorderRadius::all(10.0),
             shadow: None,
+            radius: BorderRadius::all(10.0),
         },
         "Dark Card",
         || Color::WHITE,
@@ -68,10 +68,10 @@ pub fn cards_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
     let c2 = Box::new(info_card(
         ctx,
         || RectStyle {
-            fill: Some(FillStyle::Solid(Color::WHITE)),
+            fill: Some(Paint::Solid(Color::WHITE)),
             stroke: Some(Stroke::new(use_theme::<SandboxTheme>().card_border, 1.0)),
-            radius: BorderRadius::all(10.0),
             shadow: None,
+            radius: BorderRadius::all(10.0),
         },
         "Light Card",
         || use_theme::<SandboxTheme>().dark,

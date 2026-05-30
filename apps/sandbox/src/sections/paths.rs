@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use rsx::{
-    Bounds, Color, Component, DrawCommand, DrawingArea, FillRule, FillStyle, LayoutError,
-    LayoutStyle, Line, LineCap, LineJoin, LineStyle, Path, PathData, PathStyle, Point, Shadow,
-    Stroke, TextPayload, TextStyle, View, WidgetCtx, use_theme,
+    Color, Component, DrawCommand, DrawingArea, FillRule, LayoutError, LayoutStyle, Line, LineCap,
+    LineJoin, LineStyle, Paint, Path, PathData, PathStyle, Point, Rect, Shadow, Stroke,
+    TextPayload, TextStyle, View, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -32,7 +32,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Paths"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 12.0,
                 width: 200.0,
@@ -42,7 +42,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Polygon shapes"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 36.0,
                 width: 300.0,
@@ -65,17 +65,17 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(FillStyle::Solid(primary)),
+                    fill: Some(Paint::Solid(primary)),
                     stroke: None,
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("triangle"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 176.0,
                 width: 150.0,
@@ -109,17 +109,17 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                         move || d.clone()
                     },
                     move || PathStyle {
-                        fill: Some(FillStyle::Solid(danger)),
+                        fill: Some(Paint::Solid(danger)),
                         stroke: Some(Stroke::new(dark, 1.0)),
-                        fill_rule: FillRule::Winding,
                         shadow: None,
+                        fill_rule: FillRule::Winding,
                     },
                 )
                 .view(),
             );
             children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from("star (fill + stroke)"),
-                rect: Bounds {
+                rect: Rect {
                     x: 175.0,
                     y: 176.0,
                     width: 200.0,
@@ -149,17 +149,17 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(FillStyle::Solid(purple)),
+                    fill: Some(Paint::Solid(purple)),
                     stroke: None,
-                    fill_rule: FillRule::EvenOdd,
                     shadow: None,
+                    fill_rule: FillRule::EvenOdd,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("even-odd fill"),
-            rect: Bounds {
+            rect: Rect {
                 x: 350.0,
                 y: 176.0,
                 width: 200.0,
@@ -170,7 +170,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Bézier curves"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 212.0,
                 width: 300.0,
@@ -193,15 +193,15 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 move || PathStyle {
                     fill: None,
                     stroke: Some(Stroke::new(warning, 3.0).with_cap(LineCap::Round)),
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("quad_to arch"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 318.0,
                 width: 200.0,
@@ -224,15 +224,15 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 move || PathStyle {
                     fill: None,
                     stroke: Some(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("cubic_to S-curve"),
-            rect: Bounds {
+            rect: Rect {
                 x: 296.0,
                 y: 318.0,
                 width: 200.0,
@@ -263,17 +263,17 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(FillStyle::Solid(Color { a: 0.75, ..warning })),
+                    fill: Some(Paint::Solid(Color { a: 0.75, ..warning })),
                     stroke: Some(Stroke::new(warning, 1.5)),
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("closed cubic (petal)"),
-            rect: Bounds {
+            rect: Rect {
                 x: 446.0,
                 y: 318.0,
                 width: 200.0,
@@ -284,7 +284,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Stroke style"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 354.0,
                 width: 300.0,
@@ -309,15 +309,15 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 move || PathStyle {
                     fill: None,
                     stroke: Some(Stroke::new(primary, 8.0)),
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Butt / Miter (default)"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 448.0,
                 width: 230.0,
@@ -346,15 +346,15 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                             .with_cap(LineCap::Round)
                             .with_join(LineJoin::Round),
                     ),
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Round cap / Round join"),
-            rect: Bounds {
+            rect: Rect {
                 x: 300.0,
                 y: 448.0,
                 width: 240.0,
@@ -365,7 +365,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Path shadows"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 490.0,
                 width: 300.0,
@@ -417,7 +417,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("drop shadow"),
-            rect: Bounds {
+            rect: Rect {
                 x: 32.0,
                 y: 624.0,
                 width: 88.0,
@@ -462,7 +462,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("glow"),
-            rect: Bounds {
+            rect: Rect {
                 x: 248.0,
                 y: 624.0,
                 width: 48.0,
@@ -496,7 +496,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("hard offset"),
-            rect: Bounds {
+            rect: Rect {
                 x: 428.0,
                 y: 624.0,
                 width: 80.0,
@@ -535,7 +535,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("stroke shadow"),
-            rect: Bounds {
+            rect: Rect {
                 x: 600.0,
                 y: 624.0,
                 width: 100.0,

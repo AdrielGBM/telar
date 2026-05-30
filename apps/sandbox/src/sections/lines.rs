@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use rsx::{
-    Bounds, Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line, LineCap,
-    LineStyle, Point, TextPayload, TextStyle, View, WidgetCtx, use_theme,
+    Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line, LineCap, LineStyle,
+    Point, Rect, TextPayload, TextStyle, View, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -31,7 +31,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Lines"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 12.0,
                 width: 200.0,
@@ -42,7 +42,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Width"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 40.0,
                 width: 60.0,
@@ -62,7 +62,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         for &(w, label) in width_examples {
             children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from(label),
-                rect: Bounds {
+                rect: Rect {
                     x: 0.0,
                     y: cy - 8.0,
                     width: 56.0,
@@ -83,7 +83,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Color"),
-            rect: Bounds {
+            rect: Rect {
                 x: 396.0,
                 y: 40.0,
                 width: 60.0,
@@ -110,7 +110,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             );
             children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from(label),
-                rect: Bounds {
+                rect: Rect {
                     x: 664.0,
                     y: y - 8.0,
                     width: 80.0,
@@ -122,7 +122,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Separator & chart"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 176.0,
                 width: 300.0,
@@ -193,7 +193,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Diagonals"),
-            rect: Bounds {
+            rect: Rect {
                 x: 436.0,
                 y: 200.0,
                 width: 120.0,

@@ -17,13 +17,13 @@ pub(super) struct EncodedFill {
     pub grad_colors: [[f32; 4]; 4],
 }
 
-pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, matrix: [f32; 6]) -> EncodedFill {
+pub(super) fn encode_fill_style(fill: &renderer_core::Paint, matrix: [f32; 6]) -> EncodedFill {
     let ap = |x: f32, y: f32| -> [f32; 2] {
         let [a, b, c, d, e, f] = matrix;
         [a * x + c * y + e, b * x + d * y + f]
     };
     match fill {
-        renderer_core::FillStyle::Solid(c) => EncodedFill {
+        renderer_core::Paint::Solid(c) => EncodedFill {
             fill_type: 0,
             fill_color: c.to_array(),
             grad_p0: [0.0; 2],
@@ -33,7 +33,7 @@ pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, matrix: [f32; 6
             grad_positions: [0.0; 4],
             grad_colors: [[0.0; 4]; 4],
         },
-        renderer_core::FillStyle::LinearGradient(g) => {
+        renderer_core::Paint::LinearGradient(g) => {
             let mut positions = [0.0f32; 4];
             let mut colors = [[0.0f32; 4]; 4];
             for i in 0..g.stop_count as usize {
@@ -51,7 +51,7 @@ pub(super) fn encode_fill_style(fill: &renderer_core::FillStyle, matrix: [f32; 6
                 grad_colors: colors,
             }
         }
-        renderer_core::FillStyle::RadialGradient(g) => {
+        renderer_core::Paint::RadialGradient(g) => {
             let mut positions = [0.0f32; 4];
             let mut colors = [[0.0f32; 4]; 4];
             for i in 0..g.stop_count as usize {

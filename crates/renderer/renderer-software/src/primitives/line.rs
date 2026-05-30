@@ -1,7 +1,7 @@
 use geometry_core::{Point, Rect};
 use renderer_core::LineStyle;
 
-use crate::primitives::{to_skia_color, to_skia_line_cap};
+use crate::primitives::{fill_to_paint, to_skia_line_cap};
 
 pub(crate) fn draw_line(
     pixmap: &mut tiny_skia::Pixmap,
@@ -32,8 +32,7 @@ pub(crate) fn draw_line(
     pb.line_to(p2.x, p2.y);
     let Some(path) = pb.finish() else { return };
 
-    let mut paint = tiny_skia::Paint::default();
-    paint.set_color(to_skia_color(style.color));
+    let mut paint = fill_to_paint(style.paint);
     paint.anti_alias = true;
 
     let stroke = tiny_skia::Stroke {

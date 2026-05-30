@@ -286,7 +286,7 @@ impl TextShaper {
         out.clear();
 
         let font_size = style.font_size;
-        let color = style.color;
+        let color = style.paint.solid_color();
         let width = rect.width.ceil() as u32;
         let height = rect.height.ceil() as u32;
 
@@ -438,7 +438,7 @@ impl TextShaper {
         style: &TextStyle,
     ) -> (Arc<[u8]>, u32, u32) {
         let font_size = style.font_size;
-        let color = style.color;
+        let color = style.paint.solid_color();
         let width = rect.width.ceil() as u32;
         let height = rect.height.ceil() as u32;
 

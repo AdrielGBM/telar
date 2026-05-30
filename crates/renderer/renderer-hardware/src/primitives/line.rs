@@ -91,7 +91,7 @@ pub(crate) fn prepare_line(p1: Point, p2: Point, style: LineStyle) -> LineInstan
     LineInstance {
         p1: [p1.x, p1.y],
         p2: [p2.x, p2.y],
-        color: style.color.to_array(),
+        color: style.paint.solid_color().to_array(),
         width: style.width,
         cap,
         _pad: [0.0; 2],

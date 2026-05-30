@@ -6,7 +6,7 @@ use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, FillStyle, RectPayload, RectStyle, TextPayload, TextStyle,
+    BorderRadius, Color, DrawCommand, Paint, RectPayload, RectStyle, TextPayload, TextStyle,
 };
 
 const BADGE_W: f32 = 100.0;
@@ -91,7 +91,7 @@ impl DevPlugin for DevTools {
         cmds.push(DrawCommand::Rect(Box::new(RectPayload {
             rect: self.badge_rect,
             style: RectStyle::default()
-                .with_fill(FillStyle::Solid(BADGE_BG))
+                .with_fill(Paint::Solid(BADGE_BG))
                 .with_radius(BorderRadius::all(4.0)),
         })));
 
@@ -120,7 +120,7 @@ impl DevPlugin for DevTools {
             cmds.push(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Rect::new(panel_x, panel_y, PANEL_W, PANEL_H),
                 style: RectStyle::default()
-                    .with_fill(FillStyle::Solid(BG))
+                    .with_fill(Paint::Solid(BG))
                     .with_radius(BorderRadius::all(8.0)),
             })));
 
@@ -134,7 +134,7 @@ impl DevPlugin for DevTools {
             // Horizontal separator
             cmds.push(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Rect::new(panel_x + 12.0, panel_y + 36.0, PANEL_W - 24.0, 1.0),
-                style: RectStyle::default().with_fill(FillStyle::Solid(GRAY_DIM)),
+                style: RectStyle::default().with_fill(Paint::Solid(GRAY_DIM)),
             })));
 
             // FPS value

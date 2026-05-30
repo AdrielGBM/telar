@@ -6,9 +6,9 @@ use crate::sections::{
 };
 use crate::theme::SandboxTheme;
 use rsx::{
-    App, AvailableSpace, Bounds, Color, Component, Container, Event, EventResult, ImageData,
-    LayoutError, LayoutItem, LayoutStyle, NodeId, RwSignal, ScrollArea, View, WidgetCtx,
-    compute_layout, create_rw_signal, use_theme, with_context,
+    App, AvailableSpace, Color, Component, Container, Event, EventResult, ImageData, LayoutError,
+    LayoutItem, LayoutStyle, NodeId, Rect, RwSignal, ScrollArea, View, WidgetCtx, compute_layout,
+    create_rw_signal, use_theme, with_context,
 };
 use std::rc::Rc;
 
@@ -97,7 +97,7 @@ impl App for SandboxRoot {
             let wh = window_height.clone();
             let scroll_area = ScrollArea::new(
                 ctx,
-                move || Bounds::new(0.0, 0.0, ww.get(), wh.get()),
+                move || Rect::new(0.0, 0.0, ww.get(), wh.get()),
                 Box::new(content),
             );
 

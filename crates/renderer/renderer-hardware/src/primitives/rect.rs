@@ -116,7 +116,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         });
 
     let (stroke_color, stroke_width) = match style.stroke {
-        Some(s) => (s.color.to_array(), s.width),
+        Some(s) => (s.paint.solid_color().to_array(), s.width),
         None => ([0.0; 4], 0.0),
     };
 

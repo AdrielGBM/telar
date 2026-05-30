@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Bounds, Color, Component, DrawCommand, DrawingArea, FillStyle, LayoutError,
-    LayoutStyle, Line, LineStyle, Point, RectPayload, RectStyle, Shadow, Stroke, TextPayload,
-    TextStyle, View, WidgetCtx, use_theme,
+    BorderRadius, Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line,
+    LineStyle, Paint, Point, Rect, RectPayload, RectStyle, Shadow, Stroke, TextPayload, TextStyle,
+    View, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -31,7 +31,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Shadows"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 12.0,
                 width: 300.0,
@@ -42,7 +42,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Rect shadows — offset / blur / spread"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 40.0,
                 width: 400.0,
@@ -52,27 +52,27 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 60.0,
                 width: 152.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::Solid(Color::WHITE)),
+                fill: Some(Paint::Solid(Color::WHITE)),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: Some(Shadow::new(
                     0.0,
                     4.0,
                     12.0,
                     Color::rgba(0.0, 0.0, 0.0, 0.25),
                 )),
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("soft (0, 4, 12)"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 146.0,
                 width: 152.0,
@@ -82,22 +82,22 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 176.0,
                 y: 60.0,
                 width: 152.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::Solid(Color::WHITE)),
+                fill: Some(Paint::Solid(Color::WHITE)),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: Some(Shadow::new(4.0, 8.0, 4.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("offset (4, 8, 4)"),
-            rect: Bounds {
+            rect: Rect {
                 x: 176.0,
                 y: 146.0,
                 width: 152.0,
@@ -107,22 +107,22 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 352.0,
                 y: 60.0,
                 width: 152.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::Solid(Color::WHITE)),
+                fill: Some(Paint::Solid(Color::WHITE)),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: Some(Shadow::new(0.0, 6.0, 16.0, Color { a: 0.5, ..primary })),
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("colored primary"),
-            rect: Bounds {
+            rect: Rect {
                 x: 352.0,
                 y: 146.0,
                 width: 152.0,
@@ -132,24 +132,24 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 528.0,
                 y: 60.0,
                 width: 152.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::Solid(Color::WHITE)),
+                fill: Some(Paint::Solid(Color::WHITE)),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: Some(
                     Shadow::new(0.0, 0.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.3)).with_spread(4.0),
                 ),
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("spread +4"),
-            rect: Bounds {
+            rect: Rect {
                 x: 528.0,
                 y: 146.0,
                 width: 152.0,
@@ -160,7 +160,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Colored shadows on dark cards"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 176.0,
                 width: 400.0,
@@ -178,22 +178,22 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
         for (i, &(card_color, shadow_color, label)) in card_colors.iter().enumerate() {
             let x = i as f32 * 184.0;
             children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Bounds {
+                rect: Rect {
                     x,
                     y: 196.0,
                     width: 168.0,
                     height: 80.0,
                 },
                 style: RectStyle {
-                    fill: Some(FillStyle::Solid(card_color)),
+                    fill: Some(Paint::Solid(card_color)),
                     stroke: None,
-                    radius: BorderRadius::all(10.0),
                     shadow: Some(Shadow::new(0.0, 8.0, 20.0, shadow_color)),
+                    radius: BorderRadius::all(10.0),
                 },
             }))));
             children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from(label),
-                rect: Bounds {
+                rect: Rect {
                     x,
                     y: 200.0,
                     width: 168.0,
@@ -205,7 +205,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Text shadows"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 312.0,
                 width: 300.0,
@@ -215,23 +215,23 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 332.0,
                 width: 720.0,
                 height: 100.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::Solid(Color::WHITE)),
+                fill: Some(Paint::Solid(Color::WHITE)),
                 stroke: Some(Stroke::new(card_border, 1.0)),
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Drop shadow"),
-            rect: Bounds {
+            rect: Rect {
                 x: 16.0,
                 y: 348.0,
                 width: 180.0,
@@ -247,7 +247,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Color glow"),
-            rect: Bounds {
+            rect: Rect {
                 x: 216.0,
                 y: 348.0,
                 width: 200.0,
@@ -263,7 +263,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Hard offset"),
-            rect: Bounds {
+            rect: Rect {
                 x: 436.0,
                 y: 348.0,
                 width: 200.0,
@@ -279,7 +279,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Shadow inside layer"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 452.0,
                 width: 400.0,
@@ -292,22 +292,22 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
             opacity: 1.0,
             children: vec![
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Bounds {
+                    rect: Rect {
                         x: 0.0,
                         y: 472.0,
                         width: 220.0,
                         height: 100.0,
                     },
                     style: RectStyle {
-                        fill: Some(FillStyle::Solid(Color::WHITE)),
+                        fill: Some(Paint::Solid(Color::WHITE)),
                         stroke: None,
-                        radius: BorderRadius::all(10.0),
                         shadow: Some(Shadow::new(0.0, 6.0, 16.0, Color::rgba(0.0, 0.0, 0.0, 0.2))),
+                        radius: BorderRadius::all(10.0),
                     },
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("layer opacity 1.0"),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 16.0,
                         y: 500.0,
                         width: 200.0,
@@ -322,22 +322,22 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
             opacity: 0.7,
             children: vec![
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Bounds {
+                    rect: Rect {
                         x: 240.0,
                         y: 472.0,
                         width: 220.0,
                         height: 100.0,
                     },
                     style: RectStyle {
-                        fill: Some(FillStyle::Solid(Color::WHITE)),
+                        fill: Some(Paint::Solid(Color::WHITE)),
                         stroke: None,
-                        radius: BorderRadius::all(10.0),
                         shadow: Some(Shadow::new(0.0, 6.0, 16.0, Color { a: 0.5, ..primary })),
+                        radius: BorderRadius::all(10.0),
                     },
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("layer opacity 0.7"),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 256.0,
                         y: 500.0,
                         width: 200.0,
@@ -352,22 +352,22 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
             opacity: 0.4,
             children: vec![
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Bounds {
+                    rect: Rect {
                         x: 480.0,
                         y: 472.0,
                         width: 220.0,
                         height: 100.0,
                     },
                     style: RectStyle {
-                        fill: Some(FillStyle::Solid(Color::WHITE)),
+                        fill: Some(Paint::Solid(Color::WHITE)),
                         stroke: None,
-                        radius: BorderRadius::all(10.0),
                         shadow: Some(Shadow::new(4.0, 4.0, 8.0, Color { a: 0.6, ..purple })),
+                        radius: BorderRadius::all(10.0),
                     },
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("layer opacity 0.4"),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 496.0,
                         y: 500.0,
                         width: 200.0,

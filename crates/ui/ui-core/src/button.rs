@@ -146,7 +146,7 @@ mod tests {
 
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerButton, PointerSource};
-    use renderer_core::{Color, DrawCommand, FillStyle};
+    use renderer_core::{Color, DrawCommand, Paint};
 
     use super::*;
     use crate::context::{WidgetCtx, compute_layout, new_container};
@@ -298,7 +298,7 @@ mod tests {
             if let View::Group(inner) = &children[0] {
                 if let View::Primitive(DrawCommand::Rect(p)) = &inner[0] {
                     if let Some(fill) = p.style.fill {
-                        if let FillStyle::Solid(color) = fill {
+                        if let Paint::Solid(color) = fill {
                             return color;
                         }
                     }

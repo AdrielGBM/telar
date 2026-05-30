@@ -1,10 +1,9 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Bounds, Color, Component, DrawCommand, DrawingArea, FillRule, FillStyle,
-    LayoutError, LayoutStyle, Line, LineStyle, LinearGradient, Path, PathData, PathStyle, Point,
-    RadialGradient, RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View, WidgetCtx,
-    use_theme,
+    BorderRadius, Color, Component, DrawCommand, DrawingArea, FillRule, LayoutError, LayoutStyle,
+    Line, LineStyle, LinearGradient, Paint, Path, PathData, PathStyle, Point, RadialGradient, Rect,
+    RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -34,7 +33,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Gradients"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 12.0,
                 width: 200.0,
@@ -45,7 +44,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Linear — Rect"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 40.0,
                 width: 300.0,
@@ -55,26 +54,26 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 60.0,
                 width: 168.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                fill: Some(Paint::LinearGradient(LinearGradient::new(
                     Point::new(0.0, 100.0),
                     Point::new(168.0, 100.0),
                     &[(0.0, danger), (1.0, primary)],
                 ))),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("horizontal"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 146.0,
                 width: 168.0,
@@ -84,26 +83,26 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 184.0,
                 y: 60.0,
                 width: 168.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                fill: Some(Paint::LinearGradient(LinearGradient::new(
                     Point::new(268.0, 60.0),
                     Point::new(268.0, 140.0),
                     &[(0.0, purple), (1.0, success)],
                 ))),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("vertical"),
-            rect: Bounds {
+            rect: Rect {
                 x: 184.0,
                 y: 146.0,
                 width: 168.0,
@@ -113,26 +112,26 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 368.0,
                 y: 60.0,
                 width: 168.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                fill: Some(Paint::LinearGradient(LinearGradient::new(
                     Point::new(368.0, 60.0),
                     Point::new(536.0, 140.0),
                     &[(0.0, warning), (1.0, dark)],
                 ))),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("diagonal"),
-            rect: Bounds {
+            rect: Rect {
                 x: 368.0,
                 y: 146.0,
                 width: 168.0,
@@ -142,26 +141,26 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 552.0,
                 y: 60.0,
                 width: 168.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                fill: Some(Paint::LinearGradient(LinearGradient::new(
                     Point::new(552.0, 100.0),
                     Point::new(720.0, 100.0),
                     &[(0.0, dark), (0.5, cyan), (1.0, Color::WHITE)],
                 ))),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("3 stops"),
-            rect: Bounds {
+            rect: Rect {
                 x: 552.0,
                 y: 146.0,
                 width: 168.0,
@@ -172,7 +171,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Radial — Rect"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 180.0,
                 width: 300.0,
@@ -182,26 +181,26 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 200.0,
                 width: 168.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                fill: Some(Paint::RadialGradient(RadialGradient::new(
                     Point::new(84.0, 240.0),
                     70.0,
                     &[(0.0, primary), (1.0, Color { a: 0.0, ..primary })],
                 ))),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("center burst"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 286.0,
                 width: 168.0,
@@ -211,26 +210,26 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 184.0,
                 y: 200.0,
                 width: 168.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                fill: Some(Paint::RadialGradient(RadialGradient::new(
                     Point::new(268.0, 240.0),
                     40.0,
                     &[(0.0, danger), (1.0, warning)],
                 ))),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("tight radius"),
-            rect: Bounds {
+            rect: Rect {
                 x: 184.0,
                 y: 286.0,
                 width: 168.0,
@@ -240,26 +239,26 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 368.0,
                 y: 200.0,
                 width: 168.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                fill: Some(Paint::RadialGradient(RadialGradient::new(
                     Point::new(452.0, 240.0),
                     80.0,
                     &[(0.0, Color::WHITE), (0.45, purple), (1.0, dark)],
                 ))),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("3 stops"),
-            rect: Bounds {
+            rect: Rect {
                 x: 368.0,
                 y: 286.0,
                 width: 168.0,
@@ -269,26 +268,26 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 552.0,
                 y: 200.0,
                 width: 168.0,
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                fill: Some(Paint::RadialGradient(RadialGradient::new(
                     Point::new(552.0, 200.0),
                     180.0,
                     &[(0.0, success), (1.0, dark)],
                 ))),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("off-center"),
-            rect: Bounds {
+            rect: Rect {
                 x: 552.0,
                 y: 286.0,
                 width: 168.0,
@@ -299,7 +298,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Gradients — Path"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 318.0,
                 width: 300.0,
@@ -322,21 +321,21 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    fill: Some(Paint::LinearGradient(LinearGradient::new(
                         Point::new(75.0, 338.0),
                         Point::new(75.0, 468.0),
                         &[(0.0, danger), (1.0, warning)],
                     ))),
                     stroke: None,
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("triangle linear"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 476.0,
                 width: 180.0,
@@ -368,21 +367,21 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(FillStyle::RadialGradient(RadialGradient::new(
+                    fill: Some(Paint::RadialGradient(RadialGradient::new(
                         Point::new(268.0, 403.0),
                         65.0,
                         &[(0.0, Color::WHITE), (0.5, purple), (1.0, dark)],
                     ))),
                     stroke: Some(Stroke::new(dark, 1.0)),
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("star radial"),
-            rect: Bounds {
+            rect: Rect {
                 x: 200.0,
                 y: 476.0,
                 width: 180.0,
@@ -413,21 +412,21 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    fill: Some(Paint::LinearGradient(LinearGradient::new(
                         Point::new(372.0, 338.0),
                         Point::new(532.0, 468.0),
                         &[(0.0, success), (0.5, cyan), (1.0, primary)],
                     ))),
                     stroke: Some(Stroke::new(dark, 1.5)),
-                    fill_rule: FillRule::Winding,
                     shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("petal linear 3-stop"),
-            rect: Bounds {
+            rect: Rect {
                 x: 372.0,
                 y: 476.0,
                 width: 180.0,
@@ -456,21 +455,21 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                    fill: Some(Paint::LinearGradient(LinearGradient::new(
                         Point::new(576.0, 403.0),
                         Point::new(736.0, 403.0),
                         &[(0.0, danger), (1.0, purple)],
                     ))),
                     stroke: None,
-                    fill_rule: FillRule::EvenOdd,
                     shadow: None,
+                    fill_rule: FillRule::EvenOdd,
                 },
             )
             .view(),
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("even-odd + linear"),
-            rect: Bounds {
+            rect: Rect {
                 x: 576.0,
                 y: 476.0,
                 width: 180.0,

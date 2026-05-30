@@ -1,8 +1,8 @@
 use geometry_core::Rect;
 use renderer_core::{BorderRadius, LineCap, LineJoin, RectStyle, Shadow};
 
+use crate::primitives::fill_to_paint;
 use crate::primitives::image::ShadowCache;
-use crate::primitives::{fill_to_paint, to_skia_color};
 
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
     let x = rect.x;
@@ -71,7 +71,7 @@ fn draw_rect_shadow(
     shadow_cache: &mut ShadowCache,
     blur_scratch: &mut Vec<u8>,
 ) {
-    let sigma = shadow.blur_radius / 2.0;
+    let sigma = renderer_core::blur_sigma(shadow.blur_radius);
     let padding = (sigma * 3.0).ceil() as i32 + 1;
     let spread = shadow.spread;
 
@@ -190,8 +190,7 @@ pub(crate) fn draw_rect(
             bottom_left: (style.radius.bottom_left - half).max(0.0),
         };
         if let Some(path) = build_rect_path(inset, inset_radius) {
-            let mut paint = tiny_skia::Paint::default();
-            paint.set_color(to_skia_color(s.color));
+            let mut paint = fill_to_paint(s.paint);
             paint.anti_alias = true;
             let stroke = tiny_skia::Stroke {
                 width: s.width,

@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Bounds, Color, Component, DrawCommand, DrawingArea, FillStyle, LayoutError,
-    LayoutStyle, Line, LineStyle, PathData, PathStyle, Point, RectPayload, RectStyle, Stroke,
+    BorderRadius, Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line,
+    LineStyle, Paint, PathData, PathStyle, Point, Rect, RectPayload, RectStyle, Stroke,
     TextPayload, TextStyle, View, WidgetCtx, use_theme,
 };
 
@@ -28,17 +28,17 @@ fn scale_matrix(sx: f32, sy: f32, cx: f32, cy: f32) -> [f32; 6] {
 
 fn rect_view(x: f32, y: f32, w: f32, h: f32, fill: Color, radius: f32) -> View {
     View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-        rect: Bounds {
+        rect: Rect {
             x,
             y,
             width: w,
             height: h,
         },
         style: RectStyle {
-            fill: Some(FillStyle::Solid(fill)),
+            fill: Some(Paint::Solid(fill)),
             stroke: None,
-            radius: BorderRadius::all(radius),
             shadow: None,
+            radius: BorderRadius::all(radius),
         },
     })))
 }
@@ -46,7 +46,7 @@ fn rect_view(x: f32, y: f32, w: f32, h: f32, fill: Color, radius: f32) -> View {
 fn label_view(text: &'static str, x: f32, y: f32, w: f32, color: Color) -> View {
     View::Primitive(DrawCommand::Text(Box::new(TextPayload {
         text: Rc::from(text),
-        rect: Bounds {
+        rect: Rect {
             x,
             y,
             width: w,
@@ -95,7 +95,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Transforms (PushMatrix / PopMatrix)"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 12.0,
                 width: 500.0,
@@ -107,7 +107,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
         // ── Scale ──────────────────────────────────────────────────────────
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Uniform scale around center — 0.5× / 0.75× / 1× / 1.5× / 2×"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 40.0,
                 width: 600.0,
@@ -150,7 +150,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
         // ── Rotation ───────────────────────────────────────────────────────
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Rotation — arrow shape at 0° / 30° / 60° / 90° / 120° / 150°"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 178.0,
                 width: 600.0,
@@ -188,10 +188,10 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
                     rsx::PathPayload {
                         data: Rc::new(path),
                         style: PathStyle {
-                            fill: Some(FillStyle::Solid(color)),
+                            fill: Some(Paint::Solid(color)),
                             stroke: None,
-                            fill_rule: rsx::FillRule::Winding,
                             shadow: None,
+                            fill_rule: rsx::FillRule::Winding,
                         },
                     },
                 )))],
@@ -208,7 +208,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
         // ── Scale + Rotation combined ──────────────────────────────────────
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Combined — rotation then scale (transforms compose)"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 300.0,
                 width: 600.0,
@@ -248,7 +248,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
         // ── Stroke rect with rotation ──────────────────────────────────────
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Nested translate + rotation — grid of rotated stroked rects"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 430.0,
                 width: 600.0,
@@ -267,14 +267,14 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
                 children.push(View::Transform {
                     matrix,
                     children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                        rect: Bounds {
+                        rect: Rect {
                             x: cx - 22.0,
                             y: cy - 18.0,
                             width: 44.0,
                             height: 36.0,
                         },
                         style: RectStyle {
-                            fill: Some(FillStyle::Solid(Color::from_hsla(
+                            fill: Some(Paint::Solid(Color::from_hsla(
                                 angle % 360.0,
                                 0.65,
                                 0.55,
@@ -284,8 +284,8 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
                                 Color::from_hsl(angle % 360.0, 0.65, 0.55),
                                 2.0,
                             )),
-                            radius: BorderRadius::all(4.0),
                             shadow: None,
+                            radius: BorderRadius::all(4.0),
                         },
                     })))],
                 });

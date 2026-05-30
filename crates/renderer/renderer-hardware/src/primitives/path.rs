@@ -31,7 +31,7 @@ pub(crate) struct PathFillData {
 }
 
 impl PathFillData {
-    pub(crate) fn from_fill_style(fill: renderer_core::FillStyle) -> Self {
+    pub(crate) fn from_fill_style(fill: renderer_core::Paint) -> Self {
         let enc = encode_fill_style(&fill, renderer_core::IDENTITY_MATRIX);
         Self {
             fill_type: enc.fill_type,
@@ -48,7 +48,7 @@ impl PathFillData {
     }
 
     pub(crate) fn from_solid(color: renderer_core::Color) -> Self {
-        Self::from_fill_style(renderer_core::FillStyle::Solid(color))
+        Self::from_fill_style(renderer_core::Paint::Solid(color))
     }
 }
 
@@ -386,7 +386,7 @@ pub(crate) fn prepare_path(
 
         if let Some(geom) = cache.stroke.get_mut(&stroke_key) {
             let stroke_fill_index = out_fill_data.len() as u32;
-            out_fill_data.push(PathFillData::from_solid(s.color));
+            out_fill_data.push(PathFillData::from_solid(s.paint.solid_color()));
             if emit_cached_geom(
                 geom,
                 stroke_fill_index,

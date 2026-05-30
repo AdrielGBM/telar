@@ -41,15 +41,15 @@ impl Default for BorderRadius {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextStyle {
     pub font_size: f32,
-    pub color: Color,
+    pub paint: Paint,
     pub shadow: Option<Shadow>,
 }
 
 impl TextStyle {
-    pub fn new(font_size: f32, color: Color) -> Self {
+    pub fn new(font_size: f32, paint: impl Into<Paint>) -> Self {
         Self {
             font_size,
-            color,
+            paint: paint.into(),
             shadow: None,
         }
     }
@@ -133,15 +133,26 @@ impl RadialGradient {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum FillStyle {
+pub enum Paint {
     Solid(Color),
     LinearGradient(LinearGradient),
     RadialGradient(RadialGradient),
 }
 
-impl From<Color> for FillStyle {
+impl From<Color> for Paint {
     fn from(color: Color) -> Self {
         Self::Solid(color)
+    }
+}
+
+impl Paint {
+    pub fn solid_color(&self) -> Color {
+        match self {
+            Paint::Solid(c) => *c,
+            Paint::LinearGradient(g) if g.stop_count > 0 => g.stops[0].color,
+            Paint::RadialGradient(g) if g.stop_count > 0 => g.stops[0].color,
+            _ => Color::TRANSPARENT,
+        }
     }
 }
 
@@ -156,15 +167,15 @@ pub enum LineCap {
 /// Stroke style for `DrawCommand::Line` primitives (point-to-point segments)..Does not include `join` because a single segment has no corners. For paths and rects where corners need styling, use [`Stroke`] instead.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineStyle {
-    pub color: Color,
+    pub paint: Paint,
     pub width: f32,
     pub cap: LineCap,
 }
 
 impl LineStyle {
-    pub fn new(color: Color, width: f32) -> Self {
+    pub fn new(paint: impl Into<Paint>, width: f32) -> Self {
         Self {
-            color,
+            paint: paint.into(),
             width,
             cap: LineCap::Butt,
         }
@@ -194,16 +205,16 @@ pub enum FillRule {
 /// Stroke style for shapes that have corners: paths and rects. Includes `join` to control how corners are rendered. For simple line segments (no corners), use [`LineStyle`] instead.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Stroke {
-    pub color: Color,
+    pub paint: Paint,
     pub width: f32,
     pub cap: LineCap,
     pub join: LineJoin,
 }
 
 impl Stroke {
-    pub fn new(color: Color, width: f32) -> Self {
+    pub fn new(paint: impl Into<Paint>, width: f32) -> Self {
         Self {
-            color,
+            paint: paint.into(),
             width,
             cap: LineCap::default(),
             join: LineJoin::default(),
@@ -247,27 +258,16 @@ impl Shadow {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct RectStyle {
-    pub fill: Option<FillStyle>,
+    pub fill: Option<Paint>,
     pub stroke: Option<Stroke>,
-    pub radius: BorderRadius,
     pub shadow: Option<Shadow>,
-}
-
-impl Default for RectStyle {
-    fn default() -> Self {
-        Self {
-            fill: None,
-            stroke: None,
-            radius: BorderRadius::default(),
-            shadow: None,
-        }
-    }
+    pub radius: BorderRadius,
 }
 
 impl RectStyle {
-    pub fn with_fill(mut self, fill: impl Into<FillStyle>) -> Self {
+    pub fn with_fill(mut self, fill: impl Into<Paint>) -> Self {
         self.fill = Some(fill.into());
         self
     }
@@ -288,27 +288,16 @@ impl RectStyle {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct PathStyle {
-    pub fill: Option<FillStyle>,
+    pub fill: Option<Paint>,
     pub stroke: Option<Stroke>,
-    pub fill_rule: FillRule,
     pub shadow: Option<Shadow>,
-}
-
-impl Default for PathStyle {
-    fn default() -> Self {
-        Self {
-            fill: None,
-            stroke: None,
-            fill_rule: FillRule::default(),
-            shadow: None,
-        }
-    }
+    pub fill_rule: FillRule,
 }
 
 impl PathStyle {
-    pub fn with_fill(mut self, fill: impl Into<FillStyle>) -> Self {
+    pub fn with_fill(mut self, fill: impl Into<Paint>) -> Self {
         self.fill = Some(fill.into());
         self
     }
@@ -334,10 +323,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fill_style_from_color_creates_solid() {
+    fn paint_from_color_creates_solid() {
         let color = Color::GREEN;
-        let fill: FillStyle = color.into();
-        assert_eq!(fill, FillStyle::Solid(color));
+        let fill: Paint = color.into();
+        assert_eq!(fill, Paint::Solid(color));
     }
 
     #[test]
@@ -375,13 +364,13 @@ mod tests {
     #[test]
     fn text_style_new_stores_color() {
         let style = TextStyle::new(12.0, Color::WHITE);
-        assert_eq!(style.color, Color::WHITE);
+        assert_eq!(style.paint, Paint::Solid(Color::WHITE));
     }
 
     #[test]
     fn line_style_new_stores_color_and_width() {
         let style = LineStyle::new(Color::RED, 2.0);
-        assert_eq!(style.color, Color::RED);
+        assert_eq!(style.paint, Paint::Solid(Color::RED));
         assert_eq!(style.width, 2.0);
     }
 
@@ -475,7 +464,7 @@ mod tests {
     #[test]
     fn stroke_new_stores_color_and_width() {
         let s = Stroke::new(Color::RED, 3.0);
-        assert_eq!(s.color, Color::RED);
+        assert_eq!(s.paint, Paint::Solid(Color::RED));
         assert_eq!(s.width, 3.0);
     }
 

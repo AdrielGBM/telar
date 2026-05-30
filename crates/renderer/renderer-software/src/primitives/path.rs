@@ -7,7 +7,7 @@ use renderer_core::{FillRule, PathData, PathStyle, PathVerb};
 use rustc_hash::FxBuildHasher;
 
 use crate::primitives::image::PixmapByteScale;
-use crate::primitives::{fill_to_paint, to_skia_color, to_skia_line_cap, to_skia_line_join};
+use crate::primitives::{fill_to_paint, to_skia_line_cap, to_skia_line_join};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub(crate) struct PathShadowCacheKey {
@@ -61,7 +61,7 @@ pub(crate) fn draw_path(
     let b = path.bounds();
 
     if let Some(shadow) = style.shadow {
-        let sigma = shadow.blur_radius / 2.0;
+        let sigma = renderer_core::blur_sigma(shadow.blur_radius);
         let padding = (sigma * 3.0).ceil() as i32 + 2;
 
         let shadow_x = b.x() + shadow.offset_x - padding as f32;
@@ -155,8 +155,7 @@ pub(crate) fn draw_path(
     }
 
     if let Some(s) = style.stroke {
-        let mut paint = tiny_skia::Paint::default();
-        paint.set_color(to_skia_color(s.color));
+        let mut paint = fill_to_paint(s.paint);
         paint.anti_alias = true;
         let line_cap = to_skia_line_cap(s.cap);
         let line_join = to_skia_line_join(s.join);

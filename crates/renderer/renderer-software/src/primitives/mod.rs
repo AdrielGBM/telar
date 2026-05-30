@@ -32,14 +32,14 @@ pub(crate) fn to_skia_line_join(join: renderer_core::LineJoin) -> tiny_skia::Lin
 }
 
 #[inline]
-pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<'static> {
+pub(crate) fn fill_to_paint(fill: renderer_core::Paint) -> tiny_skia::Paint<'static> {
     let mut paint = tiny_skia::Paint::default();
     paint.anti_alias = true;
     match fill {
-        renderer_core::FillStyle::Solid(c) => {
+        renderer_core::Paint::Solid(c) => {
             paint.set_color(to_skia_color(c));
         }
-        renderer_core::FillStyle::LinearGradient(g) => {
+        renderer_core::Paint::LinearGradient(g) => {
             let n = g.stop_count as usize;
             let mut stops = Vec::with_capacity(n);
             for s in &g.stops[..n] {
@@ -58,7 +58,7 @@ pub(crate) fn fill_to_paint(fill: renderer_core::FillStyle) -> tiny_skia::Paint<
                 paint.shader = shader;
             }
         }
-        renderer_core::FillStyle::RadialGradient(g) => {
+        renderer_core::Paint::RadialGradient(g) => {
             let n = g.stop_count as usize;
             let mut stops = Vec::with_capacity(n);
             for s in &g.stops[..n] {
@@ -94,7 +94,7 @@ pub(crate) fn render_shadow_pixmap(
 ) -> Option<tiny_skia::Pixmap> {
     let mut pixmap = tiny_skia::Pixmap::new(width, height)?;
     draw_fn(&mut pixmap);
-    let sigma = blur_radius / 2.0;
+    let sigma = renderer_core::blur_sigma(blur_radius);
     gaussian_blur(pixmap.data_mut(), width, height, sigma, blur_scratch);
     Some(pixmap)
 }

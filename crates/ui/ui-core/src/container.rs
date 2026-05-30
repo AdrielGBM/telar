@@ -9,6 +9,7 @@ use crate::layout_item::LayoutItem;
 
 pub struct Container {
     node: NodeId,
+    rect: RwSignal<Rect>,
     children: Vec<(Box<dyn LayoutItem>, Option<RwSignal<Rect>>)>,
 }
 
@@ -20,6 +21,8 @@ impl Container {
     ) -> Result<Self, LayoutError> {
         let child_nodes = children.iter().map(|c| c.layout_node()).collect::<Vec<_>>();
         let node = new_container(ctx, style, &child_nodes)?;
+        // track_layout retrieves the signal already stored in the context's registry by new_container
+        let rect = track_layout(ctx, node).expect("new_container always registers a signal");
         let children = children
             .into_iter()
             .map(|c| {
@@ -27,7 +30,15 @@ impl Container {
                 (c, rect)
             })
             .collect();
-        Ok(Container { node, children })
+        Ok(Container {
+            node,
+            rect,
+            children,
+        })
+    }
+
+    pub fn rect(&self) -> RwSignal<Rect> {
+        self.rect.clone()
     }
 
     pub fn row(

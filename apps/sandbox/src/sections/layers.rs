@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Bounds, Color, Component, DrawCommand, DrawingArea, FillStyle, LayoutError,
-    LayoutStyle, Line, LineStyle, LinearGradient, Point, RectPayload, RectStyle, TextPayload,
-    TextStyle, View, WidgetCtx, use_theme,
+    BorderRadius, Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line,
+    LineStyle, LinearGradient, Paint, Point, Rect, RectPayload, RectStyle, TextPayload, TextStyle,
+    View, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -31,7 +31,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         );
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Layers (PushLayer / PopLayer)"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 12.0,
                 width: 400.0,
@@ -42,7 +42,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Opacity — same red rect at 1.0 / 0.6 / 0.3 / 0.1"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 40.0,
                 width: 500.0,
@@ -57,22 +57,22 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 opacity,
                 children: vec![
                     View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                        rect: Bounds {
+                        rect: Rect {
                             x,
                             y: 60.0,
                             width: 168.0,
                             height: 80.0,
                         },
                         style: RectStyle {
-                            fill: Some(FillStyle::Solid(danger)),
+                            fill: Some(Paint::Solid(danger)),
                             stroke: None,
-                            radius: BorderRadius::all(8.0),
                             shadow: None,
+                            radius: BorderRadius::all(8.0),
                         },
                     }))),
                     View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                         text: Rc::from(format!("{opacity:.1}")),
-                        rect: Bounds {
+                        rect: Rect {
                             x,
                             y: 64.0,
                             width: 168.0,
@@ -86,7 +86,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Overlapping colored layers at 0.7 opacity"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 164.0,
                 width: 500.0,
@@ -96,34 +96,34 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         }))));
 
         children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 184.0,
                 width: 368.0,
                 height: 180.0,
             },
             style: RectStyle {
-                fill: Some(FillStyle::Solid(dark)),
+                fill: Some(Paint::Solid(dark)),
                 stroke: None,
-                radius: BorderRadius::all(8.0),
                 shadow: None,
+                radius: BorderRadius::all(8.0),
             },
         }))));
 
         children.push(View::Layer {
             opacity: 0.7,
             children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Bounds {
+                rect: Rect {
                     x: 16.0,
                     y: 200.0,
                     width: 180.0,
                     height: 120.0,
                 },
                 style: RectStyle {
-                    fill: Some(FillStyle::Solid(primary)),
+                    fill: Some(Paint::Solid(primary)),
                     stroke: None,
-                    radius: BorderRadius::all(8.0),
                     shadow: None,
+                    radius: BorderRadius::all(8.0),
                 },
             })))],
         });
@@ -131,17 +131,17 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         children.push(View::Layer {
             opacity: 0.7,
             children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Bounds {
+                rect: Rect {
                     x: 96.0,
                     y: 240.0,
                     width: 180.0,
                     height: 120.0,
                 },
                 style: RectStyle {
-                    fill: Some(FillStyle::Solid(success)),
+                    fill: Some(Paint::Solid(success)),
                     stroke: None,
-                    radius: BorderRadius::all(8.0),
                     shadow: None,
+                    radius: BorderRadius::all(8.0),
                 },
             })))],
         });
@@ -149,24 +149,24 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         children.push(View::Layer {
             opacity: 0.7,
             children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Bounds {
+                rect: Rect {
                     x: 176.0,
                     y: 220.0,
                     width: 180.0,
                     height: 120.0,
                 },
                 style: RectStyle {
-                    fill: Some(FillStyle::Solid(danger)),
+                    fill: Some(Paint::Solid(danger)),
                     stroke: None,
-                    radius: BorderRadius::all(8.0),
                     shadow: None,
+                    radius: BorderRadius::all(8.0),
                 },
             })))],
         });
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Layer (0.8) wrapping a gradient rect + text"),
-            rect: Bounds {
+            rect: Rect {
                 x: 396.0,
                 y: 164.0,
                 width: 360.0,
@@ -179,26 +179,26 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             opacity: 0.8,
             children: vec![
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Bounds {
+                    rect: Rect {
                         x: 396.0,
                         y: 184.0,
                         width: 320.0,
                         height: 180.0,
                     },
                     style: RectStyle {
-                        fill: Some(FillStyle::LinearGradient(LinearGradient::new(
+                        fill: Some(Paint::LinearGradient(LinearGradient::new(
                             Point::new(396.0, 274.0),
                             Point::new(716.0, 274.0),
                             &[(0.0, primary), (0.5, purple), (1.0, danger)],
                         ))),
                         stroke: None,
-                        radius: BorderRadius::all(12.0),
                         shadow: None,
+                        radius: BorderRadius::all(12.0),
                     },
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("gradient + layer"),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 396.0,
                         y: 254.0,
                         width: 320.0,
@@ -211,7 +211,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
         children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Nested layers: outer 0.6, inner 0.5 → combined ~0.3"),
-            rect: Bounds {
+            rect: Rect {
                 x: 0.0,
                 y: 390.0,
                 width: 500.0,
@@ -224,39 +224,39 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             opacity: 0.6,
             children: vec![
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Bounds {
+                    rect: Rect {
                         x: 0.0,
                         y: 410.0,
                         width: 340.0,
                         height: 120.0,
                     },
                     style: RectStyle {
-                        fill: Some(FillStyle::Solid(primary)),
+                        fill: Some(Paint::Solid(primary)),
                         stroke: None,
-                        radius: BorderRadius::all(8.0),
                         shadow: None,
+                        radius: BorderRadius::all(8.0),
                     },
                 }))),
                 View::Layer {
                     opacity: 0.5,
                     children: vec![
                         View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                            rect: Bounds {
+                            rect: Rect {
                                 x: 36.0,
                                 y: 430.0,
                                 width: 260.0,
                                 height: 80.0,
                             },
                             style: RectStyle {
-                                fill: Some(FillStyle::Solid(danger)),
+                                fill: Some(Paint::Solid(danger)),
                                 stroke: None,
-                                radius: BorderRadius::all(6.0),
                                 shadow: None,
+                                radius: BorderRadius::all(6.0),
                             },
                         }))),
                         View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                             text: Rc::from("inner 0.5"),
-                            rect: Bounds {
+                            rect: Rect {
                                 x: 36.0,
                                 y: 434.0,
                                 width: 260.0,
@@ -268,7 +268,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 },
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("outer 0.6"),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 0.0,
                         y: 414.0,
                         width: 340.0,

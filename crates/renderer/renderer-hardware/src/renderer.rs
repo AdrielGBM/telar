@@ -3,7 +3,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, DrawCommand, ImageFilter, RenderBackend, RendererError};
+use renderer_core::{
+    Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers,
+};
 
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
@@ -605,50 +607,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 }
 
-fn fill_layer_alpha(style: &renderer_core::RectStyle) -> Option<f32> {
-    if style.radius.is_zero() || style.shadow.is_some() {
-        return None;
-    }
-    match style.fill {
-        Some(renderer_core::FillStyle::Solid(c)) if c.a > 0.0 && c.a < 1.0 => Some(c.a),
-        _ => None,
-    }
-}
-
-fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
-    if !commands
-        .iter()
-        .any(|cmd| matches!(cmd, DrawCommand::Rect(p) if fill_layer_alpha(&p.style).is_some()))
-    {
-        return None;
-    }
-    let mut result = Vec::with_capacity(commands.len() + 4);
-    for cmd in commands {
-        if let DrawCommand::Rect(p) = cmd {
-            if let Some(alpha) = fill_layer_alpha(&p.style) {
-                let mut opaque = (**p).clone();
-                if let Some(renderer_core::FillStyle::Solid(c)) = opaque.style.fill {
-                    opaque.style.fill =
-                        Some(renderer_core::FillStyle::Solid(renderer_core::Color {
-                            a: 1.0,
-                            ..c
-                        }));
-                }
-                result.push(DrawCommand::PushLayer {
-                    opacity: alpha,
-                    backdrop_blur: 0.0,
-                    clip_radius: 0.0,
-                });
-                result.push(DrawCommand::Rect(Box::new(opaque)));
-                result.push(DrawCommand::PopLayer);
-                continue;
-            }
-        }
-        result.push(cmd.clone());
-    }
-    Some(result)
-}
-
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
     for HardwareRenderer<W>
 {
@@ -899,9 +857,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if let Some(shadow) = p.style.shadow {
                         self.flush_text();
 
-                        let s = shadow.blur_radius / 2.0;
-                        let box_r = (s * 1.5).round().max(1.0);
-                        let sigma = (box_r * (box_r + 1.0)).sqrt();
+                        let sigma = renderer_core::blur_sigma(shadow.blur_radius);
                         let padding = (sigma * 3.0).ceil() as u32 + 2;
                         let shadow_rect = Rect::new(
                             translated.x + shadow.offset_x,
@@ -915,7 +871,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let tex_h = (shadow_rect.height.ceil() as u32 + 2 * padding).max(1);
 
                         let shadow_style = renderer_core::TextStyle {
-                            color: shadow.color,
+                            paint: renderer_core::Paint::Solid(shadow.color),
                             shadow: None,
                             ..p.style
                         };
@@ -1145,16 +1101,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let shadow_fill = p
                             .style
                             .fill
-                            .map(|_| renderer_core::FillStyle::Solid(shadow.color));
+                            .map(|_| renderer_core::Paint::Solid(shadow.color));
                         let shadow_stroke = p.style.stroke.map(|s| renderer_core::Stroke {
-                            color: shadow.color,
+                            paint: renderer_core::Paint::Solid(shadow.color),
                             ..s
                         });
                         let shadow_style = renderer_core::PathStyle {
                             fill: shadow_fill,
                             stroke: shadow_stroke,
-                            fill_rule: p.style.fill_rule,
                             shadow: None,
+                            fill_rule: p.style.fill_rule,
                         };
 
                         let sv_start = self.pending_shadow_path_vertices.len();
@@ -1186,9 +1142,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             let world_max_x = wmin_x.max(wmax_x) + shadow.offset_x;
                             let world_max_y = wmin_y.max(wmax_y) + shadow.offset_y;
 
-                            let s = shadow.blur_radius / 2.0;
-                            let box_r = (s * 1.5).round().max(1.0);
-                            let sigma = (box_r * (box_r + 1.0)).sqrt();
+                            let sigma = renderer_core::blur_sigma(shadow.blur_radius);
                             let padding = (sigma * 3.0).ceil() as u32 + 2;
 
                             let origin_x = world_min_x - padding as f32;

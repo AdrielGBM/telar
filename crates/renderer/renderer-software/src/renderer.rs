@@ -3,7 +3,7 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, DrawCommand, RenderBackend, RendererError};
+use renderer_core::{Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers};
 use renderer_text::{TextShaper, TextShaperConfig};
 use rustc_hash::FxBuildHasher;
 use softbuffer::{Context, Surface};
@@ -58,59 +58,6 @@ fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
             }
         }
     })
-}
-
-// Returns Some(fill_alpha) when the rect should be rendered via an intermediate layer to avoid
-// the AA-fringe artifact that occurs when geometric coverage × fill_alpha is less than fill_alpha
-// at the edges of a rounded rect, making the border bleed more than the interior.
-fn fill_layer_alpha(style: &renderer_core::RectStyle) -> Option<f32> {
-    // Skip when shadow is present: shadow.color.a controls shadow opacity independently and would
-    // be incorrectly scaled inside a fill-alpha layer.
-    if style.radius.is_zero() || style.shadow.is_some() {
-        return None;
-    }
-    match style.fill {
-        Some(renderer_core::FillStyle::Solid(c)) if c.a > 0.0 && c.a < 1.0 => Some(c.a),
-        _ => None,
-    }
-}
-
-// Expands each semi-transparent solid-fill rounded rect into PushLayer{opacity} + opaque Rect +
-// PopLayer. This separates geometric AA coverage from fill transparency so the renderer composites
-// them correctly: the layer captures the fully-opaque shape (correct AA edge), then composites the
-// whole layer at fill_alpha, avoiding the visible fringe on high-contrast backgrounds.
-fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
-    if !commands
-        .iter()
-        .any(|cmd| matches!(cmd, DrawCommand::Rect(p) if fill_layer_alpha(&p.style).is_some()))
-    {
-        return None;
-    }
-    let mut result = Vec::with_capacity(commands.len() + 4);
-    for cmd in commands {
-        if let DrawCommand::Rect(p) = cmd {
-            if let Some(alpha) = fill_layer_alpha(&p.style) {
-                let mut opaque = (**p).clone();
-                if let Some(renderer_core::FillStyle::Solid(c)) = opaque.style.fill {
-                    opaque.style.fill =
-                        Some(renderer_core::FillStyle::Solid(renderer_core::Color {
-                            a: 1.0,
-                            ..c
-                        }));
-                }
-                result.push(DrawCommand::PushLayer {
-                    opacity: alpha,
-                    backdrop_blur: 0.0,
-                    clip_radius: 0.0,
-                });
-                result.push(DrawCommand::Rect(Box::new(opaque)));
-                result.push(DrawCommand::PopLayer);
-                continue;
-            }
-        }
-        result.push(cmd.clone());
-    }
-    Some(result)
 }
 
 fn compute_layer_bboxes(

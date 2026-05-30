@@ -1,8 +1,7 @@
 use crate::theme::{SandboxTheme, heading};
 use rsx::{
-    BorderRadius, Bounds, Color, Container, DrawCommand, DrawingArea, FillStyle, LayoutError,
-    LayoutItem, LayoutStyle, RectPayload, RectStyle, TextPayload, TextStyle, View, WidgetCtx,
-    use_theme,
+    BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
+    Paint, Rect, RectPayload, RectStyle, TextPayload, TextStyle, View, WidgetCtx, use_theme,
 };
 use std::rc::Rc;
 
@@ -17,22 +16,22 @@ pub fn color_swatch(
         move |_w, _h| {
             View::group([
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Bounds {
+                    rect: Rect {
                         x: 0.0,
                         y: 0.0,
                         width: 100.0,
                         height: 44.0,
                     },
                     style: RectStyle {
-                        fill: Some(FillStyle::Solid(color_fn())),
+                        fill: Some(Paint::Solid(color_fn())),
                         stroke: None,
-                        radius: BorderRadius::all(6.0),
                         shadow: None,
+                        radius: BorderRadius::all(6.0),
                     },
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(label),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 0.0,
                         y: 4.0,
                         width: 100.0,

@@ -63,7 +63,7 @@ pub(crate) fn draw_text(
     if let Some(shadow) = style.shadow {
         let (arc, tex_w, tex_h) = shaper.rasterize_alpha(text, rect, style);
         if tex_w > 0 && tex_h > 0 {
-            let sigma = shadow.blur_radius / 2.0;
+            let sigma = renderer_core::blur_sigma(shadow.blur_radius);
             let padding = (sigma * 3.0).ceil() as i32 + 1;
 
             let shadow_x = rect.x + shadow.offset_x - padding as f32;
@@ -130,7 +130,7 @@ pub(crate) fn draw_text(
                 style.font_size,
                 tex_w,
                 tex_h,
-                style.color,
+                style.paint.solid_color(),
             );
             let paint = tiny_skia::PixmapPaint {
                 blend_mode: tiny_skia::BlendMode::SourceOver,
@@ -138,7 +138,7 @@ pub(crate) fn draw_text(
             };
             if text_pixmap_cache.get(&body_key).is_none() {
                 let mut body_pixels = arc.to_vec();
-                tint_premultiplied(&mut body_pixels, style.color);
+                tint_premultiplied(&mut body_pixels, style.paint.solid_color());
                 if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
                     if let Some(src) = tiny_skia::Pixmap::from_vec(body_pixels, size) {
                         text_pixmap_cache.put(body_key.clone(), src);
@@ -187,7 +187,7 @@ pub(crate) fn draw_text(
         style.font_size,
         tex_width,
         tex_height,
-        style.color,
+        style.paint.solid_color(),
     );
 
     let paint = tiny_skia::PixmapPaint {
@@ -217,7 +217,7 @@ pub(crate) fn draw_text(
         return;
     };
     let mut tinted = pixels_arc.to_vec();
-    tint_premultiplied(&mut tinted, style.color);
+    tint_premultiplied(&mut tinted, style.paint.solid_color());
     let Some(src) = tiny_skia::Pixmap::from_vec(tinted, size) else {
         return;
     };

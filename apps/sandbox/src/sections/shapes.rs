@@ -1,8 +1,8 @@
 use crate::theme::{SandboxTheme, heading};
 use rsx::{
-    BorderRadius, Bounds, Color, Container, DrawCommand, DrawingArea, FillStyle, LayoutError,
-    LayoutItem, LayoutStyle, RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View,
-    WidgetCtx, use_theme,
+    BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
+    Paint, Rect, RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View, WidgetCtx,
+    use_theme,
 };
 use std::rc::Rc;
 
@@ -18,7 +18,7 @@ pub fn shape_card(
         move |_w, _h| {
             View::group([
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Bounds {
+                    rect: Rect {
                         x: 0.0,
                         y: 0.0,
                         width: 168.0,
@@ -28,7 +28,7 @@ pub fn shape_card(
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(label),
-                    rect: Bounds {
+                    rect: Rect {
                         x: 0.0,
                         y: 4.0,
                         width: 168.0,
@@ -45,10 +45,10 @@ pub fn shapes_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
     let sc1 = Box::new(shape_card(
         ctx,
         || RectStyle {
-            fill: Some(FillStyle::Solid(use_theme::<SandboxTheme>().primary)),
+            fill: Some(Paint::Solid(use_theme::<SandboxTheme>().primary)),
             stroke: None,
-            radius: BorderRadius::all(8.0),
             shadow: None,
+            radius: BorderRadius::all(8.0),
         },
         "fill",
         || use_theme::<SandboxTheme>().on_color,
@@ -58,8 +58,8 @@ pub fn shapes_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         || RectStyle {
             fill: None,
             stroke: Some(Stroke::new(use_theme::<SandboxTheme>().danger, 2.0)),
-            radius: BorderRadius::all(8.0),
             shadow: None,
+            radius: BorderRadius::all(8.0),
         },
         "stroke",
         || use_theme::<SandboxTheme>().danger,
@@ -69,10 +69,10 @@ pub fn shapes_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         || {
             let t = use_theme::<SandboxTheme>();
             RectStyle {
-                fill: Some(FillStyle::Solid(t.success)),
+                fill: Some(Paint::Solid(t.success)),
                 stroke: Some(Stroke::new(t.dark, 1.5)),
-                radius: BorderRadius::zero(),
                 shadow: None,
+                radius: BorderRadius::zero(),
             }
         },
         "fill + stroke",
@@ -81,10 +81,10 @@ pub fn shapes_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
     let sc4 = Box::new(shape_card(
         ctx,
         || RectStyle {
-            fill: Some(FillStyle::Solid(use_theme::<SandboxTheme>().purple)),
+            fill: Some(Paint::Solid(use_theme::<SandboxTheme>().purple)),
             stroke: None,
-            radius: BorderRadius::all(40.0),
             shadow: None,
+            radius: BorderRadius::all(40.0),
         },
         "pill radius",
         || use_theme::<SandboxTheme>().on_color,
