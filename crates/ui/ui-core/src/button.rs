@@ -11,13 +11,29 @@ use ui_tree::{Component, EventResult, View};
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 
+pub struct ButtonStyle {
+    pub bg: Color,
+    pub bg_hover: Color,
+    pub fg: Color,
+    pub radius: f32,
+}
+
+impl Default for ButtonStyle {
+    fn default() -> Self {
+        Self {
+            bg: Color::rgba(0.24, 0.47, 0.98, 1.0),
+            bg_hover: Color::rgba(0.15, 0.39, 0.92, 1.0),
+            fg: Color::WHITE,
+            radius: 4.0,
+        }
+    }
+}
+
 pub struct Button {
     label: Rc<str>,
     leaf: LayoutLeaf,
-    bg: Color,
-    hover_bg: Color,
-    text_style: TextStyle,
     on_click: Option<Box<dyn Fn()>>,
+    style_fn: Box<dyn Fn() -> ButtonStyle>,
     // Cell<bool> here serves as state storage, not a redraw trigger. Redraws are driven by the event loop (on_event → request_redraw), not by signal writes. This is intentional: view() is called imperatively each frame, not reactively.
     hovered: Cell<bool>,
 }
@@ -27,14 +43,12 @@ impl Button {
         ctx: &mut crate::context::WidgetCtx,
         label: impl Into<String>,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, LayoutStyle::new().height(36.0))?;
+        let leaf = LayoutLeaf::register(ctx, LayoutStyle::new().height(36.0).min_width(80.0))?;
         Ok(Self {
             label: Rc::from(label.into()),
             leaf,
-            bg: Color::from_rgb_u8(59, 130, 246),
-            hover_bg: Color::from_rgb_u8(37, 99, 235),
-            text_style: TextStyle::new(14.0, Color::WHITE),
             on_click: None,
+            style_fn: Box::new(ButtonStyle::default),
             hovered: Cell::new(false),
         })
     }
@@ -44,21 +58,23 @@ impl Button {
         self
     }
 
-    pub fn with_bg(mut self, bg: Color, hover_bg: Color) -> Self {
-        self.bg = bg;
-        self.hover_bg = hover_bg;
+    pub fn style(mut self, f: impl Fn() -> ButtonStyle + 'static) -> Self {
+        self.style_fn = Box::new(f);
         self
     }
 }
 
 impl Component for Button {
     fn view(&self) -> View {
+        let style = (self.style_fn)();
         let r = self.leaf.rect.get();
-        let color = if self.hovered.get() {
-            self.hover_bg
+        let bg_color = if self.hovered.get() {
+            style.bg_hover
         } else {
-            self.bg
+            style.bg
         };
+        let text_color = style.fg;
+        let border_radius = style.radius;
         let local = geometry_core::Rect {
             x: 0.0,
             y: 0.0,
@@ -73,13 +89,13 @@ impl Component for Button {
                 View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: local,
                     style: RectStyle::default()
-                        .with_fill(color)
-                        .with_radius(BorderRadius::all(4.0)),
+                        .with_fill(bg_color)
+                        .with_radius(BorderRadius::all(border_radius)),
                 }))),
                 View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::clone(&self.label),
                     rect: local,
-                    style: self.text_style,
+                    style: TextStyle::new(14.0, text_color),
                 }))),
             ])],
         }

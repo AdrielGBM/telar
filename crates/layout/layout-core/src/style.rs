@@ -120,6 +120,16 @@ impl LayoutStyle {
         self
     }
 
+    pub fn min_width(mut self, px: f32) -> Self {
+        self.inner.min_size.width = Dimension::length(px);
+        self
+    }
+
+    pub fn min_height(mut self, px: f32) -> Self {
+        self.inner.min_size.height = Dimension::length(px);
+        self
+    }
+
     pub fn padding_all(mut self, px: f32) -> Self {
         let value = LengthPercentage::length(px);
         self.inner.padding = taffy::geometry::Rect {

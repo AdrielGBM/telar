@@ -14,7 +14,7 @@ mod scroll_area;
 mod text;
 mod translate_group;
 
-pub use button::Button;
+pub use button::{Button, ButtonStyle};
 pub use clip_group::ClipGroup;
 pub use container::Container;
 pub use context::{

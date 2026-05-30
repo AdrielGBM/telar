@@ -148,6 +148,9 @@ impl<D: DevPlugin> EventHandler<WinitWindow> for AppHandler<D> {
             tracing::error!("begin_frame failed: {e}");
             return;
         }
+        // Flush reactive effects so clear_color and draw commands are from the same reactive pass. Without this, a RedrawRequested that fires before about_to_wait (e.g. HW keepalive) reads clear_color from the new signal value while commands still reflect the previous view() call.
+        end_batch();
+        begin_batch();
         let clear = self.app.clear_color();
         let commands_ref = self.tree.as_ref().map(|t| t.commands());
         let base_slice: &[renderer_core::DrawCommand] =

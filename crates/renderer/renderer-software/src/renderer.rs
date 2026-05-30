@@ -390,6 +390,7 @@ where
             )
         };
 
+        let clear_color_changed = clear_color != self.prev_clear_color;
         self.prev_commands.clear();
         self.prev_commands.extend(commands.iter().cloned());
         self.prev_clear_color = clear_color;
@@ -467,6 +468,10 @@ where
             }
             _ => None,
         };
+
+        // If the clear color changed, the dirty-rect only covers command-changed regions, leaving
+        // background areas untouched with stale pixels from the previous frame. Force a full clear.
+        let skip_rect = if clear_color_changed { None } else { skip_rect };
 
         if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
             if let Some(sr) = skip_rect {

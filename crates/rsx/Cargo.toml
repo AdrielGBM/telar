@@ -28,6 +28,7 @@ rsx-devtools = { workspace = true, optional = true }
 reactive-core = { workspace = true }
 services-core = { workspace = true }
 layout-core = { workspace = true }
+theme-core = { workspace = true }
 ui-core = { workspace = true }
 tracing = { workspace = true }
 geometry-core = { workspace = true }
