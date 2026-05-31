@@ -10,6 +10,10 @@ pub struct RendererBudget {
     pub text_shaping_cache_bytes: usize,
     pub text_pixmap_cache_entries: usize,
     pub text_shadow_cache_bytes: usize,
+    pub extra_font_paths: Vec<std::path::PathBuf>,
+    pub font_data: Vec<Vec<u8>>,
+    pub system_fonts_dir: Option<std::path::PathBuf>,
+    pub sans_serif_family_candidates: Vec<String>,
 }
 
 impl Default for RendererBudget {
@@ -23,6 +27,10 @@ impl Default for RendererBudget {
             text_shaping_cache_bytes: TEXT_SHAPING_CACHE_BUDGET_BYTES,
             text_pixmap_cache_entries: TEXT_PIXMAP_CACHE_MAX_ENTRIES,
             text_shadow_cache_bytes: TEXT_SHADOW_CACHE_BUDGET_BYTES,
+            extra_font_paths: Vec::new(),
+            font_data: Vec::new(),
+            system_fonts_dir: None,
+            sans_serif_family_candidates: Vec::new(),
         }
     }
 }

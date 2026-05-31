@@ -1,5 +1,4 @@
 pub(crate) mod image;
-pub(crate) const MSAA_SAMPLES: u32 = 4;
 pub(crate) mod layer;
 pub(crate) mod line;
 pub(crate) mod path;

@@ -1,39 +1,59 @@
-use platform_core::{Event, EventHandler, Platform, Window, WindowConfig};
-use platform_winit::{WinitPlatform, WinitWindow};
+use platform_core::{Event, EventHandler, Platform, Window};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};
-use renderer_hardware::HardwareRenderer;
 use renderer_software::{RendererBudget, SoftwareRenderer};
+use services_core::AppPathsProvider;
 use ui_core::ComponentTree;
 
 use rsx_devtools::{DevAction, DevPlugin};
 
 use crate::app::App;
+use crate::app_config::AppConfig;
 use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
 use crate::window_signals::WindowSignals;
 
-struct AppHandler<D: DevPlugin> {
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+use crate::paths::DesktopPathsProvider;
+#[cfg(not(target_os = "android"))]
+use platform_winit::{WinitPlatform, WinitWindow};
+use renderer_hardware::HardwareRenderer;
+
+struct AppHandler<W, D: DevPlugin> {
     app: Box<dyn App>,
     tree: Option<ComponentTree>,
     renderer: Option<Box<dyn RenderBackend>>,
     renderer_is_hardware: bool,
     backend: RendererBackend,
     prefs: UserPrefs,
+    paths: Box<dyn AppPathsProvider>,
     pending_restart: bool,
     _flush_notify: Option<FlushNotifyHandle>,
     window_signals: Option<WindowSignals>,
     app_name: String,
     last_frame: std::time::Instant,
     dev: D,
+    font_paths: Vec<std::path::PathBuf>,
+    font_data: Vec<Vec<u8>>,
+    _window: std::marker::PhantomData<W>,
 }
 
 const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
 
-impl<D: DevPlugin> EventHandler<WinitWindow> for AppHandler<D> {
-    fn on_resume(&mut self, window: &WinitWindow) -> bool {
-        let cache_path = hardware_cache_path(&self.app_name);
-        match create_renderer(self.backend, window, cache_path.as_deref()) {
+impl<W, D> EventHandler<W> for AppHandler<W, D>
+where
+    W: Window + Clone + Send + Sync + 'static,
+    D: DevPlugin,
+{
+    fn on_resume(&mut self, window: &W) -> bool {
+        let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
+        match create_renderer(
+            self.backend,
+            window,
+            cache_path.as_deref(),
+            self.font_paths.clone(),
+            self.font_data.clone(),
+        ) {
             Ok((renderer, is_hw)) => {
                 self.renderer = Some(renderer);
                 self.renderer_is_hardware = is_hw;
@@ -55,7 +75,7 @@ impl<D: DevPlugin> EventHandler<WinitWindow> for AppHandler<D> {
         true
     }
 
-    fn on_event(&mut self, event: Event, window: &WinitWindow) {
+    fn on_event(&mut self, event: Event, window: &W) {
         if let Event::WindowResized { width, height } = &event {
             if let Some(ref signals) = self.window_signals {
                 signals.update(*width as f32, *height as f32);
@@ -72,7 +92,7 @@ impl<D: DevPlugin> EventHandler<WinitWindow> for AppHandler<D> {
                         _ => RendererBackend::Hardware,
                     };
                     self.prefs.backend = Some(next);
-                    if let Err(e) = self.prefs.save(&self.app_name) {
+                    if let Err(e) = self.prefs.save(&self.app_name, self.paths.as_ref()) {
                         tracing::warn!("Could not save preferences: {e}");
                     }
                     self.pending_restart = true;
@@ -91,12 +111,13 @@ impl<D: DevPlugin> EventHandler<WinitWindow> for AppHandler<D> {
         }
     }
 
-    fn on_redraw(&mut self, window: &WinitWindow) {
+    fn on_redraw(&mut self, window: &W) {
         let mut redraw_requested = false;
         {
             let mut ctx = crate::app_context::AppCtx {
                 app_name: &self.app_name,
                 prefs: &mut self.prefs,
+                paths: self.paths.as_ref(),
                 pending_restart: &mut self.pending_restart,
                 redraw_requested: &mut redraw_requested,
                 window_signals: self.window_signals.as_ref(),
@@ -113,8 +134,14 @@ impl<D: DevPlugin> EventHandler<WinitWindow> for AppHandler<D> {
                 .prefs
                 .backend
                 .unwrap_or_else(config::compile_time_backend);
-            let cache_path = hardware_cache_path(&self.app_name);
-            match create_renderer(self.backend, window, cache_path.as_deref()) {
+            let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
+            match create_renderer(
+                self.backend,
+                window,
+                cache_path.as_deref(),
+                self.font_paths.clone(),
+                self.font_data.clone(),
+            ) {
                 Ok((renderer, is_hw)) => {
                     self.renderer = Some(renderer);
                     self.renderer_is_hardware = is_hw;
@@ -143,7 +170,7 @@ impl<D: DevPlugin> EventHandler<WinitWindow> for AppHandler<D> {
             self.last_frame = std::time::Instant::now();
         }
 
-        let (w, h) = window.size();
+        let (w, h) = (window.width(), window.height());
         if let Err(e) = renderer.begin_frame(w, h) {
             tracing::error!("begin_frame failed: {e}");
             return;
@@ -187,43 +214,93 @@ impl<D: DevPlugin> EventHandler<WinitWindow> for AppHandler<D> {
     }
 }
 
-fn hardware_cache_path(app_name: &str) -> Option<std::path::PathBuf> {
-    dirs::cache_dir().map(|d| d.join("rsx").join(app_name))
+fn hardware_cache_path(app_name: &str, paths: &dyn AppPathsProvider) -> Option<std::path::PathBuf> {
+    paths.cache_dir().map(|d| d.join("rsx").join(app_name))
 }
 
-fn create_renderer(
+fn android_software_budget(
+    font_paths: Vec<std::path::PathBuf>,
+    font_data: Vec<Vec<u8>>,
+) -> RendererBudget {
+    RendererBudget {
+        extra_font_paths: font_paths,
+        font_data,
+        system_fonts_dir: Some(std::path::PathBuf::from("/system/fonts")),
+        sans_serif_family_candidates: vec![
+            "Roboto".to_string(),
+            "Droid Sans".to_string(),
+            "MiSans Latin".to_string(),
+            "Noto Sans".to_string(),
+        ],
+        ..RendererBudget::default()
+    }
+}
+
+fn create_renderer<W>(
     backend: RendererBackend,
-    window: &WinitWindow,
+    window: &W,
     cache_path: Option<&std::path::Path>,
-) -> Result<(Box<dyn RenderBackend>, bool), RendererError> {
+    font_paths: Vec<std::path::PathBuf>,
+    font_data: Vec<Vec<u8>>,
+) -> Result<(Box<dyn RenderBackend>, bool), RendererError>
+where
+    W: Window + Clone + Send + Sync + 'static,
+{
+    let vulkan_only = cfg!(target_os = "android");
     match backend {
-        RendererBackend::Auto => match HardwareRenderer::new(window.clone(), cache_path) {
-            Ok(renderer) => {
+        RendererBackend::Auto => {
+            match HardwareRenderer::new(window.clone(), cache_path, vulkan_only) {
+                Ok(renderer) => {
+                    tracing::info!("Using hardware renderer");
+                    let _ = (font_paths, font_data);
+                    Ok((Box::new(renderer), true))
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Hardware renderer unavailable ({e}), falling back to software renderer"
+                    );
+                    let budget = if vulkan_only {
+                        android_software_budget(font_paths, font_data)
+                    } else {
+                        RendererBudget {
+                            extra_font_paths: font_paths,
+                            font_data,
+                            ..RendererBudget::default()
+                        }
+                    };
+                    SoftwareRenderer::new(window.clone(), window.clone(), budget)
+                        .map(|r| (Box::new(r) as Box<dyn RenderBackend>, false))
+                }
+            }
+        }
+        RendererBackend::Hardware => {
+            let _ = (font_paths, font_data);
+            HardwareRenderer::new(window.clone(), cache_path, vulkan_only).map(|r| {
                 tracing::info!("Using hardware renderer");
-                Ok((Box::new(renderer), true))
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Hardware renderer unavailable ({e}), falling back to software renderer"
-                );
-                SoftwareRenderer::new(window.clone(), window.clone(), RendererBudget::default())
-                    .map(|r| (Box::new(r) as Box<dyn RenderBackend>, false))
-            }
-        },
-        RendererBackend::Hardware => HardwareRenderer::new(window.clone(), cache_path).map(|r| {
-            tracing::info!("Using hardware renderer");
-            (Box::new(r) as Box<dyn RenderBackend>, true)
-        }),
+                (Box::new(r) as Box<dyn RenderBackend>, true)
+            })
+        }
         RendererBackend::Software => {
             tracing::info!("Using software renderer");
-            SoftwareRenderer::new(window.clone(), window.clone(), RendererBudget::default())
+            let budget = if vulkan_only {
+                android_software_budget(font_paths, font_data)
+            } else {
+                RendererBudget {
+                    extra_font_paths: font_paths,
+                    font_data,
+                    ..RendererBudget::default()
+                }
+            };
+            SoftwareRenderer::new(window.clone(), window.clone(), budget)
                 .map(|r| (Box::new(r) as Box<dyn RenderBackend>, false))
         }
     }
 }
 
-fn run_with_plugin<A: App, D: DevPlugin>(config: WindowConfig, app: A, app_name: &str) {
-    let prefs = UserPrefs::load(app_name);
+#[cfg(not(target_os = "android"))]
+fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
+    let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
+    let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
 
     let platform = match WinitPlatform::try_new() {
@@ -233,9 +310,14 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: WindowConfig, app: A, app_name:
             return;
         }
     };
+    let AppConfig {
+        window,
+        font_paths,
+        font_data,
+    } = config;
     if let Err(e) = platform.run(
-        config,
-        AppHandler::<D> {
+        window,
+        AppHandler::<WinitWindow, D> {
             app: Box::new(app),
             tree: None,
             renderer: None,
@@ -248,15 +330,83 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: WindowConfig, app: A, app_name:
             app_name: app_name.to_owned(),
             last_frame: std::time::Instant::now(),
             dev: D::default(),
+            paths,
+            font_paths,
+            font_data,
+            _window: std::marker::PhantomData,
         },
     ) {
         tracing::error!("Event loop exited with error: {e}");
     }
 }
 
-pub fn run_app_with_name<A: App>(config: WindowConfig, app: A, app_name: &str) {
+#[cfg(not(target_os = "android"))]
+pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     #[cfg(feature = "dev")]
     run_with_plugin::<A, rsx_devtools::DevTools>(config, app, app_name);
     #[cfg(not(feature = "dev"))]
     run_with_plugin::<A, ()>(config, app, app_name);
+}
+
+#[cfg(all(feature = "runtime", target_os = "android"))]
+pub fn run_android_app_with_name<A: App>(
+    config: AppConfig,
+    app: A,
+    app_name: &str,
+    android_app: platform_android::AndroidApp,
+) {
+    #[cfg(feature = "dev")]
+    run_android_with_plugin::<A, rsx_devtools::DevTools>(config, app, app_name, android_app);
+    #[cfg(not(feature = "dev"))]
+    run_android_with_plugin::<A, ()>(config, app, app_name, android_app);
+}
+
+#[cfg(all(feature = "runtime", target_os = "android"))]
+fn run_android_with_plugin<A: App, D: DevPlugin>(
+    config: AppConfig,
+    app: A,
+    app_name: &str,
+    android_app: platform_android::AndroidApp,
+) {
+    use platform_android::{AndroidPathsProvider, AndroidPlatform, AndroidWindow};
+
+    let paths: Box<dyn AppPathsProvider> = Box::new(AndroidPathsProvider::new(android_app.clone()));
+    let prefs = UserPrefs::load(app_name, paths.as_ref());
+    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
+
+    let platform = match AndroidPlatform::new(android_app) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to create Android event loop: {e}");
+            return;
+        }
+    };
+    let AppConfig {
+        window,
+        font_paths,
+        font_data,
+    } = config;
+    if let Err(e) = platform.run(
+        window,
+        AppHandler::<AndroidWindow, D> {
+            app: Box::new(app),
+            tree: None,
+            renderer: None,
+            renderer_is_hardware: false,
+            backend,
+            prefs,
+            pending_restart: false,
+            _flush_notify: None,
+            window_signals: None,
+            app_name: app_name.to_owned(),
+            last_frame: std::time::Instant::now(),
+            dev: D::default(),
+            paths,
+            font_paths,
+            font_data,
+            _window: std::marker::PhantomData,
+        },
+    ) {
+        tracing::error!("Android event loop exited with error: {e}");
+    }
 }

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use renderer_core::{ImageData, ImageFilter};
 use wgpu::Device;
 
-use super::{InstancePipeline, MSAA_SAMPLES};
+use super::InstancePipeline;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -39,6 +39,7 @@ impl ImagePipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
         cache: Option<&wgpu::PipelineCache>,
+        msaa_samples: u32,
     ) -> Self {
         let instances = InstancePipeline::<ImageInstance>::new(device, "image", 16);
 
@@ -108,7 +109,7 @@ impl ImagePipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: MSAA_SAMPLES,
+                count: msaa_samples,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },

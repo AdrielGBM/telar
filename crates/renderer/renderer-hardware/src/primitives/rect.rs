@@ -2,7 +2,7 @@ use geometry_core::Rect;
 use renderer_core::RectStyle;
 use wgpu::Device;
 
-use super::{InstancePipeline, MSAA_SAMPLES, encode_fill_style};
+use super::{InstancePipeline, encode_fill_style};
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -43,6 +43,7 @@ impl RectPipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
         cache: Option<&wgpu::PipelineCache>,
+        msaa_samples: u32,
     ) -> Self {
         let instances = InstancePipeline::<RectInstance>::new(device, "rect", 256);
 
@@ -83,7 +84,7 @@ impl RectPipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: MSAA_SAMPLES,
+                count: msaa_samples,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },

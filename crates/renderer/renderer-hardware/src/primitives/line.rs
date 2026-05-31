@@ -2,7 +2,7 @@ use geometry_core::Point;
 use renderer_core::{LineCap, LineStyle};
 use wgpu::Device;
 
-use super::{InstancePipeline, MSAA_SAMPLES};
+use super::InstancePipeline;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -26,6 +26,7 @@ impl LinePipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
         cache: Option<&wgpu::PipelineCache>,
+        msaa_samples: u32,
     ) -> Self {
         let instances = InstancePipeline::<LineInstance>::new(device, "line", 256);
 
@@ -66,7 +67,7 @@ impl LinePipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: MSAA_SAMPLES,
+                count: msaa_samples,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },

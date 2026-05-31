@@ -3,7 +3,7 @@ use renderer_core::TextStyle;
 use renderer_text::{ATLAS_SIZE, GlyphAtlas};
 use wgpu::{Device, Queue};
 
-use super::{InstancePipeline, MSAA_SAMPLES};
+use super::InstancePipeline;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -27,6 +27,7 @@ impl TextPipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
         cache: Option<&wgpu::PipelineCache>,
+        msaa_samples: u32,
     ) -> Self {
         let instances = InstancePipeline::<TextInstance>::new(device, "text", 256);
 
@@ -135,7 +136,7 @@ impl TextPipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: MSAA_SAMPLES,
+                count: msaa_samples,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },

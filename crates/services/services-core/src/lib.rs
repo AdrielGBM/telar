@@ -1,6 +1,8 @@
+pub mod paths;
 mod registry;
 mod scope;
 
+pub use paths::AppPathsProvider;
 pub use registry::{ServiceError, ServiceRegistry};
 pub use scope::{Scope, inject, provide, try_inject, with_service};
 

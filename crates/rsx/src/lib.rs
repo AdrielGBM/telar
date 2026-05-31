@@ -1,6 +1,8 @@
 pub mod config;
 
 #[cfg(feature = "runtime")]
+pub mod app_config;
+#[cfg(feature = "runtime")]
 pub mod app_context;
 #[cfg(feature = "runtime")]
 pub mod prefs;
@@ -9,11 +11,15 @@ pub mod window_signals;
 
 #[cfg(feature = "runtime")]
 pub mod app;
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub mod paths;
 #[cfg(feature = "runtime")]
 pub mod runner;
 
 pub use config::{RendererBackend, compile_time_backend};
 
+#[cfg(feature = "runtime")]
+pub use app_config::AppConfig;
 #[cfg(feature = "runtime")]
 pub use app_context::AppCtx;
 #[cfg(feature = "runtime")]
@@ -28,6 +34,8 @@ pub use layout_core::{
     AlignItems, AutoTrack, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
     TemplateTrack,
 };
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub use paths::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use platform_core::{Event, ScrollDelta, WindowConfig};
 pub use reactive_core::{
@@ -43,6 +51,7 @@ pub use renderer_core::{
 };
 #[cfg(feature = "runtime")]
 pub use rsx_devtools::{DevAction, DevPlugin};
+pub use services_core::AppPathsProvider;
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 pub use theme_core::{set_theme, use_theme};
 pub use ui_core::{
@@ -51,13 +60,53 @@ pub use ui_core::{
     mark_dirty, new_container, register_leaf, track_layout, update_style, with_context,
 };
 
-#[cfg(feature = "runtime")]
+#[cfg(all(feature = "runtime", target_os = "android"))]
+pub use platform_android::AndroidApp;
+#[cfg(all(feature = "runtime", target_os = "android"))]
+pub use runner::run_android_app_with_name;
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::run_app_with_name;
 
-#[cfg(feature = "runtime")]
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
 #[macro_export]
 macro_rules! run_app {
     ($config:expr, $app:expr) => {
-        $crate::run_app_with_name($config, $app, env!("CARGO_PKG_NAME"))
+        $crate::run_app_with_name(
+            $crate::AppConfig::from($config),
+            $app,
+            env!("CARGO_PKG_NAME"),
+        )
+    };
+}
+
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+#[macro_export]
+macro_rules! app {
+    ($setup:block, $config:expr, $app:expr) => {
+        pub fn run() {
+            $setup
+            $crate::run_app_with_name(
+                $crate::AppConfig::from($config),
+                $app,
+                env!("CARGO_PKG_NAME"),
+            )
+        }
+    };
+}
+
+#[cfg(all(feature = "runtime", target_os = "android"))]
+#[macro_export]
+macro_rules! app {
+    ($setup:block, $config:expr, $app:expr) => {
+        #[unsafe(no_mangle)]
+        fn android_main(android_app: $crate::AndroidApp) {
+            $setup
+            $crate::run_android_app_with_name(
+                $crate::AppConfig::from($config),
+                $app,
+                env!("CARGO_PKG_NAME"),
+                android_app,
+            );
+        }
     };
 }

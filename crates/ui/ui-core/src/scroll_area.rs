@@ -120,7 +120,7 @@ impl Component for ScrollArea {
 
         let scroll_x = self.scroll_x.get() as f64;
         let scroll_y = self.scroll_y.get() as f64;
-        let adjusted = offset_pointer(event, -(vp.x as f64) + scroll_x, -(vp.y as f64) + scroll_y);
+        let adjusted = offset_pointer(event, vp.x as f64 - scroll_x, vp.y as f64 - scroll_y);
         let effective = adjusted.as_ref().unwrap_or(event);
         self.content.on_event(effective)
     }

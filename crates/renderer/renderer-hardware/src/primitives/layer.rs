@@ -1,12 +1,18 @@
-use super::MSAA_SAMPLES;
-
 pub(crate) struct LayerPipeline {
     target_format: wgpu::TextureFormat,
+    msaa_samples: u32,
 }
 
 impl LayerPipeline {
-    pub(crate) fn new(_device: &wgpu::Device, target_format: wgpu::TextureFormat) -> Self {
-        Self { target_format }
+    pub(crate) fn new(
+        _device: &wgpu::Device,
+        target_format: wgpu::TextureFormat,
+        msaa_samples: u32,
+    ) -> Self {
+        Self {
+            target_format,
+            msaa_samples,
+        }
     }
 
     pub(crate) fn create_layer_textures(
@@ -28,7 +34,7 @@ impl LayerPipeline {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: MSAA_SAMPLES,
+            sample_count: self.msaa_samples,
             dimension: wgpu::TextureDimension::D2,
             format: self.target_format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

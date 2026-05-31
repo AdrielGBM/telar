@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 clru = { workspace = true }
 cosmic-text = "0.19.0"
+fontdb = "0.23"
 etagere = "0.3.0"
 geometry-core = { workspace = true }
 renderer-core = { workspace = true }

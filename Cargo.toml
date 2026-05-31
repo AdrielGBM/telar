@@ -3,6 +3,31 @@ resolver = "3"
 members = [
     "crates/platform/platform-core",
     "crates/platform/platform-winit",
+    "crates/platform/platform-android",
+    "crates/renderer/renderer-core",
+    "crates/renderer/renderer-software",
+    "crates/renderer/renderer-hardware",
+    "crates/renderer/renderer-text",
+    "crates/reactive/reactive-core",
+    "crates/services/services-core",
+    "crates/geometry/geometry-core",
+    "crates/layout/layout-core",
+    "crates/layout/layout-reactive",
+    "crates/ui/theme-core",
+    "crates/ui/ui-core",
+    "crates/ui/ui-tree",
+    "crates/rsx",
+    "crates/tools/cargo-rsx",
+    "crates/tools/rsx-parser",
+    "crates/tools/rsx-transpiler",
+    "crates/tools/rsx-bundler",
+    "crates/tools/rsx-devtools",
+    "apps/sandbox",
+]
+
+default-members = [
+    "crates/platform/platform-core",
+    "crates/platform/platform-winit",
     "crates/renderer/renderer-core",
     "crates/renderer/renderer-software",
     "crates/renderer/renderer-hardware",
@@ -46,6 +71,7 @@ clru = "0.6.3"
 
 platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }
+platform-android = { path = "crates/platform/platform-android" }
 renderer-core = { path = "crates/renderer/renderer-core" }
 renderer-software = { path = "crates/renderer/renderer-software" }
 renderer-hardware = { path = "crates/renderer/renderer-hardware" }

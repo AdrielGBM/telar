@@ -13,7 +13,7 @@ use lyon::tessellation::{
 use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 use wgpu::Device;
 
-use super::{MSAA_SAMPLES, encode_fill_style};
+use super::encode_fill_style;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -431,6 +431,7 @@ impl PathPipeline {
         surface_format: wgpu::TextureFormat,
         viewport_bgl: &wgpu::BindGroupLayout,
         cache: Option<&wgpu::PipelineCache>,
+        msaa_samples: u32,
     ) -> Self {
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rsx-path-vb"),
@@ -500,7 +501,7 @@ impl PathPipeline {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: MSAA_SAMPLES,
+                count: msaa_samples,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },

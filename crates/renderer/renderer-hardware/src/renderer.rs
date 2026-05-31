@@ -18,7 +18,7 @@ use crate::primitives::line::{LineInstance, LinePipeline};
 use crate::primitives::path::{PathFillData, PathPipeline, PathTessCache, PathVertex};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
-use crate::primitives::{MSAA_SAMPLES, Viewport, create_viewport_bgl};
+use crate::primitives::{Viewport, create_viewport_bgl};
 
 fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
     // Prefer Rgba8Unorm first: wider MSAA support on Linux/Vulkan; some Mesa drivers error on Bgra8Unorm MSAA textures. Fall back to Bgra8Unorm, then driver default.
@@ -216,6 +216,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_path_indices: Vec<u32>,
     pending_path_fill_data: Vec<PathFillData>,
     path_tess_cache: PathTessCache,
+    msaa_samples: u32,
     msaa_texture: Option<wgpu::Texture>,
     batch_rect_start: Option<u32>,
     batch_text_start: Option<u32>,
@@ -255,18 +256,28 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
-    pub fn new(window: W, cache_path: Option<&std::path::Path>) -> Result<Self, RendererError> {
-        pollster::block_on(Self::new_async(window, cache_path))
+    pub fn new(
+        window: W,
+        cache_path: Option<&std::path::Path>,
+        vulkan_only: bool,
+    ) -> Result<Self, RendererError> {
+        pollster::block_on(Self::new_async(window, cache_path, vulkan_only))
     }
 
     pub async fn new_async(
         window: W,
         cache_path: Option<&std::path::Path>,
+        vulkan_only: bool,
     ) -> Result<Self, RendererError> {
         let window = std::sync::Arc::new(window);
 
+        let backends = if vulkan_only {
+            wgpu::Backends::VULKAN
+        } else {
+            wgpu::Backends::all()
+        };
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
+            backends,
             ..wgpu::InstanceDescriptor::new_without_display_handle()
         });
 
@@ -322,6 +333,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = preferred_format(&surface_caps);
+        let msaa_samples = if adapter
+            .get_texture_format_features(surface_format)
+            .flags
+            .contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4)
+        {
+            4
+        } else {
+            1
+        };
         let present_mode = surface_caps
             .present_modes
             .iter()
@@ -362,14 +382,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             composite_pipeline,
             retained_blit_pipeline,
         ) = std::thread::scope(|s| {
-            let t_rect = s.spawn(|| RectPipeline::new(&device, surface_format, &viewport_bgl, pc));
-            let t_text = s.spawn(|| TextPipeline::new(&device, surface_format, &viewport_bgl, pc));
-            let t_line = s.spawn(|| LinePipeline::new(&device, surface_format, &viewport_bgl, pc));
-            let t_path = s.spawn(|| PathPipeline::new(&device, surface_format, &viewport_bgl, pc));
-            let t_layer = s.spawn(|| LayerPipeline::new(&device, surface_format));
+            let t_rect = s.spawn(|| {
+                RectPipeline::new(&device, surface_format, &viewport_bgl, pc, msaa_samples)
+            });
+            let t_text = s.spawn(|| {
+                TextPipeline::new(&device, surface_format, &viewport_bgl, pc, msaa_samples)
+            });
+            let t_line = s.spawn(|| {
+                LinePipeline::new(&device, surface_format, &viewport_bgl, pc, msaa_samples)
+            });
+            let t_path = s.spawn(|| {
+                PathPipeline::new(&device, surface_format, &viewport_bgl, pc, msaa_samples)
+            });
+            let t_layer = s.spawn(|| LayerPipeline::new(&device, surface_format, msaa_samples));
             let t_blur = s.spawn(|| BlurPipeline::new(&device, surface_format, pc));
             let t_composite = s.spawn(|| {
-                CompositePipeline::new(&device, surface_format, MSAA_SAMPLES, &viewport_bgl, pc)
+                CompositePipeline::new(&device, surface_format, msaa_samples, &viewport_bgl, pc)
             });
             let t_retained =
                 s.spawn(|| CompositePipeline::new(&device, surface_format, 1, &viewport_bgl, pc));
@@ -390,6 +418,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             surface_format,
             &viewport_bgl,
             pipeline_cache.as_ref(),
+            msaa_samples,
         );
         let path_tess_cache = PathTessCache::new();
 
@@ -444,6 +473,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_path_indices: Vec::new(),
             pending_path_fill_data: Vec::new(),
             path_tess_cache,
+            msaa_samples,
             msaa_texture: None,
             batch_rect_start: None,
             batch_text_start: None,
@@ -491,7 +521,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: MSAA_SAMPLES,
+            sample_count: self.msaa_samples,
             dimension: wgpu::TextureDimension::D2,
             format: self.surface_format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

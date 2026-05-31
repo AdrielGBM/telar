@@ -213,6 +213,10 @@ pub struct TextShaperConfig {
     pub pixel_cache_budget_bytes: usize,
     pub alpha_cache_budget_bytes: usize,
     pub shaping_cache_budget_bytes: usize,
+    pub extra_font_paths: Vec<std::path::PathBuf>,
+    pub font_data: Vec<Vec<u8>>,
+    pub system_fonts_dir: Option<std::path::PathBuf>,
+    pub sans_serif_family_candidates: Vec<String>,
 }
 
 impl Default for TextShaperConfig {
@@ -221,6 +225,10 @@ impl Default for TextShaperConfig {
             pixel_cache_budget_bytes: 64 * 1024 * 1024,
             alpha_cache_budget_bytes: 64 * 1024 * 1024,
             shaping_cache_budget_bytes: 24 * 1024 * 1024,
+            extra_font_paths: Vec::new(),
+            font_data: Vec::new(),
+            system_fonts_dir: None,
+            sans_serif_family_candidates: Vec::new(),
         }
     }
 }
@@ -254,8 +262,44 @@ impl TextShaper {
     }
 
     pub fn with_config(config: TextShaperConfig) -> Self {
+        let font_system = {
+            let needs_custom_db = config.system_fonts_dir.is_some()
+                || !config.extra_font_paths.is_empty()
+                || !config.font_data.is_empty();
+
+            if needs_custom_db {
+                let mut db = fontdb::Database::new();
+                if let Some(ref dir) = config.system_fonts_dir {
+                    db.load_fonts_dir(dir);
+                    for name in &config.sans_serif_family_candidates {
+                        if db
+                            .query(&fontdb::Query {
+                                families: &[fontdb::Family::Name(name)],
+                                ..fontdb::Query::default()
+                            })
+                            .is_some()
+                        {
+                            db.set_sans_serif_family(name.as_str());
+                            break;
+                        }
+                    }
+                } else {
+                    db.load_system_fonts();
+                }
+                for path in &config.extra_font_paths {
+                    db.load_font_file(path).ok();
+                }
+                for data in config.font_data {
+                    db.load_font_data(data);
+                }
+                let locale = std::env::var("LANG").unwrap_or_else(|_| "en-US".to_string());
+                FontSystem::new_with_locale_and_db(locale, db)
+            } else {
+                FontSystem::new()
+            }
+        };
         Self {
-            font_system: FontSystem::new(),
+            font_system,
             swash_cache: SwashCache::new(),
             atlas: GlyphAtlas::new(),
             pixel_cache: CLruCache::with_config(
@@ -593,5 +637,51 @@ impl TextShaper {
 impl Default for TextShaper {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_shaper_new_does_not_panic() {
+        let _ = TextShaper::new();
+    }
+
+    #[test]
+    fn text_shaper_with_empty_config() {
+        let _ = TextShaper::with_config(TextShaperConfig::default());
+    }
+
+    #[test]
+    fn text_shaper_with_font_data_empty_vec() {
+        let config = TextShaperConfig {
+            font_data: vec![],
+            extra_font_paths: vec![],
+            system_fonts_dir: None,
+            sans_serif_family_candidates: Vec::new(),
+            ..TextShaperConfig::default()
+        };
+        let _ = TextShaper::with_config(config);
+    }
+
+    #[test]
+    #[ignore]
+    fn measure_text_returns_nonzero_for_text() {
+        let mut shaper = TextShaper::new();
+        let (w, h) = shaper.measure_text("hello", 500.0, 16.0);
+        assert!(
+            w > 0.0 && h > 0.0,
+            "Systems without installed fonts may not render text correctly"
+        );
+    }
+
+    #[test]
+    fn measure_text_empty_returns_zero() {
+        let mut shaper = TextShaper::new();
+        let (w, h) = shaper.measure_text("", 500.0, 16.0);
+        assert_eq!(w, 0.0);
+        assert_eq!(h, 0.0);
     }
 }

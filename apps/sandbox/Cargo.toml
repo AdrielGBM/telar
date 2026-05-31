@@ -3,6 +3,16 @@ name = "sandbox"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["cdylib", "lib"]
+
 [dependencies]
 rsx = { workspace = true, features = ["runtime"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[package.metadata.android]
+package = "com.example.rsx.sandbox"
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.sdk]
+target_sdk_version = 36

@@ -323,6 +323,10 @@ where
                 pixel_cache_budget_bytes: budget.text_pixel_cache_bytes,
                 alpha_cache_budget_bytes: budget.text_alpha_cache_bytes,
                 shaping_cache_budget_bytes: budget.text_shaping_cache_bytes,
+                extra_font_paths: budget.extra_font_paths,
+                font_data: budget.font_data,
+                system_fonts_dir: budget.system_fonts_dir,
+                sans_serif_family_candidates: budget.sans_serif_family_candidates,
             }),
             image_cache: crate::primitives::image::new_image_cache(budget.image_cache_bytes),
             blur_scratch: Vec::new(),
@@ -887,7 +891,7 @@ where
                     }
                 }
                 DrawCommand::PopLayer => {
-                    if let Some((mut layer, opacity, ox, oy)) = self.layer_stack.pop() {
+                    if let Some((layer, opacity, ox, oy)) = self.layer_stack.pop() {
                         let (parent_ox, parent_oy) = self
                             .layer_stack
                             .last()
