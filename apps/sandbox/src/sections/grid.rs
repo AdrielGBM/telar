@@ -2,7 +2,8 @@ use std::rc::Rc;
 
 use rsx::{
     BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Rect, RectPayload, RectStyle, TextPayload, TextStyle, Track, View, WidgetCtx, use_theme,
+    Paint, Rect, RectPayload, RectStyle, RenderNode, TextPayload, TextStyle, Track, WidgetCtx,
+    use_theme,
 };
 
 use crate::theme::{SandboxTheme, heading};
@@ -13,8 +14,8 @@ pub fn grid_cell(
     label: &'static str,
 ) -> Result<DrawingArea, LayoutError> {
     DrawingArea::new(ctx, LayoutStyle::new().height(72.0), move |w, h| {
-        View::group([
-            View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+        RenderNode::group([
+            RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Rect {
                     x: 0.0,
                     y: 0.0,
@@ -28,7 +29,7 @@ pub fn grid_cell(
                     radius: BorderRadius::all(6.0),
                 },
             }))),
-            View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+            RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::from(label),
                 rect: Rect {
                     x: 0.0,
@@ -69,8 +70,8 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         LayoutStyle::new().height(48.0).grid_column_span(3),
         |w, h| {
             let t = use_theme::<SandboxTheme>();
-            View::group([
-                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+            RenderNode::group([
+                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -84,7 +85,7 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
                         radius: BorderRadius::all(6.0),
                     },
                 }))),
-                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("header — span 3"),
                     rect: Rect {
                         x: 0.0,
@@ -137,7 +138,7 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         vec![gcg1, gcg2, gcg3, gcg4],
     )?;
     let side_label = DrawingArea::new(ctx, LayoutStyle::new().width(180.0), |w, h| {
-        View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+        RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
             text: Rc::from("Grid nested\ninside flex →"),
             rect: Rect {
                 x: 0.0,

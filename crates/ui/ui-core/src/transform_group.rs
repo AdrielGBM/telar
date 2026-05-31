@@ -1,5 +1,5 @@
 use platform_core::Event;
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::pointer::{dispatch_to_children, transform_pointer};
 
@@ -18,8 +18,8 @@ impl TransformGroup {
 }
 
 impl Component for TransformGroup {
-    fn view(&self) -> View {
-        View::Transform {
+    fn view(&self) -> RenderNode {
+        RenderNode::Transform {
             matrix: (self.matrix)(),
             children: self.children.iter().map(|c| c.view()).collect(),
         }

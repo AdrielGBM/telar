@@ -49,6 +49,11 @@ impl DrawState {
     }
 
     #[inline]
+    pub fn current_clip(&self) -> Option<Rect> {
+        self.clip_stack.last().copied()
+    }
+
+    #[inline]
     pub fn push_matrix(&mut self, matrix: [f32; 6]) {
         self.transform_stack.push(self.cum_matrix);
         self.cum_matrix = compose_matrix(self.cum_matrix, matrix);

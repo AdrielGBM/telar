@@ -46,7 +46,7 @@ pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, wit
 pub use theme_core::{set_theme, use_theme};
 pub use ui_core::{
     Button, ButtonStyle, ClipGroup, Component, ComponentTree, Container, DrawingArea, EventResult,
-    Image, LayoutItem, Line, NodeId, Path, ScrollArea, Text, TransformGroup, View, WidgetCtx,
+    Image, LayoutItem, Line, NodeId, Path, RenderNode, ScrollArea, Text, TransformGroup, WidgetCtx,
     compute_layout, mark_dirty, new_container, register_leaf, track_layout, update_style,
     with_context,
 };

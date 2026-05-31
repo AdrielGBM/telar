@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use rsx::{
     Color, Component, DrawCommand, DrawingArea, FillRule, LayoutError, LayoutStyle, Line, LineCap,
-    LineJoin, LineStyle, Paint, Path, PathData, PathStyle, Point, Rect, Shadow, Stroke,
-    TextPayload, TextStyle, View, WidgetCtx, use_theme,
+    LineJoin, LineStyle, Paint, Path, PathData, PathStyle, Point, Rect, RenderNode, Shadow, Stroke,
+    TextPayload, TextStyle, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -20,7 +20,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         let muted = t.muted;
         let card_border = t.card_border;
 
-        let mut children: Vec<View> = Vec::new();
+        let mut children: Vec<RenderNode> = Vec::new();
 
         children.push(
             Line::new(
@@ -30,26 +30,30 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Paths"),
-            rect: Rect {
-                x: 0.0,
-                y: 12.0,
-                width: 200.0,
-                height: 20.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Paths"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 12.0,
+                    width: 200.0,
+                    height: 20.0,
+                },
+                style: TextStyle::new(12.0, muted),
             },
-            style: TextStyle::new(12.0, muted),
-        }))));
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Polygon shapes"),
-            rect: Rect {
-                x: 0.0,
-                y: 36.0,
-                width: 300.0,
-                height: 16.0,
+        ))));
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Polygon shapes"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 36.0,
+                    width: 300.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let triangle_data = Rc::new(
             PathData::new()
@@ -73,16 +77,18 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("triangle"),
-            rect: Rect {
-                x: 0.0,
-                y: 176.0,
-                width: 150.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("triangle"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 176.0,
+                    width: 150.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         {
             let cx = 245.0f32;
@@ -117,16 +123,18 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                text: Rc::from("star (fill + stroke)"),
-                rect: Rect {
-                    x: 175.0,
-                    y: 176.0,
-                    width: 200.0,
-                    height: 16.0,
+            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+                TextPayload {
+                    text: Rc::from("star (fill + stroke)"),
+                    rect: Rect {
+                        x: 175.0,
+                        y: 176.0,
+                        width: 200.0,
+                        height: 16.0,
+                    },
+                    style: TextStyle::new(11.0, muted),
                 },
-                style: TextStyle::new(11.0, muted),
-            }))));
+            ))));
         }
 
         let evenodd_data = Rc::new(
@@ -157,27 +165,31 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("even-odd fill"),
-            rect: Rect {
-                x: 350.0,
-                y: 176.0,
-                width: 200.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("even-odd fill"),
+                rect: Rect {
+                    x: 350.0,
+                    y: 176.0,
+                    width: 200.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Bézier curves"),
-            rect: Rect {
-                x: 0.0,
-                y: 212.0,
-                width: 300.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Bézier curves"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 212.0,
+                    width: 300.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let quad_data = Rc::new(
             PathData::new()
@@ -199,16 +211,18 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("quad_to arch"),
-            rect: Rect {
-                x: 0.0,
-                y: 318.0,
-                width: 200.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("quad_to arch"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 318.0,
+                    width: 200.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let cubic_data = Rc::new(PathData::new().move_to(Point::new(310.0, 248.0)).cubic_to(
             Point::new(380.0, 248.0),
@@ -230,16 +244,18 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("cubic_to S-curve"),
-            rect: Rect {
-                x: 296.0,
-                y: 318.0,
-                width: 200.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("cubic_to S-curve"),
+                rect: Rect {
+                    x: 296.0,
+                    y: 318.0,
+                    width: 200.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let petal_data = Rc::new(
             PathData::new()
@@ -263,7 +279,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(Paint::Solid(Color { a: 0.75, ..warning })),
+                    fill: Some(Paint::Solid(warning.with_alpha(0.75))),
                     stroke: Some(Stroke::new(warning, 1.5)),
                     shadow: None,
                     fill_rule: FillRule::Winding,
@@ -271,27 +287,31 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("closed cubic (petal)"),
-            rect: Rect {
-                x: 446.0,
-                y: 318.0,
-                width: 200.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("closed cubic (petal)"),
+                rect: Rect {
+                    x: 446.0,
+                    y: 318.0,
+                    width: 200.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Stroke style"),
-            rect: Rect {
-                x: 0.0,
-                y: 354.0,
-                width: 300.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Stroke style"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 354.0,
+                    width: 300.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let butt_data = Rc::new(
             PathData::new()
@@ -315,16 +335,18 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Butt / Miter (default)"),
-            rect: Rect {
-                x: 0.0,
-                y: 448.0,
-                width: 230.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Butt / Miter (default)"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 448.0,
+                    width: 230.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let round_data = Rc::new(
             PathData::new()
@@ -352,27 +374,31 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Round cap / Round join"),
-            rect: Rect {
-                x: 300.0,
-                y: 448.0,
-                width: 240.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Round cap / Round join"),
+                rect: Rect {
+                    x: 300.0,
+                    y: 448.0,
+                    width: 240.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Path shadows"),
-            rect: Rect {
-                x: 0.0,
-                y: 490.0,
-                width: 300.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Path shadows"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 490.0,
+                    width: 300.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         const K: f32 = 0.5523;
         let (cx1, cy1, r1) = (76.0_f32, 570.0_f32, 44.0_f32);
@@ -415,16 +441,18 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("drop shadow"),
-            rect: Rect {
-                x: 32.0,
-                y: 624.0,
-                width: 88.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("drop shadow"),
+                rect: Rect {
+                    x: 32.0,
+                    y: 624.0,
+                    width: 88.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let star_shadow_data = Rc::new({
             let cx = 272.0_f32;
@@ -455,21 +483,23 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 move || {
                     PathStyle::default()
                         .with_fill(warning)
-                        .with_shadow(Shadow::new(0.0, 0.0, 10.0, Color { a: 0.7, ..warning }))
+                        .with_shadow(Shadow::new(0.0, 0.0, 10.0, warning.with_alpha(0.7)))
                 },
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("glow"),
-            rect: Rect {
-                x: 248.0,
-                y: 624.0,
-                width: 48.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("glow"),
+                rect: Rect {
+                    x: 248.0,
+                    y: 624.0,
+                    width: 48.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let (cx3, cy3, r3) = (468.0_f32, 570.0_f32, 44.0_f32);
         let diamond_data = Rc::new(
@@ -494,16 +524,18 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("hard offset"),
-            rect: Rect {
-                x: 428.0,
-                y: 624.0,
-                width: 80.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("hard offset"),
+                rect: Rect {
+                    x: 428.0,
+                    y: 624.0,
+                    width: 80.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let wave_data = Rc::new(
             PathData::new()
@@ -528,22 +560,24 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 move || {
                     PathStyle::default()
                         .with_stroke(Stroke::new(danger, 4.0).with_cap(LineCap::Round))
-                        .with_shadow(Shadow::new(2.0, 4.0, 6.0, Color { a: 0.5, ..danger }))
+                        .with_shadow(Shadow::new(2.0, 4.0, 6.0, danger.with_alpha(0.5)))
                 },
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("stroke shadow"),
-            rect: Rect {
-                x: 600.0,
-                y: 624.0,
-                width: 100.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("stroke shadow"),
+                rect: Rect {
+                    x: 600.0,
+                    y: 624.0,
+                    width: 100.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
-        View::group(children)
+        RenderNode::group(children)
     })
 }

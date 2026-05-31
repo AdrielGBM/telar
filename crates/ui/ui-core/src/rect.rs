@@ -2,7 +2,7 @@ use geometry_core::Rect as Bounds;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use renderer_core::{DrawCommand, RectPayload, RectStyle};
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
@@ -27,19 +27,21 @@ impl Rect {
 }
 
 impl Component for Rect {
-    fn view(&self) -> View {
+    fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         let style = (self.style)();
         self.leaf
-            .positioned_view(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Bounds {
-                    x: 0.0,
-                    y: 0.0,
-                    width: r.width,
-                    height: r.height,
+            .positioned_view(RenderNode::Primitive(DrawCommand::Rect(Box::new(
+                RectPayload {
+                    rect: Bounds {
+                        x: 0.0,
+                        y: 0.0,
+                        width: r.width,
+                        height: r.height,
+                    },
+                    style,
                 },
-                style,
-            }))))
+            ))))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

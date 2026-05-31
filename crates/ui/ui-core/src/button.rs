@@ -6,7 +6,7 @@ use platform_core::{Event, PointerButton};
 use renderer_core::{
     BorderRadius, Color, DrawCommand, RectPayload, RectStyle, TextPayload, TextStyle,
 };
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
@@ -65,7 +65,7 @@ impl Button {
 }
 
 impl Component for Button {
-    fn view(&self) -> View {
+    fn view(&self) -> RenderNode {
         let style = (self.style_fn)();
         let r = self.leaf.rect.get();
         let bg_color = if self.hovered.get() {
@@ -82,14 +82,14 @@ impl Component for Button {
             height: r.height,
         };
 
-        self.leaf.positioned_view(View::group([
-            View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+        self.leaf.positioned_view(RenderNode::group([
+            RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: local,
                 style: RectStyle::default()
                     .with_fill(bg_color)
                     .with_radius(BorderRadius::all(border_radius)),
             }))),
-            View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+            RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::clone(&self.label),
                 rect: local,
                 style: TextStyle::new(14.0, text_color),
@@ -175,12 +175,18 @@ mod tests {
     fn button_view_renders_two_primitives() {
         let button = make_button_with_rect();
         let view = button.view();
-        if let View::Transform { children, .. } = view {
+        if let RenderNode::Transform { children, .. } = view {
             assert_eq!(children.len(), 1);
-            if let View::Group(inner) = &children[0] {
+            if let RenderNode::Group(inner) = &children[0] {
                 assert_eq!(inner.len(), 2);
-                assert!(matches!(&inner[0], View::Primitive(DrawCommand::Rect(_))));
-                assert!(matches!(&inner[1], View::Primitive(DrawCommand::Text(_))));
+                assert!(matches!(
+                    &inner[0],
+                    RenderNode::Primitive(DrawCommand::Rect(_))
+                ));
+                assert!(matches!(
+                    &inner[1],
+                    RenderNode::Primitive(DrawCommand::Text(_))
+                ));
             } else {
                 panic!("expected Group inside Translate");
             }
@@ -290,10 +296,10 @@ mod tests {
         assert!(matches!(result, EventResult::Ignored));
     }
 
-    fn rect_fill_color(view: &View) -> Color {
-        if let View::Transform { children, .. } = view {
-            if let View::Group(inner) = &children[0] {
-                if let View::Primitive(DrawCommand::Rect(p)) = &inner[0] {
+    fn rect_fill_color(view: &RenderNode) -> Color {
+        if let RenderNode::Transform { children, .. } = view {
+            if let RenderNode::Group(inner) = &children[0] {
+                if let RenderNode::Primitive(DrawCommand::Rect(p)) = &inner[0] {
                     if let Some(fill) = p.style.fill {
                         if let Paint::Solid(color) = fill {
                             return color;

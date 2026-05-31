@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use rsx::{
     Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line, LineCap, LineStyle,
-    Point, Rect, TextPayload, TextStyle, View, WidgetCtx, use_theme,
+    Point, Rect, RenderNode, TextPayload, TextStyle, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -19,7 +19,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         let muted = t.muted;
         let card_border = t.card_border;
 
-        let mut children: Vec<View> = Vec::new();
+        let mut children: Vec<RenderNode> = Vec::new();
 
         children.push(
             Line::new(
@@ -29,27 +29,31 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Lines"),
-            rect: Rect {
-                x: 0.0,
-                y: 12.0,
-                width: 200.0,
-                height: 20.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Lines"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 12.0,
+                    width: 200.0,
+                    height: 20.0,
+                },
+                style: TextStyle::new(12.0, muted),
             },
-            style: TextStyle::new(12.0, muted),
-        }))));
+        ))));
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Width"),
-            rect: Rect {
-                x: 0.0,
-                y: 40.0,
-                width: 60.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Width"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 40.0,
+                    width: 60.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         let width_examples: &[(f32, &str)] = &[
             (1.0, "1 px"),
@@ -60,16 +64,18 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         ];
         let mut cy = 62.0f32;
         for &(w, label) in width_examples {
-            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                text: Rc::from(label),
-                rect: Rect {
-                    x: 0.0,
-                    y: cy - 8.0,
-                    width: 56.0,
-                    height: 16.0,
+            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+                TextPayload {
+                    text: Rc::from(label),
+                    rect: Rect {
+                        x: 0.0,
+                        y: cy - 8.0,
+                        width: 56.0,
+                        height: 16.0,
+                    },
+                    style: TextStyle::new(11.0, muted),
                 },
-                style: TextStyle::new(11.0, muted),
-            }))));
+            ))));
             children.push(
                 Line::new(
                     move || Point::new(64.0, cy),
@@ -81,16 +87,18 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             cy += w.max(2.0) + 18.0;
         }
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Color"),
-            rect: Rect {
-                x: 396.0,
-                y: 40.0,
-                width: 60.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Color"),
+                rect: Rect {
+                    x: 396.0,
+                    y: 40.0,
+                    width: 60.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
         let color_examples: &[(Color, &str)] = &[
             (primary, "primary"),
             (success, "success"),
@@ -108,28 +116,32 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 )
                 .view(),
             );
-            children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                text: Rc::from(label),
-                rect: Rect {
-                    x: 664.0,
-                    y: y - 8.0,
-                    width: 80.0,
-                    height: 16.0,
+            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+                TextPayload {
+                    text: Rc::from(label),
+                    rect: Rect {
+                        x: 664.0,
+                        y: y - 8.0,
+                        width: 80.0,
+                        height: 16.0,
+                    },
+                    style: TextStyle::new(11.0, color),
                 },
-                style: TextStyle::new(11.0, color),
-            }))));
+            ))));
         }
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Separator & chart"),
-            rect: Rect {
-                x: 0.0,
-                y: 176.0,
-                width: 300.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Separator & chart"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 176.0,
+                    width: 300.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
         children.push(
             Line::new(
                 || Point::new(0.0, 196.0),
@@ -191,16 +203,18 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             );
         }
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Diagonals"),
-            rect: Rect {
-                x: 436.0,
-                y: 200.0,
-                width: 120.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Diagonals"),
+                rect: Rect {
+                    x: 436.0,
+                    y: 200.0,
+                    width: 120.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
         let fan_cx = 566.0f32;
         let fan_cy = 266.0f32;
         let fan_tips: &[(f32, f32, Color)] = &[
@@ -222,6 +236,6 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             );
         }
 
-        View::group(children)
+        RenderNode::group(children)
     })
 }

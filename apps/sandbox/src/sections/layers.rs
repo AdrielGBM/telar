@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use rsx::{
     BorderRadius, Color, Component, DrawCommand, DrawingArea, Gradient, LayoutError, LayoutStyle,
-    Line, LineStyle, Paint, Point, Rect, RectPayload, RectStyle, TextPayload, TextStyle, View,
-    WidgetCtx, use_theme,
+    Line, LineStyle, Paint, Point, Rect, RectPayload, RectStyle, RenderNode, TextPayload,
+    TextStyle, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -19,7 +19,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
         let muted = t.muted;
         let card_border = t.card_border;
 
-        let mut children: Vec<View> = Vec::new();
+        let mut children: Vec<RenderNode> = Vec::new();
 
         children.push(
             Line::new(
@@ -29,34 +29,38 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             )
             .view(),
         );
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Layers (PushLayer / PopLayer)"),
-            rect: Rect {
-                x: 0.0,
-                y: 12.0,
-                width: 400.0,
-                height: 20.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Layers (PushLayer / PopLayer)"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 12.0,
+                    width: 400.0,
+                    height: 20.0,
+                },
+                style: TextStyle::new(12.0, muted),
             },
-            style: TextStyle::new(12.0, muted),
-        }))));
+        ))));
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Opacity — same red rect at 1.0 / 0.6 / 0.3 / 0.1"),
-            rect: Rect {
-                x: 0.0,
-                y: 40.0,
-                width: 500.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Opacity — same red rect at 1.0 / 0.6 / 0.3 / 0.1"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 40.0,
+                    width: 500.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
         for (i, &opacity) in [1.0f32, 0.6, 0.3, 0.1].iter().enumerate() {
             let x = i as f32 * 184.0;
-            children.push(View::Layer {
+            children.push(RenderNode::Layer {
                 opacity,
                 children: vec![
-                    View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                    RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Rect {
                             x,
                             y: 60.0,
@@ -70,7 +74,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                             radius: BorderRadius::all(8.0),
                         },
                     }))),
-                    View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                    RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                         text: Rc::from(format!("{opacity:.1}")),
                         rect: Rect {
                             x,
@@ -84,101 +88,113 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             });
         }
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Overlapping colored layers at 0.7 opacity"),
-            rect: Rect {
-                x: 0.0,
-                y: 164.0,
-                width: 500.0,
-                height: 16.0,
-            },
-            style: TextStyle::new(11.0, muted),
-        }))));
-
-        children.push(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-            rect: Rect {
-                x: 0.0,
-                y: 184.0,
-                width: 368.0,
-                height: 180.0,
-            },
-            style: RectStyle {
-                fill: Some(Paint::Solid(dark)),
-                stroke: None,
-                shadow: None,
-                radius: BorderRadius::all(8.0),
-            },
-        }))));
-
-        children.push(View::Layer {
-            opacity: 0.7,
-            children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Overlapping colored layers at 0.7 opacity"),
                 rect: Rect {
-                    x: 16.0,
-                    y: 200.0,
-                    width: 180.0,
-                    height: 120.0,
+                    x: 0.0,
+                    y: 164.0,
+                    width: 500.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Box::new(
+            RectPayload {
+                rect: Rect {
+                    x: 0.0,
+                    y: 184.0,
+                    width: 368.0,
+                    height: 180.0,
                 },
                 style: RectStyle {
-                    fill: Some(Paint::Solid(primary)),
+                    fill: Some(Paint::Solid(dark)),
                     stroke: None,
                     shadow: None,
                     radius: BorderRadius::all(8.0),
                 },
-            })))],
-        });
-
-        children.push(View::Layer {
-            opacity: 0.7,
-            children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Rect {
-                    x: 96.0,
-                    y: 240.0,
-                    width: 180.0,
-                    height: 120.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Solid(success)),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
-            })))],
-        });
-
-        children.push(View::Layer {
-            opacity: 0.7,
-            children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Rect {
-                    x: 176.0,
-                    y: 220.0,
-                    width: 180.0,
-                    height: 120.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Solid(danger)),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
-            })))],
-        });
-
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Layer (0.8) wrapping a gradient rect + text"),
-            rect: Rect {
-                x: 396.0,
-                y: 164.0,
-                width: 360.0,
-                height: 16.0,
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
-        children.push(View::Layer {
+        children.push(RenderNode::Layer {
+            opacity: 0.7,
+            children: vec![RenderNode::Primitive(DrawCommand::Rect(Box::new(
+                RectPayload {
+                    rect: Rect {
+                        x: 16.0,
+                        y: 200.0,
+                        width: 180.0,
+                        height: 120.0,
+                    },
+                    style: RectStyle {
+                        fill: Some(Paint::Solid(primary)),
+                        stroke: None,
+                        shadow: None,
+                        radius: BorderRadius::all(8.0),
+                    },
+                },
+            )))],
+        });
+
+        children.push(RenderNode::Layer {
+            opacity: 0.7,
+            children: vec![RenderNode::Primitive(DrawCommand::Rect(Box::new(
+                RectPayload {
+                    rect: Rect {
+                        x: 96.0,
+                        y: 240.0,
+                        width: 180.0,
+                        height: 120.0,
+                    },
+                    style: RectStyle {
+                        fill: Some(Paint::Solid(success)),
+                        stroke: None,
+                        shadow: None,
+                        radius: BorderRadius::all(8.0),
+                    },
+                },
+            )))],
+        });
+
+        children.push(RenderNode::Layer {
+            opacity: 0.7,
+            children: vec![RenderNode::Primitive(DrawCommand::Rect(Box::new(
+                RectPayload {
+                    rect: Rect {
+                        x: 176.0,
+                        y: 220.0,
+                        width: 180.0,
+                        height: 120.0,
+                    },
+                    style: RectStyle {
+                        fill: Some(Paint::Solid(danger)),
+                        stroke: None,
+                        shadow: None,
+                        radius: BorderRadius::all(8.0),
+                    },
+                },
+            )))],
+        });
+
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Layer (0.8) wrapping a gradient rect + text"),
+                rect: Rect {
+                    x: 396.0,
+                    y: 164.0,
+                    width: 360.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        children.push(RenderNode::Layer {
             opacity: 0.8,
             children: vec![
-                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Rect {
                         x: 396.0,
                         y: 184.0,
@@ -196,7 +212,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                         radius: BorderRadius::all(12.0),
                     },
                 }))),
-                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("gradient + layer"),
                     rect: Rect {
                         x: 396.0,
@@ -209,21 +225,23 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             ],
         });
 
-        children.push(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Nested layers: outer 0.6, inner 0.5 → combined ~0.3"),
-            rect: Rect {
-                x: 0.0,
-                y: 390.0,
-                width: 500.0,
-                height: 16.0,
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Nested layers: outer 0.6, inner 0.5 → combined ~0.3"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 390.0,
+                    width: 500.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
             },
-            style: TextStyle::new(11.0, muted),
-        }))));
+        ))));
 
-        children.push(View::Layer {
+        children.push(RenderNode::Layer {
             opacity: 0.6,
             children: vec![
-                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 410.0,
@@ -237,10 +255,10 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                         radius: BorderRadius::all(8.0),
                     },
                 }))),
-                View::Layer {
+                RenderNode::Layer {
                     opacity: 0.5,
                     children: vec![
-                        View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                        RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                             rect: Rect {
                                 x: 36.0,
                                 y: 430.0,
@@ -254,7 +272,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                                 radius: BorderRadius::all(6.0),
                             },
                         }))),
-                        View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                        RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                             text: Rc::from("inner 0.5"),
                             rect: Rect {
                                 x: 36.0,
@@ -266,7 +284,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                         }))),
                     ],
                 },
-                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from("outer 0.6"),
                     rect: Rect {
                         x: 0.0,
@@ -279,6 +297,6 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
             ],
         });
 
-        View::group(children)
+        RenderNode::group(children)
     })
 }

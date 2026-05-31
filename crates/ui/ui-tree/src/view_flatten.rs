@@ -1,8 +1,12 @@
 use renderer_core::DrawCommand;
 
-use crate::view::View;
+use crate::render_node::RenderNode;
 
-pub fn flatten_view(root: View, out: &mut Vec<DrawCommand>, stack: &mut Vec<View>) -> bool {
+pub fn flatten_view(
+    root: RenderNode,
+    out: &mut Vec<DrawCommand>,
+    stack: &mut Vec<RenderNode>,
+) -> bool {
     stack.clear();
     stack.push(root);
     let mut pos: usize = 0;
@@ -25,31 +29,31 @@ pub fn flatten_view(root: View, out: &mut Vec<DrawCommand>, stack: &mut Vec<View
         }};
     }
 
-    while let Some(view) = stack.pop() {
-        match view {
-            View::Empty => {}
-            View::Primitive(cmd) => emit_cmd!(cmd),
-            View::Group(children) => {
+    while let Some(node) = stack.pop() {
+        match node {
+            RenderNode::Empty => {}
+            RenderNode::Primitive(cmd) => emit_cmd!(cmd),
+            RenderNode::Group(children) => {
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
             }
-            View::Transform { matrix, children } => {
-                stack.push(View::Primitive(DrawCommand::PopMatrix));
+            RenderNode::Transform { matrix, children } => {
+                stack.push(RenderNode::Primitive(DrawCommand::PopMatrix));
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
                 emit_cmd!(DrawCommand::PushMatrix { matrix });
             }
-            View::Clip { rect, children } => {
-                stack.push(View::Primitive(DrawCommand::PopClip));
+            RenderNode::Clip { rect, children } => {
+                stack.push(RenderNode::Primitive(DrawCommand::PopClip));
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
                 emit_cmd!(DrawCommand::PushClip { rect });
             }
-            View::Layer { opacity, children } => {
-                stack.push(View::Primitive(DrawCommand::PopLayer));
+            RenderNode::Layer { opacity, children } => {
+                stack.push(RenderNode::Primitive(DrawCommand::PopLayer));
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
@@ -89,33 +93,33 @@ mod tests {
     fn flatten_empty_returns_empty() {
         let mut out = Vec::new();
         let mut stack = Vec::new();
-        flatten_view(View::Empty, &mut out, &mut stack);
+        flatten_view(RenderNode::Empty, &mut out, &mut stack);
         assert!(out.is_empty());
     }
 
     #[test]
     fn flatten_group_of_empties() {
-        let view = View::group([View::Empty, View::Empty, View::Empty]);
+        let node = RenderNode::group([RenderNode::Empty, RenderNode::Empty, RenderNode::Empty]);
         let mut out = Vec::new();
         let mut stack = Vec::new();
-        flatten_view(view, &mut out, &mut stack);
+        flatten_view(node, &mut out, &mut stack);
         assert!(out.is_empty());
     }
 
     #[test]
     fn flatten_nested_groups() {
-        let view = View::group([
-            View::Primitive(sample_rect()),
-            View::group([
-                View::Primitive(sample_rect()),
-                View::Empty,
-                View::group([View::Primitive(sample_rect())]),
+        let node = RenderNode::group([
+            RenderNode::Primitive(sample_rect()),
+            RenderNode::group([
+                RenderNode::Primitive(sample_rect()),
+                RenderNode::Empty,
+                RenderNode::group([RenderNode::Primitive(sample_rect())]),
             ]),
-            View::Primitive(sample_rect()),
+            RenderNode::Primitive(sample_rect()),
         ]);
         let mut out = Vec::new();
         let mut stack = Vec::new();
-        flatten_view(view, &mut out, &mut stack);
+        flatten_view(node, &mut out, &mut stack);
         assert_eq!(out.len(), 4);
     }
 }

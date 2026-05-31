@@ -4,7 +4,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use renderer_core::{DrawCommand, ImageData, ImageFilter};
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
@@ -32,10 +32,10 @@ impl Image {
 }
 
 impl Component for Image {
-    fn view(&self) -> View {
+    fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         self.leaf
-            .positioned_view(View::Primitive(DrawCommand::Image {
+            .positioned_view(RenderNode::Primitive(DrawCommand::Image {
                 data: (self.data)(),
                 rect: Rect {
                     x: 0.0,

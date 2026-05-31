@@ -31,4 +31,4 @@ pub use rect::Rect;
 pub use scroll_area::ScrollArea;
 pub use text::Text;
 pub use transform_group::TransformGroup;
-pub use ui_tree::{Component, ComponentTree, EventResult, View};
+pub use ui_tree::{Component, ComponentTree, EventResult, RenderNode};

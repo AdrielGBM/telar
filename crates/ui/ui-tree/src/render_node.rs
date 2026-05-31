@@ -1,26 +1,26 @@
 use geometry_core::Rect;
 use renderer_core::DrawCommand;
 
-pub enum View {
+pub enum RenderNode {
     Empty,
     Primitive(DrawCommand),
-    Group(Vec<View>),
+    Group(Vec<RenderNode>),
     Transform {
         matrix: [f32; 6],
-        children: Vec<View>,
+        children: Vec<RenderNode>,
     },
     Clip {
         rect: Rect,
-        children: Vec<View>,
+        children: Vec<RenderNode>,
     },
     Layer {
         opacity: f32,
-        children: Vec<View>,
+        children: Vec<RenderNode>,
     },
 }
 
-impl View {
-    pub fn group(children: impl IntoIterator<Item = View>) -> Self {
+impl RenderNode {
+    pub fn group(children: impl IntoIterator<Item = RenderNode>) -> Self {
         Self::Group(children.into_iter().collect())
     }
 }

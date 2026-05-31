@@ -1,6 +1,6 @@
 use geometry_core::Rect;
 use platform_core::Event;
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::pointer::{clip_pointer_event, dispatch_to_children};
 
@@ -19,8 +19,8 @@ impl ClipGroup {
 }
 
 impl Component for ClipGroup {
-    fn view(&self) -> View {
-        View::Clip {
+    fn view(&self) -> RenderNode {
+        RenderNode::Clip {
             rect: (self.rect)(),
             children: self.children.iter().map(|c| c.view()).collect(),
         }

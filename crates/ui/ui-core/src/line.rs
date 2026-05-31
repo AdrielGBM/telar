@@ -1,7 +1,7 @@
 use geometry_core::Point;
 use platform_core::Event;
 use renderer_core::{DrawCommand, LineStyle};
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 pub struct Line {
     p1: Box<dyn Fn() -> Point>,
@@ -24,11 +24,11 @@ impl Line {
 }
 
 impl Component for Line {
-    fn view(&self) -> View {
+    fn view(&self) -> RenderNode {
         let p1 = (self.p1)();
         let p2 = (self.p2)();
         let style = (self.style)();
-        View::Primitive(DrawCommand::Line { p1, p2, style })
+        RenderNode::Primitive(DrawCommand::Line { p1, p2, style })
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

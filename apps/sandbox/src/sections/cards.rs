@@ -1,7 +1,7 @@
 use crate::theme::{SandboxTheme, heading};
 use rsx::{
     BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Rect, RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View, WidgetCtx,
+    Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
     use_theme,
 };
 use std::rc::Rc;
@@ -17,8 +17,8 @@ pub fn info_card(
         ctx,
         LayoutStyle::new().width(368.0).height(110.0),
         move |_w, _h| {
-            View::group([
-                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+            RenderNode::group([
+                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -27,7 +27,7 @@ pub fn info_card(
                     },
                     style: bg_fn(),
                 }))),
-                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(title),
                     rect: Rect {
                         x: 16.0,
@@ -37,7 +37,7 @@ pub fn info_card(
                     },
                     style: TextStyle::new(16.0, title_color_fn()),
                 }))),
-                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(body),
                     rect: Rect {
                         x: 16.0,

@@ -1,7 +1,7 @@
 use crate::theme::{SandboxTheme, heading};
 use rsx::{
     BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Rect, RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View, WidgetCtx,
+    Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
     use_theme,
 };
 use std::rc::Rc;
@@ -16,8 +16,8 @@ pub fn shape_card(
         ctx,
         LayoutStyle::new().width(168.0).height(80.0),
         move |_w, _h| {
-            View::group([
-                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+            RenderNode::group([
+                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -26,7 +26,7 @@ pub fn shape_card(
                     },
                     style: style_fn(),
                 }))),
-                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                     text: Rc::from(label),
                     rect: Rect {
                         x: 0.0,

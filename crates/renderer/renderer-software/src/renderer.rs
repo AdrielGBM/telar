@@ -475,8 +475,6 @@ where
         }
 
         self.draw_state.reset();
-        let mut clip_active: bool = false;
-        let mut current_clip_rect: Option<Rect> = None;
         self.layer_stack.clear();
 
         let expanded_commands = expand_fill_layers(commands);
@@ -534,7 +532,7 @@ where
                         spr_y.min(spr_y2),
                         (spr_x2 - spr_x).abs(),
                         (spr_y2 - spr_y).abs(),
-                        current_clip_rect,
+                        self.draw_state.current_clip(),
                     ) {
                         continue;
                     }
@@ -543,7 +541,7 @@ where
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active && !inside_layer {
+                    let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -568,7 +566,7 @@ where
                         spt_y.min(spt_y2),
                         (spt_x2 - spt_x).abs(),
                         (spt_y2 - spt_y).abs(),
-                        current_clip_rect,
+                        self.draw_state.current_clip(),
                     ) {
                         continue;
                     }
@@ -577,7 +575,7 @@ where
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active && !inside_layer {
+                    let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -590,7 +588,7 @@ where
                         &p.style,
                         transform,
                         clip,
-                        current_clip_rect,
+                        self.draw_state.current_clip(),
                         &mut self.blur_scratch,
                         &mut self.text_pixmap_cache,
                         &mut self.text_shadow_cache,
@@ -606,7 +604,7 @@ where
                         spi_y.min(spi_y2),
                         (spi_x2 - spi_x).abs(),
                         (spi_y2 - spi_y).abs(),
-                        current_clip_rect,
+                        self.draw_state.current_clip(),
                     ) {
                         continue;
                     }
@@ -615,7 +613,7 @@ where
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active && !inside_layer {
+                    let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -637,7 +635,13 @@ where
                     let min_y = lp1y.min(lp2y);
                     let w = (lp1x.max(lp2x) - min_x).max(0.0);
                     let h = (lp1y.max(lp2y) - min_y).max(0.0);
-                    if !renderer_core::culling::overlaps(min_x, min_y, w, h, current_clip_rect) {
+                    if !renderer_core::culling::overlaps(
+                        min_x,
+                        min_y,
+                        w,
+                        h,
+                        self.draw_state.current_clip(),
+                    ) {
                         continue;
                     }
                     let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
@@ -645,7 +649,7 @@ where
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active && !inside_layer {
+                    let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -657,7 +661,7 @@ where
                         *style,
                         transform,
                         clip,
-                        current_clip_rect,
+                        self.draw_state.current_clip(),
                     );
                 }
                 DrawCommand::Path(p) => {
@@ -670,7 +674,7 @@ where
                             sp_y.min(sp_y2),
                             (sp_x2 - sp_x).abs(),
                             (sp_y2 - sp_y).abs(),
-                            current_clip_rect,
+                            self.draw_state.current_clip(),
                         ) {
                             continue;
                         }
@@ -680,7 +684,7 @@ where
                     } else {
                         self.pixmap.as_mut().unwrap()
                     };
-                    let clip = if clip_active && !inside_layer {
+                    let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
                         self.clip_mask_buf.as_ref()
                     } else {
                         None
@@ -691,7 +695,7 @@ where
                         &p.style,
                         transform,
                         clip,
-                        current_clip_rect,
+                        self.draw_state.current_clip(),
                         &mut self.blur_scratch,
                         &mut self.path_shadow_cache,
                     );
@@ -699,24 +703,20 @@ where
                 DrawCommand::PushClip { rect } => {
                     let prev_dirty = self.clip_mask_dirty;
                     let effective = self.draw_state.push_clip(*rect);
-                    current_clip_rect = Some(effective);
                     if let Some(ref mut m) = self.clip_mask_buf {
                         repaint_mask(m, effective, prev_dirty, self.width, self.height);
                     }
                     self.clip_mask_dirty = Some(effective);
-                    clip_active = true;
                 }
                 DrawCommand::PopClip => {
                     let prev_dirty = self.clip_mask_dirty;
                     let effective = self.draw_state.pop_clip();
                     match effective {
                         Some(r) => {
-                            current_clip_rect = Some(r);
                             if let Some(ref mut m) = self.clip_mask_buf {
                                 repaint_mask(m, r, prev_dirty, self.width, self.height);
                             }
                             self.clip_mask_dirty = Some(r);
-                            clip_active = true;
                         }
                         None => {
                             if let (Some(ref mut m), Some(prev_rect)) =
@@ -729,8 +729,6 @@ where
                                 }
                             }
                             self.clip_mask_dirty = None;
-                            current_clip_rect = None;
-                            clip_active = false;
                         }
                     }
                 }

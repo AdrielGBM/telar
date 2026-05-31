@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use platform_core::Event;
 use renderer_core::{DrawCommand, PathData, PathPayload, PathStyle};
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 pub struct Path {
     data: Box<dyn Fn() -> Rc<PathData>>,
@@ -22,10 +22,10 @@ impl Path {
 }
 
 impl Component for Path {
-    fn view(&self) -> View {
+    fn view(&self) -> RenderNode {
         let data = (self.data)();
         let style = (self.style)();
-        View::Primitive(DrawCommand::Path(Box::new(PathPayload { data, style })))
+        RenderNode::Primitive(DrawCommand::Path(Box::new(PathPayload { data, style })))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

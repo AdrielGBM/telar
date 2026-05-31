@@ -7,8 +7,8 @@ use crate::sections::{
 use crate::theme::SandboxTheme;
 use rsx::{
     App, AvailableSpace, Color, Component, Container, Event, EventResult, ImageData, LayoutError,
-    LayoutItem, LayoutStyle, NodeId, Rect, RwSignal, ScrollArea, View, WidgetCtx, compute_layout,
-    create_rw_signal, use_theme, with_context,
+    LayoutItem, LayoutStyle, NodeId, Rect, RenderNode, RwSignal, ScrollArea, WidgetCtx,
+    compute_layout, create_rw_signal, use_theme, with_context,
 };
 use std::rc::Rc;
 
@@ -49,7 +49,7 @@ struct SandboxRootComponent {
 }
 
 impl Component for SandboxRootComponent {
-    fn view(&self) -> View {
+    fn view(&self) -> RenderNode {
         self.scroll_area.view()
     }
 

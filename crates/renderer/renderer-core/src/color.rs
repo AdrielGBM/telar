@@ -110,6 +110,10 @@ impl Color {
         Self::rgba(r + m, g + m, b + m, a)
     }
 
+    pub fn with_alpha(self, a: f32) -> Self {
+        Self { a, ..self }
+    }
+
     #[inline]
     pub fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]

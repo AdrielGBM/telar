@@ -6,14 +6,14 @@ use reactive_core::{Effect, batch, create_effect};
 use renderer_core::DrawCommand;
 
 use crate::component::{Component, EventResult};
-use crate::view::View;
+use crate::render_node::RenderNode;
 use crate::view_flatten;
 
 struct ComponentSlot {
     component: Rc<RefCell<dyn Component>>,
     commands: Rc<RefCell<Vec<DrawCommand>>>,
     dirty: Rc<Cell<bool>>,
-    _stack: Rc<RefCell<Vec<View>>>,
+    _stack: Rc<RefCell<Vec<RenderNode>>>,
     _effect: Effect,
 }
 
@@ -22,17 +22,17 @@ impl ComponentSlot {
         let component: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(component));
         let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
         let dirty = Rc::new(Cell::new(true));
-        let stack: Rc<RefCell<Vec<View>>> = Default::default();
+        let stack: Rc<RefCell<Vec<RenderNode>>> = Default::default();
 
         let comp_clone = Rc::clone(&component);
         let cmds_clone = Rc::clone(&commands);
         let dirty_clone = Rc::clone(&dirty);
         let stack_clone = Rc::clone(&stack);
         let _effect = create_effect(move || {
-            let view = comp_clone.borrow().view();
+            let node = comp_clone.borrow().view();
             let mut stk = stack_clone.borrow_mut();
             let mut cmds = cmds_clone.borrow_mut();
-            let changed = view_flatten::flatten_view(view, &mut *cmds, &mut *stk);
+            let changed = view_flatten::flatten_view(node, &mut *cmds, &mut *stk);
             if changed {
                 dirty_clone.set(true);
             }
@@ -141,7 +141,7 @@ mod tests {
     use renderer_core::{Color, RectPayload, RectStyle};
 
     use super::*;
-    use crate::view::View;
+    use crate::render_node::RenderNode;
 
     fn sample_rect(x: f32) -> DrawCommand {
         DrawCommand::Rect(Box::new(RectPayload {
@@ -153,10 +153,10 @@ mod tests {
     struct Fixed;
 
     impl Component for Fixed {
-        fn view(&self) -> View {
-            View::group([
-                View::Primitive(sample_rect(0.0)),
-                View::Primitive(sample_rect(20.0)),
+        fn view(&self) -> RenderNode {
+            RenderNode::group([
+                RenderNode::Primitive(sample_rect(0.0)),
+                RenderNode::Primitive(sample_rect(20.0)),
             ])
         }
     }
@@ -173,9 +173,9 @@ mod tests {
     }
 
     impl Component for Counter {
-        fn view(&self) -> View {
+        fn view(&self) -> RenderNode {
             let n = self.value.get();
-            View::group((0..n).map(|i| View::Primitive(sample_rect(i as f32 * 10.0))))
+            RenderNode::group((0..n).map(|i| RenderNode::Primitive(sample_rect(i as f32 * 10.0))))
         }
     }
 

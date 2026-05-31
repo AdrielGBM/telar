@@ -1,6 +1,6 @@
 use platform_core::Event;
 
-use crate::view::View;
+use crate::render_node::RenderNode;
 
 #[derive(Debug, PartialEq)]
 pub enum EventResult {
@@ -23,7 +23,7 @@ impl EventResult {
 }
 
 pub trait Component: 'static {
-    fn view(&self) -> View;
+    fn view(&self) -> RenderNode;
 
     fn on_event(&mut self, _event: &Event) -> EventResult {
         EventResult::Ignored
@@ -31,7 +31,7 @@ pub trait Component: 'static {
 }
 
 impl Component for Box<dyn Component> {
-    fn view(&self) -> View {
+    fn view(&self) -> RenderNode {
         (**self).view()
     }
 

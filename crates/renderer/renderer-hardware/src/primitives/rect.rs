@@ -22,7 +22,7 @@ pub(crate) struct RectInstance {
     pub stroke_color: [f32; 4],
     pub stroke_width: f32,
     pub _pad: [f32; 3],
-    // shadow (offset 208)
+    // Always-present shadow fields using analytical GPU/SDF fast-path, zeroed when no shadow; unlike text/path shadows which use CPU capture+blur+composite
     pub shadow_color: [f32; 4],
     pub shadow_offset: [f32; 2],
     pub shadow_blur: f32,

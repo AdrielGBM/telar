@@ -5,7 +5,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use renderer_core::{DrawCommand, TextPayload, TextStyle};
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
@@ -35,7 +35,7 @@ impl Text {
 }
 
 impl Component for Text {
-    fn view(&self) -> View {
+    fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         let text: Rc<str> = {
             let new_str = (self.content_fn)();
@@ -49,16 +49,18 @@ impl Component for Text {
             }
         };
         self.leaf
-            .positioned_view(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                text,
-                rect: Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: r.width,
-                    height: r.height,
+            .positioned_view(RenderNode::Primitive(DrawCommand::Text(Box::new(
+                TextPayload {
+                    text,
+                    rect: Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: r.width,
+                        height: r.height,
+                    },
+                    style: (self.style)(),
                 },
-                style: (self.style)(),
-            }))))
+            ))))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

@@ -2,7 +2,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::RwSignal;
-use ui_tree::{Component, EventResult, View};
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{WidgetCtx, new_container, track_layout};
 use crate::layout_item::LayoutItem;
@@ -63,8 +63,8 @@ impl LayoutItem for Container {
 }
 
 impl Component for Container {
-    fn view(&self) -> View {
-        View::group(self.children.iter().map(|(c, _)| c.view()))
+    fn view(&self) -> RenderNode {
+        RenderNode::group(self.children.iter().map(|(c, _)| c.view()))
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -152,7 +152,7 @@ mod tests {
     fn container_view_returns_group_with_children() {
         let container = make_container_with_labels();
         let view = container.view();
-        if let View::Group(children) = view {
+        if let RenderNode::Group(children) = view {
             assert_eq!(children.len(), 2);
         } else {
             panic!("expected Group");

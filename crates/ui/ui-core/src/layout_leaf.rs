@@ -1,7 +1,7 @@
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use reactive_core::RwSignal;
-use ui_tree::View;
+use ui_tree::RenderNode;
 
 use crate::context;
 
@@ -16,9 +16,9 @@ impl LayoutLeaf {
         Ok(Self { node, rect })
     }
 
-    pub(crate) fn positioned_view(&self, content: View) -> View {
+    pub(crate) fn positioned_view(&self, content: RenderNode) -> RenderNode {
         let r = self.rect.get();
-        View::Transform {
+        RenderNode::Transform {
             matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
             children: vec![content],
         }
