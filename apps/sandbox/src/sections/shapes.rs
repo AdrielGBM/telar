@@ -15,7 +15,7 @@ pub fn shape_card(
     DrawingArea::new(
         ctx,
         LayoutStyle::new().width(168.0).height(80.0),
-        move |_w, _h| {
+        move |_| {
             RenderNode::group([
                 RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Rect {

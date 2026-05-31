@@ -13,7 +13,7 @@ pub fn color_swatch(
     DrawingArea::new(
         ctx,
         LayoutStyle::new().width(100.0).height(44.0),
-        move |_w, _h| {
+        move |_| {
             RenderNode::group([
                 RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Rect {

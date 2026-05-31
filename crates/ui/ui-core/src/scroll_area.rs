@@ -140,12 +140,11 @@ mod tests {
 
     fn make_scroll_area() -> ScrollArea {
         let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
-            let content = DrawingArea::new(
-                ctx,
-                LayoutStyle::new().width(400.0).height(1000.0),
-                |_, _| RenderNode::Empty,
-            )
-            .unwrap();
+            let content =
+                DrawingArea::new(ctx, LayoutStyle::new().width(400.0).height(1000.0), |_| {
+                    RenderNode::Empty
+                })
+                .unwrap();
             let node = content.layout_node();
             let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
             compute_layout(
@@ -162,12 +161,11 @@ mod tests {
 
     fn make_scroll_area_small() -> ScrollArea {
         let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
-            let content = DrawingArea::new(
-                ctx,
-                LayoutStyle::new().width(400.0).height(200.0),
-                |_, _| RenderNode::Empty,
-            )
-            .unwrap();
+            let content =
+                DrawingArea::new(ctx, LayoutStyle::new().width(400.0).height(200.0), |_| {
+                    RenderNode::Empty
+                })
+                .unwrap();
             let node = content.layout_node();
             let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
             compute_layout(
@@ -326,12 +324,11 @@ mod tests {
 
     fn make_scroll_area_wide() -> ScrollArea {
         let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
-            let content = DrawingArea::new(
-                ctx,
-                LayoutStyle::new().width(1000.0).height(300.0),
-                |_, _| RenderNode::Empty,
-            )
-            .unwrap();
+            let content =
+                DrawingArea::new(ctx, LayoutStyle::new().width(1000.0).height(300.0), |_| {
+                    RenderNode::Empty
+                })
+                .unwrap();
             let node = content.layout_node();
             let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
             compute_layout(

@@ -3,78 +3,105 @@ use taffy::{
     style_helpers,
 };
 
-pub enum Track {
+pub enum TemplateTrack {
     Single(TrackSizingFunction),
     Repeat(RepetitionCount, TrackSizingFunction),
 }
 
-impl Track {
+impl TemplateTrack {
     pub fn fr(flex: f32) -> Self {
-        Track::Single(style_helpers::fr(flex))
+        TemplateTrack::Single(style_helpers::fr(flex))
     }
 
     pub fn px(px: f32) -> Self {
-        Track::Single(style_helpers::length(px))
+        TemplateTrack::Single(style_helpers::length(px))
     }
 
     pub fn auto() -> Self {
-        Track::Single(style_helpers::auto())
+        TemplateTrack::Single(style_helpers::auto())
     }
 
     pub fn min_content() -> Self {
-        Track::Single(style_helpers::min_content())
+        TemplateTrack::Single(style_helpers::min_content())
     }
 
     pub fn max_content() -> Self {
-        Track::Single(style_helpers::max_content())
+        TemplateTrack::Single(style_helpers::max_content())
     }
 
-    pub fn minmax(min: Track, max: Track) -> Self {
+    pub fn minmax(min: TemplateTrack, max: TemplateTrack) -> Self {
         let min_fn = match min {
-            Track::Single(tsf) => tsf.min,
+            TemplateTrack::Single(tsf) => tsf.min,
             _ => panic!("minmax min cannot be a repeat track"),
         };
         let max_fn = match max {
-            Track::Single(tsf) => tsf.max,
+            TemplateTrack::Single(tsf) => tsf.max,
             _ => panic!("minmax max cannot be a repeat track"),
         };
-        Track::Single(style_helpers::minmax(min_fn, max_fn))
+        TemplateTrack::Single(style_helpers::minmax(min_fn, max_fn))
     }
 
-    pub fn repeat(count: u16, track: Track) -> Self {
-        Track::Repeat(RepetitionCount::Count(count), track.unwrap_single())
+    pub fn repeat(count: u16, track: TemplateTrack) -> Self {
+        TemplateTrack::Repeat(RepetitionCount::Count(count), track.unwrap_single())
     }
 
-    pub fn fill(track: Track) -> Self {
-        Track::Repeat(RepetitionCount::AutoFill, track.unwrap_single())
+    pub fn fill(track: TemplateTrack) -> Self {
+        TemplateTrack::Repeat(RepetitionCount::AutoFill, track.unwrap_single())
     }
 
-    pub fn fit(track: Track) -> Self {
-        Track::Repeat(RepetitionCount::AutoFit, track.unwrap_single())
+    pub fn fit(track: TemplateTrack) -> Self {
+        TemplateTrack::Repeat(RepetitionCount::AutoFit, track.unwrap_single())
     }
 
     fn unwrap_single(self) -> TrackSizingFunction {
         match self {
-            Track::Single(tsf) => tsf,
+            TemplateTrack::Single(tsf) => tsf,
             _ => panic!("repeat tracks cannot be nested"),
         }
     }
 
     pub(crate) fn into_template_component(self) -> GridTemplateComponent<String> {
         match self {
-            Track::Single(tsf) => GridTemplateComponent::Single(tsf),
-            Track::Repeat(count, tsf) => GridTemplateComponent::Repeat(GridTemplateRepetition {
-                count,
-                tracks: vec![tsf],
-                line_names: Vec::new(),
-            }),
+            TemplateTrack::Single(tsf) => GridTemplateComponent::Single(tsf),
+            TemplateTrack::Repeat(count, tsf) => {
+                GridTemplateComponent::Repeat(GridTemplateRepetition {
+                    count,
+                    tracks: vec![tsf],
+                    line_names: Vec::new(),
+                })
+            }
         }
     }
+}
 
-    pub(crate) fn into_auto_track(self) -> TrackSizingFunction {
-        match self {
-            Track::Single(tsf) => tsf,
-            Track::Repeat(..) => panic!("repeat is not valid for grid_auto_rows/columns"),
-        }
+pub struct AutoTrack(TrackSizingFunction);
+
+impl AutoTrack {
+    pub fn fr(flex: f32) -> Self {
+        AutoTrack(style_helpers::fr(flex))
+    }
+
+    pub fn px(px: f32) -> Self {
+        AutoTrack(style_helpers::length(px))
+    }
+
+    pub fn auto() -> Self {
+        AutoTrack(style_helpers::auto())
+    }
+
+    pub fn min_content() -> Self {
+        AutoTrack(style_helpers::min_content())
+    }
+
+    pub fn max_content() -> Self {
+        AutoTrack(style_helpers::max_content())
+    }
+
+    pub fn minmax(min: AutoTrack, max: AutoTrack) -> Self {
+        AutoTrack(style_helpers::minmax(min.0.min, max.0.max))
+    }
+
+    pub(crate) fn into_sizing_function(self) -> TrackSizingFunction {
+        self.0
     }
 }

@@ -23,9 +23,10 @@ pub use window_signals::WindowSignals;
 
 #[cfg(feature = "runtime")]
 pub use app::App;
-pub use geometry_core::{Point, Rect};
+pub use geometry_core::{Point, Rect, Size};
 pub use layout_core::{
-    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension, Track,
+    AlignItems, AutoTrack, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
+    TemplateTrack,
 };
 #[cfg(feature = "runtime")]
 pub use platform_core::{Event, ScrollDelta, WindowConfig};

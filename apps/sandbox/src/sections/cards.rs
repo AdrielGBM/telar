@@ -16,7 +16,7 @@ pub fn info_card(
     DrawingArea::new(
         ctx,
         LayoutStyle::new().width(368.0).height(110.0),
-        move |_w, _h| {
+        move |_| {
             RenderNode::group([
                 RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                     rect: Rect {

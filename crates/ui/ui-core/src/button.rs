@@ -12,21 +12,9 @@ use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct ButtonStyle {
-    pub bg: Color,
-    pub bg_hover: Color,
-    pub fg: Color,
-    pub radius: f32,
-}
-
-impl Default for ButtonStyle {
-    fn default() -> Self {
-        Self {
-            bg: Color::rgba(0.24, 0.47, 0.98, 1.0),
-            bg_hover: Color::rgba(0.15, 0.39, 0.92, 1.0),
-            fg: Color::WHITE,
-            radius: 4.0,
-        }
-    }
+    pub rect: RectStyle,
+    pub rect_hover: RectStyle,
+    pub text: TextStyle,
 }
 
 pub struct Button {
@@ -48,7 +36,15 @@ impl Button {
             label: Rc::from(label.into()),
             leaf,
             on_click: None,
-            style_fn: Box::new(ButtonStyle::default),
+            style_fn: Box::new(|| ButtonStyle {
+                rect: RectStyle::default()
+                    .with_fill(Color::rgba(0.24, 0.47, 0.98, 1.0))
+                    .with_radius(BorderRadius::all(4.0)),
+                rect_hover: RectStyle::default()
+                    .with_fill(Color::rgba(0.15, 0.39, 0.92, 1.0))
+                    .with_radius(BorderRadius::all(4.0)),
+                text: TextStyle::new(14.0, Color::WHITE),
+            }),
             hovered: Cell::new(false),
         })
     }
@@ -68,13 +64,11 @@ impl Component for Button {
     fn view(&self) -> RenderNode {
         let style = (self.style_fn)();
         let r = self.leaf.rect.get();
-        let bg_color = if self.hovered.get() {
-            style.bg_hover
+        let rect_style = if self.hovered.get() {
+            style.rect_hover
         } else {
-            style.bg
+            style.rect
         };
-        let text_color = style.fg;
-        let border_radius = style.radius;
         let local = geometry_core::Rect {
             x: 0.0,
             y: 0.0,
@@ -85,14 +79,12 @@ impl Component for Button {
         self.leaf.positioned_view(RenderNode::group([
             RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: local,
-                style: RectStyle::default()
-                    .with_fill(bg_color)
-                    .with_radius(BorderRadius::all(border_radius)),
+                style: rect_style,
             }))),
             RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text: Rc::clone(&self.label),
                 rect: local,
-                style: TextStyle::new(14.0, text_color),
+                style: style.text,
             }))),
         ]))
     }

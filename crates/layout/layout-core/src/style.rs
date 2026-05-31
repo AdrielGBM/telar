@@ -5,7 +5,7 @@ use taffy::{
 
 pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
 
-use crate::track::Track;
+use crate::track::{AutoTrack, TemplateTrack};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SizeDimension {
@@ -282,7 +282,7 @@ impl LayoutStyle {
         self
     }
 
-    pub fn grid_template_columns(mut self, tracks: Vec<Track>) -> Self {
+    pub fn grid_template_columns(mut self, tracks: Vec<TemplateTrack>) -> Self {
         self.inner.grid_template_columns = tracks
             .into_iter()
             .map(|t| t.into_template_component())
@@ -290,7 +290,7 @@ impl LayoutStyle {
         self
     }
 
-    pub fn grid_template_rows(mut self, tracks: Vec<Track>) -> Self {
+    pub fn grid_template_rows(mut self, tracks: Vec<TemplateTrack>) -> Self {
         self.inner.grid_template_rows = tracks
             .into_iter()
             .map(|t| t.into_template_component())
@@ -298,13 +298,19 @@ impl LayoutStyle {
         self
     }
 
-    pub fn grid_auto_rows(mut self, tracks: Vec<Track>) -> Self {
-        self.inner.grid_auto_rows = tracks.into_iter().map(|t| t.into_auto_track()).collect();
+    pub fn grid_auto_rows(mut self, tracks: Vec<AutoTrack>) -> Self {
+        self.inner.grid_auto_rows = tracks
+            .into_iter()
+            .map(|t| t.into_sizing_function())
+            .collect();
         self
     }
 
-    pub fn grid_auto_columns(mut self, tracks: Vec<Track>) -> Self {
-        self.inner.grid_auto_columns = tracks.into_iter().map(|t| t.into_auto_track()).collect();
+    pub fn grid_auto_columns(mut self, tracks: Vec<AutoTrack>) -> Self {
+        self.inner.grid_auto_columns = tracks
+            .into_iter()
+            .map(|t| t.into_sizing_function())
+            .collect();
         self
     }
 
