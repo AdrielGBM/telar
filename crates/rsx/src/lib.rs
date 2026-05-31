@@ -35,9 +35,10 @@ pub use reactive_core::{
 };
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    BorderRadius, Color, DrawCommand, FillRule, GradientStop, ImageData, ImageFilter, LineCap,
-    LineJoin, LineStyle, LinearGradient, Paint, PathData, PathPayload, PathStyle, PathVerb,
-    RadialGradient, RectPayload, RectStyle, Shadow, Stroke, TextPayload, TextStyle,
+    BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
+    GradientStops, ImageData, ImageFilter, LineCap, LineJoin, LineStyle, Paint, PathData,
+    PathPayload, PathStyle, PathVerb, RectPayload, RectStyle, Shadow, Stroke, TextPayload,
+    TextStyle,
 };
 #[cfg(feature = "runtime")]
 pub use rsx_devtools::{DevAction, DevPlugin};

@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line,
-    LineStyle, LinearGradient, Paint, Point, Rect, RectPayload, RectStyle, TextPayload, TextStyle,
-    View, WidgetCtx, use_theme,
+    BorderRadius, Color, Component, DrawCommand, DrawingArea, Gradient, LayoutError, LayoutStyle,
+    Line, LineStyle, Paint, Point, Rect, RectPayload, RectStyle, TextPayload, TextStyle, View,
+    WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -186,7 +186,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                         height: 180.0,
                     },
                     style: RectStyle {
-                        fill: Some(Paint::LinearGradient(LinearGradient::new(
+                        fill: Some(Paint::Gradient(Gradient::linear(
                             Point::new(396.0, 274.0),
                             Point::new(716.0, 274.0),
                             &[(0.0, primary), (0.5, purple), (1.0, danger)],

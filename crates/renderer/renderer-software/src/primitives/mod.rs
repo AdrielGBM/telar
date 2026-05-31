@@ -39,44 +39,38 @@ pub(crate) fn fill_to_paint(fill: renderer_core::Paint) -> tiny_skia::Paint<'sta
         renderer_core::Paint::Solid(c) => {
             paint.set_color(to_skia_color(c));
         }
-        renderer_core::Paint::LinearGradient(g) => {
-            let n = g.stop_count as usize;
-            let mut stops = Vec::with_capacity(n);
-            for s in &g.stops[..n] {
-                stops.push(tiny_skia::GradientStop::new(
-                    s.position,
-                    to_skia_color(s.color),
-                ));
-            }
-            if let Some(shader) = tiny_skia::LinearGradient::new(
-                tiny_skia::Point::from_xy(g.start.x, g.start.y),
-                tiny_skia::Point::from_xy(g.end.x, g.end.y),
-                stops,
-                tiny_skia::SpreadMode::Pad,
-                tiny_skia::Transform::identity(),
-            ) {
-                paint.shader = shader;
-            }
-        }
-        renderer_core::Paint::RadialGradient(g) => {
-            let n = g.stop_count as usize;
-            let mut stops = Vec::with_capacity(n);
-            for s in &g.stops[..n] {
-                stops.push(tiny_skia::GradientStop::new(
-                    s.position,
-                    to_skia_color(s.color),
-                ));
-            }
-            if let Some(shader) = tiny_skia::RadialGradient::new(
-                tiny_skia::Point::from_xy(g.center.x, g.center.y),
-                0.0,
-                tiny_skia::Point::from_xy(g.center.x, g.center.y),
-                g.radius,
-                stops,
-                tiny_skia::SpreadMode::Pad,
-                tiny_skia::Transform::identity(),
-            ) {
-                paint.shader = shader;
+        renderer_core::Paint::Gradient(g) => {
+            let skia_stops: Vec<_> = g
+                .stops
+                .active()
+                .iter()
+                .map(|s| tiny_skia::GradientStop::new(s.position, to_skia_color(s.color)))
+                .collect();
+            match g.kind {
+                renderer_core::GradientKind::Linear { start, end } => {
+                    if let Some(shader) = tiny_skia::LinearGradient::new(
+                        tiny_skia::Point::from_xy(start.x, start.y),
+                        tiny_skia::Point::from_xy(end.x, end.y),
+                        skia_stops,
+                        tiny_skia::SpreadMode::Pad,
+                        tiny_skia::Transform::identity(),
+                    ) {
+                        paint.shader = shader;
+                    }
+                }
+                renderer_core::GradientKind::Radial { center, radius } => {
+                    if let Some(shader) = tiny_skia::RadialGradient::new(
+                        tiny_skia::Point::from_xy(center.x, center.y),
+                        0.0,
+                        tiny_skia::Point::from_xy(center.x, center.y),
+                        radius,
+                        skia_stops,
+                        tiny_skia::SpreadMode::Pad,
+                        tiny_skia::Transform::identity(),
+                    ) {
+                        paint.shader = shader;
+                    }
+                }
             }
         }
     }

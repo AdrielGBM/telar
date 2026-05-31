@@ -4,7 +4,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers,
+    Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers, union_rects,
 };
 
 use wgpu::util::DeviceExt;
@@ -92,15 +92,6 @@ struct LayerAccum {
     clip_radius: f32,
     begin_step_idx: usize,
     bounds: Option<Rect>,
-}
-
-#[inline]
-fn union_rects(a: Rect, b: Rect) -> Rect {
-    let x = a.x.min(b.x);
-    let y = a.y.min(b.y);
-    let right = (a.x + a.width).max(b.x + b.width);
-    let bottom = (a.y + a.height).max(b.y + b.height);
-    Rect::new(x, y, right - x, bottom - y)
 }
 
 #[inline]

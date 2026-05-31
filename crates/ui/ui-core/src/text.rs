@@ -48,9 +48,8 @@ impl Component for Text {
                 Rc::clone(&cache.1)
             }
         };
-        View::Transform {
-            matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
-            children: vec![View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+        self.leaf
+            .positioned_view(View::Primitive(DrawCommand::Text(Box::new(TextPayload {
                 text,
                 rect: Rect {
                     x: 0.0,
@@ -59,8 +58,7 @@ impl Component for Text {
                     height: r.height,
                 },
                 style: (self.style)(),
-            })))],
-        }
+            }))))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

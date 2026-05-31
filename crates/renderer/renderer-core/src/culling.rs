@@ -2,7 +2,7 @@ use geometry_core::Rect;
 
 use crate::DrawCommand;
 
-fn union_rects(a: Rect, b: Rect) -> Rect {
+pub fn union_rects(a: Rect, b: Rect) -> Rect {
     let x = a.x.min(b.x);
     let y = a.y.min(b.y);
     let right = (a.x + a.width).max(b.x + b.width);

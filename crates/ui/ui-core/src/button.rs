@@ -82,22 +82,19 @@ impl Component for Button {
             height: r.height,
         };
 
-        View::Transform {
-            matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
-            children: vec![View::group([
-                View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: local,
-                    style: RectStyle::default()
-                        .with_fill(bg_color)
-                        .with_radius(BorderRadius::all(border_radius)),
-                }))),
-                View::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                    text: Rc::clone(&self.label),
-                    rect: local,
-                    style: TextStyle::new(14.0, text_color),
-                }))),
-            ])],
-        }
+        self.leaf.positioned_view(View::group([
+            View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                rect: local,
+                style: RectStyle::default()
+                    .with_fill(bg_color)
+                    .with_radius(BorderRadius::all(border_radius)),
+            }))),
+            View::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                text: Rc::clone(&self.label),
+                rect: local,
+                style: TextStyle::new(14.0, text_color),
+            }))),
+        ]))
     }
 
     // NOTE: expects coords pre-adjusted to layout space; callers are responsible for subtracting any PushTransform offsets. DPI normalization (physical → logical pixels) is handled upstream by platform-winit before events are emitted.

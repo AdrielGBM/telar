@@ -6,7 +6,7 @@ use ui_tree::{Component, EventResult, View};
 
 use crate::context::{WidgetCtx, track_layout};
 use crate::layout_item::LayoutItem;
-use crate::pointer::{offset_pointer, pointer_coords};
+use crate::pointer::{clip_pointer_event, offset_pointer};
 
 pub struct ScrollArea {
     viewport: Box<dyn Fn() -> Rect>,
@@ -113,11 +113,9 @@ impl Component for ScrollArea {
             return EventResult::Handled;
         }
 
-        if let Some((px, py)) = pointer_coords(event) {
-            if !vp.contains(px as f32, py as f32) {
-                return EventResult::Ignored;
-            }
-        }
+        let Some(event) = clip_pointer_event(event, vp) else {
+            return EventResult::Ignored;
+        };
 
         let scroll_x = self.scroll_x.get() as f64;
         let scroll_y = self.scroll_y.get() as f64;

@@ -30,9 +30,8 @@ impl Component for Rect {
     fn view(&self) -> View {
         let r = self.leaf.rect.get();
         let style = (self.style)();
-        View::Transform {
-            matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
-            children: vec![View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+        self.leaf
+            .positioned_view(View::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: Bounds {
                     x: 0.0,
                     y: 0.0,
@@ -40,8 +39,7 @@ impl Component for Rect {
                     height: r.height,
                 },
                 style,
-            })))],
-        }
+            }))))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

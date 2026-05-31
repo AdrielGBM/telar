@@ -3,7 +3,9 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers};
+use renderer_core::{
+    Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers, union_rects,
+};
 use renderer_text::{TextShaper, TextShaperConfig};
 use rustc_hash::FxBuildHasher;
 use softbuffer::{Context, Surface};
@@ -45,18 +47,7 @@ fn rect_overlaps(a: Rect, b: Rect) -> bool {
 fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
     Some(match acc {
         None => r,
-        Some(a) => {
-            let x = a.x.min(r.x);
-            let y = a.y.min(r.y);
-            let x2 = (a.x + a.width).max(r.x + r.width);
-            let y2 = (a.y + a.height).max(r.y + r.height);
-            Rect {
-                x,
-                y,
-                width: x2 - x,
-                height: y2 - y,
-            }
-        }
+        Some(a) => union_rects(a, r),
     })
 }
 

@@ -1,7 +1,8 @@
 use geometry_core::Rect;
 
 use crate::{
-    DrawCommand, culling,
+    DrawCommand,
+    culling::{self, union_rects},
     draw_state::{IDENTITY_MATRIX, compose_matrix},
 };
 
@@ -17,14 +18,6 @@ pub struct ScrollBlit {
     pub exposed_band: Rect,
     /// Bounds of any other changed elements outside the scroll clip (e.g. scrollbar).
     pub extra_dirty: Option<Rect>,
-}
-
-fn union_rects(a: Rect, b: Rect) -> Rect {
-    let x = a.x.min(b.x);
-    let y = a.y.min(b.y);
-    let right = (a.x + a.width).max(b.x + b.width);
-    let bottom = (a.y + a.height).max(b.y + b.height);
-    Rect::new(x, y, right - x, bottom - y)
 }
 
 fn matrix_as_translation(m: &[f32; 6]) -> Option<(f32, f32)> {

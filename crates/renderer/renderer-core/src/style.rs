@@ -72,17 +72,15 @@ impl GradientStop {
     }
 }
 
-/// A linear gradient from `start` to `end` with up to 8 color stops. The maximum of 8 stops is a deliberate design choice to preserve the `Copy` bound (fixed-size arrays are `Copy`; `Vec` is not). Use `stop_count` to know how many stops are actually active.
+/// Up to 8 gradient color stops. Fixed-size array preserves the `Copy` bound.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LinearGradient {
-    pub start: Point,
-    pub end: Point,
-    pub stops: [GradientStop; 8],
-    pub stop_count: u8,
+pub struct GradientStops {
+    stops: [GradientStop; 8],
+    stop_count: u8,
 }
 
-impl LinearGradient {
-    pub fn new(start: Point, end: Point, stops: &[(f32, Color)]) -> Self {
+impl GradientStops {
+    pub fn new(stops: &[(f32, Color)]) -> Self {
         debug_assert!(
             stops.len() <= 8,
             "gradient has {} stops, max is 8",
@@ -94,40 +92,40 @@ impl LinearGradient {
             arr[i] = GradientStop::new(position, color);
         }
         Self {
-            start,
-            end,
             stops: arr,
             stop_count,
         }
     }
+
+    pub fn active(&self) -> &[GradientStop] {
+        &self.stops[..self.stop_count as usize]
+    }
 }
 
-/// A radial gradient emanating from `center` with the given `radius` and up to 8 color stops. The maximum of 8 stops is a deliberate design choice to preserve the `Copy` bound (fixed-size arrays are `Copy`; `Vec` is not). Use `stop_count` to know how many stops are actually active.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RadialGradient {
-    pub center: Point,
-    pub radius: f32,
-    pub stops: [GradientStop; 8],
-    pub stop_count: u8,
+pub enum GradientKind {
+    Linear { start: Point, end: Point },
+    Radial { center: Point, radius: f32 },
 }
 
-impl RadialGradient {
-    pub fn new(center: Point, radius: f32, stops: &[(f32, Color)]) -> Self {
-        debug_assert!(
-            stops.len() <= 8,
-            "gradient has {} stops, max is 8",
-            stops.len()
-        );
-        let stop_count = stops.len().min(8) as u8;
-        let mut arr = [GradientStop::new(0.0, Color::TRANSPARENT); 8];
-        for (i, &(position, color)) in stops.iter().take(8).enumerate() {
-            arr[i] = GradientStop::new(position, color);
-        }
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Gradient {
+    pub kind: GradientKind,
+    pub stops: GradientStops,
+}
+
+impl Gradient {
+    pub fn linear(start: Point, end: Point, stops: &[(f32, Color)]) -> Self {
         Self {
-            center,
-            radius,
-            stops: arr,
-            stop_count,
+            kind: GradientKind::Linear { start, end },
+            stops: GradientStops::new(stops),
+        }
+    }
+
+    pub fn radial(center: Point, radius: f32, stops: &[(f32, Color)]) -> Self {
+        Self {
+            kind: GradientKind::Radial { center, radius },
+            stops: GradientStops::new(stops),
         }
     }
 }
@@ -135,8 +133,7 @@ impl RadialGradient {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Paint {
     Solid(Color),
-    LinearGradient(LinearGradient),
-    RadialGradient(RadialGradient),
+    Gradient(Gradient),
 }
 
 impl From<Color> for Paint {
@@ -149,9 +146,11 @@ impl Paint {
     pub fn solid_color(&self) -> Color {
         match self {
             Paint::Solid(c) => *c,
-            Paint::LinearGradient(g) if g.stop_count > 0 => g.stops[0].color,
-            Paint::RadialGradient(g) if g.stop_count > 0 => g.stops[0].color,
-            _ => Color::TRANSPARENT,
+            Paint::Gradient(g) => g
+                .stops
+                .active()
+                .first()
+                .map_or(Color::TRANSPARENT, |s| s.color),
         }
     }
 }
@@ -330,29 +329,35 @@ mod tests {
     }
 
     #[test]
-    fn linear_gradient_new_stores_stops() {
+    fn gradient_stops_new_stores_stops() {
+        let stops = GradientStops::new(&[(0.0, Color::BLACK), (1.0, Color::WHITE)]);
+        assert_eq!(stops.active().len(), 2);
+        assert_eq!(stops.active()[0].color, Color::BLACK);
+        assert_eq!(stops.active()[1].color, Color::WHITE);
+    }
+
+    #[test]
+    fn gradient_stops_new_truncates_to_eight() {
+        let raw: Vec<(f32, Color)> = (0..6).map(|i| (i as f32 / 5.0, Color::BLACK)).collect();
+        let stops = GradientStops::new(&raw);
+        assert_eq!(stops.active().len(), 6);
+    }
+
+    #[test]
+    fn gradient_linear_stores_stops() {
         let p1 = Point::new(0.0, 0.0);
         let p2 = Point::new(1.0, 0.0);
-        let g = LinearGradient::new(p1, p2, &[(0.0, Color::BLACK), (1.0, Color::WHITE)]);
-        assert_eq!(g.stop_count, 2);
-        assert_eq!(g.stops[0].color, Color::BLACK);
-        assert_eq!(g.stops[1].color, Color::WHITE);
+        let g = Gradient::linear(p1, p2, &[(0.0, Color::BLACK), (1.0, Color::WHITE)]);
+        assert_eq!(g.stops.active().len(), 2);
+        assert_eq!(g.stops.active()[0].color, Color::BLACK);
     }
 
     #[test]
-    fn linear_gradient_new_truncates_to_eight() {
-        let p = Point::new(0.0, 0.0);
-        let stops: Vec<(f32, Color)> = (0..10).map(|i| (i as f32 / 9.0, Color::BLACK)).collect();
-        let g = LinearGradient::new(p, p, &stops[..6]);
-        assert_eq!(g.stop_count, 6);
-    }
-
-    #[test]
-    fn radial_gradient_new_stores_stops() {
+    fn gradient_radial_stores_stops() {
         let c = Point::new(0.5, 0.5);
-        let g = RadialGradient::new(c, 1.0, &[(0.0, Color::RED), (1.0, Color::TRANSPARENT)]);
-        assert_eq!(g.stop_count, 2);
-        assert_eq!(g.stops[0].color, Color::RED);
+        let g = Gradient::radial(c, 1.0, &[(0.0, Color::RED), (1.0, Color::TRANSPARENT)]);
+        assert_eq!(g.stops.active().len(), 2);
+        assert_eq!(g.stops.active()[0].color, Color::RED);
     }
 
     #[test]

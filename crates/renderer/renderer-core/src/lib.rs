@@ -12,6 +12,7 @@ mod style;
 
 pub use color::Color;
 pub use command::{DrawCommand, PathPayload, RectPayload, TextPayload};
+pub use culling::union_rects;
 pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, IDENTITY_MATRIX, compose_matrix};
 pub use error::RendererError;
@@ -20,6 +21,6 @@ pub use path::{PathData, PathVerb};
 pub use preprocess::{blur_sigma, expand_fill_layers};
 pub use renderer::RenderBackend;
 pub use style::{
-    BorderRadius, FillRule, GradientStop, LineCap, LineJoin, LineStyle, LinearGradient, Paint,
-    PathStyle, RadialGradient, RectStyle, Shadow, Stroke, TextStyle,
+    BorderRadius, FillRule, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineJoin,
+    LineStyle, Paint, PathStyle, RectStyle, Shadow, Stroke, TextStyle,
 };

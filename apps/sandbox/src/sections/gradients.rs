@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Color, Component, DrawCommand, DrawingArea, FillRule, LayoutError, LayoutStyle,
-    Line, LineStyle, LinearGradient, Paint, Path, PathData, PathStyle, Point, RadialGradient, Rect,
-    RectPayload, RectStyle, Stroke, TextPayload, TextStyle, View, WidgetCtx, use_theme,
+    BorderRadius, Color, Component, DrawCommand, DrawingArea, FillRule, Gradient, LayoutError,
+    LayoutStyle, Line, LineStyle, Paint, Path, PathData, PathStyle, Point, Rect, RectPayload,
+    RectStyle, Stroke, TextPayload, TextStyle, View, WidgetCtx, use_theme,
 };
 
 use crate::theme::SandboxTheme;
@@ -61,7 +61,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(Paint::LinearGradient(LinearGradient::new(
+                fill: Some(Paint::Gradient(Gradient::linear(
                     Point::new(0.0, 100.0),
                     Point::new(168.0, 100.0),
                     &[(0.0, danger), (1.0, primary)],
@@ -90,7 +90,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(Paint::LinearGradient(LinearGradient::new(
+                fill: Some(Paint::Gradient(Gradient::linear(
                     Point::new(268.0, 60.0),
                     Point::new(268.0, 140.0),
                     &[(0.0, purple), (1.0, success)],
@@ -119,7 +119,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(Paint::LinearGradient(LinearGradient::new(
+                fill: Some(Paint::Gradient(Gradient::linear(
                     Point::new(368.0, 60.0),
                     Point::new(536.0, 140.0),
                     &[(0.0, warning), (1.0, dark)],
@@ -148,7 +148,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(Paint::LinearGradient(LinearGradient::new(
+                fill: Some(Paint::Gradient(Gradient::linear(
                     Point::new(552.0, 100.0),
                     Point::new(720.0, 100.0),
                     &[(0.0, dark), (0.5, cyan), (1.0, Color::WHITE)],
@@ -188,7 +188,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(Paint::RadialGradient(RadialGradient::new(
+                fill: Some(Paint::Gradient(Gradient::radial(
                     Point::new(84.0, 240.0),
                     70.0,
                     &[(0.0, primary), (1.0, Color { a: 0.0, ..primary })],
@@ -217,7 +217,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(Paint::RadialGradient(RadialGradient::new(
+                fill: Some(Paint::Gradient(Gradient::radial(
                     Point::new(268.0, 240.0),
                     40.0,
                     &[(0.0, danger), (1.0, warning)],
@@ -246,7 +246,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(Paint::RadialGradient(RadialGradient::new(
+                fill: Some(Paint::Gradient(Gradient::radial(
                     Point::new(452.0, 240.0),
                     80.0,
                     &[(0.0, Color::WHITE), (0.45, purple), (1.0, dark)],
@@ -275,7 +275,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                 height: 80.0,
             },
             style: RectStyle {
-                fill: Some(Paint::RadialGradient(RadialGradient::new(
+                fill: Some(Paint::Gradient(Gradient::radial(
                     Point::new(552.0, 200.0),
                     180.0,
                     &[(0.0, success), (1.0, dark)],
@@ -321,7 +321,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(Paint::LinearGradient(LinearGradient::new(
+                    fill: Some(Paint::Gradient(Gradient::linear(
                         Point::new(75.0, 338.0),
                         Point::new(75.0, 468.0),
                         &[(0.0, danger), (1.0, warning)],
@@ -367,7 +367,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(Paint::RadialGradient(RadialGradient::new(
+                    fill: Some(Paint::Gradient(Gradient::radial(
                         Point::new(268.0, 403.0),
                         65.0,
                         &[(0.0, Color::WHITE), (0.5, purple), (1.0, dark)],
@@ -412,7 +412,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(Paint::LinearGradient(LinearGradient::new(
+                    fill: Some(Paint::Gradient(Gradient::linear(
                         Point::new(372.0, 338.0),
                         Point::new(532.0, 468.0),
                         &[(0.0, success), (0.5, cyan), (1.0, primary)],
@@ -455,7 +455,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError
                     move || d.clone()
                 },
                 move || PathStyle {
-                    fill: Some(Paint::LinearGradient(LinearGradient::new(
+                    fill: Some(Paint::Gradient(Gradient::linear(
                         Point::new(576.0, 403.0),
                         Point::new(736.0, 403.0),
                         &[(0.0, danger), (1.0, purple)],

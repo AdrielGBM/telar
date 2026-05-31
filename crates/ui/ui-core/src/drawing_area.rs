@@ -33,10 +33,7 @@ impl Component for DrawingArea {
     fn view(&self) -> View {
         let r = self.leaf.rect.get();
         let inner = (self.draw_fn)(r.width, r.height);
-        View::Transform {
-            matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
-            children: vec![inner],
-        }
+        self.leaf.positioned_view(inner)
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {
