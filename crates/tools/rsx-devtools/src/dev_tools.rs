@@ -80,11 +80,14 @@ impl DevPlugin for DevTools {
         let mut cmds = Vec::with_capacity(base.len() + 16);
         cmds.extend_from_slice(base);
 
-        // Badge wrapped in a backdrop-blur layer so the semi-transparent fill samples a blurred copy of the underlying content.
+        // Badge wrapped in a clip + backdrop-blur layer so the semi-transparent fill samples a blurred copy of the underlying content.
+        cmds.push(DrawCommand::PushClip {
+            rect: self.badge_rect,
+            radius: BorderRadius::all(4.0),
+        });
         cmds.push(DrawCommand::PushLayer {
             opacity: 1.0,
             backdrop_blur: BACKDROP_BLUR_SIGMA,
-            clip_radius: 4.0,
         });
 
         // Badge background
@@ -104,16 +107,20 @@ impl DevPlugin for DevTools {
         })));
 
         cmds.push(DrawCommand::PopLayer);
+        cmds.push(DrawCommand::PopClip);
 
         if self.panel_open {
             let panel_x = window_w - PANEL_W - MARGIN;
             let panel_y = badge_y - PANEL_H - GAP;
 
-            // Panel wrapped in a backdrop-blur layer.
+            // Panel wrapped in a clip + backdrop-blur layer.
+            cmds.push(DrawCommand::PushClip {
+                rect: Rect::new(panel_x, panel_y, PANEL_W, PANEL_H),
+                radius: BorderRadius::all(8.0),
+            });
             cmds.push(DrawCommand::PushLayer {
                 opacity: 1.0,
                 backdrop_blur: BACKDROP_BLUR_SIGMA,
-                clip_radius: 8.0,
             });
 
             // Panel background
@@ -182,6 +189,7 @@ impl DevPlugin for DevTools {
             })));
 
             cmds.push(DrawCommand::PopLayer);
+            cmds.push(DrawCommand::PopClip);
         }
 
         Cow::Owned(cmds)

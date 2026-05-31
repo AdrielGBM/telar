@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use geometry_core::Rect;
-use layout_core::{LayoutError, LayoutStyle, NodeId};
+use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use renderer_core::{DrawCommand, ImageData, ImageFilter};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::LayoutItem;
+use crate::layout_item::HasLayoutLeaf;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Image {
@@ -52,8 +52,8 @@ impl Component for Image {
     }
 }
 
-impl LayoutItem for Image {
-    fn layout_node(&self) -> NodeId {
-        self.leaf.node
+impl HasLayoutLeaf for Image {
+    fn layout_leaf(&self) -> &LayoutLeaf {
+        &self.leaf
     }
 }

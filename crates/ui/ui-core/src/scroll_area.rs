@@ -58,6 +58,7 @@ impl Component for ScrollArea {
 
         let scrollable = RenderNode::Clip {
             rect: vp,
+            radius: BorderRadius::zero(),
             children: vec![RenderNode::Transform {
                 matrix: [1.0, 0.0, 0.0, 1.0, vp.x - scroll_x, vp.y - scroll_y],
                 children: vec![self.content.view()],

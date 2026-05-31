@@ -1,10 +1,10 @@
 use geometry_core::Rect as Bounds;
-use layout_core::{LayoutError, LayoutStyle, NodeId};
+use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use renderer_core::{DrawCommand, RectPayload, RectStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::LayoutItem;
+use crate::layout_item::HasLayoutLeaf;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Rect {
@@ -49,8 +49,8 @@ impl Component for Rect {
     }
 }
 
-impl LayoutItem for Rect {
-    fn layout_node(&self) -> NodeId {
-        self.leaf.node
+impl HasLayoutLeaf for Rect {
+    fn layout_leaf(&self) -> &LayoutLeaf {
+        &self.leaf
     }
 }

@@ -35,7 +35,6 @@ pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> 
                 result.push(DrawCommand::PushLayer {
                     opacity: alpha,
                     backdrop_blur: 0.0,
-                    clip_radius: 0.0,
                 });
                 result.push(DrawCommand::Rect(Box::new(opaque)));
                 result.push(DrawCommand::PopLayer);

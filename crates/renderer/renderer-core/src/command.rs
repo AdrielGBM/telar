@@ -2,7 +2,9 @@ use std::rc::Rc;
 
 use geometry_core::{Point, Rect};
 
-use crate::{ImageData, ImageFilter, LineStyle, PathData, PathStyle, RectStyle, TextStyle};
+use crate::{
+    BorderRadius, ImageData, ImageFilter, LineStyle, PathData, PathStyle, RectStyle, TextStyle,
+};
 
 // Boxed to keep DrawCommand at 40 bytes; RectStyle is ~180 bytes on its own and would otherwise dominate the enum size, hurting cache utilization across the command buffer.
 #[derive(Debug, Clone)]
@@ -41,6 +43,7 @@ pub enum DrawCommand {
     Path(Box<PathPayload>),
     PushClip {
         rect: Rect,
+        radius: BorderRadius,
     },
     PopClip,
     PushMatrix {
@@ -50,7 +53,6 @@ pub enum DrawCommand {
     PushLayer {
         opacity: f32,
         backdrop_blur: f32,
-        clip_radius: f32,
     },
     PopLayer,
 }
@@ -103,7 +105,16 @@ impl PartialEq for DrawCommand {
                 },
             ) => p1a == p1b && p2a == p2b && s1 == s2,
             (DrawCommand::Path(a), DrawCommand::Path(b)) => a == b,
-            (DrawCommand::PushClip { rect: r1 }, DrawCommand::PushClip { rect: r2 }) => r1 == r2,
+            (
+                DrawCommand::PushClip {
+                    rect: r1,
+                    radius: br1,
+                },
+                DrawCommand::PushClip {
+                    rect: r2,
+                    radius: br2,
+                },
+            ) => r1 == r2 && br1 == br2,
             (DrawCommand::PopClip, DrawCommand::PopClip) => true,
             (DrawCommand::PushMatrix { matrix: m1 }, DrawCommand::PushMatrix { matrix: m2 }) => {
                 m1 == m2
@@ -113,14 +124,12 @@ impl PartialEq for DrawCommand {
                 DrawCommand::PushLayer {
                     opacity: o1,
                     backdrop_blur: b1,
-                    clip_radius: cr1,
                 },
                 DrawCommand::PushLayer {
                     opacity: o2,
                     backdrop_blur: b2,
-                    clip_radius: cr2,
                 },
-            ) => o1 == o2 && b1 == b2 && cr1 == cr2,
+            ) => o1 == o2 && b1 == b2,
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
             _ => false,
         }

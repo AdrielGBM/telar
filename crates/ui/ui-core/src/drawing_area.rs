@@ -1,7 +1,7 @@
-use crate::layout_item::LayoutItem;
+use crate::layout_item::HasLayoutLeaf;
 use crate::layout_leaf::LayoutLeaf;
 use geometry_core::Size;
-use layout_core::{LayoutError, LayoutStyle, NodeId};
+use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -24,9 +24,9 @@ impl DrawingArea {
     }
 }
 
-impl LayoutItem for DrawingArea {
-    fn layout_node(&self) -> NodeId {
-        self.leaf.node
+impl HasLayoutLeaf for DrawingArea {
+    fn layout_leaf(&self) -> &LayoutLeaf {
+        &self.leaf
     }
 }
 

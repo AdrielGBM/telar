@@ -1,5 +1,5 @@
 use geometry_core::Rect;
-use renderer_core::DrawCommand;
+use renderer_core::{BorderRadius, DrawCommand};
 
 pub enum RenderNode {
     Empty,
@@ -11,6 +11,7 @@ pub enum RenderNode {
     },
     Clip {
         rect: Rect,
+        radius: BorderRadius,
         children: Vec<RenderNode>,
     },
     Layer {

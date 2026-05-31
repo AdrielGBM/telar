@@ -89,6 +89,18 @@ fn compute_layer_bboxes(
                         (0, 0, window_w, window_h)
                     };
                     result[push_idx] = Some((ox, oy, bw, bh));
+                    // Propagate this layer's visual footprint to the parent layer's accumulator so
+                    // the parent layer is sized to contain the composited result of all nested layers.
+                    if !stack.is_empty() {
+                        let footprint = Rect {
+                            x: ox as f32,
+                            y: oy as f32,
+                            width: bw as f32,
+                            height: bh as f32,
+                        };
+                        let last = stack.len() - 1;
+                        stack[last].1 = union_opt_rect(stack[last].1, footprint);
+                    }
                 }
             }
             _ => {
@@ -207,6 +219,61 @@ fn repaint_mask(
     }
 }
 
+fn fill_rounded_mask(
+    mask: &mut tiny_skia::Mask,
+    rect: geometry_core::Rect,
+    radius: renderer_core::BorderRadius,
+) {
+    let (x, y, w, h) = (rect.x, rect.y, rect.width, rect.height);
+    let (tl, tr, br, bl) = (
+        radius.top_left,
+        radius.top_right,
+        radius.bottom_right,
+        radius.bottom_left,
+    );
+    let k = 0.5523_f32; // cubic bezier factor for circular arc approximation
+    let mut pb = tiny_skia::PathBuilder::new();
+    pb.move_to(x + tl, y);
+    pb.line_to(x + w - tr, y);
+    pb.cubic_to(
+        x + w - tr * (1.0 - k),
+        y,
+        x + w,
+        y + tr * (1.0 - k),
+        x + w,
+        y + tr,
+    );
+    pb.line_to(x + w, y + h - br);
+    pb.cubic_to(
+        x + w,
+        y + h - br * (1.0 - k),
+        x + w - br * (1.0 - k),
+        y + h,
+        x + w - br,
+        y + h,
+    );
+    pb.line_to(x + bl, y + h);
+    pb.cubic_to(
+        x + bl * (1.0 - k),
+        y + h,
+        x,
+        y + h - bl * (1.0 - k),
+        x,
+        y + h - bl,
+    );
+    pb.line_to(x, y + tl);
+    pb.cubic_to(x, y + tl * (1.0 - k), x + tl * (1.0 - k), y, x + tl, y);
+    pb.close();
+    if let Some(path) = pb.finish() {
+        mask.fill_path(
+            &path,
+            tiny_skia::FillRule::Winding,
+            true,
+            tiny_skia::Transform::identity(),
+        );
+    }
+}
+
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     _context: Context<D>,
     surface: Surface<D, W>,
@@ -225,7 +292,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     text_shadow_cache: TextShadowCache,
     path_shadow_cache: PathShadowCache,
-    layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32, f32)>,
+    layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32)>,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
     prev_commands: Vec<DrawCommand>,
     prev_clear_color: Option<Color>,
@@ -491,7 +558,7 @@ where
             let (layer_ox, layer_oy) = self
                 .layer_stack
                 .last()
-                .map(|(_, _, ox, oy, _)| (*ox, *oy))
+                .map(|(_, _, ox, oy)| (*ox, *oy))
                 .unwrap_or((0, 0));
 
             let [ma, mb, mc, md, me, mf] = self.draw_state.cum_matrix;
@@ -504,13 +571,18 @@ where
                 mf - layer_oy as f32,
             );
 
-            // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region, use skip_rect (the actual clamped on-screen clear bounds) so the skip check is consistent with what fill_rect actually cleared, and always execute state commands (PushTransform, PushClip, PushLayer, etc.) because they return None.
+            // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region.
+            // Only applies at the top level (not inside layers): a layer is a fresh isolated pixmap
+            // rendered from scratch every frame, so all its commands must run regardless of which
+            // window-space region is dirty.
             if let Some(sr) = skip_rect {
-                if let Some(vr) =
-                    renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
-                {
-                    if !rect_overlaps(vr, sr) {
-                        continue;
+                if !inside_layer {
+                    if let Some(vr) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
+                        if !rect_overlaps(vr, sr) {
+                            continue;
+                        }
                     }
                 }
             }
@@ -523,20 +595,20 @@ where
                     {
                         continue;
                     }
-                    let (spr_x, spr_y) = self.draw_state.apply_point(p.rect.x, p.rect.y);
-                    let (spr_x2, spr_y2) = self
-                        .draw_state
-                        .apply_point(p.rect.x + p.rect.width, p.rect.y + p.rect.height);
-                    if !renderer_core::culling::overlaps(
-                        spr_x.min(spr_x2),
-                        spr_y.min(spr_y2),
-                        (spr_x2 - spr_x).abs(),
-                        (spr_y2 - spr_y).abs(),
-                        self.draw_state.current_clip(),
-                    ) {
-                        continue;
+                    if let Some(vr) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
+                        if !renderer_core::culling::overlaps(
+                            vr.x,
+                            vr.y,
+                            vr.width,
+                            vr.height,
+                            self.draw_state.current_clip(),
+                        ) {
+                            continue;
+                        }
                     }
-                    let pixmap = if let Some((layer, _, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((layer, _, _, _)) = self.layer_stack.last_mut() {
                         layer
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -557,20 +629,20 @@ where
                     );
                 }
                 DrawCommand::Text(p) => {
-                    let (spt_x, spt_y) = self.draw_state.apply_point(p.rect.x, p.rect.y);
-                    let (spt_x2, spt_y2) = self
-                        .draw_state
-                        .apply_point(p.rect.x + p.rect.width, p.rect.y + p.rect.height);
-                    if !renderer_core::culling::overlaps(
-                        spt_x.min(spt_x2),
-                        spt_y.min(spt_y2),
-                        (spt_x2 - spt_x).abs(),
-                        (spt_y2 - spt_y).abs(),
-                        self.draw_state.current_clip(),
-                    ) {
-                        continue;
+                    if let Some(vr) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
+                        if !renderer_core::culling::overlaps(
+                            vr.x,
+                            vr.y,
+                            vr.width,
+                            vr.height,
+                            self.draw_state.current_clip(),
+                        ) {
+                            continue;
+                        }
                     }
-                    let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -588,27 +660,31 @@ where
                         &p.style,
                         transform,
                         clip,
-                        self.draw_state.current_clip(),
+                        if inside_layer {
+                            None
+                        } else {
+                            self.draw_state.current_clip()
+                        },
                         &mut self.blur_scratch,
                         &mut self.text_pixmap_cache,
                         &mut self.text_shadow_cache,
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    let (spi_x, spi_y) = self.draw_state.apply_point(rect.x, rect.y);
-                    let (spi_x2, spi_y2) = self
-                        .draw_state
-                        .apply_point(rect.x + rect.width, rect.y + rect.height);
-                    if !renderer_core::culling::overlaps(
-                        spi_x.min(spi_x2),
-                        spi_y.min(spi_y2),
-                        (spi_x2 - spi_x).abs(),
-                        (spi_y2 - spi_y).abs(),
-                        self.draw_state.current_clip(),
-                    ) {
-                        continue;
+                    if let Some(vr) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
+                        if !renderer_core::culling::overlaps(
+                            vr.x,
+                            vr.y,
+                            vr.width,
+                            vr.height,
+                            self.draw_state.current_clip(),
+                        ) {
+                            continue;
+                        }
                     }
-                    let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -629,22 +705,20 @@ where
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    let (lp1x, lp1y) = self.draw_state.apply_point(p1.x, p1.y);
-                    let (lp2x, lp2y) = self.draw_state.apply_point(p2.x, p2.y);
-                    let min_x = lp1x.min(lp2x);
-                    let min_y = lp1y.min(lp2y);
-                    let w = (lp1x.max(lp2x) - min_x).max(0.0);
-                    let h = (lp1y.max(lp2y) - min_y).max(0.0);
-                    if !renderer_core::culling::overlaps(
-                        min_x,
-                        min_y,
-                        w,
-                        h,
-                        self.draw_state.current_clip(),
-                    ) {
-                        continue;
+                    if let Some(vr) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
+                        if !renderer_core::culling::overlaps(
+                            vr.x,
+                            vr.y,
+                            vr.width,
+                            vr.height,
+                            self.draw_state.current_clip(),
+                        ) {
+                            continue;
+                        }
                     }
-                    let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -661,25 +735,28 @@ where
                         *style,
                         transform,
                         clip,
-                        self.draw_state.current_clip(),
+                        if inside_layer {
+                            None
+                        } else {
+                            self.draw_state.current_clip()
+                        },
                     );
                 }
                 DrawCommand::Path(p) => {
-                    if let Some(b) = p.data.bounds() {
-                        let (sp_x, sp_y) = self.draw_state.apply_point(b.x, b.y);
-                        let (sp_x2, sp_y2) =
-                            self.draw_state.apply_point(b.x + b.width, b.y + b.height);
+                    if let Some(vr) =
+                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
+                    {
                         if !renderer_core::culling::overlaps(
-                            sp_x.min(sp_x2),
-                            sp_y.min(sp_y2),
-                            (sp_x2 - sp_x).abs(),
-                            (sp_y2 - sp_y).abs(),
+                            vr.x,
+                            vr.y,
+                            vr.width,
+                            vr.height,
                             self.draw_state.current_clip(),
                         ) {
                             continue;
                         }
                     }
-                    let pixmap = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
                         self.pixmap.as_mut().unwrap()
@@ -695,16 +772,38 @@ where
                         &p.style,
                         transform,
                         clip,
-                        self.draw_state.current_clip(),
+                        if inside_layer {
+                            None
+                        } else {
+                            self.draw_state.current_clip()
+                        },
                         &mut self.blur_scratch,
                         &mut self.path_shadow_cache,
                     );
                 }
-                DrawCommand::PushClip { rect } => {
+                DrawCommand::PushClip { rect, radius } => {
                     let prev_dirty = self.clip_mask_dirty;
                     let effective = self.draw_state.push_clip(*rect);
                     if let Some(ref mut m) = self.clip_mask_buf {
-                        repaint_mask(m, effective, prev_dirty, self.width, self.height);
+                        if radius.is_zero() {
+                            repaint_mask(m, effective, prev_dirty, self.width, self.height);
+                        } else {
+                            if let Some(prev) = prev_dirty {
+                                if prev != effective {
+                                    if let Some(region) =
+                                        clamp_to_pixels(prev, self.width, self.height)
+                                    {
+                                        fill_mask_region(
+                                            m.data_mut(),
+                                            self.width as usize,
+                                            region,
+                                            0,
+                                        );
+                                    }
+                                }
+                            }
+                            fill_rounded_mask(m, effective, *radius);
+                        }
                     }
                     self.clip_mask_dirty = Some(effective);
                 }
@@ -741,7 +840,6 @@ where
                 DrawCommand::PushLayer {
                     opacity,
                     backdrop_blur,
-                    clip_radius,
                 } => {
                     let (ox, oy, bw, bh) =
                         layer_bboxes[cmd_idx].unwrap_or((0, 0, self.width, self.height));
@@ -755,9 +853,9 @@ where
                             let (pox, poy) = self
                                 .layer_stack
                                 .last()
-                                .map(|(_, _, pox, poy, _)| (*pox, *poy))
+                                .map(|(_, _, pox, poy)| (*pox, *poy))
                                 .unwrap_or((0, 0));
-                            let parent = if let Some((top, _, _, _, _)) = self.layer_stack.last() {
+                            let parent = if let Some((top, _, _, _)) = self.layer_stack.last() {
                                 top
                             } else {
                                 self.pixmap.as_ref().unwrap()
@@ -785,46 +883,17 @@ where
                         } else {
                             l.fill(tiny_skia::Color::TRANSPARENT);
                         }
-                        self.layer_stack.push((l, *opacity, ox, oy, *clip_radius));
+                        self.layer_stack.push((l, *opacity, ox, oy));
                     }
                 }
                 DrawCommand::PopLayer => {
-                    if let Some((mut layer, opacity, ox, oy, clip_radius)) = self.layer_stack.pop()
-                    {
-                        if clip_radius > 0.0 {
-                            let w = layer.width() as f32;
-                            let h = layer.height() as f32;
-                            let r = clip_radius;
-                            let mut pb = tiny_skia::PathBuilder::new();
-                            pb.move_to(r, 0.0);
-                            pb.line_to(w - r, 0.0);
-                            pb.quad_to(w, 0.0, w, r);
-                            pb.line_to(w, h - r);
-                            pb.quad_to(w, h, w - r, h);
-                            pb.line_to(r, h);
-                            pb.quad_to(0.0, h, 0.0, h - r);
-                            pb.line_to(0.0, r);
-                            pb.quad_to(0.0, 0.0, r, 0.0);
-                            pb.close();
-                            if let Some(path) = pb.finish() {
-                                let mut paint = tiny_skia::Paint::default();
-                                paint.set_color(tiny_skia::Color::WHITE);
-                                paint.blend_mode = tiny_skia::BlendMode::DestinationIn;
-                                layer.fill_path(
-                                    &path,
-                                    &paint,
-                                    tiny_skia::FillRule::Winding,
-                                    tiny_skia::Transform::identity(),
-                                    None,
-                                );
-                            }
-                        }
+                    if let Some((mut layer, opacity, ox, oy)) = self.layer_stack.pop() {
                         let (parent_ox, parent_oy) = self
                             .layer_stack
                             .last()
-                            .map(|(_, _, pox, poy, _)| (*pox, *poy))
+                            .map(|(_, _, pox, poy)| (*pox, *poy))
                             .unwrap_or((0, 0));
-                        let target = if let Some((top, _, _, _, _)) = self.layer_stack.last_mut() {
+                        let target = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                             top
                         } else {
                             self.pixmap.as_mut().unwrap()

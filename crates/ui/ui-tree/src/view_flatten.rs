@@ -45,12 +45,16 @@ pub fn flatten_view(
                 }
                 emit_cmd!(DrawCommand::PushMatrix { matrix });
             }
-            RenderNode::Clip { rect, children } => {
+            RenderNode::Clip {
+                rect,
+                radius,
+                children,
+            } => {
                 stack.push(RenderNode::Primitive(DrawCommand::PopClip));
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
-                emit_cmd!(DrawCommand::PushClip { rect });
+                emit_cmd!(DrawCommand::PushClip { rect, radius });
             }
             RenderNode::Layer { opacity, children } => {
                 stack.push(RenderNode::Primitive(DrawCommand::PopLayer));
@@ -60,7 +64,6 @@ pub fn flatten_view(
                 emit_cmd!(DrawCommand::PushLayer {
                     opacity,
                     backdrop_blur: 0.0,
-                    clip_radius: 0.0,
                 });
             }
         }

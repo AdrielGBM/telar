@@ -1,14 +1,14 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use layout_core::{LayoutError, LayoutStyle, NodeId};
+use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, PointerButton};
 use renderer_core::{
     BorderRadius, Color, DrawCommand, RectPayload, RectStyle, TextPayload, TextStyle,
 };
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::LayoutItem;
+use crate::layout_item::HasLayoutLeaf;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct ButtonStyle {
@@ -122,9 +122,9 @@ impl Component for Button {
     }
 }
 
-impl LayoutItem for Button {
-    fn layout_node(&self) -> NodeId {
-        self.leaf.node
+impl HasLayoutLeaf for Button {
+    fn layout_leaf(&self) -> &LayoutLeaf {
+        &self.leaf
     }
 }
 

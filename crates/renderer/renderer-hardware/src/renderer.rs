@@ -89,7 +89,6 @@ enum DrawStep {
 struct LayerAccum {
     opacity: f32,
     backdrop_blur: f32,
-    clip_radius: f32,
     begin_step_idx: usize,
     bounds: Option<Rect>,
 }
@@ -705,6 +704,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let mut current_scissor: Option<Rect> = None;
         let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new(); // saves/restores current_scissor across PushLayer/PopLayer; layers disable frustum culling inside their bounds
         let mut layer_accum_stack: Vec<LayerAccum> = Vec::new();
+        // Composite bind_groups for rounded PushClip mini-layers, consumed at the matching PopClip.
+        let mut round_clip_composite: Vec<wgpu::BindGroup> = Vec::new();
+        // Parallel to draw_state clip stack: true = rounded mini-layer, false = scissor rect.
+        let mut clip_is_round: Vec<bool> = Vec::new();
         let layer_blit_stack: Vec<wgpu::BindGroup> = Vec::new();
 
         let orig_commands = commands;
@@ -1194,20 +1197,104 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         });
                     }
                 }
-                DrawCommand::PushClip { rect } => {
+                DrawCommand::PushClip { rect, radius } => {
                     self.flush_all();
-                    let effective = self.draw_state.push_clip(*rect);
-                    current_scissor = Some(effective);
-                    self.pending_steps.push(DrawStep::SetScissor {
-                        rect: Some(effective),
-                    });
+                    if radius.is_zero() {
+                        let effective = self.draw_state.push_clip(*rect);
+                        current_scissor = Some(effective);
+                        clip_is_round.push(false);
+                        self.pending_steps.push(DrawStep::SetScissor {
+                            rect: Some(effective),
+                        });
+                    } else {
+                        // Rounded clip: allocate a mini-layer, draw into it, composite with SDF mask at PopClip.
+                        scissor_layer_stack.push(current_scissor);
+                        current_scissor = None;
+                        self.draw_state.push_clip(*rect);
+                        clip_is_round.push(true);
+                        let ox = rect.x.floor().max(0.0);
+                        let oy = rect.y.floor().max(0.0);
+                        let tex_w = (rect.width.ceil() as u32).max(1).min(self.width.max(1));
+                        let tex_h = (rect.height.ceil() as u32).max(1).min(self.height.max(1));
+                        let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
+                            if let Some(pos) = self
+                                .layer_texture_pool
+                                .iter()
+                                .position(|(_, _, _, _, pw, ph)| *pw == tex_w && *ph == tex_h)
+                            {
+                                let (mt, mv, rt, rv, _, _) = self.layer_texture_pool.remove(pos);
+                                (mt, mv, rt, rv)
+                            } else {
+                                self.layer_pipeline.create_layer_textures(
+                                    &self.device,
+                                    tex_w,
+                                    tex_h,
+                                )
+                            };
+                        let layer_vp = Viewport {
+                            size: [tex_w as f32, tex_h as f32],
+                            offset: [ox, oy],
+                        };
+                        let layer_vp_buf =
+                            self.device
+                                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("rsx-clip-vp"),
+                                    contents: bytemuck::bytes_of(&layer_vp),
+                                    usage: wgpu::BufferUsages::UNIFORM,
+                                });
+                        let layer_vp_bg =
+                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("rsx-clip-vp-bg"),
+                                layout: &self.viewport_bgl,
+                                entries: &[wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: layer_vp_buf.as_entire_binding(),
+                                }],
+                            });
+                        // composite_bg borrows resolve_view before it moves into BeginLayer
+                        let composite_bg = self.composite_pipeline.create_bind_group(
+                            &self.device,
+                            &resolve_view,
+                            [ox, oy, tex_w as f32, tex_h as f32],
+                            1.0,
+                            radius.top_left,
+                        );
+                        self.pending_steps.push(DrawStep::BeginLayer {
+                            msaa_texture,
+                            msaa_view,
+                            resolve_texture,
+                            resolve_view,
+                            viewport_bind_group: layer_vp_bg,
+                            width: tex_w,
+                            height: tex_h,
+                            offset_x: ox,
+                            offset_y: oy,
+                            backdrop_blur: 0.0,
+                        });
+                        // Pool return for clip layer textures is handled by the EndLayerComposite execution path.
+                        round_clip_composite.push(composite_bg);
+                    }
                 }
                 DrawCommand::PopClip => {
                     self.flush_all();
-                    let effective = self.draw_state.pop_clip();
-                    current_scissor = effective;
-                    self.pending_steps
-                        .push(DrawStep::SetScissor { rect: effective });
+                    if clip_is_round.pop() == Some(true) {
+                        let composite_bg = round_clip_composite
+                            .pop()
+                            .expect("round_clip_composite underflow");
+                        self.draw_state.pop_clip();
+                        current_scissor = scissor_layer_stack.pop().flatten();
+                        self.pending_steps.push(DrawStep::EndLayerComposite {
+                            bind_group: composite_bg,
+                        });
+                        self.pending_steps.push(DrawStep::SetScissor {
+                            rect: current_scissor,
+                        });
+                    } else {
+                        let effective = self.draw_state.pop_clip();
+                        current_scissor = effective;
+                        self.pending_steps
+                            .push(DrawStep::SetScissor { rect: effective });
+                    }
                 }
                 DrawCommand::PushMatrix { matrix } => {
                     self.draw_state.push_matrix(*matrix);
@@ -1218,7 +1305,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 DrawCommand::PushLayer {
                     opacity,
                     backdrop_blur,
-                    clip_radius,
                 } => {
                     self.flush_all();
                     // Disable frustum culling inside the layer to avoid incorrect culling by an outer PushClip; save scissor for restore at PopLayer.
@@ -1227,7 +1313,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     layer_accum_stack.push(LayerAccum {
                         opacity: *opacity,
                         backdrop_blur: *backdrop_blur,
-                        clip_radius: *clip_radius,
                         begin_step_idx: self.pending_steps.len(),
                         bounds: None,
                     });
@@ -1245,6 +1330,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         } else {
                             (0.0, 0.0, self.width.max(1), self.height.max(1))
                         };
+                        // Propagate this layer's visual footprint to the parent layer so nested
+                        // layers are included in the parent's bounds (and thus its texture size).
+                        if let Some(parent) = layer_accum_stack.last_mut() {
+                            let footprint =
+                                Rect::new(offset_x, offset_y, tex_w as f32, tex_h as f32);
+                            parent.bounds = Some(
+                                parent
+                                    .bounds
+                                    .map_or(footprint, |b| union_rects(b, footprint)),
+                            );
+                        }
                         let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
                             if let Some(pos) = self
                                 .layer_texture_pool
@@ -1286,7 +1382,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             &resolve_view,
                             [offset_x, offset_y, tex_w as f32, tex_h as f32],
                             accum.opacity,
-                            accum.clip_radius,
+                            0.0,
                         );
                         self.pending_steps.insert(
                             accum.begin_step_idx,
@@ -2190,19 +2286,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     }
 
                     if backdrop_blur > 0.0 {
-                        // Resolve parent MSAA into a temp single-sample texture so it can be sampled.
-                        let (parent_w, parent_h) =
-                            if let Some((_, _, _, _, _, pw, ph)) = layer_stack.last() {
-                                (*pw, *ph)
-                            } else {
-                                (self.width, self.height)
-                            };
-                        let parent_msaa_view: &wgpu::TextureView =
-                            if let Some((_, pmv, _, _, _, _, _)) = layer_stack.last() {
-                                pmv
-                            } else {
-                                &msaa_view
-                            };
+                        // Always sample from the root (main) MSAA for backdrop blur. Any layers
+                        // above this point in the stack (e.g. a rounded-clip mini-layer) are
+                        // transparent at this moment — blurring their content would yield nothing.
+                        // The root MSAA has the fully-rendered app content that the blur should sample.
+                        let (parent_w, parent_h) = (self.width, self.height);
+                        let parent_msaa_view: &wgpu::TextureView = &msaa_view;
 
                         let temp_resolve = self.device.create_texture(&wgpu::TextureDescriptor {
                             label: Some("rsx-backdrop-resolve"),

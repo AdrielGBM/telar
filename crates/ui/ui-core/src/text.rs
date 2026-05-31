@@ -2,12 +2,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use geometry_core::Rect;
-use layout_core::{LayoutError, LayoutStyle, NodeId};
+use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use renderer_core::{DrawCommand, TextPayload, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::LayoutItem;
+use crate::layout_item::HasLayoutLeaf;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Text {
@@ -68,8 +68,8 @@ impl Component for Text {
     }
 }
 
-impl LayoutItem for Text {
-    fn layout_node(&self) -> NodeId {
-        self.leaf.node
+impl HasLayoutLeaf for Text {
+    fn layout_leaf(&self) -> &LayoutLeaf {
+        &self.leaf
     }
 }

@@ -131,7 +131,7 @@ pub fn detect_scroll_blit(
     let mut clip_stack: Vec<Rect> = Vec::new();
     for cmd in &new_cmds[..scroll_idx] {
         match cmd {
-            DrawCommand::PushClip { rect } => {
+            DrawCommand::PushClip { rect, .. } => {
                 let effective = clip_stack
                     .last()
                     .and_then(|&c| c.intersect(*rect))
@@ -279,7 +279,7 @@ pub fn detect_scroll_blit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DrawCommand, style::RectStyle};
+    use crate::{BorderRadius, DrawCommand, style::RectStyle};
     use geometry_core::Rect;
 
     fn rect_cmd(x: f32, y: f32, w: f32, h: f32) -> DrawCommand {
@@ -342,6 +342,7 @@ mod tests {
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 600.0),
+                radius: BorderRadius::zero(),
             },
             rect_cmd(0.0, 100.0, 100.0, 20.0),
             DrawCommand::PopClip,
@@ -349,6 +350,7 @@ mod tests {
         let new = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 400.0),
+                radius: BorderRadius::zero(),
             },
             rect_cmd(0.0, 100.0, 100.0, 20.0),
             DrawCommand::PopClip,
@@ -361,6 +363,7 @@ mod tests {
         let cmds = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+                radius: BorderRadius::zero(),
             },
             DrawCommand::PushMatrix {
                 matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -50.0],
@@ -378,6 +381,7 @@ mod tests {
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+                radius: BorderRadius::zero(),
             },
             rect_cmd(0.0, 0.0, 100.0, 30.0), // header — before scroll
             DrawCommand::PushMatrix {
@@ -390,6 +394,7 @@ mod tests {
         let new = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+                radius: BorderRadius::zero(),
             },
             rect_cmd(0.0, 0.0, 100.0, 30.0), // unchanged header
             DrawCommand::PushMatrix {
@@ -408,6 +413,7 @@ mod tests {
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+                radius: BorderRadius::zero(),
             },
             DrawCommand::PushMatrix {
                 matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -50.0],
@@ -420,6 +426,7 @@ mod tests {
         let new = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+                radius: BorderRadius::zero(),
             },
             DrawCommand::PushMatrix {
                 matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -60.0],
@@ -437,6 +444,7 @@ mod tests {
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+                radius: BorderRadius::zero(),
             },
             DrawCommand::PushMatrix {
                 matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -50.0],
@@ -448,6 +456,7 @@ mod tests {
         let new = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+                radius: BorderRadius::zero(),
             },
             DrawCommand::PushMatrix {
                 matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -60.0],
