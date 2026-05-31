@@ -1,67 +1,31 @@
 use taffy::{
-    Dimension, Display, FlexDirection, GridAutoFlow, GridPlacement, LengthPercentage,
+    Dimension, Display, FlexDirection, FlexWrap, GridAutoFlow, GridPlacement, LengthPercentage,
     LengthPercentageAuto, Style,
 };
+
+pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
 
 use crate::track::Track;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AvailableSpace {
-    Definite(f32),
-    MinContent,
-    MaxContent,
+pub enum SizeDimension {
+    Px(f32),
+    Percent(f32),
+    Auto,
 }
 
-impl From<AvailableSpace> for taffy::AvailableSpace {
-    fn from(s: AvailableSpace) -> Self {
-        match s {
-            AvailableSpace::Definite(v) => taffy::AvailableSpace::Definite(v),
-            AvailableSpace::MinContent => taffy::AvailableSpace::MinContent,
-            AvailableSpace::MaxContent => taffy::AvailableSpace::MaxContent,
-        }
+impl From<f32> for SizeDimension {
+    fn from(px: f32) -> Self {
+        SizeDimension::Px(px)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AlignItems {
-    Start,
-    End,
-    Center,
-    Stretch,
-    Baseline,
-}
-
-impl From<AlignItems> for taffy::AlignItems {
-    fn from(v: AlignItems) -> Self {
-        match v {
-            AlignItems::Start => taffy::AlignItems::Start,
-            AlignItems::End => taffy::AlignItems::End,
-            AlignItems::Center => taffy::AlignItems::Center,
-            AlignItems::Stretch => taffy::AlignItems::Stretch,
-            AlignItems::Baseline => taffy::AlignItems::Baseline,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum JustifyContent {
-    Start,
-    End,
-    Center,
-    SpaceBetween,
-    SpaceAround,
-    SpaceEvenly,
-}
-
-impl From<JustifyContent> for taffy::JustifyContent {
-    fn from(v: JustifyContent) -> Self {
-        match v {
-            JustifyContent::Start => taffy::JustifyContent::Start,
-            JustifyContent::End => taffy::JustifyContent::End,
-            JustifyContent::Center => taffy::JustifyContent::Center,
-            JustifyContent::SpaceBetween => taffy::JustifyContent::SpaceBetween,
-            JustifyContent::SpaceAround => taffy::JustifyContent::SpaceAround,
-            JustifyContent::SpaceEvenly => taffy::JustifyContent::SpaceEvenly,
+impl From<SizeDimension> for Dimension {
+    fn from(d: SizeDimension) -> Self {
+        match d {
+            SizeDimension::Px(v) => Dimension::length(v),
+            SizeDimension::Percent(v) => Dimension::percent(v),
+            SizeDimension::Auto => Dimension::auto(),
         }
     }
 }
@@ -90,23 +54,43 @@ impl LayoutStyle {
         self
     }
 
-    pub fn width(mut self, px: f32) -> Self {
-        self.inner.size.width = Dimension::length(px);
+    pub fn flex_wrap(mut self) -> Self {
+        self.inner.flex_wrap = FlexWrap::Wrap;
         self
     }
 
-    pub fn height(mut self, px: f32) -> Self {
-        self.inner.size.height = Dimension::length(px);
+    pub fn flex_wrap_reverse(mut self) -> Self {
+        self.inner.flex_wrap = FlexWrap::WrapReverse;
         self
     }
 
-    pub fn width_percent(mut self, pct: f32) -> Self {
-        self.inner.size.width = Dimension::percent(pct);
+    pub fn width(mut self, dim: impl Into<SizeDimension>) -> Self {
+        self.inner.size.width = dim.into().into();
         self
     }
 
-    pub fn height_percent(mut self, pct: f32) -> Self {
-        self.inner.size.height = Dimension::percent(pct);
+    pub fn height(mut self, dim: impl Into<SizeDimension>) -> Self {
+        self.inner.size.height = dim.into().into();
+        self
+    }
+
+    pub fn min_width(mut self, dim: impl Into<SizeDimension>) -> Self {
+        self.inner.min_size.width = dim.into().into();
+        self
+    }
+
+    pub fn min_height(mut self, dim: impl Into<SizeDimension>) -> Self {
+        self.inner.min_size.height = dim.into().into();
+        self
+    }
+
+    pub fn max_width(mut self, dim: impl Into<SizeDimension>) -> Self {
+        self.inner.max_size.width = dim.into().into();
+        self
+    }
+
+    pub fn max_height(mut self, dim: impl Into<SizeDimension>) -> Self {
+        self.inner.max_size.height = dim.into().into();
         self
     }
 
@@ -120,13 +104,8 @@ impl LayoutStyle {
         self
     }
 
-    pub fn min_width(mut self, px: f32) -> Self {
-        self.inner.min_size.width = Dimension::length(px);
-        self
-    }
-
-    pub fn min_height(mut self, px: f32) -> Self {
-        self.inner.min_size.height = Dimension::length(px);
+    pub fn flex_basis(mut self, dim: impl Into<SizeDimension>) -> Self {
+        self.inner.flex_basis = dim.into().into();
         self
     }
 
@@ -141,6 +120,70 @@ impl LayoutStyle {
         self
     }
 
+    pub fn padding_horizontal(mut self, px: f32) -> Self {
+        self.inner.padding.left = LengthPercentage::length(px);
+        self.inner.padding.right = LengthPercentage::length(px);
+        self
+    }
+
+    pub fn padding_horizontal_percent(mut self, pct: f32) -> Self {
+        self.inner.padding.left = LengthPercentage::percent(pct);
+        self.inner.padding.right = LengthPercentage::percent(pct);
+        self
+    }
+
+    pub fn padding_vertical(mut self, px: f32) -> Self {
+        self.inner.padding.top = LengthPercentage::length(px);
+        self.inner.padding.bottom = LengthPercentage::length(px);
+        self
+    }
+
+    pub fn padding_vertical_percent(mut self, pct: f32) -> Self {
+        self.inner.padding.top = LengthPercentage::percent(pct);
+        self.inner.padding.bottom = LengthPercentage::percent(pct);
+        self
+    }
+
+    pub fn padding_top(mut self, px: f32) -> Self {
+        self.inner.padding.top = LengthPercentage::length(px);
+        self
+    }
+
+    pub fn padding_top_percent(mut self, pct: f32) -> Self {
+        self.inner.padding.top = LengthPercentage::percent(pct);
+        self
+    }
+
+    pub fn padding_bottom(mut self, px: f32) -> Self {
+        self.inner.padding.bottom = LengthPercentage::length(px);
+        self
+    }
+
+    pub fn padding_bottom_percent(mut self, pct: f32) -> Self {
+        self.inner.padding.bottom = LengthPercentage::percent(pct);
+        self
+    }
+
+    pub fn padding_left(mut self, px: f32) -> Self {
+        self.inner.padding.left = LengthPercentage::length(px);
+        self
+    }
+
+    pub fn padding_left_percent(mut self, pct: f32) -> Self {
+        self.inner.padding.left = LengthPercentage::percent(pct);
+        self
+    }
+
+    pub fn padding_right(mut self, px: f32) -> Self {
+        self.inner.padding.right = LengthPercentage::length(px);
+        self
+    }
+
+    pub fn padding_right_percent(mut self, pct: f32) -> Self {
+        self.inner.padding.right = LengthPercentage::percent(pct);
+        self
+    }
+
     pub fn margin_all(mut self, px: f32) -> Self {
         let value = LengthPercentageAuto::length(px);
         self.inner.margin = taffy::geometry::Rect {
@@ -149,6 +192,70 @@ impl LayoutStyle {
             top: value,
             bottom: value,
         };
+        self
+    }
+
+    pub fn margin_horizontal(mut self, px: f32) -> Self {
+        self.inner.margin.left = LengthPercentageAuto::length(px);
+        self.inner.margin.right = LengthPercentageAuto::length(px);
+        self
+    }
+
+    pub fn margin_horizontal_percent(mut self, pct: f32) -> Self {
+        self.inner.margin.left = LengthPercentageAuto::percent(pct);
+        self.inner.margin.right = LengthPercentageAuto::percent(pct);
+        self
+    }
+
+    pub fn margin_vertical(mut self, px: f32) -> Self {
+        self.inner.margin.top = LengthPercentageAuto::length(px);
+        self.inner.margin.bottom = LengthPercentageAuto::length(px);
+        self
+    }
+
+    pub fn margin_vertical_percent(mut self, pct: f32) -> Self {
+        self.inner.margin.top = LengthPercentageAuto::percent(pct);
+        self.inner.margin.bottom = LengthPercentageAuto::percent(pct);
+        self
+    }
+
+    pub fn margin_top(mut self, px: f32) -> Self {
+        self.inner.margin.top = LengthPercentageAuto::length(px);
+        self
+    }
+
+    pub fn margin_top_percent(mut self, pct: f32) -> Self {
+        self.inner.margin.top = LengthPercentageAuto::percent(pct);
+        self
+    }
+
+    pub fn margin_bottom(mut self, px: f32) -> Self {
+        self.inner.margin.bottom = LengthPercentageAuto::length(px);
+        self
+    }
+
+    pub fn margin_bottom_percent(mut self, pct: f32) -> Self {
+        self.inner.margin.bottom = LengthPercentageAuto::percent(pct);
+        self
+    }
+
+    pub fn margin_left(mut self, px: f32) -> Self {
+        self.inner.margin.left = LengthPercentageAuto::length(px);
+        self
+    }
+
+    pub fn margin_left_percent(mut self, pct: f32) -> Self {
+        self.inner.margin.left = LengthPercentageAuto::percent(pct);
+        self
+    }
+
+    pub fn margin_right(mut self, px: f32) -> Self {
+        self.inner.margin.right = LengthPercentageAuto::length(px);
+        self
+    }
+
+    pub fn margin_right_percent(mut self, pct: f32) -> Self {
+        self.inner.margin.right = LengthPercentageAuto::percent(pct);
         self
     }
 
@@ -161,12 +268,12 @@ impl LayoutStyle {
     }
 
     pub fn align_items(mut self, value: AlignItems) -> Self {
-        self.inner.align_items = Some(value.into());
+        self.inner.align_items = Some(value);
         self
     }
 
     pub fn justify_content(mut self, value: JustifyContent) -> Self {
-        self.inner.justify_content = Some(value.into());
+        self.inner.justify_content = Some(value);
         self
     }
 
@@ -277,9 +384,33 @@ mod tests {
     }
 
     #[test]
+    fn style_width_percent_sets_dimension() {
+        let style = LayoutStyle::new().width(SizeDimension::Percent(0.5));
+        assert_eq!(style.inner.size.width, Dimension::percent(0.5));
+    }
+
+    #[test]
     fn style_height_sets_dimension() {
         let style = LayoutStyle::new().height(80.0);
         assert_eq!(style.inner.size.height, Dimension::length(80.0));
+    }
+
+    #[test]
+    fn style_max_width_sets_dimension() {
+        let style = LayoutStyle::new().max_width(200.0);
+        assert_eq!(style.inner.max_size.width, Dimension::length(200.0));
+    }
+
+    #[test]
+    fn style_max_height_sets_dimension() {
+        let style = LayoutStyle::new().max_height(150.0);
+        assert_eq!(style.inner.max_size.height, Dimension::length(150.0));
+    }
+
+    #[test]
+    fn style_flex_basis_percent_sets_dimension() {
+        let style = LayoutStyle::new().flex_basis(SizeDimension::Percent(0.5));
+        assert_eq!(style.inner.flex_basis, Dimension::percent(0.5));
     }
 
     #[test]
@@ -313,5 +444,44 @@ mod tests {
     fn style_default_impl_matches_new() {
         let style = LayoutStyle::default();
         assert_eq!(style.inner.display, Display::Flex);
+    }
+
+    #[test]
+    fn style_padding_horizontal_sets_left_right() {
+        let style = LayoutStyle::new().padding_horizontal(10.0);
+        assert_eq!(style.inner.padding.left, LengthPercentage::length(10.0));
+        assert_eq!(style.inner.padding.right, LengthPercentage::length(10.0));
+    }
+
+    #[test]
+    fn style_padding_vertical_sets_top_bottom() {
+        let style = LayoutStyle::new().padding_vertical(8.0);
+        assert_eq!(style.inner.padding.top, LengthPercentage::length(8.0));
+        assert_eq!(style.inner.padding.bottom, LengthPercentage::length(8.0));
+    }
+
+    #[test]
+    fn style_padding_top_sets_field() {
+        let style = LayoutStyle::new().padding_top(4.0);
+        assert_eq!(style.inner.padding.top, LengthPercentage::length(4.0));
+    }
+
+    #[test]
+    fn style_padding_left_percent_sets_field() {
+        let style = LayoutStyle::new().padding_left_percent(0.1);
+        assert_eq!(style.inner.padding.left, LengthPercentage::percent(0.1));
+    }
+
+    #[test]
+    fn style_margin_horizontal_sets_left_right() {
+        let style = LayoutStyle::new().margin_horizontal(12.0);
+        assert_eq!(style.inner.margin.left, LengthPercentageAuto::length(12.0));
+        assert_eq!(style.inner.margin.right, LengthPercentageAuto::length(12.0));
+    }
+
+    #[test]
+    fn style_margin_top_sets_field() {
+        let style = LayoutStyle::new().margin_top(6.0);
+        assert_eq!(style.inner.margin.top, LengthPercentageAuto::length(6.0));
     }
 }

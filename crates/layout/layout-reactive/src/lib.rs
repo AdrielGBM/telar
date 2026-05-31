@@ -5,5 +5,6 @@ pub use context::{
     update_style, with_context,
 };
 pub use layout_core::{
-    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, NodeId, Track,
+    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, NodeId, SizeDimension,
+    Track,
 };
