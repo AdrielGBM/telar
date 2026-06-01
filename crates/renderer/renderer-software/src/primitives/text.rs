@@ -71,8 +71,8 @@ pub(crate) fn draw_text(
             let shadow_w = tex_w as f32 + 2.0 * padding as f32 + 2.0;
             let shadow_h = tex_h as f32 + 2.0 * padding as f32 + 2.0;
             if renderer_core::culling::overlaps(
-                shadow_x,
-                shadow_y,
+                shadow_x + transform.tx,
+                shadow_y + transform.ty,
                 shadow_w,
                 shadow_h,
                 current_clip_rect,

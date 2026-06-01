@@ -558,7 +558,19 @@ where
 
         let layer_bboxes = compute_layer_bboxes(commands, self.width, self.height);
 
+        // Nesting depth of PushLayer commands skipped because their bbox doesn't overlap skip_rect; their pixels are already correct from apply_scroll_blit.
+        let mut skip_layer_depth: usize = 0;
+
         for (cmd_idx, cmd) in commands.iter().enumerate() {
+            if skip_layer_depth > 0 {
+                match cmd {
+                    DrawCommand::PushLayer { .. } => skip_layer_depth += 1,
+                    DrawCommand::PopLayer => skip_layer_depth -= 1,
+                    _ => {}
+                }
+                continue;
+            }
+
             if self.pixmap.is_none() {
                 break;
             }
@@ -850,6 +862,23 @@ where
                     opacity,
                     backdrop_blur,
                 } => {
+                    // During scroll_blit, skip layers outside the dirty region: their pixels are already correct from apply_scroll_blit and re-compositing would double-apply the layer's opacity.
+                    if let Some(sr) = skip_rect {
+                        if !inside_layer {
+                            if let Some((ox, oy, bw, bh)) = layer_bboxes[cmd_idx] {
+                                let layer_rect = Rect {
+                                    x: ox as f32,
+                                    y: oy as f32,
+                                    width: bw as f32,
+                                    height: bh as f32,
+                                };
+                                if !rect_overlaps(layer_rect, sr) {
+                                    skip_layer_depth = 1;
+                                    continue;
+                                }
+                            }
+                        }
+                    }
                     let (ox, oy, bw, bh) =
                         layer_bboxes[cmd_idx].unwrap_or((0, 0, self.width, self.height));
                     let layer = self

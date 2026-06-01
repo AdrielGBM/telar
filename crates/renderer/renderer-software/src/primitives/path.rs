@@ -135,16 +135,6 @@ pub(crate) fn draw_path(
         }
     }
 
-    if !renderer_core::culling::overlaps(
-        b.x() + transform.tx,
-        b.y() + transform.ty,
-        b.width(),
-        b.height(),
-        current_clip_rect,
-    ) {
-        return;
-    }
-
     if let Some(fill_style) = style.fill {
         let paint = fill_to_paint(fill_style);
         let rule = match style.fill_rule {

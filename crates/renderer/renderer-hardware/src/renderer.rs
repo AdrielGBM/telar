@@ -812,7 +812,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         self.draw_state.reset();
-        let scroll_blit = renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands);
+        // scroll_blit requires LoadOp::Load to work; when clear_color is set the frame is cleared (LoadOp::Clear), so skipping commands would leave cleared pixels instead of correct content.
+        let scroll_blit = if clear_color.is_none() {
+            renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands)
+        } else {
+            None
+        };
         let dirty_scissor: Option<Rect> =
             if clear_color.is_none() && scroll_blit.is_none() && !self.prev_commands.is_empty() {
                 renderer_core::dirty::compute_dirty_rect(
@@ -2655,9 +2660,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         });
                     }
 
+                    // When msaa_samples==1 (Android) draws target the resolve view (tuple index 3), not the MSAA view (index 1); using the wrong view causes composited content to land on a texture the outer layer never reads, making nested layers disappear.
                     let parent_view: &wgpu::TextureView =
-                        if let Some((_, pv, _, _, _, _, _)) = layer_stack.last() {
-                            pv
+                        if let Some((_, lmv, _, lrv, _, _, _)) = layer_stack.last() {
+                            if self.msaa_samples > 1 { lmv } else { lrv }
                         } else {
                             &msaa_view
                         };
