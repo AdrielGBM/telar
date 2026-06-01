@@ -88,8 +88,8 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
             WindowEvent::Resized(size) => {
                 self.handler.on_event(
                     Event::WindowResized {
-                        width: size.width,
-                        height: size.height,
+                        width: (size.width as f64 / self.scale_factor).round() as u32,
+                        height: (size.height as f64 / self.scale_factor).round() as u32,
                     },
                     window,
                 );
@@ -180,8 +180,8 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 let scroll_delta = match delta {
                     MouseScrollDelta::LineDelta(x, y) => ScrollDelta::Lines { x, y },
                     MouseScrollDelta::PixelDelta(pos) => ScrollDelta::Pixels {
-                        x: pos.x as f32,
-                        y: pos.y as f32,
+                        x: (pos.x / self.scale_factor) as f32,
+                        y: (pos.y / self.scale_factor) as f32,
                     },
                 };
                 self.handler.on_event(

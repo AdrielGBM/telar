@@ -21,7 +21,7 @@ use crate::primitives::text::{TextInstance, TextPipeline};
 use crate::primitives::{Viewport, create_viewport_bgl};
 
 fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
-    // Prefer Rgba8Unorm first: wider MSAA support on Linux/Vulkan; some Mesa drivers error on Bgra8Unorm MSAA textures. Fall back to Bgra8Unorm, then driver default.
+    // Prefer Rgba8Unorm: wider MSAA support on Linux/Vulkan; some Mesa drivers error on Bgra8Unorm MSAA textures. Shaders output sRGB-encoded values so UNORM (no hardware gamma) is correct on all platforms.
     caps.formats
         .iter()
         .find(|f| matches!(f, wgpu::TextureFormat::Rgba8Unorm))
@@ -196,6 +196,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     alpha_mode: wgpu::CompositeAlphaMode,
     width: u32,
     height: u32,
+    scale_factor: f32,
     pending_instances: Vec<RectInstance>,
     pending_text_instances: Vec<TextInstance>,
     pending_line_instances: Vec<LineInstance>,
@@ -260,14 +261,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         window: W,
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
+        font_config: renderer_text::TextShaperConfig,
     ) -> Result<Self, RendererError> {
-        pollster::block_on(Self::new_async(window, cache_path, vulkan_only))
+        pollster::block_on(Self::new_async(
+            window,
+            cache_path,
+            vulkan_only,
+            font_config,
+        ))
     }
 
     pub async fn new_async(
         window: W,
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
+        font_config: renderer_text::TextShaperConfig,
     ) -> Result<Self, RendererError> {
         let window = std::sync::Arc::new(window);
 
@@ -333,7 +341,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = preferred_format(&surface_caps);
-        let msaa_samples = if adapter
+        // Android Adreno TBDR GPUs silently drop MSAA samples across render-pass boundaries (StoreOp::Store + LoadOp::Load on multisampled textures yields zeros); force 1 sample on Android.
+        let msaa_samples = if cfg!(target_os = "android") {
+            1
+        } else if adapter
             .get_texture_format_features(surface_format)
             .flags
             .contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4)
@@ -342,17 +353,39 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             1
         };
-        let present_mode = surface_caps
-            .present_modes
-            .iter()
-            .find(|&&m| m == wgpu::PresentMode::Mailbox)
-            .copied()
-            .unwrap_or(wgpu::PresentMode::Fifo);
+        // On Android always use Fifo: Mailbox on some Adreno/MIUI devices silently drops frames producing a black screen.
+        let present_mode = if cfg!(target_os = "android") {
+            wgpu::PresentMode::Fifo
+        } else {
+            surface_caps
+                .present_modes
+                .iter()
+                .find(|&&m| m == wgpu::PresentMode::Mailbox)
+                .copied()
+                .unwrap_or(wgpu::PresentMode::Fifo)
+        };
+        // Prefer Opaque for a non-transparent app; Inherit as fallback so the window system decides.
         let alpha_mode = surface_caps
             .alpha_modes
-            .first()
+            .iter()
+            .find(|&&m| m == wgpu::CompositeAlphaMode::Opaque)
             .copied()
-            .unwrap_or(wgpu::CompositeAlphaMode::Auto);
+            .unwrap_or_else(|| {
+                surface_caps
+                    .alpha_modes
+                    .first()
+                    .copied()
+                    .unwrap_or(wgpu::CompositeAlphaMode::Auto)
+            });
+        tracing::info!(
+            "hw init: format={:?} msaa={} alpha={:?} present={:?} all_formats={:?} all_alpha={:?}",
+            surface_format,
+            msaa_samples,
+            alpha_mode,
+            present_mode,
+            surface_caps.formats,
+            surface_caps.alpha_modes,
+        );
 
         let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rsx-viewport"),
@@ -458,12 +491,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_shadow_path_indices: Vec::new(),
             pending_shadow_path_fill_data: Vec::new(),
             pending_path_shadow_ops: Vec::new(),
-            text_shaper: renderer_text::TextShaper::new(),
+            text_shaper: renderer_text::TextShaper::with_config(font_config),
             surface_format,
             present_mode,
             alpha_mode,
             width: 0,
             height: 0,
+            scale_factor: 1.0,
             pending_instances: Vec::new(),
             pending_text_instances: Vec::new(),
             pending_line_instances: Vec::new(),
@@ -499,8 +533,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn reconfigure(&mut self, width: u32, height: u32) {
+        // COPY_DST is needed for the non-MSAA (sample_count=1) copy_texture_to_texture path.
+        let surface_usage = if self.msaa_samples == 1 {
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST
+        } else {
+            wgpu::TextureUsages::RENDER_ATTACHMENT
+        };
         let config = SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: surface_usage,
             format: self.surface_format,
             width,
             height,
@@ -513,6 +553,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.surface.configure(&self.device, &config);
         self.config = Some(config);
         self.viewport_dirty = true;
+        // msaa_samples==1: the "resolve" is a texture copy, so COPY_SRC is required.
+        let msaa_usage = if self.msaa_samples == 1 {
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC
+        } else {
+            wgpu::TextureUsages::RENDER_ATTACHMENT
+        };
         self.msaa_texture = Some(self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rsx-msaa"),
             size: wgpu::Extent3d {
@@ -524,9 +570,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             sample_count: self.msaa_samples,
             dimension: wgpu::TextureDimension::D2,
             format: self.surface_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: msaa_usage,
             view_formats: &[],
         }));
+        // msaa_samples==1: retained texture is the copy destination, so COPY_DST is required.
+        let retained_usage = if self.msaa_samples == 1 {
+            wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+        } else {
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING
+        };
         let retained = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rsx-retained"),
             size: wgpu::Extent3d {
@@ -538,7 +592,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: self.surface_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: retained_usage,
             view_formats: &[],
         });
         self.retained_view = Some(retained.create_view(&wgpu::TextureViewDescriptor::default()));
@@ -630,14 +684,32 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
     for HardwareRenderer<W>
 {
-    fn begin_frame(&mut self, width: u32, height: u32) -> Result<(), RendererError> {
+    fn begin_frame(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale_factor: f32,
+    ) -> Result<(), RendererError> {
+        self.scale_factor = scale_factor;
         if width != self.width || height != self.height || self.config.is_none() {
             // Pooled layer textures are sized to the previous surface dimensions and would be unusable at the new size; drop them so we don't leak GPU memory for textures we will never reuse.
             self.layer_texture_pool.clear();
             self.width = width;
             self.height = height;
             if width > 0 && height > 0 {
+                tracing::debug!(
+                    "hw begin_frame: reconfigure {}x{} scale={}",
+                    width,
+                    height,
+                    scale_factor
+                );
                 self.reconfigure(width, height);
+            } else {
+                tracing::warn!(
+                    "hw begin_frame: zero size {}x{}, skipping reconfigure",
+                    width,
+                    height
+                );
             }
         }
         self.clear_pending();
@@ -651,6 +723,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
+        tracing::debug!(
+            "hw render_frame: {} commands, clear={}",
+            commands.len(),
+            clear_color.is_some()
+        );
         // Idle-frame fast path: skip full pipeline and blit retained texture when commands and viewport are unchanged.
         if !self.prev_commands.is_empty()
             && commands == self.prev_commands.as_slice()
@@ -661,12 +738,26 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         {
             if let Some(retained_view) = self.retained_view.as_ref() {
                 let output = match self.surface.get_current_texture() {
-                    wgpu::CurrentSurfaceTexture::Success(t)
-                    | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+                    wgpu::CurrentSurfaceTexture::Success(t) => t,
+                    wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
+                        tracing::debug!("hw idle-blit: suboptimal surface");
+                        t
+                    }
                     wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                        tracing::warn!("hw idle-blit: surface Lost/Outdated, reconfiguring");
                         if let Some(config) = &self.config.clone() {
                             self.surface.configure(&self.device, config);
                         }
+                        self.clear_pending();
+                        return Ok(());
+                    }
+                    wgpu::CurrentSurfaceTexture::Timeout => {
+                        tracing::warn!("hw idle-blit: Timeout, skipping frame");
+                        self.clear_pending();
+                        return Ok(());
+                    }
+                    wgpu::CurrentSurfaceTexture::Occluded => {
+                        tracing::warn!("hw idle-blit: Occluded, skipping frame");
                         self.clear_pending();
                         return Ok(());
                     }
@@ -713,6 +804,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     blit.draw(0..6, 0..1);
                 }
                 self.queue.submit(std::iter::once(encoder.finish()));
+                tracing::debug!("hw idle-blit: presenting");
                 output.present();
                 self.clear_pending();
                 return Ok(());
@@ -1452,17 +1544,41 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         };
 
         if self.config.is_none() || self.width == 0 || self.height == 0 {
+            tracing::warn!(
+                "hw render_frame: skipping, config={} w={} h={}",
+                self.config.is_some(),
+                self.width,
+                self.height
+            );
             self.clear_pending();
             return Ok(());
         }
 
         let output = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            wgpu::CurrentSurfaceTexture::Success(t) => t,
+            wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
+                tracing::debug!("hw render_frame: suboptimal surface, rendering anyway");
+                t
+            }
             wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                tracing::warn!(
+                    "hw render_frame: surface Lost/Outdated, reconfiguring {}x{}",
+                    self.width,
+                    self.height
+                );
                 if let Some(config) = &self.config.clone() {
                     self.surface.configure(&self.device, config);
                 }
+                self.clear_pending();
+                return Ok(());
+            }
+            wgpu::CurrentSurfaceTexture::Timeout => {
+                tracing::warn!("hw render_frame: surface Timeout, skipping frame");
+                self.clear_pending();
+                return Ok(());
+            }
+            wgpu::CurrentSurfaceTexture::Occluded => {
+                tracing::warn!("hw render_frame: surface Occluded, skipping frame");
                 self.clear_pending();
                 return Ok(());
             }
@@ -1730,11 +1846,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     });
 
                     {
+                        let cap_draw_view = if self.msaa_samples > 1 {
+                            &cap_msaa_view
+                        } else {
+                            &cap_resolve_view
+                        };
+                        let cap_resolve_opt = if self.msaa_samples > 1 {
+                            Some(&cap_resolve_view)
+                        } else {
+                            None
+                        };
                         let mut pass = pre_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("rsx-shadow-capture"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &cap_msaa_view,
-                                resolve_target: Some(&cap_resolve_view),
+                                view: cap_draw_view,
+                                resolve_target: cap_resolve_opt,
                                 depth_slice: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -1856,11 +1982,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     });
 
                     {
+                        let cap_draw_view = if self.msaa_samples > 1 {
+                            &cap_msaa_view
+                        } else {
+                            &cap_resolve_view
+                        };
+                        let cap_resolve_opt = if self.msaa_samples > 1 {
+                            Some(&cap_resolve_view)
+                        } else {
+                            None
+                        };
                         let mut pass = pre_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("rsx-shadow-path-capture"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &cap_msaa_view,
-                                resolve_target: Some(&cap_resolve_view),
+                                view: cap_draw_view,
+                                resolve_target: cap_resolve_opt,
                                 depth_slice: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -2131,16 +2267,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     let draw_steps = &steps[start..end];
                     let inline_resolve = inline_resolve_targets[seg_idx];
                     let attach_view: &wgpu::TextureView =
-                        if let Some((_, lv, _, _, _, _, _)) = layer_stack.last() {
-                            lv
+                        if let Some((_, lmv, _, lrv, _, _, _)) = layer_stack.last() {
+                            if self.msaa_samples > 1 { lmv } else { lrv }
                         } else {
                             &msaa_view
                         };
-                    let resolve_view_opt: Option<&wgpu::TextureView> = if inline_resolve {
-                        layer_stack.last().map(|(_, _, _, rv, _, _, _)| rv)
-                    } else {
-                        None
-                    };
+                    let resolve_view_opt: Option<&wgpu::TextureView> =
+                        if inline_resolve && self.msaa_samples > 1 {
+                            layer_stack.last().map(|(_, _, _, rv, _, _, _)| rv)
+                        } else {
+                            None
+                        };
 
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("rsx-render-pass"),
@@ -2292,10 +2429,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     backdrop_blur,
                 } => {
                     {
+                        let clear_target = if self.msaa_samples > 1 {
+                            &layer_msaa_view
+                        } else {
+                            &resolve_view
+                        };
                         let _clear = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("rsx-layer-clear"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &layer_msaa_view,
+                                view: clear_target,
                                 resolve_target: None,
                                 depth_slice: None,
                                 ops: wgpu::Operations {
@@ -2335,13 +2477,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             dimension: wgpu::TextureDimension::D2,
                             format: self.surface_format,
                             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                                | wgpu::TextureUsages::COPY_SRC,
+                                | wgpu::TextureUsages::COPY_SRC
+                                | wgpu::TextureUsages::COPY_DST,
                             view_formats: &[],
                         });
                         let temp_resolve_view =
                             temp_resolve.create_view(&wgpu::TextureViewDescriptor::default());
 
-                        {
+                        if self.msaa_samples > 1 {
                             let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                 label: Some("rsx-backdrop-parent-resolve"),
                                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2358,6 +2501,26 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 timestamp_writes: None,
                                 multiview_mask: None,
                             });
+                        } else {
+                            encoder.copy_texture_to_texture(
+                                wgpu::TexelCopyTextureInfo {
+                                    texture: self.msaa_texture.as_ref().unwrap(),
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d::ZERO,
+                                    aspect: wgpu::TextureAspect::All,
+                                },
+                                wgpu::TexelCopyTextureInfo {
+                                    texture: &temp_resolve,
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d::ZERO,
+                                    aspect: wgpu::TextureAspect::All,
+                                },
+                                wgpu::Extent3d {
+                                    width: parent_w,
+                                    height: parent_h,
+                                    depth_or_array_layers: 1,
+                                },
+                            );
                         }
 
                         let ox_px = offset_x.floor().max(0.0) as u32;
@@ -2426,11 +2589,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             0.0,
                         );
                         {
+                            let backdrop_target = if self.msaa_samples > 1 {
+                                &layer_msaa_view
+                            } else {
+                                &resolve_view
+                            };
                             let mut backdrop_pass =
                                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                     label: Some("rsx-backdrop-composite"),
                                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                        view: &layer_msaa_view,
+                                        view: backdrop_target,
                                         resolve_target: None,
                                         depth_slice: None,
                                         ops: wgpu::Operations {
@@ -2467,8 +2635,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             .pop()
                             .expect("layer_stack underflow on EndLayerComposite");
 
-                    // If the preceding draw pass set its resolve_target to this layer's resolve view, the MSAA resolve already happened when that pass ended — skip the dedicated resolve pass.
-                    if !endlayer_resolve_done[seg_idx] {
+                    // When msaa_samples==1, draws already targeted resolve_view directly so no resolve pass is needed.
+                    if !endlayer_resolve_done[seg_idx] && self.msaa_samples > 1 {
                         let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("rsx-layer-resolve"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2537,26 +2705,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             }
         }
 
-        {
-            let _final = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rsx-final-resolve"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &msaa_view,
-                    resolve_target: Some(retained_view),
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
-        }
-
-        {
+        if self.msaa_samples > 1 {
+            // Resolve MSAA into retained_view so the idle-blit path has valid content next frame.
+            {
+                let _final = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("rsx-final-resolve"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &msaa_view,
+                        resolve_target: Some(retained_view),
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Discard,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                    multiview_mask: None,
+                });
+            }
+            // Blit retained to surface.
             let retained_bg = self.retained_blit_pipeline.create_bind_group(
                 &self.device,
                 retained_view,
@@ -2564,29 +2733,57 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 1.0,
                 0.0,
             );
-            let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rsx-retained-blit"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &surface_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
-            blit.set_pipeline(&self.retained_blit_pipeline.pipeline);
-            blit.set_bind_group(0, &self.viewport_bind_group, &[]);
-            blit.set_bind_group(1, &retained_bg, &[]);
-            blit.draw(0..6, 0..1);
+            {
+                let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("rsx-retained-blit"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &surface_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                    multiview_mask: None,
+                });
+                blit.set_pipeline(&self.retained_blit_pipeline.pipeline);
+                blit.set_bind_group(0, &self.viewport_bind_group, &[]);
+                blit.set_bind_group(1, &retained_bg, &[]);
+                blit.draw(0..6, 0..1);
+            }
+        } else {
+            // Android (msaa_samples==1): copy directly to surface to avoid alpha-compositing artifacts on Adreno drivers.
+            let msaa_tex = self
+                .msaa_texture
+                .as_ref()
+                .ok_or_else(|| RendererError::Backend("msaa_texture missing for copy".into()))?;
+            encoder.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: msaa_tex,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: &output.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width: self.width,
+                    height: self.height,
+                    depth_or_array_layers: 1,
+                },
+            );
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
+        tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
         output.present();
         self.prev_commands = orig_commands.to_vec();
         self.clear_pending();

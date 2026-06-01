@@ -22,6 +22,9 @@ pub trait Window: HasWindowHandle + HasDisplayHandle {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
     fn request_redraw(&self);
+    fn scale_factor(&self) -> f64 {
+        1.0
+    }
 }
 
 pub trait EventHandler<W: Window> {

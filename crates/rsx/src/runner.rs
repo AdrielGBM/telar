@@ -29,6 +29,7 @@ struct AppHandler<W, D: DevPlugin> {
     paths: Box<dyn AppPathsProvider>,
     pending_restart: bool,
     _flush_notify: Option<FlushNotifyHandle>,
+    scale_factor: f32,
     window_signals: Option<WindowSignals>,
     app_name: String,
     last_frame: std::time::Instant,
@@ -63,11 +64,22 @@ where
                 return false;
             }
         }
+        let sf = window.scale_factor() as f32;
+        self.scale_factor = sf;
         self.window_signals = Some(WindowSignals::new(
-            window.width() as f32,
-            window.height() as f32,
+            window.width() as f32 / sf,
+            window.height() as f32 / sf,
         ));
         self.tree = Some(ComponentTree::new(self.app.root()));
+        // Synthesize an initial WindowResized so apps that initialize layout from that event
+        // start with the correct logical dimensions instead of their hardcoded defaults.
+        let initial_resize = platform_core::Event::WindowResized {
+            width: (window.width() as f32 / sf) as u32,
+            height: (window.height() as f32 / sf) as u32,
+        };
+        if let Some(ref mut tree) = self.tree {
+            tree.on_event(&initial_resize);
+        }
 
         let w = window.clone();
         self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
@@ -76,6 +88,9 @@ where
     }
 
     fn on_event(&mut self, event: Event, window: &W) {
+        if let Event::ScaleFactorChanged { scale_factor } = &event {
+            self.scale_factor = *scale_factor as f32;
+        }
         if let Event::WindowResized { width, height } = &event {
             if let Some(ref signals) = self.window_signals {
                 signals.update(*width as f32, *height as f32);
@@ -171,7 +186,14 @@ where
         }
 
         let (w, h) = (window.width(), window.height());
-        if let Err(e) = renderer.begin_frame(w, h) {
+        tracing::debug!(
+            "on_redraw: window {}x{} scale={} tree_dirty={}",
+            w,
+            h,
+            self.scale_factor,
+            tree_dirty
+        );
+        if let Err(e) = renderer.begin_frame(w, h, self.scale_factor) {
             tracing::error!("begin_frame failed: {e}");
             return;
         }
@@ -182,10 +204,21 @@ where
         let commands_ref = self.tree.as_ref().map(|t| t.commands());
         let base_slice: &[renderer_core::DrawCommand] =
             commands_ref.as_deref().map(|r| r.as_slice()).unwrap_or(&[]);
+        let logical_w = w as f32 / self.scale_factor;
+        let logical_h = h as f32 / self.scale_factor;
         let frame_commands = self
             .dev
-            .on_frame(base_slice, w as f32, h as f32, tree_dirty);
-        if let Err(e) = renderer.as_mut().render_frame(&frame_commands, clear) {
+            .on_frame(base_slice, logical_w, logical_h, tree_dirty);
+        let frame_commands: &[renderer_core::DrawCommand] = &frame_commands;
+        let scaled_storage: Vec<renderer_core::DrawCommand>;
+        let frame_commands = if self.scale_factor != 1.0 {
+            scaled_storage = renderer_core::scale_commands(frame_commands, self.scale_factor)
+                .unwrap_or_default();
+            &scaled_storage
+        } else {
+            frame_commands
+        };
+        if let Err(e) = renderer.as_mut().render_frame(frame_commands, clear) {
             tracing::error!("render_frame failed: {e}");
         }
     }
@@ -218,20 +251,47 @@ fn hardware_cache_path(app_name: &str, paths: &dyn AppPathsProvider) -> Option<s
     paths.cache_dir().map(|d| d.join("rsx").join(app_name))
 }
 
-fn android_software_budget(
+fn android_sans_serif_candidates() -> Vec<String> {
+    vec![
+        "Roboto".to_string(),
+        "Droid Sans".to_string(),
+        "MiSans Latin".to_string(),
+        "Noto Sans".to_string(),
+    ]
+}
+
+fn build_hw_font_config(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
+    android: bool,
+) -> renderer_text::TextShaperConfig {
+    renderer_text::TextShaperConfig {
+        extra_font_paths: font_paths,
+        font_data,
+        system_fonts_dir: android.then(|| std::path::PathBuf::from("/system/fonts")),
+        sans_serif_family_candidates: if android {
+            android_sans_serif_candidates()
+        } else {
+            vec![]
+        },
+        ..renderer_text::TextShaperConfig::default()
+    }
+}
+
+fn build_sw_budget(
+    font_paths: Vec<std::path::PathBuf>,
+    font_data: Vec<Vec<u8>>,
+    android: bool,
 ) -> RendererBudget {
     RendererBudget {
         extra_font_paths: font_paths,
         font_data,
-        system_fonts_dir: Some(std::path::PathBuf::from("/system/fonts")),
-        sans_serif_family_candidates: vec![
-            "Roboto".to_string(),
-            "Droid Sans".to_string(),
-            "MiSans Latin".to_string(),
-            "Noto Sans".to_string(),
-        ],
+        system_fonts_dir: android.then(|| std::path::PathBuf::from("/system/fonts")),
+        sans_serif_family_candidates: if android {
+            android_sans_serif_candidates()
+        } else {
+            vec![]
+        },
         ..RendererBudget::default()
     }
 }
@@ -246,51 +306,35 @@ fn create_renderer<W>(
 where
     W: Window + Clone + Send + Sync + 'static,
 {
-    let vulkan_only = cfg!(target_os = "android");
+    let android = cfg!(target_os = "android");
     match backend {
         RendererBackend::Auto => {
-            match HardwareRenderer::new(window.clone(), cache_path, vulkan_only) {
+            let font_config = build_hw_font_config(font_paths.clone(), font_data.clone(), android);
+            match HardwareRenderer::new(window.clone(), cache_path, android, font_config) {
                 Ok(renderer) => {
                     tracing::info!("Using hardware renderer");
-                    let _ = (font_paths, font_data);
                     Ok((Box::new(renderer), true))
                 }
                 Err(e) => {
                     tracing::warn!(
                         "Hardware renderer unavailable ({e}), falling back to software renderer"
                     );
-                    let budget = if vulkan_only {
-                        android_software_budget(font_paths, font_data)
-                    } else {
-                        RendererBudget {
-                            extra_font_paths: font_paths,
-                            font_data,
-                            ..RendererBudget::default()
-                        }
-                    };
+                    let budget = build_sw_budget(font_paths, font_data, android);
                     SoftwareRenderer::new(window.clone(), window.clone(), budget)
                         .map(|r| (Box::new(r) as Box<dyn RenderBackend>, false))
                 }
             }
         }
         RendererBackend::Hardware => {
-            let _ = (font_paths, font_data);
-            HardwareRenderer::new(window.clone(), cache_path, vulkan_only).map(|r| {
+            let font_config = build_hw_font_config(font_paths, font_data, android);
+            HardwareRenderer::new(window.clone(), cache_path, android, font_config).map(|r| {
                 tracing::info!("Using hardware renderer");
                 (Box::new(r) as Box<dyn RenderBackend>, true)
             })
         }
         RendererBackend::Software => {
             tracing::info!("Using software renderer");
-            let budget = if vulkan_only {
-                android_software_budget(font_paths, font_data)
-            } else {
-                RendererBudget {
-                    extra_font_paths: font_paths,
-                    font_data,
-                    ..RendererBudget::default()
-                }
-            };
+            let budget = build_sw_budget(font_paths, font_data, android);
             SoftwareRenderer::new(window.clone(), window.clone(), budget)
                 .map(|r| (Box::new(r) as Box<dyn RenderBackend>, false))
         }
@@ -326,6 +370,7 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
             prefs,
             pending_restart: false,
             _flush_notify: None,
+            scale_factor: 1.0,
             window_signals: None,
             app_name: app_name.to_owned(),
             last_frame: std::time::Instant::now(),
@@ -397,6 +442,7 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             prefs,
             pending_restart: false,
             _flush_notify: None,
+            scale_factor: 1.0,
             window_signals: None,
             app_name: app_name.to_owned(),
             last_frame: std::time::Instant::now(),

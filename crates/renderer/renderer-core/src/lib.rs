@@ -18,7 +18,7 @@ pub use draw_state::{DrawState, IDENTITY_MATRIX, compose_matrix};
 pub use error::RendererError;
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use path::{PathData, PathVerb};
-pub use preprocess::{blur_sigma, expand_fill_layers};
+pub use preprocess::{blur_sigma, expand_fill_layers, scale_commands};
 pub use renderer::RenderBackend;
 pub use style::{
     BorderRadius, FillRule, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineJoin,

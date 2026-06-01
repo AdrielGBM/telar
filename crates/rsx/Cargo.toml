@@ -16,18 +16,20 @@ runtime = [
 [dependencies]
 serde = { workspace = true }
 toml = { workspace = true }
+tracing = { workspace = true }
+
 platform-core = { workspace = true, optional = true }
 renderer-core = { workspace = true, optional = true }
 renderer-software = { workspace = true, optional = true }
-rsx-devtools = { workspace = true, optional = true }
-reactive-core = { workspace = true }
 renderer-hardware = { workspace = true }
+renderer-text = { workspace = true }
+reactive-core = { workspace = true }
 services-core = { workspace = true }
 layout-core = { workspace = true }
 theme-core = { workspace = true }
 ui-core = { workspace = true }
-tracing = { workspace = true }
 geometry-core = { workspace = true }
+rsx-devtools = { workspace = true, optional = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "6.0.0"

@@ -33,6 +33,10 @@ impl PlatformWindow for WinitWindow {
     fn request_redraw(&self) {
         self.0.request_redraw();
     }
+
+    fn scale_factor(&self) -> f64 {
+        self.0.scale_factor()
+    }
 }
 
 impl WinitWindow {

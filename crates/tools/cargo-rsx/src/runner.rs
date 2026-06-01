@@ -228,10 +228,12 @@ fn load_dotenv(cmd: &mut Command) {
     }
 }
 
-fn make_android_cmd(cargo_args: Vec<String>) -> Command {
+fn make_android_cmd(cargo_args: Vec<String>, config: RsxConfig) -> Command {
     let ndk_root = resolve_ndk_root();
+    let backend_value = backend_str(config.backend.unwrap_or_default());
     let mut cmd = Command::new("cargo");
-    cmd.args(cargo_args).env("RSX_RENDERER_BACKEND", "software");
+    cmd.args(cargo_args)
+        .env("RSX_RENDERER_BACKEND", backend_value);
     if let Some(ndk) = ndk_root {
         cmd.env("ANDROID_NDK_ROOT", ndk);
     }
@@ -272,11 +274,12 @@ fn run_dev(args: Vec<String>) {
     if android {
         // `cargo apk run --lib` crashes on UID parsing when launching;
         // work around by doing build → adb install → adb shell am start manually.
+        let config = load_config(&rest);
         let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
         build_args.extend(rest.iter().cloned());
         inject_feature(&mut build_args, "rsx/dev");
 
-        let status = make_android_cmd(build_args)
+        let status = make_android_cmd(build_args, config)
             .status()
             .expect("[cargo-rsx] failed to invoke cargo");
         if !status.success() {
@@ -310,10 +313,11 @@ fn run_bundle(args: Vec<String>) {
     }
 
     if android {
+        let config = load_config(&rest);
         let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
         build_args.extend(rest);
 
-        let status = make_android_cmd(build_args)
+        let status = make_android_cmd(build_args, config)
             .status()
             .expect("[cargo-rsx] failed to invoke cargo");
         std::process::exit(status.code().unwrap_or(1));

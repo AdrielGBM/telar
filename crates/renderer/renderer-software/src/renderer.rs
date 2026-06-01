@@ -385,7 +385,12 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
-    fn begin_frame(&mut self, width: u32, height: u32) -> Result<(), RendererError> {
+    fn begin_frame(
+        &mut self,
+        width: u32,
+        height: u32,
+        _scale_factor: f32,
+    ) -> Result<(), RendererError> {
         if width != self.width || height != self.height {
             self.width = width;
             self.height = height;

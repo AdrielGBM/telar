@@ -62,7 +62,7 @@ impl Component for SandboxRootComponent {
             compute_layout(
                 &mut self.ctx,
                 self.content_node,
-                AvailableSpace::Definite(w.max(480.0)),
+                AvailableSpace::Definite(w),
                 AvailableSpace::MaxContent,
             )
             .ok();
