@@ -2008,6 +2008,7 @@ dependencies = [
  "dirs",
  "geometry-core",
  "layout-core",
+ "libc",
  "platform-android",
  "platform-core",
  "platform-winit",

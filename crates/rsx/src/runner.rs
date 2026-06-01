@@ -19,7 +19,10 @@ use crate::paths::DesktopPathsProvider;
 use platform_winit::{WinitPlatform, WinitWindow};
 use renderer_hardware::HardwareRenderer;
 
-struct AppHandler<W, D: DevPlugin> {
+struct AppHandler<W, D: DevPlugin>
+where
+    W: Window + Clone + Send + Sync + 'static,
+{
     app: Box<dyn App>,
     tree: Option<ComponentTree>,
     renderer: Option<Box<dyn RenderBackend>>,
@@ -28,6 +31,7 @@ struct AppHandler<W, D: DevPlugin> {
     prefs: UserPrefs,
     paths: Box<dyn AppPathsProvider>,
     pending_restart: bool,
+    pending_renderer: Option<std::thread::JoinHandle<Result<HardwareRenderer<W>, RendererError>>>,
     _flush_notify: Option<FlushNotifyHandle>,
     scale_factor: f32,
     window_signals: Option<WindowSignals>,
@@ -110,7 +114,30 @@ where
                     if let Err(e) = self.prefs.save(&self.app_name, self.paths.as_ref()) {
                         tracing::warn!("Could not save preferences: {e}");
                     }
-                    self.pending_restart = true;
+                    match next {
+                        RendererBackend::Software => {
+                            self.pending_restart = true;
+                        }
+                        _ => {
+                            let window_clone = window.clone();
+                            let cache_path =
+                                hardware_cache_path(&self.app_name, self.paths.as_ref());
+                            let font_paths = self.font_paths.clone();
+                            let font_data = self.font_data.clone();
+                            let android = cfg!(target_os = "android");
+                            let handle = std::thread::spawn(move || {
+                                let font_config =
+                                    build_hw_font_config(font_paths, font_data, android);
+                                HardwareRenderer::new(
+                                    window_clone,
+                                    cache_path.as_deref(),
+                                    android,
+                                    font_config,
+                                )
+                            });
+                            self.pending_renderer = Some(handle);
+                        }
+                    }
                 }
                 DevAction::None => {}
             }
@@ -143,6 +170,30 @@ where
             window.request_redraw();
         }
 
+        if let Some(handle) = self.pending_renderer.take() {
+            if handle.is_finished() {
+                match handle.join().unwrap_or_else(|_| {
+                    Err(RendererError::Backend(
+                        "renderer thread panicked".to_string(),
+                    ))
+                }) {
+                    Ok(new_renderer) => {
+                        drop(self.renderer.take());
+                        #[cfg(target_os = "linux")]
+                        unsafe {
+                            libc::malloc_trim(0);
+                        }
+                        self.renderer = Some(Box::new(new_renderer));
+                        self.renderer_is_hardware = true;
+                    }
+                    Err(e) => tracing::error!("Background HW renderer creation failed: {e}"),
+                }
+                window.request_redraw();
+            } else {
+                self.pending_renderer = Some(handle);
+            }
+        }
+
         if self.pending_restart {
             self.pending_restart = false;
             self.backend = self
@@ -150,6 +201,12 @@ where
                 .backend
                 .unwrap_or_else(config::compile_time_backend);
             let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
+            // Drop old renderer before creating new one to avoid peak memory overlap
+            drop(self.renderer.take());
+            #[cfg(target_os = "linux")]
+            unsafe {
+                libc::malloc_trim(0);
+            }
             match create_renderer(
                 self.backend,
                 window,
@@ -369,6 +426,7 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
             backend,
             prefs,
             pending_restart: false,
+            pending_renderer: None,
             _flush_notify: None,
             scale_factor: 1.0,
             window_signals: None,
@@ -441,6 +499,7 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             backend,
             prefs,
             pending_restart: false,
+            pending_renderer: None,
             _flush_notify: None,
             scale_factor: 1.0,
             window_signals: None,

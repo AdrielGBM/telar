@@ -17,7 +17,6 @@ struct GpuImage {
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
     last_used_frame: u64,
-    _data: Rc<renderer_core::ImageData>,
 }
 
 pub(crate) struct ImagePipeline {
@@ -26,7 +25,7 @@ pub(crate) struct ImagePipeline {
     texture_bgl: wgpu::BindGroupLayout,
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
-    texture_cache: FxHashMap<(usize, ImageFilter), GpuImage>,
+    texture_cache: FxHashMap<(u64, ImageFilter), GpuImage>,
     current_frame: u64,
 }
 
@@ -195,7 +194,6 @@ impl ImagePipeline {
             texture,
             bind_group,
             last_used_frame: self.current_frame,
-            _data: image.clone(),
         }
     }
 
@@ -206,7 +204,7 @@ impl ImagePipeline {
         image: &Rc<ImageData>,
         filter: ImageFilter,
     ) -> wgpu::BindGroup {
-        let key = (Rc::as_ptr(image) as usize, filter);
+        let key = (image.id, filter);
         if !self.texture_cache.contains_key(&key) {
             let gpu_image = self.create_gpu_image(device, queue, image, filter);
             self.texture_cache.insert(key, gpu_image);

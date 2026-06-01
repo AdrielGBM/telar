@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 use std::collections::VecDeque;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 
 use lyon::math::point;
 use lyon::path::LineCap as LyonLineCap;
@@ -127,13 +127,13 @@ pub(crate) struct PathVertex {
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 struct FillGeomKey {
-    ptr: usize,
+    id: u64,
     even_odd: bool,
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 struct StrokeGeomKey {
-    ptr: usize,
+    id: u64,
     width_bits: u32,
     cap: u8,
     join: u8,
@@ -145,7 +145,6 @@ struct CachedGeom {
     positions: Vec<[f32; 2]>,
     indices: Vec<u32>,
     last_frame: u64,
-    weak: Weak<PathData>,
 }
 
 pub(crate) struct PathTessCache {
@@ -276,21 +275,17 @@ pub(crate) fn prepare_path(
     out_fill_data: &mut Vec<PathFillData>,
 ) {
     let current_frame = cache.frame;
-    let ptr = Rc::as_ptr(data) as usize;
+    let id = data.id;
 
     let mut lyon_path: Option<Path> = None;
 
     if let Some(fill_style) = style.fill {
         let fill_key = FillGeomKey {
-            ptr,
+            id,
             even_odd: style.fill_rule == FillRule::EvenOdd,
         };
 
-        let fill_hit = cache
-            .fill
-            .get(&fill_key)
-            .map(|g| g.weak.upgrade().is_some())
-            .unwrap_or(false);
+        let fill_hit = cache.fill.contains_key(&fill_key);
 
         if !fill_hit {
             let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
@@ -316,7 +311,6 @@ pub(crate) fn prepare_path(
                             positions: geometry.vertices,
                             indices: geometry.indices,
                             last_frame: current_frame,
-                            weak: Rc::downgrade(data),
                         },
                     );
                     cache.fill_lru.push_back((fill_key, current_frame));
@@ -338,17 +332,13 @@ pub(crate) fn prepare_path(
 
     if let Some(s) = style.stroke {
         let stroke_key = StrokeGeomKey {
-            ptr,
+            id,
             width_bits: s.width.to_bits(),
             cap: s.cap as u8,
             join: s.join as u8,
         };
 
-        let stroke_hit = cache
-            .stroke
-            .get(&stroke_key)
-            .map(|g| g.weak.upgrade().is_some())
-            .unwrap_or(false);
+        let stroke_hit = cache.stroke.contains_key(&stroke_key);
 
         if !stroke_hit {
             let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
@@ -375,7 +365,6 @@ pub(crate) fn prepare_path(
                             positions: geometry.vertices,
                             indices: geometry.indices,
                             last_frame: current_frame,
-                            weak: Rc::downgrade(data),
                         },
                     );
                     cache.stroke_lru.push_back((stroke_key, current_frame));

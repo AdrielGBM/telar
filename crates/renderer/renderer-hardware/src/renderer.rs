@@ -256,6 +256,24 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     _window: std::sync::Arc<W>,
 }
 
+// Safety: HardwareRenderer is always constructed with prev_commands: Vec::new() (no Rc<> values).
+// The cross-thread transfer via JoinHandle happens before any DrawCommands are processed,
+// so no Rc<> values exist at transfer time. After joining, the renderer lives exclusively
+// on the main thread.
+unsafe impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Send
+    for HardwareRenderer<W>
+{
+}
+
+impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for HardwareRenderer<W> {
+    fn drop(&mut self) {
+        // Wait for all pending GPU work before the device is destroyed so the Vulkan driver
+        // frees GEM objects synchronously. Without this, wgpu may defer cleanup to a later
+        // maintenance cycle, keeping GPU memory allocated beyond this drop.
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+    }
+}
+
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
     pub fn new(
         window: W,

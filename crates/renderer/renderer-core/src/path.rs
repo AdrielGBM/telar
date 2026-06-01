@@ -1,4 +1,7 @@
 use geometry_core::{Point, Rect};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_PATH_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
 pub enum PathVerb {
@@ -16,10 +19,21 @@ pub enum PathVerb {
     Close,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PathData {
+    pub id: u64,
     pub(crate) verbs: Vec<PathVerb>,
     bounds_cache: std::cell::OnceCell<Option<Rect>>,
+}
+
+impl Default for PathData {
+    fn default() -> Self {
+        Self {
+            id: NEXT_PATH_ID.fetch_add(1, Ordering::Relaxed),
+            verbs: Vec::new(),
+            bounds_cache: std::cell::OnceCell::new(),
+        }
+    }
 }
 
 impl PathData {

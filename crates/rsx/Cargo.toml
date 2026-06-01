@@ -30,6 +30,7 @@ theme-core = { workspace = true }
 ui-core = { workspace = true }
 geometry-core = { workspace = true }
 rsx-devtools = { workspace = true, optional = true }
+libc = "0.2.186"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "6.0.0"
