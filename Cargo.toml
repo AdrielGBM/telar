@@ -66,7 +66,7 @@ toml = "1.1.2"
 tracing = { version = "0.1.44", features = ["log"] }
 bytemuck = "1.25.0"
 rustc-hash = "2.1.2"
-wide = "0.7"
+wide = "1.4"
 clru = "0.6.3"
 
 platform-core = { path = "crates/platform/platform-core" }
