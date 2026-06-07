@@ -2,13 +2,7 @@ use geometry_core::Rect;
 
 use crate::DrawCommand;
 
-pub fn union_rects(a: Rect, b: Rect) -> Rect {
-    let x = a.x.min(b.x);
-    let y = a.y.min(b.y);
-    let right = (a.x + a.width).max(b.x + b.width);
-    let bottom = (a.y + a.height).max(b.y + b.height);
-    Rect::new(x, y, right - x, bottom - y)
-}
+pub use crate::geometry::union_rects;
 
 pub fn overlaps(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
     match clip {
@@ -41,7 +35,7 @@ pub fn expand_for_shadow(
 }
 
 #[inline]
-fn apply(matrix: [f32; 6], x: f32, y: f32) -> (f32, f32) {
+pub fn apply_matrix(matrix: [f32; 6], x: f32, y: f32) -> (f32, f32) {
     let [a, b, c, d, e, f] = matrix;
     (a * x + c * y + e, b * x + d * y + f)
 }
@@ -49,10 +43,10 @@ fn apply(matrix: [f32; 6], x: f32, y: f32) -> (f32, f32) {
 // Returns the axis-aligned bounding box of a transformed rectangle.
 #[inline]
 fn transform_rect_aabb(matrix: [f32; 6], rx: f32, ry: f32, rw: f32, rh: f32) -> Rect {
-    let (x0, y0) = apply(matrix, rx, ry);
-    let (x1, y1) = apply(matrix, rx + rw, ry);
-    let (x2, y2) = apply(matrix, rx, ry + rh);
-    let (x3, y3) = apply(matrix, rx + rw, ry + rh);
+    let (x0, y0) = apply_matrix(matrix, rx, ry);
+    let (x1, y1) = apply_matrix(matrix, rx + rw, ry);
+    let (x2, y2) = apply_matrix(matrix, rx, ry + rh);
+    let (x3, y3) = apply_matrix(matrix, rx + rw, ry + rh);
     let min_x = x0.min(x1).min(x2).min(x3);
     let min_y = y0.min(y1).min(y2).min(y3);
     let max_x = x0.max(x1).max(x2).max(x3);
@@ -96,8 +90,8 @@ pub fn command_visual_rect(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Rect> 
         )),
         DrawCommand::Line { p1, p2, style } => {
             let half_w = style.width / 2.0;
-            let (tx1, ty1) = apply(matrix, p1.x, p1.y);
-            let (tx2, ty2) = apply(matrix, p2.x, p2.y);
+            let (tx1, ty1) = apply_matrix(matrix, p1.x, p1.y);
+            let (tx2, ty2) = apply_matrix(matrix, p2.x, p2.y);
             let x = tx1.min(tx2) - half_w;
             let y = ty1.min(ty2) - half_w;
             let right = tx1.max(tx2) + half_w;

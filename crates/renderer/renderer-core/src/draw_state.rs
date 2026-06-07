@@ -68,8 +68,7 @@ impl DrawState {
 
     #[inline]
     pub fn apply_point(&self, x: f32, y: f32) -> (f32, f32) {
-        let [a, b, c, d, e, f] = self.cum_matrix;
-        (a * x + c * y + e, b * x + d * y + f)
+        crate::culling::apply_matrix(self.cum_matrix, x, y)
     }
 
     pub fn reset(&mut self) {

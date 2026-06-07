@@ -64,7 +64,7 @@ pub(crate) fn draw_text(
         let (arc, tex_w, tex_h) = shaper.rasterize_alpha(text, rect, style);
         if tex_w > 0 && tex_h > 0 {
             let sigma = renderer_core::blur_sigma(shadow.blur_radius);
-            let padding = (sigma * 3.0).ceil() as i32 + 1;
+            let padding = renderer_core::blur_padding(sigma);
 
             let shadow_x = rect.x + shadow.offset_x - padding as f32;
             let shadow_y = rect.y + shadow.offset_y - padding as f32;

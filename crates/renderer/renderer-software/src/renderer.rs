@@ -231,7 +231,7 @@ fn fill_rounded_mask(
         radius.bottom_right,
         radius.bottom_left,
     );
-    let k = 0.5523_f32; // cubic bezier factor for circular arc approximation
+    let k = renderer_core::BEZIER_CIRCLE_K;
     let mut pb = tiny_skia::PathBuilder::new();
     pb.move_to(x + tl, y);
     pb.line_to(x + w - tr, y);

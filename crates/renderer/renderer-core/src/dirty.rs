@@ -1,9 +1,9 @@
 use geometry_core::Rect;
 
 use crate::{
-    DrawCommand,
-    culling::{self, union_rects},
+    DrawCommand, culling,
     draw_state::{IDENTITY_MATRIX, compose_matrix},
+    geometry::union_rects,
 };
 
 /// When a pure axis-aligned scroll is detected, this describes what changed.

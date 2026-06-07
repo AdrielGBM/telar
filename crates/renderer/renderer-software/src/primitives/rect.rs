@@ -22,40 +22,40 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     let br = radius.bottom_right.min(w / 2.0).min(h / 2.0);
     let bl = radius.bottom_left.min(w / 2.0).min(h / 2.0);
 
-    const K: f32 = 0.552_284_8;
+    let k = renderer_core::BEZIER_CIRCLE_K;
 
     let mut pb = tiny_skia::PathBuilder::new();
 
     pb.move_to(x + tl, y);
     pb.line_to(x + w - tr, y);
     pb.cubic_to(
-        x + w - tr + K * tr,
+        x + w - tr + k * tr,
         y,
         x + w,
-        y + tr - K * tr,
+        y + tr - k * tr,
         x + w,
         y + tr,
     );
     pb.line_to(x + w, y + h - br);
     pb.cubic_to(
         x + w,
-        y + h - br + K * br,
-        x + w - br + K * br,
+        y + h - br + k * br,
+        x + w - br + k * br,
         y + h,
         x + w - br,
         y + h,
     );
     pb.line_to(x + bl, y + h);
     pb.cubic_to(
-        x + bl - K * bl,
+        x + bl - k * bl,
         y + h,
         x,
-        y + h - bl + K * bl,
+        y + h - bl + k * bl,
         x,
         y + h - bl,
     );
     pb.line_to(x, y + tl);
-    pb.cubic_to(x, y + tl - K * tl, x + tl - K * tl, y, x + tl, y);
+    pb.cubic_to(x, y + tl - k * tl, x + tl - k * tl, y, x + tl, y);
     pb.close();
 
     pb.finish()
@@ -72,7 +72,7 @@ fn draw_rect_shadow(
     blur_scratch: &mut Vec<u8>,
 ) {
     let sigma = renderer_core::blur_sigma(shadow.blur_radius);
-    let padding = (sigma * 3.0).ceil() as i32 + 1;
+    let padding = renderer_core::blur_padding(sigma);
     let spread = shadow.spread;
 
     let shadow_rect = Rect::new(

@@ -50,6 +50,10 @@ pub fn blur_sigma(blur_radius: f32) -> f32 {
     blur_radius / 2.0
 }
 
+pub fn blur_padding(sigma: f32) -> i32 {
+    (sigma * 3.0).ceil() as i32 + 1
+}
+
 pub fn scale_commands(commands: &[DrawCommand], sf: f32) -> Option<Vec<DrawCommand>> {
     if (sf - 1.0).abs() < f32::EPSILON {
         return None;

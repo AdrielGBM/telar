@@ -274,6 +274,50 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for Har
     }
 }
 
+fn cull_bounds(
+    bounds: geometry_core::Rect,
+    scissor: Option<geometry_core::Rect>,
+    dirty_scissor: Option<geometry_core::Rect>,
+    scroll_blit: Option<&renderer_core::ScrollBlit>,
+) -> bool {
+    if !renderer_core::culling::overlaps(bounds.x, bounds.y, bounds.width, bounds.height, scissor) {
+        return true;
+    }
+    if let Some(ds) = dirty_scissor {
+        if !renderer_core::culling::overlaps(
+            bounds.x,
+            bounds.y,
+            bounds.width,
+            bounds.height,
+            Some(ds),
+        ) {
+            return true;
+        }
+    }
+    if let Some(sb) = scroll_blit {
+        let in_exp = renderer_core::culling::overlaps(
+            bounds.x,
+            bounds.y,
+            bounds.width,
+            bounds.height,
+            Some(sb.exposed_band),
+        );
+        let in_extra = sb.extra_dirty.map_or(false, |ed| {
+            renderer_core::culling::overlaps(
+                bounds.x,
+                bounds.y,
+                bounds.width,
+                bounds.height,
+                Some(ed),
+            )
+        });
+        if !in_exp && !in_extra {
+            return true;
+        }
+    }
+    false
+}
+
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
     pub fn new(
         window: W,
@@ -871,46 +915,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
-                        if !renderer_core::culling::overlaps(
-                            bounds.x,
-                            bounds.y,
-                            bounds.width,
-                            bounds.height,
-                            current_scissor,
-                        ) {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
+                        {
                             continue;
-                        }
-                        if let Some(ds) = dirty_scissor {
-                            if !renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(ds),
-                            ) {
-                                continue;
-                            }
-                        }
-                        if let Some(ref sb) = scroll_blit {
-                            let in_exp = renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(sb.exposed_band),
-                            );
-                            let in_extra = sb.extra_dirty.map_or(false, |ed| {
-                                renderer_core::culling::overlaps(
-                                    bounds.x,
-                                    bounds.y,
-                                    bounds.width,
-                                    bounds.height,
-                                    Some(ed),
-                                )
-                            });
-                            if !in_exp && !in_extra {
-                                continue;
-                            }
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
@@ -934,46 +941,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
-                        if !renderer_core::culling::overlaps(
-                            bounds.x,
-                            bounds.y,
-                            bounds.width,
-                            bounds.height,
-                            current_scissor,
-                        ) {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
+                        {
                             continue;
-                        }
-                        if let Some(ds) = dirty_scissor {
-                            if !renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(ds),
-                            ) {
-                                continue;
-                            }
-                        }
-                        if let Some(ref sb) = scroll_blit {
-                            let in_exp = renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(sb.exposed_band),
-                            );
-                            let in_extra = sb.extra_dirty.map_or(false, |ed| {
-                                renderer_core::culling::overlaps(
-                                    bounds.x,
-                                    bounds.y,
-                                    bounds.width,
-                                    bounds.height,
-                                    Some(ed),
-                                )
-                            });
-                            if !in_exp && !in_extra {
-                                continue;
-                            }
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
@@ -1055,46 +1025,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
-                        if !renderer_core::culling::overlaps(
-                            bounds.x,
-                            bounds.y,
-                            bounds.width,
-                            bounds.height,
-                            current_scissor,
-                        ) {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
+                        {
                             continue;
-                        }
-                        if let Some(ds) = dirty_scissor {
-                            if !renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(ds),
-                            ) {
-                                continue;
-                            }
-                        }
-                        if let Some(ref sb) = scroll_blit {
-                            let in_exp = renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(sb.exposed_band),
-                            );
-                            let in_extra = sb.extra_dirty.map_or(false, |ed| {
-                                renderer_core::culling::overlaps(
-                                    bounds.x,
-                                    bounds.y,
-                                    bounds.width,
-                                    bounds.height,
-                                    Some(ed),
-                                )
-                            });
-                            if !in_exp && !in_extra {
-                                continue;
-                            }
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
@@ -1119,46 +1052,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
-                        if !renderer_core::culling::overlaps(
-                            bounds.x,
-                            bounds.y,
-                            bounds.width,
-                            bounds.height,
-                            current_scissor,
-                        ) {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
+                        {
                             continue;
-                        }
-                        if let Some(ds) = dirty_scissor {
-                            if !renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(ds),
-                            ) {
-                                continue;
-                            }
-                        }
-                        if let Some(ref sb) = scroll_blit {
-                            let in_exp = renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(sb.exposed_band),
-                            );
-                            let in_extra = sb.extra_dirty.map_or(false, |ed| {
-                                renderer_core::culling::overlaps(
-                                    bounds.x,
-                                    bounds.y,
-                                    bounds.width,
-                                    bounds.height,
-                                    Some(ed),
-                                )
-                            });
-                            if !in_exp && !in_extra {
-                                continue;
-                            }
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
@@ -1199,35 +1095,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
-                        if !renderer_core::culling::overlaps(
-                            bounds.x,
-                            bounds.y,
-                            bounds.width,
-                            bounds.height,
-                            current_scissor,
-                        ) {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
+                        {
                             continue;
-                        }
-                        if let Some(ref sb) = scroll_blit {
-                            let in_exp = renderer_core::culling::overlaps(
-                                bounds.x,
-                                bounds.y,
-                                bounds.width,
-                                bounds.height,
-                                Some(sb.exposed_band),
-                            );
-                            let in_extra = sb.extra_dirty.map_or(false, |ed| {
-                                renderer_core::culling::overlaps(
-                                    bounds.x,
-                                    bounds.y,
-                                    bounds.width,
-                                    bounds.height,
-                                    Some(ed),
-                                )
-                            });
-                            if !in_exp && !in_extra {
-                                continue;
-                            }
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
                             accum.bounds =
