@@ -1,7 +1,7 @@
 use crate::limits::*;
 
 /// Per-cache memory budgets for the software renderer. Pass to `SoftwareRenderer::new()` to override the compiled-in defaults without editing internal constants.
-pub struct RendererBudget {
+pub struct SoftwareRendererConfig {
     pub image_cache_bytes: usize,
     pub shadow_cache_bytes: usize,
     pub path_shadow_cache_bytes: usize,
@@ -10,13 +10,10 @@ pub struct RendererBudget {
     pub text_shaping_cache_bytes: usize,
     pub text_pixmap_cache_entries: usize,
     pub text_shadow_cache_bytes: usize,
-    pub extra_font_paths: Vec<std::path::PathBuf>,
-    pub font_data: Vec<Vec<u8>>,
-    pub system_fonts_dir: Option<std::path::PathBuf>,
-    pub sans_serif_family_candidates: Vec<String>,
+    pub font: renderer_core::FontConfig,
 }
 
-impl Default for RendererBudget {
+impl Default for SoftwareRendererConfig {
     fn default() -> Self {
         Self {
             image_cache_bytes: IMAGE_CACHE_BUDGET_BYTES,
@@ -27,10 +24,7 @@ impl Default for RendererBudget {
             text_shaping_cache_bytes: TEXT_SHAPING_CACHE_BUDGET_BYTES,
             text_pixmap_cache_entries: TEXT_PIXMAP_CACHE_MAX_ENTRIES,
             text_shadow_cache_bytes: TEXT_SHADOW_CACHE_BUDGET_BYTES,
-            extra_font_paths: Vec::new(),
-            font_data: Vec::new(),
-            system_fonts_dir: None,
-            sans_serif_family_candidates: Vec::new(),
+            font: renderer_core::FontConfig::default(),
         }
     }
 }

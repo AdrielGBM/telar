@@ -4,15 +4,15 @@ use platform_core::Event;
 use renderer_core::{DrawCommand, RectPayload, RectStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::HasLayoutLeaf;
+use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
-pub struct Rect {
+pub struct RectView {
     leaf: LayoutLeaf,
     style: Box<dyn Fn() -> RectStyle>,
 }
 
-impl Rect {
+impl RectView {
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
         layout_style: LayoutStyle,
@@ -26,7 +26,7 @@ impl Rect {
     }
 }
 
-impl Component for Rect {
+impl Component for RectView {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         let style = (self.style)();
@@ -49,8 +49,4 @@ impl Component for Rect {
     }
 }
 
-impl HasLayoutLeaf for Rect {
-    fn layout_leaf(&self) -> &LayoutLeaf {
-        &self.leaf
-    }
-}
+impl_leaf_widget!(RectView);

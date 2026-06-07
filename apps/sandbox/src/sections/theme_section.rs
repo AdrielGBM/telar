@@ -7,7 +7,27 @@ use rsx::{
 };
 
 pub fn theme_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
-    let btn_modern = Button::new(ctx, "Modern")?.on_click(|| set_theme(SandboxTheme::modern()));
+    let btn_modern = Button::new(ctx, "Modern")?
+        .style(|| {
+            let theme = use_theme::<SandboxTheme>();
+            let p = theme.primary;
+            let hover = Color::rgba(
+                (p.r * 0.85).min(1.0),
+                (p.g * 0.85).min(1.0),
+                (p.b * 0.85).min(1.0),
+                1.0,
+            );
+            ButtonStyle {
+                rect: RectStyle::default()
+                    .with_fill(theme.primary)
+                    .with_radius(BorderRadius::all(4.0)),
+                rect_hover: RectStyle::default()
+                    .with_fill(hover)
+                    .with_radius(BorderRadius::all(4.0)),
+                text: TextStyle::new(14.0, theme.on_color),
+            }
+        })
+        .on_click(|| set_theme(SandboxTheme::modern()));
 
     let btn_pastel = Button::new(ctx, "Pastel")?
         .style(|| ButtonStyle {

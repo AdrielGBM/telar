@@ -1,7 +1,7 @@
 use crate::theme::SandboxTheme;
 use crate::theme::section;
 use rsx::{
-    BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
+    BorderRadius, Canvas, Color, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
     Paint, Rect, RectPayload, RectStyle, RenderNode, TextPayload, TextStyle, WidgetCtx, use_theme,
 };
 use std::rc::Rc;
@@ -10,8 +10,8 @@ pub fn color_swatch(
     ctx: &mut WidgetCtx,
     color_fn: impl Fn() -> Color + 'static,
     label: &'static str,
-) -> Result<DrawingArea, LayoutError> {
-    DrawingArea::new(
+) -> Result<Canvas, LayoutError> {
+    Canvas::new(
         ctx,
         LayoutStyle::new().width(100.0).height(44.0),
         move |_| {

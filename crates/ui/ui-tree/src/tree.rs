@@ -48,13 +48,13 @@ impl ComponentSlot {
     }
 }
 
-pub struct ComponentTree {
+pub struct ComponentList {
     slots: Vec<ComponentSlot>,
     cached: RefCell<Vec<DrawCommand>>,
     slot_starts: RefCell<Vec<usize>>,
 }
 
-impl ComponentTree {
+impl ComponentList {
     pub fn new<C: Component + 'static>(component: C) -> Self {
         Self {
             slots: vec![ComponentSlot::new(component)],
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn tree_initial_render() {
-        let tree = ComponentTree::new(Fixed);
+        let tree = ComponentList::new(Fixed);
         let cmds = tree.commands();
         assert_eq!(cmds.len(), 2);
     }
@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn tree_reactive_update() {
         let signal = create_rw_signal(2i32);
-        let tree = ComponentTree::new(Counter {
+        let tree = ComponentList::new(Counter {
             value: signal.clone(),
         });
 

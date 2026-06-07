@@ -160,10 +160,11 @@ impl GlyphAtlas {
 
     pub fn get_and_touch(&mut self, key: &GlyphKey) -> Option<AtlasEntry> {
         let entry = self.entries.get_mut(key)?;
-        let stamp = self.lru_counter;
+        // Bump the generation stamp to mark this entry as recently used. The old queue entry
+        // (from insert) now carries a stale stamp, so evict_lru will skip it. We do NOT push
+        // a new queue entry here — the queue only grows on misses (inserts), not on hits.
         self.lru_counter += 1;
-        entry.lru_gen = stamp;
-        self.lru_queue.push_back((*key, stamp));
+        entry.lru_gen = self.lru_counter;
         Some(*entry)
     }
 
@@ -213,10 +214,7 @@ pub struct TextShaperConfig {
     pub pixel_cache_budget_bytes: usize,
     pub alpha_cache_budget_bytes: usize,
     pub shaping_cache_budget_bytes: usize,
-    pub extra_font_paths: Vec<std::path::PathBuf>,
-    pub font_data: Vec<Vec<u8>>,
-    pub system_fonts_dir: Option<std::path::PathBuf>,
-    pub sans_serif_family_candidates: Vec<String>,
+    pub font: renderer_core::FontConfig,
 }
 
 impl Default for TextShaperConfig {
@@ -225,10 +223,7 @@ impl Default for TextShaperConfig {
             pixel_cache_budget_bytes: 64 * 1024 * 1024,
             alpha_cache_budget_bytes: 64 * 1024 * 1024,
             shaping_cache_budget_bytes: 24 * 1024 * 1024,
-            extra_font_paths: Vec::new(),
-            font_data: Vec::new(),
-            system_fonts_dir: None,
-            sans_serif_family_candidates: Vec::new(),
+            font: renderer_core::FontConfig::default(),
         }
     }
 }
@@ -245,6 +240,8 @@ pub struct TextShaper {
         FxBuildHasher,
         ShapingCacheScale,
     >,
+    // Keyed by (text_hash, max_width_bits, font_size_bits); cleared when it exceeds 1000 entries.
+    measure_cache: FxHashMap<(u64, u32, u32), (f32, f32)>,
 }
 
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
@@ -263,15 +260,16 @@ impl TextShaper {
 
     pub fn with_config(config: TextShaperConfig) -> Self {
         let font_system = {
-            let needs_custom_db = config.system_fonts_dir.is_some()
-                || !config.extra_font_paths.is_empty()
-                || !config.font_data.is_empty();
+            let font = config.font;
+            let needs_custom_db = font.system_fonts_dir.is_some()
+                || !font.extra_font_paths.is_empty()
+                || !font.font_data.is_empty();
 
             if needs_custom_db {
                 let mut db = fontdb::Database::new();
-                if let Some(ref dir) = config.system_fonts_dir {
+                if let Some(ref dir) = font.system_fonts_dir {
                     db.load_fonts_dir(dir);
-                    for name in &config.sans_serif_family_candidates {
+                    for name in &font.sans_serif_family_candidates {
                         if db
                             .query(&fontdb::Query {
                                 families: &[fontdb::Family::Name(name)],
@@ -286,10 +284,10 @@ impl TextShaper {
                 } else {
                     db.load_system_fonts();
                 }
-                for path in &config.extra_font_paths {
+                for path in &font.extra_font_paths {
                     db.load_font_file(path).ok();
                 }
-                for data in config.font_data {
+                for data in font.font_data {
                     db.load_font_data(data);
                 }
                 let locale = std::env::var("LANG").unwrap_or_else(|_| "en-US".to_string());
@@ -317,6 +315,7 @@ impl TextShaper {
                     .with_hasher(FxBuildHasher::default())
                     .with_scale(ShapingCacheScale),
             ),
+            measure_cache: FxHashMap::default(),
         }
     }
 
@@ -609,6 +608,11 @@ impl TextShaper {
             return (0.0, 0.0);
         }
 
+        let cache_key = (hash_text(text), max_width.to_bits(), font_size.to_bits());
+        if let Some(&cached) = self.measure_cache.get(&cache_key) {
+            return cached;
+        }
+
         let rect = Rect {
             x: 0.0,
             y: 0.0,
@@ -630,7 +634,12 @@ impl TextShaper {
             }
         }
 
-        (width, height)
+        let result = (width, height);
+        if self.measure_cache.len() >= 1000 {
+            self.measure_cache.clear();
+        }
+        self.measure_cache.insert(cache_key, result);
+        result
     }
 }
 
@@ -657,10 +666,12 @@ mod tests {
     #[test]
     fn text_shaper_with_font_data_empty_vec() {
         let config = TextShaperConfig {
-            font_data: vec![],
-            extra_font_paths: vec![],
-            system_fonts_dir: None,
-            sans_serif_family_candidates: Vec::new(),
+            font: renderer_core::FontConfig {
+                font_data: vec![],
+                extra_font_paths: vec![],
+                system_fonts_dir: None,
+                sans_serif_family_candidates: Vec::new(),
+            },
             ..TextShaperConfig::default()
         };
         let _ = TextShaper::with_config(config);

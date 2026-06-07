@@ -38,18 +38,20 @@ impl LayoutStyle {
     pub fn new() -> Self {
         Self {
             inner: Style {
-                display: Display::Flex,
+                display: Display::Block,
                 ..Style::default()
             },
         }
     }
 
     pub fn flex_row(mut self) -> Self {
+        self.inner.display = Display::Flex;
         self.inner.flex_direction = FlexDirection::Row;
         self
     }
 
     pub fn flex_column(mut self) -> Self {
+        self.inner.display = Display::Flex;
         self.inner.flex_direction = FlexDirection::Column;
         self
     }
@@ -393,9 +395,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn style_default_is_flex() {
+    fn style_default_is_block() {
         let style = LayoutStyle::new();
-        assert_eq!(style.inner.display, Display::Flex);
+        assert_eq!(style.inner.display, Display::Block);
     }
 
     #[test]
@@ -464,7 +466,7 @@ mod tests {
     #[test]
     fn style_default_impl_matches_new() {
         let style = LayoutStyle::default();
-        assert_eq!(style.inner.display, Display::Flex);
+        assert_eq!(style.inner.display, Display::Block);
     }
 
     #[test]

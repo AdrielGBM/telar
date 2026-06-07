@@ -53,11 +53,12 @@ pub use renderer_core::{
 pub use rsx_devtools::{DevAction, DevPlugin};
 pub use services_core::AppPathsProvider;
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
-pub use theme_core::{set_theme, use_theme};
+pub use theme_core::{Theme, set_theme, use_theme};
 pub use ui_core::{
-    Button, ButtonStyle, Component, ComponentTree, Container, DrawingArea, EventResult, Group,
-    Image, LayoutItem, Line, NodeId, Path, RenderNode, ScrollArea, Text, WidgetCtx, compute_layout,
-    mark_dirty, new_container, new_leaf, track_layout, update_style, with_context,
+    Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Group, Image,
+    LayoutItem, Line, NodeId, NodeVec, Path, RectView, RenderNode, ScrollArea, ScrollablePage,
+    ScrollbarStyle, Text, WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf,
+    track_layout, update_style, with_context,
 };
 
 #[cfg(all(feature = "runtime", target_os = "android"))]

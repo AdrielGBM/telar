@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Rect, RectPayload, RectStyle, RenderNode, Size, TemplateTrack, TextPayload, TextStyle,
+    BorderRadius, Canvas, Color, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
+    Paint, Rect, RectPayload, RectStyle, RenderNode, TemplateTrack, TextPayload, TextStyle,
     WidgetCtx, use_theme,
 };
 
@@ -13,42 +13,37 @@ pub fn grid_cell(
     ctx: &mut WidgetCtx,
     color_fn: impl Fn() -> Color + 'static,
     label: &'static str,
-) -> Result<DrawingArea, LayoutError> {
-    DrawingArea::new(
-        ctx,
-        LayoutStyle::new().height(72.0),
-        move |Size {
-                  width: w,
-                  height: h,
-              }| {
-            RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                    rect: Rect {
-                        x: 0.0,
-                        y: 0.0,
-                        width: w,
-                        height: h,
-                    },
-                    style: RectStyle {
-                        fill: Some(Paint::Solid(color_fn())),
-                        stroke: None,
-                        shadow: None,
-                        radius: BorderRadius::all(6.0),
-                    },
-                }))),
-                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                    text: Rc::from(label),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 0.0,
-                        width: w,
-                        height: h,
-                    },
-                    style: TextStyle::new(13.0, use_theme::<SandboxTheme>().on_color),
-                }))),
-            ])
-        },
-    )
+) -> Result<Canvas, LayoutError> {
+    Canvas::with_intrinsic_height(ctx, 72.0, move |rect| {
+        let w = rect.width;
+        let h = rect.height;
+        RenderNode::group([
+            RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: w,
+                    height: h,
+                },
+                style: RectStyle {
+                    fill: Some(Paint::Solid(color_fn())),
+                    stroke: None,
+                    shadow: None,
+                    radius: BorderRadius::all(6.0),
+                },
+            }))),
+            RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                text: Rc::from(label),
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: w,
+                    height: h,
+                },
+                style: TextStyle::new(13.0, use_theme::<SandboxTheme>().on_color),
+            }))),
+        ])
+    })
 }
 
 pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
@@ -73,13 +68,12 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         vec![gc1, gc2, gc3, gc4, gc5, gc6],
     )?;
 
-    let header = DrawingArea::new(
+    let header = Canvas::new(
         ctx,
         LayoutStyle::new().height(48.0).grid_column_span(3),
-        |Size {
-             width: w,
-             height: h,
-         }| {
+        |rect| {
+            let w = rect.width;
+            let h = rect.height;
             let t = use_theme::<SandboxTheme>();
             RenderNode::group([
                 RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
@@ -152,25 +146,20 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
             .gap(8.0),
         vec![gcg1, gcg2, gcg3, gcg4],
     )?;
-    let side_label = DrawingArea::new(
-        ctx,
-        LayoutStyle::new().width(180.0),
-        |Size {
-             width: w,
-             height: h,
-         }| {
-            RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                text: Rc::from("Grid nested\ninside flex →"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: w,
-                    height: h,
-                },
-                style: TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
-            })))
-        },
-    )?;
+    let side_label = Canvas::new(ctx, LayoutStyle::new().width(180.0), |rect| {
+        let w = rect.width;
+        let h = rect.height;
+        RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
+            text: Rc::from("Grid nested\ninside flex →"),
+            rect: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: w,
+                height: h,
+            },
+            style: TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
+        })))
+    })?;
     let nested_row = Container::new(
         ctx,
         LayoutStyle::new().flex_row().gap(16.0),

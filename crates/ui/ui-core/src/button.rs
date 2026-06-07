@@ -8,7 +8,7 @@ use renderer_core::{
 };
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::HasLayoutLeaf;
+use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct ButtonStyle {
@@ -22,7 +22,7 @@ pub struct Button {
     leaf: LayoutLeaf,
     on_click: Option<Box<dyn Fn()>>,
     style_fn: Box<dyn Fn() -> ButtonStyle>,
-    // Cell<bool> here serves as state storage, not a redraw trigger. Redraws are driven by the event loop (on_event → request_redraw), not by signal writes. This is intentional: view() is called imperatively each frame, not reactively.
+    // Imperative model: hover is stored in Cell, re-render only when on_event returns Handled.
     hovered: Cell<bool>,
 }
 
@@ -122,11 +122,7 @@ impl Component for Button {
     }
 }
 
-impl HasLayoutLeaf for Button {
-    fn layout_leaf(&self) -> &LayoutLeaf {
-        &self.leaf
-    }
-}
+impl_leaf_widget!(Button);
 
 #[cfg(test)]
 mod tests {

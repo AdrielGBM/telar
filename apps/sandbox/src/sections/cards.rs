@@ -1,7 +1,7 @@
 use crate::theme::SandboxTheme;
 use crate::theme::section;
 use rsx::{
-    BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
+    BorderRadius, Canvas, Color, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
     Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
     use_theme,
 };
@@ -13,8 +13,8 @@ pub fn info_card(
     title: &'static str,
     title_color_fn: impl Fn() -> Color + 'static,
     body: &'static str,
-) -> Result<DrawingArea, LayoutError> {
-    DrawingArea::new(
+) -> Result<Canvas, LayoutError> {
+    Canvas::new(
         ctx,
         LayoutStyle::new().width(368.0).height(110.0),
         move |_| {

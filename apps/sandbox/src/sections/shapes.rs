@@ -1,7 +1,7 @@
 use crate::theme::SandboxTheme;
 use crate::theme::section;
 use rsx::{
-    BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
+    BorderRadius, Canvas, Color, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
     Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
     use_theme,
 };
@@ -12,8 +12,8 @@ pub fn shape_card(
     style_fn: impl Fn() -> RectStyle + 'static,
     label: &'static str,
     label_color_fn: impl Fn() -> Color + 'static,
-) -> Result<DrawingArea, LayoutError> {
-    DrawingArea::new(
+) -> Result<Canvas, LayoutError> {
+    Canvas::new(
         ctx,
         LayoutStyle::new().width(168.0).height(80.0),
         move |_| {

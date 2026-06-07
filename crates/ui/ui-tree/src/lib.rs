@@ -4,6 +4,6 @@ mod tree;
 mod view_flatten;
 
 pub use component::{Component, EventResult};
-pub use render_node::RenderNode;
-pub use tree::ComponentTree;
+pub use render_node::{NodeVec, RenderNode};
+pub use tree::ComponentList;
 pub use view_flatten::flatten_view;

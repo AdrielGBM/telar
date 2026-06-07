@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::num::{NonZeroU32, NonZeroUsize};
 
 use clru::{CLruCache, CLruCacheConfig};
@@ -7,7 +8,7 @@ use renderer_core::{
     Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers, union_rects,
 };
 use renderer_text::{TextShaper, TextShaperConfig};
-use rustc_hash::FxBuildHasher;
+use rustc_hash::{FxBuildHasher, FxHasher};
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
@@ -265,6 +266,160 @@ fn fill_rounded_mask(
     }
 }
 
+// Hashes the draw-command slice (plus optional dimensions) structurally, mirroring the fields compared by PartialEq, so that two equal slices always produce the same hash. Uses FxHasher for speed; f32 fields are fed as bit patterns to avoid undefined behavior on NaN.
+fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
+    let mut h = FxHasher::default();
+    width.hash(&mut h);
+    height.hash(&mut h);
+    commands.len().hash(&mut h);
+    for cmd in commands {
+        match cmd {
+            DrawCommand::Rect(p) => {
+                0u8.hash(&mut h);
+                p.rect.x.to_bits().hash(&mut h);
+                p.rect.y.to_bits().hash(&mut h);
+                p.rect.width.to_bits().hash(&mut h);
+                p.rect.height.to_bits().hash(&mut h);
+                // Hash style discriminant+fields in a compact way via Debug string is too slow;
+                // use the PartialEq-comparable fields via their PartialEq impl transitively by
+                // re-encoding them to bits. We hash p.style fields that PartialEq covers.
+                hash_rect_style(&p.style, &mut h);
+            }
+            DrawCommand::Text(p) => {
+                1u8.hash(&mut h);
+                p.text.len().hash(&mut h);
+                p.text.as_bytes().hash(&mut h);
+                p.rect.x.to_bits().hash(&mut h);
+                p.rect.y.to_bits().hash(&mut h);
+                p.rect.width.to_bits().hash(&mut h);
+                p.rect.height.to_bits().hash(&mut h);
+                p.style.font_size.to_bits().hash(&mut h);
+            }
+            DrawCommand::Image { data, rect, filter } => {
+                2u8.hash(&mut h);
+                data.id.hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                (*filter as u8).hash(&mut h);
+            }
+            DrawCommand::Line { p1, p2, style } => {
+                3u8.hash(&mut h);
+                p1.x.to_bits().hash(&mut h);
+                p1.y.to_bits().hash(&mut h);
+                p2.x.to_bits().hash(&mut h);
+                p2.y.to_bits().hash(&mut h);
+                style.width.to_bits().hash(&mut h);
+            }
+            DrawCommand::Path(p) => {
+                4u8.hash(&mut h);
+                // PathPayload PartialEq uses ptr equality for data; use the raw pointer as the key.
+                (std::rc::Rc::as_ptr(&p.data) as usize).hash(&mut h);
+            }
+            DrawCommand::PushClip { rect, radius } => {
+                5u8.hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                radius.top_left.to_bits().hash(&mut h);
+                radius.top_right.to_bits().hash(&mut h);
+                radius.bottom_right.to_bits().hash(&mut h);
+                radius.bottom_left.to_bits().hash(&mut h);
+            }
+            DrawCommand::PopClip => {
+                6u8.hash(&mut h);
+            }
+            DrawCommand::PushMatrix { matrix } => {
+                7u8.hash(&mut h);
+                for v in matrix {
+                    v.to_bits().hash(&mut h);
+                }
+            }
+            DrawCommand::PopMatrix => {
+                8u8.hash(&mut h);
+            }
+            DrawCommand::PushLayer {
+                opacity,
+                backdrop_blur,
+            } => {
+                9u8.hash(&mut h);
+                opacity.to_bits().hash(&mut h);
+                backdrop_blur.to_bits().hash(&mut h);
+            }
+            DrawCommand::PopLayer => {
+                10u8.hash(&mut h);
+            }
+        }
+    }
+    h.finish()
+}
+
+fn hash_rect_style(s: &renderer_core::RectStyle, h: &mut FxHasher) {
+    hash_opt_paint(s.fill.as_ref(), h);
+    if let Some(stroke) = &s.stroke {
+        1u8.hash(h);
+        hash_paint(&stroke.paint, h);
+        stroke.width.to_bits().hash(h);
+    } else {
+        0u8.hash(h);
+    }
+    if let Some(shadow) = &s.shadow {
+        1u8.hash(h);
+        shadow.offset_x.to_bits().hash(h);
+        shadow.offset_y.to_bits().hash(h);
+        shadow.blur_radius.to_bits().hash(h);
+        shadow.spread.to_bits().hash(h);
+        shadow.color.r.to_bits().hash(h);
+        shadow.color.g.to_bits().hash(h);
+        shadow.color.b.to_bits().hash(h);
+        shadow.color.a.to_bits().hash(h);
+    } else {
+        0u8.hash(h);
+    }
+    s.radius.top_left.to_bits().hash(h);
+    s.radius.top_right.to_bits().hash(h);
+    s.radius.bottom_right.to_bits().hash(h);
+    s.radius.bottom_left.to_bits().hash(h);
+}
+
+fn hash_opt_paint(p: Option<&renderer_core::Paint>, h: &mut FxHasher) {
+    match p {
+        None => {
+            0u8.hash(h);
+        }
+        Some(paint) => {
+            1u8.hash(h);
+            hash_paint(paint, h);
+        }
+    }
+}
+
+fn hash_paint(p: &renderer_core::Paint, h: &mut FxHasher) {
+    match p {
+        renderer_core::Paint::Solid(c) => {
+            0u8.hash(h);
+            c.r.to_bits().hash(h);
+            c.g.to_bits().hash(h);
+            c.b.to_bits().hash(h);
+            c.a.to_bits().hash(h);
+        }
+        renderer_core::Paint::Gradient(g) => {
+            1u8.hash(h);
+            let active = g.stops.active();
+            active.len().hash(h);
+            for stop in active {
+                stop.position.to_bits().hash(h);
+                stop.color.r.to_bits().hash(h);
+                stop.color.g.to_bits().hash(h);
+                stop.color.b.to_bits().hash(h);
+                stop.color.a.to_bits().hash(h);
+            }
+        }
+    }
+}
+
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     _context: Context<D>,
     surface: Surface<D, W>,
@@ -286,7 +441,12 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32)>,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
     prev_commands: Vec<DrawCommand>,
+    prev_commands_hash: u64,
     prev_clear_color: Option<Color>,
+    // Cache for expand_fill_layers: avoids re-expanding on idle frames where commands didn't change.
+    expanded_commands_cache: Option<(u64, Vec<DrawCommand>)>,
+    // Cache for compute_layer_bboxes: avoids re-traversing commands when input and dimensions are unchanged.
+    layer_bboxes_cache: Option<(u64, Vec<Option<(i32, i32, u32, u32)>>)>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -297,7 +457,7 @@ where
     pub fn new(
         display: D,
         window: W,
-        budget: crate::RendererBudget,
+        budget: crate::SoftwareRendererConfig,
     ) -> Result<Self, RendererError> {
         let context = Context::new(display).map_err(|e| {
             RendererError::Backend(format!("softbuffer context creation failed: {}", e))
@@ -314,10 +474,7 @@ where
                 pixel_cache_budget_bytes: budget.text_pixel_cache_bytes,
                 alpha_cache_budget_bytes: budget.text_alpha_cache_bytes,
                 shaping_cache_budget_bytes: budget.text_shaping_cache_bytes,
-                extra_font_paths: budget.extra_font_paths,
-                font_data: budget.font_data,
-                system_fonts_dir: budget.system_fonts_dir,
-                sans_serif_family_candidates: budget.sans_serif_family_candidates,
+                font: budget.font,
             }),
             image_cache: crate::primitives::image::new_image_cache(budget.image_cache_bytes),
             blur_scratch: Vec::new(),
@@ -337,7 +494,10 @@ where
             path_shadow_cache: new_path_shadow_cache(budget.path_shadow_cache_bytes),
             layer_stack: Vec::new(),
             prev_commands: Vec::with_capacity(256),
+            prev_commands_hash: 0,
             prev_clear_color: None,
+            expanded_commands_cache: None,
+            layer_bboxes_cache: None,
         })
     }
     fn present_pixmap(&mut self) -> Result<(), RendererError> {
@@ -395,7 +555,10 @@ where
             self.clip_mask_dirty = None;
             self.pixmap_pool.clear();
             self.prev_commands.clear();
+            self.prev_commands_hash = 0;
             self.prev_clear_color = None;
+            self.expanded_commands_cache = None;
+            self.layer_bboxes_cache = None;
             if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
                 self.surface
                     .resize(w, h)
@@ -451,8 +614,12 @@ where
         };
 
         let clear_color_changed = clear_color != self.prev_clear_color;
-        self.prev_commands.clear();
-        self.prev_commands.extend(commands.iter().cloned());
+        let current_hash = hash_commands(commands, 0, 0);
+        if current_hash != self.prev_commands_hash {
+            self.prev_commands.clear();
+            self.prev_commands.extend(commands.iter().cloned());
+            self.prev_commands_hash = current_hash;
+        }
         self.prev_clear_color = clear_color;
 
         // Clear either the dirty region only or the full pixmap when a structural change forces a full re-render; IMPORTANT: compute both the tiny-skia clear rect and the geometry rect used for command-skipping from the same clamped bounds because the naive (dr.x-1).max(0) / dr.width+2 formula shifts the rect right/down when dr has negative coordinates (off-screen content), so fill_rect would clear a larger on-screen area than `dr` describes — causing commands outside `dr` to have their pixels cleared and then be skipped, which makes them disappear.
@@ -549,10 +716,47 @@ where
         self.draw_state.reset();
         self.layer_stack.clear();
 
-        let expanded_commands = expand_fill_layers(commands);
-        let commands: &[DrawCommand] = expanded_commands.as_deref().unwrap_or(commands);
+        // Task 2.5: skip expand_fill_layers when the input commands haven't changed since last frame.
+        let input_hash = hash_commands(commands, 0, 0);
+        let expanded_commands = match &self.expanded_commands_cache {
+            Some((cached_hash, _)) if *cached_hash == input_hash => None, // signals "use cache"
+            _ => {
+                let result = expand_fill_layers(commands);
+                // Store the expanded result (or a clone of the original if no expansion needed).
+                let stored = result.clone().unwrap_or_else(|| commands.to_vec());
+                self.expanded_commands_cache = Some((input_hash, stored));
+                result
+            }
+        };
+        // When expanded_commands is None and cache hit occurred, we still need to know if expansion happened.
+        // The cache stores the final resolved slice (expanded or original), so we use it directly.
+        let commands: &[DrawCommand] = match &expanded_commands {
+            Some(v) => v.as_slice(),
+            None => {
+                // Either no semi-transparent rects (expand_fill_layers returned None) OR cache hit.
+                // In both cases the cache holds the correct resolved slice.
+                if let Some((cached_hash, cached)) = &self.expanded_commands_cache {
+                    if *cached_hash == input_hash {
+                        cached.as_slice()
+                    } else {
+                        commands
+                    }
+                } else {
+                    commands
+                }
+            }
+        };
 
-        let layer_bboxes = compute_layer_bboxes(commands, self.width, self.height);
+        // Task 2.12: skip compute_layer_bboxes when commands and dimensions haven't changed.
+        let bbox_hash = hash_commands(commands, self.width, self.height);
+        let layer_bboxes = match &self.layer_bboxes_cache {
+            Some((cached_hash, cached)) if *cached_hash == bbox_hash => cached.clone(),
+            _ => {
+                let result = compute_layer_bboxes(commands, self.width, self.height);
+                self.layer_bboxes_cache = Some((bbox_hash, result.clone()));
+                result
+            }
+        };
 
         // Nesting depth of PushLayer commands skipped because their bbox doesn't overlap skip_rect; their pixels are already correct from apply_scroll_blit.
         let mut skip_layer_depth: usize = 0;

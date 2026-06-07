@@ -6,7 +6,7 @@ use platform_core::Event;
 use renderer_core::{DrawCommand, ImageData, ImageFilter};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::HasLayoutLeaf;
+use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Image {
@@ -19,10 +19,10 @@ impl Image {
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
         data_fn: impl Fn() -> Rc<ImageData> + 'static,
-        style: LayoutStyle,
+        layout: LayoutStyle,
         filter_fn: impl Fn() -> ImageFilter + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, style)?;
+        let leaf = LayoutLeaf::register(ctx, layout)?;
         Ok(Self {
             data: Box::new(data_fn),
             leaf,
@@ -52,8 +52,4 @@ impl Component for Image {
     }
 }
 
-impl HasLayoutLeaf for Image {
-    fn layout_leaf(&self) -> &LayoutLeaf {
-        &self.leaf
-    }
-}
+impl_leaf_widget!(Image);

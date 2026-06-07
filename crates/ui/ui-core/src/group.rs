@@ -1,7 +1,7 @@
 use geometry_core::Rect;
 use platform_core::Event;
 use renderer_core::BorderRadius;
-use ui_tree::{Component, EventResult, RenderNode};
+use ui_tree::{Component, EventResult, NodeVec, RenderNode};
 
 use crate::pointer::{
     clip_pointer_event, clip_pointer_event_rounded, dispatch_to_children, transform_pointer,
@@ -48,7 +48,7 @@ impl Group {
 
 impl Component for Group {
     fn view(&self) -> RenderNode {
-        let children: Vec<RenderNode> = self.children.iter().map(|c| c.view()).collect();
+        let children = NodeVec::collect(self.children.iter().map(|c| c.view()));
         match (&self.clip, &self.matrix) {
             (Some((rect_fn, radius)), None) => RenderNode::Clip {
                 rect: (rect_fn)(),
@@ -62,10 +62,10 @@ impl Component for Group {
             (Some((rect_fn, radius)), Some(matrix_fn)) => RenderNode::Clip {
                 rect: (rect_fn)(),
                 radius: *radius,
-                children: vec![RenderNode::Transform {
+                children: NodeVec::collect([RenderNode::Transform {
                     matrix: (matrix_fn)(),
                     children,
-                }],
+                }]),
             },
             (None, None) => unreachable!("Group requires at least clip or matrix"),
         }

@@ -1,42 +1,45 @@
-use crate::layout_item::HasLayoutLeaf;
+use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
-use geometry_core::Size;
+use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use ui_tree::{Component, EventResult, RenderNode};
 
-pub struct DrawingArea {
+pub struct Canvas {
     leaf: LayoutLeaf,
-    draw_fn: Box<dyn Fn(Size) -> RenderNode>,
+    draw_fn: Box<dyn Fn(Rect) -> RenderNode>,
 }
 
-impl DrawingArea {
+impl Canvas {
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
-        style: LayoutStyle,
-        draw_fn: impl Fn(Size) -> RenderNode + 'static,
+        layout: LayoutStyle,
+        draw_fn: impl Fn(Rect) -> RenderNode + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, style)?;
+        let leaf = LayoutLeaf::register(ctx, layout)?;
         Ok(Self {
             leaf,
             draw_fn: Box::new(draw_fn),
         })
     }
-}
 
-impl HasLayoutLeaf for DrawingArea {
-    fn layout_leaf(&self) -> &LayoutLeaf {
-        &self.leaf
+    /// Creates a `Canvas` with only the height set, using a default `LayoutStyle`.
+    /// Use this when height is the only layout constraint — avoids constructing a full `LayoutStyle` for the common case.
+    pub fn with_intrinsic_height(
+        ctx: &mut crate::context::WidgetCtx,
+        height: f32,
+        draw_fn: impl Fn(Rect) -> RenderNode + 'static,
+    ) -> Result<Self, LayoutError> {
+        Self::new(ctx, LayoutStyle::new().height(height), draw_fn)
     }
 }
 
-impl Component for DrawingArea {
+impl_leaf_widget!(Canvas);
+
+impl Component for Canvas {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
-        let inner = (self.draw_fn)(Size {
-            width: r.width,
-            height: r.height,
-        });
+        let inner = (self.draw_fn)(r);
         self.leaf.at_layout_position(inner)
     }
 

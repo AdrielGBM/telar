@@ -1,9 +1,9 @@
 use platform_core::{Event, EventHandler, Platform, Window};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};
-use renderer_software::{RendererBudget, SoftwareRenderer};
+use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use services_core::AppPathsProvider;
-use ui_core::ComponentTree;
+use ui_core::ComponentList;
 
 use rsx_devtools::{DevAction, DevPlugin};
 
@@ -24,7 +24,7 @@ where
     W: Window + Clone + Send + Sync + 'static,
 {
     app: Box<dyn App>,
-    tree: Option<ComponentTree>,
+    tree: Option<ComponentList>,
     renderer: Option<Box<dyn RenderBackend>>,
     renderer_is_hardware: bool,
     backend: RendererBackend,
@@ -74,7 +74,7 @@ where
             window.width() as f32 / sf,
             window.height() as f32 / sf,
         ));
-        self.tree = Some(ComponentTree::new(self.app.root()));
+        self.tree = Some(ComponentList::new(self.app.root()));
         // Synthesize an initial WindowResized so apps that initialize layout from that event
         // start with the correct logical dimensions instead of their hardcoded defaults.
         let initial_resize = platform_core::Event::WindowResized {
@@ -323,6 +323,17 @@ fn build_hw_font_config(
     android: bool,
 ) -> renderer_text::TextShaperConfig {
     renderer_text::TextShaperConfig {
+        font: build_font_config(font_paths, font_data, android),
+        ..renderer_text::TextShaperConfig::default()
+    }
+}
+
+fn build_font_config(
+    font_paths: Vec<std::path::PathBuf>,
+    font_data: Vec<Vec<u8>>,
+    android: bool,
+) -> renderer_core::FontConfig {
+    renderer_core::FontConfig {
         extra_font_paths: font_paths,
         font_data,
         system_fonts_dir: android.then(|| std::path::PathBuf::from("/system/fonts")),
@@ -331,7 +342,6 @@ fn build_hw_font_config(
         } else {
             vec![]
         },
-        ..renderer_text::TextShaperConfig::default()
     }
 }
 
@@ -339,17 +349,10 @@ fn build_sw_budget(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     android: bool,
-) -> RendererBudget {
-    RendererBudget {
-        extra_font_paths: font_paths,
-        font_data,
-        system_fonts_dir: android.then(|| std::path::PathBuf::from("/system/fonts")),
-        sans_serif_family_candidates: if android {
-            android_sans_serif_candidates()
-        } else {
-            vec![]
-        },
-        ..RendererBudget::default()
+) -> SoftwareRendererConfig {
+    SoftwareRendererConfig {
+        font: build_font_config(font_paths, font_data, android),
+        ..SoftwareRendererConfig::default()
     }
 }
 

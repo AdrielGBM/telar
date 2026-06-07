@@ -1,7 +1,9 @@
 use rsx::{
-    Color, Container, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, WidgetCtx, use_theme,
+    Color, Container, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, Theme, WidgetCtx,
+    use_theme,
 };
 
+#[derive(Clone)]
 pub struct SandboxTheme {
     pub name: &'static str,
     pub background: Color,
@@ -16,6 +18,8 @@ pub struct SandboxTheme {
     pub cyan: Color,
     pub on_color: Color,
 }
+
+impl Theme for SandboxTheme {}
 
 impl SandboxTheme {
     pub fn modern() -> Self {
@@ -57,10 +61,9 @@ pub fn heading(
     ctx: &mut WidgetCtx,
     label: &'static str,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let text = Text::new(
+    let text = Text::single_line(
         ctx,
         move || label.to_string(),
-        LayoutStyle::new().height(20.0),
         || TextStyle::new(12.0, use_theme::<SandboxTheme>().muted),
     )?;
     Ok(Box::new(text) as Box<dyn LayoutItem>)

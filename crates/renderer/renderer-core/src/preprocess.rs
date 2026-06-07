@@ -125,6 +125,7 @@ fn sline_style(s: crate::LineStyle, sf: f32) -> crate::LineStyle {
         paint: spaint(s.paint, sf),
         width: s.width * sf,
         cap: s.cap,
+        join: s.join,
     }
 }
 

@@ -208,29 +208,6 @@ pub enum LineCap {
     Square,
 }
 
-/// Stroke style for `DrawCommand::Line` primitives (point-to-point segments)..Does not include `join` because a single segment has no corners. For paths and rects where corners need styling, use [`Stroke`] instead.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LineStyle {
-    pub paint: Paint,
-    pub width: f32,
-    pub cap: LineCap,
-}
-
-impl LineStyle {
-    pub fn new(paint: impl Into<Paint>, width: f32) -> Self {
-        Self {
-            paint: paint.into(),
-            width,
-            cap: LineCap::Butt,
-        }
-    }
-
-    pub fn with_cap(mut self, cap: LineCap) -> Self {
-        self.cap = cap;
-        self
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LineJoin {
     #[default]
@@ -246,7 +223,7 @@ pub enum FillRule {
     EvenOdd,
 }
 
-/// Stroke style for shapes that have corners: paths and rects. Includes `join` to control how corners are rendered. For simple line segments (no corners), use [`LineStyle`] instead.
+/// Stroke style for drawing primitives. Includes `join` to control how corners are rendered in paths and rects; for line segments `join` is unused and defaults to `Miter`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Stroke {
     pub paint: Paint,
@@ -275,6 +252,9 @@ impl Stroke {
         self
     }
 }
+
+/// Type alias for [`Stroke`]; line segments don't use the `join` field (it defaults to `Miter`).
+pub type LineStyle = Stroke;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Shadow {

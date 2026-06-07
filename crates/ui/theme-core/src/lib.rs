@@ -1,3 +1,3 @@
 mod context;
 
-pub use context::{set_theme, use_theme};
+pub use context::{Theme, set_theme, use_theme};

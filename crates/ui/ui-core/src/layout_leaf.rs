@@ -1,7 +1,7 @@
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use reactive_core::RwSignal;
-use ui_tree::RenderNode;
+use ui_tree::{NodeVec, RenderNode};
 
 use crate::context;
 
@@ -20,7 +20,7 @@ impl LayoutLeaf {
         let r = self.rect.get();
         RenderNode::Transform {
             matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
-            children: vec![content],
+            children: NodeVec::collect([content]),
         }
     }
 }

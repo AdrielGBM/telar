@@ -1,5 +1,8 @@
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::hash::{DefaultHasher, Hash, Hasher};
+
+use rustc_hash::FxHasher;
 
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -32,6 +35,105 @@ fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
         })
         .copied()
         .unwrap_or(caps.formats[0])
+}
+
+// Number of viewport buffer/bind-group slots pre-allocated for per-layer uniforms; frames with more concurrent layers fall back to ad-hoc allocations.
+const VIEWPORT_POOL_SIZE: usize = 8;
+// Upper bound on cached scratch textures per (width, height, format); prevents unbounded GPU memory growth.
+const MAX_TEXTURE_POOL_PER_SIZE: usize = 4;
+
+fn create_viewport_pool_slot(
+    device: &wgpu::Device,
+    viewport_bgl: &wgpu::BindGroupLayout,
+) -> (wgpu::Buffer, wgpu::BindGroup) {
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("rsx-layer-vp-pool"),
+        size: std::mem::size_of::<Viewport>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("rsx-layer-vp-pool-bg"),
+        layout: viewport_bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+    });
+    (buffer, bind_group)
+}
+
+// Borrows a scratch texture matching (width, height, format) from the pool, or creates a fresh one on miss. The returned tuple must be handed back via return_pooled_texture once the frame's GPU work is recorded so it can be reused next frame.
+fn take_pooled_texture(
+    device: &wgpu::Device,
+    pool: &mut Vec<(
+        u32,
+        u32,
+        wgpu::TextureFormat,
+        wgpu::Texture,
+        wgpu::TextureView,
+    )>,
+    width: u32,
+    height: u32,
+    format: wgpu::TextureFormat,
+    label: &str,
+    usage: wgpu::TextureUsages,
+) -> (
+    u32,
+    u32,
+    wgpu::TextureFormat,
+    wgpu::Texture,
+    wgpu::TextureView,
+) {
+    if let Some(pos) = pool
+        .iter()
+        .position(|(w, h, f, _, _)| *w == width && *h == height && *f == format)
+    {
+        return pool.swap_remove(pos);
+    }
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    (width, height, format, texture, view)
+}
+
+// Returns a scratch texture to the pool for reuse, bounded to MAX_TEXTURE_POOL_PER_SIZE entries per (width, height, format) so memory does not grow without limit.
+fn return_pooled_texture(
+    pool: &mut Vec<(
+        u32,
+        u32,
+        wgpu::TextureFormat,
+        wgpu::Texture,
+        wgpu::TextureView,
+    )>,
+    entry: (
+        u32,
+        u32,
+        wgpu::TextureFormat,
+        wgpu::Texture,
+        wgpu::TextureView,
+    ),
+) {
+    let (w, h, f, _, _) = entry;
+    let count = pool
+        .iter()
+        .filter(|(pw, ph, pf, _, _)| *pw == w && *ph == h && *pf == f)
+        .count();
+    if count < MAX_TEXTURE_POOL_PER_SIZE {
+        pool.push(entry);
+    }
 }
 
 enum DrawStep {
@@ -101,6 +203,90 @@ fn hash_instances<T: bytemuck::Pod>(data: &[T]) -> u64 {
     hasher.finish()
 }
 
+// Hashes a draw-command slice structurally (same approach as the software renderer's hash_commands).
+// Uses FxHasher for speed; f32 fields are fed as bit patterns to avoid UB on NaN.
+fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
+    use std::rc::Rc;
+    let mut h = FxHasher::default();
+    commands.len().hash(&mut h);
+    for cmd in commands {
+        match cmd {
+            DrawCommand::Rect(p) => {
+                0u8.hash(&mut h);
+                p.rect.x.to_bits().hash(&mut h);
+                p.rect.y.to_bits().hash(&mut h);
+                p.rect.width.to_bits().hash(&mut h);
+                p.rect.height.to_bits().hash(&mut h);
+            }
+            DrawCommand::Text(p) => {
+                1u8.hash(&mut h);
+                p.text.as_bytes().hash(&mut h);
+                p.rect.x.to_bits().hash(&mut h);
+                p.rect.y.to_bits().hash(&mut h);
+                p.rect.width.to_bits().hash(&mut h);
+                p.rect.height.to_bits().hash(&mut h);
+                p.style.font_size.to_bits().hash(&mut h);
+            }
+            DrawCommand::Image { data, rect, filter } => {
+                2u8.hash(&mut h);
+                data.id.hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                (*filter as u8).hash(&mut h);
+            }
+            DrawCommand::Line { p1, p2, style } => {
+                3u8.hash(&mut h);
+                p1.x.to_bits().hash(&mut h);
+                p1.y.to_bits().hash(&mut h);
+                p2.x.to_bits().hash(&mut h);
+                p2.y.to_bits().hash(&mut h);
+                style.width.to_bits().hash(&mut h);
+            }
+            DrawCommand::Path(p) => {
+                4u8.hash(&mut h);
+                (Rc::as_ptr(&p.data) as usize).hash(&mut h);
+            }
+            DrawCommand::PushClip { rect, radius } => {
+                5u8.hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                radius.top_left.to_bits().hash(&mut h);
+                radius.top_right.to_bits().hash(&mut h);
+                radius.bottom_right.to_bits().hash(&mut h);
+                radius.bottom_left.to_bits().hash(&mut h);
+            }
+            DrawCommand::PopClip => {
+                6u8.hash(&mut h);
+            }
+            DrawCommand::PushMatrix { matrix } => {
+                7u8.hash(&mut h);
+                for v in matrix {
+                    v.to_bits().hash(&mut h);
+                }
+            }
+            DrawCommand::PopMatrix => {
+                8u8.hash(&mut h);
+            }
+            DrawCommand::PushLayer {
+                opacity,
+                backdrop_blur,
+            } => {
+                9u8.hash(&mut h);
+                opacity.to_bits().hash(&mut h);
+                backdrop_blur.to_bits().hash(&mut h);
+            }
+            DrawCommand::PopLayer => {
+                10u8.hash(&mut h);
+            }
+        }
+    }
+    h.finish()
+}
+
 struct ShadowOp {
     instance_start: u32,
     instance_end: u32,
@@ -119,7 +305,7 @@ struct PathShadowOp {
     dest: [f32; 4],
 }
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Clone)]
 struct ShadowCacheKey {
     instance_start: u32,
     instance_count: u32,
@@ -129,7 +315,7 @@ struct ShadowCacheKey {
     instances_hash: u64,
 }
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Clone)]
 struct PathShadowCacheKey {
     index_start: u32,
     index_count: u32,
@@ -186,6 +372,17 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     viewport_buffer: wgpu::Buffer,
     viewport_bind_group: wgpu::BindGroup,
     viewport_dirty: bool,
+    // Round-robin pool of (buffer, bind group) pairs reused for per-layer viewport uniforms; avoids a create_buffer_init + create_bind_group driver round-trip per layer each frame. Reset to index 0 at begin_frame.
+    viewport_buffer_pool: Vec<(wgpu::Buffer, wgpu::BindGroup)>,
+    viewport_buffer_pool_idx: usize,
+    // Reusable offscreen textures keyed by (width, height, format); reused across frames for backdrop-blur scratch targets to avoid per-frame multi-megabyte allocations.
+    texture_pool: Vec<(
+        u32,
+        u32,
+        wgpu::TextureFormat,
+        wgpu::Texture,
+        wgpu::TextureView,
+    )>,
     rect_pipeline: RectPipeline,
     text_pipeline: TextPipeline,
     line_pipeline: LinePipeline,
@@ -243,11 +440,16 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
         u32,
     )>,
     shadow_resolved_cache: HashMap<ShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
+    // LRU eviction order for shadow_resolved_cache: front is least-recently-used, back is most-recently-used.
+    shadow_resolved_cache_order: VecDeque<ShadowCacheKey>,
     path_shadow_resolved_cache: HashMap<PathShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
+    // LRU eviction order for path_shadow_resolved_cache: front is least-recently-used, back is most-recently-used.
+    path_shadow_resolved_cache_order: VecDeque<PathShadowCacheKey>,
     // Non-MSAA presentation texture holding the last resolved frame. Used both as the idle-frame fast-path source (blit when commands are unchanged) and as the MSAA resolve target each active frame.
     retained_texture: Option<wgpu::Texture>,
     retained_view: Option<wgpu::TextureView>,
     prev_commands: Vec<DrawCommand>,
+    prev_commands_hash: u64,
     retained_blit_pipeline: crate::composite::CompositePipeline,
     prev_rect_hash: u64,
     prev_text_hash: u64,
@@ -530,6 +732,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }
         }
 
+        // Pre-allocate the per-layer viewport buffer/bind-group pool so the common case (<=8 layers per frame) never hits create_buffer_init/create_bind_group during rendering.
+        let mut viewport_buffer_pool = Vec::with_capacity(VIEWPORT_POOL_SIZE);
+        for _ in 0..VIEWPORT_POOL_SIZE {
+            viewport_buffer_pool.push(create_viewport_pool_slot(&device, &viewport_bgl));
+        }
+
         Ok(Self {
             surface,
             device,
@@ -538,6 +746,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             viewport_buffer,
             viewport_bind_group,
             viewport_dirty: true,
+            viewport_buffer_pool,
+            viewport_buffer_pool_idx: 0,
+            texture_pool: Vec::new(),
             rect_pipeline,
             text_pipeline,
             line_pipeline,
@@ -581,10 +792,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             layer_texture_pool: Vec::new(),
             shadow_capture_pool: Vec::new(),
             shadow_resolved_cache: HashMap::new(),
+            shadow_resolved_cache_order: VecDeque::new(),
             path_shadow_resolved_cache: HashMap::new(),
+            path_shadow_resolved_cache_order: VecDeque::new(),
             retained_texture: None,
             retained_view: None,
             prev_commands: Vec::new(),
+            prev_commands_hash: 0,
             retained_blit_pipeline,
             prev_rect_hash: 0,
             prev_text_hash: 0,
@@ -592,6 +806,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             prev_image_hash: 0,
             _window: window,
         })
+    }
+
+    // Returns a viewport bind group backed by a pooled uniform buffer holding `vp`. Reuses a pre-allocated slot via round-robin (writing the new contents in place) when available, otherwise grows the pool with a fresh slot. The returned BindGroup is an Arc-backed clone, so the pool retains ownership of the underlying resources.
+    fn take_layer_viewport_bg(&mut self, vp: Viewport) -> wgpu::BindGroup {
+        let idx = self.viewport_buffer_pool_idx;
+        self.viewport_buffer_pool_idx += 1;
+        if idx >= self.viewport_buffer_pool.len() {
+            let slot = create_viewport_pool_slot(&self.device, &self.viewport_bgl);
+            self.queue.write_buffer(&slot.0, 0, bytemuck::bytes_of(&vp));
+            let bg = slot.1.clone();
+            self.viewport_buffer_pool.push(slot);
+            return bg;
+        }
+        let (buffer, bind_group) = &self.viewport_buffer_pool[idx];
+        self.queue.write_buffer(buffer, 0, bytemuck::bytes_of(&vp));
+        bind_group.clone()
     }
 
     fn reconfigure(&mut self, width: u32, height: u32) {
@@ -661,6 +891,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.retained_texture = Some(retained);
         // Invalidate prev_commands on resize so scroll blit is never applied across size changes.
         self.prev_commands.clear();
+        self.prev_commands_hash = 0;
     }
 
     fn clear_pending(&mut self) {
@@ -756,6 +987,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         if width != self.width || height != self.height || self.config.is_none() {
             // Pooled layer textures are sized to the previous surface dimensions and would be unusable at the new size; drop them so we don't leak GPU memory for textures we will never reuse.
             self.layer_texture_pool.clear();
+            // Backdrop-blur scratch textures are sized to the old surface; drop them on resize for the same reason.
+            self.texture_pool.clear();
             self.width = width;
             self.height = height;
             if width > 0 && height > 0 {
@@ -777,6 +1010,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.clear_pending();
         self.path_tess_cache.begin_frame();
         self.image_pipeline.begin_frame();
+        self.viewport_buffer_pool_idx = 0;
         Ok(())
     }
 
@@ -1250,22 +1484,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             size: [tex_w as f32, tex_h as f32],
                             offset: [ox, oy],
                         };
-                        let layer_vp_buf =
-                            self.device
-                                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                    label: Some("rsx-clip-vp"),
-                                    contents: bytemuck::bytes_of(&layer_vp),
-                                    usage: wgpu::BufferUsages::UNIFORM,
-                                });
-                        let layer_vp_bg =
-                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                label: Some("rsx-clip-vp-bg"),
-                                layout: &self.viewport_bgl,
-                                entries: &[wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: layer_vp_buf.as_entire_binding(),
-                                }],
-                            });
+                        let layer_vp_bg = self.take_layer_viewport_bg(layer_vp);
                         // composite_bg borrows resolve_view before it moves into BeginLayer
                         let composite_bg = self.composite_pipeline.create_bind_group(
                             &self.device,
@@ -1375,22 +1594,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             size: [tex_w as f32, tex_h as f32],
                             offset: [offset_x, offset_y],
                         };
-                        let layer_vp_buf =
-                            self.device
-                                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                    label: Some("rsx-layer-vp"),
-                                    contents: bytemuck::bytes_of(&layer_vp),
-                                    usage: wgpu::BufferUsages::UNIFORM,
-                                });
-                        let layer_vp_bg =
-                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                label: Some("rsx-layer-vp-bg"),
-                                layout: &self.viewport_bgl,
-                                entries: &[wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: layer_vp_buf.as_entire_binding(),
-                                }],
-                            });
+                        let layer_vp_bg = self.take_layer_viewport_bg(layer_vp);
                         // Composite bind group uses window-absolute dest rect; parent viewport (set 0) converts it to NDC.
                         let composite_bg = self.composite_pipeline.create_bind_group(
                             &self.device,
@@ -1702,6 +1906,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             0.0,
                         );
                         text_results.push(Some(bg));
+                        if let Some(pos) = self
+                            .shadow_resolved_cache_order
+                            .iter()
+                            .position(|k| *k == key)
+                        {
+                            self.shadow_resolved_cache_order.remove(pos);
+                        }
+                        self.shadow_resolved_cache_order.push_back(key);
                         continue;
                     }
 
@@ -1789,8 +2001,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     );
                     text_results.push(Some(bg));
                     if self.shadow_resolved_cache.len() >= 128 {
-                        self.shadow_resolved_cache.clear();
+                        if let Some(oldest) = self.shadow_resolved_cache_order.pop_front() {
+                            self.shadow_resolved_cache.remove(&oldest);
+                        }
                     }
+                    self.shadow_resolved_cache_order.push_back(key.clone());
                     self.shadow_resolved_cache
                         .insert(key, (blurred_texture, blurred_view));
                     self.shadow_capture_pool.push((
@@ -1838,6 +2053,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             0.0,
                         );
                         path_results.push(Some(bg));
+                        if let Some(pos) = self
+                            .path_shadow_resolved_cache_order
+                            .iter()
+                            .position(|k| *k == path_key)
+                        {
+                            self.path_shadow_resolved_cache_order.remove(pos);
+                        }
+                        self.path_shadow_resolved_cache_order.push_back(path_key);
                         continue;
                     }
 
@@ -1926,8 +2149,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     );
                     path_results.push(Some(bg));
                     if self.path_shadow_resolved_cache.len() >= 128 {
-                        self.path_shadow_resolved_cache.clear();
+                        if let Some(oldest) = self.path_shadow_resolved_cache_order.pop_front() {
+                            self.path_shadow_resolved_cache.remove(&oldest);
+                        }
                     }
+                    self.path_shadow_resolved_cache_order
+                        .push_back(path_key.clone());
                     self.path_shadow_resolved_cache
                         .insert(path_key, (blurred_texture, blurred_view));
                     self.shadow_capture_pool.push((
@@ -2132,6 +2359,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             wgpu::BindGroup,   // per-layer viewport bind group
             u32,               // layer texture width
             u32,               // layer texture height
+        )> = Vec::new();
+
+        // Backdrop-blur scratch textures borrowed from texture_pool this frame. Held until after submit so the same texture is never reused within one encoder (which would alias reads and writes); returned to the pool below.
+        let mut frame_scratch_textures: Vec<(
+            u32,
+            u32,
+            wgpu::TextureFormat,
+            wgpu::Texture,
+            wgpu::TextureView,
         )> = Vec::new();
 
         // Marks draw segments preceding EndLayerComposite to inline MSAA resolve into the drawing pass, skipping the dedicated resolve pass.
@@ -2358,31 +2594,29 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let (parent_w, parent_h) = (self.width, self.height);
                         let parent_msaa_view: &wgpu::TextureView = &msaa_view;
 
-                        let temp_resolve = self.device.create_texture(&wgpu::TextureDescriptor {
-                            label: Some("rsx-backdrop-resolve"),
-                            size: wgpu::Extent3d {
-                                width: parent_w.max(1),
-                                height: parent_h.max(1),
-                                depth_or_array_layers: 1,
-                            },
-                            mip_level_count: 1,
-                            sample_count: 1,
-                            dimension: wgpu::TextureDimension::D2,
-                            format: self.surface_format,
-                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                                | wgpu::TextureUsages::COPY_SRC
-                                | wgpu::TextureUsages::COPY_DST,
-                            view_formats: &[],
-                        });
-                        let temp_resolve_view =
-                            temp_resolve.create_view(&wgpu::TextureViewDescriptor::default());
+                        // Superset usage so any pooled texture of this size/format can serve as either the resolve target or the crop destination interchangeably.
+                        let scratch_usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+                            | wgpu::TextureUsages::COPY_SRC
+                            | wgpu::TextureUsages::COPY_DST
+                            | wgpu::TextureUsages::TEXTURE_BINDING;
+                        let temp_resolve_entry = take_pooled_texture(
+                            &self.device,
+                            &mut self.texture_pool,
+                            parent_w.max(1),
+                            parent_h.max(1),
+                            self.surface_format,
+                            "rsx-backdrop-resolve",
+                            scratch_usage,
+                        );
+                        let temp_resolve = &temp_resolve_entry.3;
+                        let temp_resolve_view = &temp_resolve_entry.4;
 
                         if self.msaa_samples > 1 {
                             let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                 label: Some("rsx-backdrop-parent-resolve"),
                                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                     view: parent_msaa_view,
-                                    resolve_target: Some(&temp_resolve_view),
+                                    resolve_target: Some(temp_resolve_view),
                                     depth_slice: None,
                                     ops: wgpu::Operations {
                                         load: wgpu::LoadOp::Load,
@@ -2403,7 +2637,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     aspect: wgpu::TextureAspect::All,
                                 },
                                 wgpu::TexelCopyTextureInfo {
-                                    texture: &temp_resolve,
+                                    texture: temp_resolve,
                                     mip_level: 0,
                                     origin: wgpu::Origin3d::ZERO,
                                     aspect: wgpu::TextureAspect::All,
@@ -2421,26 +2655,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let crop_w = width.min(parent_w.saturating_sub(ox_px));
                         let crop_h = height.min(parent_h.saturating_sub(oy_px));
 
-                        let cropped = self.device.create_texture(&wgpu::TextureDescriptor {
-                            label: Some("rsx-backdrop-crop"),
-                            size: wgpu::Extent3d {
-                                width: crop_w.max(1),
-                                height: crop_h.max(1),
-                                depth_or_array_layers: 1,
-                            },
-                            mip_level_count: 1,
-                            sample_count: 1,
-                            dimension: wgpu::TextureDimension::D2,
-                            format: self.surface_format,
-                            usage: wgpu::TextureUsages::COPY_DST
-                                | wgpu::TextureUsages::TEXTURE_BINDING,
-                            view_formats: &[],
-                        });
+                        let cropped_entry = take_pooled_texture(
+                            &self.device,
+                            &mut self.texture_pool,
+                            crop_w.max(1),
+                            crop_h.max(1),
+                            self.surface_format,
+                            "rsx-backdrop-crop",
+                            scratch_usage,
+                        );
+                        let cropped = &cropped_entry.3;
+                        let cropped_view = &cropped_entry.4;
 
                         if crop_w > 0 && crop_h > 0 {
                             encoder.copy_texture_to_texture(
                                 wgpu::TexelCopyTextureInfo {
-                                    texture: &temp_resolve,
+                                    texture: temp_resolve,
                                     mip_level: 0,
                                     origin: wgpu::Origin3d {
                                         x: ox_px,
@@ -2450,7 +2680,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     aspect: wgpu::TextureAspect::All,
                                 },
                                 wgpu::TexelCopyTextureInfo {
-                                    texture: &cropped,
+                                    texture: cropped,
                                     mip_level: 0,
                                     origin: wgpu::Origin3d::ZERO,
                                     aspect: wgpu::TextureAspect::All,
@@ -2463,12 +2693,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             );
                         }
 
-                        let cropped_view =
-                            cropped.create_view(&wgpu::TextureViewDescriptor::default());
                         let (_blurred_tex, blurred_view) = self.blur_pipeline.apply(
                             &self.device,
                             &mut encoder,
-                            &cropped_view,
+                            cropped_view,
                             crop_w.max(1),
                             crop_h.max(1),
                             backdrop_blur,
@@ -2509,6 +2737,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             backdrop_pass.set_bind_group(1, &backdrop_bg, &[]);
                             backdrop_pass.draw(0..6, 0..1);
                         }
+                        // Hold these scratch textures until after submit; returning them to the pool now would let a later layer in this same encoder reuse and overwrite them before the GPU reads them.
+                        frame_scratch_textures.push(temp_resolve_entry);
+                        frame_scratch_textures.push(cropped_entry);
                     }
 
                     layer_stack.push((
@@ -2677,9 +2908,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
+        // Safe to recycle now: the encoder is submitted, so no in-flight pass within this frame can alias these textures.
+        for entry in frame_scratch_textures.drain(..) {
+            return_pooled_texture(&mut self.texture_pool, entry);
+        }
         tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
         output.present();
-        self.prev_commands = orig_commands.to_vec();
+        let current_hash = hash_draw_commands(orig_commands);
+        if current_hash != self.prev_commands_hash {
+            self.prev_commands = orig_commands.to_vec();
+            self.prev_commands_hash = current_hash;
+        }
         self.clear_pending();
         Ok(())
     }

@@ -6,6 +6,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{WidgetCtx, new_container, track_layout};
 use crate::layout_item::LayoutItem;
+use crate::pointer::{dispatch_to_children_filtered, pointer_coords};
 
 pub struct Container {
     node: NodeId,
@@ -68,25 +69,17 @@ impl Component for Container {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let pointer_pos: Option<(f32, f32)> = match event {
-            Event::PointerMoved { x, y, .. } => Some((*x as f32, *y as f32)),
-            Event::PointerPressed { x, y, .. } => Some((*x as f32, *y as f32)),
-            Event::PointerReleased { x, y, .. } => Some((*x as f32, *y as f32)),
-            _ => None,
-        };
-        for (child, rect_signal) in &mut self.children {
-            if let Some((px, py)) = pointer_pos {
-                if let Some(sig) = rect_signal {
-                    if !sig.get().contains(px, py) {
-                        continue;
-                    }
-                }
-            }
-            if child.on_event(event) == EventResult::Handled {
-                return EventResult::Handled;
-            }
-        }
-        EventResult::Ignored
+        let pointer_pos = pointer_coords(event).map(|(x, y)| (x as f32, y as f32));
+        dispatch_to_children_filtered(
+            &mut self.children,
+            |(_, rect_signal)| match pointer_pos {
+                Some((px, py)) => rect_signal
+                    .as_ref()
+                    .map_or(true, |sig| sig.get().contains(px, py)),
+                None => true,
+            },
+            |(child, _)| child.on_event(event),
+        )
     }
 }
 

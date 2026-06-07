@@ -1,161 +1,116 @@
 use std::rc::Rc;
 
 use rsx::{
-    Color, Component, DrawCommand, DrawingArea, FillRule, LayoutError, LayoutStyle, LineCap,
-    LineJoin, Paint, Path, PathData, PathStyle, Point, Rect, RenderNode, Shadow, Size, Stroke,
-    TextPayload, TextStyle, WidgetCtx, use_theme,
+    Canvas, Color, Component, DrawCommand, FillRule, LayoutError, LineCap, LineJoin, Paint, Path,
+    PathData, PathStyle, Point, Rect, RenderNode, Shadow, Stroke, TextPayload, TextStyle,
+    WidgetCtx, use_theme,
 };
 
 use crate::sections::draw_section_header;
 use crate::theme::SandboxTheme;
 
-pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
-    DrawingArea::new(
-        ctx,
-        LayoutStyle::new().height(660.0),
-        |Size { width: w, .. }| {
-            let t = use_theme::<SandboxTheme>();
-            let primary = t.primary;
-            let success = t.success;
-            let danger = t.danger;
-            let warning = t.warning;
-            let purple = t.purple;
-            let dark = t.dark;
-            let muted = t.muted;
-            let card_border = t.card_border;
+pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
+    Canvas::with_intrinsic_height(ctx, 660.0, |rect| {
+        let w = rect.width;
+        let t = use_theme::<SandboxTheme>();
+        let primary = t.primary;
+        let success = t.success;
+        let danger = t.danger;
+        let warning = t.warning;
+        let purple = t.purple;
+        let dark = t.dark;
+        let muted = t.muted;
+        let card_border = t.card_border;
 
-            let mut children: Vec<RenderNode> = Vec::new();
+        let mut children: Vec<RenderNode> = Vec::new();
 
-            draw_section_header(&mut children, w, "Paths", card_border, muted);
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Polygon shapes"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 36.0,
-                        width: 300.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+        draw_section_header(&mut children, w, "Paths", card_border, muted);
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Polygon shapes"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 36.0,
+                    width: 300.0,
+                    height: 16.0,
                 },
-            ))));
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
 
-            let triangle_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(75.0, 56.0))
-                    .line_to(Point::new(135.0, 166.0))
-                    .line_to(Point::new(15.0, 166.0))
-                    .close(),
-            );
-            children.push(
-                Path::new(
-                    {
-                        let d = triangle_data.clone();
-                        move || d.clone()
-                    },
-                    move || PathStyle {
-                        fill: Some(Paint::Solid(primary)),
-                        stroke: None,
-                        shadow: None,
-                        fill_rule: FillRule::Winding,
-                    },
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("triangle"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 176.0,
-                        width: 150.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+        let triangle_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(75.0, 56.0))
+                .line_to(Point::new(135.0, 166.0))
+                .line_to(Point::new(15.0, 166.0))
+                .close(),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = triangle_data.clone();
+                    move || d.clone()
                 },
-            ))));
+                move || PathStyle {
+                    fill: Some(Paint::Solid(primary)),
+                    stroke: None,
+                    shadow: None,
+                    fill_rule: FillRule::Winding,
+                },
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("triangle"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 176.0,
+                    width: 150.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
 
-            {
-                let cx = 245.0f32;
-                let cy = 111.0f32;
-                let outer = 55.0f32;
-                let inner = 22.0f32;
-                let mut path = PathData::new();
-                for i in 0..10usize {
-                    let angle =
-                        std::f32::consts::TAU * i as f32 / 10.0 - std::f32::consts::FRAC_PI_2;
-                    let r = if i % 2 == 0 { outer } else { inner };
-                    let p = Point::new(cx + r * angle.cos(), cy + r * angle.sin());
-                    path = if i == 0 {
-                        path.move_to(p)
-                    } else {
-                        path.line_to(p)
-                    };
-                }
-                path = path.close();
-                let star_data = Rc::new(path);
-                children.push(
-                    Path::new(
-                        {
-                            let d = star_data.clone();
-                            move || d.clone()
-                        },
-                        move || PathStyle {
-                            fill: Some(Paint::Solid(danger)),
-                            stroke: Some(Stroke::new(dark, 1.0)),
-                            shadow: None,
-                            fill_rule: FillRule::Winding,
-                        },
-                    )
-                    .view(),
-                );
-                children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                    TextPayload {
-                        text: Rc::from("star (fill + stroke)"),
-                        rect: Rect {
-                            x: 175.0,
-                            y: 176.0,
-                            width: 200.0,
-                            height: 16.0,
-                        },
-                        style: TextStyle::new(11.0, muted),
-                    },
-                ))));
+        {
+            let cx = 245.0f32;
+            let cy = 111.0f32;
+            let outer = 55.0f32;
+            let inner = 22.0f32;
+            let mut path = PathData::new();
+            for i in 0..10usize {
+                let angle = std::f32::consts::TAU * i as f32 / 10.0 - std::f32::consts::FRAC_PI_2;
+                let r = if i % 2 == 0 { outer } else { inner };
+                let p = Point::new(cx + r * angle.cos(), cy + r * angle.sin());
+                path = if i == 0 {
+                    path.move_to(p)
+                } else {
+                    path.line_to(p)
+                };
             }
-
-            let evenodd_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(360.0, 58.0))
-                    .line_to(Point::new(540.0, 58.0))
-                    .line_to(Point::new(540.0, 168.0))
-                    .line_to(Point::new(360.0, 168.0))
-                    .close()
-                    .move_to(Point::new(390.0, 88.0))
-                    .line_to(Point::new(510.0, 88.0))
-                    .line_to(Point::new(510.0, 138.0))
-                    .line_to(Point::new(390.0, 138.0))
-                    .close(),
-            );
+            path = path.close();
+            let star_data = Rc::new(path);
             children.push(
                 Path::new(
                     {
-                        let d = evenodd_data.clone();
+                        let d = star_data.clone();
                         move || d.clone()
                     },
                     move || PathStyle {
-                        fill: Some(Paint::Solid(purple)),
-                        stroke: None,
+                        fill: Some(Paint::Solid(danger)),
+                        stroke: Some(Stroke::new(dark, 1.0)),
                         shadow: None,
-                        fill_rule: FillRule::EvenOdd,
+                        fill_rule: FillRule::Winding,
                     },
                 )
                 .view(),
             );
             children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
                 TextPayload {
-                    text: Rc::from("even-odd fill"),
+                    text: Rc::from("star (fill + stroke)"),
                     rect: Rect {
-                        x: 350.0,
+                        x: 175.0,
                         y: 176.0,
                         width: 200.0,
                         height: 16.0,
@@ -163,418 +118,449 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                     style: TextStyle::new(11.0, muted),
                 },
             ))));
+        }
 
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Bézier curves"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 212.0,
-                        width: 300.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+        let evenodd_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(360.0, 58.0))
+                .line_to(Point::new(540.0, 58.0))
+                .line_to(Point::new(540.0, 168.0))
+                .line_to(Point::new(360.0, 168.0))
+                .close()
+                .move_to(Point::new(390.0, 88.0))
+                .line_to(Point::new(510.0, 88.0))
+                .line_to(Point::new(510.0, 138.0))
+                .line_to(Point::new(390.0, 138.0))
+                .close(),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = evenodd_data.clone();
+                    move || d.clone()
                 },
-            ))));
+                move || PathStyle {
+                    fill: Some(Paint::Solid(purple)),
+                    stroke: None,
+                    shadow: None,
+                    fill_rule: FillRule::EvenOdd,
+                },
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("even-odd fill"),
+                rect: Rect {
+                    x: 350.0,
+                    y: 176.0,
+                    width: 200.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
 
-            let quad_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(0.0, 308.0))
-                    .quad_to(Point::new(140.0, 238.0), Point::new(280.0, 308.0)),
-            );
-            children.push(
-                Path::new(
-                    {
-                        let d = quad_data.clone();
-                        move || d.clone()
-                    },
-                    move || PathStyle {
-                        fill: None,
-                        stroke: Some(Stroke::new(warning, 3.0).with_cap(LineCap::Round)),
-                        shadow: None,
-                        fill_rule: FillRule::Winding,
-                    },
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Bézier curves"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 212.0,
+                    width: 300.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        let quad_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(0.0, 308.0))
+                .quad_to(Point::new(140.0, 238.0), Point::new(280.0, 308.0)),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = quad_data.clone();
+                    move || d.clone()
+                },
+                move || PathStyle {
+                    fill: None,
+                    stroke: Some(Stroke::new(warning, 3.0).with_cap(LineCap::Round)),
+                    shadow: None,
+                    fill_rule: FillRule::Winding,
+                },
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("quad_to arch"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 318.0,
+                    width: 200.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        let cubic_data = Rc::new(PathData::new().move_to(Point::new(310.0, 248.0)).cubic_to(
+            Point::new(380.0, 248.0),
+            Point::new(310.0, 308.0),
+            Point::new(380.0, 308.0),
+        ));
+        children.push(
+            Path::new(
+                {
+                    let d = cubic_data.clone();
+                    move || d.clone()
+                },
+                move || PathStyle {
+                    fill: None,
+                    stroke: Some(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
+                    shadow: None,
+                    fill_rule: FillRule::Winding,
+                },
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("cubic_to S-curve"),
+                rect: Rect {
+                    x: 296.0,
+                    y: 318.0,
+                    width: 200.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        let petal_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(516.0, 243.0))
+                .cubic_to(
+                    Point::new(586.0, 243.0),
+                    Point::new(586.0, 313.0),
+                    Point::new(516.0, 313.0),
                 )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("quad_to arch"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 318.0,
-                        width: 200.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
-                },
-            ))));
-
-            let cubic_data = Rc::new(PathData::new().move_to(Point::new(310.0, 248.0)).cubic_to(
-                Point::new(380.0, 248.0),
-                Point::new(310.0, 308.0),
-                Point::new(380.0, 308.0),
-            ));
-            children.push(
-                Path::new(
-                    {
-                        let d = cubic_data.clone();
-                        move || d.clone()
-                    },
-                    move || PathStyle {
-                        fill: None,
-                        stroke: Some(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
-                        shadow: None,
-                        fill_rule: FillRule::Winding,
-                    },
+                .cubic_to(
+                    Point::new(446.0, 313.0),
+                    Point::new(446.0, 243.0),
+                    Point::new(516.0, 243.0),
                 )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("cubic_to S-curve"),
-                    rect: Rect {
-                        x: 296.0,
-                        y: 318.0,
-                        width: 200.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+                .close(),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = petal_data.clone();
+                    move || d.clone()
                 },
-            ))));
-
-            let petal_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(516.0, 243.0))
-                    .cubic_to(
-                        Point::new(586.0, 243.0),
-                        Point::new(586.0, 313.0),
-                        Point::new(516.0, 313.0),
-                    )
-                    .cubic_to(
-                        Point::new(446.0, 313.0),
-                        Point::new(446.0, 243.0),
-                        Point::new(516.0, 243.0),
-                    )
-                    .close(),
-            );
-            children.push(
-                Path::new(
-                    {
-                        let d = petal_data.clone();
-                        move || d.clone()
-                    },
-                    move || PathStyle {
-                        fill: Some(Paint::Solid(warning.with_alpha(0.75))),
-                        stroke: Some(Stroke::new(warning, 1.5)),
-                        shadow: None,
-                        fill_rule: FillRule::Winding,
-                    },
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("closed cubic (petal)"),
-                    rect: Rect {
-                        x: 446.0,
-                        y: 318.0,
-                        width: 200.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+                move || PathStyle {
+                    fill: Some(Paint::Solid(warning.with_alpha(0.75))),
+                    stroke: Some(Stroke::new(warning, 1.5)),
+                    shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
-            ))));
-
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Stroke style"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 354.0,
-                        width: 300.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("closed cubic (petal)"),
+                rect: Rect {
+                    x: 446.0,
+                    y: 318.0,
+                    width: 200.0,
+                    height: 16.0,
                 },
-            ))));
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
 
-            let butt_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(0.0, 410.0))
-                    .line_to(Point::new(76.0, 390.0))
-                    .line_to(Point::new(152.0, 430.0))
-                    .line_to(Point::new(228.0, 390.0)),
-            );
-            children.push(
-                Path::new(
-                    {
-                        let d = butt_data.clone();
-                        move || d.clone()
-                    },
-                    move || PathStyle {
-                        fill: None,
-                        stroke: Some(Stroke::new(primary, 8.0)),
-                        shadow: None,
-                        fill_rule: FillRule::Winding,
-                    },
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Butt / Miter (default)"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 448.0,
-                        width: 230.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Stroke style"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 354.0,
+                    width: 300.0,
+                    height: 16.0,
                 },
-            ))));
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
 
-            let round_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(300.0, 410.0))
-                    .line_to(Point::new(376.0, 390.0))
-                    .line_to(Point::new(452.0, 430.0))
-                    .line_to(Point::new(528.0, 390.0)),
-            );
-            children.push(
-                Path::new(
-                    {
-                        let d = round_data.clone();
-                        move || d.clone()
-                    },
-                    move || PathStyle {
-                        fill: None,
-                        stroke: Some(
-                            Stroke::new(danger, 8.0)
-                                .with_cap(LineCap::Round)
-                                .with_join(LineJoin::Round),
-                        ),
-                        shadow: None,
-                        fill_rule: FillRule::Winding,
-                    },
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Round cap / Round join"),
-                    rect: Rect {
-                        x: 300.0,
-                        y: 448.0,
-                        width: 240.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+        let butt_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(0.0, 410.0))
+                .line_to(Point::new(76.0, 390.0))
+                .line_to(Point::new(152.0, 430.0))
+                .line_to(Point::new(228.0, 390.0)),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = butt_data.clone();
+                    move || d.clone()
                 },
-            ))));
-
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Path shadows"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 490.0,
-                        width: 300.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+                move || PathStyle {
+                    fill: None,
+                    stroke: Some(Stroke::new(primary, 8.0)),
+                    shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
-            ))));
-
-            const K: f32 = 0.5523;
-            let (cx1, cy1, r1) = (76.0_f32, 570.0_f32, 44.0_f32);
-            let circle_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(cx1, cy1 - r1))
-                    .cubic_to(
-                        Point::new(cx1 + K * r1, cy1 - r1),
-                        Point::new(cx1 + r1, cy1 - K * r1),
-                        Point::new(cx1 + r1, cy1),
-                    )
-                    .cubic_to(
-                        Point::new(cx1 + r1, cy1 + K * r1),
-                        Point::new(cx1 + K * r1, cy1 + r1),
-                        Point::new(cx1, cy1 + r1),
-                    )
-                    .cubic_to(
-                        Point::new(cx1 - K * r1, cy1 + r1),
-                        Point::new(cx1 - r1, cy1 + K * r1),
-                        Point::new(cx1 - r1, cy1),
-                    )
-                    .cubic_to(
-                        Point::new(cx1 - r1, cy1 - K * r1),
-                        Point::new(cx1 - K * r1, cy1 - r1),
-                        Point::new(cx1, cy1 - r1),
-                    )
-                    .close(),
-            );
-            children.push(
-                Path::new(
-                    {
-                        let d = circle_data.clone();
-                        move || d.clone()
-                    },
-                    move || {
-                        PathStyle::default()
-                            .with_fill(primary)
-                            .with_shadow(Shadow::new(
-                                4.0,
-                                6.0,
-                                8.0,
-                                Color::rgba(0.0, 0.0, 0.0, 0.4),
-                            ))
-                    },
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("drop shadow"),
-                    rect: Rect {
-                        x: 32.0,
-                        y: 624.0,
-                        width: 88.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Butt / Miter (default)"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 448.0,
+                    width: 230.0,
+                    height: 16.0,
                 },
-            ))));
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
 
-            let star_shadow_data = Rc::new({
-                let cx = 272.0_f32;
-                let cy = 570.0_f32;
-                let outer = 44.0_f32;
-                let inner = 18.0_f32;
-                let n = 5usize;
-                let mut pd = PathData::new();
-                for i in 0..n * 2 {
-                    let r = if i % 2 == 0 { outer } else { inner };
-                    let angle =
-                        std::f32::consts::PI * i as f32 / n as f32 - std::f32::consts::FRAC_PI_2;
-                    let p = Point::new(cx + r * angle.cos(), cy + r * angle.sin());
-                    if i == 0 {
-                        pd = pd.move_to(p);
-                    } else {
-                        pd = pd.line_to(p);
-                    }
-                }
-                pd.close()
-            });
-            children.push(
-                Path::new(
-                    {
-                        let d = star_shadow_data.clone();
-                        move || d.clone()
-                    },
-                    move || {
-                        PathStyle::default()
-                            .with_fill(warning)
-                            .with_shadow(Shadow::new(0.0, 0.0, 10.0, warning.with_alpha(0.7)))
-                    },
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("glow"),
-                    rect: Rect {
-                        x: 248.0,
-                        y: 624.0,
-                        width: 48.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+        let round_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(300.0, 410.0))
+                .line_to(Point::new(376.0, 390.0))
+                .line_to(Point::new(452.0, 430.0))
+                .line_to(Point::new(528.0, 390.0)),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = round_data.clone();
+                    move || d.clone()
                 },
-            ))));
-
-            let (cx3, cy3, r3) = (468.0_f32, 570.0_f32, 44.0_f32);
-            let diamond_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(cx3, cy3 - r3))
-                    .line_to(Point::new(cx3 + r3 * 0.65, cy3))
-                    .line_to(Point::new(cx3, cy3 + r3))
-                    .line_to(Point::new(cx3 - r3 * 0.65, cy3))
-                    .close(),
-            );
-            children.push(
-                Path::new(
-                    {
-                        let d = diamond_data.clone();
-                        move || d.clone()
-                    },
-                    move || {
-                        PathStyle::default()
-                            .with_fill(success)
-                            .with_shadow(Shadow::new(
-                                3.0,
-                                3.0,
-                                2.0,
-                                Color::rgba(0.0, 0.0, 0.0, 0.5),
-                            ))
-                    },
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("hard offset"),
-                    rect: Rect {
-                        x: 428.0,
-                        y: 624.0,
-                        width: 80.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
-                },
-            ))));
-
-            let wave_data = Rc::new(
-                PathData::new()
-                    .move_to(Point::new(556.0, 570.0))
-                    .cubic_to(
-                        Point::new(586.0, 530.0),
-                        Point::new(626.0, 530.0),
-                        Point::new(656.0, 570.0),
-                    )
-                    .cubic_to(
-                        Point::new(686.0, 610.0),
-                        Point::new(726.0, 610.0),
-                        Point::new(756.0, 570.0),
+                move || PathStyle {
+                    fill: None,
+                    stroke: Some(
+                        Stroke::new(danger, 8.0)
+                            .with_cap(LineCap::Round)
+                            .with_join(LineJoin::Round),
                     ),
-            );
-            children.push(
-                Path::new(
-                    {
-                        let d = wave_data.clone();
-                        move || d.clone()
-                    },
-                    move || {
-                        PathStyle::default()
-                            .with_stroke(Stroke::new(danger, 4.0).with_cap(LineCap::Round))
-                            .with_shadow(Shadow::new(2.0, 4.0, 6.0, danger.with_alpha(0.5)))
-                    },
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("stroke shadow"),
-                    rect: Rect {
-                        x: 600.0,
-                        y: 624.0,
-                        width: 100.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+                    shadow: None,
+                    fill_rule: FillRule::Winding,
                 },
-            ))));
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Round cap / Round join"),
+                rect: Rect {
+                    x: 300.0,
+                    y: 448.0,
+                    width: 240.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
 
-            RenderNode::group(children)
-        },
-    )
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("Path shadows"),
+                rect: Rect {
+                    x: 0.0,
+                    y: 490.0,
+                    width: 300.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        const K: f32 = 0.5523;
+        let (cx1, cy1, r1) = (76.0_f32, 570.0_f32, 44.0_f32);
+        let circle_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(cx1, cy1 - r1))
+                .cubic_to(
+                    Point::new(cx1 + K * r1, cy1 - r1),
+                    Point::new(cx1 + r1, cy1 - K * r1),
+                    Point::new(cx1 + r1, cy1),
+                )
+                .cubic_to(
+                    Point::new(cx1 + r1, cy1 + K * r1),
+                    Point::new(cx1 + K * r1, cy1 + r1),
+                    Point::new(cx1, cy1 + r1),
+                )
+                .cubic_to(
+                    Point::new(cx1 - K * r1, cy1 + r1),
+                    Point::new(cx1 - r1, cy1 + K * r1),
+                    Point::new(cx1 - r1, cy1),
+                )
+                .cubic_to(
+                    Point::new(cx1 - r1, cy1 - K * r1),
+                    Point::new(cx1 - K * r1, cy1 - r1),
+                    Point::new(cx1, cy1 - r1),
+                )
+                .close(),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = circle_data.clone();
+                    move || d.clone()
+                },
+                move || {
+                    PathStyle::default()
+                        .with_fill(primary)
+                        .with_shadow(Shadow::new(4.0, 6.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4)))
+                },
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("drop shadow"),
+                rect: Rect {
+                    x: 32.0,
+                    y: 624.0,
+                    width: 88.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        let star_shadow_data = Rc::new({
+            let cx = 272.0_f32;
+            let cy = 570.0_f32;
+            let outer = 44.0_f32;
+            let inner = 18.0_f32;
+            let n = 5usize;
+            let mut pd = PathData::new();
+            for i in 0..n * 2 {
+                let r = if i % 2 == 0 { outer } else { inner };
+                let angle =
+                    std::f32::consts::PI * i as f32 / n as f32 - std::f32::consts::FRAC_PI_2;
+                let p = Point::new(cx + r * angle.cos(), cy + r * angle.sin());
+                if i == 0 {
+                    pd = pd.move_to(p);
+                } else {
+                    pd = pd.line_to(p);
+                }
+            }
+            pd.close()
+        });
+        children.push(
+            Path::new(
+                {
+                    let d = star_shadow_data.clone();
+                    move || d.clone()
+                },
+                move || {
+                    PathStyle::default()
+                        .with_fill(warning)
+                        .with_shadow(Shadow::new(0.0, 0.0, 10.0, warning.with_alpha(0.7)))
+                },
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("glow"),
+                rect: Rect {
+                    x: 248.0,
+                    y: 624.0,
+                    width: 48.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        let (cx3, cy3, r3) = (468.0_f32, 570.0_f32, 44.0_f32);
+        let diamond_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(cx3, cy3 - r3))
+                .line_to(Point::new(cx3 + r3 * 0.65, cy3))
+                .line_to(Point::new(cx3, cy3 + r3))
+                .line_to(Point::new(cx3 - r3 * 0.65, cy3))
+                .close(),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = diamond_data.clone();
+                    move || d.clone()
+                },
+                move || {
+                    PathStyle::default()
+                        .with_fill(success)
+                        .with_shadow(Shadow::new(3.0, 3.0, 2.0, Color::rgba(0.0, 0.0, 0.0, 0.5)))
+                },
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("hard offset"),
+                rect: Rect {
+                    x: 428.0,
+                    y: 624.0,
+                    width: 80.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        let wave_data = Rc::new(
+            PathData::new()
+                .move_to(Point::new(556.0, 570.0))
+                .cubic_to(
+                    Point::new(586.0, 530.0),
+                    Point::new(626.0, 530.0),
+                    Point::new(656.0, 570.0),
+                )
+                .cubic_to(
+                    Point::new(686.0, 610.0),
+                    Point::new(726.0, 610.0),
+                    Point::new(756.0, 570.0),
+                ),
+        );
+        children.push(
+            Path::new(
+                {
+                    let d = wave_data.clone();
+                    move || d.clone()
+                },
+                move || {
+                    PathStyle::default()
+                        .with_stroke(Stroke::new(danger, 4.0).with_cap(LineCap::Round))
+                        .with_shadow(Shadow::new(2.0, 4.0, 6.0, danger.with_alpha(0.5)))
+                },
+            )
+            .view(),
+        );
+        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            TextPayload {
+                text: Rc::from("stroke shadow"),
+                rect: Rect {
+                    x: 600.0,
+                    y: 624.0,
+                    width: 100.0,
+                    height: 16.0,
+                },
+                style: TextStyle::new(11.0, muted),
+            },
+        ))));
+
+        RenderNode::group(children)
+    })
 }

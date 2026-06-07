@@ -1,19 +1,44 @@
 use geometry_core::Rect;
+use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, ScrollDelta};
 use reactive_core::{RwSignal, create_rw_signal};
 use renderer_core::{BorderRadius, Color, DrawCommand, RectPayload, RectStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
+use ui_tree::NodeVec;
+
 use crate::context::{WidgetCtx, track_layout};
-use crate::layout_item::LayoutItem;
+use crate::layout_item::{LayoutItem, LeafWidget};
+use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, offset_pointer};
+
+pub struct ScrollbarStyle {
+    pub color: Color,
+    pub width: f32,
+    pub radius: f32,
+}
+
+impl Default for ScrollbarStyle {
+    fn default() -> Self {
+        Self {
+            color: Color::rgba(0.5, 0.5, 0.6, 0.6),
+            width: 8.0,
+            radius: 3.0,
+        }
+    }
+}
 
 pub struct ScrollArea {
     viewport: Box<dyn Fn() -> Rect>,
     content_size: RwSignal<Rect>,
+    // Reactive model: signal writes automatically trigger view() re-evaluation.
     scroll_x: RwSignal<f32>,
+    // Reactive model: signal writes automatically trigger view() re-evaluation.
     scroll_y: RwSignal<f32>,
     content: Box<dyn LayoutItem>,
+    scrollbar_style: ScrollbarStyle,
+    // When Some, the ScrollArea is a LayoutItem and its viewport is taken from this leaf's taffy-computed rect instead of the `viewport` closure.
+    layout_leaf: Option<LayoutLeaf>,
 }
 
 impl ScrollArea {
@@ -30,11 +55,47 @@ impl ScrollArea {
             scroll_x: create_rw_signal(0.0),
             scroll_y: create_rw_signal(0.0),
             content,
+            scrollbar_style: ScrollbarStyle::default(),
+            layout_leaf: None,
         }
     }
 
+    /// Creates a ScrollArea that acts as a LayoutItem (can be a child of Container).
+    /// The viewport size is determined by the layout system (taffy), not a closure.
+    pub fn as_layout_item(
+        ctx: &mut WidgetCtx,
+        layout: LayoutStyle,
+        content: Box<dyn LayoutItem>,
+    ) -> Result<Self, LayoutError> {
+        let content_size =
+            track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
+        let leaf = LayoutLeaf::register(ctx, layout)?;
+        Ok(Self {
+            // Unused when `layout_leaf` is Some; the viewport comes from the leaf's taffy rect.
+            viewport: Box::new(Rect::default),
+            content_size,
+            scroll_x: create_rw_signal(0.0),
+            scroll_y: create_rw_signal(0.0),
+            content,
+            scrollbar_style: ScrollbarStyle::default(),
+            layout_leaf: Some(leaf),
+        })
+    }
+
+    fn viewport_rect(&self) -> Rect {
+        match &self.layout_leaf {
+            Some(leaf) => leaf.rect.get(),
+            None => (self.viewport)(),
+        }
+    }
+
+    pub fn scrollbar_style(mut self, style: ScrollbarStyle) -> Self {
+        self.scrollbar_style = style;
+        self
+    }
+
     pub fn clamp_scroll(&mut self) {
-        let vp = (self.viewport)();
+        let vp = self.viewport_rect();
         let content_rect = self.content_size.get();
         let max_x = (content_rect.width - vp.width).max(0.0);
         let max_y = (content_rect.height - vp.height).max(0.0);
@@ -51,7 +112,7 @@ impl ScrollArea {
 
 impl Component for ScrollArea {
     fn view(&self) -> RenderNode {
-        let vp = (self.viewport)();
+        let vp = self.viewport_rect();
         let scroll_x = self.scroll_x.get();
         let scroll_y = self.scroll_y.get();
         let content_rect = self.content_size.get();
@@ -59,21 +120,22 @@ impl Component for ScrollArea {
         let scrollable = RenderNode::Clip {
             rect: vp,
             radius: BorderRadius::zero(),
-            children: vec![RenderNode::Transform {
+            children: NodeVec::collect([RenderNode::Transform {
                 matrix: [1.0, 0.0, 0.0, 1.0, vp.x - scroll_x, vp.y - scroll_y],
-                children: vec![self.content.view()],
-            }],
+                children: NodeVec::collect([self.content.view()]),
+            }]),
         };
 
+        let sb = &self.scrollbar_style;
         let vbar = if content_rect.height > vp.height {
             let bar_h = (vp.height / content_rect.height * vp.height).max(24.0);
             let max_scroll = (content_rect.height - vp.height).max(1.0);
             let bar_y = vp.y + (scroll_y / max_scroll) * (vp.height - bar_h);
             RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Rect::new(vp.x + vp.width - 8.0, bar_y, 6.0, bar_h),
+                rect: Rect::new(vp.x + vp.width - sb.width, bar_y, sb.width - 2.0, bar_h),
                 style: RectStyle::default()
-                    .with_fill(Color::rgba(0.5, 0.5, 0.6, 0.6))
-                    .with_radius(BorderRadius::all(3.0)),
+                    .with_fill(sb.color)
+                    .with_radius(BorderRadius::all(sb.radius)),
             })))
         } else {
             RenderNode::Empty
@@ -84,10 +146,10 @@ impl Component for ScrollArea {
             let max_scroll_x = (content_rect.width - vp.width).max(1.0);
             let bar_x = vp.x + (scroll_x / max_scroll_x) * (vp.width - bar_w);
             RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
-                rect: Rect::new(bar_x, vp.y + vp.height - 8.0, bar_w, 6.0),
+                rect: Rect::new(bar_x, vp.y + vp.height - sb.width, bar_w, sb.width - 2.0),
                 style: RectStyle::default()
-                    .with_fill(Color::rgba(0.5, 0.5, 0.6, 0.6))
-                    .with_radius(BorderRadius::all(3.0)),
+                    .with_fill(sb.color)
+                    .with_radius(BorderRadius::all(sb.radius)),
             })))
         } else {
             RenderNode::Empty
@@ -97,7 +159,7 @@ impl Component for ScrollArea {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let vp = (self.viewport)();
+        let vp = self.viewport_rect();
 
         if let Event::Scrolled { delta } = event {
             let (dx, dy) = match delta {
@@ -126,6 +188,14 @@ impl Component for ScrollArea {
     }
 }
 
+impl LeafWidget for ScrollArea {
+    fn layout_leaf(&self) -> &LayoutLeaf {
+        self.layout_leaf
+            .as_ref()
+            .expect("ScrollArea must be created with as_layout_item to use as LayoutItem")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use geometry_core::Rect;
@@ -134,18 +204,17 @@ mod tests {
     use ui_tree::{Component, EventResult, RenderNode};
 
     use super::*;
-    use crate::context::{WidgetCtx, compute_layout, with_context};
-    use crate::drawing_area::DrawingArea;
+    use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
+    use crate::drawing_area::Canvas;
     use crate::layout_item::LayoutItem;
     use crate::layout_leaf::LayoutLeaf;
 
     fn make_scroll_area() -> ScrollArea {
         let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
-            let content =
-                DrawingArea::new(ctx, LayoutStyle::new().width(400.0).height(1000.0), |_| {
-                    RenderNode::Empty
-                })
-                .unwrap();
+            let content = Canvas::new(ctx, LayoutStyle::new().width(400.0).height(1000.0), |_| {
+                RenderNode::Empty
+            })
+            .unwrap();
             let node = content.layout_node();
             let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
             compute_layout(
@@ -162,11 +231,10 @@ mod tests {
 
     fn make_scroll_area_small() -> ScrollArea {
         let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
-            let content =
-                DrawingArea::new(ctx, LayoutStyle::new().width(400.0).height(200.0), |_| {
-                    RenderNode::Empty
-                })
-                .unwrap();
+            let content = Canvas::new(ctx, LayoutStyle::new().width(400.0).height(200.0), |_| {
+                RenderNode::Empty
+            })
+            .unwrap();
             let node = content.layout_node();
             let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
             compute_layout(
@@ -179,6 +247,95 @@ mod tests {
             sa
         });
         sa
+    }
+
+    #[test]
+    fn as_layout_item_uses_leaf_rect_as_viewport() {
+        let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
+            let content = Canvas::new(ctx, LayoutStyle::new().width(400.0).height(1000.0), |_| {
+                RenderNode::Empty
+            })
+            .unwrap();
+            let content_node = content.layout_node();
+            let sa = ScrollArea::as_layout_item(
+                ctx,
+                LayoutStyle::new().width(400.0).height(300.0),
+                Box::new(content),
+            )
+            .unwrap();
+            let root = new_container(
+                ctx,
+                LayoutStyle::new().flex_column().width(400.0).height(300.0),
+                &[sa.layout_node()],
+            )
+            .unwrap();
+            compute_layout(
+                ctx,
+                root,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::Definite(300.0),
+            )
+            .unwrap();
+            compute_layout(
+                ctx,
+                content_node,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::MaxContent,
+            )
+            .unwrap();
+            sa
+        });
+        let vp = sa.viewport_rect();
+        assert_eq!(vp.width, 400.0);
+        assert_eq!(vp.height, 300.0);
+    }
+
+    #[test]
+    fn as_layout_item_emits_clip_and_vbar_on_overflow() {
+        let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
+            let content = Canvas::new(ctx, LayoutStyle::new().width(400.0).height(1000.0), |_| {
+                RenderNode::Empty
+            })
+            .unwrap();
+            let content_node = content.layout_node();
+            let sa = ScrollArea::as_layout_item(
+                ctx,
+                LayoutStyle::new().width(400.0).height(300.0),
+                Box::new(content),
+            )
+            .unwrap();
+            let root = new_container(
+                ctx,
+                LayoutStyle::new().flex_column().width(400.0).height(300.0),
+                &[sa.layout_node()],
+            )
+            .unwrap();
+            compute_layout(
+                ctx,
+                root,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::Definite(300.0),
+            )
+            .unwrap();
+            compute_layout(
+                ctx,
+                content_node,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::MaxContent,
+            )
+            .unwrap();
+            sa
+        });
+        if let RenderNode::Group(children) = sa.view() {
+            assert_eq!(children.len(), 3);
+            assert!(matches!(&children[0], RenderNode::Clip { .. }));
+            assert!(matches!(
+                &children[1],
+                RenderNode::Primitive(DrawCommand::Rect(_))
+            ));
+        } else {
+            panic!("expected Group");
+        }
     }
 
     #[test]
@@ -325,11 +482,10 @@ mod tests {
 
     fn make_scroll_area_wide() -> ScrollArea {
         let (sa, _ctx) = with_context(WidgetCtx::new(), |ctx| {
-            let content =
-                DrawingArea::new(ctx, LayoutStyle::new().width(1000.0).height(300.0), |_| {
-                    RenderNode::Empty
-                })
-                .unwrap();
+            let content = Canvas::new(ctx, LayoutStyle::new().width(1000.0).height(300.0), |_| {
+                RenderNode::Empty
+            })
+            .unwrap();
             let node = content.layout_node();
             let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
             compute_layout(

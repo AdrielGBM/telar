@@ -7,7 +7,7 @@ use platform_core::Event;
 use renderer_core::{DrawCommand, TextPayload, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::HasLayoutLeaf;
+use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Text {
@@ -21,16 +21,25 @@ impl Text {
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
         content_fn: impl Fn() -> String + 'static,
-        style: LayoutStyle,
+        layout: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, style)?;
+        let leaf = LayoutLeaf::register(ctx, layout)?;
         Ok(Self {
             content_fn: Box::new(content_fn),
             cached_content: RefCell::new((String::new(), Rc::from(""))),
             style: Box::new(style_fn),
             leaf,
         })
+    }
+
+    pub fn single_line(
+        ctx: &mut crate::context::WidgetCtx,
+        content_fn: impl Fn() -> String + 'static,
+        style_fn: impl Fn() -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        let height = style_fn().font_size * 1.4;
+        Text::new(ctx, content_fn, LayoutStyle::new().height(height), style_fn)
     }
 }
 
@@ -68,8 +77,4 @@ impl Component for Text {
     }
 }
 
-impl HasLayoutLeaf for Text {
-    fn layout_leaf(&self) -> &LayoutLeaf {
-        &self.leaf
-    }
-}
+impl_leaf_widget!(Text);

@@ -4,6 +4,7 @@ use platform_core::Event;
 use renderer_core::{DrawCommand, PathData, PathPayload, PathStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
+/// `Path` is designed for use inside `Canvas`/`DrawingArea` closures where you control absolute coordinates. It does not implement `LayoutItem` because its path data uses absolute points, not relative to a layout rect. To use `Path` in a layout context, embed it in a `Canvas` widget.
 pub struct Path {
     data: Box<dyn Fn() -> Rc<PathData>>,
     style: Box<dyn Fn() -> PathStyle>,

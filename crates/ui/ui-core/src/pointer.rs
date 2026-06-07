@@ -136,3 +136,26 @@ pub(crate) fn dispatch_to_children(
     }
     EventResult::Ignored
 }
+
+// Like dispatch_to_children but skips entries for which the predicate returns false.
+// For each entry, `should_dispatch` is called first — if it returns false the entry is skipped;
+// then `get_result` is called to obtain the EventResult for that entry.
+pub(crate) fn dispatch_to_children_filtered<T, P, D>(
+    children: &mut [T],
+    mut should_dispatch: P,
+    mut get_result: D,
+) -> EventResult
+where
+    P: FnMut(&T) -> bool,
+    D: FnMut(&mut T) -> EventResult,
+{
+    for entry in children.iter_mut() {
+        if !should_dispatch(entry) {
+            continue;
+        }
+        if get_result(entry).is_handled() {
+            return EventResult::Handled;
+        }
+    }
+    EventResult::Ignored
+}

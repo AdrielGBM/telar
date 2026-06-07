@@ -437,66 +437,35 @@ impl PathPipeline {
         });
 
         let shader_source = [include_str!("viewport.wgsl"), include_str!("path.wgsl")].concat();
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("rsx-path-shader"),
-            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
-        });
-
         let fill_data = FillDataBuffer::new(device);
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("rsx-path-pipeline-layout"),
-            bind_group_layouts: &[Some(viewport_bgl), Some(&fill_data.bgl)],
-            immediate_size: 0,
-        });
+        let path_vertex_layout = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<PathVertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: 8,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Uint32,
+                },
+            ],
+        };
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("rsx-path-pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<PathVertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[
-                        wgpu::VertexAttribute {
-                            offset: 0,
-                            shader_location: 0,
-                            format: wgpu::VertexFormat::Float32x2,
-                        },
-                        wgpu::VertexAttribute {
-                            offset: 8,
-                            shader_location: 1,
-                            format: wgpu::VertexFormat::Uint32,
-                        },
-                    ],
-                }],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: msaa_samples,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview_mask: None,
+        let pipeline = super::create_render_pipeline(
+            device,
+            "path",
+            &shader_source,
+            &[viewport_bgl, &fill_data.bgl],
+            &[path_vertex_layout],
+            surface_format,
+            msaa_samples,
             cache,
-        });
+        );
 
         Self {
             vertex_buffer,

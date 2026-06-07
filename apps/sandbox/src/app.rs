@@ -6,9 +6,8 @@ use crate::sections::{
 };
 use crate::theme::SandboxTheme;
 use rsx::{
-    App, AvailableSpace, Color, Component, Container, Event, EventResult, ImageData, LayoutError,
-    LayoutItem, LayoutStyle, NodeId, Rect, RenderNode, RwSignal, ScrollArea, WidgetCtx,
-    compute_layout, create_rw_signal, use_theme, with_context,
+    App, Color, Container, ImageData, LayoutError, LayoutItem, LayoutStyle, ScrollablePage,
+    WidgetCtx, use_theme,
 };
 use std::rc::Rc;
 
@@ -40,86 +39,26 @@ fn build_content(
     )
 }
 
-struct SandboxRootComponent {
-    ctx: WidgetCtx,
-    content_node: NodeId,
-    window_width: RwSignal<f32>,
-    window_height: RwSignal<f32>,
-    scroll_area: ScrollArea,
-}
-
-impl Component for SandboxRootComponent {
-    fn view(&self) -> RenderNode {
-        self.scroll_area.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        if let Event::WindowResized { width, height } = event {
-            let w = *width as f32;
-            self.window_width.set(w);
-            self.window_height.set(*height as f32);
-            self.ctx.mark_dirty_node(self.content_node).ok();
-            compute_layout(
-                &mut self.ctx,
-                self.content_node,
-                AvailableSpace::Definite(w),
-                AvailableSpace::MaxContent,
-            )
-            .ok();
-            self.scroll_area.clamp_scroll();
-            return EventResult::Handled;
-        }
-        self.scroll_area.on_event(event)
-    }
-}
-
 pub struct SandboxRoot;
 
 impl App for SandboxRoot {
-    fn root(&self) -> Box<dyn Component> {
-        let window_width = create_rw_signal(0.0f32);
-        let window_height = create_rw_signal(0.0f32);
-
+    fn root(&self) -> Box<dyn rsx::Component> {
         let gradient_image = Rc::new(make_gradient(128, 128));
         let checker_image = Rc::new(make_checker(128, 128, 16));
         let alpha_image = Rc::new(make_radial_alpha(128, 128));
 
-        let (build, ctx) = with_context(WidgetCtx::new(), |ctx| {
-            let content = build_content(
-                ctx,
-                gradient_image.clone(),
-                checker_image.clone(),
-                alpha_image.clone(),
-            )?;
+        let mut ctx = WidgetCtx::new();
+        let content = build_content(
+            &mut ctx,
+            gradient_image.clone(),
+            checker_image.clone(),
+            alpha_image.clone(),
+        )
+        .expect("layout failed");
 
-            let content_node = content.layout_node();
-            let ww = window_width.clone();
-            let wh = window_height.clone();
-            let scroll_area = ScrollArea::new(
-                ctx,
-                move || Rect::new(0.0, 0.0, ww.get(), wh.get()),
-                Box::new(content),
-            );
-
-            compute_layout(
-                ctx,
-                content_node,
-                AvailableSpace::Definite(window_width.get()),
-                AvailableSpace::MaxContent,
-            )?;
-
-            Ok::<_, LayoutError>((scroll_area, content_node))
-        });
-
-        let (scroll_area, content_node) = build.expect("layout failed");
-
-        Box::new(SandboxRootComponent {
-            ctx,
-            content_node,
-            window_width,
-            window_height,
-            scroll_area,
-        })
+        let mut page = ScrollablePage::new(ctx, Box::new(content), 0.0, 0.0);
+        page.compute_layout();
+        Box::new(page)
     }
 
     fn clear_color(&self) -> Option<Color> {
