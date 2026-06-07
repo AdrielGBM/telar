@@ -24,6 +24,51 @@ impl BorderRadius {
         Self::all(0.0)
     }
 
+    pub fn new(top_left: f32, top_right: f32, bottom_right: f32, bottom_left: f32) -> Self {
+        Self {
+            top_left,
+            top_right,
+            bottom_right,
+            bottom_left,
+        }
+    }
+
+    pub fn top(radius: f32) -> Self {
+        Self {
+            top_left: radius,
+            top_right: radius,
+            bottom_right: 0.0,
+            bottom_left: 0.0,
+        }
+    }
+
+    pub fn bottom(radius: f32) -> Self {
+        Self {
+            top_left: 0.0,
+            top_right: 0.0,
+            bottom_right: radius,
+            bottom_left: radius,
+        }
+    }
+
+    pub fn left(radius: f32) -> Self {
+        Self {
+            top_left: radius,
+            top_right: 0.0,
+            bottom_right: 0.0,
+            bottom_left: radius,
+        }
+    }
+
+    pub fn right(radius: f32) -> Self {
+        Self {
+            top_left: 0.0,
+            top_right: radius,
+            bottom_right: radius,
+            bottom_left: 0.0,
+        }
+    }
+
     pub fn is_zero(&self) -> bool {
         self.top_left == 0.0
             && self.top_right == 0.0

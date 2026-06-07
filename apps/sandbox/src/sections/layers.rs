@@ -62,6 +62,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                 let x = i as f32 * 184.0;
                 children.push(RenderNode::Layer {
                     opacity,
+                    backdrop_blur: 0.0,
                     children: vec![
                         RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                             rect: Rect {
@@ -123,6 +124,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
             children.push(RenderNode::Layer {
                 opacity: 0.7,
+                backdrop_blur: 0.0,
                 children: vec![RenderNode::Primitive(DrawCommand::Rect(Box::new(
                     RectPayload {
                         rect: Rect {
@@ -143,6 +145,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
             children.push(RenderNode::Layer {
                 opacity: 0.7,
+                backdrop_blur: 0.0,
                 children: vec![RenderNode::Primitive(DrawCommand::Rect(Box::new(
                     RectPayload {
                         rect: Rect {
@@ -163,6 +166,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
             children.push(RenderNode::Layer {
                 opacity: 0.7,
+                backdrop_blur: 0.0,
                 children: vec![RenderNode::Primitive(DrawCommand::Rect(Box::new(
                     RectPayload {
                         rect: Rect {
@@ -196,6 +200,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
             children.push(RenderNode::Layer {
                 opacity: 0.8,
+                backdrop_blur: 0.0,
                 children: vec![
                     RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Rect {
@@ -243,6 +248,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
             children.push(RenderNode::Layer {
                 opacity: 0.6,
+                backdrop_blur: 0.0,
                 children: vec![
                     RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Rect {
@@ -260,6 +266,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
                     }))),
                     RenderNode::Layer {
                         opacity: 0.5,
+                        backdrop_blur: 0.0,
                         children: vec![
                             RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                                 rect: Rect {

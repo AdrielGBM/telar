@@ -267,6 +267,16 @@ impl LayoutStyle {
         self
     }
 
+    pub fn gap_x(mut self, px: f32) -> Self {
+        self.inner.gap.width = LengthPercentage::length(px);
+        self
+    }
+
+    pub fn gap_y(mut self, px: f32) -> Self {
+        self.inner.gap.height = LengthPercentage::length(px);
+        self
+    }
+
     pub fn align_items(mut self, value: AlignItems) -> Self {
         self.inner.align_items = Some(value);
         self
@@ -363,6 +373,11 @@ impl LayoutStyle {
             start: GridPlacement::Span(n),
             end: GridPlacement::Auto,
         };
+        self
+    }
+
+    pub fn aspect_ratio(mut self, ratio: f32) -> Self {
+        self.inner.aspect_ratio = Some(ratio);
         self
     }
 }

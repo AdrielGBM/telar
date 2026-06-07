@@ -16,6 +16,7 @@ pub enum RenderNode {
     },
     Layer {
         opacity: f32,
+        backdrop_blur: f32,
         children: Vec<RenderNode>,
     },
 }

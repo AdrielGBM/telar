@@ -56,14 +56,18 @@ pub fn flatten_view(
                 }
                 emit_cmd!(DrawCommand::PushClip { rect, radius });
             }
-            RenderNode::Layer { opacity, children } => {
+            RenderNode::Layer {
+                opacity,
+                backdrop_blur,
+                children,
+            } => {
                 stack.push(RenderNode::Primitive(DrawCommand::PopLayer));
                 for child in children.into_iter().rev() {
                     stack.push(child);
                 }
                 emit_cmd!(DrawCommand::PushLayer {
                     opacity,
-                    backdrop_blur: 0.0,
+                    backdrop_blur,
                 });
             }
         }

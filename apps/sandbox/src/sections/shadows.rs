@@ -332,6 +332,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
             children.push(RenderNode::Layer {
                 opacity: 1.0,
+                backdrop_blur: 0.0,
                 children: vec![
                     RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Rect {
@@ -367,6 +368,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
             children.push(RenderNode::Layer {
                 opacity: 0.7,
+                backdrop_blur: 0.0,
                 children: vec![
                     RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Rect {
@@ -397,6 +399,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
             children.push(RenderNode::Layer {
                 opacity: 0.4,
+                backdrop_blur: 0.0,
                 children: vec![
                     RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                         rect: Rect {

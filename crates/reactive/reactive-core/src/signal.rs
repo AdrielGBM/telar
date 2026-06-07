@@ -27,6 +27,10 @@ impl<T: Clone + 'static> ReadSignal<T> {
         track(&self.inner);
         self.inner.borrow().value.clone()
     }
+
+    pub fn peek(&self) -> T {
+        self.inner.borrow().value.clone()
+    }
 }
 
 impl<T: 'static> ReadSignal<T> {
