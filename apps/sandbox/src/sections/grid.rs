@@ -6,6 +6,7 @@ use rsx::{
     WidgetCtx, use_theme,
 };
 
+use crate::theme::section;
 use crate::theme::{SandboxTheme, heading};
 
 pub fn grid_cell(
@@ -179,15 +180,13 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         ],
     )?;
 
-    let h1 = heading(ctx, "Grid")?;
     let h2 = heading(ctx, "Auto-placed (repeat(3, 1fr))")?;
     let h3 = heading(ctx, "Explicit placement (grid_column_span)")?;
     let h4 = heading(ctx, "Nested in Container")?;
-    Container::new(
+    let content = Container::new(
         ctx,
         LayoutStyle::new().flex_column().gap(16.0),
         vec![
-            h1,
             h2,
             Box::new(auto_grid) as Box<dyn LayoutItem>,
             h3,
@@ -195,5 +194,6 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
             h4,
             Box::new(nested_row) as Box<dyn LayoutItem>,
         ],
-    )
+    )?;
+    section(ctx, "Grid", content)
 }

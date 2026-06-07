@@ -1,4 +1,5 @@
-use crate::theme::{SandboxTheme, heading};
+use crate::theme::SandboxTheme;
+use crate::theme::section;
 use rsx::{
     BorderRadius, Color, Container, DrawCommand, DrawingArea, LayoutError, LayoutItem, LayoutStyle,
     Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
@@ -94,10 +95,5 @@ pub fn shapes_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         LayoutStyle::new().flex_row().gap(16.0),
         vec![sc1, sc2, sc3, sc4],
     )?;
-    let h = heading(ctx, "Shapes")?;
-    Container::new(
-        ctx,
-        LayoutStyle::new().flex_column().gap(8.0),
-        vec![h, Box::new(cards) as Box<dyn LayoutItem>],
-    )
+    section(ctx, "Shapes", cards)
 }

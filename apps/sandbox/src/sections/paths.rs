@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
 use rsx::{
-    Color, Component, DrawCommand, DrawingArea, FillRule, LayoutError, LayoutStyle, Line, LineCap,
-    LineJoin, LineStyle, Paint, Path, PathData, PathStyle, Point, Rect, RenderNode, Shadow, Size,
-    Stroke, TextPayload, TextStyle, WidgetCtx, use_theme,
+    Color, Component, DrawCommand, DrawingArea, FillRule, LayoutError, LayoutStyle, LineCap,
+    LineJoin, Paint, Path, PathData, PathStyle, Point, Rect, RenderNode, Shadow, Size, Stroke,
+    TextPayload, TextStyle, WidgetCtx, use_theme,
 };
 
+use crate::sections::draw_section_header;
 use crate::theme::SandboxTheme;
 
 pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
@@ -25,26 +26,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
 
             let mut children: Vec<RenderNode> = Vec::new();
 
-            children.push(
-                Line::new(
-                    || Point::new(0.0, 0.0),
-                    move || Point::new(w, 0.0),
-                    move || LineStyle::new(card_border, 1.0),
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Paths"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 12.0,
-                        width: 200.0,
-                        height: 20.0,
-                    },
-                    style: TextStyle::new(12.0, muted),
-                },
-            ))));
+            draw_section_header(&mut children, w, "Paths", card_border, muted);
             children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
                 TextPayload {
                     text: Rc::from("Polygon shapes"),

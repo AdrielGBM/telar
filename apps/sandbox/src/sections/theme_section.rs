@@ -1,4 +1,5 @@
-use crate::theme::{SandboxTheme, heading};
+use crate::theme::SandboxTheme;
+use crate::theme::section;
 use rsx::set_theme;
 use rsx::{
     BorderRadius, Button, ButtonStyle, Color, Container, LayoutError, LayoutItem, LayoutStyle,
@@ -6,8 +7,6 @@ use rsx::{
 };
 
 pub fn theme_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
-    let h = heading(ctx, "Theme")?;
-
     let btn_modern = Button::new(ctx, "Modern")?.on_click(|| set_theme(SandboxTheme::modern()));
 
     let btn_pastel = Button::new(ctx, "Pastel")?
@@ -38,13 +37,13 @@ pub fn theme_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         || TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
     )?;
 
-    Container::new(
+    let content = Container::new(
         ctx,
         LayoutStyle::new().flex_column().gap(8.0),
         vec![
-            h,
             Box::new(btn_row) as Box<dyn LayoutItem>,
             Box::new(status) as Box<dyn LayoutItem>,
         ],
-    )
+    )?;
+    section(ctx, "Theme", content)
 }

@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line,
-    LineStyle, Paint, Point, Rect, RectPayload, RectStyle, RenderNode, Shadow, Size, Stroke,
-    TextPayload, TextStyle, WidgetCtx, use_theme,
+    BorderRadius, Color, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Paint, Rect,
+    RectPayload, RectStyle, RenderNode, Shadow, Size, Stroke, TextPayload, TextStyle, WidgetCtx,
+    use_theme,
 };
 
+use crate::sections::draw_section_header;
 use crate::theme::SandboxTheme;
 
 pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> {
@@ -24,26 +25,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutError> 
 
             let mut children: Vec<RenderNode> = Vec::new();
 
-            children.push(
-                Line::new(
-                    || Point::new(0.0, 0.0),
-                    move || Point::new(w, 0.0),
-                    move || LineStyle::new(card_border, 1.0),
-                )
-                .view(),
-            );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Shadows"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 12.0,
-                        width: 300.0,
-                        height: 20.0,
-                    },
-                    style: TextStyle::new(12.0, muted),
-                },
-            ))));
+            draw_section_header(&mut children, w, "Shadows", card_border, muted);
 
             children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
                 TextPayload {

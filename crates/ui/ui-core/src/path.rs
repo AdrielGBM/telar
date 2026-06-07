@@ -19,6 +19,13 @@ impl Path {
             style: Box::new(style),
         }
     }
+
+    pub fn static_data(data: Rc<PathData>, style: impl Fn() -> PathStyle + 'static) -> Self {
+        Self {
+            data: Box::new(move || data.clone()),
+            style: Box::new(style),
+        }
+    }
 }
 
 impl Component for Path {

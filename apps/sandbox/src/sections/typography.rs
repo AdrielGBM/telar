@@ -1,4 +1,5 @@
-use crate::theme::{SandboxTheme, heading};
+use crate::theme::SandboxTheme;
+use crate::theme::section;
 use rsx::{
     Color, Container, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, WidgetCtx, use_theme,
 };
@@ -20,7 +21,6 @@ pub fn type_line(
 }
 
 pub fn typography_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
-    let h = heading(ctx, "Typography")?;
     let t1 = type_line(
         ctx,
         "Small — 12px — The quick brown fox",
@@ -56,9 +56,10 @@ pub fn typography_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError>
         || use_theme::<SandboxTheme>().primary,
         42.0,
     )?;
-    Container::new(
+    let content = Container::new(
         ctx,
         LayoutStyle::new().flex_column().gap(8.0),
-        vec![h, t1, t2, t3, t4, t5],
-    )
+        vec![t1, t2, t3, t4, t5],
+    )?;
+    section(ctx, "Typography", content)
 }

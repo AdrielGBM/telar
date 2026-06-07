@@ -110,3 +110,10 @@ macro_rules! app {
         }
     };
 }
+
+#[macro_export]
+macro_rules! children {
+    ($($item:expr),* $(,)?) => {
+        vec![$(Box::new($item) as Box<dyn $crate::LayoutItem>),*]
+    }
+}

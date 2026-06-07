@@ -77,8 +77,8 @@ pub struct SandboxRoot;
 
 impl App for SandboxRoot {
     fn root(&self) -> Box<dyn Component> {
-        let window_width = create_rw_signal(800.0f32);
-        let window_height = create_rw_signal(600.0f32);
+        let window_width = create_rw_signal(0.0f32);
+        let window_height = create_rw_signal(0.0f32);
 
         let gradient_image = Rc::new(make_gradient(128, 128));
         let checker_image = Rc::new(make_checker(128, 128, 16));

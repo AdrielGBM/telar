@@ -1,4 +1,6 @@
-use rsx::{Color, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, WidgetCtx, use_theme};
+use rsx::{
+    Color, Container, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, WidgetCtx, use_theme,
+};
 
 pub struct SandboxTheme {
     pub name: &'static str,
@@ -62,4 +64,17 @@ pub fn heading(
         || TextStyle::new(12.0, use_theme::<SandboxTheme>().muted),
     )?;
     Ok(Box::new(text) as Box<dyn LayoutItem>)
+}
+
+pub fn section(
+    ctx: &mut WidgetCtx,
+    title: &'static str,
+    content: impl LayoutItem + 'static,
+) -> Result<Container, LayoutError> {
+    let h = heading(ctx, title)?;
+    Container::new(
+        ctx,
+        LayoutStyle::new().flex_column().gap(8.0),
+        vec![h, Box::new(content) as Box<dyn LayoutItem>],
+    )
 }

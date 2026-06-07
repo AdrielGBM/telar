@@ -5,7 +5,8 @@ use rsx::{
     TextStyle, WidgetCtx, use_theme,
 };
 
-use crate::theme::{SandboxTheme, heading};
+use crate::theme::SandboxTheme;
+use crate::theme::section;
 
 pub fn image_with_label(
     ctx: &mut WidgetCtx,
@@ -72,10 +73,5 @@ pub fn images_section(
         LayoutStyle::new().flex_row().gap(20.0),
         vec![i1, i2, i3],
     )?;
-    let h = heading(ctx, "Images")?;
-    Container::new(
-        ctx,
-        LayoutStyle::new().flex_column().gap(8.0),
-        vec![h, Box::new(row) as Box<dyn LayoutItem>],
-    )
+    section(ctx, "Images", row)
 }

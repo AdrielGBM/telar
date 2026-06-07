@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
 use rsx::{
-    BorderRadius, Color, Component, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Line,
-    LineStyle, Paint, PathData, PathStyle, Point, Rect, RectPayload, RectStyle, RenderNode, Size,
-    Stroke, TextPayload, TextStyle, WidgetCtx, use_theme,
+    BorderRadius, Color, DrawCommand, DrawingArea, LayoutError, LayoutStyle, Paint, PathData,
+    PathStyle, Point, Rect, RectPayload, RectStyle, RenderNode, Size, Stroke, TextPayload,
+    TextStyle, WidgetCtx, use_theme,
 };
 
+use crate::sections::draw_section_header;
 use crate::theme::SandboxTheme;
 
 fn rotation_matrix(angle_deg: f32, cx: f32, cy: f32) -> [f32; 6] {
@@ -88,26 +89,13 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<DrawingArea, LayoutErro
             let mut children: Vec<RenderNode> = Vec::new();
 
             // — section divider & title —
-            children.push(
-                Line::new(
-                    || Point::new(0.0, 0.0),
-                    move || Point::new(w, 0.0),
-                    move || LineStyle::new(card_border, 1.0),
-                )
-                .view(),
+            draw_section_header(
+                &mut children,
+                w,
+                "Transforms (PushMatrix / PopMatrix)",
+                card_border,
+                muted,
             );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
-                TextPayload {
-                    text: Rc::from("Transforms (PushMatrix / PopMatrix)"),
-                    rect: Rect {
-                        x: 0.0,
-                        y: 12.0,
-                        width: 500.0,
-                        height: 20.0,
-                    },
-                    style: TextStyle::new(12.0, muted),
-                },
-            ))));
 
             // ── Scale ──────────────────────────────────────────────────────────
             children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
