@@ -35,7 +35,7 @@ impl Component for Image {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         self.leaf
-            .positioned_view(RenderNode::Primitive(DrawCommand::Image {
+            .at_layout_position(RenderNode::Primitive(DrawCommand::Image {
                 data: (self.data)(),
                 rect: Rect {
                     x: 0.0,

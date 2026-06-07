@@ -3,11 +3,11 @@ use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, NodeId
 use reactive_core::{RwSignal, batch, create_rw_signal};
 use rustc_hash::FxHashMap;
 
-pub fn register_leaf(
+pub fn new_leaf(
     ctx: &mut WidgetCtx,
     style: LayoutStyle,
 ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
-    ctx.register_leaf(style)
+    ctx.new_leaf(style)
 }
 
 pub fn new_container(
@@ -24,7 +24,7 @@ pub fn compute_layout(
     width: AvailableSpace,
     height: AvailableSpace,
 ) -> Result<(), LayoutError> {
-    ctx.compute(root, width, height)
+    ctx.compute_layout(root, width, height)
 }
 
 pub fn track_layout(ctx: &WidgetCtx, node: NodeId) -> Option<RwSignal<Rect>> {
@@ -36,7 +36,7 @@ pub fn update_style(
     node: NodeId,
     style: LayoutStyle,
 ) -> Result<(), LayoutError> {
-    ctx.update_style_for(node, style)
+    ctx.update_style(node, style)
 }
 
 pub fn mark_dirty(ctx: &mut WidgetCtx, node: NodeId) -> Result<(), LayoutError> {
@@ -70,7 +70,7 @@ impl WidgetCtx {
         }
     }
 
-    pub fn register_leaf(
+    pub fn new_leaf(
         &mut self,
         style: LayoutStyle,
     ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
@@ -91,7 +91,7 @@ impl WidgetCtx {
         Ok(node)
     }
 
-    pub fn compute(
+    pub fn compute_layout(
         &mut self,
         root: NodeId,
         width: AvailableSpace,
@@ -111,7 +111,7 @@ impl WidgetCtx {
             );
             self.is_computing = true;
         }
-        self.engine.compute(root, width, height)?;
+        self.engine.compute_layout(root, width, height)?;
         let registry = &self.registry;
         let mut walk_result = Ok(());
         batch(|| {
@@ -135,11 +135,7 @@ impl WidgetCtx {
         self.registry.get(&node).cloned()
     }
 
-    pub fn update_style_for(
-        &mut self,
-        node: NodeId,
-        style: LayoutStyle,
-    ) -> Result<(), LayoutError> {
+    pub fn update_style(&mut self, node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
         self.engine.set_style(node, style)
     }
 
@@ -164,14 +160,14 @@ mod tests {
     #[test]
     fn ctx_register_leaf_returns_ok() {
         let mut ctx = WidgetCtx::new();
-        let result = register_leaf(&mut ctx, LayoutStyle::new());
+        let result = new_leaf(&mut ctx, LayoutStyle::new());
         assert!(result.is_ok());
     }
 
     #[test]
     fn ctx_new_container_returns_ok() {
         let mut ctx = WidgetCtx::new();
-        let leaf_result = register_leaf(&mut ctx, LayoutStyle::new());
+        let leaf_result = new_leaf(&mut ctx, LayoutStyle::new());
         assert!(leaf_result.is_ok());
         let (leaf, _) = leaf_result.unwrap();
         let container_result = new_container(&mut ctx, LayoutStyle::new(), &[leaf]);
@@ -181,7 +177,7 @@ mod tests {
     #[test]
     fn ctx_register_leaf_returns_zero_rect() {
         let mut ctx = WidgetCtx::new();
-        let (_node, rect) = register_leaf(&mut ctx, LayoutStyle::new()).unwrap();
+        let (_node, rect) = new_leaf(&mut ctx, LayoutStyle::new()).unwrap();
         assert_eq!(rect.get(), Rect::default());
     }
 
@@ -189,7 +185,7 @@ mod tests {
     fn ctx_compute_updates_rect() {
         let mut ctx = WidgetCtx::new();
         let (leaf, rect) =
-            register_leaf(&mut ctx, LayoutStyle::new().width(100.0).height(50.0)).unwrap();
+            new_leaf(&mut ctx, LayoutStyle::new().width(100.0).height(50.0)).unwrap();
         let root = new_container(
             &mut ctx,
             LayoutStyle::new().flex_row().width(200.0).height(100.0),

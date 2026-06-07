@@ -57,7 +57,7 @@ pub use theme_core::{set_theme, use_theme};
 pub use ui_core::{
     Button, ButtonStyle, Component, ComponentTree, Container, DrawingArea, EventResult, Group,
     Image, LayoutItem, Line, NodeId, Path, RenderNode, ScrollArea, Text, WidgetCtx, compute_layout,
-    mark_dirty, new_container, register_leaf, track_layout, update_style, with_context,
+    mark_dirty, new_container, new_leaf, track_layout, update_style, with_context,
 };
 
 #[cfg(all(feature = "runtime", target_os = "android"))]

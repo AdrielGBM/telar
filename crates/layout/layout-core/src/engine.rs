@@ -40,7 +40,7 @@ impl LayoutEngine {
         self.tree.mark_dirty(node).map_err(LayoutError::from)
     }
 
-    pub fn compute(
+    pub fn compute_layout(
         &mut self,
         root: NodeId,
         available_width: AvailableSpace,
@@ -130,7 +130,7 @@ mod tests {
             .new_leaf(LayoutStyle::new().width(50.0).height(40.0))
             .unwrap();
         engine
-            .compute(
+            .compute_layout(
                 leaf,
                 AvailableSpace::Definite(200.0),
                 AvailableSpace::Definite(200.0),
@@ -157,7 +157,7 @@ mod tests {
             )
             .unwrap();
         engine
-            .compute(
+            .compute_layout(
                 root,
                 AvailableSpace::Definite(200.0),
                 AvailableSpace::Definite(100.0),
@@ -188,7 +188,7 @@ mod tests {
             )
             .unwrap();
         engine
-            .compute(
+            .compute_layout(
                 root,
                 AvailableSpace::Definite(100.0),
                 AvailableSpace::Definite(200.0),
@@ -225,7 +225,7 @@ mod tests {
             )
             .unwrap();
         engine
-            .compute(
+            .compute_layout(
                 root,
                 AvailableSpace::Definite(150.0),
                 AvailableSpace::Definite(50.0),
@@ -261,7 +261,7 @@ mod tests {
             .set_style(leaf, LayoutStyle::new().width(80.0).height(60.0))
             .unwrap();
         engine
-            .compute(
+            .compute_layout(
                 leaf,
                 AvailableSpace::Definite(200.0),
                 AvailableSpace::Definite(200.0),

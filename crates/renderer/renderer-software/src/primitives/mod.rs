@@ -40,12 +40,13 @@ pub(crate) fn fill_to_paint(fill: renderer_core::Paint) -> tiny_skia::Paint<'sta
             paint.set_color(to_skia_color(c));
         }
         renderer_core::Paint::Gradient(g) => {
-            let skia_stops: Vec<_> = g
-                .stops
-                .active()
-                .iter()
-                .map(|s| tiny_skia::GradientStop::new(s.position, to_skia_color(s.color)))
-                .collect();
+            let mut skia_stops = Vec::with_capacity(8);
+            skia_stops.extend(
+                g.stops
+                    .active()
+                    .iter()
+                    .map(|s| tiny_skia::GradientStop::new(s.position, to_skia_color(s.color))),
+            );
             match g.kind {
                 renderer_core::GradientKind::Linear { start, end } => {
                     if let Some(shader) = tiny_skia::LinearGradient::new(

@@ -31,7 +31,7 @@ impl Component for Rect {
         let r = self.leaf.rect.get();
         let style = (self.style)();
         self.leaf
-            .positioned_view(RenderNode::Primitive(DrawCommand::Rect(Box::new(
+            .at_layout_position(RenderNode::Primitive(DrawCommand::Rect(Box::new(
                 RectPayload {
                     rect: Bounds {
                         x: 0.0,

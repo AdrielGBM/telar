@@ -2,10 +2,10 @@ use geometry_core::Rect;
 
 pub const IDENTITY_MATRIX: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
-// Computes outer(inner(point)) for two affine matrices [a, b, c, d, e, f].
-pub fn compose_matrix(outer: [f32; 6], inner: [f32; 6]) -> [f32; 6] {
-    let [a1, b1, c1, d1, e1, f1] = inner;
-    let [a2, b2, c2, d2, e2, f2] = outer;
+// Computes parent(child(point)) for two affine matrices [a, b, c, d, e, f].
+pub fn compose_matrix(parent: [f32; 6], child: [f32; 6]) -> [f32; 6] {
+    let [a1, b1, c1, d1, e1, f1] = child;
+    let [a2, b2, c2, d2, e2, f2] = parent;
     [
         a2 * a1 + c2 * b1,
         b2 * a1 + d2 * b1,
@@ -25,8 +25,8 @@ pub struct DrawState {
 impl DrawState {
     pub fn new() -> Self {
         Self {
-            clip_stack: Vec::new(),
-            transform_stack: Vec::new(),
+            clip_stack: Vec::with_capacity(16),
+            transform_stack: Vec::with_capacity(16),
             cum_matrix: IDENTITY_MATRIX,
         }
     }

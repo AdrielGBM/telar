@@ -12,11 +12,11 @@ pub struct LayoutLeaf {
 
 impl LayoutLeaf {
     pub fn register(ctx: &mut context::WidgetCtx, style: LayoutStyle) -> Result<Self, LayoutError> {
-        let (node, rect) = context::register_leaf(ctx, style)?;
+        let (node, rect) = context::new_leaf(ctx, style)?;
         Ok(Self { node, rect })
     }
 
-    pub(crate) fn positioned_view(&self, content: RenderNode) -> RenderNode {
+    pub(crate) fn at_layout_position(&self, content: RenderNode) -> RenderNode {
         let r = self.rect.get();
         RenderNode::Transform {
             matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],

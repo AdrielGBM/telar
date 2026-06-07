@@ -16,7 +16,7 @@ mod text;
 pub use button::{Button, ButtonStyle};
 pub use container::Container;
 pub use context::{
-    NodeId, WidgetCtx, compute_layout, mark_dirty, new_container, register_leaf, track_layout,
+    NodeId, WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf, track_layout,
     update_style, with_context,
 };
 pub use drawing_area::DrawingArea;

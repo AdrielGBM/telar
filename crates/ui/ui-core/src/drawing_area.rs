@@ -37,7 +37,7 @@ impl Component for DrawingArea {
             width: r.width,
             height: r.height,
         });
-        self.leaf.positioned_view(inner)
+        self.leaf.at_layout_position(inner)
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

@@ -76,7 +76,7 @@ impl Component for Button {
             height: r.height,
         };
 
-        self.leaf.positioned_view(RenderNode::group([
+        self.leaf.at_layout_position(RenderNode::group([
             RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
                 rect: local,
                 style: rect_style,
