@@ -162,34 +162,25 @@ fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, delta_ty: f
             }
         }
     } else if dx != 0 {
-        if dx < 0 {
-            // Content moved left: read from a higher column, write to a lower column → left-to-right is safe.
-            let shift = (-dx) as usize;
-            for y in y0..y1 {
-                let row_base = y * width;
-                for dst_x in x0..x1 {
-                    let src_x = dst_x + shift;
-                    if src_x >= x1 {
-                        break;
-                    }
-                    let src_off = (row_base + src_x) * 4;
-                    let dst_off = (row_base + dst_x) * 4;
-                    data.copy_within(src_off..src_off + 4, dst_off);
+        let shift = dx.unsigned_abs() as usize;
+        let copy_cols = (x1 - x0).saturating_sub(shift);
+        if copy_cols > 0 {
+            let byte_count = copy_cols * 4;
+            if dx < 0 {
+                // Content moved left: copy columns [x0+shift..x1] → [x0..x0+copy_cols] per row.
+                for y in y0..y1 {
+                    let row_base = y * width;
+                    let src_off = (row_base + x0 + shift) * 4;
+                    let dst_off = (row_base + x0) * 4;
+                    data.copy_within(src_off..src_off + byte_count, dst_off);
                 }
-            }
-        } else {
-            // Content moved right: read from a lower column, write to a higher column → right-to-left is safe.
-            let shift = dx as usize;
-            for y in y0..y1 {
-                let row_base = y * width;
-                for dst_x in (x0..x1).rev() {
-                    if dst_x < x0 + shift {
-                        break;
-                    }
-                    let src_x = dst_x - shift;
-                    let src_off = (row_base + src_x) * 4;
-                    let dst_off = (row_base + dst_x) * 4;
-                    data.copy_within(src_off..src_off + 4, dst_off);
+            } else {
+                // Content moved right: copy columns [x0..x0+copy_cols] → [x0+shift..x1] per row.
+                for y in y0..y1 {
+                    let row_base = y * width;
+                    let src_off = (row_base + x0) * 4;
+                    let dst_off = (row_base + x0 + shift) * 4;
+                    data.copy_within(src_off..src_off + byte_count, dst_off);
                 }
             }
         }
@@ -357,12 +348,17 @@ where
             return Ok(());
         }
         if let Ok(mut buffer) = self.surface.buffer_mut() {
-            // Pixel format conversion: tiny-skia stores pixels as premultiplied RGBA bytes [R, G, B, A, ...]. softbuffer expects u32 pixels as 0x00RRGGBB in native endianness. On little-endian, the bytemuck cast gives 0xAABBGGRR per pixel; swap_bytes() reorders to 0xRRGGBBAA and >> 8 drops the alpha byte to yield 0x00RRGGBB.
+            // Pixel format conversion: tiny_skia stores [R, G, B, A, ...] bytes; softbuffer LE u32 is 0x00RRGGBB = [B, G, R, 0x00] in memory. A byte-level shuffle auto-vectorizes better than swap_bytes()>>8.
             #[cfg(target_endian = "little")]
             {
-                let src: &[u32] = bytemuck::cast_slice(pixmap.data());
-                for (dst, &src_px) in buffer.iter_mut().zip(src.iter()) {
-                    *dst = src_px.swap_bytes() >> 8;
+                let src = pixmap.data();
+                let dst_bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut buffer[..]);
+                for (src_chunk, dst_chunk) in src.chunks_exact(4).zip(dst_bytes.chunks_exact_mut(4))
+                {
+                    dst_chunk[0] = src_chunk[2]; // B
+                    dst_chunk[1] = src_chunk[1]; // G
+                    dst_chunk[2] = src_chunk[0]; // R
+                    dst_chunk[3] = 0;
                 }
             }
             #[cfg(target_endian = "big")]

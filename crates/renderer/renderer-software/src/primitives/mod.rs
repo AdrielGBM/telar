@@ -155,28 +155,39 @@ fn box_blur_h(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut Ve
     let w = width as usize;
     let h = height as usize;
     let r = r as usize;
-    scratch.resize(data.len(), 0);
     if w == 0 || h == 0 {
         return;
     }
     for y in 0..h {
         let row = y * w;
-        for c in 0..4usize {
-            let initial_end = (r + 1).min(w);
-            let mut sum: u32 = (0..initial_end)
-                .map(|xi| data[(row + xi) * 4 + c] as u32)
-                .sum();
-            let mut count: u32 = initial_end as u32;
-            for x in 0..w {
-                scratch[(row + x) * 4 + c] = (sum / count) as u8;
-                if x + r + 1 < w {
-                    sum += data[(row + x + r + 1) * 4 + c] as u32;
-                    count += 1;
+        let initial_end = (r + 1).min(w);
+        // Accumulate all 4 channels together so each row is walked once instead of 4 times.
+        let mut sum = [0u32; 4];
+        for xi in 0..initial_end {
+            let base = (row + xi) * 4;
+            for c in 0..4 {
+                sum[c] += data[base + c] as u32;
+            }
+        }
+        let mut count = initial_end as u32;
+        for x in 0..w {
+            let out_base = (row + x) * 4;
+            for c in 0..4 {
+                scratch[out_base + c] = (sum[c] / count) as u8;
+            }
+            if x + r + 1 < w {
+                let add_base = (row + x + r + 1) * 4;
+                for c in 0..4 {
+                    sum[c] += data[add_base + c] as u32;
                 }
-                if x >= r {
-                    sum -= data[(row + (x - r)) * 4 + c] as u32;
-                    count -= 1;
+                count += 1;
+            }
+            if x >= r {
+                let sub_base = (row + (x - r)) * 4;
+                for c in 0..4 {
+                    sum[c] -= data[sub_base + c] as u32;
                 }
+                count -= 1;
             }
         }
     }
@@ -187,7 +198,6 @@ fn box_blur_v(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut Ve
     let w = width as usize;
     let h = height as usize;
     let r = r as usize;
-    scratch.resize(data.len(), 0);
     if w == 0 || h == 0 {
         return;
     }
