@@ -7,17 +7,21 @@ pub(crate) type EffectId = usize;
 
 pub(crate) struct EffectEntry {
     pub(crate) f: Box<dyn Fn()>,
+    pub(crate) pure: bool,
+    pub(crate) last_run_epoch: u64,
 }
 
-struct Runtime {
-    observer_stack: Vec<EffectId>,
-    effects: slab::Slab<EffectEntry>,
-    batch_depth: usize,
-    pending: Vec<EffectId>,
-    pending_set: FxHashSet<EffectId>,
+pub(crate) struct Runtime {
+    pub(crate) observer_stack: Vec<EffectId>,
+    pub(crate) effects: slab::Slab<EffectEntry>,
+    pub(crate) batch_depth: usize,
+    pub(crate) pending: Vec<EffectId>,
+    pub(crate) memo_pending: Vec<EffectId>,
+    pub(crate) pending_set: FxHashSet<EffectId>,
     on_flush: Vec<(u64, Rc<dyn Fn()>)>,
     next_flush_notify_id: u64,
-    flushing: bool,
+    pub(crate) flushing: bool,
+    flush_epoch: u64,
 }
 
 thread_local! {
@@ -26,10 +30,12 @@ thread_local! {
         effects: slab::Slab::new(),
         batch_depth: 0,
         pending: Vec::new(),
+        memo_pending: Vec::new(),
         pending_set: FxHashSet::default(),
         on_flush: Vec::new(),
         next_flush_notify_id: 0,
         flushing: false,
+        flush_epoch: 0,
     });
 }
 
@@ -68,7 +74,22 @@ pub(crate) fn current_observer() -> Option<EffectId> {
 pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        rt.effects.insert(EffectEntry { f })
+        rt.effects.insert(EffectEntry {
+            f,
+            pure: false,
+            last_run_epoch: 0,
+        })
+    })
+}
+
+pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        rt.effects.insert(EffectEntry {
+            f,
+            pure: true,
+            last_run_epoch: 0,
+        })
     })
 }
 
@@ -95,7 +116,11 @@ pub(crate) fn schedule(id: EffectId) {
         let mut rt = rt.borrow_mut();
         let alive = rt.effects.contains(id);
         if alive && rt.pending_set.insert(id) {
-            rt.pending.push(id);
+            if rt.effects[id].pure {
+                rt.memo_pending.push(id);
+            } else {
+                rt.pending.push(id);
+            }
         }
         rt.batch_depth == 0 && !rt.flushing
     });
@@ -104,12 +129,21 @@ pub(crate) fn schedule(id: EffectId) {
     }
 }
 
+pub(crate) fn with_runtime_mut<R>(f: impl FnOnce(&mut Runtime) -> R) -> R {
+    RUNTIME.with(|rt| f(&mut rt.borrow_mut()))
+}
+
 pub(crate) fn run_effect(id: EffectId) {
     let ptr = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         if !rt.effects.contains(id) {
             return None;
         }
+        // Epoch-based dedup: skip if already ran this flush cycle
+        if rt.effects[id].last_run_epoch == rt.flush_epoch && rt.flush_epoch > 0 {
+            return None;
+        }
+        rt.effects[id].last_run_epoch = rt.flush_epoch;
         // SAFETY: The slab owns this Box. No effect closure in this codebase captures its own Effect handle, so deregistration cannot happen during execution.
         let ptr: *const dyn Fn() = &*rt.effects[id].f;
         rt.observer_stack.push(id);
@@ -127,20 +161,38 @@ pub(crate) fn run_effect(id: EffectId) {
     }
 }
 
+pub(crate) fn flush_public() {
+    flush();
+}
+
 const MAX_FLUSH_ITERATIONS: usize = 1_000;
 
 fn flush() {
-    RUNTIME.with(|rt| rt.borrow_mut().flushing = true);
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        rt.flushing = true;
+        rt.flush_epoch += 1;
+    });
 
     let should_panic = {
         let mut did_work = false;
         for _ in 0..MAX_FLUSH_ITERATIONS {
-            let pending = RUNTIME.with(|rt| {
+            // Drain memo_pending first (pure computations), then user effects
+            let memo_batch = RUNTIME.with(|rt| {
                 let mut rt = rt.borrow_mut();
-                rt.pending_set.clear();
-                std::mem::take(&mut rt.pending)
+                std::mem::take(&mut rt.memo_pending)
             });
-            if pending.is_empty() {
+            let pending_batch = if memo_batch.is_empty() {
+                RUNTIME.with(|rt| {
+                    let mut rt = rt.borrow_mut();
+                    rt.pending_set.clear();
+                    std::mem::take(&mut rt.pending)
+                })
+            } else {
+                Vec::new()
+            };
+
+            if memo_batch.is_empty() && pending_batch.is_empty() {
                 RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
                 if did_work {
                     let cbs: smallvec::SmallVec<[Rc<dyn Fn()>; 2]> = RUNTIME.with(|rt| {
@@ -157,7 +209,10 @@ fn flush() {
                 return;
             }
             did_work = true;
-            for id in pending {
+            for id in memo_batch {
+                run_effect(id);
+            }
+            for id in pending_batch {
                 run_effect(id);
             }
         }
@@ -180,7 +235,7 @@ pub fn batch<R>(f: impl FnOnce() -> R) -> R {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         rt.batch_depth -= 1;
-        rt.batch_depth == 0 && !rt.pending.is_empty()
+        rt.batch_depth == 0 && (!rt.pending.is_empty() || !rt.memo_pending.is_empty())
     });
     if should_flush {
         flush();
@@ -196,7 +251,7 @@ pub fn end_batch() {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         rt.batch_depth -= 1;
-        rt.batch_depth == 0 && !rt.pending.is_empty()
+        rt.batch_depth == 0 && (!rt.pending.is_empty() || !rt.memo_pending.is_empty())
     });
     if should_flush {
         flush();

@@ -99,14 +99,15 @@ impl LayoutEngine {
             );
 
             if descend {
-                let children: Vec<NodeId> = self.tree.child_ids(entry.node).collect();
-                for child in children.into_iter().rev() {
+                let base = stack.len();
+                for child in self.tree.child_ids(entry.node) {
                     stack.push(StackEntry {
                         node: child,
                         offset_x: abs_x,
                         offset_y: abs_y,
                     });
                 }
+                stack[base..].reverse();
             }
         }
         Ok(())

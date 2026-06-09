@@ -7,8 +7,75 @@ use renderer_core::{Color, TextStyle};
 use rustc_hash::{FxBuildHasher, FxHasher};
 
 fn tint_premultiplied(pixels: &mut [u8], color: Color) {
+    use wide::u32x8;
     let [r, g, b, a] = color.to_rgba8();
-    for chunk in pixels.chunks_exact_mut(4) {
+    let n_simd = pixels.len() / 32;
+    let (simd_pixels, rest) = pixels.split_at_mut(n_simd * 32);
+
+    // fast_div255(v, c) = (v * c + 128) >> 8, a 1-ulp approximation of v*c/255
+    let r_splat = u32x8::splat(r as u32);
+    let g_splat = u32x8::splat(g as u32);
+    let b_splat = u32x8::splat(b as u32);
+    let a_splat = u32x8::splat(a as u32);
+    let bias = u32x8::splat(128);
+
+    for chunk in simd_pixels.chunks_exact_mut(32) {
+        let rv = u32x8::from([
+            chunk[0] as u32,
+            chunk[4] as u32,
+            chunk[8] as u32,
+            chunk[12] as u32,
+            chunk[16] as u32,
+            chunk[20] as u32,
+            chunk[24] as u32,
+            chunk[28] as u32,
+        ]);
+        let gv = u32x8::from([
+            chunk[1] as u32,
+            chunk[5] as u32,
+            chunk[9] as u32,
+            chunk[13] as u32,
+            chunk[17] as u32,
+            chunk[21] as u32,
+            chunk[25] as u32,
+            chunk[29] as u32,
+        ]);
+        let bv = u32x8::from([
+            chunk[2] as u32,
+            chunk[6] as u32,
+            chunk[10] as u32,
+            chunk[14] as u32,
+            chunk[18] as u32,
+            chunk[22] as u32,
+            chunk[26] as u32,
+            chunk[30] as u32,
+        ]);
+        let av = u32x8::from([
+            chunk[3] as u32,
+            chunk[7] as u32,
+            chunk[11] as u32,
+            chunk[15] as u32,
+            chunk[19] as u32,
+            chunk[23] as u32,
+            chunk[27] as u32,
+            chunk[31] as u32,
+        ]);
+
+        let rv: [u32; 8] = ((rv * r_splat + bias) >> u32x8::splat(8)).into();
+        let gv: [u32; 8] = ((gv * g_splat + bias) >> u32x8::splat(8)).into();
+        let bv: [u32; 8] = ((bv * b_splat + bias) >> u32x8::splat(8)).into();
+        let av: [u32; 8] = ((av * a_splat + bias) >> u32x8::splat(8)).into();
+
+        for i in 0..8usize {
+            chunk[i * 4] = rv[i] as u8;
+            chunk[i * 4 + 1] = gv[i] as u8;
+            chunk[i * 4 + 2] = bv[i] as u8;
+            chunk[i * 4 + 3] = av[i] as u8;
+        }
+    }
+
+    // Scalar fallback for remaining < 8 pixels
+    for chunk in rest.chunks_exact_mut(4) {
         chunk[0] = ((chunk[0] as u32 * r as u32) / 255) as u8;
         chunk[1] = ((chunk[1] as u32 * g as u32) / 255) as u8;
         chunk[2] = ((chunk[2] as u32 * b as u32) / 255) as u8;
@@ -77,6 +144,7 @@ pub(crate) fn draw_text(
                 shadow_h,
                 current_clip_rect,
             ) {
+                let q_blur = (shadow.blur_radius * 2.0).round() / 2.0;
                 let [sr, sg, sb, sa] = shadow.color.to_rgba8();
                 let shadow_key = TextShadowCacheKey {
                     text_hash: hash_text(text),
@@ -84,7 +152,7 @@ pub(crate) fn draw_text(
                     tex_w,
                     tex_h,
                     shadow_color: u32::from_le_bytes([sr, sg, sb, sa]),
-                    blur_radius_bits: shadow.blur_radius.to_bits(),
+                    blur_radius_bits: q_blur.to_bits(),
                 };
 
                 let tmp_w = tex_w + 2 * padding as u32 + 2;
@@ -99,7 +167,7 @@ pub(crate) fn draw_text(
                     rect.y as i32 + shadow.offset_y as i32 - padding,
                     tmp_w,
                     tmp_h,
-                    shadow.blur_radius,
+                    q_blur,
                     blur_scratch,
                     transform,
                     clip,

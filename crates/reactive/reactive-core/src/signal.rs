@@ -1,14 +1,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 
 use crate::runtime::{self, EffectId};
 
 pub(crate) struct SignalInner<T> {
     pub(crate) value: T,
-    pub(crate) subscribers: FxHashSet<EffectId>,
+    pub(crate) subscribers: SmallVec<[EffectId; 4]>,
 }
 pub struct ReadSignal<T: 'static> {
     pub(crate) inner: Rc<RefCell<SignalInner<T>>>,
@@ -129,7 +128,7 @@ impl<T: Clone + 'static> RwSignal<T> {
 pub fn create_signal<T: 'static>(value: T) -> (ReadSignal<T>, WriteSignal<T>) {
     let inner = Rc::new(RefCell::new(SignalInner {
         value,
-        subscribers: FxHashSet::default(),
+        subscribers: SmallVec::new(),
     }));
     (
         ReadSignal {
@@ -143,31 +142,51 @@ pub fn create_rw_signal<T: 'static>(value: T) -> RwSignal<T> {
     RwSignal {
         inner: Rc::new(RefCell::new(SignalInner {
             value,
-            subscribers: FxHashSet::default(),
+            subscribers: SmallVec::new(),
         })),
     }
 }
 
 fn track<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
     if let Some(id) = runtime::current_observer() {
-        inner.borrow_mut().subscribers.insert(id);
+        let mut borrow = inner.borrow_mut();
+        if !borrow.subscribers.contains(&id) {
+            borrow.subscribers.push(id);
+        }
     }
 }
 
 pub(crate) fn notify<T>(inner: &Rc<RefCell<SignalInner<T>>>) {
     let subs: SmallVec<[EffectId; 8]> = inner.borrow().subscribers.iter().copied().collect();
-    let mut dead: Option<Vec<EffectId>> = None;
-    for id in subs {
-        if runtime::is_alive(id) {
-            runtime::schedule(id);
-        } else {
-            dead.get_or_insert_with(Vec::new).push(id);
-        }
+    if subs.is_empty() {
+        return;
     }
-    if let Some(dead) = dead {
-        let mut inner = inner.borrow_mut();
-        for id in dead {
-            inner.subscribers.remove(&id);
+    // Single RUNTIME.with call to schedule all subscribers at once
+    let (should_flush, dead): (bool, SmallVec<[EffectId; 4]>) = runtime::with_runtime_mut(|rt| {
+        let mut dead: SmallVec<[EffectId; 4]> = SmallVec::new();
+        let mut any_scheduled = false;
+        for &id in &subs {
+            if rt.effects.contains(id) {
+                if rt.pending_set.insert(id) {
+                    if rt.effects[id].pure {
+                        rt.memo_pending.push(id);
+                    } else {
+                        rt.pending.push(id);
+                    }
+                }
+                any_scheduled = true;
+            } else {
+                dead.push(id);
+            }
         }
+        (any_scheduled && rt.batch_depth == 0 && !rt.flushing, dead)
+    });
+    // Clean up dead subscribers outside of RUNTIME borrow
+    if !dead.is_empty() {
+        let mut borrow = inner.borrow_mut();
+        borrow.subscribers.retain(|x| !dead.contains(x));
+    }
+    if should_flush {
+        runtime::flush_public();
     }
 }

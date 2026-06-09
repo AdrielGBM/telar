@@ -1,3 +1,24 @@
+#[cfg(target_os = "android")]
+mod adpf {
+    use std::ffi::c_long;
+
+    #[link(name = "android")]
+    unsafe extern "C" {
+        pub fn APerformanceHint_getManager() -> *mut std::ffi::c_void;
+        pub fn APerformanceHint_createSession(
+            manager: *mut std::ffi::c_void,
+            thread_ids: *const i32,
+            size: usize,
+            initial_target_work_duration_ns: c_long,
+        ) -> *mut std::ffi::c_void;
+        pub fn APerformanceHint_reportActualWorkDuration(
+            session: *mut std::ffi::c_void,
+            actual_duration_ns: c_long,
+        );
+        pub fn APerformanceHint_closeSession(session: *mut std::ffi::c_void);
+    }
+}
+
 use platform_core::{Event, EventHandler, Platform, Window};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};
@@ -41,6 +62,10 @@ where
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     _window: std::marker::PhantomData<W>,
+    #[cfg(target_os = "android")]
+    hint_session: Option<*mut std::ffi::c_void>,
+    #[cfg(target_os = "android")]
+    frame_start: std::time::Instant,
 }
 
 const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
@@ -87,6 +112,20 @@ where
 
         let w = window.clone();
         self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
+        #[cfg(target_os = "android")]
+        {
+            let session = unsafe {
+                let manager = adpf::APerformanceHint_getManager();
+                if manager.is_null() {
+                    None
+                } else {
+                    let tid = libc::syscall(libc::SYS_gettid) as i32;
+                    let s = adpf::APerformanceHint_createSession(manager, &tid, 1, 16_666_667);
+                    if s.is_null() { None } else { Some(s) }
+                }
+            };
+            self.hint_session = session;
+        }
         window.request_redraw();
         true
     }
@@ -250,6 +289,10 @@ where
             self.scale_factor,
             tree_dirty
         );
+        #[cfg(target_os = "android")]
+        {
+            self.frame_start = std::time::Instant::now();
+        }
         if let Err(e) = renderer.begin_frame(w, h, self.scale_factor) {
             tracing::error!("begin_frame failed: {e}");
             return;
@@ -278,9 +321,23 @@ where
         if let Err(e) = renderer.as_mut().render_frame(frame_commands, clear) {
             tracing::error!("render_frame failed: {e}");
         }
+        #[cfg(target_os = "android")]
+        if let Some(session) = self.hint_session {
+            let duration_ns = self.frame_start.elapsed().as_nanos() as std::ffi::c_long;
+            unsafe {
+                adpf::APerformanceHint_reportActualWorkDuration(session, duration_ns);
+            }
+        }
     }
 
-    fn on_suspend(&mut self) {}
+    fn on_suspend(&mut self) {
+        #[cfg(target_os = "android")]
+        if let Some(session) = self.hint_session.take() {
+            unsafe {
+                adpf::APerformanceHint_closeSession(session);
+            }
+        }
+    }
 
     fn new_events(&mut self) {
         begin_batch();
@@ -513,6 +570,8 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             font_paths,
             font_data,
             _window: std::marker::PhantomData,
+            hint_session: None,
+            frame_start: std::time::Instant::now(),
         },
     ) {
         tracing::error!("Android event loop exited with error: {e}");

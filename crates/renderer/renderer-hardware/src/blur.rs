@@ -1,4 +1,3 @@
-use wgpu::util::DeviceExt;
 use wgpu::{Device, TextureFormat};
 
 #[repr(C)]
@@ -15,6 +14,7 @@ pub(crate) struct BlurPipeline {
     sampler: wgpu::Sampler,
     bgl: wgpu::BindGroupLayout,
     format: TextureFormat,
+    use_immediates: bool,
     // Pool of intermediate textures keyed by (width, height). The intermediate is rewritten every horizontal pass (loaded with Clear), so leftover contents from a previous use are harmless.
     intermediate_pool: Vec<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
 }
@@ -24,8 +24,13 @@ impl BlurPipeline {
         device: &Device,
         format: TextureFormat,
         cache: Option<&wgpu::PipelineCache>,
+        use_immediates: bool,
     ) -> Self {
-        let shader_source = include_str!("blur.wgsl");
+        let shader_source = if use_immediates {
+            include_str!("blur_immediates.wgsl")
+        } else {
+            include_str!("blur.wgsl")
+        };
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rsx-blur-shader"),
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
@@ -40,42 +45,50 @@ impl BlurPipeline {
             ..Default::default()
         });
 
+        let mut bgl_entries = vec![
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ];
+        if !use_immediates {
+            bgl_entries.push(wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            });
+        }
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-blur-bgl"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
+            entries: &bgl_entries,
         });
 
+        let immediate_size = if use_immediates {
+            std::mem::size_of::<BlurParams>() as u32
+        } else {
+            0
+        };
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-blur-pipeline-layout"),
             bind_group_layouts: &[Some(&bgl)],
-            immediate_size: 0,
+            immediate_size,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -116,6 +129,7 @@ impl BlurPipeline {
             sampler,
             bgl,
             format,
+            use_immediates,
             intermediate_pool: Vec::new(),
         }
     }
@@ -136,6 +150,7 @@ impl BlurPipeline {
         let pipeline = &self.pipeline;
         let bgl = &self.bgl;
         let sampler = &self.sampler;
+        let use_immediates = self.use_immediates;
 
         let (intermediate, intermediate_view) = if let Some(pos) = self
             .intermediate_pool
@@ -179,40 +194,62 @@ impl BlurPipeline {
         });
         let output_view = output.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let make_bind_group = |view: &wgpu::TextureView, direction: [f32; 2]| {
-            let params = BlurParams {
-                direction,
-                tex_size: [width as f32, height as f32],
-                sigma,
-                _pad: [0.0; 3],
-            };
-            let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("rsx-blur-params"),
-                contents: bytemuck::bytes_of(&params),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("rsx-blur-bind-group"),
-                layout: bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: params_buf.as_entire_binding(),
-                    },
-                ],
-            })
+        let tex_size = [width as f32, height as f32];
+
+        let make_bg_with_params = |view: &wgpu::TextureView, params: &BlurParams| {
+            if use_immediates {
+                // Immediates path: bind group has only texture + sampler.
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("rsx-blur-bind-group"),
+                    layout: bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(sampler),
+                        },
+                    ],
+                })
+            } else {
+                // Uniform buffer path: bind group includes params buffer at binding 2.
+                use wgpu::util::DeviceExt;
+                let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("rsx-blur-params"),
+                    contents: bytemuck::bytes_of(params),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("rsx-blur-bind-group"),
+                    layout: bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: params_buf.as_entire_binding(),
+                        },
+                    ],
+                })
+            }
         };
 
         {
-            let bg = make_bind_group(src_view, [1.0, 0.0]);
+            let params = BlurParams {
+                direction: [1.0, 0.0],
+                tex_size,
+                sigma,
+                _pad: [0.0; 3],
+            };
+            let bg = make_bg_with_params(src_view, &params);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rsx-blur-h-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -231,11 +268,20 @@ impl BlurPipeline {
             });
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bg, &[]);
+            if use_immediates {
+                pass.set_immediates(0, bytemuck::bytes_of(&params));
+            }
             pass.draw(0..6, 0..1);
         }
 
         {
-            let bg = make_bind_group(&intermediate_view, [0.0, 1.0]);
+            let params = BlurParams {
+                direction: [0.0, 1.0],
+                tex_size,
+                sigma,
+                _pad: [0.0; 3],
+            };
+            let bg = make_bg_with_params(&intermediate_view, &params);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rsx-blur-v-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -254,6 +300,9 @@ impl BlurPipeline {
             });
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bg, &[]);
+            if use_immediates {
+                pass.set_immediates(0, bytemuck::bytes_of(&params));
+            }
             pass.draw(0..6, 0..1);
         }
 

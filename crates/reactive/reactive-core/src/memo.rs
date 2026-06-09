@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 
 use crate::runtime::{self, EffectId};
@@ -13,7 +12,7 @@ enum MemoState<T> {
 
 struct MemoInner<T> {
     state: MemoState<T>,
-    subscribers: FxHashSet<EffectId>,
+    subscribers: SmallVec<[EffectId; 4]>,
     effect_id: EffectId,
 }
 
@@ -60,7 +59,10 @@ impl<T: 'static> Memo<T> {
 
     fn track(&self) {
         if let Some(id) = runtime::current_observer() {
-            self.inner.borrow_mut().subscribers.insert(id);
+            let mut borrow = self.inner.borrow_mut();
+            if !borrow.subscribers.contains(&id) {
+                borrow.subscribers.push(id);
+            }
         }
     }
 }
@@ -70,7 +72,7 @@ pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<
 
     let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {
         state: MemoState::Computing,
-        subscribers: FxHashSet::default(),
+        subscribers: SmallVec::new(),
         effect_id: 0,
     }));
 
@@ -106,12 +108,13 @@ pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<
         if let Some(dead) = dead {
             let mut memo = inner.borrow_mut();
             for id in dead {
-                memo.subscribers.remove(&id);
+                memo.subscribers.retain(|x| x != &id);
             }
         }
     });
 
-    let effect_id = runtime::register_effect(effect_f);
+    // Register as a pure effect so it runs before user effects during flush
+    let effect_id = runtime::register_pure_effect(effect_f);
     inner.borrow_mut().effect_id = effect_id;
 
     runtime::run_effect(effect_id);

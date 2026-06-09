@@ -513,12 +513,12 @@ where
             {
                 let src = pixmap.data();
                 let dst_bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut buffer[..]);
-                for (src_chunk, dst_chunk) in src.chunks_exact(4).zip(dst_bytes.chunks_exact_mut(4))
-                {
-                    dst_chunk[0] = src_chunk[2]; // B
-                    dst_chunk[1] = src_chunk[1]; // G
-                    dst_chunk[2] = src_chunk[0]; // R
-                    dst_chunk[3] = 0;
+                let pixels = src.len() / 4;
+                for i in 0..pixels {
+                    dst_bytes[i * 4] = src[i * 4 + 2]; // B
+                    dst_bytes[i * 4 + 1] = src[i * 4 + 1]; // G
+                    dst_bytes[i * 4 + 2] = src[i * 4]; // R
+                    dst_bytes[i * 4 + 3] = 0;
                 }
             }
             #[cfg(target_endian = "big")]

@@ -18,7 +18,7 @@ struct ComponentSlot {
 }
 
 impl ComponentSlot {
-    fn new<C: Component + 'static>(component: C) -> Self {
+    fn new<C: Component + 'static>(component: C, generation: Rc<Cell<u64>>) -> Self {
         let component: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(component));
         let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
         let dirty = Rc::new(Cell::new(true));
@@ -35,6 +35,8 @@ impl ComponentSlot {
             let changed = view_flatten::flatten_view(node, &mut *cmds, &mut *stk);
             if changed {
                 dirty_clone.set(true);
+                // Bump the shared generation so consumers can detect content changes with a single integer compare instead of an O(n) command-slice scan.
+                generation.set(generation.get().wrapping_add(1));
             }
         });
 
@@ -52,20 +54,32 @@ pub struct ComponentList {
     slots: Vec<ComponentSlot>,
     cached: RefCell<Vec<DrawCommand>>,
     slot_starts: RefCell<Vec<usize>>,
+    // Monotonically increasing counter bumped by any slot whose flattened commands change; lets renderers detect "nothing changed" with one integer compare.
+    generation: Rc<Cell<u64>>,
 }
 
 impl ComponentList {
     pub fn new<C: Component + 'static>(component: C) -> Self {
+        let generation = Rc::new(Cell::new(0));
         Self {
-            slots: vec![ComponentSlot::new(component)],
+            slots: vec![ComponentSlot::new(component, Rc::clone(&generation))],
             cached: RefCell::new(Vec::new()),
             slot_starts: RefCell::new(Vec::new()),
+            generation,
         }
     }
 
     pub fn add<C: Component + 'static>(&mut self, component: C) {
-        self.slots.push(ComponentSlot::new(component));
+        self.slots
+            .push(ComponentSlot::new(component, Rc::clone(&self.generation)));
         self.slot_starts.borrow_mut().clear();
+        // Adding a slot changes the rendered output; bump so consumers rebuild.
+        self.generation.set(self.generation.get().wrapping_add(1));
+    }
+
+    /// Current content generation. Increments whenever any component's flattened draw commands change. Two reads returning the same value guarantee identical `commands()` output.
+    pub fn generation(&self) -> u64 {
+        self.generation.get()
     }
 
     pub fn is_dirty(&self) -> bool {

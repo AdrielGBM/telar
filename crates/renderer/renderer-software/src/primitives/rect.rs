@@ -96,13 +96,14 @@ fn draw_rect_shadow(
         return;
     }
 
+    let q_blur = (shadow.blur_radius * 2.0).round() / 2.0;
     let [cr, cg, cb, ca] = shadow.color.to_rgba8();
     let color_rgba8 = u32::from_le_bytes([cr, cg, cb, ca]);
     let cache_key: crate::primitives::image::ShadowCacheKey = (
         rect.width.ceil() as u32,
         rect.height.ceil() as u32,
         shadow.spread.to_bits(),
-        shadow.blur_radius.to_bits(),
+        q_blur.to_bits(),
         color_rgba8,
         radius.top_left.to_bits(),
         radius.top_right.to_bits(),
@@ -125,7 +126,7 @@ fn draw_rect_shadow(
         tmp_y,
         tmp_w,
         tmp_h,
-        shadow.blur_radius,
+        q_blur,
         blur_scratch,
         transform,
         clip,

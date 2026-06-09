@@ -3,6 +3,30 @@ use platform_core::{
     Event, EventHandler, Platform, PlatformError, PointerButton, PointerSource, ScrollDelta,
     Window, WindowConfig,
 };
+
+// ANativeWindow_setFrameRate is API 30+ and may live in libnativewindow.so on some OEM devices rather than libandroid.so, so resolve it at runtime to avoid a hard dlopen failure on devices where the NDK stub does not match the runtime library.
+#[cfg(target_os = "android")]
+unsafe fn try_set_frame_rate(window: *mut std::ffi::c_void, fps: f32) {
+    unsafe extern "C" {
+        fn dlsym(
+            handle: *mut core::ffi::c_void,
+            symbol: *const core::ffi::c_char,
+        ) -> *mut core::ffi::c_void;
+    }
+    let sym = unsafe {
+        dlsym(
+            core::ptr::null_mut(),
+            b"ANativeWindow_setFrameRate\0".as_ptr() as _,
+        )
+    };
+    if sym.is_null() {
+        return;
+    }
+    let f: unsafe extern "C" fn(*mut core::ffi::c_void, f32, i8) -> i32 =
+        unsafe { core::mem::transmute(sym) };
+    unsafe { f(window, fps, 0) };
+}
+
 use winit::application::ApplicationHandler;
 use winit::event::{
     ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, StartCause, Touch, TouchPhase,
@@ -76,6 +100,17 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler for AndroidRunner<H> {
             Ok(w) => {
                 // Read before move into Arc; ScaleFactorChanged may not fire on first resume.
                 self.scale_factor = w.scale_factor();
+                #[cfg(target_os = "android")]
+                {
+                    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+                    if let Ok(handle) = w.window_handle() {
+                        if let RawWindowHandle::AndroidNdk(android_handle) = handle.as_raw() {
+                            unsafe {
+                                try_set_frame_rate(android_handle.a_native_window.as_ptr(), 60.0);
+                            }
+                        }
+                    }
+                }
                 let window = AndroidWindow(Arc::new(w));
                 if !self.handler.on_resume(&window) {
                     event_loop.exit();

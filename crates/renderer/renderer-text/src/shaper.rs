@@ -3,7 +3,7 @@ use cosmic_text::{
     Attrs, Buffer, CacheKey, Color as CosmicColor, FontSystem, Metrics, Shaping, SwashCache,
     SwashContent,
 };
-use etagere::{AllocId, AtlasAllocator, size2};
+use etagere::{AllocId, BucketedAtlasAllocator, size2};
 use geometry_core::Rect;
 use renderer_core::{Color, TextStyle, premultiply_rgba};
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHasher};
@@ -93,7 +93,7 @@ pub struct GlyphAtlas {
     pub pixels: Vec<u8>,
     pub dirty_rects: Vec<[u32; 4]>,
     entries: FxHashMap<GlyphKey, AtlasEntry>,
-    allocator: AtlasAllocator,
+    allocator: BucketedAtlasAllocator,
     lru_queue: VecDeque<(GlyphKey, u64)>,
     lru_counter: u64,
 }
@@ -104,7 +104,7 @@ impl GlyphAtlas {
             pixels: vec![0u8; (ATLAS_SIZE * ATLAS_SIZE * 4) as usize],
             dirty_rects: Vec::new(),
             entries: FxHashMap::default(),
-            allocator: AtlasAllocator::new(size2(ATLAS_SIZE as i32, ATLAS_SIZE as i32)),
+            allocator: BucketedAtlasAllocator::new(size2(ATLAS_SIZE as i32, ATLAS_SIZE as i32)),
             lru_queue: VecDeque::new(),
             lru_counter: 0,
         }
@@ -168,18 +168,18 @@ impl GlyphAtlas {
         Some(*entry)
     }
 
-    /// Evicts one LRU entry from the glyph atlas when it becomes full. Uses capacity-based LRU (evict when full) rather than a frame threshold, because atlas space is the binding constraint.
-    fn evict_lru(&mut self) -> bool {
+    /// Evicts one LRU entry from the glyph atlas when it becomes full. Uses capacity-based LRU (evict when full) rather than a frame threshold, because atlas space is the binding constraint. Returns the key of the evicted glyph if successful.
+    fn evict_lru(&mut self) -> Option<GlyphKey> {
         while let Some((key, stamp)) = self.lru_queue.pop_front() {
             if let Some(entry) = self.entries.get(&key) {
                 if entry.lru_gen == stamp {
                     self.allocator.deallocate(entry.alloc_id);
                     self.entries.remove(&key);
-                    return true;
+                    return Some(key);
                 }
             }
         }
-        false
+        None
     }
 }
 
@@ -445,14 +445,16 @@ impl TextShaper {
             } else {
                 let mut inserted = None;
                 loop {
-                    if !self.atlas.evict_lru() {
-                        break;
-                    }
-                    if let Some(e) =
-                        self.atlas
-                            .insert(glyph_key, &pixels, w, h, pl, pt, is_color_glyph)
-                    {
-                        inserted = Some(e);
+                    if let Some(evicted_key) = self.atlas.evict_lru() {
+                        self.swash_cache.image_cache.remove(&evicted_key.cache_key);
+                        if let Some(e) =
+                            self.atlas
+                                .insert(glyph_key, &pixels, w, h, pl, pt, is_color_glyph)
+                        {
+                            inserted = Some(e);
+                            break;
+                        }
+                    } else {
                         break;
                     }
                 }

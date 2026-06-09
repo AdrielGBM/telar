@@ -81,10 +81,11 @@ pub(crate) fn draw_path(
             let draw_x = (b.x() + shadow.offset_x) as i32 - padding;
             let draw_y = (b.y() + shadow.offset_y) as i32 - padding;
 
+            let q_blur = (shadow.blur_radius * 2.0).round() / 2.0;
             let [sc_r, sc_g, sc_b, sc_a] = shadow.color.to_rgba8();
             let cache_key = PathShadowCacheKey {
                 path_ptr,
-                blur_radius_bits: shadow.blur_radius.to_bits(),
+                blur_radius_bits: q_blur.to_bits(),
                 spread_bits: shadow.spread.to_bits(),
                 color: [sc_r, sc_g, sc_b, sc_a],
             };
@@ -110,7 +111,7 @@ pub(crate) fn draw_path(
                 draw_y,
                 tmp_w,
                 tmp_h,
-                shadow.blur_radius,
+                q_blur,
                 blur_scratch,
                 transform,
                 clip,

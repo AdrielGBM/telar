@@ -159,40 +159,49 @@ fn box_blur_h(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut Ve
     if w == 0 || h == 0 {
         return;
     }
-    for y in 0..h {
-        let row = y * w;
-        let initial_end = (r + 1).min(w);
-        // Accumulate all 4 channels together so each row is walked once instead of 4 times.
-        let mut sum = [0u32; 4];
-        for xi in 0..initial_end {
-            let base = (row + xi) * 4;
-            for c in 0..4 {
-                sum[c] += data[base + c] as u32;
-            }
-        }
-        let mut count = initial_end as u32;
-        for x in 0..w {
-            let out_base = (row + x) * 4;
-            for c in 0..4 {
-                scratch[out_base + c] = (sum[c] / count) as u8;
-            }
-            if x + r + 1 < w {
-                let add_base = (row + x + r + 1) * 4;
+    let full_count = (2 * r + 1) as u32;
+    let recip: u32 = ((1u32 << 16) + full_count - 1) / full_count;
+    let row_size = w * 4;
+    use rayon::prelude::*;
+    data.par_chunks_mut(row_size)
+        .zip(scratch.par_chunks_mut(row_size))
+        .for_each(|(row_data, row_scratch)| {
+            let initial_end = (r + 1).min(w);
+            // Accumulate all 4 channels together so each row is walked once instead of 4 times.
+            let mut sum = [0u32; 4];
+            for xi in 0..initial_end {
+                let base = xi * 4;
                 for c in 0..4 {
-                    sum[c] += data[add_base + c] as u32;
+                    sum[c] += row_data[base + c] as u32;
                 }
-                count += 1;
             }
-            if x >= r {
-                let sub_base = (row + (x - r)) * 4;
+            let mut count = initial_end as u32;
+            for x in 0..w {
+                let out_base = x * 4;
                 for c in 0..4 {
-                    sum[c] -= data[sub_base + c] as u32;
+                    row_scratch[out_base + c] = (if count == full_count {
+                        (sum[c] * recip) >> 16
+                    } else {
+                        sum[c] / count
+                    }) as u8;
                 }
-                count -= 1;
+                if x + r + 1 < w {
+                    let add_base = (x + r + 1) * 4;
+                    for c in 0..4 {
+                        sum[c] += row_data[add_base + c] as u32;
+                    }
+                    count += 1;
+                }
+                if x >= r {
+                    let sub_base = (x - r) * 4;
+                    for c in 0..4 {
+                        sum[c] -= row_data[sub_base + c] as u32;
+                    }
+                    count -= 1;
+                }
             }
-        }
-    }
-    data.copy_from_slice(&scratch[..data.len()]);
+            row_data.copy_from_slice(row_scratch);
+        });
 }
 
 fn box_blur_v(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut Vec<u8>) {
@@ -202,6 +211,8 @@ fn box_blur_v(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut Ve
     if w == 0 || h == 0 {
         return;
     }
+    let full_count = (2 * r + 1) as u32;
+    let recip: u32 = ((1u32 << 16) + full_count - 1) / full_count;
     for x in 0..w {
         let initial_end = (r + 1).min(h);
         // Accumulate all 4 channels together so each column is walked once instead of 4 times.
@@ -216,7 +227,11 @@ fn box_blur_v(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut Ve
         for y in 0..h {
             let out_base = (y * w + x) * 4;
             for c in 0..4 {
-                scratch[out_base + c] = (sum[c] / count) as u8;
+                scratch[out_base + c] = (if count == full_count {
+                    (sum[c] * recip) >> 16
+                } else {
+                    sum[c] / count
+                }) as u8;
             }
             if y + r + 1 < h {
                 let add_base = ((y + r + 1) * w + x) * 4;

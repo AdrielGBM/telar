@@ -440,6 +440,8 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
         u32,
     )>,
     shadow_resolved_cache: HashMap<ShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
+    // Retained frame-wide shadow instance buffer + bind group, keyed by a hash of all pending shadow instances. Reused across frames so unchanged shadows skip per-frame create_buffer_init + create_bind_group.
+    shadow_instances_cache: Option<(u64, wgpu::Buffer, wgpu::BindGroup)>,
     // LRU eviction order for shadow_resolved_cache: front is least-recently-used, back is most-recently-used.
     shadow_resolved_cache_order: VecDeque<ShadowCacheKey>,
     path_shadow_resolved_cache: HashMap<PathShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
@@ -450,6 +452,8 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     retained_view: Option<wgpu::TextureView>,
     prev_commands: Vec<DrawCommand>,
     prev_commands_hash: u64,
+    // Content generation of the last rendered frame. Initialized to u64::MAX so the first frame never matches and always renders. Used by the idle-frame fast path to skip work with a single integer compare when the upstream ComponentList generation is threaded through.
+    prev_generation: u64,
     retained_blit_pipeline: crate::composite::CompositePipeline,
     prev_rect_hash: u64,
     prev_text_hash: u64,
@@ -572,12 +576,25 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             wgpu::Features::empty()
         };
+        const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<[f32; 8]>() as u32; // 32 bytes
+        let supports_immediates = adapter.features().contains(wgpu::Features::IMMEDIATES)
+            && adapter.limits().max_immediate_size >= BLUR_PARAMS_SIZE;
+        let immediates_feature = if supports_immediates {
+            wgpu::Features::IMMEDIATES
+        } else {
+            wgpu::Features::empty()
+        };
+
+        let mut required_limits = wgpu::Limits::default();
+        if supports_immediates {
+            required_limits.max_immediate_size = BLUR_PARAMS_SIZE;
+        }
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("rsx-hardware-renderer"),
-                required_features: pipeline_cache_feature,
-                required_limits: wgpu::Limits::default(),
+                required_features: pipeline_cache_feature | immediates_feature,
+                required_limits,
                 ..Default::default()
             })
             .await
@@ -692,7 +709,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 PathPipeline::new(&device, surface_format, &viewport_bgl, pc, msaa_samples)
             });
             let t_layer = s.spawn(|| LayerPipeline::new(&device, surface_format, msaa_samples));
-            let t_blur = s.spawn(|| BlurPipeline::new(&device, surface_format, pc));
+            let t_blur =
+                s.spawn(|| BlurPipeline::new(&device, surface_format, pc, supports_immediates));
             let t_composite = s.spawn(|| {
                 CompositePipeline::new(&device, surface_format, msaa_samples, &viewport_bgl, pc)
             });
@@ -792,6 +810,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             layer_texture_pool: Vec::new(),
             shadow_capture_pool: Vec::new(),
             shadow_resolved_cache: HashMap::new(),
+            shadow_instances_cache: None,
             shadow_resolved_cache_order: VecDeque::new(),
             path_shadow_resolved_cache: HashMap::new(),
             path_shadow_resolved_cache_order: VecDeque::new(),
@@ -799,6 +818,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             retained_view: None,
             prev_commands: Vec::new(),
             prev_commands_hash: 0,
+            prev_generation: u64::MAX,
             retained_blit_pipeline,
             prev_rect_hash: 0,
             prev_text_hash: 0,
@@ -1799,32 +1819,49 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             !self.pending_shadow_ops.is_empty() && !self.pending_shadow_instances.is_empty();
         let has_path_shadows = !self.pending_path_shadow_ops.is_empty();
 
+        // Single encoder for both the shadow pre-passes and the main pass; wgpu inserts the necessary barriers between render passes, so a separate pre-encoder and extra queue.submit are unnecessary.
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("rsx-encoder"),
+            });
+
         let (shadow_results, path_shadow_results): (
             Vec<Option<wgpu::BindGroup>>,
             Vec<Option<wgpu::BindGroup>>,
         ) = if has_text_shadows || has_path_shadows {
-            let shadow_buf_opt = if has_text_shadows {
-                Some(
-                    self.device
+            // Reuse the retained shadow instance buffer + bind group when the instance data is unchanged; otherwise (re)create and cache them. This avoids a create_buffer_init + create_bind_group round-trip every frame for static shadows.
+            let shadow_instances_bg_opt = if has_text_shadows {
+                let instances_hash = hash_instances(&self.pending_shadow_instances);
+                let cache_valid = self
+                    .shadow_instances_cache
+                    .as_ref()
+                    .is_some_and(|(h, _, _)| *h == instances_hash);
+                if !cache_valid {
+                    let buf = self
+                        .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                             label: Some("rsx-shadow-instances"),
                             contents: bytemuck::cast_slice(&self.pending_shadow_instances),
                             usage: wgpu::BufferUsages::STORAGE,
-                        }),
-                )
+                        });
+                    let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("rsx-shadow-instances-bg"),
+                        layout: &self.text_pipeline.instances.instances_bgl,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: buf.as_entire_binding(),
+                        }],
+                    });
+                    self.shadow_instances_cache = Some((instances_hash, buf, bg));
+                }
+                // create_bind_group returns an owned Arc-backed handle, so clone to hand a copy to the draw loop while keeping the cached one.
+                self.shadow_instances_cache
+                    .as_ref()
+                    .map(|(_, _, bg)| bg.clone())
             } else {
                 None
             };
-            let shadow_instances_bg_opt = shadow_buf_opt.as_ref().map(|buf| {
-                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("rsx-shadow-instances-bg"),
-                    layout: &self.text_pipeline.instances.instances_bgl,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: buf.as_entire_binding(),
-                    }],
-                })
-            });
 
             let shadow_path_vb_opt = if has_path_shadows {
                 Some(
@@ -1870,12 +1907,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             } else {
                 None
             };
-
-            let mut pre_encoder =
-                self.device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("rsx-shadow-pre-encoder"),
-                    });
 
             let mut text_results: Vec<Option<wgpu::BindGroup>> = Vec::new();
             let mut path_results: Vec<Option<wgpu::BindGroup>> = Vec::new();
@@ -1961,7 +1992,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         } else {
                             None
                         };
-                        let mut pass = pre_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("rsx-shadow-capture"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: cap_draw_view,
@@ -1986,7 +2017,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                     let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
                         &self.device,
-                        &mut pre_encoder,
+                        &mut encoder,
                         &cap_resolve_view,
                         op.tex_w,
                         op.tex_h,
@@ -2108,7 +2139,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         } else {
                             None
                         };
-                        let mut pass = pre_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("rsx-shadow-path-capture"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: cap_draw_view,
@@ -2134,7 +2165,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                     let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
                         &self.device,
-                        &mut pre_encoder,
+                        &mut encoder,
                         &cap_resolve_view,
                         op.tex_w,
                         op.tex_h,
@@ -2168,7 +2199,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
             }
 
-            self.queue.submit(std::iter::once(pre_encoder.finish()));
+            // Shadow passes are recorded into the shared `encoder` and submitted with the main pass; no separate submit here.
             (text_results, path_results)
         } else {
             (Vec::new(), Vec::new())
@@ -2246,12 +2277,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let retained_view = self.retained_view.as_ref().ok_or_else(|| {
             RendererError::Backend("retained_view not initialized; call begin_frame first".into())
         })?;
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("rsx-encoder"),
-            });
 
         {
             let _init = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -2918,6 +2943,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         if current_hash != self.prev_commands_hash {
             self.prev_commands = orig_commands.to_vec();
             self.prev_commands_hash = current_hash;
+            // Bump the rendered-content generation in lockstep with the command hash so a future caller that threads ComponentList::generation() through render_frame can compare against this with a single integer compare.
+            self.prev_generation = self.prev_generation.wrapping_add(1);
         }
         self.clear_pending();
         Ok(())
