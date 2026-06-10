@@ -6,8 +6,7 @@ struct CompositeParamsRaw {
     rect: [f32; 4],
     alpha: f32,
     clip_radius: f32,
-    _pad0: f32,
-    _pad1: f32,
+    content_uv_scale: [f32; 2],
 }
 
 pub(crate) struct CompositePipeline {
@@ -124,13 +123,13 @@ impl CompositePipeline {
         rect: [f32; 4],
         alpha: f32,
         clip_radius: f32,
+        content_uv_scale: [f32; 2],
     ) -> wgpu::BindGroup {
         let params = CompositeParamsRaw {
             rect,
             alpha,
             clip_radius,
-            _pad0: 0.0,
-            _pad1: 0.0,
+            content_uv_scale,
         };
         let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("rsx-composite-params"),

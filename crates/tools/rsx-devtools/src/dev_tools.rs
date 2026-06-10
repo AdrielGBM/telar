@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::VecDeque;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use crate::dev_plugin::{DevAction, DevPlugin};
@@ -91,7 +92,7 @@ impl DevPlugin for DevTools {
         });
 
         // Badge background
-        cmds.push(DrawCommand::Rect(Box::new(RectPayload {
+        cmds.push(DrawCommand::Rect(Rc::new(RectPayload {
             rect: self.badge_rect,
             style: RectStyle::default()
                 .with_fill(Paint::Solid(BADGE_BG))
@@ -100,7 +101,7 @@ impl DevPlugin for DevTools {
 
         // Badge label
         let badge_label = format!("DEV \u{2022} {} fps", self.last_fps);
-        cmds.push(DrawCommand::Text(Box::new(TextPayload {
+        cmds.push(DrawCommand::Text(Rc::new(TextPayload {
             text: badge_label.into(),
             rect: Rect::new(badge_x + 8.0, badge_y + 5.0, BADGE_W - 16.0, BADGE_H - 10.0),
             style: TextStyle::new(12.0, GREEN),
@@ -124,7 +125,7 @@ impl DevPlugin for DevTools {
             });
 
             // Panel background
-            cmds.push(DrawCommand::Rect(Box::new(RectPayload {
+            cmds.push(DrawCommand::Rect(Rc::new(RectPayload {
                 rect: Rect::new(panel_x, panel_y, PANEL_W, PANEL_H),
                 style: RectStyle::default()
                     .with_fill(Paint::Solid(BG))
@@ -132,21 +133,21 @@ impl DevPlugin for DevTools {
             })));
 
             // Title
-            cmds.push(DrawCommand::Text(Box::new(TextPayload {
+            cmds.push(DrawCommand::Text(Rc::new(TextPayload {
                 text: "rsx devtools".into(),
                 rect: Rect::new(panel_x + 12.0, panel_y + 12.0, PANEL_W - 24.0, 16.0),
                 style: TextStyle::new(11.0, WHITE),
             })));
 
             // Horizontal separator
-            cmds.push(DrawCommand::Rect(Box::new(RectPayload {
+            cmds.push(DrawCommand::Rect(Rc::new(RectPayload {
                 rect: Rect::new(panel_x + 12.0, panel_y + 36.0, PANEL_W - 24.0, 1.0),
                 style: RectStyle::default().with_fill(Paint::Solid(GRAY_DIM)),
             })));
 
             // FPS value
             let fps_label = format!("{} fps", self.last_fps);
-            cmds.push(DrawCommand::Text(Box::new(TextPayload {
+            cmds.push(DrawCommand::Text(Rc::new(TextPayload {
                 text: fps_label.into(),
                 rect: Rect::new(panel_x + 12.0, panel_y + 44.0, PANEL_W - 24.0, 28.0),
                 style: TextStyle::new(20.0, GREEN),
@@ -155,7 +156,7 @@ impl DevPlugin for DevTools {
             // Renderer info line (only when set)
             let renderer_text_y = if let Some(ref info) = self.renderer_info {
                 let renderer_label = format!("renderer: {}", info);
-                cmds.push(DrawCommand::Text(Box::new(TextPayload {
+                cmds.push(DrawCommand::Text(Rc::new(TextPayload {
                     text: renderer_label.into(),
                     rect: Rect::new(panel_x + 12.0, panel_y + 80.0, PANEL_W - 24.0, 16.0),
                     style: TextStyle::new(11.0, GRAY),
@@ -166,7 +167,7 @@ impl DevPlugin for DevTools {
             };
 
             // Keyboard shortcut hints
-            cmds.push(DrawCommand::Text(Box::new(TextPayload {
+            cmds.push(DrawCommand::Text(Rc::new(TextPayload {
                 text: "ctrl+shift+b  toggle renderer".into(),
                 rect: Rect::new(
                     panel_x + 12.0,
@@ -177,7 +178,7 @@ impl DevPlugin for DevTools {
                 style: TextStyle::new(10.0, GRAY_DIM),
             })));
 
-            cmds.push(DrawCommand::Text(Box::new(TextPayload {
+            cmds.push(DrawCommand::Text(Rc::new(TextPayload {
                 text: "click badge  close".into(),
                 rect: Rect::new(
                     panel_x + 12.0,

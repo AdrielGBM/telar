@@ -25,9 +25,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         let mut children: Vec<RenderNode> = Vec::new();
 
         draw_section_header(&mut children, w, "Paths", card_border, muted);
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("Polygon shapes"),
+                text: crate::static_rc_str!("Polygon shapes"),
                 rect: Rect {
                     x: 0.0,
                     y: 36.0,
@@ -60,9 +60,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("triangle"),
+                text: crate::static_rc_str!("triangle"),
                 rect: Rect {
                     x: 0.0,
                     y: 176.0,
@@ -106,9 +106,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 )
                 .view(),
             );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
                 TextPayload {
-                    text: Rc::from("star (fill + stroke)"),
+                    text: crate::static_rc_str!("star (fill + stroke)"),
                     rect: Rect {
                         x: 175.0,
                         y: 176.0,
@@ -148,9 +148,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("even-odd fill"),
+                text: crate::static_rc_str!("even-odd fill"),
                 rect: Rect {
                     x: 350.0,
                     y: 176.0,
@@ -161,9 +161,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("Bézier curves"),
+                text: crate::static_rc_str!("Bézier curves"),
                 rect: Rect {
                     x: 0.0,
                     y: 212.0,
@@ -194,9 +194,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("quad_to arch"),
+                text: crate::static_rc_str!("quad_to arch"),
                 rect: Rect {
                     x: 0.0,
                     y: 318.0,
@@ -227,9 +227,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("cubic_to S-curve"),
+                text: crate::static_rc_str!("cubic_to S-curve"),
                 rect: Rect {
                     x: 296.0,
                     y: 318.0,
@@ -270,9 +270,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("closed cubic (petal)"),
+                text: crate::static_rc_str!("closed cubic (petal)"),
                 rect: Rect {
                     x: 446.0,
                     y: 318.0,
@@ -283,9 +283,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("Stroke style"),
+                text: crate::static_rc_str!("Stroke style"),
                 rect: Rect {
                     x: 0.0,
                     y: 354.0,
@@ -318,9 +318,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("Butt / Miter (default)"),
+                text: crate::static_rc_str!("Butt / Miter (default)"),
                 rect: Rect {
                     x: 0.0,
                     y: 448.0,
@@ -357,9 +357,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("Round cap / Round join"),
+                text: crate::static_rc_str!("Round cap / Round join"),
                 rect: Rect {
                     x: 300.0,
                     y: 448.0,
@@ -370,9 +370,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("Path shadows"),
+                text: crate::static_rc_str!("Path shadows"),
                 rect: Rect {
                     x: 0.0,
                     y: 490.0,
@@ -424,9 +424,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("drop shadow"),
+                text: crate::static_rc_str!("drop shadow"),
                 rect: Rect {
                     x: 32.0,
                     y: 624.0,
@@ -471,9 +471,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("glow"),
+                text: crate::static_rc_str!("glow"),
                 rect: Rect {
                     x: 248.0,
                     y: 624.0,
@@ -507,9 +507,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("hard offset"),
+                text: crate::static_rc_str!("hard offset"),
                 rect: Rect {
                     x: 428.0,
                     y: 624.0,
@@ -548,9 +548,9 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
             TextPayload {
-                text: Rc::from("stroke shadow"),
+                text: crate::static_rc_str!("stroke shadow"),
                 rect: Rect {
                     x: 600.0,
                     y: 624.0,

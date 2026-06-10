@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::num::{NonZeroU32, NonZeroUsize};
+use std::sync::mpsc;
 
 use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
@@ -9,6 +11,7 @@ use renderer_core::{
 };
 use renderer_text::{TextShaper, TextShaperConfig};
 use rustc_hash::{FxBuildHasher, FxHasher};
+use smallvec::SmallVec;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
@@ -438,6 +441,12 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     text_shadow_cache: TextShadowCache,
     path_shadow_cache: PathShadowCache,
+    // Large shadows are computed on background threads; these maps hold the receivers for in-flight computations keyed by the same cache key, so a frame can poll for completion and avoid re-spawning duplicate work.
+    pending_shadows: HashMap<crate::primitives::image::ShadowCacheKey, mpsc::Receiver<Pixmap>>,
+    pending_text_shadows:
+        HashMap<crate::primitives::text::TextShadowCacheKey, mpsc::Receiver<Pixmap>>,
+    pending_path_shadows:
+        HashMap<crate::primitives::path::PathShadowCacheKey, mpsc::Receiver<Pixmap>>,
     layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32)>,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
     prev_commands: Vec<DrawCommand>,
@@ -492,6 +501,9 @@ where
             ),
             text_shadow_cache: new_text_shadow_cache(budget.text_shadow_cache_bytes),
             path_shadow_cache: new_path_shadow_cache(budget.path_shadow_cache_bytes),
+            pending_shadows: HashMap::new(),
+            pending_text_shadows: HashMap::new(),
+            pending_path_shadows: HashMap::new(),
             layer_stack: Vec::new(),
             prev_commands: Vec::with_capacity(256),
             prev_commands_hash: 0,
@@ -500,6 +512,44 @@ where
             layer_bboxes_cache: None,
         })
     }
+    // Drains finished background shadow computations into their respective caches. Returns true if at least one shadow became available this frame.
+    fn poll_pending_shadows(&mut self) -> bool {
+        let mut arrived = false;
+        let shadow_cache = &mut self.shadow_cache;
+        self.pending_shadows.retain(|key, rx| match rx.try_recv() {
+            Ok(pixmap) => {
+                shadow_cache.put_with_weight(key.clone(), pixmap).ok();
+                arrived = true;
+                false
+            }
+            Err(mpsc::TryRecvError::Empty) => true,
+            Err(mpsc::TryRecvError::Disconnected) => false,
+        });
+        let text_shadow_cache = &mut self.text_shadow_cache;
+        self.pending_text_shadows
+            .retain(|key, rx| match rx.try_recv() {
+                Ok(pixmap) => {
+                    text_shadow_cache.put_with_weight(key.clone(), pixmap).ok();
+                    arrived = true;
+                    false
+                }
+                Err(mpsc::TryRecvError::Empty) => true,
+                Err(mpsc::TryRecvError::Disconnected) => false,
+            });
+        let path_shadow_cache = &mut self.path_shadow_cache;
+        self.pending_path_shadows
+            .retain(|key, rx| match rx.try_recv() {
+                Ok(pixmap) => {
+                    path_shadow_cache.put_with_weight(key.clone(), pixmap).ok();
+                    arrived = true;
+                    false
+                }
+                Err(mpsc::TryRecvError::Empty) => true,
+                Err(mpsc::TryRecvError::Disconnected) => false,
+            });
+        arrived
+    }
+
     fn present_pixmap(&mut self) -> Result<(), RendererError> {
         let Some(pixmap) = &self.pixmap else {
             return Ok(());
@@ -508,17 +558,32 @@ where
             return Ok(());
         }
         if let Ok(mut buffer) = self.surface.buffer_mut() {
-            // Pixel format conversion: tiny_skia stores [R, G, B, A, ...] bytes; softbuffer LE u32 is 0x00RRGGBB = [B, G, R, 0x00] in memory. A byte-level shuffle auto-vectorizes better than swap_bytes()>>8.
+            // Pixel format: tiny_skia RGBA bytes → softbuffer LE u32 0x00RRGGBB.
+            // u32 bit trick: output = (input>>16 & 0xFF) | (input & 0xFF00) | ((input & 0xFF)<<16)
             #[cfg(target_endian = "little")]
             {
+                use wide::u32x8;
                 let src = pixmap.data();
-                let dst_bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut buffer[..]);
-                let pixels = src.len() / 4;
-                for i in 0..pixels {
-                    dst_bytes[i * 4] = src[i * 4 + 2]; // B
-                    dst_bytes[i * 4 + 1] = src[i * 4 + 1]; // G
-                    dst_bytes[i * 4 + 2] = src[i * 4]; // R
-                    dst_bytes[i * 4 + 3] = 0;
+                let pixels = buffer.len();
+                let mask_lo = u32x8::splat(0xFF);
+                let mask_g = u32x8::splat(0x0000_FF00);
+                let shift16 = u32x8::splat(16);
+                let n_simd = pixels / 8;
+                for i in 0..n_simd {
+                    let b = i * 8;
+                    let v = u32x8::from(std::array::from_fn::<u32, 8, _>(|j| {
+                        let p = (b + j) * 4;
+                        u32::from_le_bytes(src[p..p + 4].try_into().unwrap())
+                    }));
+                    let out =
+                        ((v >> shift16) & mask_lo) | (v & mask_g) | ((v & mask_lo) << shift16);
+                    let out_arr: [u32; 8] = out.into();
+                    buffer[b..b + 8].copy_from_slice(&out_arr);
+                }
+                for i in (n_simd * 8)..pixels {
+                    let p = i * 4;
+                    let s = u32::from_le_bytes(src[p..p + 4].try_into().unwrap());
+                    buffer[i] = ((s >> 16) & 0xFF) | (s & 0xFF00) | ((s & 0xFF) << 16);
                 }
             }
             #[cfg(target_endian = "big")]
@@ -573,8 +638,14 @@ where
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
-        // Optimization 1: skip the entire render when nothing changed; just re-present the existing pixmap.
-        if commands == self.prev_commands.as_slice() && clear_color == self.prev_clear_color {
+        // Poll background shadow workers and move finished pixmaps into their caches. Returns true if any completed this frame, in which case we must re-render even if the command list is unchanged so the newly-available shadow gets drawn.
+        let shadow_arrived = self.poll_pending_shadows();
+
+        // Optimization 1: skip the entire render when nothing changed; just re-present the existing pixmap. A shadow that just finished computing forces a redraw so it can appear.
+        if !shadow_arrived
+            && commands == self.prev_commands.as_slice()
+            && clear_color == self.prev_clear_color
+        {
             return self.present_pixmap();
         }
 
@@ -595,14 +666,15 @@ where
             }
         }
 
-        // Optimization 3: compute the on-screen union of all changed commands so we can clear only that region.
-        let dirty_rect = if let Some(ref sb) = maybe_scroll {
+        // Optimization 3: compute the on-screen regions that changed so we can clear and re-render only those. Disjoint changes (e.g. a header and a scrollbar) are kept as separate rects instead of a viewport-spanning union, so the untouched center can be skipped.
+        let dirty_rect: Option<SmallVec<[Rect; 8]>> = if let Some(ref sb) = maybe_scroll {
             // Scroll blit case: only re-render the newly exposed band and any changed overlays.
-            let base = sb.exposed_band;
-            Some(match sb.extra_dirty {
-                Some(ed) => union_opt_rect(Some(base), ed).unwrap(),
-                None => base,
-            })
+            let mut v: SmallVec<[Rect; 8]> = SmallVec::new();
+            v.push(sb.exposed_band);
+            if let Some(ed) = sb.extra_dirty {
+                v.push(ed);
+            }
+            Some(v)
         } else if self.prev_commands.is_empty() {
             None // first frame → full clear
         } else {
@@ -622,52 +694,70 @@ where
         }
         self.prev_clear_color = clear_color;
 
-        // Clear either the dirty region only or the full pixmap when a structural change forces a full re-render; IMPORTANT: compute both the tiny-skia clear rect and the geometry rect used for command-skipping from the same clamped bounds because the naive (dr.x-1).max(0) / dr.width+2 formula shifts the rect right/down when dr has negative coordinates (off-screen content), so fill_rect would clear a larger on-screen area than `dr` describes — causing commands outside `dr` to have their pixels cleared and then be skipped, which makes them disappear.
-        let skip_rect: Option<Rect> = match dirty_rect {
-            Some(dr) if dr.width > 0.0 && dr.height > 0.0 => {
-                let x0 = (dr.x - 1.0).max(0.0);
-                let y0 = (dr.y - 1.0).max(0.0);
-                let x1 = (dr.x + dr.width + 1.0).min(self.width as f32);
-                let y1 = (dr.y + dr.height + 1.0).min(self.height as f32);
-                if x1 > x0 && y1 > y0 {
-                    // Expand skip_rect to fully contain every command it partially intersects: a partially-overlapping command is still fully redrawn, overwriting pixels of earlier commands that fall outside the region and won't be redrawn themselves.
+        // Clear either the dirty regions only or the full pixmap when a structural change forces a full re-render; IMPORTANT: compute both the tiny-skia clear rect and the geometry rect used for command-skipping from the same clamped bounds because the naive (dr.x-1).max(0) / dr.width+2 formula shifts the rect right/down when dr has negative coordinates (off-screen content), so fill_rect would clear a larger on-screen area than `dr` describes — causing commands outside `dr` to have their pixels cleared and then be skipped, which makes them disappear.
+        let skip_rect: Option<SmallVec<[Rect; 8]>> = match dirty_rect {
+            Some(drs) if !drs.is_empty() => {
+                // Precompute each command's window-space visual rect once so expanding every dirty region is O(rects + commands) rather than O(rects * commands).
+                let mut visual_rects: Vec<Rect> = Vec::with_capacity(commands.len());
+                let mut sr_matrix = renderer_core::IDENTITY_MATRIX;
+                let mut sr_matrix_stk: Vec<[f32; 6]> = Vec::new();
+                for cmd in commands.iter() {
+                    match cmd {
+                        DrawCommand::PushMatrix { matrix } => {
+                            sr_matrix_stk.push(sr_matrix);
+                            sr_matrix = renderer_core::compose_matrix(sr_matrix, *matrix);
+                        }
+                        DrawCommand::PopMatrix => {
+                            if let Some(prev) = sr_matrix_stk.pop() {
+                                sr_matrix = prev;
+                            }
+                        }
+                        _ => {}
+                    }
+                    if let Some(vr) = renderer_core::culling::command_visual_rect(cmd, sr_matrix) {
+                        visual_rects.push(vr);
+                    }
+                }
+
+                let mut out: SmallVec<[Rect; 8]> = SmallVec::new();
+                for dr in drs.iter() {
+                    if dr.width <= 0.0 || dr.height <= 0.0 {
+                        continue;
+                    }
+                    let x0 = (dr.x - 1.0).max(0.0);
+                    let y0 = (dr.y - 1.0).max(0.0);
+                    let x1 = (dr.x + dr.width + 1.0).min(self.width as f32);
+                    let y1 = (dr.y + dr.height + 1.0).min(self.height as f32);
+                    if x1 <= x0 || y1 <= y0 {
+                        // This region is entirely off-screen; skip it.
+                        continue;
+                    }
+                    // Expand the region to fully contain every command it partially intersects: a partially-overlapping command is still fully redrawn, overwriting pixels of earlier commands that fall outside the region and won't be redrawn themselves.
                     let mut sr = Rect {
                         x: x0,
                         y: y0,
                         width: x1 - x0,
                         height: y1 - y0,
                     };
-                    let mut sr_matrix = renderer_core::IDENTITY_MATRIX;
-                    let mut sr_matrix_stk: Vec<[f32; 6]> = Vec::new();
-                    for cmd in commands.iter() {
-                        match cmd {
-                            DrawCommand::PushMatrix { matrix } => {
-                                sr_matrix_stk.push(sr_matrix);
-                                sr_matrix = renderer_core::compose_matrix(sr_matrix, *matrix);
+                    // A single pass is insufficient when expansion brings new commands into range; iterate until the region stops growing (bounded by command count in the worst case, but converges in 1-2 passes in practice).
+                    loop {
+                        let before = sr;
+                        for vr in &visual_rects {
+                            if rect_overlaps(*vr, sr) {
+                                let nx = sr.x.min(vr.x);
+                                let ny = sr.y.min(vr.y);
+                                let nx2 = (sr.x + sr.width).max(vr.x + vr.width);
+                                let ny2 = (sr.y + sr.height).max(vr.y + vr.height);
+                                sr = Rect {
+                                    x: nx,
+                                    y: ny,
+                                    width: nx2 - nx,
+                                    height: ny2 - ny,
+                                };
                             }
-                            DrawCommand::PopMatrix => {
-                                if let Some(prev) = sr_matrix_stk.pop() {
-                                    sr_matrix = prev;
-                                }
-                            }
-                            _ => {
-                                if let Some(vr) =
-                                    renderer_core::culling::command_visual_rect(cmd, sr_matrix)
-                                {
-                                    if rect_overlaps(vr, sr) {
-                                        let nx = sr.x.min(vr.x);
-                                        let ny = sr.y.min(vr.y);
-                                        let nx2 = (sr.x + sr.width).max(vr.x + vr.width);
-                                        let ny2 = (sr.y + sr.height).max(vr.y + vr.height);
-                                        sr = Rect {
-                                            x: nx,
-                                            y: ny,
-                                            width: nx2 - nx,
-                                            height: ny2 - ny,
-                                        };
-                                    }
-                                }
-                            }
+                        }
+                        if sr == before {
+                            break;
                         }
                     }
                     // Re-clamp to viewport after expansion.
@@ -676,19 +766,19 @@ where
                     let fx1 = (sr.x + sr.width).min(self.width as f32);
                     let fy1 = (sr.y + sr.height).min(self.height as f32);
                     if fx1 > fx0 && fy1 > fy0 {
-                        Some(Rect {
+                        out.push(Rect {
                             x: fx0,
                             y: fy0,
                             width: fx1 - fx0,
                             height: fy1 - fy0,
-                        })
-                    } else {
-                        return self.present_pixmap();
+                        });
                     }
-                } else {
-                    // Dirty region is entirely off-screen — nothing visible changed.
+                }
+                if out.is_empty() {
+                    // Every dirty region was off-screen — nothing visible changed.
                     return self.present_pixmap();
                 }
+                Some(out)
             }
             _ => None,
         };
@@ -698,15 +788,18 @@ where
         let skip_rect = if clear_color_changed { None } else { skip_rect };
 
         if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
-            if let Some(sr) = skip_rect {
-                let skia_rect = tiny_skia::Rect::from_xywh(sr.x, sr.y, sr.width, sr.height);
-                if let Some(r) = skia_rect {
-                    let mut paint = tiny_skia::Paint::default();
-                    paint.set_color(crate::primitives::to_skia_color(color));
-                    paint.blend_mode = tiny_skia::BlendMode::Source;
-                    pixmap.fill_rect(r, &paint, tiny_skia::Transform::identity(), None);
-                } else {
-                    pixmap.fill(crate::primitives::to_skia_color(color));
+            if let Some(ref rects) = skip_rect {
+                for sr in rects.iter() {
+                    let skia_rect = tiny_skia::Rect::from_xywh(sr.x, sr.y, sr.width, sr.height);
+                    if let Some(r) = skia_rect {
+                        let mut paint = tiny_skia::Paint::default();
+                        paint.set_color(crate::primitives::to_skia_color(color));
+                        paint.blend_mode = tiny_skia::BlendMode::Source;
+                        pixmap.fill_rect(r, &paint, tiny_skia::Transform::identity(), None);
+                    } else {
+                        pixmap.fill(crate::primitives::to_skia_color(color));
+                        break;
+                    }
                 }
             } else {
                 pixmap.fill(crate::primitives::to_skia_color(color));
@@ -796,12 +889,12 @@ where
             // Only applies at the top level (not inside layers): a layer is a fresh isolated pixmap
             // rendered from scratch every frame, so all its commands must run regardless of which
             // window-space region is dirty.
-            if let Some(sr) = skip_rect {
+            if let Some(ref dirty_rects) = skip_rect {
                 if !inside_layer {
                     if let Some(vr) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
-                        if !rect_overlaps(vr, sr) {
+                        if dirty_rects.iter().all(|dr| !rect_overlaps(vr, *dr)) {
                             continue;
                         }
                     }
@@ -846,6 +939,7 @@ where
                         transform,
                         clip,
                         &mut self.shadow_cache,
+                        &mut self.pending_shadows,
                         &mut self.blur_scratch,
                     );
                 }
@@ -889,6 +983,7 @@ where
                         &mut self.blur_scratch,
                         &mut self.text_pixmap_cache,
                         &mut self.text_shadow_cache,
+                        &mut self.pending_text_shadows,
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
@@ -1000,6 +1095,7 @@ where
                         },
                         &mut self.blur_scratch,
                         &mut self.path_shadow_cache,
+                        &mut self.pending_path_shadows,
                     );
                 }
                 DrawCommand::PushClip { rect, radius } => {
@@ -1063,7 +1159,7 @@ where
                     backdrop_blur,
                 } => {
                     // During scroll_blit, skip layers outside the dirty region: their pixels are already correct from apply_scroll_blit and re-compositing would double-apply the layer's opacity.
-                    if let Some(sr) = skip_rect {
+                    if let Some(ref dirty_rects) = skip_rect {
                         if !inside_layer {
                             if let Some((ox, oy, bw, bh)) = layer_bboxes[cmd_idx] {
                                 let layer_rect = Rect {
@@ -1072,7 +1168,7 @@ where
                                     width: bw as f32,
                                     height: bh as f32,
                                 };
-                                if !rect_overlaps(layer_rect, sr) {
+                                if dirty_rects.iter().all(|dr| !rect_overlaps(layer_rect, *dr)) {
                                     skip_layer_depth = 1;
                                     continue;
                                 }

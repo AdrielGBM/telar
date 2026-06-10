@@ -152,10 +152,11 @@ pub(crate) fn prepare_text(
     text: &str,
     rect: Rect,
     style: &TextStyle,
+    scale_factor: f32,
     out: &mut Vec<TextInstance>,
 ) {
     let mut glyphs: Vec<renderer_text::GlyphInfo> = Vec::new();
-    shaper.layout_glyphs(text, rect, style, &mut glyphs);
+    shaper.layout_glyphs(text, rect, style, scale_factor, &mut glyphs);
     out.extend(glyphs.iter().map(|g| TextInstance {
         dest_rect: g.dest_rect,
         uv_min: g.uv_min,

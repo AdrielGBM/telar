@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, ScrollDelta};
@@ -131,7 +133,7 @@ impl Component for ScrollArea {
             let bar_h = (vp.height / content_rect.height * vp.height).max(24.0);
             let max_scroll = (content_rect.height - vp.height).max(1.0);
             let bar_y = vp.y + (scroll_y / max_scroll) * (vp.height - bar_h);
-            RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+            RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
                 rect: Rect::new(vp.x + vp.width - sb.width, bar_y, sb.width - 2.0, bar_h),
                 style: RectStyle::default()
                     .with_fill(sb.color)
@@ -145,7 +147,7 @@ impl Component for ScrollArea {
             let bar_w = (vp.width / content_rect.width * vp.width).max(24.0);
             let max_scroll_x = (content_rect.width - vp.width).max(1.0);
             let bar_x = vp.x + (scroll_x / max_scroll_x) * (vp.width - bar_w);
-            RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+            RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
                 rect: Rect::new(bar_x, vp.y + vp.height - sb.width, bar_w, sb.width - 2.0),
                 style: RectStyle::default()
                     .with_fill(sb.color)

@@ -5,5 +5,6 @@ edition = "2024"
 
 [dependencies]
 geometry-core = { workspace = true }
+smallvec = { version = "1.15.1", features = ["union"] }
 thiserror = { workspace = true }
 wide = { workspace = true }

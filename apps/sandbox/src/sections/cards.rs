@@ -19,7 +19,7 @@ pub fn info_card(
         LayoutStyle::new().width(368.0).height(110.0),
         move |_| {
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -28,7 +28,7 @@ pub fn info_card(
                     },
                     style: bg_fn(),
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
                     text: Rc::from(title),
                     rect: Rect {
                         x: 16.0,
@@ -38,7 +38,7 @@ pub fn info_card(
                     },
                     style: TextStyle::new(16.0, title_color_fn()),
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
                     text: Rc::from(body),
                     rect: Rect {
                         x: 16.0,

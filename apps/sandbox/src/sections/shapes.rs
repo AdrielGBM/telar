@@ -18,7 +18,7 @@ pub fn shape_card(
         LayoutStyle::new().width(168.0).height(80.0),
         move |_| {
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -27,7 +27,7 @@ pub fn shape_card(
                     },
                     style: style_fn(),
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
                     text: Rc::from(label),
                     rect: Rect {
                         x: 0.0,

@@ -17,3 +17,4 @@ rustc-hash = { workspace = true }
 clru = { workspace = true }
 wide = { workspace = true }
 rayon = "1"
+smallvec = { version = "1.15.1", features = ["union"] }

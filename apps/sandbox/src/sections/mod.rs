@@ -1,6 +1,34 @@
+use std::rc::Rc;
+
 use rsx::{
     Color, Component, DrawCommand, Line, LineStyle, Point, Rect, RenderNode, TextPayload, TextStyle,
 };
+
+/// Returns a cached `Rc<str>` for a `&'static str`, allocating at most once per unique pointer per thread.
+pub(crate) fn intern_static_str(s: &'static str) -> Rc<str> {
+    use rustc_hash::FxHashMap;
+    use std::cell::RefCell;
+    thread_local! {
+        static MAP: RefCell<FxHashMap<*const u8, Rc<str>>> = RefCell::new(FxHashMap::default());
+    }
+    MAP.with(|m| {
+        m.borrow_mut()
+            .entry(s.as_ptr())
+            .or_insert_with(|| Rc::from(s))
+            .clone()
+    })
+}
+
+/// Returns a per-call-site cached `Rc<str>` for a string literal, allocating at most once per thread.
+#[macro_export]
+macro_rules! static_rc_str {
+    ($s:literal) => {{
+        thread_local! {
+            static V: std::rc::Rc<str> = std::rc::Rc::from($s as &str);
+        }
+        V.with(std::rc::Rc::clone)
+    }};
+}
 
 mod cards;
 mod colors;
@@ -37,7 +65,6 @@ pub(crate) fn draw_section_header(
     border_color: Color,
     text_color: Color,
 ) {
-    use std::rc::Rc;
     children.push(
         Line::new(
             || Point::new(0.0, 0.0),
@@ -46,9 +73,9 @@ pub(crate) fn draw_section_header(
         )
         .view(),
     );
-    children.push(RenderNode::Primitive(DrawCommand::Text(Box::new(
+    children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
         TextPayload {
-            text: Rc::from(title),
+            text: intern_static_str(title),
             rect: Rect {
                 x: 0.0,
                 y: 12.0,

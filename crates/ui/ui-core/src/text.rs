@@ -58,7 +58,7 @@ impl Component for Text {
             }
         };
         self.leaf
-            .at_layout_position(RenderNode::Primitive(DrawCommand::Text(Box::new(
+            .at_layout_position(RenderNode::Primitive(DrawCommand::Text(Rc::new(
                 TextPayload {
                     text,
                     rect: Rect {

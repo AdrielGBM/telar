@@ -33,7 +33,7 @@ impl Component for Path {
     fn view(&self) -> RenderNode {
         let data = (self.data)();
         let style = (self.style)();
-        RenderNode::Primitive(DrawCommand::Path(Box::new(PathPayload { data, style })))
+        RenderNode::Primitive(DrawCommand::Path(Rc::new(PathPayload { data, style })))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

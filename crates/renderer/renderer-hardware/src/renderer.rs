@@ -136,6 +136,12 @@ fn return_pooled_texture(
     }
 }
 
+// Round n up to the nearest multiple of 64 so pool textures are reused across subpixel-layout variations that produce slightly different exact dimensions.
+fn bucket_size(n: u32) -> u32 {
+    const B: u32 = 64;
+    n.div_ceil(B) * B
+}
+
 enum DrawStep {
     RectBatch {
         start: u32,
@@ -1091,6 +1097,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     [0.0, 0.0, self.width as f32, self.height as f32],
                     1.0,
                     0.0,
+                    [1.0, 1.0],
                 );
                 let mut encoder =
                     self.device
@@ -1134,6 +1141,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         } else {
             None
         };
+        // compute_dirty_rect now returns the changed regions as disjoint rects; the hardware path uses a single scissor, so collapse them into their union here.
         let dirty_scissor: Option<Rect> =
             if clear_color.is_none() && scroll_blit.is_none() && !self.prev_commands.is_empty() {
                 renderer_core::dirty::compute_dirty_rect(
@@ -1141,6 +1149,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     &self.prev_commands,
                     renderer_core::culling::command_visual_rect,
                 )
+                .and_then(|rects| rects.into_iter().reduce(union_rects))
             } else {
                 None
             };
@@ -1244,6 +1253,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             &p.text,
                             shadow_rect,
                             &shadow_style,
+                            self.scale_factor,
                             &mut self.pending_shadow_instances,
                         );
                         let instance_end = self.pending_shadow_instances.len() as u32;
@@ -1272,6 +1282,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &p.text,
                         translated,
                         &p.style,
+                        self.scale_factor,
                         &mut self.pending_text_instances,
                     );
                 }
@@ -1485,26 +1496,34 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let oy = rect.y.floor().max(0.0);
                         let tex_w = (rect.width.ceil() as u32).max(1).min(self.width.max(1));
                         let tex_h = (rect.height.ceil() as u32).max(1).min(self.height.max(1));
+                        let bucket_w = bucket_size(tex_w);
+                        let bucket_h = bucket_size(tex_h);
                         let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
                             if let Some(pos) = self
                                 .layer_texture_pool
                                 .iter()
-                                .position(|(_, _, _, _, pw, ph)| *pw == tex_w && *ph == tex_h)
+                                .position(|(_, _, _, _, pw, ph)| *pw == bucket_w && *ph == bucket_h)
                             {
                                 let (mt, mv, rt, rv, _, _) = self.layer_texture_pool.remove(pos);
                                 (mt, mv, rt, rv)
                             } else {
                                 self.layer_pipeline.create_layer_textures(
                                     &self.device,
-                                    tex_w,
-                                    tex_h,
+                                    bucket_w,
+                                    bucket_h,
                                 )
                             };
                         let layer_vp = Viewport {
-                            size: [tex_w as f32, tex_h as f32],
+                            // Use bucket dimensions so NDC 1.0 maps to pixel bucket_w/h;
+                            // content then fills only the first tex_w/h pixels and uv_scale clips correctly.
+                            size: [bucket_w as f32, bucket_h as f32],
                             offset: [ox, oy],
                         };
                         let layer_vp_bg = self.take_layer_viewport_bg(layer_vp);
+                        let uv_scale = [
+                            tex_w as f32 / bucket_w as f32,
+                            tex_h as f32 / bucket_h as f32,
+                        ];
                         // composite_bg borrows resolve_view before it moves into BeginLayer
                         let composite_bg = self.composite_pipeline.create_bind_group(
                             &self.device,
@@ -1512,6 +1531,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             [ox, oy, tex_w as f32, tex_h as f32],
                             1.0,
                             radius.top_left,
+                            uv_scale,
                         );
                         self.pending_steps.push(DrawStep::BeginLayer {
                             msaa_texture,
@@ -1519,8 +1539,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             resolve_texture,
                             resolve_view,
                             viewport_bind_group: layer_vp_bg,
-                            width: tex_w,
-                            height: tex_h,
+                            width: bucket_w,
+                            height: bucket_h,
                             offset_x: ox,
                             offset_y: oy,
                             backdrop_blur: 0.0,
@@ -1595,26 +1615,34 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     .map_or(footprint, |b| union_rects(b, footprint)),
                             );
                         }
+                        let bucket_w = bucket_size(tex_w);
+                        let bucket_h = bucket_size(tex_h);
                         let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
                             if let Some(pos) = self
                                 .layer_texture_pool
                                 .iter()
-                                .position(|(_, _, _, _, pw, ph)| *pw == tex_w && *ph == tex_h)
+                                .position(|(_, _, _, _, pw, ph)| *pw == bucket_w && *ph == bucket_h)
                             {
                                 let (mt, mv, rt, rv, _, _) = self.layer_texture_pool.remove(pos);
                                 (mt, mv, rt, rv)
                             } else {
                                 self.layer_pipeline.create_layer_textures(
                                     &self.device,
-                                    tex_w,
-                                    tex_h,
+                                    bucket_w,
+                                    bucket_h,
                                 )
                             };
                         let layer_vp = Viewport {
-                            size: [tex_w as f32, tex_h as f32],
+                            // Use bucket dimensions so NDC 1.0 maps to pixel bucket_w/h;
+                            // content then fills only the first tex_w/h pixels and uv_scale clips correctly.
+                            size: [bucket_w as f32, bucket_h as f32],
                             offset: [offset_x, offset_y],
                         };
                         let layer_vp_bg = self.take_layer_viewport_bg(layer_vp);
+                        let uv_scale = [
+                            tex_w as f32 / bucket_w as f32,
+                            tex_h as f32 / bucket_h as f32,
+                        ];
                         // Composite bind group uses window-absolute dest rect; parent viewport (set 0) converts it to NDC.
                         let composite_bg = self.composite_pipeline.create_bind_group(
                             &self.device,
@@ -1622,6 +1650,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             [offset_x, offset_y, tex_w as f32, tex_h as f32],
                             accum.opacity,
                             0.0,
+                            uv_scale,
                         );
                         self.pending_steps.insert(
                             accum.begin_step_idx,
@@ -1631,8 +1660,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 resolve_texture,
                                 resolve_view,
                                 viewport_bind_group: layer_vp_bg,
-                                width: tex_w,
-                                height: tex_h,
+                                width: bucket_w,
+                                height: bucket_h,
                                 offset_x,
                                 offset_y,
                                 backdrop_blur: accum.backdrop_blur,
@@ -1929,12 +1958,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     };
 
                     if let Some((_, cached_view)) = self.shadow_resolved_cache.get(&key) {
+                        let cbw = bucket_size(op.tex_w);
+                        let cbh = bucket_size(op.tex_h);
                         let bg = self.composite_pipeline.create_bind_group(
                             &self.device,
                             cached_view,
                             op.dest,
                             1.0,
                             0.0,
+                            [op.tex_w as f32 / cbw as f32, op.tex_h as f32 / cbh as f32],
                         );
                         text_results.push(Some(bg));
                         if let Some(pos) = self
@@ -1948,23 +1980,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         continue;
                     }
 
+                    let cap_bucket_w = bucket_size(op.tex_w);
+                    let cap_bucket_h = bucket_size(op.tex_h);
                     let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
                         if let Some(pos) = self
                             .shadow_capture_pool
                             .iter()
-                            .position(|(_, _, _, _, w, h)| *w == op.tex_w && *h == op.tex_h)
+                            .position(|(_, _, _, _, w, h)| *w == cap_bucket_w && *h == cap_bucket_h)
                         {
                             let (mt, mv, rt, rv, _, _) = self.shadow_capture_pool.remove(pos);
                             (mt, mv, rt, rv)
                         } else {
                             self.layer_pipeline.create_layer_textures(
                                 &self.device,
-                                op.tex_w,
-                                op.tex_h,
+                                cap_bucket_w,
+                                cap_bucket_h,
                             )
                         };
 
-                    let vp_data: [f32; 4] = [op.tex_w as f32, op.tex_h as f32, 0.0, 0.0];
+                    // Use bucket dimensions: vertices are local to the shadow texture (0-based),
+                    // so size must match the physical texture dimensions, not the logical ones.
+                    let vp_data: [f32; 4] = [cap_bucket_w as f32, cap_bucket_h as f32, 0.0, 0.0];
                     let vp_buf =
                         self.device
                             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2000,7 +2036,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 depth_slice: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                    store: wgpu::StoreOp::Store,
+                                    store: if self.msaa_samples > 1 && cap_resolve_opt.is_some() {
+                                        wgpu::StoreOp::Discard
+                                    } else {
+                                        wgpu::StoreOp::Store
+                                    },
                                 },
                             })],
                             depth_stencil_attachment: None,
@@ -2019,16 +2059,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &self.device,
                         &mut encoder,
                         &cap_resolve_view,
-                        op.tex_w,
-                        op.tex_h,
+                        cap_bucket_w,
+                        cap_bucket_h,
                         op.sigma,
                     );
+                    let shadow_uv_scale = [
+                        op.tex_w as f32 / cap_bucket_w as f32,
+                        op.tex_h as f32 / cap_bucket_h as f32,
+                    ];
                     let bg = self.composite_pipeline.create_bind_group(
                         &self.device,
                         &blurred_view,
                         op.dest,
                         1.0,
                         0.0,
+                        shadow_uv_scale,
                     );
                     text_results.push(Some(bg));
                     if self.shadow_resolved_cache.len() >= 128 {
@@ -2044,8 +2089,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         cap_msaa_view,
                         cap_resolve_texture,
                         cap_resolve_view,
-                        op.tex_w,
-                        op.tex_h,
+                        cap_bucket_w,
+                        cap_bucket_h,
                     ));
                 }
             }
@@ -2076,12 +2121,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     };
 
                     if let Some((_, cached_view)) = self.path_shadow_resolved_cache.get(&path_key) {
+                        let cbw = bucket_size(op.tex_w);
+                        let cbh = bucket_size(op.tex_h);
                         let bg = self.composite_pipeline.create_bind_group(
                             &self.device,
                             cached_view,
                             op.dest,
                             1.0,
                             0.0,
+                            [op.tex_w as f32 / cbw as f32, op.tex_h as f32 / cbh as f32],
                         );
                         path_results.push(Some(bg));
                         if let Some(pos) = self
@@ -2095,23 +2143,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         continue;
                     }
 
+                    let cap_bucket_w = bucket_size(op.tex_w);
+                    let cap_bucket_h = bucket_size(op.tex_h);
                     let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
                         if let Some(pos) = self
                             .shadow_capture_pool
                             .iter()
-                            .position(|(_, _, _, _, w, h)| *w == op.tex_w && *h == op.tex_h)
+                            .position(|(_, _, _, _, w, h)| *w == cap_bucket_w && *h == cap_bucket_h)
                         {
                             let (mt, mv, rt, rv, _, _) = self.shadow_capture_pool.remove(pos);
                             (mt, mv, rt, rv)
                         } else {
                             self.layer_pipeline.create_layer_textures(
                                 &self.device,
-                                op.tex_w,
-                                op.tex_h,
+                                cap_bucket_w,
+                                cap_bucket_h,
                             )
                         };
 
-                    let vp_data: [f32; 4] = [op.tex_w as f32, op.tex_h as f32, 0.0, 0.0];
+                    // Use bucket dimensions: vertices are local to the shadow texture (0-based),
+                    // so size must match the physical texture dimensions, not the logical ones.
+                    let vp_data: [f32; 4] = [cap_bucket_w as f32, cap_bucket_h as f32, 0.0, 0.0];
                     let vp_buf =
                         self.device
                             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2147,7 +2199,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 depth_slice: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                    store: wgpu::StoreOp::Store,
+                                    store: if self.msaa_samples > 1 && cap_resolve_opt.is_some() {
+                                        wgpu::StoreOp::Discard
+                                    } else {
+                                        wgpu::StoreOp::Store
+                                    },
                                 },
                             })],
                             depth_stencil_attachment: None,
@@ -2167,16 +2223,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &self.device,
                         &mut encoder,
                         &cap_resolve_view,
-                        op.tex_w,
-                        op.tex_h,
+                        cap_bucket_w,
+                        cap_bucket_h,
                         op.sigma,
                     );
+                    let shadow_uv_scale = [
+                        op.tex_w as f32 / cap_bucket_w as f32,
+                        op.tex_h as f32 / cap_bucket_h as f32,
+                    ];
                     let bg = self.composite_pipeline.create_bind_group(
                         &self.device,
                         &blurred_view,
                         op.dest,
                         1.0,
                         0.0,
+                        shadow_uv_scale,
                     );
                     path_results.push(Some(bg));
                     if self.path_shadow_resolved_cache.len() >= 128 {
@@ -2193,8 +2254,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         cap_msaa_view,
                         cap_resolve_texture,
                         cap_resolve_view,
-                        op.tex_w,
-                        op.tex_h,
+                        cap_bucket_w,
+                        cap_bucket_h,
                     ));
                 }
             }
@@ -2441,7 +2502,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             depth_slice: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
+                                store: if resolve_view_opt.is_some() {
+                                    wgpu::StoreOp::Discard // MSAA samples not needed after inline resolve
+                                } else {
+                                    wgpu::StoreOp::Store
+                                },
                             },
                         })],
                         depth_stencil_attachment: None,
@@ -2645,6 +2710,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     depth_slice: None,
                                     ops: wgpu::Operations {
                                         load: wgpu::LoadOp::Load,
+                                        // Store: the parent MSAA is still needed after this resolve
+                                        // so EndLayerComposite can load it to composite the layer on top.
+                                        // Discard here caused a black screen on immediate-mode GPUs (desktop).
                                         store: wgpu::StoreOp::Store,
                                     },
                                 })],
@@ -2733,6 +2801,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             [offset_x, offset_y, crop_w as f32, crop_h as f32],
                             1.0,
                             0.0,
+                            [1.0, 1.0],
                         );
                         {
                             let backdrop_target = if self.msaa_samples > 1 {
@@ -2794,7 +2863,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 depth_slice: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Load,
-                                    store: wgpu::StoreOp::Store,
+                                    store: wgpu::StoreOp::Discard, // MSAA samples not needed after resolve
                                 },
                             })],
                             depth_stencil_attachment: None,
@@ -2882,6 +2951,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 [0.0, 0.0, self.width as f32, self.height as f32],
                 1.0,
                 0.0,
+                [1.0, 1.0],
             );
             {
                 let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

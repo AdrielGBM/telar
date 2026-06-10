@@ -114,6 +114,7 @@ pub(crate) fn new_text_shadow_cache(budget_bytes: usize) -> TextShadowCache {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_text(
     pixmap: &mut tiny_skia::Pixmap,
     shaper: &mut renderer_text::TextShaper,
@@ -126,6 +127,10 @@ pub(crate) fn draw_text(
     blur_scratch: &mut Vec<u8>,
     text_pixmap_cache: &mut lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     text_shadow_cache: &mut TextShadowCache,
+    pending_text_shadows: &mut std::collections::HashMap<
+        TextShadowCacheKey,
+        std::sync::mpsc::Receiver<tiny_skia::Pixmap>,
+    >,
 ) {
     if let Some(shadow) = style.shadow {
         let (arc, tex_w, tex_h) = shaper.rasterize_alpha(text, rect, style);
@@ -159,9 +164,36 @@ pub(crate) fn draw_text(
                 let tmp_h = tex_h + 2 * padding as u32 + 2;
                 let shadow_color = shadow.color;
 
-                crate::primitives::blit_cached_shadow(
+                // The shadow shape is the tinted alpha texture; it only needs the (Send) alpha buffer and Copy params, so large text shadows can be blurred on a background thread. The async closure owns a clone of the alpha Arc.
+                let draw_text_shadow = move |tmp_pmap: &mut tiny_skia::Pixmap, alpha: &[u8]| {
+                    let mut shadow_pixels = alpha.to_vec();
+                    tint_premultiplied(&mut shadow_pixels, shadow_color);
+                    if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
+                        if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size) {
+                            tmp_pmap.draw_pixmap(
+                                padding,
+                                padding,
+                                src.as_ref(),
+                                &tiny_skia::PixmapPaint {
+                                    blend_mode: tiny_skia::BlendMode::SourceOver,
+                                    ..Default::default()
+                                },
+                                tiny_skia::Transform::identity(),
+                                None,
+                            );
+                        }
+                    }
+                };
+
+                let async_alpha = arc.clone();
+                let draw_async = move |tmp_pmap: &mut tiny_skia::Pixmap| {
+                    draw_text_shadow(tmp_pmap, &async_alpha);
+                };
+
+                crate::primitives::blit_cached_shadow_async(
                     pixmap,
                     text_shadow_cache,
+                    pending_text_shadows,
                     shadow_key,
                     rect.x as i32 + shadow.offset_x as i32 - padding,
                     rect.y as i32 + shadow.offset_y as i32 - padding,
@@ -171,25 +203,8 @@ pub(crate) fn draw_text(
                     blur_scratch,
                     transform,
                     clip,
-                    |tmp_pmap| {
-                        let mut shadow_pixels = arc.to_vec();
-                        tint_premultiplied(&mut shadow_pixels, shadow_color);
-                        if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
-                            if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size) {
-                                tmp_pmap.draw_pixmap(
-                                    padding,
-                                    padding,
-                                    src.as_ref(),
-                                    &tiny_skia::PixmapPaint {
-                                        blend_mode: tiny_skia::BlendMode::SourceOver,
-                                        ..Default::default()
-                                    },
-                                    tiny_skia::Transform::identity(),
-                                    None,
-                                );
-                            }
-                        }
-                    },
+                    |tmp_pmap| draw_text_shadow(tmp_pmap, &arc),
+                    draw_async,
                 );
             }
 

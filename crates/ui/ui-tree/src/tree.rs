@@ -158,7 +158,7 @@ mod tests {
     use crate::render_node::RenderNode;
 
     fn sample_rect(x: f32) -> DrawCommand {
-        DrawCommand::Rect(Box::new(RectPayload {
+        DrawCommand::Rect(Rc::new(RectPayload {
             rect: Rect::new(x, 0.0, 10.0, 10.0),
             style: RectStyle::default().with_fill(Color::BLACK),
         }))

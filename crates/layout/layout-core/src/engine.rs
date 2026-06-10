@@ -1,4 +1,4 @@
-use taffy::{TaffyTree, TraversePartialTree};
+use taffy::{LengthPercentage, TaffyTree, TraversePartialTree};
 
 use crate::error::LayoutError;
 use crate::style::{AvailableSpace, LayoutStyle};
@@ -69,6 +69,48 @@ impl LayoutEngine {
             layout.size.width,
             layout.size.height,
         ))
+    }
+
+    pub fn get_content_size(&self, node: NodeId) -> Option<taffy::geometry::Size<f32>> {
+        self.tree.layout(node).ok().map(|l| l.content_size)
+    }
+
+    pub fn is_fixed_px_leaf(&self, node: NodeId) -> Option<(f32, f32)> {
+        let style = self.tree.style(node).ok()?;
+        if self.tree.child_count(node) > 0 {
+            return None;
+        }
+        let w = style.size.width.into_option()?;
+        let h = style.size.height.into_option()?;
+        let zero_lp = LengthPercentage::length(0.0);
+        let zero_rect = taffy::geometry::Rect {
+            left: zero_lp,
+            right: zero_lp,
+            top: zero_lp,
+            bottom: zero_lp,
+        };
+        if style.padding != zero_rect {
+            return None;
+        }
+        if style.border != zero_rect {
+            return None;
+        }
+        if style.flex_grow > 0.0 {
+            return None;
+        }
+        Some((w, h))
+    }
+
+    pub fn collect_dirty_nodes(&self, root: NodeId, out: &mut Vec<NodeId>) {
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if self.is_dirty(node) {
+                out.push(node);
+            }
+            for child in self.tree.child_ids(node) {
+                stack.push(child);
+            }
+        }
     }
 
     pub fn walk<F>(&self, root: NodeId, f: &mut F) -> Result<(), LayoutError>

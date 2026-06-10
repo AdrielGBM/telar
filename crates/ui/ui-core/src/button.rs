@@ -77,11 +77,11 @@ impl Component for Button {
         };
 
         self.leaf.at_layout_position(RenderNode::group([
-            RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+            RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
                 rect: local,
                 style: rect_style,
             }))),
-            RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
+            RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
                 text: Rc::clone(&self.label),
                 rect: local,
                 style: style.text,

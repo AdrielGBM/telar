@@ -1,10 +1,60 @@
 use geometry_core::Rect;
+use smallvec::{SmallVec, smallvec};
 
 use crate::{
     DrawCommand, culling,
     draw_state::{IDENTITY_MATRIX, compose_matrix},
     geometry::union_rects,
 };
+
+/// Inline capacity for the dirty-rect list. Beyond this the rects are collapsed into a single union (see MAX_DIRTY_RECTS).
+pub type DirtyRects = SmallVec<[Rect; 8]>;
+
+/// Above this count we stop tracking individual disjoint regions and fall back to a single union rect, keeping the per-frame work bounded.
+const MAX_DIRTY_RECTS: usize = 4;
+
+/// Two rects that touch or overlap (within `slop` pixels) should be merged so the dirty list stays small and the skip test stays cheap.
+fn rects_adjacent_or_overlapping(a: Rect, b: Rect, slop: f32) -> bool {
+    a.x <= b.x + b.width + slop
+        && b.x <= a.x + a.width + slop
+        && a.y <= b.y + b.height + slop
+        && b.y <= a.y + a.height + slop
+}
+
+// Merges `r` into the accumulated dirty list. If `r` is adjacent to or overlaps an existing rect, the two are unioned (which can cascade-merge further); otherwise `r` is added separately. Once the list would exceed MAX_DIRTY_RECTS distinct regions it collapses to a single union to bound growth.
+fn push_dirty_rect(rects: &mut DirtyRects, r: Rect) {
+    // Merge slop in pixels: regions separated by a thin gap are cheaper to repaint as one than to track separately.
+    const SLOP: f32 = 1.0;
+    if let Some(idx) = rects
+        .iter()
+        .position(|e| rects_adjacent_or_overlapping(*e, r, SLOP))
+    {
+        let mut merged = union_rects(rects[idx], r);
+        rects.swap_remove(idx);
+        // The merged rect may now touch other entries; keep folding until it is disjoint from all of them.
+        let mut i = 0;
+        while i < rects.len() {
+            if rects_adjacent_or_overlapping(rects[i], merged, SLOP) {
+                merged = union_rects(rects[i], merged);
+                rects.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+        rects.push(merged);
+    } else {
+        rects.push(r);
+    }
+
+    if rects.len() > MAX_DIRTY_RECTS {
+        let union = rects
+            .iter()
+            .copied()
+            .reduce(union_rects)
+            .expect("non-empty");
+        *rects = smallvec![union];
+    }
+}
 
 /// When a pure axis-aligned scroll is detected, this describes what changed.
 pub struct ScrollBlit {
@@ -28,17 +78,17 @@ fn matrix_as_translation(m: &[f32; 6]) -> Option<(f32, f32)> {
     }
 }
 
-/// Compare two consecutive DrawCommand slices and return the union of regions that changed visually; returns None if a full re-render is required.
+/// Compare two consecutive DrawCommand slices and return the list of disjoint regions that changed visually; returns None if a full re-render is required. A `Some(vec)` where vec is non-empty enumerates the changed regions so the caller can skip a command only when it overlaps none of them.
 pub fn compute_dirty_rect(
     new_cmds: &[DrawCommand],
     old_cmds: &[DrawCommand],
     visual_rect: impl Fn(&DrawCommand, [f32; 6]) -> Option<Rect>,
-) -> Option<Rect> {
+) -> Option<DirtyRects> {
     if new_cmds.len() != old_cmds.len() {
         return None;
     }
 
-    let mut dirty: Option<Rect> = None;
+    let mut dirty: DirtyRects = SmallVec::new();
     let mut new_matrix_stack: Vec<[f32; 6]> = Vec::new();
     let mut old_matrix_stack: Vec<[f32; 6]> = Vec::new();
     let mut new_matrix = IDENTITY_MATRIX;
@@ -76,10 +126,10 @@ pub fn compute_dirty_rect(
                 return None;
             }
             if let Some(r) = visual_rect(new_cmd, new_matrix) {
-                dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
+                push_dirty_rect(&mut dirty, r);
             }
             if let Some(r) = visual_rect(old_cmd, old_matrix) {
-                dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
+                push_dirty_rect(&mut dirty, r);
             }
         } else {
             // Content is identical but the on-screen position may have changed because a parent PushMatrix changed. Capture both rects so that old pixels are cleared and the element is re-drawn at the new position.
@@ -87,16 +137,17 @@ pub fn compute_dirty_rect(
             let old_r = visual_rect(old_cmd, old_matrix);
             if new_r != old_r {
                 if let Some(r) = new_r {
-                    dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
+                    push_dirty_rect(&mut dirty, r);
                 }
                 if let Some(r) = old_r {
-                    dirty = Some(dirty.map_or(r, |d| union_rects(d, r)));
+                    push_dirty_rect(&mut dirty, r);
                 }
             }
         }
     }
 
-    dirty
+    // Nothing changed visually: report None (same as before) rather than an empty list, so the caller's "no dirty region" path is preserved.
+    if dirty.is_empty() { None } else { Some(dirty) }
 }
 
 /// Detect whether the only change between two command slices is a pure axis-aligned (X-only or Y-only) translation of scrollable content within a fixed clip.
@@ -281,9 +332,10 @@ mod tests {
     use super::*;
     use crate::{BorderRadius, DrawCommand, style::RectStyle};
     use geometry_core::Rect;
+    use std::rc::Rc;
 
     fn rect_cmd(x: f32, y: f32, w: f32, h: f32) -> DrawCommand {
-        DrawCommand::Rect(Box::new(crate::RectPayload {
+        DrawCommand::Rect(Rc::new(crate::RectPayload {
             rect: Rect::new(x, y, w, h),
             style: RectStyle::default(),
         }))
@@ -306,10 +358,30 @@ mod tests {
     fn compute_dirty_rect_single_change() {
         let old = vec![rect_cmd(0.0, 0.0, 10.0, 10.0)];
         let new = vec![rect_cmd(5.0, 0.0, 10.0, 10.0)];
-        let dirty = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
-        // must cover both positions
+        let rects = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
+        // overlapping old/new positions merge into a single region covering both
+        let dirty = rects.iter().copied().reduce(union_rects).unwrap();
         assert!(dirty.x <= 0.0);
         assert!(dirty.x + dirty.width >= 15.0);
+    }
+
+    #[test]
+    fn compute_dirty_rect_disjoint_changes_stay_separate() {
+        // A change at the top-left and a far-away change at the bottom-right must remain two disjoint regions, not collapse into a viewport-spanning union.
+        let old = vec![
+            rect_cmd(0.0, 0.0, 10.0, 10.0),
+            rect_cmd(500.0, 500.0, 10.0, 10.0),
+        ];
+        let new = vec![
+            rect_cmd(0.0, 0.0, 20.0, 20.0),
+            rect_cmd(500.0, 500.0, 20.0, 20.0),
+        ];
+        let rects = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
+        assert_eq!(rects.len(), 2);
+        // Neither region should span the gap between the two corners.
+        for r in &rects {
+            assert!(r.width < 100.0 && r.height < 100.0);
+        }
     }
 
     #[test]
@@ -328,7 +400,8 @@ mod tests {
             rect_cmd(0.0, 0.0, 10.0, 10.0),
             DrawCommand::PopMatrix,
         ];
-        let dirty = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
+        let rects = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
+        let dirty = rects.iter().copied().reduce(union_rects).unwrap();
         // must cover both positions
         assert!(dirty.x <= 0.0);
         assert!(dirty.y <= 0.0);

@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+use std::sync::mpsc;
+
 use geometry_core::Rect;
 use renderer_core::{BorderRadius, LineCap, LineJoin, RectStyle, Shadow};
 
 use crate::primitives::fill_to_paint;
-use crate::primitives::image::ShadowCache;
+use crate::primitives::image::{ShadowCache, ShadowCacheKey};
 
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
     let x = rect.x;
@@ -61,6 +64,7 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     pb.finish()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_rect_shadow(
     pixmap: &mut tiny_skia::Pixmap,
     rect: Rect,
@@ -69,6 +73,7 @@ fn draw_rect_shadow(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
     shadow_cache: &mut ShadowCache,
+    pending_shadows: &mut HashMap<ShadowCacheKey, mpsc::Receiver<tiny_skia::Pixmap>>,
     blur_scratch: &mut Vec<u8>,
 ) {
     let sigma = renderer_core::blur_sigma(shadow.blur_radius);
@@ -118,9 +123,27 @@ fn draw_rect_shadow(
         shadow_rect.height,
     );
 
-    crate::primitives::blit_cached_shadow(
+    // The shadow shape depends only on Copy data (rect dimensions, radius, color), so the same closure body can run either inline or on a background worker thread for large shadows.
+    let shadow_color = shadow.color;
+    let draw_shadow = move |tmp_pmap: &mut tiny_skia::Pixmap| {
+        if let Some(path) = build_rect_path(local_rect, shadow_radius) {
+            let mut paint = tiny_skia::Paint::default();
+            paint.set_color(crate::primitives::to_skia_color(shadow_color));
+            paint.anti_alias = true;
+            tmp_pmap.fill_path(
+                &path,
+                &paint,
+                tiny_skia::FillRule::Winding,
+                tiny_skia::Transform::identity(),
+                None,
+            );
+        }
+    };
+
+    crate::primitives::blit_cached_shadow_async(
         pixmap,
         shadow_cache,
+        pending_shadows,
         cache_key,
         tmp_x,
         tmp_y,
@@ -130,23 +153,12 @@ fn draw_rect_shadow(
         blur_scratch,
         transform,
         clip,
-        |tmp_pmap| {
-            if let Some(path) = build_rect_path(local_rect, shadow_radius) {
-                let mut paint = tiny_skia::Paint::default();
-                paint.set_color(crate::primitives::to_skia_color(shadow.color));
-                paint.anti_alias = true;
-                tmp_pmap.fill_path(
-                    &path,
-                    &paint,
-                    tiny_skia::FillRule::Winding,
-                    tiny_skia::Transform::identity(),
-                    None,
-                );
-            }
-        },
+        draw_shadow,
+        draw_shadow,
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_rect(
     pixmap: &mut tiny_skia::Pixmap,
     rect: Rect,
@@ -154,6 +166,7 @@ pub(crate) fn draw_rect(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
     shadow_cache: &mut ShadowCache,
+    pending_shadows: &mut HashMap<ShadowCacheKey, mpsc::Receiver<tiny_skia::Pixmap>>,
     blur_scratch: &mut Vec<u8>,
 ) {
     if let Some(shadow) = style.shadow {
@@ -165,6 +178,7 @@ pub(crate) fn draw_rect(
             transform,
             clip,
             shadow_cache,
+            pending_shadows,
             blur_scratch,
         );
     }

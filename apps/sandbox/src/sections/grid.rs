@@ -18,7 +18,7 @@ pub fn grid_cell(
         let w = rect.width;
         let h = rect.height;
         RenderNode::group([
-            RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+            RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
                 rect: Rect {
                     x: 0.0,
                     y: 0.0,
@@ -32,8 +32,8 @@ pub fn grid_cell(
                     radius: BorderRadius::all(6.0),
                 },
             }))),
-            RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                text: Rc::from(label),
+            RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+                text: crate::sections::intern_static_str(label),
                 rect: Rect {
                     x: 0.0,
                     y: 0.0,
@@ -76,7 +76,7 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
             let h = rect.height;
             let t = use_theme::<SandboxTheme>();
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Box::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -90,8 +90,8 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
                         radius: BorderRadius::all(6.0),
                     },
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
-                    text: Rc::from("header — span 3"),
+                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+                    text: crate::static_rc_str!("header — span 3"),
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -149,8 +149,8 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
     let side_label = Canvas::new(ctx, LayoutStyle::new().width(180.0), |rect| {
         let w = rect.width;
         let h = rect.height;
-        RenderNode::Primitive(DrawCommand::Text(Box::new(TextPayload {
-            text: Rc::from("Grid nested\ninside flex →"),
+        RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+            text: crate::static_rc_str!("Grid nested\ninside flex →"),
             rect: Rect {
                 x: 0.0,
                 y: 0.0,

@@ -5,9 +5,9 @@ use cosmic_text::{
 };
 use etagere::{AllocId, BucketedAtlasAllocator, size2};
 use geometry_core::Rect;
+use lru::LruCache;
 use renderer_core::{Color, TextStyle, premultiply_rgba};
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHasher};
-use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -17,6 +17,7 @@ pub struct ShapingCacheKey {
     pub text_hash: u64,
     pub font_size_bits: u32,
     pub width: u32,
+    pub scale_factor_bits: u32,
     // height removed — shaping only depends on wrap width, not container height
 }
 
@@ -76,8 +77,6 @@ pub struct AtlasEntry {
     pub placement_left: i32,
     pub placement_top: i32,
     pub is_color_glyph: bool,
-    alloc_id: AllocId,
-    lru_gen: u64,
 }
 
 pub struct GlyphInfo {
@@ -94,8 +93,7 @@ pub struct GlyphAtlas {
     pub dirty_rects: Vec<[u32; 4]>,
     entries: FxHashMap<GlyphKey, AtlasEntry>,
     allocator: BucketedAtlasAllocator,
-    lru_queue: VecDeque<(GlyphKey, u64)>,
-    lru_counter: u64,
+    lru_cache: LruCache<GlyphKey, AllocId>,
 }
 
 impl GlyphAtlas {
@@ -105,8 +103,7 @@ impl GlyphAtlas {
             dirty_rects: Vec::new(),
             entries: FxHashMap::default(),
             allocator: BucketedAtlasAllocator::new(size2(ATLAS_SIZE as i32, ATLAS_SIZE as i32)),
-            lru_queue: VecDeque::new(),
-            lru_counter: 0,
+            lru_cache: LruCache::unbounded(),
         }
     }
 
@@ -136,8 +133,6 @@ impl GlyphAtlas {
             self.pixels[dst_start..dst_start + w as usize * 4].copy_from_slice(src);
         }
 
-        let stamp = self.lru_counter;
-        self.lru_counter += 1;
         let entry = AtlasEntry {
             uv_min: [ax as f32 / ATLAS_SIZE as f32, ay as f32 / ATLAS_SIZE as f32],
             uv_max: [
@@ -149,37 +144,25 @@ impl GlyphAtlas {
             placement_left,
             placement_top,
             is_color_glyph,
-            alloc_id,
-            lru_gen: stamp,
         };
         self.entries.insert(key, entry);
-        self.lru_queue.push_back((key, stamp));
+        self.lru_cache.put(key, alloc_id);
         self.dirty_rects.push([ax, ay, w, h]);
         Some(entry)
     }
 
     pub fn get_and_touch(&mut self, key: &GlyphKey) -> Option<AtlasEntry> {
-        let entry = self.entries.get_mut(key)?;
-        // Bump the generation stamp to mark this entry as recently used. The old queue entry
-        // (from insert) now carries a stale stamp, so evict_lru will skip it. We do NOT push
-        // a new queue entry here — the queue only grows on misses (inserts), not on hits.
-        self.lru_counter += 1;
-        entry.lru_gen = self.lru_counter;
-        Some(*entry)
+        // Promote to MRU position in O(1); if not present in lru_cache, entry doesn't exist.
+        self.lru_cache.get(key)?;
+        self.entries.get(key).copied()
     }
 
-    /// Evicts one LRU entry from the glyph atlas when it becomes full. Uses capacity-based LRU (evict when full) rather than a frame threshold, because atlas space is the binding constraint. Returns the key of the evicted glyph if successful.
+    /// Evicts one LRU entry from the glyph atlas when it becomes full. O(1) via lru_cache.pop_lru(). Returns the key of the evicted glyph if successful.
     fn evict_lru(&mut self) -> Option<GlyphKey> {
-        while let Some((key, stamp)) = self.lru_queue.pop_front() {
-            if let Some(entry) = self.entries.get(&key) {
-                if entry.lru_gen == stamp {
-                    self.allocator.deallocate(entry.alloc_id);
-                    self.entries.remove(&key);
-                    return Some(key);
-                }
-            }
-        }
-        None
+        let (key, alloc_id) = self.lru_cache.pop_lru()?;
+        self.allocator.deallocate(alloc_id);
+        self.entries.remove(&key);
+        Some(key)
     }
 }
 
@@ -324,6 +307,7 @@ impl TextShaper {
         text: &str,
         rect: Rect,
         style: &TextStyle,
+        scale_factor: f32,
         out: &mut Vec<GlyphInfo>,
     ) {
         out.clear();
@@ -344,6 +328,7 @@ impl TextShaper {
             text_hash: hash_text(text),
             font_size_bits: font_size.to_bits(),
             width,
+            scale_factor_bits: scale_factor.to_bits(),
         };
 
         let positions: std::sync::Arc<Vec<(CacheKey, i32, i32)>> =
@@ -354,7 +339,7 @@ impl TextShaper {
                 let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
                 for run in buffer.layout_runs() {
                     for glyph in run.glyphs.iter() {
-                        let physical = glyph.physical((0., run.line_y), 1.0);
+                        let physical = glyph.physical((0., run.line_y), scale_factor);
                         pos.push((physical.cache_key, physical.x, physical.y));
                     }
                 }
@@ -370,8 +355,10 @@ impl TextShaper {
             let glyph_key = GlyphKey { cache_key };
 
             if let Some(entry) = self.atlas.get_and_touch(&glyph_key) {
-                let screen_x = rect.x + px as f32 + entry.placement_left as f32;
-                let screen_y = rect.y + py as f32 - entry.placement_top as f32;
+                // px/py and placement offsets are in physical pixels; divide by scale_factor
+                // to get logical pixel screen coordinates expected by the viewport shader.
+                let screen_x = rect.x + (px as f32 + entry.placement_left as f32) / scale_factor;
+                let screen_y = rect.y + (py as f32 - entry.placement_top as f32) / scale_factor;
                 let glyph_color = if entry.is_color_glyph {
                     identity_tint
                 } else {
@@ -381,8 +368,8 @@ impl TextShaper {
                     dest_rect: [
                         screen_x,
                         screen_y,
-                        entry.glyph_width as f32,
-                        entry.glyph_height as f32,
+                        entry.glyph_width as f32 / scale_factor,
+                        entry.glyph_height as f32 / scale_factor,
                     ],
                     uv_min: entry.uv_min,
                     uv_max: entry.uv_max,
@@ -464,11 +451,16 @@ impl TextShaper {
                 }
             };
 
-            let screen_x = rect.x + px as f32 + pl as f32;
-            let screen_y = rect.y + py as f32 - pt as f32;
+            let screen_x = rect.x + (px as f32 + pl as f32) / scale_factor;
+            let screen_y = rect.y + (py as f32 - pt as f32) / scale_factor;
             let glyph_color = if is_color_glyph { identity_tint } else { tint };
             out.push(GlyphInfo {
-                dest_rect: [screen_x, screen_y, w as f32, h as f32],
+                dest_rect: [
+                    screen_x,
+                    screen_y,
+                    w as f32 / scale_factor,
+                    h as f32 / scale_factor,
+                ],
                 uv_min: entry.uv_min,
                 uv_max: entry.uv_max,
                 color: glyph_color,

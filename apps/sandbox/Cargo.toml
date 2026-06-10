@@ -8,6 +8,7 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 rsx = { workspace = true, features = ["runtime"] }
+rustc-hash = { workspace = true }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [package.metadata.android]

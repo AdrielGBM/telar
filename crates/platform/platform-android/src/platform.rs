@@ -27,6 +27,122 @@ unsafe fn try_set_frame_rate(window: *mut std::ffi::c_void, fps: f32) {
     unsafe { f(window, fps, 0) };
 }
 
+// AChoreographer is API 24+ (Android 7.0). Resolved at runtime via dlsym to avoid hard-linking failures on older NDK stubs or OEM variants.
+#[cfg(target_os = "android")]
+mod choreographer {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    // Opaque handle — AChoreographer is not meant to be constructed, only passed through.
+    #[repr(C)]
+    pub struct AChoreographer {
+        _opaque: [u8; 0],
+    }
+
+    pub type FrameCallbackFn =
+        unsafe extern "C" fn(frame_time_ns: i64, data: *mut core::ffi::c_void);
+
+    // Resolve AChoreographer_getInstance at runtime; returns null on pre-API-24 devices.
+    unsafe fn get_instance_fn() -> Option<unsafe extern "C" fn() -> *mut AChoreographer> {
+        unsafe extern "C" {
+            fn dlsym(
+                handle: *mut core::ffi::c_void,
+                symbol: *const core::ffi::c_char,
+            ) -> *mut core::ffi::c_void;
+        }
+        let sym = unsafe {
+            dlsym(
+                core::ptr::null_mut(),
+                b"AChoreographer_getInstance\0".as_ptr() as _,
+            )
+        };
+        if sym.is_null() {
+            None
+        } else {
+            Some(unsafe { core::mem::transmute(sym) })
+        }
+    }
+
+    // Resolve AChoreographer_postFrameCallback at runtime.
+    unsafe fn post_callback_fn()
+    -> Option<unsafe extern "C" fn(*mut AChoreographer, FrameCallbackFn, *mut core::ffi::c_void)>
+    {
+        unsafe extern "C" {
+            fn dlsym(
+                handle: *mut core::ffi::c_void,
+                symbol: *const core::ffi::c_char,
+            ) -> *mut core::ffi::c_void;
+        }
+        let sym = unsafe {
+            dlsym(
+                core::ptr::null_mut(),
+                b"AChoreographer_postFrameCallback\0".as_ptr() as _,
+            )
+        };
+        if sym.is_null() {
+            None
+        } else {
+            Some(unsafe { core::mem::transmute(sym) })
+        }
+    }
+
+    // The frame callback: wakes the event loop via the proxy pointer stored in `data`, then clears the pending flag so about_to_wait can re-register on the next animation request.
+    pub unsafe extern "C" fn frame_callback(_frame_time_ns: i64, data: *mut core::ffi::c_void) {
+        // data points to a VsyncCallbackData on the heap; we only borrow it here.
+        let cb_data = unsafe { &*(data as *const VsyncCallbackData) };
+        // Clear pending first so about_to_wait sees the frame was delivered.
+        cb_data.pending.store(false, Ordering::Release);
+        // Wake the winit event loop. Ignore errors — the loop may have already exited.
+        let _ = cb_data.proxy.send_event(());
+    }
+
+    // Heap-allocated state shared between the runner and the vsync callback. The pointer lives for the full duration of the AndroidRunner.
+    pub struct VsyncCallbackData {
+        pub pending: Arc<AtomicBool>,
+        pub proxy: winit::event_loop::EventLoopProxy<()>,
+    }
+
+    pub struct Choreographer {
+        // Cached instance pointer; valid for the lifetime of the Looper thread (i.e. the main thread).
+        instance: *mut AChoreographer,
+        // Stable heap allocation passed as `data` to every postFrameCallback call.
+        pub callback_data: Box<VsyncCallbackData>,
+    }
+
+    // The instance pointer is obtained on the main thread and only used there, so Send is safe here.
+    unsafe impl Send for Choreographer {}
+
+    impl Choreographer {
+        // Returns None if AChoreographer is not available on this device/API level.
+        pub fn new(
+            proxy: winit::event_loop::EventLoopProxy<()>,
+            pending: Arc<AtomicBool>,
+        ) -> Option<Self> {
+            let get_instance = unsafe { get_instance_fn()? };
+            let instance = unsafe { get_instance() };
+            if instance.is_null() {
+                return None;
+            }
+            Some(Self {
+                instance,
+                callback_data: Box::new(VsyncCallbackData { pending, proxy }),
+            })
+        }
+
+        // Post a single vsync callback. No-op if the symbols are unavailable.
+        pub fn request_vsync(&self) {
+            let post = match unsafe { post_callback_fn() } {
+                Some(f) => f,
+                None => return,
+            };
+            // Pass a raw pointer into the stable Box allocation; the Box outlives all callbacks.
+            let data_ptr =
+                self.callback_data.as_ref() as *const VsyncCallbackData as *mut core::ffi::c_void;
+            unsafe { post(self.instance, frame_callback, data_ptr) };
+        }
+    }
+}
+
 use winit::application::ApplicationHandler;
 use winit::event::{
     ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, StartCause, Touch, TouchPhase,
@@ -65,26 +181,52 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     cursor_pos: (f64, f64),
     // Last position of an active touch finger, used to emit Scrolled deltas from drag gestures.
     last_touch_pos: Option<(f64, f64, u64)>,
-    // True only on WaitUntil timer expiry; gates keepalive request_redraw() so it doesn't fire on every event queue drain.
-    timer_fired: bool,
+    #[cfg(target_os = "android")]
+    choreographer: Option<choreographer::Choreographer>,
+    #[cfg(target_os = "android")]
+    animation_pending: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
-impl<H: EventHandler<AndroidWindow>> ApplicationHandler for AndroidRunner<H> {
-    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
-        self.timer_fired = matches!(cause, StartCause::ResumeTimeReached { .. });
+impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H> {
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
         self.handler.new_events();
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if let Some(d) = self.handler.about_to_wait() {
-            if self.timer_fired {
-                if let Some(window) = &self.window {
-                    window.request_redraw();
+        if let Some(_d) = self.handler.about_to_wait() {
+            #[cfg(target_os = "android")]
+            {
+                // On Android, use Choreographer vsync callbacks instead of WaitUntil wall-clock timers. This aligns frame wakeups to vsync edges, eliminating jank at any refresh rate (60/90/120 Hz).
+                let already_pending = self
+                    .animation_pending
+                    .swap(true, std::sync::atomic::Ordering::AcqRel);
+                if !already_pending {
+                    if let Some(chore) = &self.choreographer {
+                        chore.request_vsync();
+                    } else if let Some(window) = &self.window {
+                        // Fallback when Choreographer is unavailable (pre-API-24): request an immediate redraw and rely on WaitUntil.
+                        window.request_redraw();
+                        event_loop.set_control_flow(ControlFlow::WaitUntil(
+                            std::time::Instant::now() + _d,
+                        ));
+                        return;
+                    }
                 }
+                event_loop.set_control_flow(ControlFlow::Wait);
             }
-            event_loop.set_control_flow(ControlFlow::WaitUntil(std::time::Instant::now() + d));
+            #[cfg(not(target_os = "android"))]
+            {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(std::time::Instant::now() + _d));
+            }
         } else {
             event_loop.set_control_flow(ControlFlow::Wait);
+        }
+    }
+
+    // about_to_wait handles frame scheduling; user_event fires when the vsync callback wakes the loop.
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: ()) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
         }
     }
 
@@ -345,6 +487,15 @@ impl Platform for AndroidPlatform {
         config: WindowConfig,
         handler: H,
     ) -> Result<(), PlatformError> {
+        #[cfg(target_os = "android")]
+        let animation_pending = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        #[cfg(target_os = "android")]
+        let choreographer = choreographer::Choreographer::new(
+            self.event_loop.create_proxy(),
+            animation_pending.clone(),
+        );
+
         let mut runner = AndroidRunner {
             handler,
             window: None,
@@ -353,7 +504,10 @@ impl Platform for AndroidPlatform {
             modifiers: platform_core::ModifiersState::default(),
             cursor_pos: (0.0, 0.0),
             last_touch_pos: None,
-            timer_fired: false,
+            #[cfg(target_os = "android")]
+            choreographer,
+            #[cfg(target_os = "android")]
+            animation_pending,
         };
         self.event_loop
             .run_app(&mut runner)

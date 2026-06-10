@@ -28,8 +28,8 @@ pub struct PathPayload {
 
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
-    Rect(Box<RectPayload>),
-    Text(Box<TextPayload>),
+    Rect(Rc<RectPayload>),
+    Text(Rc<TextPayload>),
     Image {
         data: Rc<ImageData>,
         rect: Rect,
@@ -40,7 +40,7 @@ pub enum DrawCommand {
         p2: Point,
         style: LineStyle,
     },
-    Path(Box<PathPayload>),
+    Path(Rc<PathPayload>),
     PushClip {
         rect: Rect,
         radius: BorderRadius,

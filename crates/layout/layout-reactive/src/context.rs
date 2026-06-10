@@ -100,6 +100,11 @@ impl WidgetCtx {
         if !self.engine.is_dirty(root) {
             return Ok(());
         }
+        let mut dirty_nodes = Vec::new();
+        self.engine.collect_dirty_nodes(root, &mut dirty_nodes);
+        if dirty_nodes.is_empty() {
+            return Ok(());
+        }
         #[cfg(debug_assertions)]
         {
             assert!(

@@ -84,13 +84,15 @@ pub fn flatten_view(
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use geometry_core::Rect;
     use renderer_core::{Color, RectPayload, RectStyle};
 
     use super::*;
 
     fn sample_rect() -> DrawCommand {
-        DrawCommand::Rect(Box::new(RectPayload {
+        DrawCommand::Rect(Rc::new(RectPayload {
             rect: Rect::new(0.0, 0.0, 10.0, 10.0),
             style: RectStyle::default().with_fill(Color::BLACK),
         }))

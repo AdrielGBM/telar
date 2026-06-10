@@ -8,8 +8,7 @@ struct CompositeParams {
     rect: vec4<f32>,
     alpha: f32,
     clip_radius: f32,
-    _pad0: f32,
-    _pad1: f32,
+    content_uv_scale: vec2<f32>,
 }
 
 fn sdf_rrect(p: vec2<f32>, half_size: vec2<f32>, r: f32) -> f32 {
@@ -49,7 +48,7 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(src_texture, src_sampler, in.uv);
+    let color = textureSample(src_texture, src_sampler, in.uv * params.content_uv_scale);
     var result = color * params.alpha;
     if params.clip_radius > 0.0 {
         let size = vec2<f32>(params.rect.z, params.rect.w);

@@ -18,7 +18,11 @@ pub fn expand_for_shadow(
     offset_x: f32,
     offset_y: f32,
 ) -> Rect {
-    let expand = blur_radius + spread;
+    // The shadow pixmap extends blur_padding = ceil(blur_radius * 1.5) + 1 pixels beyond
+    // the shape edge (matching the padding calculation in the software renderer).
+    // Using only blur_radius underestimates by ~0.5*blur_radius, leaving stale shadow
+    // pixels outside the dirty rect when shadows move.
+    let expand = (blur_radius * 1.5).ceil() + 1.0 + spread;
     let expanded = Rect::new(
         rect.x - expand,
         rect.y - expand,

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use geometry_core::Rect as Bounds;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
@@ -31,7 +33,7 @@ impl Component for RectView {
         let r = self.leaf.rect.get();
         let style = (self.style)();
         self.leaf
-            .at_layout_position(RenderNode::Primitive(DrawCommand::Rect(Box::new(
+            .at_layout_position(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
                 RectPayload {
                     rect: Bounds {
                         x: 0.0,
