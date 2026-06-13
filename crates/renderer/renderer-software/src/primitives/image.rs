@@ -1,5 +1,5 @@
 use std::num::NonZeroUsize;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use clru::{CLruCache, CLruCacheConfig, WeightScale};
 use geometry_core::Rect;
@@ -32,7 +32,7 @@ pub(crate) fn new_image_cache(budget_bytes: usize) -> ImageCache {
 
 pub(crate) fn draw_image(
     pixmap: &mut tiny_skia::Pixmap,
-    data: &Rc<ImageData>,
+    data: &Arc<ImageData>,
     cache: &mut ImageCache,
     rect: Rect,
     filter: ImageFilter,

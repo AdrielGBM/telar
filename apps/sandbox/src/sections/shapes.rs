@@ -5,7 +5,7 @@ use rsx::{
     Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
     use_theme,
 };
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub fn shape_card(
     ctx: &mut WidgetCtx,
@@ -18,7 +18,7 @@ pub fn shape_card(
         LayoutStyle::new().width(168.0).height(80.0),
         move |_| {
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -27,8 +27,8 @@ pub fn shape_card(
                     },
                     style: style_fn(),
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
-                    text: Rc::from(label),
+                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
+                    text: Arc::from(label),
                     rect: Rect {
                         x: 0.0,
                         y: 4.0,

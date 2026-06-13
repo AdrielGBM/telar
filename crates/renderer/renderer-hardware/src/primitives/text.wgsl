@@ -36,5 +36,7 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(atlas_texture, atlas_sampler, in.uv) * in.color;
+    let rgba = textureSample(atlas_texture, atlas_sampler, in.uv) * in.color;
+    // Premultiply alpha: pipeline uses PREMULTIPLIED_ALPHA_BLENDING, so src.rgb must already be multiplied by src.a.
+    return vec4(rgba.rgb * rgba.a, rgba.a);
 }

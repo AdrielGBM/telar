@@ -75,6 +75,16 @@ impl LayoutEngine {
         self.tree.layout(node).ok().map(|l| l.content_size)
     }
 
+    pub fn is_fixed_size_node(&self, node: NodeId) -> Option<(f32, f32)> {
+        let style = self.tree.style(node).ok()?;
+        let w = style.size.width.into_option()?;
+        let h = style.size.height.into_option()?;
+        if style.flex_grow > 0.0 {
+            return None;
+        }
+        Some((w, h))
+    }
+
     pub fn is_fixed_px_leaf(&self, node: NodeId) -> Option<(f32, f32)> {
         let style = self.tree.style(node).ok()?;
         if self.tree.child_count(node) > 0 {

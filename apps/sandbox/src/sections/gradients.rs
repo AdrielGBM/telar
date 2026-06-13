@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rsx::{
     BorderRadius, Canvas, Color, Component, DrawCommand, FillRule, Gradient, LayoutError, Paint,
@@ -27,7 +27,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
 
         draw_section_header(&mut children, w, "Gradients", card_border, muted);
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Linear — Rect"),
                 rect: Rect {
@@ -40,7 +40,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 0.0,
@@ -60,7 +60,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("horizontal"),
                 rect: Rect {
@@ -73,7 +73,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 184.0,
@@ -93,7 +93,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("vertical"),
                 rect: Rect {
@@ -106,7 +106,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 368.0,
@@ -126,7 +126,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("diagonal"),
                 rect: Rect {
@@ -139,7 +139,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 552.0,
@@ -159,7 +159,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("3 stops"),
                 rect: Rect {
@@ -172,7 +172,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Radial — Rect"),
                 rect: Rect {
@@ -185,7 +185,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 0.0,
@@ -205,7 +205,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("center burst"),
                 rect: Rect {
@@ -218,7 +218,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 184.0,
@@ -238,7 +238,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("tight radius"),
                 rect: Rect {
@@ -251,7 +251,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 368.0,
@@ -271,7 +271,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("3 stops"),
                 rect: Rect {
@@ -284,7 +284,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 552.0,
@@ -304,7 +304,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("off-center"),
                 rect: Rect {
@@ -317,7 +317,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Gradients — Path"),
                 rect: Rect {
@@ -330,7 +330,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let tri = Rc::new(
+        let tri = Arc::new(
             PathData::new()
                 .move_to(Point::new(75.0, 338.0))
                 .line_to(Point::new(150.0, 468.0))
@@ -356,7 +356,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("triangle linear"),
                 rect: Rect {
@@ -384,7 +384,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 star_path.line_to(p)
             };
         }
-        let star_path = Rc::new(star_path.close());
+        let star_path = Arc::new(star_path.close());
         children.push(
             Path::new(
                 {
@@ -404,7 +404,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("star radial"),
                 rect: Rect {
@@ -417,7 +417,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let petal = Rc::new(
+        let petal = Arc::new(
             PathData::new()
                 .move_to(Point::new(452.0, 338.0))
                 .cubic_to(
@@ -451,7 +451,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("petal linear 3-stop"),
                 rect: Rect {
@@ -464,7 +464,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let rings = Rc::new(
+        let rings = Arc::new(
             PathData::new()
                 .move_to(Point::new(576.0, 338.0))
                 .line_to(Point::new(736.0, 338.0))
@@ -496,7 +496,7 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("even-odd + linear"),
                 rect: Rect {

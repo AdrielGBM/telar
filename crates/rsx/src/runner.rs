@@ -26,6 +26,15 @@ use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use services_core::AppPathsProvider;
 use ui_core::ComponentList;
 
+struct HwFrameMsg {
+    w: u32,
+    h: u32,
+    sf: f32,
+    commands: Vec<renderer_core::DrawCommand>,
+    clear: Option<renderer_core::Color>,
+    at: std::time::Instant,
+}
+
 use rsx_devtools::{DevAction, DevPlugin};
 
 use crate::app::App;
@@ -62,6 +71,8 @@ where
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     _window: std::marker::PhantomData<W>,
+    render_tx: Option<std::sync::mpsc::SyncSender<HwFrameMsg>>,
+    render_join: Option<std::thread::JoinHandle<()>>,
     #[cfg(target_os = "android")]
     hint_session: Option<*mut std::ffi::c_void>,
     #[cfg(target_os = "android")]
@@ -76,21 +87,59 @@ where
     D: DevPlugin,
 {
     fn on_resume(&mut self, window: &W) -> bool {
+        let android = cfg!(target_os = "android");
         let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
-        match create_renderer(
-            self.backend,
-            window,
-            cache_path.as_deref(),
-            self.font_paths.clone(),
-            self.font_data.clone(),
-        ) {
-            Ok((renderer, is_hw)) => {
-                self.renderer = Some(renderer);
-                self.renderer_is_hardware = is_hw;
+        match self.backend {
+            RendererBackend::Software => {
+                let budget =
+                    build_sw_budget(self.font_paths.clone(), self.font_data.clone(), android);
+                match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
+                    Ok(r) => {
+                        self.renderer = Some(Box::new(r));
+                    }
+                    Err(e) => {
+                        tracing::error!("SW renderer failed: {e}");
+                        return false;
+                    }
+                }
             }
-            Err(e) => {
-                tracing::error!("Failed to initialize renderer: {e}");
-                return false;
+            RendererBackend::Hardware | RendererBackend::Auto => {
+                let font_config =
+                    build_hw_font_config(self.font_paths.clone(), self.font_data.clone(), android);
+                match HardwareRenderer::new(
+                    window.clone(),
+                    cache_path.as_deref(),
+                    android,
+                    font_config,
+                ) {
+                    Ok(hw) => {
+                        let (tx, join) = spawn_hw_render_thread(hw);
+                        self.render_tx = Some(tx);
+                        self.render_join = Some(join);
+                        self.renderer_is_hardware = true;
+                    }
+                    Err(e) if matches!(self.backend, RendererBackend::Auto) => {
+                        tracing::warn!("HW renderer unavailable ({e}), falling back to SW");
+                        let budget = build_sw_budget(
+                            self.font_paths.clone(),
+                            self.font_data.clone(),
+                            android,
+                        );
+                        match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
+                            Ok(r) => {
+                                self.renderer = Some(Box::new(r));
+                            }
+                            Err(e2) => {
+                                tracing::error!("SW fallback also failed: {e2}");
+                                return false;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("HW renderer failed: {e}");
+                        return false;
+                    }
+                }
             }
         }
         let sf = window.scale_factor() as f32;
@@ -218,11 +267,18 @@ where
                 }) {
                     Ok(new_renderer) => {
                         drop(self.renderer.take());
+                        // Drop the old render sender to signal the old render thread to exit, then wait for it.
+                        drop(self.render_tx.take());
+                        if let Some(j) = self.render_join.take() {
+                            let _ = j.join();
+                        }
                         #[cfg(target_os = "linux")]
                         unsafe {
                             libc::malloc_trim(0);
                         }
-                        self.renderer = Some(Box::new(new_renderer));
+                        let (tx, join) = spawn_hw_render_thread(new_renderer);
+                        self.render_tx = Some(tx);
+                        self.render_join = Some(join);
                         self.renderer_is_hardware = true;
                     }
                     Err(e) => tracing::error!("Background HW renderer creation failed: {e}"),
@@ -240,34 +296,58 @@ where
                 .backend
                 .unwrap_or_else(config::compile_time_backend);
             let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
-            // Drop old renderer before creating new one to avoid peak memory overlap
+            let android = cfg!(target_os = "android");
+            // Drop old renderer and render thread before creating new one to avoid peak memory overlap.
             drop(self.renderer.take());
+            drop(self.render_tx.take());
+            if let Some(j) = self.render_join.take() {
+                let _ = j.join();
+            }
             #[cfg(target_os = "linux")]
             unsafe {
                 libc::malloc_trim(0);
             }
-            match create_renderer(
-                self.backend,
-                window,
-                cache_path.as_deref(),
-                self.font_paths.clone(),
-                self.font_data.clone(),
-            ) {
-                Ok((renderer, is_hw)) => {
-                    self.renderer = Some(renderer);
-                    self.renderer_is_hardware = is_hw;
+            match self.backend {
+                RendererBackend::Software => {
+                    let budget =
+                        build_sw_budget(self.font_paths.clone(), self.font_data.clone(), android);
+                    match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
+                        Ok(r) => {
+                            self.renderer = Some(Box::new(r));
+                            self.renderer_is_hardware = false;
+                        }
+                        Err(e) => tracing::error!("Failed to switch to SW renderer: {e}"),
+                    }
                 }
-                Err(e) => tracing::error!("Failed to switch renderer: {e}"),
+                RendererBackend::Hardware | RendererBackend::Auto => {
+                    let font_config = build_hw_font_config(
+                        self.font_paths.clone(),
+                        self.font_data.clone(),
+                        android,
+                    );
+                    match HardwareRenderer::new(
+                        window.clone(),
+                        cache_path.as_deref(),
+                        android,
+                        font_config,
+                    ) {
+                        Ok(hw) => {
+                            let (tx, join) = spawn_hw_render_thread(hw);
+                            self.render_tx = Some(tx);
+                            self.render_join = Some(join);
+                            self.renderer_is_hardware = true;
+                        }
+                        Err(e) => tracing::error!("Failed to switch to HW renderer: {e}"),
+                    }
+                }
             }
         }
 
-        let Some(renderer) = &mut self.renderer else {
-            return;
-        };
-
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
-        // HW renderer always calls render_frame (cheap idle-blit fast path avoids 1-2s GPU wake-up); SW skips when nothing changed unless dev plugin requests keepalive.
-        let needs_keepalive = self.renderer_is_hardware || self.dev.keepalive_interval().is_some();
+        // HW render thread always receives frames (idle-blit avoids GPU wake-up); SW skips when nothing changed unless dev plugin requests keepalive.
+        let needs_keepalive = self.render_tx.is_some()
+            || self.renderer_is_hardware
+            || self.dev.keepalive_interval().is_some();
         if !tree_dirty && !needs_keepalive {
             return;
         }
@@ -289,6 +369,44 @@ where
             self.scale_factor,
             tree_dirty
         );
+
+        // HW render thread path: build commands and send to dedicated render thread; main thread returns immediately.
+        if let Some(tx) = &self.render_tx {
+            end_batch();
+            begin_batch();
+            let clear = self.app.clear_color();
+            let commands_ref = self.tree.as_ref().map(|t| t.commands());
+            let base_slice: &[renderer_core::DrawCommand] =
+                commands_ref.as_deref().map(|r| r.as_slice()).unwrap_or(&[]);
+            let logical_w = w as f32 / self.scale_factor;
+            let logical_h = h as f32 / self.scale_factor;
+            let frame_commands = self
+                .dev
+                .on_frame(base_slice, logical_w, logical_h, tree_dirty);
+            let commands: Vec<renderer_core::DrawCommand> = if self.scale_factor != 1.0 {
+                renderer_core::scale_commands(&frame_commands, self.scale_factor)
+                    .unwrap_or_default()
+            } else {
+                frame_commands.to_vec()
+            };
+            let msg = HwFrameMsg {
+                w,
+                h,
+                sf: self.scale_factor,
+                commands,
+                clear,
+                at: std::time::Instant::now(),
+            };
+            // Drop frame if render thread is busy; keeps the main thread responsive.
+            let _ = tx.try_send(msg);
+            return;
+        }
+
+        // SW path: renderer must be present to proceed.
+        let Some(renderer) = &mut self.renderer else {
+            return;
+        };
+
         #[cfg(target_os = "android")]
         {
             self.frame_start = std::time::Instant::now();
@@ -331,6 +449,11 @@ where
     }
 
     fn on_suspend(&mut self) {
+        // Drop the sender to signal the render thread to exit, then wait for it to finish.
+        drop(self.render_tx.take());
+        if let Some(join) = self.render_join.take() {
+            let _ = join.join();
+        }
         #[cfg(target_os = "android")]
         if let Some(session) = self.hint_session.take() {
             unsafe {
@@ -413,49 +536,32 @@ fn build_sw_budget(
     }
 }
 
-fn create_renderer<W>(
-    backend: RendererBackend,
-    window: &W,
-    cache_path: Option<&std::path::Path>,
-    font_paths: Vec<std::path::PathBuf>,
-    font_data: Vec<Vec<u8>>,
-) -> Result<(Box<dyn RenderBackend>, bool), RendererError>
+fn spawn_hw_render_thread<W>(
+    renderer: HardwareRenderer<W>,
+) -> (
+    std::sync::mpsc::SyncSender<HwFrameMsg>,
+    std::thread::JoinHandle<()>,
+)
 where
     W: Window + Clone + Send + Sync + 'static,
 {
-    let android = cfg!(target_os = "android");
-    match backend {
-        RendererBackend::Auto => {
-            let font_config = build_hw_font_config(font_paths.clone(), font_data.clone(), android);
-            match HardwareRenderer::new(window.clone(), cache_path, android, font_config) {
-                Ok(renderer) => {
-                    tracing::info!("Using hardware renderer");
-                    Ok((Box::new(renderer), true))
+    let (tx, rx) = std::sync::mpsc::sync_channel::<HwFrameMsg>(1);
+    let join = std::thread::Builder::new()
+        .name("rsx-render".to_string())
+        .spawn(move || {
+            let mut renderer = renderer;
+            while let Ok(msg) = rx.recv() {
+                if msg.at.elapsed() > FRAME_BUDGET {
+                    continue;
                 }
-                Err(e) => {
-                    tracing::warn!(
-                        "Hardware renderer unavailable ({e}), falling back to software renderer"
-                    );
-                    let budget = build_sw_budget(font_paths, font_data, android);
-                    SoftwareRenderer::new(window.clone(), window.clone(), budget)
-                        .map(|r| (Box::new(r) as Box<dyn RenderBackend>, false))
+                if renderer.begin_frame(msg.w, msg.h, msg.sf).is_err() {
+                    continue;
                 }
+                let _ = renderer.render_frame(&msg.commands, msg.clear);
             }
-        }
-        RendererBackend::Hardware => {
-            let font_config = build_hw_font_config(font_paths, font_data, android);
-            HardwareRenderer::new(window.clone(), cache_path, android, font_config).map(|r| {
-                tracing::info!("Using hardware renderer");
-                (Box::new(r) as Box<dyn RenderBackend>, true)
-            })
-        }
-        RendererBackend::Software => {
-            tracing::info!("Using software renderer");
-            let budget = build_sw_budget(font_paths, font_data, android);
-            SoftwareRenderer::new(window.clone(), window.clone(), budget)
-                .map(|r| (Box::new(r) as Box<dyn RenderBackend>, false))
-        }
-    }
+        })
+        .expect("failed to spawn render thread");
+    (tx, join)
 }
 
 #[cfg(not(target_os = "android"))]
@@ -497,6 +603,8 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
             font_paths,
             font_data,
             _window: std::marker::PhantomData,
+            render_tx: None,
+            render_join: None,
         },
     ) {
         tracing::error!("Event loop exited with error: {e}");
@@ -570,6 +678,8 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             font_paths,
             font_data,
             _window: std::marker::PhantomData,
+            render_tx: None,
+            render_join: None,
             hint_session: None,
             frame_start: std::time::Instant::now(),
         },

@@ -11,7 +11,7 @@ use renderer_core::{
 };
 
 use wgpu::util::DeviceExt;
-use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureViewDescriptor};
+use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
 use crate::blur::BlurPipeline;
 use crate::composite::CompositePipeline;
@@ -23,8 +23,8 @@ use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
 use crate::primitives::{Viewport, create_viewport_bgl};
 
+// Prefer Rgba8Unorm: shaders output sRGB-encoded values so the GPU must NOT apply sRGB encoding on write. Bgra8Unorm is the fallback for drivers (e.g. some macOS/DX12 paths) that don't expose Rgba8Unorm.
 fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
-    // Prefer Rgba8Unorm: wider MSAA support on Linux/Vulkan; some Mesa drivers error on Bgra8Unorm MSAA textures. Shaders output sRGB-encoded values so UNORM (no hardware gamma) is correct on all platforms.
     caps.formats
         .iter()
         .find(|f| matches!(f, wgpu::TextureFormat::Rgba8Unorm))
@@ -182,6 +182,16 @@ enum DrawStep {
     },
     EndLayerComposite {
         bind_group: wgpu::BindGroup,
+        // Some(hash) when the resolved layer texture should be cached for reuse next frame; None for layers that must not be cached (backdrop blur, round-clip).
+        cache_hash: Option<u64>,
+        // Outer scissor to apply during the composite blit, so the layer respects parent clip rects (e.g. scroll area). None = full render target.
+        scissor: Option<Rect>,
+    },
+    // Already-cached layer composited directly without a render pass.
+    PrerenderedLayer {
+        bind_group: wgpu::BindGroup,
+        // Outer scissor to apply during the composite blit, so the layer respects parent clip rects (e.g. scroll area). None = full render target.
+        scissor: Option<Rect>,
     },
     ShadowPlaceholder {
         op_idx: usize,
@@ -199,6 +209,35 @@ struct LayerAccum {
     backdrop_blur: f32,
     begin_step_idx: usize,
     bounds: Option<Rect>,
+    // Index into the commands slice just after the PushLayer (start of layer content).
+    cmd_start: usize,
+    // Instance buffer lengths captured at PushLayer, used to truncate on a cache hit.
+    inst_start: u32,
+    text_inst_start: u32,
+    line_inst_start: u32,
+    image_inst_start: u32,
+}
+
+// Tries to merge two consecutive same-type batch steps whose instance index ranges are contiguous. Returns Ok(merged) on success, Err((a, b)) if they cannot be merged.
+fn try_merge_steps(a: DrawStep, b: DrawStep) -> Result<DrawStep, (DrawStep, DrawStep)> {
+    match (a, b) {
+        (DrawStep::RectBatch { start: s, end: e1 }, DrawStep::RectBatch { start: s2, end: e2 })
+            if e1 == s2 =>
+        {
+            Ok(DrawStep::RectBatch { start: s, end: e2 })
+        }
+        (DrawStep::TextBatch { start: s, end: e1 }, DrawStep::TextBatch { start: s2, end: e2 })
+            if e1 == s2 =>
+        {
+            Ok(DrawStep::TextBatch { start: s, end: e2 })
+        }
+        (DrawStep::LineBatch { start: s, end: e1 }, DrawStep::LineBatch { start: s2, end: e2 })
+            if e1 == s2 =>
+        {
+            Ok(DrawStep::LineBatch { start: s, end: e2 })
+        }
+        (a, b) => Err((a, b)),
+    }
 }
 
 #[inline]
@@ -212,7 +251,7 @@ fn hash_instances<T: bytemuck::Pod>(data: &[T]) -> u64 {
 // Hashes a draw-command slice structurally (same approach as the software renderer's hash_commands).
 // Uses FxHasher for speed; f32 fields are fed as bit patterns to avoid UB on NaN.
 fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
-    use std::rc::Rc;
+    use std::sync::Arc;
     let mut h = FxHasher::default();
     commands.len().hash(&mut h);
     for cmd in commands {
@@ -252,7 +291,7 @@ fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
             }
             DrawCommand::Path(p) => {
                 4u8.hash(&mut h);
-                (Rc::as_ptr(&p.data) as usize).hash(&mut h);
+                (Arc::as_ptr(&p.data) as usize).hash(&mut h);
             }
             DrawCommand::PushClip { rect, radius } => {
                 5u8.hash(&mut h);
@@ -453,6 +492,12 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     path_shadow_resolved_cache: HashMap<PathShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
     // LRU eviction order for path_shadow_resolved_cache: front is least-recently-used, back is most-recently-used.
     path_shadow_resolved_cache_order: VecDeque<PathShadowCacheKey>,
+    // Resolved layer textures keyed by a hash of their draw commands + layer params. Value is (resolve_texture, resolve_view, pixel_count). Lets unchanged static layers skip their whole render pass and composite directly.
+    layer_resolved_cache: HashMap<u64, (wgpu::Texture, wgpu::TextureView, u64)>,
+    // LRU eviction order for layer_resolved_cache: front is least-recently-used, back is most-recently-used.
+    layer_resolved_cache_order: VecDeque<u64>,
+    // Total pixel budget for layer_resolved_cache, set per frame to 4 * width * height.
+    layer_cache_pixel_budget: u64,
     // Non-MSAA presentation texture holding the last resolved frame. Used both as the idle-frame fast-path source (blit when commands are unchanged) and as the MSAA resolve target each active frame.
     retained_texture: Option<wgpu::Texture>,
     retained_view: Option<wgpu::TextureView>,
@@ -482,6 +527,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for Har
         // Wait for all pending GPU work before the device is destroyed so the Vulkan driver
         // frees GEM objects synchronously. Without this, wgpu may defer cleanup to a later
         // maintenance cycle, keeping GPU memory allocated beyond this drop.
+        // Release cached layer textures before the device so the driver frees their GEM objects synchronously.
+        self.layer_resolved_cache.clear();
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
     }
 }
@@ -820,6 +867,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             shadow_resolved_cache_order: VecDeque::new(),
             path_shadow_resolved_cache: HashMap::new(),
             path_shadow_resolved_cache_order: VecDeque::new(),
+            layer_resolved_cache: HashMap::new(),
+            layer_resolved_cache_order: VecDeque::new(),
+            layer_cache_pixel_budget: 0,
             retained_texture: None,
             retained_view: None,
             prev_commands: Vec::new(),
@@ -998,6 +1048,57 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.flush_line();
         self.flush_image();
     }
+
+    // Stable-sorts RectBatch/TextBatch/LineBatch within flat zones (separated by structural markers), then merges consecutive same-type batches with contiguous index ranges. Reduces 2N draw calls for a list of N items (rect+label) down to 2.
+    fn merge_opaque_batches(&mut self) {
+        let steps = &mut self.pending_steps;
+        let mut out: Vec<DrawStep> = Vec::with_capacity(steps.len());
+        let mut zone: Vec<DrawStep> = Vec::new();
+
+        fn flush_zone(zone: &mut Vec<DrawStep>, out: &mut Vec<DrawStep>) {
+            if zone.is_empty() {
+                return;
+            }
+            zone.sort_by_key(|s| match s {
+                DrawStep::RectBatch { .. } => 0u8,
+                DrawStep::LineBatch { .. } => 1,
+                DrawStep::TextBatch { .. } => 2,
+                _ => 3,
+            });
+            let mut merged: Option<DrawStep> = None;
+            for step in zone.drain(..) {
+                match merged.take() {
+                    None => merged = Some(step),
+                    Some(prev) => match try_merge_steps(prev, step) {
+                        Ok(m) => merged = Some(m),
+                        Err((a, b)) => {
+                            out.push(a);
+                            merged = Some(b);
+                        }
+                    },
+                }
+            }
+            if let Some(last) = merged {
+                out.push(last);
+            }
+        }
+
+        for step in steps.drain(..) {
+            match &step {
+                DrawStep::RectBatch { .. }
+                | DrawStep::TextBatch { .. }
+                | DrawStep::LineBatch { .. } => {
+                    zone.push(step);
+                }
+                _ => {
+                    flush_zone(&mut zone, &mut out);
+                    out.push(step);
+                }
+            }
+        }
+        flush_zone(&mut zone, &mut out);
+        *steps = out;
+    }
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
@@ -1015,6 +1116,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             self.layer_texture_pool.clear();
             // Backdrop-blur scratch textures are sized to the old surface; drop them on resize for the same reason.
             self.texture_pool.clear();
+            // Cached layer textures are sized to the old surface; their hashes also encode the old dimensions, so drop them on resize.
+            self.layer_resolved_cache.clear();
+            self.layer_resolved_cache_order.clear();
             self.width = width;
             self.height = height;
             if width > 0 && height > 0 {
@@ -1033,6 +1137,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 );
             }
         }
+        self.layer_cache_pixel_budget = 4 * self.width as u64 * self.height as u64;
         self.clear_pending();
         self.path_tess_cache.begin_frame();
         self.image_pipeline.begin_frame();
@@ -1090,7 +1195,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 };
                 let surface_view = output
                     .texture
-                    .create_view(&TextureViewDescriptor::default());
+                    .create_view(&wgpu::TextureViewDescriptor::default());
                 let retained_bg = self.retained_blit_pipeline.create_bind_group(
                     &self.device,
                     retained_view,
@@ -1166,7 +1271,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let expanded_commands = expand_fill_layers(commands);
         let commands: &[DrawCommand] = expanded_commands.as_deref().unwrap_or(commands);
 
-        for cmd in commands {
+        for (cmd_idx, cmd) in commands.iter().enumerate() {
             match cmd {
                 DrawCommand::Rect(p) => {
                     if p.rect.width <= 0.0
@@ -1559,6 +1664,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         current_scissor = scissor_layer_stack.pop().flatten();
                         self.pending_steps.push(DrawStep::EndLayerComposite {
                             bind_group: composite_bg,
+                            // Round-clip layers draw the clip mask into the texture, so their content is not safely cacheable by command hash.
+                            cache_hash: None,
+                            scissor: current_scissor,
                         });
                         self.pending_steps.push(DrawStep::SetScissor {
                             rect: current_scissor,
@@ -1589,6 +1697,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         backdrop_blur: *backdrop_blur,
                         begin_step_idx: self.pending_steps.len(),
                         bounds: None,
+                        cmd_start: cmd_idx + 1,
+                        inst_start: self.pending_instances.len() as u32,
+                        text_inst_start: self.pending_text_instances.len() as u32,
+                        line_inst_start: self.pending_line_instances.len() as u32,
+                        image_inst_start: self.pending_image_instances.len() as u32,
                     });
                 }
                 DrawCommand::PopLayer => {
@@ -1615,61 +1728,149 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     .map_or(footprint, |b| union_rects(b, footprint)),
                             );
                         }
+                        // Backdrop-blur layers read framebuffer content, so they are never cacheable.
+                        let layer_hash: Option<u64> = if accum.backdrop_blur == 0.0 {
+                            use std::hash::{Hash, Hasher};
+                            let base = hash_draw_commands(&commands[accum.cmd_start..cmd_idx]);
+                            let mut h = FxHasher::default();
+                            base.hash(&mut h);
+                            accum.opacity.to_bits().hash(&mut h);
+                            // Use the unclamped floored world bounds (not offset_x/y which are max'd to 0)
+                            // so that different scroll positions with the same clamped offset don't alias
+                            // to the same cache entry and produce stale composites.
+                            let (hash_bx, hash_by) = accum
+                                .bounds
+                                .map_or((0.0f32, 0.0f32), |b| (b.x.floor(), b.y.floor()));
+                            hash_bx.to_bits().hash(&mut h);
+                            hash_by.to_bits().hash(&mut h);
+                            tex_w.hash(&mut h);
+                            tex_h.hash(&mut h);
+                            // Text shaping and rasterization depend on the scale factor; mix it in so a scale change without a resize invalidates stale entries.
+                            self.scale_factor.to_bits().hash(&mut h);
+                            Some(h.finish())
+                        } else {
+                            None
+                        };
+                        let cache_hit =
+                            layer_hash.is_some_and(|h| self.layer_resolved_cache.contains_key(&h));
                         let bucket_w = bucket_size(tex_w);
                         let bucket_h = bucket_size(tex_h);
-                        let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
-                            if let Some(pos) = self
-                                .layer_texture_pool
-                                .iter()
-                                .position(|(_, _, _, _, pw, ph)| *pw == bucket_w && *ph == bucket_h)
-                            {
-                                let (mt, mv, rt, rv, _, _) = self.layer_texture_pool.remove(pos);
-                                (mt, mv, rt, rv)
-                            } else {
-                                self.layer_pipeline.create_layer_textures(
+                        if cache_hit {
+                            let hash = layer_hash.unwrap();
+                            let uv_scale = [
+                                tex_w as f32 / bucket_w as f32,
+                                tex_h as f32 / bucket_h as f32,
+                            ];
+                            let bind_group = {
+                                let (_, cached_view, _) = &self.layer_resolved_cache[&hash];
+                                self.composite_pipeline.create_bind_group(
                                     &self.device,
-                                    bucket_w,
-                                    bucket_h,
+                                    cached_view,
+                                    [offset_x, offset_y, tex_w as f32, tex_h as f32],
+                                    accum.opacity,
+                                    0.0,
+                                    uv_scale,
                                 )
                             };
-                        let layer_vp = Viewport {
-                            // Use bucket dimensions so NDC 1.0 maps to pixel bucket_w/h;
-                            // content then fills only the first tex_w/h pixels and uv_scale clips correctly.
-                            size: [bucket_w as f32, bucket_h as f32],
-                            offset: [offset_x, offset_y],
-                        };
-                        let layer_vp_bg = self.take_layer_viewport_bg(layer_vp);
-                        let uv_scale = [
-                            tex_w as f32 / bucket_w as f32,
-                            tex_h as f32 / bucket_h as f32,
-                        ];
-                        // Composite bind group uses window-absolute dest rect; parent viewport (set 0) converts it to NDC.
-                        let composite_bg = self.composite_pipeline.create_bind_group(
-                            &self.device,
-                            &resolve_view,
-                            [offset_x, offset_y, tex_w as f32, tex_h as f32],
-                            accum.opacity,
-                            0.0,
-                            uv_scale,
-                        );
-                        self.pending_steps.insert(
-                            accum.begin_step_idx,
-                            DrawStep::BeginLayer {
-                                msaa_texture,
-                                msaa_view,
-                                resolve_texture,
-                                resolve_view,
-                                viewport_bind_group: layer_vp_bg,
-                                width: bucket_w,
-                                height: bucket_h,
-                                offset_x,
-                                offset_y,
-                                backdrop_blur: accum.backdrop_blur,
-                            },
-                        );
-                        self.pending_steps.push(DrawStep::EndLayerComposite {
-                            bind_group: composite_bg,
-                        });
+                            // Refresh LRU position so reused layers are not evicted first.
+                            if let Some(pos) = self
+                                .layer_resolved_cache_order
+                                .iter()
+                                .position(|k| *k == hash)
+                            {
+                                self.layer_resolved_cache_order.remove(pos);
+                            }
+                            self.layer_resolved_cache_order.push_back(hash);
+                            // The layer content emitted DrawSteps and instance data we no longer need; drop them so they neither render nor leave dangling instance ranges.
+                            self.pending_steps.truncate(accum.begin_step_idx);
+                            self.pending_instances.truncate(accum.inst_start as usize);
+                            self.pending_text_instances
+                                .truncate(accum.text_inst_start as usize);
+                            self.pending_line_instances
+                                .truncate(accum.line_inst_start as usize);
+                            self.pending_image_instances
+                                .truncate(accum.image_inst_start as usize);
+                            self.pending_steps.push(DrawStep::PrerenderedLayer {
+                                bind_group,
+                                scissor: current_scissor,
+                            });
+                            // Re-apply the outer scissor after the segment boundary. Skip when
+                            // current_scissor is None: the new render pass already defaults to the
+                            // full target, and emitting (0,0,w,h) inside a nested layer render
+                            // pass would use window dimensions on a smaller texture → validation error.
+                            if let Some(s) = current_scissor {
+                                self.pending_steps
+                                    .push(DrawStep::SetScissor { rect: Some(s) });
+                            }
+                        } else {
+                            let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
+                                if let Some(pos) = self.layer_texture_pool.iter().position(
+                                    |(_, _, _, _, pw, ph)| *pw == bucket_w && *ph == bucket_h,
+                                ) {
+                                    let (mt, mv, rt, rv, _, _) =
+                                        self.layer_texture_pool.remove(pos);
+                                    (mt, mv, rt, rv)
+                                } else {
+                                    self.layer_pipeline.create_layer_textures(
+                                        &self.device,
+                                        bucket_w,
+                                        bucket_h,
+                                    )
+                                };
+                            let layer_vp = Viewport {
+                                // Use bucket dimensions so NDC 1.0 maps to pixel bucket_w/h;
+                                // content then fills only the first tex_w/h pixels and uv_scale clips correctly.
+                                size: [bucket_w as f32, bucket_h as f32],
+                                offset: [offset_x, offset_y],
+                            };
+                            let layer_vp_bg = self.take_layer_viewport_bg(layer_vp);
+                            let uv_scale = [
+                                tex_w as f32 / bucket_w as f32,
+                                tex_h as f32 / bucket_h as f32,
+                            ];
+                            // Composite bind group uses window-absolute dest rect; parent viewport (set 0) converts it to NDC.
+                            let composite_bg = self.composite_pipeline.create_bind_group(
+                                &self.device,
+                                &resolve_view,
+                                [offset_x, offset_y, tex_w as f32, tex_h as f32],
+                                accum.opacity,
+                                0.0,
+                                uv_scale,
+                            );
+                            self.pending_steps.insert(
+                                accum.begin_step_idx,
+                                DrawStep::BeginLayer {
+                                    msaa_texture,
+                                    msaa_view,
+                                    resolve_texture,
+                                    resolve_view,
+                                    viewport_bind_group: layer_vp_bg,
+                                    width: bucket_w,
+                                    height: bucket_h,
+                                    offset_x,
+                                    offset_y,
+                                    backdrop_blur: accum.backdrop_blur,
+                                },
+                            );
+                            self.pending_steps.push(DrawStep::EndLayerComposite {
+                                bind_group: composite_bg,
+                                // Only cache when no dirty-scissor is active; otherwise the layer's draws may be clipped to the dirty region, leaving a partially-rendered texture.
+                                cache_hash: if dirty_scissor.is_none() {
+                                    layer_hash
+                                } else {
+                                    None
+                                },
+                                scissor: current_scissor,
+                            });
+                            // Re-apply the outer scissor after the segment boundary. Skip when
+                            // current_scissor is None: the new render pass already defaults to the
+                            // full target, and emitting (0,0,w,h) inside a nested layer render
+                            // pass would use window dimensions on a smaller texture → validation error.
+                            if let Some(s) = current_scissor {
+                                self.pending_steps
+                                    .push(DrawStep::SetScissor { rect: Some(s) });
+                            }
+                        }
                     }
                     let _ = layer_blit_stack; // suppresses unused variable warning
                 }
@@ -1679,11 +1880,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.flush_all();
 
         let load_op = if let Some(c) = clear_color {
+            let c_arr = c.to_array();
             wgpu::LoadOp::Clear(wgpu::Color {
-                r: c.r as f64,
-                g: c.g as f64,
-                b: c.b as f64,
-                a: c.a as f64,
+                r: c_arr[0] as f64,
+                g: c_arr[1] as f64,
+                b: c_arr[2] as f64,
+                a: c_arr[3] as f64,
             })
         } else {
             wgpu::LoadOp::Load
@@ -2321,9 +2523,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             }
         }
 
+        self.merge_opaque_batches();
+
         let surface_view = output
             .texture
-            .create_view(&TextureViewDescriptor::default());
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let msaa_view = self
             .msaa_texture
@@ -2375,7 +2579,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 offset_y: f32,
                 backdrop_blur: f32,
             },
-            EndLayerComposite(wgpu::BindGroup),
+            EndLayerComposite {
+                bind_group: wgpu::BindGroup,
+                cache_hash: Option<u64>,
+                scissor: Option<Rect>,
+            },
+            PrerenderedLayer {
+                bind_group: wgpu::BindGroup,
+                scissor: Option<Rect>,
+            },
         }
 
         let mut steps = std::mem::take(&mut self.pending_steps);
@@ -2385,7 +2597,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         for i in 0..steps.len() {
             let is_boundary = matches!(
                 steps[i],
-                DrawStep::BeginLayer { .. } | DrawStep::EndLayerComposite { .. }
+                DrawStep::BeginLayer { .. }
+                    | DrawStep::EndLayerComposite { .. }
+                    | DrawStep::PrerenderedLayer { .. }
             );
             if !is_boundary {
                 continue;
@@ -2423,8 +2637,25 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         backdrop_blur,
                     });
                 }
-                DrawStep::EndLayerComposite { bind_group } => {
-                    segments.push(Segment::EndLayerComposite(bind_group));
+                DrawStep::EndLayerComposite {
+                    bind_group,
+                    cache_hash,
+                    scissor,
+                } => {
+                    segments.push(Segment::EndLayerComposite {
+                        bind_group,
+                        cache_hash,
+                        scissor,
+                    });
+                }
+                DrawStep::PrerenderedLayer {
+                    bind_group,
+                    scissor,
+                } => {
+                    segments.push(Segment::PrerenderedLayer {
+                        bind_group,
+                        scissor,
+                    });
                 }
                 _ => unreachable!(),
             }
@@ -2459,7 +2690,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         // Marks draw segments preceding EndLayerComposite to inline MSAA resolve into the drawing pass, skipping the dedicated resolve pass.
         let mut inline_resolve_targets: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
-            if let (Segment::Draw { .. }, Some(Segment::EndLayerComposite(_))) =
+            if let (Segment::Draw { .. }, Some(Segment::EndLayerComposite { .. })) =
                 (&segments[i], segments.get(i + 1))
             {
                 inline_resolve_targets[i] = true;
@@ -2468,7 +2699,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         let mut endlayer_resolve_done: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
-            if matches!(segments[i], Segment::EndLayerComposite(_))
+            if matches!(segments[i], Segment::EndLayerComposite { .. })
                 && i > 0
                 && inline_resolve_targets[i - 1]
             {
@@ -2628,7 +2859,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             }
                             DrawStep::ShadowPlaceholder { .. }
                             | DrawStep::PathShadowPlaceholder { .. } => {}
-                            DrawStep::BeginLayer { .. } | DrawStep::EndLayerComposite { .. } => {
+                            DrawStep::BeginLayer { .. }
+                            | DrawStep::EndLayerComposite { .. }
+                            | DrawStep::PrerenderedLayer { .. } => {
                                 unreachable!("layer boundaries are split into segments")
                             }
                         }
@@ -2847,7 +3080,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     ));
                 }
 
-                Segment::EndLayerComposite(bind_group) => {
+                Segment::EndLayerComposite {
+                    bind_group,
+                    cache_hash,
+                    scissor,
+                } => {
                     let (l_msaa_tex, l_msaa_view, l_resolve_tex, l_resolve_view, _, lw, lh) =
                         layer_stack
                             .pop()
@@ -2909,17 +3146,117 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         blit.set_pipeline(&self.composite_pipeline.pipeline);
                         blit.set_bind_group(0, parent_vp_bg, &[]);
                         blit.set_bind_group(1, &bind_group, &[]);
+                        if let Some(s) = scissor {
+                            let x = (s.x.max(0.0).floor() as u32).min(self.width.saturating_sub(1));
+                            let y =
+                                (s.y.max(0.0).floor() as u32).min(self.height.saturating_sub(1));
+                            let right = ((s.x + s.width).ceil() as u32).min(self.width);
+                            let bottom = ((s.y + s.height).ceil() as u32).min(self.height);
+                            let w = right
+                                .saturating_sub(x)
+                                .max(1)
+                                .min(self.width.saturating_sub(x));
+                            let h = bottom
+                                .saturating_sub(y)
+                                .max(1)
+                                .min(self.height.saturating_sub(y));
+                            blit.set_scissor_rect(x, y, w, h);
+                        }
                         blit.draw(0..6, 0..1);
                     }
 
-                    self.layer_texture_pool.push((
-                        l_msaa_tex,
-                        l_msaa_view,
-                        l_resolve_tex,
-                        l_resolve_view,
-                        lw,
-                        lh,
-                    ));
+                    if let Some(hash) = cache_hash {
+                        // Retain the resolved texture so the next frame can composite it directly. The MSAA half is not cacheable (it is consumed by the resolve), so it drops instead of returning to the pool.
+                        let pixel_count = lw as u64 * lh as u64;
+                        self.layer_resolved_cache
+                            .insert(hash, (l_resolve_tex, l_resolve_view, pixel_count));
+                        self.layer_resolved_cache_order.push_back(hash);
+                        let mut total_pixels: u64 = self
+                            .layer_resolved_cache
+                            .values()
+                            .map(|(_, _, px)| *px)
+                            .sum();
+                        while total_pixels > self.layer_cache_pixel_budget {
+                            match self.layer_resolved_cache_order.pop_front() {
+                                Some(oldest) if oldest == hash => {
+                                    // Never evict the entry we just inserted; if it alone exceeds the budget keep it for this frame.
+                                    self.layer_resolved_cache_order.push_front(oldest);
+                                    break;
+                                }
+                                Some(oldest) => {
+                                    if let Some((_, _, px)) =
+                                        self.layer_resolved_cache.remove(&oldest)
+                                    {
+                                        total_pixels = total_pixels.saturating_sub(px);
+                                    }
+                                }
+                                None => break,
+                            }
+                        }
+                    } else {
+                        self.layer_texture_pool.push((
+                            l_msaa_tex,
+                            l_msaa_view,
+                            l_resolve_tex,
+                            l_resolve_view,
+                            lw,
+                            lh,
+                        ));
+                    }
+                }
+
+                Segment::PrerenderedLayer {
+                    bind_group,
+                    scissor,
+                } => {
+                    // Composite the cached layer texture onto the current target (parent layer or surface) without rendering the layer content.
+                    let parent_view: &wgpu::TextureView =
+                        if let Some((_, lmv, _, lrv, _, _, _)) = layer_stack.last() {
+                            if self.msaa_samples > 1 { lmv } else { lrv }
+                        } else {
+                            &msaa_view
+                        };
+                    let parent_vp_bg: &wgpu::BindGroup =
+                        if let Some((_, _, _, _, vp_bg, _, _)) = layer_stack.last() {
+                            vp_bg
+                        } else {
+                            &self.viewport_bind_group
+                        };
+                    let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("rsx-prerendered-layer-blit"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: parent_view,
+                            resolve_target: None,
+                            depth_slice: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                        multiview_mask: None,
+                    });
+                    blit.set_pipeline(&self.composite_pipeline.pipeline);
+                    blit.set_bind_group(0, parent_vp_bg, &[]);
+                    blit.set_bind_group(1, &bind_group, &[]);
+                    if let Some(s) = scissor {
+                        let x = (s.x.max(0.0).floor() as u32).min(self.width.saturating_sub(1));
+                        let y = (s.y.max(0.0).floor() as u32).min(self.height.saturating_sub(1));
+                        let right = ((s.x + s.width).ceil() as u32).min(self.width);
+                        let bottom = ((s.y + s.height).ceil() as u32).min(self.height);
+                        let w = right
+                            .saturating_sub(x)
+                            .max(1)
+                            .min(self.width.saturating_sub(x));
+                        let h = bottom
+                            .saturating_sub(y)
+                            .max(1)
+                            .min(self.height.saturating_sub(y));
+                        blit.set_scissor_rect(x, y, w, h);
+                    }
+                    blit.draw(0..6, 0..1);
                 }
             }
         }

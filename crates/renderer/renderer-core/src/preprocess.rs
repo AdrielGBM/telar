@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::{Color, DrawCommand, Paint, RectStyle};
 
@@ -38,7 +38,7 @@ pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> 
                     opacity: alpha,
                     backdrop_blur: 0.0,
                 });
-                result.push(DrawCommand::Rect(Rc::new(opaque)));
+                result.push(DrawCommand::Rect(Arc::new(opaque)));
                 result.push(DrawCommand::PopLayer);
                 continue;
             }
@@ -175,11 +175,11 @@ fn spath_data(data: &crate::PathData, sf: f32) -> crate::PathData {
 
 fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
     match cmd {
-        DrawCommand::Rect(p) => DrawCommand::Rect(Rc::new(crate::command::RectPayload {
+        DrawCommand::Rect(p) => DrawCommand::Rect(Arc::new(crate::command::RectPayload {
             rect: sr(p.rect, sf),
             style: srect_style(p.style, sf),
         })),
-        DrawCommand::Text(p) => DrawCommand::Text(Rc::new(crate::command::TextPayload {
+        DrawCommand::Text(p) => DrawCommand::Text(Arc::new(crate::command::TextPayload {
             text: p.text.clone(),
             rect: sr(p.rect, sf),
             style: stext_style(p.style, sf),
@@ -194,8 +194,8 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             p2: sp(*p2, sf),
             style: sline_style(*style, sf),
         },
-        DrawCommand::Path(p) => DrawCommand::Path(Rc::new(crate::command::PathPayload {
-            data: Rc::new(spath_data(&p.data, sf)),
+        DrawCommand::Path(p) => DrawCommand::Path(Arc::new(crate::command::PathPayload {
+            data: Arc::new(spath_data(&p.data, sf)),
             style: spath_style(p.style, sf),
         })),
         DrawCommand::PushClip { rect, radius } => DrawCommand::PushClip {

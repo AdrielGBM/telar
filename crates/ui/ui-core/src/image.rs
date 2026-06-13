@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
@@ -10,7 +10,7 @@ use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Image {
-    data: Box<dyn Fn() -> Rc<ImageData>>,
+    data: Box<dyn Fn() -> Arc<ImageData>>,
     leaf: LayoutLeaf,
     filter: Box<dyn Fn() -> ImageFilter>,
 }
@@ -18,7 +18,7 @@ pub struct Image {
 impl Image {
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
-        data_fn: impl Fn() -> Rc<ImageData> + 'static,
+        data_fn: impl Fn() -> Arc<ImageData> + 'static,
         layout: LayoutStyle,
         filter_fn: impl Fn() -> ImageFilter + 'static,
     ) -> Result<Self, LayoutError> {

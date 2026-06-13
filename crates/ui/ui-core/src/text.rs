@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
@@ -12,7 +12,7 @@ use crate::layout_leaf::LayoutLeaf;
 
 pub struct Text {
     content_fn: Box<dyn Fn() -> String>,
-    cached_content: RefCell<(String, Rc<str>)>,
+    cached_content: RefCell<(String, Arc<str>)>,
     style: Box<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
 }
@@ -27,7 +27,7 @@ impl Text {
         let leaf = LayoutLeaf::register(ctx, layout)?;
         Ok(Self {
             content_fn: Box::new(content_fn),
-            cached_content: RefCell::new((String::new(), Rc::from(""))),
+            cached_content: RefCell::new((String::new(), Arc::from(""))),
             style: Box::new(style_fn),
             leaf,
         })
@@ -46,19 +46,19 @@ impl Text {
 impl Component for Text {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
-        let text: Rc<str> = {
+        let text: Arc<str> = {
             let new_str = (self.content_fn)();
             let mut cache = self.cached_content.borrow_mut();
             if cache.0 != new_str {
-                let rc = Rc::from(new_str.as_str());
-                *cache = (new_str, Rc::clone(&rc));
+                let rc = Arc::from(new_str.as_str());
+                *cache = (new_str, Arc::clone(&rc));
                 rc
             } else {
-                Rc::clone(&cache.1)
+                Arc::clone(&cache.1)
             }
         };
         self.leaf
-            .at_layout_position(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+            .at_layout_position(RenderNode::Primitive(DrawCommand::Text(Arc::new(
                 TextPayload {
                     text,
                     rect: Rect {

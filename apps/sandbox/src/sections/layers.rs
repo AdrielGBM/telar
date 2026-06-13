@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rsx::{
     BorderRadius, Canvas, Color, DrawCommand, Gradient, LayoutError, NodeVec, Paint, Point, Rect,
@@ -30,7 +30,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             muted,
         );
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Opacity — same red rect at 1.0 / 0.6 / 0.3 / 0.1"),
                 rect: Rect {
@@ -49,7 +49,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 opacity,
                 backdrop_blur: 0.0,
                 children: NodeVec::collect([
-                    RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                    RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                         rect: Rect {
                             x,
                             y: 60.0,
@@ -63,8 +63,8 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                             radius: BorderRadius::all(8.0),
                         },
                     }))),
-                    RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
-                        text: Rc::from(format!("{opacity:.1}")),
+                    RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
+                        text: Arc::from(format!("{opacity:.1}")),
                         rect: Rect {
                             x,
                             y: 64.0,
@@ -77,7 +77,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             });
         }
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Overlapping colored layers at 0.7 opacity"),
                 rect: Rect {
@@ -90,7 +90,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 0.0,
@@ -110,7 +110,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         children.push(RenderNode::Layer {
             opacity: 0.7,
             backdrop_blur: 0.0,
-            children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+            children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Rect(Arc::new(
                 RectPayload {
                     rect: Rect {
                         x: 16.0,
@@ -131,7 +131,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         children.push(RenderNode::Layer {
             opacity: 0.7,
             backdrop_blur: 0.0,
-            children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+            children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Rect(Arc::new(
                 RectPayload {
                     rect: Rect {
                         x: 96.0,
@@ -152,7 +152,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         children.push(RenderNode::Layer {
             opacity: 0.7,
             backdrop_blur: 0.0,
-            children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+            children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Rect(Arc::new(
                 RectPayload {
                     rect: Rect {
                         x: 176.0,
@@ -170,7 +170,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )))]),
         });
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Layer (0.8) wrapping a gradient rect + text"),
                 rect: Rect {
@@ -187,7 +187,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             opacity: 0.8,
             backdrop_blur: 0.0,
             children: NodeVec::collect([
-                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                     rect: Rect {
                         x: 396.0,
                         y: 184.0,
@@ -205,7 +205,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                         radius: BorderRadius::all(12.0),
                     },
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
                     text: crate::static_rc_str!("gradient + layer"),
                     rect: Rect {
                         x: 396.0,
@@ -218,7 +218,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             ]),
         });
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Nested layers: outer 0.6, inner 0.5 → combined ~0.3"),
                 rect: Rect {
@@ -235,7 +235,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             opacity: 0.6,
             backdrop_blur: 0.0,
             children: NodeVec::collect([
-                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 410.0,
@@ -253,7 +253,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                     opacity: 0.5,
                     backdrop_blur: 0.0,
                     children: NodeVec::collect([
-                        RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                        RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                             rect: Rect {
                                 x: 36.0,
                                 y: 430.0,
@@ -267,7 +267,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                                 radius: BorderRadius::all(6.0),
                             },
                         }))),
-                        RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+                        RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
                             text: crate::static_rc_str!("inner 0.5"),
                             rect: Rect {
                                 x: 36.0,
@@ -279,7 +279,7 @@ pub fn layers_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                         }))),
                     ]),
                 },
-                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
                     text: crate::static_rc_str!("outer 0.6"),
                     rect: Rect {
                         x: 0.0,

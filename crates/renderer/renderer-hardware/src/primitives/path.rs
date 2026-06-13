@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 use std::collections::VecDeque;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use lyon::math::point;
 use lyon::path::LineCap as LyonLineCap;
@@ -268,7 +268,7 @@ fn build_lyon_path(data: &PathData) -> Path {
 
 pub(crate) fn prepare_path(
     cache: &mut PathTessCache,
-    data: &Rc<PathData>,
+    data: &Arc<PathData>,
     style: &PathStyle,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,

@@ -215,6 +215,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if final_a < 0.001 {
         discard;
     }
-    let final_rgb = (main_rgb * main_a + shadow_rgb * shadow_a * (1.0 - main_a)) / final_a;
+    // Premultiplied output required by PREMULTIPLIED_ALPHA_BLENDING: rgb must already be
+    // multiplied by alpha so AA edges and shadow falloff blend correctly instead of leaking
+    // full-brightness color into the destination.
+    let final_rgb = main_rgb * main_a + shadow_rgb * shadow_a * (1.0 - main_a);
     return vec4<f32>(final_rgb, final_a);
 }

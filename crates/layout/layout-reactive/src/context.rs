@@ -55,6 +55,8 @@ where
 pub struct WidgetCtx {
     engine: LayoutEngine,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
+    parents: FxHashMap<NodeId, NodeId>,
+    boundary_nodes: FxHashMap<NodeId, (f32, f32)>,
     // Guards against recursive compute(): an effect that reads a layout signal and calls compute_layout() again creates a re-layout cycle caught immediately in debug builds.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -65,6 +67,8 @@ impl WidgetCtx {
         Self {
             engine: LayoutEngine::new(),
             registry: FxHashMap::default(),
+            parents: FxHashMap::default(),
+            boundary_nodes: FxHashMap::default(),
             #[cfg(debug_assertions)]
             is_computing: false,
         }
@@ -77,6 +81,9 @@ impl WidgetCtx {
         let node = self.engine.new_leaf(style)?;
         let signal = create_rw_signal(Rect::default());
         self.registry.insert(node, signal.clone());
+        if let Some(dims) = self.engine.is_fixed_size_node(node) {
+            self.boundary_nodes.insert(node, dims);
+        }
         Ok((node, signal))
     }
 
@@ -88,6 +95,12 @@ impl WidgetCtx {
         let node = self.engine.new_container(style, children)?;
         let signal = create_rw_signal(Rect::default());
         self.registry.insert(node, signal);
+        for &child in children {
+            self.parents.insert(child, node);
+        }
+        if let Some(dims) = self.engine.is_fixed_size_node(node) {
+            self.boundary_nodes.insert(node, dims);
+        }
         Ok(node)
     }
 
@@ -116,11 +129,14 @@ impl WidgetCtx {
             );
             self.is_computing = true;
         }
-        self.engine.compute_layout(root, width, height)?;
+        let (layout_root, layout_width, layout_height) =
+            self.find_boundary_root(&dirty_nodes, root, width, height);
+        self.engine
+            .compute_layout(layout_root, layout_width, layout_height)?;
         let registry = &self.registry;
         let mut walk_result = Ok(());
         batch(|| {
-            walk_result = self.engine.walk(root, &mut |node_id, rect| {
+            walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
                 if let Some(sig) = registry.get(&node_id) {
                     if sig.peek() != rect {
                         sig.set(rect);
@@ -136,12 +152,66 @@ impl WidgetCtx {
         walk_result
     }
 
+    fn find_boundary_root(
+        &self,
+        dirty_nodes: &[NodeId],
+        global_root: NodeId,
+        global_width: AvailableSpace,
+        global_height: AvailableSpace,
+    ) -> (NodeId, AvailableSpace, AvailableSpace) {
+        let candidate = dirty_nodes
+            .iter()
+            .find_map(|&node| self.find_nearest_boundary(node));
+        match candidate {
+            Some((boundary, bw, bh))
+                if dirty_nodes.iter().all(|&n| self.is_in_subtree(n, boundary)) =>
+            {
+                (
+                    boundary,
+                    AvailableSpace::Definite(bw),
+                    AvailableSpace::Definite(bh),
+                )
+            }
+            _ => (global_root, global_width, global_height),
+        }
+    }
+
+    fn find_nearest_boundary(&self, mut node: NodeId) -> Option<(NodeId, f32, f32)> {
+        loop {
+            if let Some(&(w, h)) = self.boundary_nodes.get(&node) {
+                return Some((node, w, h));
+            }
+            node = *self.parents.get(&node)?;
+        }
+    }
+
+    fn is_in_subtree(&self, mut node: NodeId, ancestor: NodeId) -> bool {
+        loop {
+            if node == ancestor {
+                return true;
+            }
+            match self.parents.get(&node) {
+                Some(&parent) => node = parent,
+                None => return false,
+            }
+        }
+    }
+
     pub fn track_layout(&self, node: NodeId) -> Option<RwSignal<Rect>> {
         self.registry.get(&node).cloned()
     }
 
     pub fn update_style(&mut self, node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
-        self.engine.set_style(node, style)
+        self.engine.set_style(node, style)?;
+        match self.engine.is_fixed_size_node(node) {
+            Some(dims) => {
+                self.boundary_nodes.insert(node, dims);
+            }
+            None => {
+                self.boundary_nodes.remove(&node);
+            }
+        }
+        Ok(())
     }
 
     pub fn mark_dirty_node(&mut self, node: NodeId) -> Result<(), LayoutError> {

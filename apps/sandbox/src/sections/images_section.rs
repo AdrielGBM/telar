@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rsx::{
     Container, Image, ImageData, ImageFilter, LayoutError, LayoutItem, LayoutStyle, Text,
@@ -10,7 +10,7 @@ use crate::theme::section;
 
 pub fn image_with_label(
     ctx: &mut WidgetCtx,
-    data: Rc<ImageData>,
+    data: Arc<ImageData>,
     filter: ImageFilter,
     size: f32,
     label: &'static str,
@@ -43,9 +43,9 @@ pub fn image_with_label(
 
 pub fn images_section(
     ctx: &mut WidgetCtx,
-    gradient: Rc<ImageData>,
-    checker: Rc<ImageData>,
-    alpha: Rc<ImageData>,
+    gradient: Arc<ImageData>,
+    checker: Arc<ImageData>,
+    alpha: Arc<ImageData>,
 ) -> Result<Container, LayoutError> {
     let i1 = Box::new(image_with_label(
         ctx,

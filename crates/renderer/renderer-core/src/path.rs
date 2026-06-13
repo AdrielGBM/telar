@@ -23,7 +23,8 @@ pub enum PathVerb {
 pub struct PathData {
     pub id: u64,
     pub(crate) verbs: Vec<PathVerb>,
-    bounds_cache: std::cell::OnceCell<Option<Rect>>,
+    // OnceLock is both Send and Sync, required for Arc<PathData>: Send when crossing thread boundaries.
+    bounds_cache: std::sync::OnceLock<Option<Rect>>,
 }
 
 impl Default for PathData {
@@ -31,7 +32,7 @@ impl Default for PathData {
         Self {
             id: NEXT_PATH_ID.fetch_add(1, Ordering::Relaxed),
             verbs: Vec::new(),
-            bounds_cache: std::cell::OnceCell::new(),
+            bounds_cache: std::sync::OnceLock::new(),
         }
     }
 }
@@ -47,31 +48,31 @@ impl PathData {
 
     pub fn move_to(mut self, p: Point) -> Self {
         self.verbs.push(PathVerb::MoveTo(p));
-        self.bounds_cache = std::cell::OnceCell::new();
+        self.bounds_cache = std::sync::OnceLock::new();
         self
     }
 
     pub fn line_to(mut self, p: Point) -> Self {
         self.verbs.push(PathVerb::LineTo(p));
-        self.bounds_cache = std::cell::OnceCell::new();
+        self.bounds_cache = std::sync::OnceLock::new();
         self
     }
 
     pub fn quad_to(mut self, ctrl: Point, to: Point) -> Self {
         self.verbs.push(PathVerb::QuadTo { ctrl, to });
-        self.bounds_cache = std::cell::OnceCell::new();
+        self.bounds_cache = std::sync::OnceLock::new();
         self
     }
 
     pub fn cubic_to(mut self, ctrl1: Point, ctrl2: Point, to: Point) -> Self {
         self.verbs.push(PathVerb::CubicTo { ctrl1, ctrl2, to });
-        self.bounds_cache = std::cell::OnceCell::new();
+        self.bounds_cache = std::sync::OnceLock::new();
         self
     }
 
     pub fn close(mut self) -> Self {
         self.verbs.push(PathVerb::Close);
-        self.bounds_cache = std::cell::OnceCell::new();
+        self.bounds_cache = std::sync::OnceLock::new();
         self
     }
 

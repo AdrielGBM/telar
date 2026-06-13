@@ -318,7 +318,7 @@ fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
             DrawCommand::Path(p) => {
                 4u8.hash(&mut h);
                 // PathPayload PartialEq uses ptr equality for data; use the raw pointer as the key.
-                (std::rc::Rc::as_ptr(&p.data) as usize).hash(&mut h);
+                (std::sync::Arc::as_ptr(&p.data) as usize).hash(&mut h);
             }
             DrawCommand::PushClip { rect, radius } => {
                 5u8.hash(&mut h);

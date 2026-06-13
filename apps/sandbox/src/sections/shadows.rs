@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rsx::{
     BorderRadius, Canvas, Color, DrawCommand, LayoutError, NodeVec, Paint, Rect, RectPayload,
@@ -24,7 +24,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
 
         draw_section_header(&mut children, w, "Shadows", card_border, muted);
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Rect shadows — offset / blur / spread"),
                 rect: Rect {
@@ -37,7 +37,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 0.0,
@@ -58,7 +58,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("soft (0, 4, 12)"),
                 rect: Rect {
@@ -71,7 +71,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 176.0,
@@ -87,7 +87,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("offset (4, 8, 4)"),
                 rect: Rect {
@@ -100,7 +100,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 352.0,
@@ -116,7 +116,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("colored primary"),
                 rect: Rect {
@@ -129,7 +129,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 528.0,
@@ -148,7 +148,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 },
             },
         ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("spread +4"),
                 rect: Rect {
@@ -161,7 +161,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Colored shadows on dark cards"),
                 rect: Rect {
@@ -182,7 +182,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         ];
         for (i, &(card_color, shadow_color, label)) in card_colors.iter().enumerate() {
             let x = i as f32 * 184.0;
-            children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+            children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
                 RectPayload {
                     rect: Rect {
                         x,
@@ -198,9 +198,9 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                     },
                 },
             ))));
-            children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+            children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
                 TextPayload {
-                    text: Rc::from(label),
+                    text: Arc::from(label),
                     rect: Rect {
                         x,
                         y: 200.0,
@@ -212,7 +212,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             ))));
         }
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Text shadows"),
                 rect: Rect {
@@ -225,7 +225,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
             RectPayload {
                 rect: Rect {
                     x: 0.0,
@@ -242,7 +242,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Drop shadow"),
                 rect: Rect {
@@ -260,7 +260,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Color glow"),
                 rect: Rect {
@@ -278,7 +278,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Hard offset"),
                 rect: Rect {
@@ -296,7 +296,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Shadow inside layer"),
                 rect: Rect {
@@ -313,7 +313,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             opacity: 1.0,
             backdrop_blur: 0.0,
             children: NodeVec::collect([
-                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 472.0,
@@ -327,7 +327,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                         radius: BorderRadius::all(10.0),
                     },
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
                     text: crate::static_rc_str!("layer opacity 1.0"),
                     rect: Rect {
                         x: 16.0,
@@ -344,7 +344,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             opacity: 0.7,
             backdrop_blur: 0.0,
             children: NodeVec::collect([
-                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                     rect: Rect {
                         x: 240.0,
                         y: 472.0,
@@ -358,7 +358,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                         radius: BorderRadius::all(10.0),
                     },
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
                     text: crate::static_rc_str!("layer opacity 0.7"),
                     rect: Rect {
                         x: 256.0,
@@ -375,7 +375,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             opacity: 0.4,
             backdrop_blur: 0.0,
             children: NodeVec::collect([
-                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                     rect: Rect {
                         x: 480.0,
                         y: 472.0,
@@ -389,7 +389,7 @@ pub fn shadows_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                         radius: BorderRadius::all(10.0),
                     },
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
+                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
                     text: crate::static_rc_str!("layer opacity 0.4"),
                     rect: Rect {
                         x: 496.0,

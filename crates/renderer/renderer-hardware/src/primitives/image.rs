@@ -1,5 +1,5 @@
 use rustc_hash::FxHashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use renderer_core::{ImageData, ImageFilter};
 use wgpu::Device;
@@ -94,7 +94,7 @@ impl ImagePipeline {
         &self,
         device: &Device,
         queue: &wgpu::Queue,
-        image: &Rc<ImageData>,
+        image: &Arc<ImageData>,
         filter: ImageFilter,
     ) -> GpuImage {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -164,7 +164,7 @@ impl ImagePipeline {
         &mut self,
         device: &Device,
         queue: &wgpu::Queue,
-        image: &Rc<ImageData>,
+        image: &Arc<ImageData>,
         filter: ImageFilter,
     ) -> wgpu::BindGroup {
         let key = (image.id, filter);

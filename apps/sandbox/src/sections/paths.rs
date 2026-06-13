@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rsx::{
     Canvas, Color, Component, DrawCommand, FillRule, LayoutError, LineCap, LineJoin, Paint, Path,
@@ -25,7 +25,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         let mut children: Vec<RenderNode> = Vec::new();
 
         draw_section_header(&mut children, w, "Paths", card_border, muted);
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Polygon shapes"),
                 rect: Rect {
@@ -38,7 +38,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let triangle_data = Rc::new(
+        let triangle_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(75.0, 56.0))
                 .line_to(Point::new(135.0, 166.0))
@@ -60,7 +60,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("triangle"),
                 rect: Rect {
@@ -90,7 +90,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 };
             }
             path = path.close();
-            let star_data = Rc::new(path);
+            let star_data = Arc::new(path);
             children.push(
                 Path::new(
                     {
@@ -106,7 +106,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 )
                 .view(),
             );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+            children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
                 TextPayload {
                     text: crate::static_rc_str!("star (fill + stroke)"),
                     rect: Rect {
@@ -120,7 +120,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             ))));
         }
 
-        let evenodd_data = Rc::new(
+        let evenodd_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(360.0, 58.0))
                 .line_to(Point::new(540.0, 58.0))
@@ -148,7 +148,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("even-odd fill"),
                 rect: Rect {
@@ -161,7 +161,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Bézier curves"),
                 rect: Rect {
@@ -174,7 +174,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let quad_data = Rc::new(
+        let quad_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(0.0, 308.0))
                 .quad_to(Point::new(140.0, 238.0), Point::new(280.0, 308.0)),
@@ -194,7 +194,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("quad_to arch"),
                 rect: Rect {
@@ -207,7 +207,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let cubic_data = Rc::new(PathData::new().move_to(Point::new(310.0, 248.0)).cubic_to(
+        let cubic_data = Arc::new(PathData::new().move_to(Point::new(310.0, 248.0)).cubic_to(
             Point::new(380.0, 248.0),
             Point::new(310.0, 308.0),
             Point::new(380.0, 308.0),
@@ -227,7 +227,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("cubic_to S-curve"),
                 rect: Rect {
@@ -240,7 +240,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let petal_data = Rc::new(
+        let petal_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(516.0, 243.0))
                 .cubic_to(
@@ -270,7 +270,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("closed cubic (petal)"),
                 rect: Rect {
@@ -283,7 +283,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Stroke style"),
                 rect: Rect {
@@ -296,7 +296,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let butt_data = Rc::new(
+        let butt_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(0.0, 410.0))
                 .line_to(Point::new(76.0, 390.0))
@@ -318,7 +318,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Butt / Miter (default)"),
                 rect: Rect {
@@ -331,7 +331,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let round_data = Rc::new(
+        let round_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(300.0, 410.0))
                 .line_to(Point::new(376.0, 390.0))
@@ -357,7 +357,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Round cap / Round join"),
                 rect: Rect {
@@ -370,7 +370,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Path shadows"),
                 rect: Rect {
@@ -385,7 +385,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
 
         const K: f32 = 0.5523;
         let (cx1, cy1, r1) = (76.0_f32, 570.0_f32, 44.0_f32);
-        let circle_data = Rc::new(
+        let circle_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(cx1, cy1 - r1))
                 .cubic_to(
@@ -424,7 +424,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("drop shadow"),
                 rect: Rect {
@@ -437,7 +437,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let star_shadow_data = Rc::new({
+        let star_shadow_data = Arc::new({
             let cx = 272.0_f32;
             let cy = 570.0_f32;
             let outer = 44.0_f32;
@@ -471,7 +471,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("glow"),
                 rect: Rect {
@@ -485,7 +485,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         ))));
 
         let (cx3, cy3, r3) = (468.0_f32, 570.0_f32, 44.0_f32);
-        let diamond_data = Rc::new(
+        let diamond_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(cx3, cy3 - r3))
                 .line_to(Point::new(cx3 + r3 * 0.65, cy3))
@@ -507,7 +507,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("hard offset"),
                 rect: Rect {
@@ -520,7 +520,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             },
         ))));
 
-        let wave_data = Rc::new(
+        let wave_data = Arc::new(
             PathData::new()
                 .move_to(Point::new(556.0, 570.0))
                 .cubic_to(
@@ -548,7 +548,7 @@ pub fn paths_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             )
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("stroke shadow"),
                 rect: Rect {

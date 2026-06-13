@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rsx::{
     BorderRadius, Canvas, Color, DrawCommand, LayoutError, NodeVec, Paint, PathData, PathStyle,
@@ -28,7 +28,7 @@ fn scale_matrix(sx: f32, sy: f32, cx: f32, cy: f32) -> [f32; 6] {
 }
 
 fn rect_view(x: f32, y: f32, w: f32, h: f32, fill: Color, radius: f32) -> RenderNode {
-    RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+    RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
         rect: Rect {
             x,
             y,
@@ -45,8 +45,8 @@ fn rect_view(x: f32, y: f32, w: f32, h: f32, fill: Color, radius: f32) -> Render
 }
 
 fn label_view(text: &'static str, x: f32, y: f32, w: f32, color: Color) -> RenderNode {
-    RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
-        text: Rc::from(text),
+    RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
+        text: Arc::from(text),
         rect: Rect {
             x,
             y,
@@ -96,7 +96,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         );
 
         // ── Scale ──────────────────────────────────────────────────────────
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!(
                     "Uniform scale around center — 0.5× / 0.75× / 1× / 1.5× / 2×"
@@ -143,7 +143,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         }
 
         // ── Rotation ───────────────────────────────────────────────────────
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!(
                     "Rotation — arrow shape at 0° / 30° / 60° / 90° / 120° / 150°"
@@ -183,9 +183,9 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             let matrix = rotation_matrix(angle, cx, cy);
             children.push(RenderNode::Transform {
                 matrix,
-                children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Path(Rc::new(
+                children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Path(Arc::new(
                     rsx::PathPayload {
-                        data: Rc::new(path),
+                        data: Arc::new(path),
                         style: PathStyle {
                             fill: Some(Paint::Solid(color)),
                             stroke: None,
@@ -205,7 +205,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         }
 
         // ── Scale + Rotation combined ──────────────────────────────────────
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Combined — rotation then scale (transforms compose)"),
                 rect: Rect {
@@ -254,7 +254,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         }
 
         // ── Stroke rect with rotation ──────────────────────────────────────
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!(
                     "Nested translate + rotation — grid of rotated stroked rects"
@@ -279,7 +279,7 @@ pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 children.push(RenderNode::Transform {
                     matrix,
                     children: NodeVec::collect([RenderNode::Primitive(DrawCommand::Rect(
-                        Rc::new(RectPayload {
+                        Arc::new(RectPayload {
                             rect: Rect {
                                 x: cx - 22.0,
                                 y: cy - 18.0,

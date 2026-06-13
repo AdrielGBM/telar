@@ -119,6 +119,24 @@ impl Color {
         [self.r, self.g, self.b, self.a]
     }
 
+    // Converts sRGB color channels to linear light using the IEC 61966-2-1 transfer function; alpha is already linear and passed through unchanged.
+    #[inline]
+    pub fn to_linear_f32(self) -> [f32; 4] {
+        fn srgb_channel(c: f32) -> f32 {
+            if c <= 0.04045 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
+        }
+        [
+            srgb_channel(self.r),
+            srgb_channel(self.g),
+            srgb_channel(self.b),
+            self.a,
+        ]
+    }
+
     fn hue_to_rgb(c: f32, x: f32, h: f32) -> (f32, f32, f32) {
         match ((h % 360.0 + 360.0) % 360.0) as u32 / 60 {
             0 => (c, x, 0.0),

@@ -1,5 +1,5 @@
 use std::cell::Cell;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, PointerButton};
@@ -18,7 +18,7 @@ pub struct ButtonStyle {
 }
 
 pub struct Button {
-    label: Rc<str>,
+    label: Arc<str>,
     leaf: LayoutLeaf,
     on_click: Option<Box<dyn Fn()>>,
     style_fn: Box<dyn Fn() -> ButtonStyle>,
@@ -33,7 +33,7 @@ impl Button {
     ) -> Result<Self, LayoutError> {
         let leaf = LayoutLeaf::register(ctx, LayoutStyle::new().height(36.0).min_width(80.0))?;
         Ok(Self {
-            label: Rc::from(label.into()),
+            label: Arc::from(label.into()),
             leaf,
             on_click: None,
             style_fn: Box::new(|| ButtonStyle {
@@ -77,12 +77,12 @@ impl Component for Button {
         };
 
         self.leaf.at_layout_position(RenderNode::group([
-            RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+            RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                 rect: local,
                 style: rect_style,
             }))),
-            RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
-                text: Rc::clone(&self.label),
+            RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
+                text: Arc::clone(&self.label),
                 rect: local,
                 style: style.text,
             }))),

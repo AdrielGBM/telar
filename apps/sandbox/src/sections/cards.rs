@@ -5,7 +5,7 @@ use rsx::{
     Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
     use_theme,
 };
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub fn info_card(
     ctx: &mut WidgetCtx,
@@ -19,7 +19,7 @@ pub fn info_card(
         LayoutStyle::new().width(368.0).height(110.0),
         move |_| {
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Rc::new(RectPayload {
+                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
                     rect: Rect {
                         x: 0.0,
                         y: 0.0,
@@ -28,8 +28,8 @@ pub fn info_card(
                     },
                     style: bg_fn(),
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
-                    text: Rc::from(title),
+                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
+                    text: Arc::from(title),
                     rect: Rect {
                         x: 16.0,
                         y: 14.0,
@@ -38,8 +38,8 @@ pub fn info_card(
                     },
                     style: TextStyle::new(16.0, title_color_fn()),
                 }))),
-                RenderNode::Primitive(DrawCommand::Text(Rc::new(TextPayload {
-                    text: Rc::from(body),
+                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
+                    text: Arc::from(body),
                     rect: Rect {
                         x: 16.0,
                         y: 44.0,

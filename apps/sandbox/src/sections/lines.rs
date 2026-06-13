@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rsx::{
     Canvas, Color, Component, DrawCommand, LayoutError, Line, LineCap, LineStyle, Point, Rect,
@@ -25,7 +25,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
 
         draw_section_header(&mut children, w, "Lines", card_border, muted);
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Width"),
                 rect: Rect {
@@ -47,9 +47,9 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         ];
         let mut cy = 62.0f32;
         for &(w, label) in width_examples {
-            children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+            children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
                 TextPayload {
-                    text: Rc::from(label),
+                    text: Arc::from(label),
                     rect: Rect {
                         x: 0.0,
                         y: cy - 8.0,
@@ -70,7 +70,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             cy += w.max(2.0) + 18.0;
         }
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Color"),
                 rect: Rect {
@@ -99,9 +99,9 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 )
                 .view(),
             );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+            children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
                 TextPayload {
-                    text: Rc::from(label),
+                    text: Arc::from(label),
                     rect: Rect {
                         x: 664.0,
                         y: y - 8.0,
@@ -113,7 +113,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             ))));
         }
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Separator & chart"),
                 rect: Rect {
@@ -186,7 +186,7 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             );
         }
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Rc::new(
+        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
             TextPayload {
                 text: crate::static_rc_str!("Diagonals"),
                 rect: Rect {

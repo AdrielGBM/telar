@@ -1,5 +1,5 @@
 use std::num::NonZeroUsize;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
@@ -89,7 +89,7 @@ fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_path(
     pixmap: &mut tiny_skia::Pixmap,
-    data: &Rc<PathData>,
+    data: &Arc<PathData>,
     style: &PathStyle,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,

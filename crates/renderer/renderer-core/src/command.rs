@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use geometry_core::{Point, Rect};
 
@@ -15,23 +15,23 @@ pub struct RectPayload {
 
 #[derive(Debug, Clone)]
 pub struct TextPayload {
-    pub text: Rc<str>,
+    pub text: Arc<str>,
     pub rect: Rect,
     pub style: TextStyle,
 }
 
 #[derive(Debug, Clone)]
 pub struct PathPayload {
-    pub data: Rc<PathData>,
+    pub data: Arc<PathData>,
     pub style: PathStyle,
 }
 
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
-    Rect(Rc<RectPayload>),
-    Text(Rc<TextPayload>),
+    Rect(Arc<RectPayload>),
+    Text(Arc<TextPayload>),
     Image {
-        data: Rc<ImageData>,
+        data: Arc<ImageData>,
         rect: Rect,
         filter: ImageFilter,
     },
@@ -40,7 +40,7 @@ pub enum DrawCommand {
         p2: Point,
         style: LineStyle,
     },
-    Path(Rc<PathPayload>),
+    Path(Arc<PathPayload>),
     PushClip {
         rect: Rect,
         radius: BorderRadius,
@@ -71,7 +71,7 @@ impl PartialEq for TextPayload {
 
 impl PartialEq for PathPayload {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.data, &other.data) && self.style == other.style
+        Arc::ptr_eq(&self.data, &other.data) && self.style == other.style
     }
 }
 

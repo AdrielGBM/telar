@@ -9,13 +9,13 @@ use rsx::{
     App, Color, Container, ImageData, LayoutError, LayoutItem, LayoutStyle, ScrollablePage,
     WidgetCtx, use_theme,
 };
-use std::rc::Rc;
+use std::sync::Arc;
 
 fn build_content(
     ctx: &mut WidgetCtx,
-    gradient: Rc<ImageData>,
-    checker: Rc<ImageData>,
-    alpha: Rc<ImageData>,
+    gradient: Arc<ImageData>,
+    checker: Arc<ImageData>,
+    alpha: Arc<ImageData>,
 ) -> Result<Container, LayoutError> {
     let s0 = Box::new(theme_section(ctx)?) as Box<dyn LayoutItem>;
     let s1 = Box::new(shapes_section(ctx)?) as Box<dyn LayoutItem>;
@@ -43,9 +43,9 @@ pub struct SandboxRoot;
 
 impl App for SandboxRoot {
     fn root(&self) -> Box<dyn rsx::Component> {
-        let gradient_image = Rc::new(make_gradient(128, 128));
-        let checker_image = Rc::new(make_checker(128, 128, 16));
-        let alpha_image = Rc::new(make_radial_alpha(128, 128));
+        let gradient_image = Arc::new(make_gradient(128, 128));
+        let checker_image = Arc::new(make_checker(128, 128, 16));
+        let alpha_image = Arc::new(make_radial_alpha(128, 128));
 
         let mut ctx = WidgetCtx::new();
         let content = build_content(
