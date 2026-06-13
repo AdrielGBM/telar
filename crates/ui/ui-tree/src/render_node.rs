@@ -1,7 +1,11 @@
 use std::cell::RefCell;
+use std::sync::Arc;
 
 use geometry_core::Rect;
-use renderer_core::{BorderRadius, DrawCommand};
+use renderer_core::{
+    BorderRadius, DrawCommand, PathData, PathPayload, PathStyle, RectPayload, RectStyle,
+    TextPayload, TextStyle,
+};
 
 thread_local! {
     static NODE_VEC_POOL: RefCell<Vec<Vec<RenderNode>>> = const { RefCell::new(Vec::new()) };
@@ -76,5 +80,43 @@ pub enum RenderNode {
 impl RenderNode {
     pub fn group(children: impl IntoIterator<Item = RenderNode>) -> Self {
         Self::Group(NodeVec::collect(children))
+    }
+
+    pub fn rect(rect: Rect, style: RectStyle) -> Self {
+        Self::Primitive(DrawCommand::Rect(Arc::new(RectPayload { rect, style })))
+    }
+
+    pub fn text(text: impl Into<Arc<str>>, rect: Rect, style: TextStyle) -> Self {
+        Self::Primitive(DrawCommand::Text(Arc::new(TextPayload {
+            text: text.into(),
+            rect,
+            style,
+        })))
+    }
+
+    pub fn path(data: Arc<PathData>, style: PathStyle) -> Self {
+        Self::Primitive(DrawCommand::Path(Arc::new(PathPayload { data, style })))
+    }
+
+    pub fn layer(
+        opacity: f32,
+        backdrop_blur: f32,
+        children: impl IntoIterator<Item = RenderNode>,
+    ) -> Self {
+        Self::Layer {
+            opacity,
+            backdrop_blur,
+            children: NodeVec::collect(children),
+        }
+    }
+
+    pub fn transform_with(
+        matrix: [f32; 6],
+        children: impl IntoIterator<Item = RenderNode>,
+    ) -> Self {
+        Self::Transform {
+            matrix,
+            children: NodeVec::collect(children),
+        }
     }
 }

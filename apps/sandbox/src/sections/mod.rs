@@ -1,23 +1,10 @@
 use std::sync::Arc;
 
+use crate::theme::SandboxTheme;
 use rsx::{
-    Color, Component, DrawCommand, Line, LineStyle, Point, Rect, RenderNode, TextPayload, TextStyle,
+    Component, DrawCommand, Line, LineStyle, Point, Rect, RenderNode, TextPayload, TextStyle,
+    use_theme,
 };
-
-/// Returns a cached `Arc<str>` for a `&'static str`, allocating at most once per unique pointer per thread.
-pub(crate) fn intern_static_str(s: &'static str) -> Arc<str> {
-    use rustc_hash::FxHashMap;
-    use std::cell::RefCell;
-    thread_local! {
-        static MAP: RefCell<FxHashMap<*const u8, Arc<str>>> = RefCell::new(FxHashMap::default());
-    }
-    MAP.with(|m| {
-        m.borrow_mut()
-            .entry(s.as_ptr())
-            .or_insert_with(|| Arc::from(s))
-            .clone()
-    })
-}
 
 /// Returns a per-call-site cached `Arc<str>` for a string literal, allocating at most once per thread.
 #[macro_export]
@@ -58,31 +45,26 @@ pub use theme_section::theme_section;
 pub use transforms::transforms_section;
 pub use typography::typography_section;
 
-pub(crate) fn draw_section_header(
-    children: &mut Vec<RenderNode>,
-    w: f32,
-    title: &'static str,
-    border_color: Color,
-    text_color: Color,
-) {
+pub(crate) fn draw_section_header(children: &mut Vec<RenderNode>, w: f32, title: &'static str) {
+    let muted = use_theme::<SandboxTheme>().muted;
     children.push(
         Line::new(
             || Point::new(0.0, 0.0),
             move || Point::new(w, 0.0),
-            move || LineStyle::new(border_color, 1.0),
+            move || LineStyle::new(use_theme::<SandboxTheme>().card_border, 1.0),
         )
         .view(),
     );
     children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
         TextPayload {
-            text: intern_static_str(title),
+            text: Arc::from(title),
             rect: Rect {
                 x: 0.0,
                 y: 12.0,
                 width: 200.0,
                 height: 20.0,
             },
-            style: TextStyle::new(12.0, text_color),
+            style: TextStyle::new(12.0, muted),
         },
     ))));
 }

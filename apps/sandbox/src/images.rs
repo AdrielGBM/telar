@@ -39,7 +39,7 @@ pub fn make_radial_alpha(width: u32, height: u32) -> ImageData {
             let dx = x as f32 - cx;
             let dy = y as f32 - cy;
             let dist = (dx * dx + dy * dy).sqrt();
-            let alpha = ((radius - dist).clamp(0.0, 1.0) * 255.0) as u8;
+            let alpha = (((radius - dist) / radius).clamp(0.0, 1.0) * 255.0) as u8;
             pixels.extend_from_slice(&[240, 140, 30, alpha]);
         }
     }

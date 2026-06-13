@@ -14,6 +14,7 @@ pub fn grid_cell(
     color_fn: impl Fn() -> Color + 'static,
     label: &'static str,
 ) -> Result<Canvas, LayoutError> {
+    let label_arc: Arc<str> = Arc::from(label);
     Canvas::with_intrinsic_height(ctx, 72.0, move |rect| {
         let w = rect.width;
         let h = rect.height;
@@ -33,7 +34,7 @@ pub fn grid_cell(
                 },
             }))),
             RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
-                text: crate::sections::intern_static_str(label),
+                text: label_arc.clone(),
                 rect: Rect {
                     x: 0.0,
                     y: 0.0,
@@ -111,11 +112,7 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         ctx,
         LayoutStyle::new()
             .display_grid()
-            .grid_template_columns(vec![
-                TemplateTrack::fr(1.0),
-                TemplateTrack::fr(1.0),
-                TemplateTrack::fr(1.0),
-            ])
+            .grid_template_columns(vec![TemplateTrack::repeat(3, TemplateTrack::fr(1.0))])
             .gap(12.0),
         vec![Box::new(header) as Box<dyn LayoutItem>, gca, gcb],
     )?;

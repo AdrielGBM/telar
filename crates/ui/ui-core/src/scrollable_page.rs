@@ -40,13 +40,15 @@ impl ScrollablePage {
             content,
         );
         // ctx is moved here after ScrollArea::new borrows it immutably above (the borrow ends before this line).
-        Self {
+        let mut page = Self {
             ctx,
             content_node,
             window_width,
             window_height,
             scroll_area,
-        }
+        };
+        page.compute_layout();
+        page
     }
 
     /// Recompute layout for the content node given the current window width. Call this after

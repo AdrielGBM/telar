@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use rsx::{
-    BorderRadius, Canvas, Color, Component, DrawCommand, FillRule, Gradient, LayoutError, Paint,
-    Path, PathData, PathStyle, Point, Rect, RectPayload, RectStyle, RenderNode, Stroke,
-    TextPayload, TextStyle, WidgetCtx, use_theme,
+    BorderRadius, Canvas, Color, Component, FillRule, Gradient, LayoutError, Paint, Path, PathData,
+    PathStyle, Point, Rect, RectStyle, RenderNode, Stroke, TextStyle, WidgetCtx, use_theme,
 };
 
 use crate::sections::draw_section_header;
@@ -20,315 +19,276 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         let purple = t.purple;
         let dark = t.dark;
         let muted = t.muted;
-        let card_border = t.card_border;
         let cyan = t.cyan;
 
         let mut children: Vec<RenderNode> = Vec::new();
 
-        draw_section_header(&mut children, w, "Gradients", card_border, muted);
+        draw_section_header(&mut children, w, "Gradients");
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("Linear — Rect"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 40.0,
-                    width: 300.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("Linear — Rect"),
+            Rect {
+                x: 0.0,
+                y: 40.0,
+                width: 300.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-            RectPayload {
-                rect: Rect {
-                    x: 0.0,
-                    y: 60.0,
-                    width: 168.0,
-                    height: 80.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Gradient(Gradient::linear(
-                        Point::new(0.0, 100.0),
-                        Point::new(168.0, 100.0),
-                        &[(0.0, danger), (1.0, primary)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+        children.push(RenderNode::rect(
+            Rect {
+                x: 0.0,
+                y: 60.0,
+                width: 168.0,
+                height: 80.0,
             },
-        ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("horizontal"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 146.0,
-                    width: 168.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+            RectStyle {
+                fill: Some(Paint::Gradient(Gradient::linear(
+                    Point::new(0.0, 100.0),
+                    Point::new(168.0, 100.0),
+                    &[(0.0, danger), (1.0, primary)],
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(8.0),
             },
-        ))));
+        ));
+        children.push(RenderNode::text(
+            crate::static_rc_str!("horizontal"),
+            Rect {
+                x: 0.0,
+                y: 146.0,
+                width: 168.0,
+                height: 16.0,
+            },
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-            RectPayload {
-                rect: Rect {
-                    x: 184.0,
-                    y: 60.0,
-                    width: 168.0,
-                    height: 80.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Gradient(Gradient::linear(
-                        Point::new(268.0, 60.0),
-                        Point::new(268.0, 140.0),
-                        &[(0.0, purple), (1.0, success)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+        children.push(RenderNode::rect(
+            Rect {
+                x: 184.0,
+                y: 60.0,
+                width: 168.0,
+                height: 80.0,
             },
-        ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("vertical"),
-                rect: Rect {
-                    x: 184.0,
-                    y: 146.0,
-                    width: 168.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+            RectStyle {
+                fill: Some(Paint::Gradient(Gradient::linear(
+                    Point::new(268.0, 60.0),
+                    Point::new(268.0, 140.0),
+                    &[(0.0, purple), (1.0, success)],
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(8.0),
             },
-        ))));
+        ));
+        children.push(RenderNode::text(
+            crate::static_rc_str!("vertical"),
+            Rect {
+                x: 184.0,
+                y: 146.0,
+                width: 168.0,
+                height: 16.0,
+            },
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-            RectPayload {
-                rect: Rect {
-                    x: 368.0,
-                    y: 60.0,
-                    width: 168.0,
-                    height: 80.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Gradient(Gradient::linear(
-                        Point::new(368.0, 60.0),
-                        Point::new(536.0, 140.0),
-                        &[(0.0, warning), (1.0, dark)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+        children.push(RenderNode::rect(
+            Rect {
+                x: 368.0,
+                y: 60.0,
+                width: 168.0,
+                height: 80.0,
             },
-        ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("diagonal"),
-                rect: Rect {
-                    x: 368.0,
-                    y: 146.0,
-                    width: 168.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+            RectStyle {
+                fill: Some(Paint::Gradient(Gradient::linear(
+                    Point::new(368.0, 60.0),
+                    Point::new(536.0, 140.0),
+                    &[(0.0, warning), (1.0, dark)],
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(8.0),
             },
-        ))));
+        ));
+        children.push(RenderNode::text(
+            crate::static_rc_str!("diagonal"),
+            Rect {
+                x: 368.0,
+                y: 146.0,
+                width: 168.0,
+                height: 16.0,
+            },
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-            RectPayload {
-                rect: Rect {
-                    x: 552.0,
-                    y: 60.0,
-                    width: 168.0,
-                    height: 80.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Gradient(Gradient::linear(
-                        Point::new(552.0, 100.0),
-                        Point::new(720.0, 100.0),
-                        &[(0.0, dark), (0.5, cyan), (1.0, Color::WHITE)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+        children.push(RenderNode::rect(
+            Rect {
+                x: 552.0,
+                y: 60.0,
+                width: 168.0,
+                height: 80.0,
             },
-        ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("3 stops"),
-                rect: Rect {
-                    x: 552.0,
-                    y: 146.0,
-                    width: 168.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+            RectStyle {
+                fill: Some(Paint::Gradient(Gradient::linear(
+                    Point::new(552.0, 100.0),
+                    Point::new(720.0, 100.0),
+                    &[(0.0, dark), (0.5, cyan), (1.0, Color::WHITE)],
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(8.0),
             },
-        ))));
+        ));
+        children.push(RenderNode::text(
+            crate::static_rc_str!("3 stops"),
+            Rect {
+                x: 552.0,
+                y: 146.0,
+                width: 168.0,
+                height: 16.0,
+            },
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("Radial — Rect"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 180.0,
-                    width: 300.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("Radial — Rect"),
+            Rect {
+                x: 0.0,
+                y: 180.0,
+                width: 300.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-            RectPayload {
-                rect: Rect {
-                    x: 0.0,
-                    y: 200.0,
-                    width: 168.0,
-                    height: 80.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Gradient(Gradient::radial(
-                        Point::new(84.0, 240.0),
-                        70.0,
-                        &[(0.0, primary), (1.0, primary.with_alpha(0.0))],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+        children.push(RenderNode::rect(
+            Rect {
+                x: 0.0,
+                y: 200.0,
+                width: 168.0,
+                height: 80.0,
             },
-        ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("center burst"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 286.0,
-                    width: 168.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+            RectStyle {
+                fill: Some(Paint::Gradient(Gradient::radial(
+                    Point::new(84.0, 240.0),
+                    70.0,
+                    &[(0.0, primary), (1.0, primary.with_alpha(0.0))],
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(8.0),
             },
-        ))));
+        ));
+        children.push(RenderNode::text(
+            crate::static_rc_str!("center burst"),
+            Rect {
+                x: 0.0,
+                y: 286.0,
+                width: 168.0,
+                height: 16.0,
+            },
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-            RectPayload {
-                rect: Rect {
-                    x: 184.0,
-                    y: 200.0,
-                    width: 168.0,
-                    height: 80.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Gradient(Gradient::radial(
-                        Point::new(268.0, 240.0),
-                        40.0,
-                        &[(0.0, danger), (1.0, warning)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+        children.push(RenderNode::rect(
+            Rect {
+                x: 184.0,
+                y: 200.0,
+                width: 168.0,
+                height: 80.0,
             },
-        ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("tight radius"),
-                rect: Rect {
-                    x: 184.0,
-                    y: 286.0,
-                    width: 168.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+            RectStyle {
+                fill: Some(Paint::Gradient(Gradient::radial(
+                    Point::new(268.0, 240.0),
+                    40.0,
+                    &[(0.0, danger), (1.0, warning)],
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(8.0),
             },
-        ))));
+        ));
+        children.push(RenderNode::text(
+            crate::static_rc_str!("tight radius"),
+            Rect {
+                x: 184.0,
+                y: 286.0,
+                width: 168.0,
+                height: 16.0,
+            },
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-            RectPayload {
-                rect: Rect {
-                    x: 368.0,
-                    y: 200.0,
-                    width: 168.0,
-                    height: 80.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Gradient(Gradient::radial(
-                        Point::new(452.0, 240.0),
-                        80.0,
-                        &[(0.0, Color::WHITE), (0.45, purple), (1.0, dark)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+        children.push(RenderNode::rect(
+            Rect {
+                x: 368.0,
+                y: 200.0,
+                width: 168.0,
+                height: 80.0,
             },
-        ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("3 stops"),
-                rect: Rect {
-                    x: 368.0,
-                    y: 286.0,
-                    width: 168.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+            RectStyle {
+                fill: Some(Paint::Gradient(Gradient::radial(
+                    Point::new(452.0, 240.0),
+                    80.0,
+                    &[(0.0, Color::WHITE), (0.45, purple), (1.0, dark)],
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(8.0),
             },
-        ))));
+        ));
+        children.push(RenderNode::text(
+            crate::static_rc_str!("3 stops"),
+            Rect {
+                x: 368.0,
+                y: 286.0,
+                width: 168.0,
+                height: 16.0,
+            },
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-            RectPayload {
-                rect: Rect {
-                    x: 552.0,
-                    y: 200.0,
-                    width: 168.0,
-                    height: 80.0,
-                },
-                style: RectStyle {
-                    fill: Some(Paint::Gradient(Gradient::radial(
-                        Point::new(552.0, 200.0),
-                        180.0,
-                        &[(0.0, success), (1.0, dark)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+        children.push(RenderNode::rect(
+            Rect {
+                x: 552.0,
+                y: 200.0,
+                width: 168.0,
+                height: 80.0,
             },
-        ))));
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("off-center"),
-                rect: Rect {
-                    x: 552.0,
-                    y: 286.0,
-                    width: 168.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+            RectStyle {
+                fill: Some(Paint::Gradient(Gradient::radial(
+                    Point::new(552.0, 200.0),
+                    180.0,
+                    &[(0.0, success), (1.0, dark)],
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(8.0),
             },
-        ))));
+        ));
+        children.push(RenderNode::text(
+            crate::static_rc_str!("off-center"),
+            Rect {
+                x: 552.0,
+                y: 286.0,
+                width: 168.0,
+                height: 16.0,
+            },
+            TextStyle::new(11.0, muted),
+        ));
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("Gradients — Path"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 318.0,
-                    width: 300.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("Gradients — Path"),
+            Rect {
+                x: 0.0,
+                y: 318.0,
+                width: 300.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
 
         let tri = Arc::new(
             PathData::new()
@@ -338,36 +298,28 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 .close(),
         );
         children.push(
-            Path::new(
-                {
-                    let d = tri.clone();
-                    move || d.clone()
-                },
-                move || PathStyle {
-                    fill: Some(Paint::Gradient(Gradient::linear(
-                        Point::new(75.0, 338.0),
-                        Point::new(75.0, 468.0),
-                        &[(0.0, danger), (1.0, warning)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    fill_rule: FillRule::Winding,
-                },
-            )
+            Path::static_data(tri.clone(), move || PathStyle {
+                fill: Some(Paint::Gradient(Gradient::linear(
+                    Point::new(75.0, 338.0),
+                    Point::new(75.0, 468.0),
+                    &[(0.0, danger), (1.0, warning)],
+                ))),
+                stroke: None,
+                shadow: None,
+                fill_rule: FillRule::Winding,
+            })
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("triangle linear"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 476.0,
-                    width: 180.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("triangle linear"),
+            Rect {
+                x: 0.0,
+                y: 476.0,
+                width: 180.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
 
         let cx = 268.0f32;
         let cy = 403.0f32;
@@ -386,36 +338,28 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         }
         let star_path = Arc::new(star_path.close());
         children.push(
-            Path::new(
-                {
-                    let d = star_path.clone();
-                    move || d.clone()
-                },
-                move || PathStyle {
-                    fill: Some(Paint::Gradient(Gradient::radial(
-                        Point::new(268.0, 403.0),
-                        65.0,
-                        &[(0.0, Color::WHITE), (0.5, purple), (1.0, dark)],
-                    ))),
-                    stroke: Some(Stroke::new(dark, 1.0)),
-                    shadow: None,
-                    fill_rule: FillRule::Winding,
-                },
-            )
+            Path::static_data(star_path.clone(), move || PathStyle {
+                fill: Some(Paint::Gradient(Gradient::radial(
+                    Point::new(268.0, 403.0),
+                    65.0,
+                    &[(0.0, Color::WHITE), (0.5, purple), (1.0, dark)],
+                ))),
+                stroke: Some(Stroke::new(dark, 1.0)),
+                shadow: None,
+                fill_rule: FillRule::Winding,
+            })
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("star radial"),
-                rect: Rect {
-                    x: 200.0,
-                    y: 476.0,
-                    width: 180.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("star radial"),
+            Rect {
+                x: 200.0,
+                y: 476.0,
+                width: 180.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
 
         let petal = Arc::new(
             PathData::new()
@@ -433,36 +377,28 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 .close(),
         );
         children.push(
-            Path::new(
-                {
-                    let d = petal.clone();
-                    move || d.clone()
-                },
-                move || PathStyle {
-                    fill: Some(Paint::Gradient(Gradient::linear(
-                        Point::new(372.0, 338.0),
-                        Point::new(532.0, 468.0),
-                        &[(0.0, success), (0.5, cyan), (1.0, primary)],
-                    ))),
-                    stroke: Some(Stroke::new(dark, 1.5)),
-                    shadow: None,
-                    fill_rule: FillRule::Winding,
-                },
-            )
+            Path::static_data(petal.clone(), move || PathStyle {
+                fill: Some(Paint::Gradient(Gradient::linear(
+                    Point::new(372.0, 338.0),
+                    Point::new(532.0, 468.0),
+                    &[(0.0, success), (0.5, cyan), (1.0, primary)],
+                ))),
+                stroke: Some(Stroke::new(dark, 1.5)),
+                shadow: None,
+                fill_rule: FillRule::Winding,
+            })
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("petal linear 3-stop"),
-                rect: Rect {
-                    x: 372.0,
-                    y: 476.0,
-                    width: 180.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("petal linear 3-stop"),
+            Rect {
+                x: 372.0,
+                y: 476.0,
+                width: 180.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
 
         let rings = Arc::new(
             PathData::new()
@@ -478,36 +414,28 @@ pub fn gradients_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 .close(),
         );
         children.push(
-            Path::new(
-                {
-                    let d = rings.clone();
-                    move || d.clone()
-                },
-                move || PathStyle {
-                    fill: Some(Paint::Gradient(Gradient::linear(
-                        Point::new(576.0, 403.0),
-                        Point::new(736.0, 403.0),
-                        &[(0.0, danger), (1.0, purple)],
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    fill_rule: FillRule::EvenOdd,
-                },
-            )
+            Path::static_data(rings.clone(), move || PathStyle {
+                fill: Some(Paint::Gradient(Gradient::linear(
+                    Point::new(576.0, 403.0),
+                    Point::new(736.0, 403.0),
+                    &[(0.0, danger), (1.0, purple)],
+                ))),
+                stroke: None,
+                shadow: None,
+                fill_rule: FillRule::EvenOdd,
+            })
             .view(),
         );
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("even-odd + linear"),
-                rect: Rect {
-                    x: 576.0,
-                    y: 476.0,
-                    width: 180.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("even-odd + linear"),
+            Rect {
+                x: 576.0,
+                y: 476.0,
+                width: 180.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
 
         RenderNode::group(children)
     })

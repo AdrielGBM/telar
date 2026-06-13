@@ -150,6 +150,8 @@ impl ComponentList {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use geometry_core::Rect;
     use reactive_core::create_rw_signal;
     use renderer_core::{Color, RectPayload, RectStyle};
@@ -158,7 +160,7 @@ mod tests {
     use crate::render_node::RenderNode;
 
     fn sample_rect(x: f32) -> DrawCommand {
-        DrawCommand::Rect(Rc::new(RectPayload {
+        DrawCommand::Rect(Arc::new(RectPayload {
             rect: Rect::new(x, 0.0, 10.0, 10.0),
             style: RectStyle::default().with_fill(Color::BLACK),
         }))

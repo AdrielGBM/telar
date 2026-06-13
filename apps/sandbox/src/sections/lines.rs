@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use rsx::{
-    Canvas, Color, Component, DrawCommand, LayoutError, Line, LineCap, LineStyle, Point, Rect,
-    RenderNode, TextPayload, TextStyle, WidgetCtx, use_theme,
+    Canvas, Color, Component, LayoutError, Line, LineCap, LineStyle, Point, Rect, RenderNode,
+    TextStyle, WidgetCtx, use_theme,
 };
 
 use crate::sections::draw_section_header;
@@ -23,20 +23,18 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
 
         let mut children: Vec<RenderNode> = Vec::new();
 
-        draw_section_header(&mut children, w, "Lines", card_border, muted);
+        draw_section_header(&mut children, w, "Lines");
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("Width"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 40.0,
-                    width: 60.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("Width"),
+            Rect {
+                x: 0.0,
+                y: 40.0,
+                width: 60.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
 
         let width_examples: &[(f32, &str)] = &[
             (1.0, "1 px"),
@@ -47,18 +45,16 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
         ];
         let mut cy = 62.0f32;
         for &(w, label) in width_examples {
-            children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-                TextPayload {
-                    text: Arc::from(label),
-                    rect: Rect {
-                        x: 0.0,
-                        y: cy - 8.0,
-                        width: 56.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, muted),
+            children.push(RenderNode::text(
+                Arc::<str>::from(label),
+                Rect {
+                    x: 0.0,
+                    y: cy - 8.0,
+                    width: 56.0,
+                    height: 16.0,
                 },
-            ))));
+                TextStyle::new(11.0, muted),
+            ));
             children.push(
                 Line::new(
                     move || Point::new(64.0, cy),
@@ -70,18 +66,16 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             cy += w.max(2.0) + 18.0;
         }
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("Color"),
-                rect: Rect {
-                    x: 396.0,
-                    y: 40.0,
-                    width: 60.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("Color"),
+            Rect {
+                x: 396.0,
+                y: 40.0,
+                width: 60.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
         let color_examples: &[(Color, &str)] = &[
             (primary, "primary"),
             (success, "success"),
@@ -99,32 +93,28 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
                 )
                 .view(),
             );
-            children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-                TextPayload {
-                    text: Arc::from(label),
-                    rect: Rect {
-                        x: 664.0,
-                        y: y - 8.0,
-                        width: 80.0,
-                        height: 16.0,
-                    },
-                    style: TextStyle::new(11.0, color),
-                },
-            ))));
-        }
-
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("Separator & chart"),
-                rect: Rect {
-                    x: 0.0,
-                    y: 176.0,
-                    width: 300.0,
+            children.push(RenderNode::text(
+                Arc::<str>::from(label),
+                Rect {
+                    x: 664.0,
+                    y: y - 8.0,
+                    width: 80.0,
                     height: 16.0,
                 },
-                style: TextStyle::new(11.0, muted),
+                TextStyle::new(11.0, color),
+            ));
+        }
+
+        children.push(RenderNode::text(
+            crate::static_rc_str!("Separator & chart"),
+            Rect {
+                x: 0.0,
+                y: 176.0,
+                width: 300.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
         children.push(
             Line::new(
                 || Point::new(0.0, 196.0),
@@ -186,18 +176,16 @@ pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
             );
         }
 
-        children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-            TextPayload {
-                text: crate::static_rc_str!("Diagonals"),
-                rect: Rect {
-                    x: 436.0,
-                    y: 200.0,
-                    width: 120.0,
-                    height: 16.0,
-                },
-                style: TextStyle::new(11.0, muted),
+        children.push(RenderNode::text(
+            crate::static_rc_str!("Diagonals"),
+            Rect {
+                x: 436.0,
+                y: 200.0,
+                width: 120.0,
+                height: 16.0,
             },
-        ))));
+            TextStyle::new(11.0, muted),
+        ));
         let fan_cx = 566.0f32;
         let fan_cy = 266.0f32;
         let fan_tips: &[(f32, f32, Color)] = &[

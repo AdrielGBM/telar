@@ -30,14 +30,23 @@ pub fn theme_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         .on_click(|| set_theme(SandboxTheme::modern()));
 
     let btn_pastel = Button::new(ctx, "Pastel")?
-        .style(|| ButtonStyle {
-            rect: RectStyle::default()
-                .with_fill(Color::rgba(0.82, 0.72, 0.94, 1.0))
-                .with_radius(BorderRadius::all(4.0)),
-            rect_hover: RectStyle::default()
-                .with_fill(Color::rgba(0.74, 0.63, 0.88, 1.0))
-                .with_radius(BorderRadius::all(4.0)),
-            text: TextStyle::new(14.0, Color::rgba(0.25, 0.15, 0.35, 1.0)),
+        .style(|| {
+            let p = SandboxTheme::pastel();
+            let hover = Color::rgba(
+                (p.primary.r * 0.85).min(1.0),
+                (p.primary.g * 0.85).min(1.0),
+                (p.primary.b * 0.85).min(1.0),
+                1.0,
+            );
+            ButtonStyle {
+                rect: RectStyle::default()
+                    .with_fill(p.primary)
+                    .with_radius(BorderRadius::all(4.0)),
+                rect_hover: RectStyle::default()
+                    .with_fill(hover)
+                    .with_radius(BorderRadius::all(4.0)),
+                text: TextStyle::new(14.0, p.on_color),
+            }
         })
         .on_click(|| set_theme(SandboxTheme::pastel()));
 

@@ -2184,7 +2184,6 @@ name = "sandbox"
 version = "0.1.0"
 dependencies = [
  "rsx",
- "rustc-hash 2.1.2",
  "tracing-subscriber",
 ]
 
