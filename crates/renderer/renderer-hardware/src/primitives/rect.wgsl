@@ -74,7 +74,7 @@ fn vs_main(
     let max_wy = max(max(wy0, wy1), max(wy2, wy3));
 
     let has_shadow = inst.shadow_color.a > 0.0;
-    let shadow_ext = select(0.0, inst.shadow_blur * 2.5 + inst.shadow_spread, has_shadow);
+    let shadow_ext = select(0.0, inst.shadow_blur * 2.0 + inst.shadow_spread, has_shadow);
     let sx = select(0.0, inst.shadow_offset.x, has_shadow);
     let sy = select(0.0, inst.shadow_offset.y, has_shadow);
 
@@ -206,7 +206,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let shadow_radii = clamp(inst.radii + spread, vec4<f32>(0.0), vec4<f32>(max_r));
         let shadow_dist = sdf_rounded_rect(shadow_local, shadow_half, shadow_radii);
 
-        let sigma = max(inst.shadow_blur * 0.75, 0.5);
+        let sigma = max(inst.shadow_blur * 0.5, 0.5);
         shadow_a = inst.shadow_color.a * 0.5 * erfc_approx(shadow_dist / (sigma * 1.41421356));
         shadow_rgb = inst.shadow_color.rgb;
     }

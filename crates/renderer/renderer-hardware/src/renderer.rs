@@ -13,7 +13,7 @@ use renderer_core::{
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
-use crate::blur::BlurPipeline;
+use crate::blur::{BlurParams, BlurPipeline};
 use crate::composite::CompositePipeline;
 use crate::primitives::image::{ImageInstance, ImagePipeline};
 use crate::primitives::layer::LayerPipeline;
@@ -629,7 +629,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             wgpu::Features::empty()
         };
-        const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<[f32; 8]>() as u32; // 32 bytes
+        const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<BlurParams>() as u32;
         let supports_immediates = adapter.features().contains(wgpu::Features::IMMEDIATES)
             && adapter.limits().max_immediate_size >= BLUR_PARAMS_SIZE;
         let immediates_feature = if supports_immediates {

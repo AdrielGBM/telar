@@ -69,7 +69,9 @@ impl FillDataBuffer {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
-                    min_binding_size: None,
+                    min_binding_size: wgpu::BufferSize::new(
+                        std::mem::size_of::<PathFillData>() as u64
+                    ),
                 },
                 count: None,
             }],

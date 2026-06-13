@@ -2,7 +2,7 @@ use wgpu::{Device, TextureFormat};
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct BlurParams {
+pub(crate) struct BlurParams {
     direction: [f32; 2],
     tex_size: [f32; 2],
     sigma: f32,
@@ -92,7 +92,9 @@ impl BlurPipeline {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: None,
+                    min_binding_size: wgpu::BufferSize::new(
+                        std::mem::size_of::<BlurParams>() as u64
+                    ),
                 },
                 count: None,
             });
