@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
 use geometry_core::Rect as Bounds;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
-use renderer_core::{DrawCommand, RectPayload, RectStyle};
+use renderer_core::RectStyle;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
@@ -32,18 +30,15 @@ impl Component for RectView {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         let style = (self.style)();
-        self.leaf
-            .at_layout_position(RenderNode::Primitive(DrawCommand::Rect(Arc::new(
-                RectPayload {
-                    rect: Bounds {
-                        x: 0.0,
-                        y: 0.0,
-                        width: r.width,
-                        height: r.height,
-                    },
-                    style,
-                },
-            ))))
+        self.leaf.at_layout_position(RenderNode::rect(
+            Bounds {
+                x: 0.0,
+                y: 0.0,
+                width: r.width,
+                height: r.height,
+            },
+            style,
+        ))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

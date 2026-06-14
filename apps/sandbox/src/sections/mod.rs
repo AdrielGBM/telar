@@ -1,10 +1,5 @@
-use std::sync::Arc;
-
 use crate::theme::SandboxTheme;
-use rsx::{
-    Component, DrawCommand, Line, LineStyle, Point, Rect, RenderNode, TextPayload, TextStyle,
-    use_theme,
-};
+use rsx::{Component, Line, LineStyle, Point, Rect, RenderNode, TextStyle, use_theme};
 
 /// Returns a per-call-site cached `Arc<str>` for a string literal, allocating at most once per thread.
 #[macro_export]
@@ -55,16 +50,14 @@ pub(crate) fn draw_section_header(children: &mut Vec<RenderNode>, w: f32, title:
         )
         .view(),
     );
-    children.push(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-        TextPayload {
-            text: Arc::from(title),
-            rect: Rect {
-                x: 0.0,
-                y: 12.0,
-                width: 200.0,
-                height: 20.0,
-            },
-            style: TextStyle::new(12.0, muted),
+    children.push(RenderNode::text(
+        title,
+        Rect {
+            x: 0.0,
+            y: 12.0,
+            width: 200.0,
+            height: 20.0,
         },
-    ))));
+        TextStyle::new(12.0, muted),
+    ));
 }

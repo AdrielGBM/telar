@@ -2,34 +2,20 @@ use std::sync::Arc;
 
 use geometry_core::{Point, Rect};
 
-use crate::{
-    BorderRadius, ImageData, ImageFilter, LineStyle, PathData, PathStyle, RectStyle, TextStyle,
-};
-
-// Boxed to keep DrawCommand at 40 bytes; RectStyle is ~180 bytes on its own and would otherwise dominate the enum size, hurting cache utilization across the command buffer.
-#[derive(Debug, Clone)]
-pub struct RectPayload {
-    pub rect: Rect,
-    pub style: RectStyle,
-}
-
-#[derive(Debug, Clone)]
-pub struct TextPayload {
-    pub text: Arc<str>,
-    pub rect: Rect,
-    pub style: TextStyle,
-}
-
-#[derive(Debug, Clone)]
-pub struct PathPayload {
-    pub data: Arc<PathData>,
-    pub style: PathStyle,
-}
+use crate::style_pool::StyleHandle;
+use crate::{BorderRadius, ImageData, ImageFilter, LineStyle, PathData};
 
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
-    Rect(Arc<RectPayload>),
-    Text(Arc<TextPayload>),
+    Rect {
+        rect: Rect,
+        style: StyleHandle,
+    },
+    Text {
+        text: Arc<str>,
+        rect: Rect,
+        style: StyleHandle,
+    },
     Image {
         data: Arc<ImageData>,
         rect: Rect,
@@ -40,7 +26,10 @@ pub enum DrawCommand {
         p2: Point,
         style: LineStyle,
     },
-    Path(Arc<PathPayload>),
+    Path {
+        data: Arc<PathData>,
+        style: StyleHandle,
+    },
     PushClip {
         rect: Rect,
         radius: BorderRadius,
@@ -55,31 +44,45 @@ pub enum DrawCommand {
         backdrop_blur: f32,
     },
     PopLayer,
-}
-
-impl PartialEq for RectPayload {
-    fn eq(&self, other: &Self) -> bool {
-        self.rect == other.rect && self.style == other.style
-    }
-}
-
-impl PartialEq for TextPayload {
-    fn eq(&self, other: &Self) -> bool {
-        *self.text == *other.text && self.rect == other.rect && self.style == other.style
-    }
-}
-
-impl PartialEq for PathPayload {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.data, &other.data) && self.style == other.style
-    }
+    // AHardwareBuffer* (cast to u64 for FFI safety) imported directly as a GPU texture,
+    // bypassing the staging buffer copy used by the normal Image variant.
+    #[cfg(target_os = "android")]
+    AndroidHardwareBufferImage {
+        handle: u64,
+        rect: geometry_core::Rect,
+        filter: crate::ImageFilter,
+        width: u32,
+        height: u32,
+        /// AHardwareBuffer format constant (e.g. AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM = 1).
+        format: u32,
+    },
 }
 
 impl PartialEq for DrawCommand {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (DrawCommand::Rect(a), DrawCommand::Rect(b)) => a == b,
-            (DrawCommand::Text(a), DrawCommand::Text(b)) => a == b,
+            (
+                DrawCommand::Rect {
+                    rect: r1,
+                    style: s1,
+                },
+                DrawCommand::Rect {
+                    rect: r2,
+                    style: s2,
+                },
+            ) => r1 == r2 && s1 == s2,
+            (
+                DrawCommand::Text {
+                    text: t1,
+                    rect: r1,
+                    style: s1,
+                },
+                DrawCommand::Text {
+                    text: t2,
+                    rect: r2,
+                    style: s2,
+                },
+            ) => *t1 == *t2 && r1 == r2 && s1 == s2,
             (
                 DrawCommand::Image {
                     data: d1,
@@ -104,7 +107,16 @@ impl PartialEq for DrawCommand {
                     style: s2,
                 },
             ) => p1a == p1b && p2a == p2b && s1 == s2,
-            (DrawCommand::Path(a), DrawCommand::Path(b)) => a == b,
+            (
+                DrawCommand::Path {
+                    data: d1,
+                    style: s1,
+                },
+                DrawCommand::Path {
+                    data: d2,
+                    style: s2,
+                },
+            ) => Arc::ptr_eq(d1, d2) && s1 == s2,
             (
                 DrawCommand::PushClip {
                     rect: r1,
@@ -131,6 +143,21 @@ impl PartialEq for DrawCommand {
                 },
             ) => o1 == o2 && b1 == b2,
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
+            #[cfg(target_os = "android")]
+            (
+                DrawCommand::AndroidHardwareBufferImage {
+                    handle: h1,
+                    rect: r1,
+                    filter: f1,
+                    ..
+                },
+                DrawCommand::AndroidHardwareBufferImage {
+                    handle: h2,
+                    rect: r2,
+                    filter: f2,
+                    ..
+                },
+            ) => h1 == h2 && r1 == r2 && f1 == f2,
             _ => false,
         }
     }

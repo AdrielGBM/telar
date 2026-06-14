@@ -19,6 +19,7 @@ impl LayoutLeaf {
     pub(crate) fn at_layout_position(&self, content: RenderNode) -> RenderNode {
         let r = self.rect.get();
         RenderNode::Transform {
+            node_key: 0,
             matrix: [1.0, 0.0, 0.0, 1.0, r.x, r.y],
             children: NodeVec::collect([content]),
         }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use platform_core::Event;
-use renderer_core::{DrawCommand, PathData, PathPayload, PathStyle};
+use renderer_core::{PathData, PathStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 /// `Path` is designed for use inside `Canvas`/`DrawingArea` closures where you control absolute coordinates. It does not implement `LayoutItem` because its path data uses absolute points, not relative to a layout rect. To use `Path` in a layout context, embed it in a `Canvas` widget.
@@ -33,7 +33,7 @@ impl Component for Path {
     fn view(&self) -> RenderNode {
         let data = (self.data)();
         let style = (self.style)();
-        RenderNode::Primitive(DrawCommand::Path(Arc::new(PathPayload { data, style })))
+        RenderNode::path(data, style)
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

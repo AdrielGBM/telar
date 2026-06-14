@@ -1,11 +1,9 @@
 use crate::theme::SandboxTheme;
 use crate::theme::section;
 use rsx::{
-    BorderRadius, Canvas, Color, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
-    use_theme,
+    BorderRadius, Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Paint, Rect,
+    RectStyle, RenderNode, Stroke, TextStyle, WidgetCtx, use_theme,
 };
-use std::sync::Arc;
 
 pub fn shape_card(
     ctx: &mut WidgetCtx,
@@ -18,25 +16,25 @@ pub fn shape_card(
         LayoutStyle::new().width(168.0).height(80.0),
         move |_| {
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
-                    rect: Rect {
+                RenderNode::rect(
+                    Rect {
                         x: 0.0,
                         y: 0.0,
                         width: 168.0,
                         height: 80.0,
                     },
-                    style: style_fn(),
-                }))),
-                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
-                    text: Arc::from(label),
-                    rect: Rect {
+                    style_fn(),
+                ),
+                RenderNode::text(
+                    label,
+                    Rect {
                         x: 0.0,
                         y: 4.0,
                         width: 168.0,
                         height: 72.0,
                     },
-                    style: TextStyle::new(13.0, label_color_fn()),
-                }))),
+                    TextStyle::new(13.0, label_color_fn()),
+                ),
             ])
         },
     )

@@ -1,10 +1,8 @@
-use std::sync::Arc;
-
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, ScrollDelta};
 use reactive_core::{RwSignal, create_rw_signal};
-use renderer_core::{BorderRadius, Color, DrawCommand, RectPayload, RectStyle};
+use renderer_core::{BorderRadius, Color, RectStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use ui_tree::NodeVec;
@@ -120,9 +118,11 @@ impl Component for ScrollArea {
         let content_rect = self.content_size.get();
 
         let scrollable = RenderNode::Clip {
+            node_key: 0,
             rect: vp,
             radius: BorderRadius::zero(),
             children: NodeVec::collect([RenderNode::Transform {
+                node_key: 0,
                 matrix: [1.0, 0.0, 0.0, 1.0, vp.x - scroll_x, vp.y - scroll_y],
                 children: NodeVec::collect([self.content.view()]),
             }]),
@@ -133,12 +133,12 @@ impl Component for ScrollArea {
             let bar_h = (vp.height / content_rect.height * vp.height).max(24.0);
             let max_scroll = (content_rect.height - vp.height).max(1.0);
             let bar_y = vp.y + (scroll_y / max_scroll) * (vp.height - bar_h);
-            RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
-                rect: Rect::new(vp.x + vp.width - sb.width, bar_y, sb.width - 2.0, bar_h),
-                style: RectStyle::default()
+            RenderNode::rect(
+                Rect::new(vp.x + vp.width - sb.width, bar_y, sb.width - 2.0, bar_h),
+                RectStyle::default()
                     .with_fill(sb.color)
                     .with_radius(BorderRadius::all(sb.radius)),
-            })))
+            )
         } else {
             RenderNode::Empty
         };
@@ -147,12 +147,12 @@ impl Component for ScrollArea {
             let bar_w = (vp.width / content_rect.width * vp.width).max(24.0);
             let max_scroll_x = (content_rect.width - vp.width).max(1.0);
             let bar_x = vp.x + (scroll_x / max_scroll_x) * (vp.width - bar_w);
-            RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
-                rect: Rect::new(bar_x, vp.y + vp.height - sb.width, bar_w, sb.width - 2.0),
-                style: RectStyle::default()
+            RenderNode::rect(
+                Rect::new(bar_x, vp.y + vp.height - sb.width, bar_w, sb.width - 2.0),
+                RectStyle::default()
                     .with_fill(sb.color)
                     .with_radius(BorderRadius::all(sb.radius)),
-            })))
+            )
         } else {
             RenderNode::Empty
         };
@@ -203,6 +203,7 @@ mod tests {
     use geometry_core::Rect;
     use layout_core::{AvailableSpace, LayoutStyle, NodeId};
     use platform_core::{Event, PointerSource, ScrollDelta};
+    use renderer_core::DrawCommand;
     use ui_tree::{Component, EventResult, RenderNode};
 
     use super::*;
@@ -328,12 +329,12 @@ mod tests {
             .unwrap();
             sa
         });
-        if let RenderNode::Group(children) = sa.view() {
+        if let RenderNode::Group { children, .. } = sa.view() {
             assert_eq!(children.len(), 3);
             assert!(matches!(&children[0], RenderNode::Clip { .. }));
             assert!(matches!(
                 &children[1],
-                RenderNode::Primitive(DrawCommand::Rect(_))
+                RenderNode::Primitive(DrawCommand::Rect { .. })
             ));
         } else {
             panic!("expected Group");
@@ -391,12 +392,12 @@ mod tests {
     fn view_emits_clip_and_scrollbar_when_content_overflows() {
         let sa = make_scroll_area();
         let view = sa.view();
-        if let RenderNode::Group(children) = view {
+        if let RenderNode::Group { children, .. } = view {
             assert_eq!(children.len(), 3);
             assert!(matches!(&children[0], RenderNode::Clip { .. }));
             assert!(matches!(
                 &children[1],
-                RenderNode::Primitive(DrawCommand::Rect(_))
+                RenderNode::Primitive(DrawCommand::Rect { .. })
             ));
         } else {
             panic!("expected Group");
@@ -407,7 +408,7 @@ mod tests {
     fn view_no_scrollbar_when_content_fits() {
         let sa = make_scroll_area_small();
         let view = sa.view();
-        if let RenderNode::Group(children) = view {
+        if let RenderNode::Group { children, .. } = view {
             assert!(matches!(&children[1], RenderNode::Empty));
         } else {
             panic!("expected Group");
@@ -542,13 +543,13 @@ mod tests {
     fn view_emits_hbar_when_content_overflows_x() {
         let sa = make_scroll_area_wide();
         let view = sa.view();
-        if let RenderNode::Group(children) = view {
+        if let RenderNode::Group { children, .. } = view {
             assert_eq!(children.len(), 3);
             assert!(matches!(&children[0], RenderNode::Clip { .. }));
             assert!(matches!(&children[1], RenderNode::Empty));
             assert!(matches!(
                 &children[2],
-                RenderNode::Primitive(DrawCommand::Rect(_))
+                RenderNode::Primitive(DrawCommand::Rect { .. })
             ));
         } else {
             panic!("expected Group");
@@ -559,7 +560,7 @@ mod tests {
     fn view_no_hbar_when_content_fits_x() {
         let sa = make_scroll_area();
         let view = sa.view();
-        if let RenderNode::Group(children) = view {
+        if let RenderNode::Group { children, .. } = view {
             assert_eq!(children.len(), 3);
             assert!(matches!(&children[2], RenderNode::Empty));
         } else {

@@ -8,3 +8,4 @@ reactive-core = { workspace = true }
 renderer-core = { workspace = true }
 platform-core = { workspace = true }
 geometry-core = { workspace = true }
+rustc-hash = { workspace = true }

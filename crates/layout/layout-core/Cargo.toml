@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 geometry-core = { workspace = true }
-taffy = "0.10.1"
+taffy = "0.11"
 thiserror = { workspace = true }

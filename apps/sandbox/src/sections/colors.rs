@@ -1,10 +1,9 @@
 use crate::theme::SandboxTheme;
 use crate::theme::section;
 use rsx::{
-    BorderRadius, Canvas, Color, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Rect, RectPayload, RectStyle, RenderNode, TextPayload, TextStyle, WidgetCtx, use_theme,
+    BorderRadius, Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Paint, Rect,
+    RectStyle, RenderNode, TextStyle, WidgetCtx, use_theme,
 };
-use std::sync::Arc;
 
 pub fn color_swatch(
     ctx: &mut WidgetCtx,
@@ -16,30 +15,30 @@ pub fn color_swatch(
         LayoutStyle::new().width(100.0).height(44.0),
         move |_| {
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
-                    rect: Rect {
+                RenderNode::rect(
+                    Rect {
                         x: 0.0,
                         y: 0.0,
                         width: 100.0,
                         height: 44.0,
                     },
-                    style: RectStyle {
+                    RectStyle {
                         fill: Some(Paint::Solid(color_fn())),
                         stroke: None,
                         shadow: None,
                         radius: BorderRadius::all(6.0),
                     },
-                }))),
-                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
-                    text: Arc::from(label),
-                    rect: Rect {
+                ),
+                RenderNode::text(
+                    label,
+                    Rect {
                         x: 0.0,
                         y: 4.0,
                         width: 100.0,
                         height: 36.0,
                     },
-                    style: TextStyle::new(11.0, use_theme::<SandboxTheme>().on_color),
-                }))),
+                    TextStyle::new(11.0, use_theme::<SandboxTheme>().on_color),
+                ),
             ])
         },
     )

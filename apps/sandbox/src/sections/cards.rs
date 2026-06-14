@@ -1,11 +1,9 @@
 use crate::theme::SandboxTheme;
 use crate::theme::section;
 use rsx::{
-    BorderRadius, Canvas, Color, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Rect, RectPayload, RectStyle, RenderNode, Stroke, TextPayload, TextStyle, WidgetCtx,
-    use_theme,
+    BorderRadius, Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Paint, Rect,
+    RectStyle, RenderNode, Stroke, TextStyle, WidgetCtx, use_theme,
 };
-use std::sync::Arc;
 
 pub fn info_card(
     ctx: &mut WidgetCtx,
@@ -19,35 +17,35 @@ pub fn info_card(
         LayoutStyle::new().width(368.0).height(110.0),
         move |_| {
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
-                    rect: Rect {
+                RenderNode::rect(
+                    Rect {
                         x: 0.0,
                         y: 0.0,
                         width: 368.0,
                         height: 110.0,
                     },
-                    style: bg_fn(),
-                }))),
-                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
-                    text: Arc::from(title),
-                    rect: Rect {
+                    bg_fn(),
+                ),
+                RenderNode::text(
+                    title,
+                    Rect {
                         x: 16.0,
                         y: 14.0,
                         width: 340.0,
                         height: 24.0,
                     },
-                    style: TextStyle::new(16.0, title_color_fn()),
-                }))),
-                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
-                    text: Arc::from(body),
-                    rect: Rect {
+                    TextStyle::new(16.0, title_color_fn()),
+                ),
+                RenderNode::text(
+                    body,
+                    Rect {
                         x: 16.0,
                         y: 44.0,
                         width: 340.0,
                         height: 52.0,
                     },
-                    style: TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
-                }))),
+                    TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
+                ),
             ])
         },
     )

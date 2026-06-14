@@ -11,11 +11,12 @@ mod path;
 mod preprocess;
 mod renderer;
 mod style;
+pub mod style_pool;
 
 pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 
 pub use color::Color;
-pub use command::{DrawCommand, PathPayload, RectPayload, TextPayload};
+pub use command::DrawCommand;
 pub use culling::{apply_matrix, union_rects};
 #[doc(hidden)]
 pub use dirty::ScrollBlit;
@@ -30,3 +31,4 @@ pub use style::{
     BorderRadius, FillRule, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineJoin,
     LineStyle, Paint, PathStyle, RectStyle, Shadow, Stroke, TextStyle,
 };
+pub use style_pool::{FRAME_STYLE_POOL, FrameStylePool, StyleHandle};

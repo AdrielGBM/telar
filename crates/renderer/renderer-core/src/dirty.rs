@@ -330,15 +330,19 @@ pub fn detect_scroll_blit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::style_pool::FRAME_STYLE_POOL;
     use crate::{BorderRadius, DrawCommand, style::RectStyle};
     use geometry_core::Rect;
-    use std::sync::Arc;
 
     fn rect_cmd(x: f32, y: f32, w: f32, h: f32) -> DrawCommand {
-        DrawCommand::Rect(Arc::new(crate::RectPayload {
+        let style = FRAME_STYLE_POOL
+            .lock()
+            .unwrap()
+            .intern_rect(RectStyle::default());
+        DrawCommand::Rect {
             rect: Rect::new(x, y, w, h),
-            style: RectStyle::default(),
-        }))
+            style,
+        }
     }
 
     #[test]

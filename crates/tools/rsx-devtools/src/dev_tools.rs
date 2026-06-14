@@ -1,14 +1,30 @@
 use std::borrow::Cow;
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, Paint, RectPayload, RectStyle, TextPayload, TextStyle,
+    BorderRadius, Color, DrawCommand, FRAME_STYLE_POOL, Paint, RectStyle, TextStyle,
 };
+
+fn rect_cmd(rect: Rect, style: RectStyle) -> DrawCommand {
+    let handle = FRAME_STYLE_POOL.lock().unwrap().intern_rect(style);
+    DrawCommand::Rect {
+        rect,
+        style: handle,
+    }
+}
+
+fn text_cmd(text: std::sync::Arc<str>, rect: Rect, style: TextStyle) -> DrawCommand {
+    let handle = FRAME_STYLE_POOL.lock().unwrap().intern_text(style);
+    DrawCommand::Text {
+        text,
+        rect,
+        style: handle,
+    }
+}
 
 const BADGE_W: f32 = 100.0;
 const BADGE_H: f32 = 24.0;
@@ -92,20 +108,20 @@ impl DevPlugin for DevTools {
         });
 
         // Badge background
-        cmds.push(DrawCommand::Rect(Arc::new(RectPayload {
-            rect: self.badge_rect,
-            style: RectStyle::default()
+        cmds.push(rect_cmd(
+            self.badge_rect,
+            RectStyle::default()
                 .with_fill(Paint::Solid(BADGE_BG))
                 .with_radius(BorderRadius::all(4.0)),
-        })));
+        ));
 
         // Badge label
         let badge_label = format!("DEV \u{2022} {} fps", self.last_fps);
-        cmds.push(DrawCommand::Text(Arc::new(TextPayload {
-            text: badge_label.into(),
-            rect: Rect::new(badge_x + 8.0, badge_y + 5.0, BADGE_W - 16.0, BADGE_H - 10.0),
-            style: TextStyle::new(12.0, GREEN),
-        })));
+        cmds.push(text_cmd(
+            badge_label.into(),
+            Rect::new(badge_x + 8.0, badge_y + 5.0, BADGE_W - 16.0, BADGE_H - 10.0),
+            TextStyle::new(12.0, GREEN),
+        ));
 
         cmds.push(DrawCommand::PopLayer);
         cmds.push(DrawCommand::PopClip);
@@ -125,69 +141,69 @@ impl DevPlugin for DevTools {
             });
 
             // Panel background
-            cmds.push(DrawCommand::Rect(Arc::new(RectPayload {
-                rect: Rect::new(panel_x, panel_y, PANEL_W, PANEL_H),
-                style: RectStyle::default()
+            cmds.push(rect_cmd(
+                Rect::new(panel_x, panel_y, PANEL_W, PANEL_H),
+                RectStyle::default()
                     .with_fill(Paint::Solid(BG))
                     .with_radius(BorderRadius::all(8.0)),
-            })));
+            ));
 
             // Title
-            cmds.push(DrawCommand::Text(Arc::new(TextPayload {
-                text: "rsx devtools".into(),
-                rect: Rect::new(panel_x + 12.0, panel_y + 12.0, PANEL_W - 24.0, 16.0),
-                style: TextStyle::new(11.0, WHITE),
-            })));
+            cmds.push(text_cmd(
+                "rsx devtools".into(),
+                Rect::new(panel_x + 12.0, panel_y + 12.0, PANEL_W - 24.0, 16.0),
+                TextStyle::new(11.0, WHITE),
+            ));
 
             // Horizontal separator
-            cmds.push(DrawCommand::Rect(Arc::new(RectPayload {
-                rect: Rect::new(panel_x + 12.0, panel_y + 36.0, PANEL_W - 24.0, 1.0),
-                style: RectStyle::default().with_fill(Paint::Solid(GRAY_DIM)),
-            })));
+            cmds.push(rect_cmd(
+                Rect::new(panel_x + 12.0, panel_y + 36.0, PANEL_W - 24.0, 1.0),
+                RectStyle::default().with_fill(Paint::Solid(GRAY_DIM)),
+            ));
 
             // FPS value
             let fps_label = format!("{} fps", self.last_fps);
-            cmds.push(DrawCommand::Text(Arc::new(TextPayload {
-                text: fps_label.into(),
-                rect: Rect::new(panel_x + 12.0, panel_y + 44.0, PANEL_W - 24.0, 28.0),
-                style: TextStyle::new(20.0, GREEN),
-            })));
+            cmds.push(text_cmd(
+                fps_label.into(),
+                Rect::new(panel_x + 12.0, panel_y + 44.0, PANEL_W - 24.0, 28.0),
+                TextStyle::new(20.0, GREEN),
+            ));
 
             // Renderer info line (only when set)
             let renderer_text_y = if let Some(ref info) = self.renderer_info {
                 let renderer_label = format!("renderer: {}", info);
-                cmds.push(DrawCommand::Text(Arc::new(TextPayload {
-                    text: renderer_label.into(),
-                    rect: Rect::new(panel_x + 12.0, panel_y + 80.0, PANEL_W - 24.0, 16.0),
-                    style: TextStyle::new(11.0, GRAY),
-                })));
+                cmds.push(text_cmd(
+                    renderer_label.into(),
+                    Rect::new(panel_x + 12.0, panel_y + 80.0, PANEL_W - 24.0, 16.0),
+                    TextStyle::new(11.0, GRAY),
+                ));
                 96.0
             } else {
                 80.0
             };
 
             // Keyboard shortcut hints
-            cmds.push(DrawCommand::Text(Arc::new(TextPayload {
-                text: "ctrl+shift+b  toggle renderer".into(),
-                rect: Rect::new(
+            cmds.push(text_cmd(
+                "ctrl+shift+b  toggle renderer".into(),
+                Rect::new(
                     panel_x + 12.0,
                     panel_y + renderer_text_y,
                     PANEL_W - 24.0,
                     14.0,
                 ),
-                style: TextStyle::new(10.0, GRAY_DIM),
-            })));
+                TextStyle::new(10.0, GRAY_DIM),
+            ));
 
-            cmds.push(DrawCommand::Text(Arc::new(TextPayload {
-                text: "click badge  close".into(),
-                rect: Rect::new(
+            cmds.push(text_cmd(
+                "click badge  close".into(),
+                Rect::new(
                     panel_x + 12.0,
                     panel_y + renderer_text_y + 18.0,
                     PANEL_W - 24.0,
                     14.0,
                 ),
-                style: TextStyle::new(10.0, GRAY_DIM),
-            })));
+                TextStyle::new(10.0, GRAY_DIM),
+            ));
 
             cmds.push(DrawCommand::PopLayer);
             cmds.push(DrawCommand::PopClip);

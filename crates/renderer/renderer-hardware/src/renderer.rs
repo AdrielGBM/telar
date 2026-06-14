@@ -7,7 +7,8 @@ use rustc_hash::FxHasher;
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers, union_rects,
+    Color, DrawCommand, FRAME_STYLE_POOL, ImageFilter, RenderBackend, RendererError,
+    expand_fill_layers, union_rects,
 };
 
 use wgpu::util::DeviceExt;
@@ -21,6 +22,8 @@ use crate::primitives::line::{LineInstance, LinePipeline};
 use crate::primitives::path::{PathFillData, PathPipeline, PathTessCache, PathVertex};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
+#[cfg(feature = "vello-paths")]
+use crate::primitives::vello_renderer::VelloPathRenderer;
 use crate::primitives::{Viewport, create_viewport_bgl};
 
 // Prefer Rgba8Unorm: shaders output sRGB-encoded values so the GPU must NOT apply sRGB encoding on write. Bgra8Unorm is the fallback for drivers (e.g. some macOS/DX12 paths) that don't expose Rgba8Unorm.
@@ -256,21 +259,22 @@ fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
     commands.len().hash(&mut h);
     for cmd in commands {
         match cmd {
-            DrawCommand::Rect(p) => {
+            DrawCommand::Rect { rect, style } => {
                 0u8.hash(&mut h);
-                p.rect.x.to_bits().hash(&mut h);
-                p.rect.y.to_bits().hash(&mut h);
-                p.rect.width.to_bits().hash(&mut h);
-                p.rect.height.to_bits().hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                style.0.hash(&mut h);
             }
-            DrawCommand::Text(p) => {
+            DrawCommand::Text { text, rect, style } => {
                 1u8.hash(&mut h);
-                p.text.as_bytes().hash(&mut h);
-                p.rect.x.to_bits().hash(&mut h);
-                p.rect.y.to_bits().hash(&mut h);
-                p.rect.width.to_bits().hash(&mut h);
-                p.rect.height.to_bits().hash(&mut h);
-                p.style.font_size.to_bits().hash(&mut h);
+                text.as_bytes().hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                style.0.hash(&mut h);
             }
             DrawCommand::Image { data, rect, filter } => {
                 2u8.hash(&mut h);
@@ -289,9 +293,10 @@ fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
                 p2.y.to_bits().hash(&mut h);
                 style.width.to_bits().hash(&mut h);
             }
-            DrawCommand::Path(p) => {
+            DrawCommand::Path { data, style } => {
                 4u8.hash(&mut h);
-                (Arc::as_ptr(&p.data) as usize).hash(&mut h);
+                (Arc::as_ptr(data) as usize).hash(&mut h);
+                style.0.hash(&mut h);
             }
             DrawCommand::PushClip { rect, radius } => {
                 5u8.hash(&mut h);
@@ -326,6 +331,21 @@ fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
             }
             DrawCommand::PopLayer => {
                 10u8.hash(&mut h);
+            }
+            #[cfg(target_os = "android")]
+            DrawCommand::AndroidHardwareBufferImage {
+                handle,
+                rect,
+                filter,
+                ..
+            } => {
+                11u8.hash(&mut h);
+                handle.hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                (*filter as u8).hash(&mut h);
             }
         }
     }
@@ -459,6 +479,9 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_path_indices: Vec<u32>,
     pending_path_fill_data: Vec<PathFillData>,
     path_tess_cache: PathTessCache,
+    // GPU path tessellation via Vello (Finding 4.3). None when the device failed to initialize a Vello renderer; in that case path rendering falls back to the Lyon pipeline even with the feature enabled.
+    #[cfg(feature = "vello-paths")]
+    vello_path_renderer: Option<VelloPathRenderer>,
     msaa_samples: u32,
     msaa_texture: Option<wgpu::Texture>,
     batch_rect_start: Option<u32>,
@@ -790,6 +813,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         );
         let path_tess_cache = PathTessCache::new();
 
+        #[cfg(feature = "vello-paths")]
+        let vello_path_renderer = VelloPathRenderer::new(&device);
+
         // Persist pipeline cache data so subsequent startups skip shader compilation.
         if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path) {
             if let Some(data) = cache.get_data() {
@@ -851,6 +877,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_path_indices: Vec::new(),
             pending_path_fill_data: Vec::new(),
             path_tess_cache,
+            #[cfg(feature = "vello-paths")]
+            vello_path_renderer,
             msaa_samples,
             msaa_texture: None,
             batch_rect_start: None,
@@ -898,6 +926,56 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let (buffer, bind_group) = &self.viewport_buffer_pool[idx];
         self.queue.write_buffer(buffer, 0, bytemuck::bytes_of(&vp));
         bind_group.clone()
+    }
+
+    // Rasterizes the frame's accumulated Vello path scene to an offscreen texture and composites it over the surface using the single-sample blit pipeline (which targets the surface format with premultiplied-alpha blending). No-op when nothing was recorded or the Vello renderer is unavailable.
+    #[cfg(feature = "vello-paths")]
+    fn composite_vello_paths(&mut self, surface_view: &wgpu::TextureView) {
+        let width = self.width;
+        let height = self.height;
+        let Some(vello) = self.vello_path_renderer.as_mut() else {
+            return;
+        };
+        let Some(vello_view) = vello.render(&self.device, &self.queue, width, height) else {
+            return;
+        };
+        let vello_view = vello_view.clone();
+        let bind_group = self.retained_blit_pipeline.create_bind_group(
+            &self.device,
+            &vello_view,
+            [0.0, 0.0, width as f32, height as f32],
+            1.0,
+            0.0,
+            [1.0, 1.0],
+        );
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("rsx-vello-composite-encoder"),
+            });
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("rsx-vello-composite"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: surface_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(&self.retained_blit_pipeline.pipeline);
+            pass.set_bind_group(0, &self.viewport_bind_group, &[]);
+            pass.set_bind_group(1, &bind_group, &[]);
+            pass.draw(0..6, 0..1);
+        }
+        self.queue.submit(std::iter::once(encoder.finish()));
     }
 
     fn reconfigure(&mut self, width: u32, height: u32) {
@@ -1140,6 +1218,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.layer_cache_pixel_budget = 4 * self.width as u64 * self.height as u64;
         self.clear_pending();
         self.path_tess_cache.begin_frame();
+        #[cfg(feature = "vello-paths")]
+        if let Some(vello) = self.vello_path_renderer.as_mut() {
+            vello.reset();
+        }
         self.image_pipeline.begin_frame();
         self.viewport_buffer_pool_idx = 0;
         Ok(())
@@ -1273,10 +1355,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         for (cmd_idx, cmd) in commands.iter().enumerate() {
             match cmd {
-                DrawCommand::Rect(p) => {
-                    if p.rect.width <= 0.0
-                        || p.rect.height <= 0.0
-                        || (p.style.fill.is_none() && p.style.stroke.is_none())
+                DrawCommand::Rect { rect, style } => {
+                    let rect = *rect;
+                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_rect(*style);
+                    if rect.width <= 0.0
+                        || rect.height <= 0.0
+                        || (style.fill.is_none() && style.stroke.is_none())
                     {
                         continue;
                     }
@@ -1299,13 +1383,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.batch_rect_start = Some(self.pending_instances.len() as u32);
                     }
                     let inst = crate::primitives::rect::prepare_rect(
-                        p.rect,
-                        &p.style,
+                        rect,
+                        &style,
                         self.draw_state.cum_matrix,
                     );
                     self.pending_instances.push(inst);
                 }
-                DrawCommand::Text(p) => {
+                DrawCommand::Text { text, rect, style } => {
+                    let rect = *rect;
+                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_text(*style);
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
@@ -1321,17 +1407,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
-                    let (text_tx, text_ty) = self.draw_state.apply_point(p.rect.x, p.rect.y);
+                    let (text_tx, text_ty) = self.draw_state.apply_point(rect.x, rect.y);
                     let (text_tx2, text_ty2) = self
                         .draw_state
-                        .apply_point(p.rect.x + p.rect.width, p.rect.y + p.rect.height);
+                        .apply_point(rect.x + rect.width, rect.y + rect.height);
                     let translated = Rect::new(
                         text_tx,
                         text_ty,
                         (text_tx2 - text_tx).abs(),
                         (text_ty2 - text_ty).abs(),
                     );
-                    if let Some(shadow) = p.style.shadow {
+                    if let Some(shadow) = style.shadow {
                         self.flush_text();
 
                         let sigma = renderer_core::blur_sigma(shadow.blur_radius);
@@ -1350,12 +1436,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let shadow_style = renderer_core::TextStyle {
                             paint: renderer_core::Paint::Solid(shadow.color),
                             shadow: None,
-                            ..p.style
+                            ..style
                         };
                         let instance_start = self.pending_shadow_instances.len() as u32;
                         crate::primitives::text::prepare_text(
                             &mut self.text_shaper,
-                            &p.text,
+                            text,
                             shadow_rect,
                             &shadow_style,
                             self.scale_factor,
@@ -1384,9 +1470,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     }
                     crate::primitives::text::prepare_text(
                         &mut self.text_shaper,
-                        &p.text,
+                        text,
                         translated,
-                        &p.style,
+                        &style,
                         self.scale_factor,
                         &mut self.pending_text_instances,
                     );
@@ -1461,7 +1547,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.pending_image_instances
                         .push(crate::primitives::image::prepare_image(translated));
                 }
-                DrawCommand::Path(p) => {
+                DrawCommand::Path { data, style } => {
+                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_path(*style);
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
@@ -1476,12 +1563,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     }
                     self.flush_all();
 
-                    if let Some(shadow) = p.style.shadow {
-                        let shadow_fill = p
-                            .style
+                    if let Some(shadow) = style.shadow {
+                        let shadow_fill = style
                             .fill
                             .map(|_| renderer_core::Paint::Solid(shadow.color));
-                        let shadow_stroke = p.style.stroke.map(|s| renderer_core::Stroke {
+                        let shadow_stroke = style.stroke.map(|s| renderer_core::Stroke {
                             paint: renderer_core::Paint::Solid(shadow.color),
                             ..s
                         });
@@ -1489,14 +1575,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             fill: shadow_fill,
                             stroke: shadow_stroke,
                             shadow: None,
-                            fill_rule: p.style.fill_rule,
+                            fill_rule: style.fill_rule,
                         };
 
                         let sv_start = self.pending_shadow_path_vertices.len();
                         let si_start = self.pending_shadow_path_indices.len() as u32;
                         crate::primitives::path::prepare_path(
                             &mut self.path_tess_cache,
-                            &p.data,
+                            data,
                             &shadow_style,
                             &mut self.pending_shadow_path_vertices,
                             &mut self.pending_shadow_path_indices,
@@ -1552,34 +1638,50 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         }
                     }
 
-                    let vertex_start = self.pending_path_vertices.len();
-                    let index_start = self.pending_path_indices.len() as u32;
-                    let fill_data_start = self.pending_path_fill_data.len();
-                    crate::primitives::path::prepare_path(
-                        &mut self.path_tess_cache,
-                        &p.data,
-                        &p.style,
-                        &mut self.pending_path_vertices,
-                        &mut self.pending_path_indices,
-                        &mut self.pending_path_fill_data,
-                    );
-                    for v in &mut self.pending_path_vertices[vertex_start..] {
-                        let (wx, wy) = self.draw_state.apply_point(v.position[0], v.position[1]);
-                        v.position[0] = wx;
-                        v.position[1] = wy;
-                    }
-                    for fd in &mut self.pending_path_fill_data[fill_data_start..] {
-                        let (gx0, gy0) = self.draw_state.apply_point(fd.grad_p0[0], fd.grad_p0[1]);
-                        let (gx1, gy1) = self.draw_state.apply_point(fd.grad_p1[0], fd.grad_p1[1]);
-                        fd.grad_p0 = [gx0, gy0];
-                        fd.grad_p1 = [gx1, gy1];
-                    }
-                    let index_end = self.pending_path_indices.len() as u32;
-                    if index_end > index_start {
-                        self.pending_steps.push(DrawStep::PathDraw {
-                            index_start,
-                            index_end,
-                        });
+                    // With the vello-paths feature, record the fill/stroke into the GPU scene and skip Lyon entirely; the accumulated scene is rasterized and composited once at frame end. Shadows above still use the Lyon + blur pipeline.
+                    #[cfg(feature = "vello-paths")]
+                    let routed_to_vello = if let Some(vello) = self.vello_path_renderer.as_mut() {
+                        vello.add_path(data, &style, self.draw_state.cum_matrix);
+                        true
+                    } else {
+                        false
+                    };
+                    #[cfg(not(feature = "vello-paths"))]
+                    let routed_to_vello = false;
+
+                    if !routed_to_vello {
+                        let vertex_start = self.pending_path_vertices.len();
+                        let index_start = self.pending_path_indices.len() as u32;
+                        let fill_data_start = self.pending_path_fill_data.len();
+                        crate::primitives::path::prepare_path(
+                            &mut self.path_tess_cache,
+                            data,
+                            &style,
+                            &mut self.pending_path_vertices,
+                            &mut self.pending_path_indices,
+                            &mut self.pending_path_fill_data,
+                        );
+                        for v in &mut self.pending_path_vertices[vertex_start..] {
+                            let (wx, wy) =
+                                self.draw_state.apply_point(v.position[0], v.position[1]);
+                            v.position[0] = wx;
+                            v.position[1] = wy;
+                        }
+                        for fd in &mut self.pending_path_fill_data[fill_data_start..] {
+                            let (gx0, gy0) =
+                                self.draw_state.apply_point(fd.grad_p0[0], fd.grad_p0[1]);
+                            let (gx1, gy1) =
+                                self.draw_state.apply_point(fd.grad_p1[0], fd.grad_p1[1]);
+                            fd.grad_p0 = [gx0, gy0];
+                            fd.grad_p1 = [gx1, gy1];
+                        }
+                        let index_end = self.pending_path_indices.len() as u32;
+                        if index_end > index_start {
+                            self.pending_steps.push(DrawStep::PathDraw {
+                                index_start,
+                                index_end,
+                            });
+                        }
                     }
                 }
                 DrawCommand::PushClip { rect, radius } => {
@@ -1874,6 +1976,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     }
                     let _ = layer_blit_stack; // suppresses unused variable warning
                 }
+                #[cfg(target_os = "android")]
+                DrawCommand::AndroidHardwareBufferImage { .. } => {}
             }
         }
 
@@ -3344,6 +3448,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         for entry in frame_scratch_textures.drain(..) {
             return_pooled_texture(&mut self.texture_pool, entry);
         }
+
+        // Rasterize accumulated GPU paths (Vello) and composite over the surface. Done after the main encoder submit so Vello's internal compute submission is ordered after the frame's base content; the composite then blends the path layer on top.
+        #[cfg(feature = "vello-paths")]
+        self.composite_vello_paths(&surface_view);
+
         tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
         output.present();
         let current_hash = hash_draw_commands(orig_commands);

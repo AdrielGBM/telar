@@ -4,6 +4,7 @@ use std::rc::Rc;
 use platform_core::Event;
 use reactive_core::{Effect, batch, create_effect};
 use renderer_core::DrawCommand;
+use rustc_hash::FxHashMap;
 
 use crate::component::{Component, EventResult};
 use crate::render_node::RenderNode;
@@ -14,6 +15,8 @@ struct ComponentSlot {
     commands: Rc<RefCell<Vec<DrawCommand>>>,
     dirty: Rc<Cell<bool>>,
     _stack: Rc<RefCell<Vec<RenderNode>>>,
+    // Persisted across frames so keyed structural nodes can fingerprint their flattened ranges and short-circuit unchanged subtrees.
+    _key_cache: Rc<RefCell<FxHashMap<u64, (usize, usize, u64)>>>,
     _effect: Effect,
 }
 
@@ -23,16 +26,24 @@ impl ComponentSlot {
         let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
         let dirty = Rc::new(Cell::new(true));
         let stack: Rc<RefCell<Vec<RenderNode>>> = Default::default();
+        let key_cache: Rc<RefCell<FxHashMap<u64, (usize, usize, u64)>>> =
+            Rc::new(RefCell::new(FxHashMap::default()));
 
         let comp_clone = Rc::clone(&component);
         let cmds_clone = Rc::clone(&commands);
         let dirty_clone = Rc::clone(&dirty);
         let stack_clone = Rc::clone(&stack);
+        let key_cache_clone = Rc::clone(&key_cache);
         let _effect = create_effect(move || {
             let node = comp_clone.borrow().view();
             let mut stk = stack_clone.borrow_mut();
             let mut cmds = cmds_clone.borrow_mut();
-            let changed = view_flatten::flatten_view(node, &mut *cmds, &mut *stk);
+            let changed = view_flatten::flatten_view(
+                node,
+                &mut *cmds,
+                &mut *stk,
+                &mut *key_cache_clone.borrow_mut(),
+            );
             if changed {
                 dirty_clone.set(true);
                 // Bump the shared generation so consumers can detect content changes with a single integer compare instead of an O(n) command-slice scan.
@@ -45,6 +56,7 @@ impl ComponentSlot {
             commands,
             dirty,
             _stack: stack,
+            _key_cache: key_cache,
             _effect,
         }
     }
@@ -150,20 +162,22 @@ impl ComponentList {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use geometry_core::Rect;
     use reactive_core::create_rw_signal;
-    use renderer_core::{Color, RectPayload, RectStyle};
+    use renderer_core::{Color, FRAME_STYLE_POOL, RectStyle};
 
     use super::*;
     use crate::render_node::RenderNode;
 
     fn sample_rect(x: f32) -> DrawCommand {
-        DrawCommand::Rect(Arc::new(RectPayload {
+        let style = FRAME_STYLE_POOL
+            .lock()
+            .unwrap()
+            .intern_rect(RectStyle::default().with_fill(Color::BLACK));
+        DrawCommand::Rect {
             rect: Rect::new(x, 0.0, 10.0, 10.0),
-            style: RectStyle::default().with_fill(Color::BLACK),
-        }))
+            style,
+        }
     }
 
     struct Fixed;

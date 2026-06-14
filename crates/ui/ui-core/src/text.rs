@@ -4,7 +4,7 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
-use renderer_core::{DrawCommand, TextPayload, TextStyle};
+use renderer_core::TextStyle;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
@@ -57,19 +57,16 @@ impl Component for Text {
                 Arc::clone(&cache.1)
             }
         };
-        self.leaf
-            .at_layout_position(RenderNode::Primitive(DrawCommand::Text(Arc::new(
-                TextPayload {
-                    text,
-                    rect: Rect {
-                        x: 0.0,
-                        y: 0.0,
-                        width: r.width,
-                        height: r.height,
-                    },
-                    style: (self.style)(),
-                },
-            ))))
+        self.leaf.at_layout_position(RenderNode::text(
+            text,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: r.width,
+                height: r.height,
+            },
+            (self.style)(),
+        ))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

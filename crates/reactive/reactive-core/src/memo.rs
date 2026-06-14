@@ -6,14 +6,17 @@ use smallvec::SmallVec;
 use crate::runtime::{self, EffectId};
 
 enum MemoState<T> {
-    Computing,
-    Ready(T),
+    Computing, // closure currently executing (cycle detection)
+    Clean(T),  // value is fresh, sources verified
+    Dirty,     // must recompute (no valid cached value)
 }
 
 struct MemoInner<T> {
     state: MemoState<T>,
     subscribers: SmallVec<[EffectId; 4]>,
     effect_id: EffectId,
+    // Mirrors EffectEntry.height for this memo.
+    height: u32,
 }
 
 pub struct Memo<T: 'static> {
@@ -41,7 +44,8 @@ impl<T: Clone + 'static> Memo<T> {
     pub fn get(&self) -> T {
         self.track();
         match &self.inner.borrow().state {
-            MemoState::Ready(v) => v.clone(),
+            MemoState::Clean(v) => v.clone(),
+            MemoState::Dirty => panic!("memo read while Dirty — flush ordering issue"),
             MemoState::Computing => panic!("reactive cycle detected in memo"),
         }
     }
@@ -52,7 +56,8 @@ impl<T: 'static> Memo<T> {
         self.track();
         let borrow = self.inner.borrow();
         match &borrow.state {
-            MemoState::Ready(v) => f(v),
+            MemoState::Clean(v) => f(v),
+            MemoState::Dirty => panic!("memo read while Dirty — flush ordering issue"),
             MemoState::Computing => panic!("reactive cycle detected in memo"),
         }
     }
@@ -71,9 +76,10 @@ pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<
     use std::rc::Weak;
 
     let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {
-        state: MemoState::Computing,
+        state: MemoState::Dirty,
         subscribers: SmallVec::new(),
         effect_id: 0,
+        height: 0,
     }));
 
     let weak: Weak<RefCell<MemoInner<T>>> = Rc::downgrade(&inner);
@@ -87,16 +93,21 @@ pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<
         let subs: SmallVec<[EffectId; 8]> = {
             let mut memo = inner.borrow_mut();
             let changed = match &memo.state {
-                MemoState::Ready(old) => old != &new_value,
+                MemoState::Clean(old) => old != &new_value,
                 _ => true,
             };
-            memo.state = MemoState::Ready(new_value);
+            memo.state = MemoState::Clean(new_value);
             if changed {
                 memo.subscribers.iter().copied().collect()
             } else {
                 SmallVec::new()
             }
         };
+        // Sync height from EffectEntry so other memos can read it (future SubscriberSet impl).
+        let effect_id = inner.borrow().effect_id;
+        if let Some(h) = runtime::effect_height(effect_id) {
+            inner.borrow_mut().height = h;
+        }
         let mut dead: Option<Vec<EffectId>> = None;
         for id in subs {
             if runtime::is_alive(id) {

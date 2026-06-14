@@ -3,8 +3,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use renderer_core::{
-    BorderRadius, DrawCommand, PathData, PathPayload, PathStyle, RectPayload, RectStyle,
-    TextPayload, TextStyle,
+    BorderRadius, DrawCommand, FRAME_STYLE_POOL, PathData, PathStyle, RectStyle, TextStyle,
 };
 
 thread_local! {
@@ -60,17 +59,23 @@ impl IntoIterator for NodeVec {
 pub enum RenderNode {
     Empty,
     Primitive(DrawCommand),
-    Group(NodeVec),
+    Group {
+        node_key: u64,
+        children: NodeVec,
+    },
     Transform {
+        node_key: u64,
         matrix: [f32; 6],
         children: NodeVec,
     },
     Clip {
+        node_key: u64,
         rect: Rect,
         radius: BorderRadius,
         children: NodeVec,
     },
     Layer {
+        node_key: u64,
         opacity: f32,
         backdrop_blur: f32,
         children: NodeVec,
@@ -79,23 +84,42 @@ pub enum RenderNode {
 
 impl RenderNode {
     pub fn group(children: impl IntoIterator<Item = RenderNode>) -> Self {
-        Self::Group(NodeVec::collect(children))
+        Self::Group {
+            node_key: 0,
+            children: NodeVec::collect(children),
+        }
+    }
+
+    pub fn group_keyed(key: u64, children: impl IntoIterator<Item = RenderNode>) -> Self {
+        Self::Group {
+            node_key: key,
+            children: NodeVec::collect(children),
+        }
     }
 
     pub fn rect(rect: Rect, style: RectStyle) -> Self {
-        Self::Primitive(DrawCommand::Rect(Arc::new(RectPayload { rect, style })))
+        let handle = FRAME_STYLE_POOL.lock().unwrap().intern_rect(style);
+        Self::Primitive(DrawCommand::Rect {
+            rect,
+            style: handle,
+        })
     }
 
     pub fn text(text: impl Into<Arc<str>>, rect: Rect, style: TextStyle) -> Self {
-        Self::Primitive(DrawCommand::Text(Arc::new(TextPayload {
+        let handle = FRAME_STYLE_POOL.lock().unwrap().intern_text(style);
+        Self::Primitive(DrawCommand::Text {
             text: text.into(),
             rect,
-            style,
-        })))
+            style: handle,
+        })
     }
 
     pub fn path(data: Arc<PathData>, style: PathStyle) -> Self {
-        Self::Primitive(DrawCommand::Path(Arc::new(PathPayload { data, style })))
+        let handle = FRAME_STYLE_POOL.lock().unwrap().intern_path(style);
+        Self::Primitive(DrawCommand::Path {
+            data,
+            style: handle,
+        })
     }
 
     pub fn layer(
@@ -104,6 +128,21 @@ impl RenderNode {
         children: impl IntoIterator<Item = RenderNode>,
     ) -> Self {
         Self::Layer {
+            node_key: 0,
+            opacity,
+            backdrop_blur,
+            children: NodeVec::collect(children),
+        }
+    }
+
+    pub fn layer_keyed(
+        key: u64,
+        opacity: f32,
+        backdrop_blur: f32,
+        children: impl IntoIterator<Item = RenderNode>,
+    ) -> Self {
+        Self::Layer {
+            node_key: key,
             opacity,
             backdrop_blur,
             children: NodeVec::collect(children),
@@ -115,6 +154,19 @@ impl RenderNode {
         children: impl IntoIterator<Item = RenderNode>,
     ) -> Self {
         Self::Transform {
+            node_key: 0,
+            matrix,
+            children: NodeVec::collect(children),
+        }
+    }
+
+    pub fn transform_keyed(
+        key: u64,
+        matrix: [f32; 6],
+        children: impl IntoIterator<Item = RenderNode>,
+    ) -> Self {
+        Self::Transform {
+            node_key: key,
             matrix,
             children: NodeVec::collect(children),
         }

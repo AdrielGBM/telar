@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use rsx::{
-    BorderRadius, Canvas, Color, Container, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Rect, RectPayload, RectStyle, RenderNode, TemplateTrack, TextPayload, TextStyle,
-    WidgetCtx, use_theme,
+    BorderRadius, Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Paint, Rect,
+    RectStyle, RenderNode, TemplateTrack, TextStyle, WidgetCtx, use_theme,
 };
 
 use crate::theme::section;
@@ -19,30 +18,30 @@ pub fn grid_cell(
         let w = rect.width;
         let h = rect.height;
         RenderNode::group([
-            RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
-                rect: Rect {
+            RenderNode::rect(
+                Rect {
                     x: 0.0,
                     y: 0.0,
                     width: w,
                     height: h,
                 },
-                style: RectStyle {
+                RectStyle {
                     fill: Some(Paint::Solid(color_fn())),
                     stroke: None,
                     shadow: None,
                     radius: BorderRadius::all(6.0),
                 },
-            }))),
-            RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
-                text: label_arc.clone(),
-                rect: Rect {
+            ),
+            RenderNode::text(
+                label_arc.clone(),
+                Rect {
                     x: 0.0,
                     y: 0.0,
                     width: w,
                     height: h,
                 },
-                style: TextStyle::new(13.0, use_theme::<SandboxTheme>().on_color),
-            }))),
+                TextStyle::new(13.0, use_theme::<SandboxTheme>().on_color),
+            ),
         ])
     })
 }
@@ -77,30 +76,30 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
             let h = rect.height;
             let t = use_theme::<SandboxTheme>();
             RenderNode::group([
-                RenderNode::Primitive(DrawCommand::Rect(Arc::new(RectPayload {
-                    rect: Rect {
+                RenderNode::rect(
+                    Rect {
                         x: 0.0,
                         y: 0.0,
                         width: w,
                         height: h,
                     },
-                    style: RectStyle {
+                    RectStyle {
                         fill: Some(Paint::Solid(t.dark)),
                         stroke: None,
                         shadow: None,
                         radius: BorderRadius::all(6.0),
                     },
-                }))),
-                RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
-                    text: crate::static_rc_str!("header — span 3"),
-                    rect: Rect {
+                ),
+                RenderNode::text(
+                    crate::static_rc_str!("header — span 3"),
+                    Rect {
                         x: 0.0,
                         y: 0.0,
                         width: w,
                         height: h,
                     },
-                    style: TextStyle::new(13.0, t.on_color),
-                }))),
+                    TextStyle::new(13.0, t.on_color),
+                ),
             ])
         },
     )?;
@@ -146,16 +145,16 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
     let side_label = Canvas::new(ctx, LayoutStyle::new().width(180.0), |rect| {
         let w = rect.width;
         let h = rect.height;
-        RenderNode::Primitive(DrawCommand::Text(Arc::new(TextPayload {
-            text: crate::static_rc_str!("Grid nested\ninside flex →"),
-            rect: Rect {
+        RenderNode::text(
+            crate::static_rc_str!("Grid nested\ninside flex →"),
+            Rect {
                 x: 0.0,
                 y: 0.0,
                 width: w,
                 height: h,
             },
-            style: TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
-        })))
+            TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
+        )
     })?;
     let nested_row = Container::new(
         ctx,

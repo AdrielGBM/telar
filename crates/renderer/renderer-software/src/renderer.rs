@@ -7,7 +7,8 @@ use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers, union_rects,
+    Color, DrawCommand, FRAME_STYLE_POOL, RenderBackend, RendererError, expand_fill_layers,
+    union_rects,
 };
 use renderer_text::{TextShaper, TextShaperConfig};
 use rustc_hash::{FxBuildHasher, FxHasher};
@@ -277,26 +278,24 @@ fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
     commands.len().hash(&mut h);
     for cmd in commands {
         match cmd {
-            DrawCommand::Rect(p) => {
+            DrawCommand::Rect { rect, style } => {
                 0u8.hash(&mut h);
-                p.rect.x.to_bits().hash(&mut h);
-                p.rect.y.to_bits().hash(&mut h);
-                p.rect.width.to_bits().hash(&mut h);
-                p.rect.height.to_bits().hash(&mut h);
-                // Hash style discriminant+fields in a compact way via Debug string is too slow;
-                // use the PartialEq-comparable fields via their PartialEq impl transitively by
-                // re-encoding them to bits. We hash p.style fields that PartialEq covers.
-                hash_rect_style(&p.style, &mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                // The style handle is content-addressable within the frame pool, so equal handles imply equal style content; hashing the handle index is sufficient and cheaper than re-encoding the style fields.
+                style.0.hash(&mut h);
             }
-            DrawCommand::Text(p) => {
+            DrawCommand::Text { text, rect, style } => {
                 1u8.hash(&mut h);
-                p.text.len().hash(&mut h);
-                p.text.as_bytes().hash(&mut h);
-                p.rect.x.to_bits().hash(&mut h);
-                p.rect.y.to_bits().hash(&mut h);
-                p.rect.width.to_bits().hash(&mut h);
-                p.rect.height.to_bits().hash(&mut h);
-                p.style.font_size.to_bits().hash(&mut h);
+                text.len().hash(&mut h);
+                text.as_bytes().hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                style.0.hash(&mut h);
             }
             DrawCommand::Image { data, rect, filter } => {
                 2u8.hash(&mut h);
@@ -315,10 +314,11 @@ fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
                 p2.y.to_bits().hash(&mut h);
                 style.width.to_bits().hash(&mut h);
             }
-            DrawCommand::Path(p) => {
+            DrawCommand::Path { data, style } => {
                 4u8.hash(&mut h);
-                // PathPayload PartialEq uses ptr equality for data; use the raw pointer as the key.
-                (std::sync::Arc::as_ptr(&p.data) as usize).hash(&mut h);
+                // PathData equality uses Arc pointer identity; use the raw pointer as the key.
+                (std::sync::Arc::as_ptr(data) as usize).hash(&mut h);
+                style.0.hash(&mut h);
             }
             DrawCommand::PushClip { rect, radius } => {
                 5u8.hash(&mut h);
@@ -354,73 +354,24 @@ fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
             DrawCommand::PopLayer => {
                 10u8.hash(&mut h);
             }
-        }
-    }
-    h.finish()
-}
-
-fn hash_rect_style(s: &renderer_core::RectStyle, h: &mut FxHasher) {
-    hash_opt_paint(s.fill.as_ref(), h);
-    if let Some(stroke) = &s.stroke {
-        1u8.hash(h);
-        hash_paint(&stroke.paint, h);
-        stroke.width.to_bits().hash(h);
-    } else {
-        0u8.hash(h);
-    }
-    if let Some(shadow) = &s.shadow {
-        1u8.hash(h);
-        shadow.offset_x.to_bits().hash(h);
-        shadow.offset_y.to_bits().hash(h);
-        shadow.blur_radius.to_bits().hash(h);
-        shadow.spread.to_bits().hash(h);
-        shadow.color.r.to_bits().hash(h);
-        shadow.color.g.to_bits().hash(h);
-        shadow.color.b.to_bits().hash(h);
-        shadow.color.a.to_bits().hash(h);
-    } else {
-        0u8.hash(h);
-    }
-    s.radius.top_left.to_bits().hash(h);
-    s.radius.top_right.to_bits().hash(h);
-    s.radius.bottom_right.to_bits().hash(h);
-    s.radius.bottom_left.to_bits().hash(h);
-}
-
-fn hash_opt_paint(p: Option<&renderer_core::Paint>, h: &mut FxHasher) {
-    match p {
-        None => {
-            0u8.hash(h);
-        }
-        Some(paint) => {
-            1u8.hash(h);
-            hash_paint(paint, h);
-        }
-    }
-}
-
-fn hash_paint(p: &renderer_core::Paint, h: &mut FxHasher) {
-    match p {
-        renderer_core::Paint::Solid(c) => {
-            0u8.hash(h);
-            c.r.to_bits().hash(h);
-            c.g.to_bits().hash(h);
-            c.b.to_bits().hash(h);
-            c.a.to_bits().hash(h);
-        }
-        renderer_core::Paint::Gradient(g) => {
-            1u8.hash(h);
-            let active = g.stops.active();
-            active.len().hash(h);
-            for stop in active {
-                stop.position.to_bits().hash(h);
-                stop.color.r.to_bits().hash(h);
-                stop.color.g.to_bits().hash(h);
-                stop.color.b.to_bits().hash(h);
-                stop.color.a.to_bits().hash(h);
+            #[cfg(target_os = "android")]
+            DrawCommand::AndroidHardwareBufferImage {
+                handle,
+                rect,
+                filter,
+                ..
+            } => {
+                11u8.hash(&mut h);
+                handle.hash(&mut h);
+                rect.x.to_bits().hash(&mut h);
+                rect.y.to_bits().hash(&mut h);
+                rect.width.to_bits().hash(&mut h);
+                rect.height.to_bits().hash(&mut h);
+                (*filter as u8).hash(&mut h);
             }
         }
     }
+    h.finish()
 }
 
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
@@ -902,10 +853,12 @@ where
             }
 
             match cmd {
-                DrawCommand::Rect(p) => {
-                    if p.rect.width <= 0.0
-                        || p.rect.height <= 0.0
-                        || (p.style.fill.is_none() && p.style.stroke.is_none())
+                DrawCommand::Rect { rect, style } => {
+                    let rect = *rect;
+                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_rect(*style);
+                    if rect.width <= 0.0
+                        || rect.height <= 0.0
+                        || (style.fill.is_none() && style.stroke.is_none())
                     {
                         continue;
                     }
@@ -934,8 +887,8 @@ where
                     };
                     crate::primitives::rect::draw_rect(
                         pixmap,
-                        p.rect,
-                        &p.style,
+                        rect,
+                        &style,
                         transform,
                         clip,
                         &mut self.shadow_cache,
@@ -943,7 +896,9 @@ where
                         &mut self.blur_scratch,
                     );
                 }
-                DrawCommand::Text(p) => {
+                DrawCommand::Text { text, rect, style } => {
+                    let rect = *rect;
+                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_text(*style);
                     if let Some(vr) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
@@ -970,9 +925,9 @@ where
                     crate::primitives::text::draw_text(
                         pixmap,
                         &mut self.text_shaper,
-                        &p.text,
-                        p.rect,
-                        &p.style,
+                        text,
+                        rect,
+                        &style,
                         transform,
                         clip,
                         if inside_layer {
@@ -1058,7 +1013,8 @@ where
                         },
                     );
                 }
-                DrawCommand::Path(p) => {
+                DrawCommand::Path { data, style } => {
+                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_path(*style);
                     if let Some(vr) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
@@ -1084,8 +1040,8 @@ where
                     };
                     crate::primitives::path::draw_path(
                         pixmap,
-                        &p.data,
-                        &p.style,
+                        data,
+                        &style,
                         transform,
                         clip,
                         if inside_layer {
@@ -1247,6 +1203,8 @@ where
                         self.pixmap_pool.push(layer);
                     }
                 }
+                #[cfg(target_os = "android")]
+                DrawCommand::AndroidHardwareBufferImage { .. } => {}
             }
         }
 
