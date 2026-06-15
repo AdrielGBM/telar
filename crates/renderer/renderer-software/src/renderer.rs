@@ -7,8 +7,8 @@ use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, FRAME_STYLE_POOL, RenderBackend, RendererError, expand_fill_layers,
-    union_rects,
+    Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers, hash_path_style,
+    hash_rect_style, hash_text_style, union_rects,
 };
 use renderer_text::{TextShaper, TextShaperConfig};
 use rustc_hash::{FxBuildHasher, FxHasher};
@@ -284,8 +284,7 @@ fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
                 rect.y.to_bits().hash(&mut h);
                 rect.width.to_bits().hash(&mut h);
                 rect.height.to_bits().hash(&mut h);
-                // The style handle is content-addressable within the frame pool, so equal handles imply equal style content; hashing the handle index is sufficient and cheaper than re-encoding the style fields.
-                style.0.hash(&mut h);
+                hash_rect_style(style).hash(&mut h);
             }
             DrawCommand::Text { text, rect, style } => {
                 1u8.hash(&mut h);
@@ -295,7 +294,7 @@ fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
                 rect.y.to_bits().hash(&mut h);
                 rect.width.to_bits().hash(&mut h);
                 rect.height.to_bits().hash(&mut h);
-                style.0.hash(&mut h);
+                hash_text_style(style).hash(&mut h);
             }
             DrawCommand::Image { data, rect, filter } => {
                 2u8.hash(&mut h);
@@ -318,7 +317,7 @@ fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
                 4u8.hash(&mut h);
                 // PathData equality uses Arc pointer identity; use the raw pointer as the key.
                 (std::sync::Arc::as_ptr(data) as usize).hash(&mut h);
-                style.0.hash(&mut h);
+                hash_path_style(style).hash(&mut h);
             }
             DrawCommand::PushClip { rect, radius } => {
                 5u8.hash(&mut h);
@@ -855,7 +854,7 @@ where
             match cmd {
                 DrawCommand::Rect { rect, style } => {
                     let rect = *rect;
-                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_rect(*style);
+                    let style = **style;
                     if rect.width <= 0.0
                         || rect.height <= 0.0
                         || (style.fill.is_none() && style.stroke.is_none())
@@ -898,7 +897,7 @@ where
                 }
                 DrawCommand::Text { text, rect, style } => {
                     let rect = *rect;
-                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_text(*style);
+                    let style = **style;
                     if let Some(vr) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
@@ -1014,7 +1013,7 @@ where
                     );
                 }
                 DrawCommand::Path { data, style } => {
-                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_path(*style);
+                    let style = **style;
                     if let Some(vr) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {

@@ -24,7 +24,7 @@ use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify}
 use renderer_core::{RenderBackend, RendererError};
 use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use services_core::AppPathsProvider;
-use ui_core::ComponentList;
+use ui_core::{ComponentList, EventResult};
 
 struct HwFrameMsg {
     w: u32,
@@ -73,6 +73,8 @@ where
     _window: std::marker::PhantomData<W>,
     render_tx: Option<std::sync::mpsc::SyncSender<HwFrameMsg>>,
     render_join: Option<std::thread::JoinHandle<()>>,
+    #[cfg(feature = "dev")]
+    hot_reload_rx: Option<std::sync::mpsc::Receiver<std::path::PathBuf>>,
     #[cfg(target_os = "android")]
     hint_session: Option<*mut std::ffi::c_void>,
     #[cfg(target_os = "android")]
@@ -149,6 +151,23 @@ where
             window.height() as f32 / sf,
         ));
         self.tree = Some(ComponentList::new(self.app.root()));
+        #[cfg(feature = "dev")]
+        if let Some(rx) = self.hot_reload_rx.take() {
+            let (relay_tx, relay_rx) = std::sync::mpsc::channel::<std::path::PathBuf>();
+            let window_clone = window.clone();
+            std::thread::Builder::new()
+                .name("rsx-hot-relay".to_string())
+                .spawn(move || {
+                    while let Ok(path) = rx.recv() {
+                        if relay_tx.send(path).is_err() {
+                            break;
+                        }
+                        window_clone.request_redraw();
+                    }
+                })
+                .ok();
+            self.hot_reload_rx = Some(relay_rx);
+        }
         // Synthesize an initial WindowResized so apps that initialize layout from that event
         // start with the correct logical dimensions instead of their hardcoded defaults.
         let initial_resize = platform_core::Event::WindowResized {
@@ -237,11 +256,48 @@ where
             }
         }
         if let Some(tree) = &mut self.tree {
-            tree.on_event(&event);
+            if tree.on_event(&event) == EventResult::Handled {
+                #[cfg(feature = "dev")]
+                tree.bump_force_ticks();
+                // Flush reactive effects immediately so on_redraw() in the same
+                // cycle finds tree_dirty=true rather than deferring to the next cycle.
+                end_batch();
+                begin_batch();
+                window.request_redraw();
+            }
         }
     }
 
     fn on_redraw(&mut self, window: &W) {
+        #[cfg(feature = "dev")]
+        if let Some(rx) = &self.hot_reload_rx {
+            if let Ok(new_path) = rx.try_recv() {
+                match crate::hot::load_hot_app(&new_path) {
+                    Ok(new_app) => {
+                        // Drop the old tree first so effect closures (which contain code from
+                        // the old dylib) are destroyed while the old lib is still mapped.
+                        // Only then replace self.app, which dlcloses the old dylib.
+                        self.tree = None;
+                        self.app = Box::new(new_app);
+                        self.tree = Some(ComponentList::new(self.app.root()));
+                        // Synthesize WindowResized so the new tree's layout (e.g. ScrollablePage)
+                        // starts with the correct logical dimensions instead of its 0×0 defaults.
+                        let resize = platform_core::Event::WindowResized {
+                            width: (window.width() as f32 / self.scale_factor) as u32,
+                            height: (window.height() as f32 / self.scale_factor) as u32,
+                        };
+                        if let Some(ref mut tree) = self.tree {
+                            tree.on_event(&resize);
+                            tree.bump_force_ticks();
+                        }
+                        eprintln!("[rsx] Hot reloaded: {}", new_path.display());
+                        window.request_redraw();
+                        return;
+                    }
+                    Err(e) => eprintln!("[rsx] Hot reload failed: {e}"),
+                }
+            }
+        }
         let mut redraw_requested = false;
         {
             let mut ctx = crate::app_context::AppCtx {
@@ -605,6 +661,8 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
             _window: std::marker::PhantomData,
             render_tx: None,
             render_join: None,
+            #[cfg(feature = "dev")]
+            hot_reload_rx: None,
         },
     ) {
         tracing::error!("Event loop exited with error: {e}");
@@ -680,10 +738,72 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             _window: std::marker::PhantomData,
             render_tx: None,
             render_join: None,
+            #[cfg(feature = "dev")]
+            hot_reload_rx: None,
             hint_session: None,
             frame_start: std::time::Instant::now(),
         },
     ) {
         tracing::error!("Android event loop exited with error: {e}");
+    }
+}
+
+#[cfg(all(feature = "dev", not(target_os = "android")))]
+pub fn run_hot_reload_host(
+    lib_path: &str,
+    socket_path: &str,
+    config: crate::app_config::AppConfig,
+    app_name: &str,
+) {
+    let initial_app = match crate::hot::load_hot_app(std::path::Path::new(lib_path)) {
+        Ok(app) => app,
+        Err(e) => {
+            eprintln!("[rsx] Failed to load dylib: {e}");
+            return;
+        }
+    };
+    let hot_rx = crate::hot::listen_hot_reload(socket_path);
+    let paths: Box<dyn services_core::AppPathsProvider> = Box::new(DesktopPathsProvider);
+    let prefs = UserPrefs::load(app_name, paths.as_ref());
+    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
+    let platform = match WinitPlatform::try_new() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to create event loop: {e}");
+            return;
+        }
+    };
+    let crate::app_config::AppConfig {
+        window,
+        font_paths,
+        font_data,
+    } = config;
+    if let Err(e) = platform.run(
+        window,
+        AppHandler::<WinitWindow, rsx_devtools::DevTools> {
+            app: Box::new(initial_app),
+            tree: None,
+            renderer: None,
+            renderer_is_hardware: false,
+            backend,
+            prefs,
+            pending_restart: false,
+            pending_renderer: None,
+            _flush_notify: None,
+            scale_factor: 1.0,
+            window_signals: None,
+            app_name: app_name.to_owned(),
+            last_frame: std::time::Instant::now(),
+            dev: rsx_devtools::DevTools::default(),
+            paths,
+            font_paths,
+            font_data,
+            _window: std::marker::PhantomData,
+            render_tx: None,
+            render_join: None,
+            hot_reload_rx: Some(hot_rx),
+        },
+    ) {
+        tracing::error!("Event loop error: {e}");
     }
 }

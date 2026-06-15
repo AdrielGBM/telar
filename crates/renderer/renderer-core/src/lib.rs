@@ -31,4 +31,7 @@ pub use style::{
     BorderRadius, FillRule, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineJoin,
     LineStyle, Paint, PathStyle, RectStyle, Shadow, Stroke, TextStyle,
 };
-pub use style_pool::{FRAME_STYLE_POOL, FrameStylePool, StyleHandle};
+pub use style_pool::{
+    FRAME_STYLE_POOL, FrameStylePool, StyleHandle, hash_path_style, hash_rect_style,
+    hash_text_style,
+};

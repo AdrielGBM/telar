@@ -25,6 +25,7 @@ pub fn theme_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
                     .with_fill(hover)
                     .with_radius(BorderRadius::all(4.0)),
                 text: TextStyle::new(14.0, theme.on_color),
+                text_hover: TextStyle::new(14.0, theme.on_color),
             }
         })
         .on_click(|| set_theme(SandboxTheme::modern()));
@@ -46,6 +47,7 @@ pub fn theme_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
                     .with_fill(hover)
                     .with_radius(BorderRadius::all(4.0)),
                 text: TextStyle::new(14.0, p.on_color),
+                text_hover: TextStyle::new(14.0, p.on_color),
             }
         })
         .on_click(|| set_theme(SandboxTheme::pastel()));

@@ -6,6 +6,10 @@ edition = "2024"
 [lib]
 crate-type = ["cdylib", "lib"]
 
+[[bin]]
+name = "sandbox"
+path = "src/main.rs"
+
 [dependencies]
 rsx = { workspace = true, features = ["runtime"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

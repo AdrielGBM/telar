@@ -11,12 +11,21 @@ pub mod window_signals;
 
 #[cfg(feature = "runtime")]
 pub mod app;
+#[cfg(all(feature = "dev", not(target_os = "android")))]
+pub mod hot;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub mod paths;
 #[cfg(feature = "runtime")]
 pub mod runner;
 
 pub use config::{RendererBackend, compile_time_backend};
+
+#[derive(Clone)]
+pub struct PreviewEntry {
+    pub component_name: &'static str,
+    pub preview_name: &'static str,
+    pub build: fn(&mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>,
+}
 
 #[cfg(feature = "runtime")]
 pub use app_config::AppConfig;
@@ -44,9 +53,9 @@ pub use reactive_core::{
 };
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    BorderRadius, Color, DrawCommand, FillRule, FrameStylePool, Gradient, GradientKind,
-    GradientStop, GradientStops, ImageData, ImageFilter, LineCap, LineJoin, LineStyle, Paint,
-    PathData, PathStyle, PathVerb, RectStyle, Shadow, Stroke, StyleHandle, TextStyle,
+    BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
+    GradientStops, ImageData, ImageFilter, LineCap, LineJoin, LineStyle, Paint, PathData,
+    PathStyle, PathVerb, RectStyle, Shadow, Stroke, TextStyle,
 };
 #[cfg(feature = "runtime")]
 pub use rsx_devtools::{DevAction, DevPlugin};
@@ -60,12 +69,38 @@ pub use ui_core::{
     track_layout, update_style, with_context,
 };
 
+#[cfg(all(feature = "preview", not(target_os = "android")))]
+mod preview;
+#[cfg(all(feature = "preview", not(target_os = "android")))]
+pub use preview::run_preview_window;
+
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use platform_android::AndroidApp;
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use runner::run_android_app_with_name;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::run_app_with_name;
+#[cfg(all(feature = "dev", not(target_os = "android")))]
+pub use runner::run_hot_reload_host;
+
+pub use rsx_macros::app;
+
+#[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]
+pub fn make_hot_preview_app(entries: Vec<PreviewEntry>) -> Box<dyn App> {
+    Box::new(preview::PreviewApp { entries })
+}
+
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub fn try_run_preview(entries: Vec<PreviewEntry>) -> bool {
+    #[cfg(feature = "preview")]
+    {
+        run_preview_window(entries);
+        return true;
+    }
+    #[allow(unreachable_code)]
+    let _ = entries;
+    false
+}
 
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 #[macro_export]
@@ -76,38 +111,6 @@ macro_rules! run_app {
             $app,
             env!("CARGO_PKG_NAME"),
         )
-    };
-}
-
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
-#[macro_export]
-macro_rules! app {
-    ($setup:block, $config:expr, $app:expr) => {
-        pub fn run() {
-            $setup
-            $crate::run_app_with_name(
-                $crate::AppConfig::from($config),
-                $app,
-                env!("CARGO_PKG_NAME"),
-            )
-        }
-    };
-}
-
-#[cfg(all(feature = "runtime", target_os = "android"))]
-#[macro_export]
-macro_rules! app {
-    ($setup:block, $config:expr, $app:expr) => {
-        #[unsafe(no_mangle)]
-        fn android_main(android_app: $crate::AndroidApp) {
-            $setup
-            $crate::run_android_app_with_name(
-                $crate::AppConfig::from($config),
-                $app,
-                env!("CARGO_PKG_NAME"),
-                android_app,
-            );
-        }
     };
 }
 

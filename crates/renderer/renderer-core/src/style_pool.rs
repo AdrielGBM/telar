@@ -97,7 +97,7 @@ impl Default for FrameStylePool {
 
 // Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`;
 // each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
-fn hash_rect_style(s: &RectStyle) -> u64 {
+pub fn hash_rect_style(s: &RectStyle) -> u64 {
     let mut h = FxHasher::default();
     hash_opt_paint(s.fill.as_ref(), &mut h);
     hash_opt_stroke(s.stroke.as_ref(), &mut h);
@@ -106,7 +106,7 @@ fn hash_rect_style(s: &RectStyle) -> u64 {
     h.finish()
 }
 
-fn hash_text_style(s: &TextStyle) -> u64 {
+pub fn hash_text_style(s: &TextStyle) -> u64 {
     let mut h = FxHasher::default();
     h.write_u32(s.font_size.to_bits());
     hash_paint(&s.paint, &mut h);
@@ -114,7 +114,7 @@ fn hash_text_style(s: &TextStyle) -> u64 {
     h.finish()
 }
 
-fn hash_path_style(s: &PathStyle) -> u64 {
+pub fn hash_path_style(s: &PathStyle) -> u64 {
     let mut h = FxHasher::default();
     hash_opt_paint(s.fill.as_ref(), &mut h);
     hash_opt_stroke(s.stroke.as_ref(), &mut h);

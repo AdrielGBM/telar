@@ -2,9 +2,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use renderer_core::{
-    BorderRadius, DrawCommand, FRAME_STYLE_POOL, PathData, PathStyle, RectStyle, TextStyle,
-};
+use renderer_core::{BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, TextStyle};
 
 thread_local! {
     static NODE_VEC_POOL: RefCell<Vec<Vec<RenderNode>>> = const { RefCell::new(Vec::new()) };
@@ -98,27 +96,24 @@ impl RenderNode {
     }
 
     pub fn rect(rect: Rect, style: RectStyle) -> Self {
-        let handle = FRAME_STYLE_POOL.lock().unwrap().intern_rect(style);
         Self::Primitive(DrawCommand::Rect {
             rect,
-            style: handle,
+            style: Arc::new(style),
         })
     }
 
     pub fn text(text: impl Into<Arc<str>>, rect: Rect, style: TextStyle) -> Self {
-        let handle = FRAME_STYLE_POOL.lock().unwrap().intern_text(style);
         Self::Primitive(DrawCommand::Text {
             text: text.into(),
             rect,
-            style: handle,
+            style: Arc::new(style),
         })
     }
 
     pub fn path(data: Arc<PathData>, style: PathStyle) -> Self {
-        let handle = FRAME_STYLE_POOL.lock().unwrap().intern_path(style);
         Self::Primitive(DrawCommand::Path {
             data,
-            style: handle,
+            style: Arc::new(style),
         })
     }
 

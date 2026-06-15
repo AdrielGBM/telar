@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 serde = { workspace = true }
 toml = { workspace = true }
-rsx = { workspace = true }
+rsx = { workspace = true, default-features = false }
+notify = "8.2.0"

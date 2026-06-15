@@ -284,6 +284,11 @@ impl LayoutStyle {
         self
     }
 
+    pub fn align_self_stretch(mut self) -> Self {
+        self.inner.align_self = Some(taffy::AlignSelf::STRETCH);
+        self
+    }
+
     pub fn justify_content(mut self, value: JustifyContent) -> Self {
         self.inner.justify_content = Some(value);
         self
@@ -450,16 +455,16 @@ mod tests {
 
     #[test]
     fn style_align_items_center_sets_field() {
-        let style = LayoutStyle::new().align_items(AlignItems::Center);
-        assert_eq!(style.inner.align_items, Some(taffy::AlignItems::Center));
+        let style = LayoutStyle::new().align_items(AlignItems::CENTER);
+        assert_eq!(style.inner.align_items, Some(taffy::AlignItems::CENTER));
     }
 
     #[test]
     fn style_justify_center_sets_field() {
-        let style = LayoutStyle::new().justify_content(JustifyContent::Center);
+        let style = LayoutStyle::new().justify_content(JustifyContent::CENTER);
         assert_eq!(
             style.inner.justify_content,
-            Some(taffy::JustifyContent::Center)
+            Some(taffy::JustifyContent::CENTER)
         );
     }
 

@@ -1,8 +1,8 @@
-use std::cell::Cell;
 use std::sync::Arc;
 
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, PointerButton};
+use reactive_core::{RwSignal, create_rw_signal};
 use renderer_core::{BorderRadius, Color, RectStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -13,6 +13,7 @@ pub struct ButtonStyle {
     pub rect: RectStyle,
     pub rect_hover: RectStyle,
     pub text: TextStyle,
+    pub text_hover: TextStyle,
 }
 
 pub struct Button {
@@ -20,8 +21,7 @@ pub struct Button {
     leaf: LayoutLeaf,
     on_click: Option<Box<dyn Fn()>>,
     style_fn: Box<dyn Fn() -> ButtonStyle>,
-    // Imperative model: hover is stored in Cell, re-render only when on_event returns Handled.
-    hovered: Cell<bool>,
+    hovered: RwSignal<bool>,
 }
 
 impl Button {
@@ -42,8 +42,9 @@ impl Button {
                     .with_fill(Color::rgba(0.15, 0.39, 0.92, 1.0))
                     .with_radius(BorderRadius::all(4.0)),
                 text: TextStyle::new(14.0, Color::WHITE),
+                text_hover: TextStyle::new(14.0, Color::WHITE),
             }),
-            hovered: Cell::new(false),
+            hovered: create_rw_signal(false),
         })
     }
 
@@ -62,10 +63,16 @@ impl Component for Button {
     fn view(&self) -> RenderNode {
         let style = (self.style_fn)();
         let r = self.leaf.rect.get();
-        let rect_style = if self.hovered.get() {
+        let hovered = self.hovered.get();
+        let rect_style = if hovered {
             style.rect_hover
         } else {
             style.rect
+        };
+        let text_style = if hovered {
+            style.text_hover
+        } else {
+            style.text
         };
         let local = geometry_core::Rect {
             x: 0.0,
@@ -76,7 +83,7 @@ impl Component for Button {
 
         self.leaf.at_layout_position(RenderNode::group([
             RenderNode::rect(local, rect_style),
-            RenderNode::text(Arc::clone(&self.label), local, style.text),
+            RenderNode::text(Arc::clone(&self.label), local, text_style),
         ]))
     }
 
@@ -122,7 +129,7 @@ mod tests {
 
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerButton, PointerSource};
-    use renderer_core::{Color, DrawCommand, FRAME_STYLE_POOL, Paint};
+    use renderer_core::{Color, DrawCommand, Paint};
 
     use super::*;
     use crate::context::{WidgetCtx, compute_layout, new_container};
@@ -285,7 +292,7 @@ mod tests {
             } = &children[0]
             {
                 if let RenderNode::Primitive(DrawCommand::Rect { style, .. }) = &inner[0] {
-                    let fill = FRAME_STYLE_POOL.lock().unwrap().get_rect(*style).fill;
+                    let fill = style.fill;
                     if let Some(Paint::Solid(color)) = fill {
                         return color;
                     }

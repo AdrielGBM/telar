@@ -2,19 +2,20 @@ use std::sync::Arc;
 
 use geometry_core::{Point, Rect};
 
-use crate::style_pool::StyleHandle;
-use crate::{BorderRadius, ImageData, ImageFilter, LineStyle, PathData};
+use crate::{
+    BorderRadius, ImageData, ImageFilter, LineStyle, PathData, PathStyle, RectStyle, TextStyle,
+};
 
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
     Rect {
         rect: Rect,
-        style: StyleHandle,
+        style: Arc<RectStyle>,
     },
     Text {
         text: Arc<str>,
         rect: Rect,
-        style: StyleHandle,
+        style: Arc<TextStyle>,
     },
     Image {
         data: Arc<ImageData>,
@@ -28,7 +29,7 @@ pub enum DrawCommand {
     },
     Path {
         data: Arc<PathData>,
-        style: StyleHandle,
+        style: Arc<PathStyle>,
     },
     PushClip {
         rect: Rect,

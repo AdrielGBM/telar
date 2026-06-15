@@ -1,3 +1,4 @@
+use crate::counter;
 use crate::images::{make_checker, make_gradient, make_radial_alpha};
 use crate::sections::{
     cards_section, colors_section, gradients_section, grid_section, images_section, layers_section,
@@ -31,6 +32,7 @@ fn build_content(
         Box::new(shadows_section(ctx)?),
         Box::new(grid_section(ctx)?),
         Box::new(transforms_section(ctx)?),
+        counter(ctx)?,
     ];
     Container::new(
         ctx,

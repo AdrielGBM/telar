@@ -6,6 +6,9 @@ edition = "2024"
 [dependencies]
 platform-core = { workspace = true }
 services-core = { workspace = true }
+raw-window-handle = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
 winit = { version = "0.30", default-features = false, features = [
     "android-native-activity",
     "rwh_06",
@@ -13,4 +16,3 @@ winit = { version = "0.30", default-features = false, features = [
 android-activity = { version = "0.6", features = ["native-activity"] }
 android_logger = "0.15"
 log = "0.4"
-raw-window-handle = { workspace = true }

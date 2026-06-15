@@ -2,7 +2,7 @@ use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
 
 use platform_core::Event;
-use reactive_core::{Effect, batch, create_effect};
+use reactive_core::{Effect, RwSignal, batch, create_effect, create_rw_signal};
 use renderer_core::DrawCommand;
 use rustc_hash::FxHashMap;
 
@@ -18,6 +18,9 @@ struct ComponentSlot {
     // Persisted across frames so keyed structural nodes can fingerprint their flattened ranges and short-circuit unchanged subtrees.
     _key_cache: Rc<RefCell<FxHashMap<u64, (usize, usize, u64)>>>,
     _effect: Effect,
+    // Bumped by on_event to force a re-run of the view effect in hot-reload mode, where
+    // signals in the dylib's reactive RUNTIME are not tracked by the binary's effect.
+    force_tick: RwSignal<u64>,
 }
 
 impl ComponentSlot {
@@ -28,13 +31,16 @@ impl ComponentSlot {
         let stack: Rc<RefCell<Vec<RenderNode>>> = Default::default();
         let key_cache: Rc<RefCell<FxHashMap<u64, (usize, usize, u64)>>> =
             Rc::new(RefCell::new(FxHashMap::default()));
+        let force_tick = create_rw_signal(0u64);
 
         let comp_clone = Rc::clone(&component);
         let cmds_clone = Rc::clone(&commands);
         let dirty_clone = Rc::clone(&dirty);
         let stack_clone = Rc::clone(&stack);
         let key_cache_clone = Rc::clone(&key_cache);
+        let force_tick_inner = force_tick.clone();
         let _effect = create_effect(move || {
+            force_tick_inner.get(); // subscribe so on_event bumps can force a re-run
             let node = comp_clone.borrow().view();
             let mut stk = stack_clone.borrow_mut();
             let mut cmds = cmds_clone.borrow_mut();
@@ -58,6 +64,7 @@ impl ComponentSlot {
             _stack: stack,
             _key_cache: key_cache,
             _effect,
+            force_tick,
         }
     }
 }
@@ -158,25 +165,31 @@ impl ComponentList {
             EventResult::Ignored
         })
     }
+
+    // In hot-reload mode the dylib's reactive signals are not tracked by the binary's effect, so state changes from on_event (e.g. WindowResized updating layout) would never trigger a re-render. Call this after on_event to force every slot's view effect to re-run so it reads fresh layout and state from the component.
+    pub fn bump_force_ticks(&self) {
+        batch(|| {
+            for slot in &self.slots {
+                slot.force_tick.set(slot.force_tick.peek().wrapping_add(1));
+            }
+        });
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use geometry_core::Rect;
     use reactive_core::create_rw_signal;
-    use renderer_core::{Color, FRAME_STYLE_POOL, RectStyle};
+    use renderer_core::{Color, RectStyle};
+    use std::sync::Arc;
 
     use super::*;
     use crate::render_node::RenderNode;
 
     fn sample_rect(x: f32) -> DrawCommand {
-        let style = FRAME_STYLE_POOL
-            .lock()
-            .unwrap()
-            .intern_rect(RectStyle::default().with_fill(Color::BLACK));
         DrawCommand::Rect {
             rect: Rect::new(x, 0.0, 10.0, 10.0),
-            style,
+            style: Arc::new(RectStyle::default().with_fill(Color::BLACK)),
         }
     }
 

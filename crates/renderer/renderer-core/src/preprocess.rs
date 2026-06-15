@@ -1,4 +1,5 @@
-use crate::style_pool::FRAME_STYLE_POOL;
+use std::sync::Arc;
+
 use crate::{Color, DrawCommand, Paint, RectStyle};
 
 // Returns Some(fill_alpha) when the rect should be rendered via an intermediate
@@ -20,10 +21,7 @@ fn fill_layer_alpha(style: &RectStyle) -> Option<f32> {
 // separately.
 pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
     let needs_expand = commands.iter().any(|cmd| match cmd {
-        DrawCommand::Rect { style, .. } => {
-            let s = *FRAME_STYLE_POOL.lock().unwrap().get_rect(*style);
-            fill_layer_alpha(&s).is_some()
-        }
+        DrawCommand::Rect { style, .. } => fill_layer_alpha(style).is_some(),
         _ => false,
     });
     if !needs_expand {
@@ -32,20 +30,18 @@ pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> 
     let mut result = Vec::with_capacity(commands.len() + 4);
     for cmd in commands {
         if let DrawCommand::Rect { rect, style } = cmd {
-            let resolved = *FRAME_STYLE_POOL.lock().unwrap().get_rect(*style);
-            if let Some(alpha) = fill_layer_alpha(&resolved) {
-                let mut opaque = resolved;
+            if let Some(alpha) = fill_layer_alpha(style) {
+                let mut opaque = **style;
                 if let Some(Paint::Solid(c)) = opaque.fill {
                     opaque.fill = Some(Paint::Solid(Color { a: 1.0, ..c }));
                 }
-                let opaque_handle = FRAME_STYLE_POOL.lock().unwrap().intern_rect(opaque);
                 result.push(DrawCommand::PushLayer {
                     opacity: alpha,
                     backdrop_blur: 0.0,
                 });
                 result.push(DrawCommand::Rect {
                     rect: *rect,
-                    style: opaque_handle,
+                    style: Arc::new(opaque),
                 });
                 result.push(DrawCommand::PopLayer);
                 continue;
@@ -183,25 +179,15 @@ fn spath_data(data: &crate::PathData, sf: f32) -> crate::PathData {
 
 fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
     match cmd {
-        DrawCommand::Rect { rect, style } => {
-            let resolved = *FRAME_STYLE_POOL.lock().unwrap().get_rect(*style);
-            let scaled = srect_style(resolved, sf);
-            let handle = FRAME_STYLE_POOL.lock().unwrap().intern_rect(scaled);
-            DrawCommand::Rect {
-                rect: sr(*rect, sf),
-                style: handle,
-            }
-        }
-        DrawCommand::Text { text, rect, style } => {
-            let resolved = *FRAME_STYLE_POOL.lock().unwrap().get_text(*style);
-            let scaled = stext_style(resolved, sf);
-            let handle = FRAME_STYLE_POOL.lock().unwrap().intern_text(scaled);
-            DrawCommand::Text {
-                text: text.clone(),
-                rect: sr(*rect, sf),
-                style: handle,
-            }
-        }
+        DrawCommand::Rect { rect, style } => DrawCommand::Rect {
+            rect: sr(*rect, sf),
+            style: Arc::new(srect_style(**style, sf)),
+        },
+        DrawCommand::Text { text, rect, style } => DrawCommand::Text {
+            text: text.clone(),
+            rect: sr(*rect, sf),
+            style: Arc::new(stext_style(**style, sf)),
+        },
         DrawCommand::Image { data, rect, filter } => DrawCommand::Image {
             data: data.clone(),
             rect: sr(*rect, sf),
@@ -212,15 +198,10 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             p2: sp(*p2, sf),
             style: sline_style(*style, sf),
         },
-        DrawCommand::Path { data, style } => {
-            let resolved = *FRAME_STYLE_POOL.lock().unwrap().get_path(*style);
-            let scaled = spath_style(resolved, sf);
-            let handle = FRAME_STYLE_POOL.lock().unwrap().intern_path(scaled);
-            DrawCommand::Path {
-                data: std::sync::Arc::new(spath_data(data, sf)),
-                style: handle,
-            }
-        }
+        DrawCommand::Path { data, style } => DrawCommand::Path {
+            data: Arc::new(spath_data(data, sf)),
+            style: Arc::new(spath_style(**style, sf)),
+        },
         DrawCommand::PushClip { rect, radius } => DrawCommand::PushClip {
             rect: sr(*rect, sf),
             radius: sbr(*radius, sf),

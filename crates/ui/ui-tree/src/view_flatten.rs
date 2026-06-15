@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use renderer_core::DrawCommand;
+use renderer_core::{hash_path_style, hash_rect_style, hash_text_style};
 use rustc_hash::{FxHashMap, FxHasher};
 
 use crate::render_node::RenderNode;
@@ -19,7 +20,7 @@ fn range_hash(cmds: &[DrawCommand]) -> u64 {
                 rect.y.to_bits().hash(&mut h);
                 rect.width.to_bits().hash(&mut h);
                 rect.height.to_bits().hash(&mut h);
-                style.0.hash(&mut h);
+                hash_rect_style(style).hash(&mut h);
             }
             DrawCommand::Text { text, rect, style } => {
                 1u8.hash(&mut h);
@@ -29,7 +30,7 @@ fn range_hash(cmds: &[DrawCommand]) -> u64 {
                 rect.y.to_bits().hash(&mut h);
                 rect.width.to_bits().hash(&mut h);
                 rect.height.to_bits().hash(&mut h);
-                style.0.hash(&mut h);
+                hash_text_style(style).hash(&mut h);
             }
             DrawCommand::Image { data, rect, filter } => {
                 2u8.hash(&mut h);
@@ -40,17 +41,18 @@ fn range_hash(cmds: &[DrawCommand]) -> u64 {
                 rect.height.to_bits().hash(&mut h);
                 (*filter as u8).hash(&mut h);
             }
-            DrawCommand::Line { p1, p2, .. } => {
+            DrawCommand::Line { p1, p2, style } => {
                 3u8.hash(&mut h);
                 p1.x.to_bits().hash(&mut h);
                 p1.y.to_bits().hash(&mut h);
                 p2.x.to_bits().hash(&mut h);
                 p2.y.to_bits().hash(&mut h);
+                style.width.to_bits().hash(&mut h);
             }
             DrawCommand::Path { data, style } => {
                 4u8.hash(&mut h);
                 (Arc::as_ptr(data) as usize).hash(&mut h);
-                style.0.hash(&mut h);
+                hash_path_style(style).hash(&mut h);
             }
             DrawCommand::PushClip { rect, radius } => {
                 5u8.hash(&mut h);
@@ -225,19 +227,16 @@ pub fn flatten_view(
 #[cfg(test)]
 mod tests {
     use geometry_core::Rect;
-    use renderer_core::{Color, FRAME_STYLE_POOL, RectStyle};
+    use renderer_core::{Color, RectStyle};
     use rustc_hash::FxHashMap;
+    use std::sync::Arc;
 
     use super::*;
 
     fn sample_rect() -> DrawCommand {
-        let style = FRAME_STYLE_POOL
-            .lock()
-            .unwrap()
-            .intern_rect(RectStyle::default().with_fill(Color::BLACK));
         DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 10.0, 10.0),
-            style,
+            style: Arc::new(RectStyle::default().with_fill(Color::BLACK)),
         }
     }
 

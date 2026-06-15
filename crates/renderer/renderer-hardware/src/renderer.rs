@@ -7,8 +7,8 @@ use rustc_hash::FxHasher;
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, FRAME_STYLE_POOL, ImageFilter, RenderBackend, RendererError,
-    expand_fill_layers, union_rects,
+    Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers,
+    hash_path_style, hash_rect_style, hash_text_style, union_rects,
 };
 
 use wgpu::util::DeviceExt;
@@ -265,7 +265,7 @@ fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
                 rect.y.to_bits().hash(&mut h);
                 rect.width.to_bits().hash(&mut h);
                 rect.height.to_bits().hash(&mut h);
-                style.0.hash(&mut h);
+                hash_rect_style(style).hash(&mut h);
             }
             DrawCommand::Text { text, rect, style } => {
                 1u8.hash(&mut h);
@@ -274,7 +274,7 @@ fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
                 rect.y.to_bits().hash(&mut h);
                 rect.width.to_bits().hash(&mut h);
                 rect.height.to_bits().hash(&mut h);
-                style.0.hash(&mut h);
+                hash_text_style(style).hash(&mut h);
             }
             DrawCommand::Image { data, rect, filter } => {
                 2u8.hash(&mut h);
@@ -296,7 +296,7 @@ fn hash_draw_commands(commands: &[DrawCommand]) -> u64 {
             DrawCommand::Path { data, style } => {
                 4u8.hash(&mut h);
                 (Arc::as_ptr(data) as usize).hash(&mut h);
-                style.0.hash(&mut h);
+                hash_path_style(style).hash(&mut h);
             }
             DrawCommand::PushClip { rect, radius } => {
                 5u8.hash(&mut h);
@@ -1357,7 +1357,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             match cmd {
                 DrawCommand::Rect { rect, style } => {
                     let rect = *rect;
-                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_rect(*style);
+                    let style = **style;
                     if rect.width <= 0.0
                         || rect.height <= 0.0
                         || (style.fill.is_none() && style.stroke.is_none())
@@ -1391,7 +1391,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
                 DrawCommand::Text { text, rect, style } => {
                     let rect = *rect;
-                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_text(*style);
+                    let style = **style;
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {
@@ -1548,7 +1548,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         .push(crate::primitives::image::prepare_image(translated));
                 }
                 DrawCommand::Path { data, style } => {
-                    let style = *FRAME_STYLE_POOL.lock().unwrap().get_path(*style);
+                    let style = **style;
                     if let Some(bounds) =
                         renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
                     {

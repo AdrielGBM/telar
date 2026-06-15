@@ -24,7 +24,9 @@ impl Text {
         layout: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, layout)?;
+        // Stretch overrides any parent align-items (e.g. center) so text always
+        // fills the parent's cross-axis width instead of collapsing to 0.
+        let leaf = LayoutLeaf::register(ctx, layout.align_self_stretch())?;
         Ok(Self {
             content_fn: Box::new(content_fn),
             cached_content: RefCell::new((String::new(), Arc::from(""))),

@@ -1,7 +1,6 @@
 use geometry_core::Rect;
 
 use crate::DrawCommand;
-use crate::style_pool::FRAME_STYLE_POOL;
 
 pub use crate::geometry::union_rects;
 
@@ -63,7 +62,7 @@ pub fn command_visual_rect(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Rect> 
     match cmd {
         DrawCommand::Rect { rect, style } => {
             let r = transform_rect_aabb(matrix, rect.x, rect.y, rect.width, rect.height);
-            let shadow = FRAME_STYLE_POOL.lock().unwrap().get_rect(*style).shadow;
+            let shadow = style.shadow;
             Some(match shadow {
                 Some(s) => expand_for_shadow(r, s.blur_radius, s.spread, s.offset_x, s.offset_y),
                 None => r,
@@ -71,11 +70,8 @@ pub fn command_visual_rect(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Rect> 
         }
         DrawCommand::Text { rect, style, .. } => {
             // Glyphs can extend outside rect: ascenders above rect.y and line_height (font_size*1.2) may exceed rect.height. Expand the visual rect to cover the real glyph extent so that dirty-rect computation and culling never under-estimate the painted area.
-            let (font_size, shadow) = {
-                let pool = FRAME_STYLE_POOL.lock().unwrap();
-                let s = pool.get_text(*style);
-                (s.font_size, s.shadow)
-            };
+            let font_size = style.font_size;
+            let shadow = style.shadow;
             let line_h = font_size * 1.2;
             let ascender_overshoot = font_size * 0.25;
             let extra_bottom = (line_h - rect.height).max(0.0);
@@ -111,7 +107,7 @@ pub fn command_visual_rect(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Rect> 
         DrawCommand::Path { data, style } => {
             let base = data.bounds()?;
             let r = transform_rect_aabb(matrix, base.x, base.y, base.width, base.height);
-            let shadow = FRAME_STYLE_POOL.lock().unwrap().get_path(*style).shadow;
+            let shadow = style.shadow;
             Some(match shadow {
                 Some(s) => expand_for_shadow(r, s.blur_radius, s.spread, s.offset_x, s.offset_y),
                 None => r,

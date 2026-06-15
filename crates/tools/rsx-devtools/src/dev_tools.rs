@@ -5,24 +5,20 @@ use std::time::{Duration, Instant};
 use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
-use renderer_core::{
-    BorderRadius, Color, DrawCommand, FRAME_STYLE_POOL, Paint, RectStyle, TextStyle,
-};
+use renderer_core::{BorderRadius, Color, DrawCommand, Paint, RectStyle, TextStyle};
 
 fn rect_cmd(rect: Rect, style: RectStyle) -> DrawCommand {
-    let handle = FRAME_STYLE_POOL.lock().unwrap().intern_rect(style);
     DrawCommand::Rect {
         rect,
-        style: handle,
+        style: std::sync::Arc::new(style),
     }
 }
 
 fn text_cmd(text: std::sync::Arc<str>, rect: Rect, style: TextStyle) -> DrawCommand {
-    let handle = FRAME_STYLE_POOL.lock().unwrap().intern_text(style);
     DrawCommand::Text {
         text,
         rect,
-        style: handle,
+        style: std::sync::Arc::new(style),
     }
 }
 
