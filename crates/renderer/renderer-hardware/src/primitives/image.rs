@@ -250,9 +250,7 @@ impl ImagePipeline {
         height: u32,
         device: &wgpu::Device,
     ) -> Option<(wgpu::Texture, wgpu::TextureView)> {
-        use ndk_sys::AHardwareBuffer;
-        let _buffer: *mut AHardwareBuffer = handle as *mut AHardwareBuffer;
-        let _ = (width, height, device);
+        let _ = (handle, width, height, device);
         // TODO: implement Vulkan external memory import once wgpu HAL API stabilises.
         None
     }

@@ -2171,7 +2171,6 @@ dependencies = [
  "bytemuck",
  "geometry-core",
  "lyon",
- "ndk-sys",
  "pollster",
  "raw-window-handle",
  "renderer-core",
@@ -2186,8 +2185,6 @@ dependencies = [
 name = "renderer-software"
 version = "0.1.0"
 dependencies = [
- "arrayvec",
- "bytemuck",
  "clru",
  "geometry-core",
  "lru",

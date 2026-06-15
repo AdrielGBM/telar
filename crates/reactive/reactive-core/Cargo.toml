@@ -6,4 +6,4 @@ edition = "2024"
 [dependencies]
 rustc-hash = { workspace = true }
 slab = "0.4.12"
-smallvec = { version = "1.15.1", features = ["union"] }
+smallvec = { workspace = true }

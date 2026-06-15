@@ -3,6 +3,10 @@ name = "rsx-devtools"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+devtools = []
+
 [dependencies]
 platform-core = { workspace = true }
 renderer-core = { workspace = true }
