@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 use rustc_hash::FxHasher;
 
@@ -246,7 +246,7 @@ fn try_merge_steps(a: DrawStep, b: DrawStep) -> Result<DrawStep, (DrawStep, Draw
 #[inline]
 fn hash_instances<T: bytemuck::Pod>(data: &[T]) -> u64 {
     let bytes: &[u8] = bytemuck::cast_slice(data);
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = FxHasher::default();
     bytes.hash(&mut hasher);
     hasher.finish()
 }
@@ -430,6 +430,7 @@ fn flush_image_batch(
 
 /// A hardware-accelerated renderer using wgpu. The `W: Send + Sync + 'static` bound is a wgpu requirement for surface creation, not an indication that this renderer is thread-safe. The renderer must only be used on the main thread alongside the reactive runtime; it is not safe to move between threads.
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
+    instance: wgpu::Instance,
     surface: Surface<'static>,
     device: Device,
     queue: Queue,
@@ -526,8 +527,10 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     retained_view: Option<wgpu::TextureView>,
     prev_commands: Vec<DrawCommand>,
     prev_commands_hash: u64,
-    // Content generation of the last rendered frame. Initialized to u64::MAX so the first frame never matches and always renders. Used by the idle-frame fast path to skip work with a single integer compare when the upstream ComponentList generation is threaded through.
+    // ComponentList generation of the last fully rendered frame. Initialized to u64::MAX so the first frame never matches and always renders. Set to the incoming generation after each successful render.
     prev_generation: u64,
+    // Generation received from the current begin_frame call; used by render_frame to decide the idle-blit fast path.
+    incoming_generation: u64,
     retained_blit_pipeline: crate::composite::CompositePipeline,
     prev_rect_hash: u64,
     prev_text_hash: u64,
@@ -836,6 +839,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         }
 
         Ok(Self {
+            instance,
             surface,
             device,
             queue,
@@ -903,6 +907,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             prev_commands: Vec::new(),
             prev_commands_hash: 0,
             prev_generation: u64::MAX,
+            incoming_generation: 0,
             retained_blit_pipeline,
             prev_rect_hash: 0,
             prev_text_hash: 0,
@@ -910,6 +915,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             prev_image_hash: 0,
             _window: window,
         })
+    }
+
+    /// Rebind the renderer to a new native window after Android resume.
+    /// Keeps all GPU resources (device, pipelines, caches, atlas) intact — only the surface is replaced.
+    /// The new surface will be configured on the next `begin_frame` call.
+    pub fn rebind_surface(&mut self, window: std::sync::Arc<W>) -> Result<(), RendererError> {
+        let new_surface = self
+            .instance
+            .create_surface(window.clone())
+            .map_err(|e| RendererError::Surface(e.to_string()))?;
+        self.surface = new_surface;
+        self._window = window;
+        // Force reconfiguration on the next begin_frame (begin_frame handles config.is_none()).
+        self.config = None;
+        self.viewport_dirty = true;
+        Ok(())
     }
 
     // Returns a viewport bind group backed by a pooled uniform buffer holding `vp`. Reuses a pre-allocated slot via round-robin (writing the new contents in place) when available, otherwise grows the pool with a fresh slot. The returned BindGroup is an Arc-backed clone, so the pool retains ownership of the underlying resources.
@@ -943,7 +964,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let bind_group = self.retained_blit_pipeline.create_bind_group(
             &self.device,
             &vello_view,
-            [0.0, 0.0, width as f32, height as f32],
+            [
+                0.0,
+                0.0,
+                width as f32 / self.scale_factor,
+                height as f32 / self.scale_factor,
+            ],
             1.0,
             0.0,
             [1.0, 1.0],
@@ -1187,8 +1213,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         width: u32,
         height: u32,
         scale_factor: f32,
+        generation: u64,
     ) -> Result<(), RendererError> {
         self.scale_factor = scale_factor;
+        self.incoming_generation = generation;
         if width != self.width || height != self.height || self.config.is_none() {
             // Pooled layer textures are sized to the previous surface dimensions and would be unusable at the new size; drop them so we don't leak GPU memory for textures we will never reuse.
             self.layer_texture_pool.clear();
@@ -1237,9 +1265,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             commands.len(),
             clear_color.is_some()
         );
-        // Idle-frame fast path: skip full pipeline and blit retained texture when commands and viewport are unchanged.
-        if !self.prev_commands.is_empty()
-            && commands == self.prev_commands.as_slice()
+        // Idle-frame fast path: skip full pipeline and blit retained texture when content generation and viewport are unchanged.
+        if self.incoming_generation == self.prev_generation
+            && self.retained_view.is_some()
             && !self.viewport_dirty
             && self.config.is_some()
             && self.width > 0
@@ -1281,7 +1309,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 let retained_bg = self.retained_blit_pipeline.create_bind_group(
                     &self.device,
                     retained_view,
-                    [0.0, 0.0, self.width as f32, self.height as f32],
+                    [
+                        0.0,
+                        0.0,
+                        self.width as f32 / self.scale_factor,
+                        self.height as f32 / self.scale_factor,
+                    ],
                     1.0,
                     0.0,
                     [1.0, 1.0],
@@ -1421,6 +1454,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.flush_text();
 
                         let sigma = renderer_core::blur_sigma(shadow.blur_radius);
+                        let sigma_phys = sigma * self.scale_factor;
                         let padding = (sigma * 3.0).ceil() as u32 + 2;
                         let shadow_rect = Rect::new(
                             translated.x + shadow.offset_x,
@@ -1430,8 +1464,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         );
                         let origin_x = shadow_rect.x - padding as f32;
                         let origin_y = shadow_rect.y - padding as f32;
-                        let tex_w = (shadow_rect.width.ceil() as u32 + 2 * padding).max(1);
-                        let tex_h = (shadow_rect.height.ceil() as u32 + 2 * padding).max(1);
+                        let tex_w_log = (shadow_rect.width.ceil() as u32 + 2 * padding).max(1);
+                        let tex_h_log = (shadow_rect.height.ceil() as u32 + 2 * padding).max(1);
+                        let tex_w = (tex_w_log as f32 * self.scale_factor).ceil() as u32;
+                        let tex_h = (tex_h_log as f32 * self.scale_factor).ceil() as u32;
 
                         let shadow_style = renderer_core::TextStyle {
                             paint: renderer_core::Paint::Solid(shadow.color),
@@ -1456,10 +1492,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.pending_shadow_ops.push(ShadowOp {
                             instance_start,
                             instance_end,
-                            sigma,
+                            sigma: sigma_phys,
                             tex_w,
                             tex_h,
-                            dest: [origin_x, origin_y, tex_w as f32, tex_h as f32],
+                            dest: [origin_x, origin_y, tex_w_log as f32, tex_h_log as f32],
                         });
                         self.pending_steps.push(DrawStep::ShadowPlaceholder {
                             op_idx: self.pending_shadow_ops.len() - 1,
@@ -1608,14 +1644,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             let world_max_y = wmin_y.max(wmax_y) + shadow.offset_y;
 
                             let sigma = renderer_core::blur_sigma(shadow.blur_radius);
+                            let sigma_phys = sigma * self.scale_factor;
                             let padding = (sigma * 3.0).ceil() as u32 + 2;
 
                             let origin_x = world_min_x - padding as f32;
                             let origin_y = world_min_y - padding as f32;
-                            let tex_w =
+                            let tex_w_log =
                                 ((world_max_x - world_min_x).ceil() as u32 + 2 * padding).max(1);
-                            let tex_h =
+                            let tex_h_log =
                                 ((world_max_y - world_min_y).ceil() as u32 + 2 * padding).max(1);
+                            let tex_w = (tex_w_log as f32 * self.scale_factor).ceil() as u32;
+                            let tex_h = (tex_h_log as f32 * self.scale_factor).ceil() as u32;
 
                             for v in &mut self.pending_shadow_path_vertices[sv_start..] {
                                 let (wx, wy) =
@@ -1627,10 +1666,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             self.pending_path_shadow_ops.push(PathShadowOp {
                                 index_start: si_start,
                                 index_end: si_end,
-                                sigma,
+                                sigma: sigma_phys,
                                 tex_w,
                                 tex_h,
-                                dest: [origin_x, origin_y, tex_w as f32, tex_h as f32],
+                                dest: [origin_x, origin_y, tex_w_log as f32, tex_h_log as f32],
                             });
                             self.pending_steps.push(DrawStep::PathShadowPlaceholder {
                                 op_idx: self.pending_path_shadow_ops.len() - 1,
@@ -1701,8 +1740,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         clip_is_round.push(true);
                         let ox = rect.x.floor().max(0.0);
                         let oy = rect.y.floor().max(0.0);
-                        let tex_w = (rect.width.ceil() as u32).max(1).min(self.width.max(1));
-                        let tex_h = (rect.height.ceil() as u32).max(1).min(self.height.max(1));
+                        let tex_w_log = (rect.width.ceil() as u32).max(1);
+                        let tex_h_log = (rect.height.ceil() as u32).max(1);
+                        let tex_w = ((tex_w_log as f32 * self.scale_factor).ceil() as u32)
+                            .min(self.width.max(1));
+                        let tex_h = ((tex_h_log as f32 * self.scale_factor).ceil() as u32)
+                            .min(self.height.max(1));
                         let bucket_w = bucket_size(tex_w);
                         let bucket_h = bucket_size(tex_h);
                         let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
@@ -1721,10 +1764,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 )
                             };
                         let layer_vp = Viewport {
-                            // Use bucket dimensions so NDC 1.0 maps to pixel bucket_w/h;
-                            // content then fills only the first tex_w/h pixels and uv_scale clips correctly.
+                            // Use physical bucket dimensions: to_ndc scales logical coords by scale_factor,
+                            // so size must be physical to map [0, logical_w] correctly to NDC [-1, 1].
                             size: [bucket_w as f32, bucket_h as f32],
-                            offset: [ox, oy],
+                            offset: [ox * self.scale_factor, oy * self.scale_factor],
+                            scale: self.scale_factor,
+                            _pad: 0.0,
                         };
                         let layer_vp_bg = self.take_layer_viewport_bg(layer_vp);
                         let uv_scale = [
@@ -1735,7 +1780,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let composite_bg = self.composite_pipeline.create_bind_group(
                             &self.device,
                             &resolve_view,
-                            [ox, oy, tex_w as f32, tex_h as f32],
+                            [ox, oy, tex_w_log as f32, tex_h_log as f32],
                             1.0,
                             radius.top_left,
                             uv_scale,
@@ -1810,20 +1855,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_all();
                     current_scissor = scissor_layer_stack.pop().flatten();
                     if let Some(accum) = layer_accum_stack.pop() {
-                        let (offset_x, offset_y, tex_w, tex_h) = if let Some(b) = accum.bounds {
-                            let ox = b.x.floor().max(0.0);
-                            let oy = b.y.floor().max(0.0);
-                            let w = (b.width.ceil() as u32).max(1).min(self.width.max(1));
-                            let h = (b.height.ceil() as u32).max(1).min(self.height.max(1));
-                            (ox, oy, w, h)
-                        } else {
-                            (0.0, 0.0, self.width.max(1), self.height.max(1))
-                        };
+                        let (offset_x, offset_y, tex_w, tex_h, tex_w_log, tex_h_log) =
+                            if let Some(b) = accum.bounds {
+                                let ox = b.x.floor().max(0.0);
+                                let oy = b.y.floor().max(0.0);
+                                let wl = (b.width.ceil() as u32).max(1);
+                                let hl = (b.height.ceil() as u32).max(1);
+                                let wp = ((wl as f32 * self.scale_factor).ceil() as u32)
+                                    .min(self.width.max(1));
+                                let hp = ((hl as f32 * self.scale_factor).ceil() as u32)
+                                    .min(self.height.max(1));
+                                (ox, oy, wp, hp, wl, hl)
+                            } else {
+                                let wl = (self.width as f32 / self.scale_factor).ceil() as u32;
+                                let hl = (self.height as f32 / self.scale_factor).ceil() as u32;
+                                (0.0, 0.0, self.width.max(1), self.height.max(1), wl, hl)
+                            };
                         // Propagate this layer's visual footprint to the parent layer so nested
                         // layers are included in the parent's bounds (and thus its texture size).
                         if let Some(parent) = layer_accum_stack.last_mut() {
                             let footprint =
-                                Rect::new(offset_x, offset_y, tex_w as f32, tex_h as f32);
+                                Rect::new(offset_x, offset_y, tex_w_log as f32, tex_h_log as f32);
                             parent.bounds = Some(
                                 parent
                                     .bounds
@@ -1868,7 +1920,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 self.composite_pipeline.create_bind_group(
                                     &self.device,
                                     cached_view,
-                                    [offset_x, offset_y, tex_w as f32, tex_h as f32],
+                                    [offset_x, offset_y, tex_w_log as f32, tex_h_log as f32],
                                     accum.opacity,
                                     0.0,
                                     uv_scale,
@@ -1920,21 +1972,26 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                     )
                                 };
                             let layer_vp = Viewport {
-                                // Use bucket dimensions so NDC 1.0 maps to pixel bucket_w/h;
-                                // content then fills only the first tex_w/h pixels and uv_scale clips correctly.
+                                // Physical bucket dimensions: to_ndc multiplies logical coords by scale_factor,
+                                // so using physical size correctly maps logical content into the physical texture.
                                 size: [bucket_w as f32, bucket_h as f32],
-                                offset: [offset_x, offset_y],
+                                offset: [
+                                    offset_x * self.scale_factor,
+                                    offset_y * self.scale_factor,
+                                ],
+                                scale: self.scale_factor,
+                                _pad: 0.0,
                             };
                             let layer_vp_bg = self.take_layer_viewport_bg(layer_vp);
                             let uv_scale = [
                                 tex_w as f32 / bucket_w as f32,
                                 tex_h as f32 / bucket_h as f32,
                             ];
-                            // Composite bind group uses window-absolute dest rect; parent viewport (set 0) converts it to NDC.
+                            // Composite bind group uses window-absolute dest rect in logical pixels; parent viewport (set 0) converts it to NDC.
                             let composite_bg = self.composite_pipeline.create_bind_group(
                                 &self.device,
                                 &resolve_view,
-                                [offset_x, offset_y, tex_w as f32, tex_h as f32],
+                                [offset_x, offset_y, tex_w_log as f32, tex_h_log as f32],
                                 accum.opacity,
                                 0.0,
                                 uv_scale,
@@ -2044,6 +2101,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             let viewport = Viewport {
                 size: [self.width as f32, self.height as f32],
                 offset: [0.0; 2],
+                scale: self.scale_factor,
+                _pad: 0.0,
             };
             self.queue
                 .write_buffer(&self.viewport_buffer, 0, bytemuck::bytes_of(&viewport));
@@ -2306,7 +2365,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                     // Use bucket dimensions: vertices are local to the shadow texture (0-based),
                     // so size must match the physical texture dimensions, not the logical ones.
-                    let vp_data: [f32; 4] = [cap_bucket_w as f32, cap_bucket_h as f32, 0.0, 0.0];
+                    let vp_data: [f32; 6] = [
+                        cap_bucket_w as f32,
+                        cap_bucket_h as f32,
+                        0.0,
+                        0.0,
+                        self.scale_factor,
+                        0.0,
+                    ];
                     let vp_buf =
                         self.device
                             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2412,7 +2478,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let idxs = &self.pending_shadow_path_indices
                             [op.index_start as usize..op.index_end as usize];
                         let h = hash_instances(verts);
-                        let mut hasher = DefaultHasher::new();
+                        let mut hasher = FxHasher::default();
                         h.hash(&mut hasher);
                         hash_instances(idxs).hash(&mut hasher);
                         hasher.finish()
@@ -2469,7 +2535,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                     // Use bucket dimensions: vertices are local to the shadow texture (0-based),
                     // so size must match the physical texture dimensions, not the logical ones.
-                    let vp_data: [f32; 4] = [cap_bucket_w as f32, cap_bucket_h as f32, 0.0, 0.0];
+                    let vp_data: [f32; 6] = [
+                        cap_bucket_w as f32,
+                        cap_bucket_h as f32,
+                        0.0,
+                        0.0,
+                        self.scale_factor,
+                        0.0,
+                    ];
                     let vp_buf =
                         self.device
                             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2937,13 +3010,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                         render_pass.set_scissor_rect(0, 0, self.width, self.height);
                                     }
                                     Some(r) => {
-                                        let x = (r.x.max(0.0).floor() as u32)
+                                        let sf = self.scale_factor;
+                                        let x = ((r.x * sf).max(0.0).floor() as u32)
                                             .min(self.width.saturating_sub(1));
-                                        let y = (r.y.max(0.0).floor() as u32)
+                                        let y = ((r.y * sf).max(0.0).floor() as u32)
                                             .min(self.height.saturating_sub(1));
-                                        let right = ((r.x + r.width).ceil() as u32).min(self.width);
-                                        let bottom =
-                                            ((r.y + r.height).ceil() as u32).min(self.height);
+                                        let right =
+                                            (((r.x + r.width) * sf).ceil() as u32).min(self.width);
+                                        let bottom = (((r.y + r.height) * sf).ceil() as u32)
+                                            .min(self.height);
                                         let w = right
                                             .saturating_sub(x)
                                             .max(1)
@@ -3251,11 +3326,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         blit.set_bind_group(0, parent_vp_bg, &[]);
                         blit.set_bind_group(1, &bind_group, &[]);
                         if let Some(s) = scissor {
-                            let x = (s.x.max(0.0).floor() as u32).min(self.width.saturating_sub(1));
-                            let y =
-                                (s.y.max(0.0).floor() as u32).min(self.height.saturating_sub(1));
-                            let right = ((s.x + s.width).ceil() as u32).min(self.width);
-                            let bottom = ((s.y + s.height).ceil() as u32).min(self.height);
+                            let sf = self.scale_factor;
+                            let x = ((s.x * sf).max(0.0).floor() as u32)
+                                .min(self.width.saturating_sub(1));
+                            let y = ((s.y * sf).max(0.0).floor() as u32)
+                                .min(self.height.saturating_sub(1));
+                            let right = (((s.x + s.width) * sf).ceil() as u32).min(self.width);
+                            let bottom = (((s.y + s.height) * sf).ceil() as u32).min(self.height);
                             let w = right
                                 .saturating_sub(x)
                                 .max(1)
@@ -3346,10 +3423,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     blit.set_bind_group(0, parent_vp_bg, &[]);
                     blit.set_bind_group(1, &bind_group, &[]);
                     if let Some(s) = scissor {
-                        let x = (s.x.max(0.0).floor() as u32).min(self.width.saturating_sub(1));
-                        let y = (s.y.max(0.0).floor() as u32).min(self.height.saturating_sub(1));
-                        let right = ((s.x + s.width).ceil() as u32).min(self.width);
-                        let bottom = ((s.y + s.height).ceil() as u32).min(self.height);
+                        let sf = self.scale_factor;
+                        let x =
+                            ((s.x * sf).max(0.0).floor() as u32).min(self.width.saturating_sub(1));
+                        let y =
+                            ((s.y * sf).max(0.0).floor() as u32).min(self.height.saturating_sub(1));
+                        let right = (((s.x + s.width) * sf).ceil() as u32).min(self.width);
+                        let bottom = (((s.y + s.height) * sf).ceil() as u32).min(self.height);
                         let w = right
                             .saturating_sub(x)
                             .max(1)
@@ -3389,7 +3469,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             let retained_bg = self.retained_blit_pipeline.create_bind_group(
                 &self.device,
                 retained_view,
-                [0.0, 0.0, self.width as f32, self.height as f32],
+                [
+                    0.0,
+                    0.0,
+                    self.width as f32 / self.scale_factor,
+                    self.height as f32 / self.scale_factor,
+                ],
                 1.0,
                 0.0,
                 [1.0, 1.0],
@@ -3441,6 +3526,28 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     depth_or_array_layers: 1,
                 },
             );
+            // Copy msaa_texture → retained_texture so the idle-blit path has valid content for the next idle frame.
+            if let Some(retained) = self.retained_texture.as_ref() {
+                encoder.copy_texture_to_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: msaa_tex,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    wgpu::TexelCopyTextureInfo {
+                        texture: retained,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    wgpu::Extent3d {
+                        width: self.width,
+                        height: self.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -3459,9 +3566,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         if current_hash != self.prev_commands_hash {
             self.prev_commands = orig_commands.to_vec();
             self.prev_commands_hash = current_hash;
-            // Bump the rendered-content generation in lockstep with the command hash so a future caller that threads ComponentList::generation() through render_frame can compare against this with a single integer compare.
-            self.prev_generation = self.prev_generation.wrapping_add(1);
         }
+        self.prev_generation = self.incoming_generation;
         self.clear_pending();
         Ok(())
     }

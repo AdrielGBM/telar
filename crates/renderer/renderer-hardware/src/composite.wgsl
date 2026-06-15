@@ -1,6 +1,8 @@
 struct Viewport {
     size: vec2<f32>,
     offset: vec2<f32>,
+    scale: f32,
+    _pad: f32,
 }
 @group(0) @binding(0) var<uniform> viewport: Viewport;
 
@@ -38,8 +40,8 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
     let uv = offsets[vi];
     let px = params.rect.x + uv.x * params.rect.z;
     let py = params.rect.y + uv.y * params.rect.w;
-    let ndx = (px - viewport.offset.x) / viewport.size.x * 2.0 - 1.0;
-    let ndy = 1.0 - (py - viewport.offset.y) / viewport.size.y * 2.0;
+    let ndx = (px * viewport.scale - viewport.offset.x) / viewport.size.x * 2.0 - 1.0;
+    let ndy = 1.0 - (py * viewport.scale - viewport.offset.y) / viewport.size.y * 2.0;
     var out: VertexOutput;
     out.position = vec4<f32>(ndx, ndy, 0.0, 1.0);
     out.uv = uv;

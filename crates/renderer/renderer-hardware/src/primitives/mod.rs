@@ -130,6 +130,8 @@ pub(super) fn encode_fill_style(fill: &renderer_core::Paint, matrix: [f32; 6]) -
 pub(crate) struct Viewport {
     pub size: [f32; 2],
     pub offset: [f32; 2],
+    pub scale: f32,
+    pub _pad: f32,
 }
 
 pub(crate) fn create_viewport_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {

@@ -561,6 +561,7 @@ where
         width: u32,
         height: u32,
         _scale_factor: f32,
+        _generation: u64,
     ) -> Result<(), RendererError> {
         if width != self.width || height != self.height {
             self.width = width;
@@ -759,8 +760,7 @@ where
         self.draw_state.reset();
         self.layer_stack.clear();
 
-        // Task 2.5: skip expand_fill_layers when the input commands haven't changed since last frame.
-        let input_hash = hash_commands(commands, 0, 0);
+        let input_hash = current_hash;
         let expanded_commands = match &self.expanded_commands_cache {
             Some((cached_hash, _)) if *cached_hash == input_hash => None, // signals "use cache"
             _ => {

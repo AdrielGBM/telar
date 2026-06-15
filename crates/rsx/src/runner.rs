@@ -30,6 +30,7 @@ struct HwFrameMsg {
     w: u32,
     h: u32,
     sf: f32,
+    generation: u64,
     commands: Vec<renderer_core::DrawCommand>,
     clear: Option<renderer_core::Color>,
     at: std::time::Instant,
@@ -72,7 +73,8 @@ where
     font_data: Vec<Vec<u8>>,
     _window: std::marker::PhantomData<W>,
     render_tx: Option<std::sync::mpsc::SyncSender<HwFrameMsg>>,
-    render_join: Option<std::thread::JoinHandle<()>>,
+    render_join: Option<std::thread::JoinHandle<HardwareRenderer<W>>>,
+    hw_renderer: Option<HardwareRenderer<W>>,
     #[cfg(feature = "dev")]
     hot_reload_rx: Option<std::sync::mpsc::Receiver<std::path::PathBuf>>,
     #[cfg(target_os = "android")]
@@ -108,12 +110,20 @@ where
             RendererBackend::Hardware | RendererBackend::Auto => {
                 let font_config =
                     build_hw_font_config(self.font_paths.clone(), self.font_data.clone(), android);
-                match HardwareRenderer::new(
-                    window.clone(),
-                    cache_path.as_deref(),
-                    android,
-                    font_config,
-                ) {
+                // Reuse the renderer saved on suspend (keeps device/pipelines/caches warm); only the surface is rebound. Otherwise build a fresh one.
+                let hw_result = if let Some(mut existing) = self.hw_renderer.take() {
+                    existing
+                        .rebind_surface(std::sync::Arc::new(window.clone()))
+                        .map(|()| existing)
+                } else {
+                    HardwareRenderer::new(
+                        window.clone(),
+                        cache_path.as_deref(),
+                        android,
+                        font_config,
+                    )
+                };
+                match hw_result {
                     Ok(hw) => {
                         let (tx, join) = spawn_hw_render_thread(hw);
                         self.render_tx = Some(tx);
@@ -269,7 +279,7 @@ where
     }
 
     fn on_redraw(&mut self, window: &W) {
-        #[cfg(feature = "dev")]
+        #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = &self.hot_reload_rx {
             if let Ok(new_path) = rx.try_recv() {
                 match crate::hot::load_hot_app(&new_path) {
@@ -439,16 +449,12 @@ where
             let frame_commands = self
                 .dev
                 .on_frame(base_slice, logical_w, logical_h, tree_dirty);
-            let commands: Vec<renderer_core::DrawCommand> = if self.scale_factor != 1.0 {
-                renderer_core::scale_commands(&frame_commands, self.scale_factor)
-                    .unwrap_or_default()
-            } else {
-                frame_commands.to_vec()
-            };
+            let commands = frame_commands.to_vec();
             let msg = HwFrameMsg {
                 w,
                 h,
                 sf: self.scale_factor,
+                generation: self.tree.as_ref().map(|t| t.generation()).unwrap_or(0),
                 commands,
                 clear,
                 at: std::time::Instant::now(),
@@ -467,7 +473,12 @@ where
         {
             self.frame_start = std::time::Instant::now();
         }
-        if let Err(e) = renderer.begin_frame(w, h, self.scale_factor) {
+        if let Err(e) = renderer.begin_frame(
+            w,
+            h,
+            self.scale_factor,
+            self.tree.as_ref().map(|t| t.generation()).unwrap_or(0),
+        ) {
             tracing::error!("begin_frame failed: {e}");
             return;
         }
@@ -508,7 +519,14 @@ where
         // Drop the sender to signal the render thread to exit, then wait for it to finish.
         drop(self.render_tx.take());
         if let Some(join) = self.render_join.take() {
-            let _ = join.join();
+            // Reclaim the renderer so the next resume can rebind the surface instead of rebuilding device/pipelines/caches.
+            match join.join() {
+                Ok(hw) => self.hw_renderer = Some(hw),
+                Err(_) => {
+                    tracing::warn!("render thread panicked on suspend, renderer lost");
+                    self.hw_renderer = None;
+                }
+            }
         }
         #[cfg(target_os = "android")]
         if let Some(session) = self.hint_session.take() {
@@ -596,7 +614,7 @@ fn spawn_hw_render_thread<W>(
     renderer: HardwareRenderer<W>,
 ) -> (
     std::sync::mpsc::SyncSender<HwFrameMsg>,
-    std::thread::JoinHandle<()>,
+    std::thread::JoinHandle<HardwareRenderer<W>>,
 )
 where
     W: Window + Clone + Send + Sync + 'static,
@@ -610,11 +628,16 @@ where
                 if msg.at.elapsed() > FRAME_BUDGET {
                     continue;
                 }
-                if renderer.begin_frame(msg.w, msg.h, msg.sf).is_err() {
+                if renderer
+                    .begin_frame(msg.w, msg.h, msg.sf, msg.generation)
+                    .is_err()
+                {
                     continue;
                 }
                 let _ = renderer.render_frame(&msg.commands, msg.clear);
             }
+            // Return the renderer so on_suspend can reclaim it and keep warm caches across resume.
+            renderer
         })
         .expect("failed to spawn render thread");
     (tx, join)
@@ -661,6 +684,7 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
             _window: std::marker::PhantomData,
             render_tx: None,
             render_join: None,
+            hw_renderer: None,
             #[cfg(feature = "dev")]
             hot_reload_rx: None,
         },
@@ -738,6 +762,7 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             _window: std::marker::PhantomData,
             render_tx: None,
             render_join: None,
+            hw_renderer: None,
             #[cfg(feature = "dev")]
             hot_reload_rx: None,
             hint_session: None,
@@ -801,6 +826,7 @@ pub fn run_hot_reload_host(
             _window: std::marker::PhantomData,
             render_tx: None,
             render_join: None,
+            hw_renderer: None,
             hot_reload_rx: Some(hot_rx),
         },
     ) {

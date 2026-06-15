@@ -6,6 +6,7 @@ pub trait RenderBackend {
         width: u32,
         height: u32,
         scale_factor: f32,
+        generation: u64,
     ) -> Result<(), RendererError>;
     /// Process and present all draw commands for this frame. Must be called exactly once per frame after `begin_frame`.
     fn render_frame(

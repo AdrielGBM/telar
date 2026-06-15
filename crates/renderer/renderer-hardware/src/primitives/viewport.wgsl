@@ -1,14 +1,16 @@
 struct Viewport {
     size: vec2<f32>,
     offset: vec2<f32>,
+    scale: f32,
+    _pad: f32,
 }
 
 @group(0) @binding(0) var<uniform> viewport: Viewport;
 
 fn to_ndc(px: f32, py: f32) -> vec2<f32> {
     return vec2<f32>(
-        (px - viewport.offset.x) / viewport.size.x * 2.0 - 1.0,
-        1.0 - (py - viewport.offset.y) / viewport.size.y * 2.0,
+        (px * viewport.scale - viewport.offset.x) / viewport.size.x * 2.0 - 1.0,
+        1.0 - (py * viewport.scale - viewport.offset.y) / viewport.size.y * 2.0,
     );
 }
 
