@@ -680,6 +680,7 @@ fn run_preview(args: Vec<String>) {
         let status = Command::new("cargo")
             .args(&build_args)
             .env("RSX_HOT_RELOAD_BUILD", "1")
+            .env("RSX_PREVIEW_BUILD", "1")
             .env("RUSTFLAGS", preview_rustflags())
             .status()
             .expect("[cargo-rsx] failed to invoke cargo");
@@ -690,13 +691,15 @@ fn run_preview(args: Vec<String>) {
         if bin_path.exists() && lib_path.exists() {
             let lib_build_args = make_lib_build_args(&args, &["rsx/preview", "rsx/dev"]);
 
+            let mut build_envs = make_envs();
+            build_envs.push(("RSX_PREVIEW_BUILD".to_string(), "1".to_string()));
             let socket_path = format!("/tmp/rsx-hot-{}.sock", std::process::id());
             watch_and_hot_reload(
                 lib_build_args,
                 bin_path,
                 lib_path,
                 socket_path,
-                make_envs(),
+                build_envs,
                 preview_rustflags(),
                 workspace_root,
             );

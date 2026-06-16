@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::rc::Rc;
@@ -52,22 +52,45 @@ pub(crate) struct Runtime {
     owners: slab::Slab<OwnerData>,
 }
 
+impl Runtime {
+    fn new() -> Self {
+        Runtime {
+            observer_stack: Vec::new(),
+            effects: slab::Slab::new(),
+            signals: slab::Slab::new(),
+            batch_depth: 0,
+            pending: Vec::new(),
+            memo_pending: BinaryHeap::new(),
+            pending_set: FxHashSet::default(),
+            on_flush: Vec::new(),
+            next_flush_notify_id: 0,
+            flushing: false,
+            flush_epoch: 0,
+            owner_stack: Vec::new(),
+            owners: slab::Slab::new(),
+        }
+    }
+}
+
+// RuntimeCell stores the runtime as a heap-allocated Box behind a raw pointer.
+// Because *mut T has no Drop, Cell<*mut T> has no Drop, and this struct has no Drop either.
+// That means thread_local! won't register a TLS destructor for RUNTIME — so dlclosing the
+// dylib during hot reload no longer causes "double free or corruption" when the thread exits.
+struct RuntimeCell(Cell<*mut RefCell<Runtime>>);
+
+impl RuntimeCell {
+    fn borrow_mut(&self) -> RefMut<'_, Runtime> {
+        unsafe { (*self.0.get()).borrow_mut() }
+    }
+    fn borrow(&self) -> Ref<'_, Runtime> {
+        unsafe { (*self.0.get()).borrow() }
+    }
+}
+
 thread_local! {
-    static RUNTIME: RefCell<Runtime> = RefCell::new(Runtime {
-        observer_stack: Vec::new(),
-        effects: slab::Slab::new(),
-        signals: slab::Slab::new(),
-        batch_depth: 0,
-        pending: Vec::new(),
-        memo_pending: BinaryHeap::new(),
-        pending_set: FxHashSet::default(),
-        on_flush: Vec::new(),
-        next_flush_notify_id: 0,
-        flushing: false,
-        flush_epoch: 0,
-        owner_stack: Vec::new(),
-        owners: slab::Slab::new(),
-    });
+    static RUNTIME: RuntimeCell = RuntimeCell(Cell::new(
+        Box::into_raw(Box::new(RefCell::new(Runtime::new())))
+    ));
 }
 
 pub struct FlushNotifyHandle {
@@ -623,4 +646,18 @@ pub fn end_batch() {
     if should_flush {
         flush();
     }
+}
+
+pub fn reset_runtime() {
+    RUNTIME.with(|cell| {
+        let old_ptr = cell.0.get();
+        // Install a fresh runtime BEFORE dropping the old one. Any re-entrant RUNTIME
+        // access during the old runtime's drop glue (drop_signal, drop_owner, etc.)
+        // will see the new empty runtime and return early — no borrow conflict, no double-free.
+        cell.0
+            .set(Box::into_raw(Box::new(RefCell::new(Runtime::new()))));
+        if !old_ptr.is_null() {
+            unsafe { drop(Box::from_raw(old_ptr)) };
+        }
+    });
 }

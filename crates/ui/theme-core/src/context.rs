@@ -6,7 +6,10 @@ use reactive_core::{RwSignal, create_rw_signal};
 pub trait Theme: 'static {}
 
 thread_local! {
-    static THEME: RwSignal<Rc<dyn Any>> = create_rw_signal(Rc::new(()) as Rc<dyn Any>);
+    // ManuallyDrop suppresses RwSignal's Drop impl so no TLS destructor is registered.
+    // Cleanup happens via reset_runtime() which drops the entire Runtime (and its signals slab).
+    static THEME: std::mem::ManuallyDrop<RwSignal<Rc<dyn Any>>> =
+        std::mem::ManuallyDrop::new(create_rw_signal(Rc::new(()) as Rc<dyn Any>));
 }
 
 pub fn use_theme<T: Theme + Clone>() -> T {

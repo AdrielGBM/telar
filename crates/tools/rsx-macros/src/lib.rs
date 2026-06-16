@@ -150,8 +150,9 @@ pub fn app(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Detected at macro expansion time: cargo-rsx sets this env var for hot reload builds.
+    // Detected at macro expansion time: cargo-rsx sets these env vars.
     let is_hot_reload = std::env::var("RSX_HOT_RELOAD_BUILD").is_ok();
+    let is_preview = std::env::var("RSX_PREVIEW_BUILD").is_ok();
 
     let desktop_run = if is_hot_reload {
         quote! {
@@ -203,21 +204,36 @@ pub fn app(input: TokenStream) -> TokenStream {
     };
 
     // Only emitted when cargo-rsx sets RSX_HOT_RELOAD_BUILD so dlopen can find the app factory.
-    // The preview branch is gated on cfg(rsx_preview) — a custom cfg flag that cargo-rsx injects
-    // via RUSTFLAGS (--cfg=rsx_preview). Using a RUSTFLAG (not an env var) is important because
-    // Cargo uses RUSTFLAGS in its compilation fingerprint, so changing between dev and preview
-    // always forces a recompile of the crate. An env-var-only approach would silently reuse the
-    // cached dylib without the preview branch.
+    // cargo-rsx also passes --cfg=rsx_preview in RUSTFLAGS (purely for fingerprinting, to force
+    // recompilation when switching modes) and sets RSX_PREVIEW_BUILD=1 so the macro can branch
+    // here at expansion time without emitting any custom cfg into the output.
     let hot_export = if is_hot_reload {
+        let body: TokenStream2 = if is_preview {
+            quote! {
+                return ::rsx::make_hot_preview_app(rsx_all_preview_entries());
+            }
+        } else {
+            quote! {
+                return ::std::boxed::Box::new(#app_expr);
+            }
+        };
         quote! {
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_create_app() -> ::std::boxed::Box<dyn ::rsx::App> {
                 #setup
-                #[cfg(rsx_preview)]
-                {
-                    return ::rsx::make_hot_preview_app(rsx_all_preview_entries());
-                }
-                ::std::boxed::Box::new(#app_expr)
+                #body
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    // Cleanup function exported for hot reload: called before dlclose to clean up TLS in the dylib.
+    let hot_cleanup = if is_hot_reload {
+        quote! {
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_cleanup() {
+                ::rsx::reset_runtime();
             }
         }
     } else {
@@ -245,6 +261,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         #desktop_run
         #android_run
         #hot_export
+        #hot_cleanup
     }
     .into()
 }

@@ -49,7 +49,7 @@ pub use paths::DesktopPathsProvider;
 pub use platform_core::{Event, ScrollDelta, WindowConfig};
 pub use reactive_core::{
     Effect, Memo, ReadSignal, RwSignal, WriteSignal, batch, create_effect, create_memo,
-    create_rw_signal, create_signal,
+    create_rw_signal, create_signal, reset_runtime,
 };
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
