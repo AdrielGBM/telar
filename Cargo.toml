@@ -92,5 +92,4 @@ rsx = { path = "crates/rsx", default-features = false }
 rsx-devtools = { path = "crates/tools/rsx-devtools" }
 rsx-parser = { path = "crates/tools/rsx-parser" }
 rsx-transpiler = { path = "crates/tools/rsx-transpiler" }
-rsx-bundler = { path = "crates/tools/rsx-bundler" }
 rsx-macros = { path = "crates/tools/rsx-macros" }

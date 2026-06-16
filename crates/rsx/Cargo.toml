@@ -41,5 +41,5 @@ platform-winit = { workspace = true }
 [target.'cfg(target_os = "android")'.dependencies]
 platform-android = { workspace = true }
 
-[target.'cfg(any(target_os = "android", target_os = "linux"))'.dependencies]
+[target.'cfg(any(target_os = "android", unix))'.dependencies]
 libc = "0.2.186"

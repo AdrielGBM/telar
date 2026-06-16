@@ -220,10 +220,11 @@ pub(crate) fn draw_text(
                 ..Default::default()
             };
             if text_pixmap_cache.get(&body_key).is_none() {
-                let mut body_pixels = arc.to_vec();
-                tint_premultiplied(&mut body_pixels, style.paint.solid_color());
+                // Use rasterize (not rasterize_alpha+tint) so color emoji preserve their natural
+                // colors instead of being multiplied by the text color.
+                let (colored_arc, _, _) = shaper.rasterize(text, rect, style);
                 if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
-                    if let Some(src) = tiny_skia::Pixmap::from_vec(body_pixels, size) {
+                    if let Some(src) = tiny_skia::Pixmap::from_vec(colored_arc.to_vec(), size) {
                         text_pixmap_cache.put(body_key.clone(), src);
                     }
                 }
@@ -247,6 +248,8 @@ pub(crate) fn draw_text(
                 }
             }
         }
+
+        draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
         return;
     }
 
@@ -287,21 +290,20 @@ pub(crate) fn draw_text(
             transform,
             clip,
         );
+        draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
         return;
     }
 
-    // Use rasterize_alpha so the shaper's alpha cache is keyed without color — color changes tint
-    // the cached alpha pixmap instead of triggering a full re-rasterize.
-    let (pixels_arc, w, h) = shaper.rasterize_alpha(text, rect, style);
+    // Use rasterize (not rasterize_alpha+tint) so color emoji preserve their natural colors
+    // instead of being multiplied by the text color.
+    let (pixels_arc, w, h) = shaper.rasterize(text, rect, style);
     if w == 0 || h == 0 {
         return;
     }
     let Some(size) = tiny_skia::IntSize::from_wh(w, h) else {
         return;
     };
-    let mut tinted = pixels_arc.to_vec();
-    tint_premultiplied(&mut tinted, style.paint.solid_color());
-    let Some(src) = tiny_skia::Pixmap::from_vec(tinted, size) else {
+    let Some(src) = tiny_skia::Pixmap::from_vec(pixels_arc.to_vec(), size) else {
         return;
     };
     pixmap.draw_pixmap(
@@ -313,4 +315,24 @@ pub(crate) fn draw_text(
         clip,
     );
     text_pixmap_cache.put(cache_key, src);
+
+    draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
+}
+
+/// Renders COLR v1 color glyphs that swash cannot rasterize. swash returns `None` for these glyphs,
+/// so `Buffer::draw` omits them; we re-rasterize via skrifa + tiny-skia and blit them on top.
+fn draw_colr_fallback(
+    pixmap: &mut tiny_skia::Pixmap,
+    shaper: &mut renderer_text::TextShaper,
+    text: &str,
+    rect: Rect,
+    style: &TextStyle,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+) {
+    let mut colr_glyphs: Vec<renderer_text::ColrGlyph> = Vec::new();
+    shaper.collect_colr_glyphs(text, rect, style, &mut colr_glyphs);
+    if !colr_glyphs.is_empty() {
+        crate::primitives::colr::draw_colr_glyphs(pixmap, &colr_glyphs, shaper, transform, clip);
+    }
 }

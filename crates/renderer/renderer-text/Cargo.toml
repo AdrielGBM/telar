@@ -12,3 +12,5 @@ geometry-core = { workspace = true }
 lru = { workspace = true }
 renderer-core = { workspace = true }
 rustc-hash = { workspace = true }
+skrifa = "0.42.1"
+tiny-skia = "0.12.0"

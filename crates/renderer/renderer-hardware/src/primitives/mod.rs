@@ -4,7 +4,6 @@ pub(crate) mod line;
 pub(crate) mod path;
 pub(crate) mod rect;
 pub(crate) mod text;
-pub(crate) mod vello_renderer;
 
 pub(crate) fn create_render_pipeline(
     device: &wgpu::Device,

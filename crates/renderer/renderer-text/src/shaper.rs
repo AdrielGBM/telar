@@ -7,7 +7,7 @@ use etagere::{AllocId, BucketedAtlasAllocator, size2};
 use geometry_core::Rect;
 use lru::LruCache;
 use renderer_core::{Color, TextStyle, premultiply_rgba};
-use rustc_hash::{FxBuildHasher, FxHashMap, FxHasher};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet, FxHasher};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -225,6 +225,10 @@ pub struct TextShaper {
     >,
     // Keyed by (text_hash, max_width_bits, font_size_bits); cleared when it exceeds 1000 entries.
     measure_cache: FxHashMap<(u64, u32, u32), (f32, f32)>,
+    // Raw font bytes + face index, cached by font id so COLR rasterization does not re-read the font file on every atlas miss.
+    colr_font_cache: FxHashMap<cosmic_text::fontdb::ID, Arc<(Vec<u8>, u32)>>,
+    // Glyphs that swash cannot rasterize and that are not COLR glyphs either (e.g. whitespace); skipped on later frames so we do not re-attempt COLR rasterization for them every frame.
+    blank_glyphs: FxHashSet<CacheKey>,
 }
 
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
@@ -299,6 +303,8 @@ impl TextShaper {
                     .with_scale(ShapingCacheScale),
             ),
             measure_cache: FxHashMap::default(),
+            colr_font_cache: FxHashMap::default(),
+            blank_glyphs: FxHashSet::default(),
         }
     }
 
@@ -378,16 +384,19 @@ impl TextShaper {
                 continue;
             }
 
-            let raster = {
+            // Skip glyphs already known to be non-rasterizable (whitespace, etc.) to avoid retrying COLR every frame.
+            if self.blank_glyphs.contains(&cache_key) {
+                continue;
+            }
+
+            // swash returns a usable bitmap for normal and color (e.g. CBDT) glyphs; for COLR v1
+            // glyphs it returns None or an empty placement, in which case we rasterize with skrifa.
+            let raster: Option<(u32, u32, i32, i32, Vec<u8>, bool)> = {
                 let img_opt = self.swash_cache.get_image(&mut self.font_system, cache_key);
                 match img_opt {
-                    None => continue,
-                    Some(img) => {
+                    Some(img) if img.placement.width != 0 && img.placement.height != 0 => {
                         let w = img.placement.width;
                         let h = img.placement.height;
-                        if w == 0 || h == 0 {
-                            continue;
-                        }
                         let pl = img.placement.left;
                         let pt = img.placement.top;
                         let (pixels, is_color_glyph) = match img.content {
@@ -417,12 +426,26 @@ impl TextShaper {
                             }
                             SwashContent::Color => (img.data.to_vec(), true),
                         };
-                        (w, h, pl, pt, pixels, is_color_glyph)
+                        Some((w, h, pl, pt, pixels, is_color_glyph))
                     }
+                    _ => None,
                 }
             };
 
-            let (w, h, pl, pt, pixels, is_color_glyph) = raster;
+            let (w, h, pl, pt, pixels, is_color_glyph) = match raster {
+                Some(r) => r,
+                None => match self.rasterize_colr_atlas_glyph(
+                    cache_key,
+                    font_size * scale_factor,
+                    color.to_rgba8(),
+                ) {
+                    Some(r) => r,
+                    None => {
+                        self.blank_glyphs.insert(cache_key);
+                        continue;
+                    }
+                },
+            };
 
             let entry = if let Some(e) =
                 self.atlas
@@ -635,12 +658,112 @@ impl TextShaper {
         self.measure_cache.insert(cache_key, result);
         result
     }
+
+    /// Collects glyphs swash could not rasterize (COLR color glyphs, e.g. emoji) so the software
+    /// renderer can re-rasterize them via the skrifa COLR fallback.
+    pub fn collect_colr_glyphs(
+        &mut self,
+        text: &str,
+        rect: Rect,
+        style: &TextStyle,
+        out: &mut Vec<ColrGlyph>,
+    ) {
+        if text.is_empty() {
+            return;
+        }
+        let buffer = make_buffer(&mut self.font_system, text, rect, style.font_size);
+        let color = style.paint.solid_color();
+        for run in buffer.layout_runs() {
+            for glyph in run.glyphs.iter() {
+                let physical = glyph.physical((0., run.line_y), 1.0);
+                let swash_empty = match self
+                    .swash_cache
+                    .get_image(&mut self.font_system, physical.cache_key)
+                {
+                    // swash returns None for COLR v1 glyphs it cannot rasterize, OR Some with
+                    // zero-size placement for fonts (like NotoColorEmoji on Android) that store
+                    // empty outlines in the glyf table while actual rendering lives in COLR.
+                    None => true,
+                    Some(img) => img.placement.width == 0 && img.placement.height == 0,
+                };
+                if swash_empty {
+                    out.push(ColrGlyph {
+                        font_id: glyph.font_id,
+                        glyph_id: glyph.glyph_id as u32,
+                        x: rect.x + glyph.x,
+                        y: rect.y + run.line_y,
+                        font_size: style.font_size,
+                        color,
+                    });
+                }
+            }
+        }
+    }
+
+    /// Rasterizes a COLR v1 color glyph swash could not handle, returning atlas-ready data
+    /// `(w, h, placement_left, placement_top, straight-alpha RGBA8, is_color_glyph=true)`.
+    fn rasterize_colr_atlas_glyph(
+        &mut self,
+        cache_key: CacheKey,
+        physical_font_size: f32,
+        foreground: [u8; 4],
+    ) -> Option<(u32, u32, i32, i32, Vec<u8>, bool)> {
+        let font = self.colr_font_bytes(cache_key.font_id)?;
+        let (bytes, face_index) = font.as_ref();
+        let bmp = crate::colr::rasterize_colr_glyph(
+            bytes,
+            *face_index,
+            cache_key.glyph_id,
+            physical_font_size,
+            foreground,
+        )?;
+        Some((
+            bmp.width,
+            bmp.height,
+            bmp.placement_left,
+            bmp.placement_top,
+            bmp.rgba,
+            true,
+        ))
+    }
+
+    /// Returns cached raw font bytes + face index for `font_id`, reading them from the font db on first use.
+    fn colr_font_bytes(&mut self, font_id: cosmic_text::fontdb::ID) -> Option<Arc<(Vec<u8>, u32)>> {
+        if let Some(b) = self.colr_font_cache.get(&font_id) {
+            return Some(b.clone());
+        }
+        let (bytes, index) = self.font_data_for(font_id)?;
+        let arc = Arc::new((bytes, index));
+        self.colr_font_cache.insert(font_id, arc.clone());
+        Some(arc)
+    }
+
+    pub fn font_data_for(&self, font_id: cosmic_text::fontdb::ID) -> Option<(Vec<u8>, u32)> {
+        let (source, index) = self.font_system.db().face_source(font_id)?;
+        let bytes = match source {
+            cosmic_text::fontdb::Source::Binary(arc) => arc.as_ref().as_ref().to_vec(),
+            cosmic_text::fontdb::Source::File(path) => std::fs::read(path).ok()?,
+            cosmic_text::fontdb::Source::SharedFile(path, _) => std::fs::read(path).ok()?,
+        };
+        Some((bytes, index))
+    }
 }
 
 impl Default for TextShaper {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// A COLR color glyph swash could not rasterize (commonly emoji, but COLR v1 also covers colored
+/// icons and decorative glyphs). Collected by the software renderer for skrifa COLR fallback rendering.
+pub struct ColrGlyph {
+    pub font_id: cosmic_text::fontdb::ID,
+    pub glyph_id: u32,
+    pub x: f32,
+    pub y: f32,
+    pub font_size: f32,
+    pub color: Color,
 }
 
 #[cfg(test)]

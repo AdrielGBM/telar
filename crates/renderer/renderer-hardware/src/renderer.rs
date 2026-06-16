@@ -22,8 +22,6 @@ use crate::primitives::line::{LineInstance, LinePipeline};
 use crate::primitives::path::{PathFillData, PathPipeline, PathTessCache, PathVertex};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
-#[cfg(feature = "vello-paths")]
-use crate::primitives::vello_renderer::VelloPathRenderer;
 use crate::primitives::{Viewport, create_viewport_bgl};
 
 // Prefer Rgba8Unorm: shaders output sRGB-encoded values so the GPU must NOT apply sRGB encoding on write. Bgra8Unorm is the fallback for drivers (e.g. some macOS/DX12 paths) that don't expose Rgba8Unorm.
@@ -480,9 +478,6 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_path_indices: Vec<u32>,
     pending_path_fill_data: Vec<PathFillData>,
     path_tess_cache: PathTessCache,
-    // GPU path tessellation via Vello (Finding 4.3). None when the device failed to initialize a Vello renderer; in that case path rendering falls back to the Lyon pipeline even with the feature enabled.
-    #[cfg(feature = "vello-paths")]
-    vello_path_renderer: Option<VelloPathRenderer>,
     msaa_samples: u32,
     msaa_texture: Option<wgpu::Texture>,
     batch_rect_start: Option<u32>,
@@ -816,9 +811,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         );
         let path_tess_cache = PathTessCache::new();
 
-        #[cfg(feature = "vello-paths")]
-        let vello_path_renderer = VelloPathRenderer::new(&device);
-
         // Persist pipeline cache data so subsequent startups skip shader compilation.
         if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path) {
             if let Some(data) = cache.get_data() {
@@ -881,8 +873,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_path_indices: Vec::new(),
             pending_path_fill_data: Vec::new(),
             path_tess_cache,
-            #[cfg(feature = "vello-paths")]
-            vello_path_renderer,
             msaa_samples,
             msaa_texture: None,
             batch_rect_start: None,
@@ -947,61 +937,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let (buffer, bind_group) = &self.viewport_buffer_pool[idx];
         self.queue.write_buffer(buffer, 0, bytemuck::bytes_of(&vp));
         bind_group.clone()
-    }
-
-    // Rasterizes the frame's accumulated Vello path scene to an offscreen texture and composites it over the surface using the single-sample blit pipeline (which targets the surface format with premultiplied-alpha blending). No-op when nothing was recorded or the Vello renderer is unavailable.
-    #[cfg(feature = "vello-paths")]
-    fn composite_vello_paths(&mut self, surface_view: &wgpu::TextureView) {
-        let width = self.width;
-        let height = self.height;
-        let Some(vello) = self.vello_path_renderer.as_mut() else {
-            return;
-        };
-        let Some(vello_view) = vello.render(&self.device, &self.queue, width, height) else {
-            return;
-        };
-        let vello_view = vello_view.clone();
-        let bind_group = self.retained_blit_pipeline.create_bind_group(
-            &self.device,
-            &vello_view,
-            [
-                0.0,
-                0.0,
-                width as f32 / self.scale_factor,
-                height as f32 / self.scale_factor,
-            ],
-            1.0,
-            0.0,
-            [1.0, 1.0],
-        );
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("rsx-vello-composite-encoder"),
-            });
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rsx-vello-composite"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: surface_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
-            pass.set_pipeline(&self.retained_blit_pipeline.pipeline);
-            pass.set_bind_group(0, &self.viewport_bind_group, &[]);
-            pass.set_bind_group(1, &bind_group, &[]);
-            pass.draw(0..6, 0..1);
-        }
-        self.queue.submit(std::iter::once(encoder.finish()));
     }
 
     fn reconfigure(&mut self, width: u32, height: u32) {
@@ -1246,10 +1181,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.layer_cache_pixel_budget = 4 * self.width as u64 * self.height as u64;
         self.clear_pending();
         self.path_tess_cache.begin_frame();
-        #[cfg(feature = "vello-paths")]
-        if let Some(vello) = self.vello_path_renderer.as_mut() {
-            vello.reset();
-        }
         self.image_pipeline.begin_frame();
         self.viewport_buffer_pool_idx = 0;
         Ok(())
@@ -1273,39 +1204,40 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             && self.width > 0
             && self.height > 0
         {
-            if let Some(retained_view) = self.retained_view.as_ref() {
-                let output = match self.surface.get_current_texture() {
-                    wgpu::CurrentSurfaceTexture::Success(t) => t,
-                    wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
-                        tracing::debug!("hw idle-blit: suboptimal surface");
-                        t
+            let output = match self.surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(t) => t,
+                wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
+                    tracing::debug!("hw idle-blit: suboptimal surface");
+                    t
+                }
+                wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                    tracing::warn!("hw idle-blit: surface Lost/Outdated, reconfiguring");
+                    if let Some(config) = &self.config.clone() {
+                        self.surface.configure(&self.device, config);
                     }
-                    wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
-                        tracing::warn!("hw idle-blit: surface Lost/Outdated, reconfiguring");
-                        if let Some(config) = &self.config.clone() {
-                            self.surface.configure(&self.device, config);
-                        }
-                        self.clear_pending();
-                        return Ok(());
-                    }
-                    wgpu::CurrentSurfaceTexture::Timeout => {
-                        tracing::warn!("hw idle-blit: Timeout, skipping frame");
-                        self.clear_pending();
-                        return Ok(());
-                    }
-                    wgpu::CurrentSurfaceTexture::Occluded => {
-                        tracing::warn!("hw idle-blit: Occluded, skipping frame");
-                        self.clear_pending();
-                        return Ok(());
-                    }
-                    other => {
-                        self.clear_pending();
-                        return Err(RendererError::Present(format!("surface error: {other:?}")));
-                    }
-                };
-                let surface_view = output
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
+                    self.clear_pending();
+                    return Ok(());
+                }
+                wgpu::CurrentSurfaceTexture::Timeout => {
+                    tracing::warn!("hw idle-blit: Timeout, skipping frame");
+                    self.clear_pending();
+                    return Ok(());
+                }
+                wgpu::CurrentSurfaceTexture::Occluded => {
+                    tracing::warn!("hw idle-blit: Occluded, skipping frame");
+                    self.clear_pending();
+                    return Ok(());
+                }
+                other => {
+                    self.clear_pending();
+                    return Err(RendererError::Present(format!("surface error: {other:?}")));
+                }
+            };
+            let surface_view = output
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            {
+                let retained_view = self.retained_view.as_ref().unwrap(); // safe: outer if checks is_some()
                 let retained_bg = self.retained_blit_pipeline.create_bind_group(
                     &self.device,
                     retained_view,
@@ -1347,11 +1279,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     blit.draw(0..6, 0..1);
                 }
                 self.queue.submit(std::iter::once(encoder.finish()));
-                tracing::debug!("hw idle-blit: presenting");
-                output.present();
-                self.clear_pending();
-                return Ok(());
             }
+            tracing::debug!("hw idle-blit: presenting");
+            output.present();
+            self.clear_pending();
+            return Ok(());
         }
 
         self.draw_state.reset();
@@ -1677,18 +1609,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         }
                     }
 
-                    // With the vello-paths feature, record the fill/stroke into the GPU scene and skip Lyon entirely; the accumulated scene is rasterized and composited once at frame end. Shadows above still use the Lyon + blur pipeline.
-                    #[cfg(feature = "vello-paths")]
-                    let routed_to_vello = if let Some(vello) = self.vello_path_renderer.as_mut() {
-                        vello.add_path(data, &style, self.draw_state.cum_matrix);
-                        true
-                    } else {
-                        false
-                    };
-                    #[cfg(not(feature = "vello-paths"))]
-                    let routed_to_vello = false;
-
-                    if !routed_to_vello {
+                    {
                         let vertex_start = self.pending_path_vertices.len();
                         let index_start = self.pending_path_indices.len() as u32;
                         let fill_data_start = self.pending_path_fill_data.len();
@@ -3555,10 +3476,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         for entry in frame_scratch_textures.drain(..) {
             return_pooled_texture(&mut self.texture_pool, entry);
         }
-
-        // Rasterize accumulated GPU paths (Vello) and composite over the surface. Done after the main encoder submit so Vello's internal compute submission is ordered after the frame's base content; the composite then blends the path layer on top.
-        #[cfg(feature = "vello-paths")]
-        self.composite_vello_paths(&surface_view);
 
         tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
         output.present();

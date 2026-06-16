@@ -1,3 +1,4 @@
+pub(crate) mod colr;
 pub(crate) mod image;
 pub(crate) mod line;
 pub(crate) mod path;

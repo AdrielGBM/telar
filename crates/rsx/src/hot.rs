@@ -35,6 +35,18 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
             .as_nanos()
     ));
     std::fs::copy(path, &unique)?;
+    // RTLD_NODELETE prevents the library from being unmapped at dlclose. Without it, thread-local
+    // destructors registered by the dylib (RUNTIME, THEME, etc.) keep dangling pointers to unmapped
+    // code and corrupt the heap when the main thread exits after dlclose.
+    #[cfg(unix)]
+    let lib_result = unsafe {
+        libloading::os::unix::Library::open(
+            Some(unique.as_os_str()),
+            libc::RTLD_NOW | libc::RTLD_LOCAL | libc::RTLD_NODELETE,
+        )
+        .map(libloading::Library::from)
+    };
+    #[cfg(not(unix))]
     let lib_result = unsafe { libloading::Library::new(&unique) };
     let _ = std::fs::remove_file(&unique);
     let lib = lib_result?;
