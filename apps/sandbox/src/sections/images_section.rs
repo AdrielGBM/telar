@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use rsx::{
-    Container, Image, ImageData, ImageFilter, LayoutError, LayoutItem, LayoutStyle, Text,
-    TextStyle, WidgetCtx, use_theme,
+    Container, Image, ImageData, ImageFilter, LayoutError, LayoutStyle, Text, TextStyle, WidgetCtx,
+    children,
 };
 
-use crate::theme::SandboxTheme;
-use crate::theme::section;
+use crate::theme::{section, theme};
 
 pub fn image_with_label(
     ctx: &mut WidgetCtx,
@@ -24,20 +23,16 @@ pub fn image_with_label(
         LayoutStyle::new().width(size).height(size),
         move || filter,
     )?;
-    let label = Text::new(
+    let label_widget = Text::new(
         ctx,
         move || label.to_string(),
         LayoutStyle::new().width(size).height(16.0),
-        || TextStyle::new(11.0, use_theme::<SandboxTheme>().muted),
+        || TextStyle::new(11.0, theme().muted),
     )?;
-
     Container::new(
         ctx,
         LayoutStyle::new().flex_column().gap(4.0),
-        vec![
-            Box::new(image) as Box<dyn LayoutItem>,
-            Box::new(label) as Box<dyn LayoutItem>,
-        ],
+        children![image, label_widget],
     )
 }
 
@@ -47,31 +42,19 @@ pub fn images_section(
     checker: Arc<ImageData>,
     alpha: Arc<ImageData>,
 ) -> Result<Container, LayoutError> {
-    let i1 = Box::new(image_with_label(
-        ctx,
-        gradient,
-        ImageFilter::Linear,
-        128.0,
-        "gradient",
-    )?) as Box<dyn LayoutItem>;
-    let i2 = Box::new(image_with_label(
+    let i1 = image_with_label(ctx, gradient, ImageFilter::Linear, 128.0, "gradient")?;
+    let i2 = image_with_label(
         ctx,
         checker,
         ImageFilter::Nearest,
         192.0,
         "checker (scaled)",
-    )?) as Box<dyn LayoutItem>;
-    let i3 = Box::new(image_with_label(
-        ctx,
-        alpha,
-        ImageFilter::Nearest,
-        128.0,
-        "alpha blend",
-    )?) as Box<dyn LayoutItem>;
+    )?;
+    let i3 = image_with_label(ctx, alpha, ImageFilter::Nearest, 128.0, "alpha blend")?;
     let row = Container::new(
         ctx,
         LayoutStyle::new().flex_row().gap(20.0),
-        vec![i1, i2, i3],
+        children![i1, i2, i3],
     )?;
     section(ctx, "Images", row)
 }

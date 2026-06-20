@@ -1,8 +1,7 @@
-use crate::theme::SandboxTheme;
-use crate::theme::section;
+use crate::theme::{SandboxTheme, section, theme};
 use rsx::{
-    BorderRadius, Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Paint, Rect,
-    RectStyle, RenderNode, TextStyle, WidgetCtx, use_theme,
+    BorderRadius, Canvas, Color, Container, LayoutError, LayoutStyle, Rect, RectStyle, RenderNode,
+    TextStyle, WidgetCtx, box_item,
 };
 
 pub fn color_swatch(
@@ -22,12 +21,7 @@ pub fn color_swatch(
                         width: 100.0,
                         height: 44.0,
                     },
-                    RectStyle {
-                        fill: Some(Paint::Solid(color_fn())),
-                        stroke: None,
-                        shadow: None,
-                        radius: BorderRadius::all(6.0),
-                    },
+                    RectStyle::filled(color_fn(), BorderRadius::all(6.0)),
                 ),
                 RenderNode::text(
                     label,
@@ -37,7 +31,7 @@ pub fn color_swatch(
                         width: 100.0,
                         height: 36.0,
                     },
-                    TextStyle::new(11.0, use_theme::<SandboxTheme>().on_color),
+                    TextStyle::new(11.0, theme().on_color),
                 ),
             ])
         },
@@ -55,13 +49,13 @@ pub fn colors_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         (|t| t.dark, "dark"),
     ];
 
-    let mut row_children: Vec<Box<dyn LayoutItem>> = Vec::new();
+    let mut row_children = Vec::new();
     for (accessor, label) in swatches {
-        row_children.push(Box::new(color_swatch(
+        row_children.push(box_item(color_swatch(
             ctx,
-            move || accessor(&use_theme::<SandboxTheme>()),
+            move || accessor(&theme()),
             label,
-        )?) as Box<dyn LayoutItem>);
+        )?));
     }
 
     let row = Container::new(ctx, LayoutStyle::new().flex_row().gap(16.0), row_children)?;

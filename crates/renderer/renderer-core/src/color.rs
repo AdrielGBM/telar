@@ -98,6 +98,24 @@ impl Color {
         Self { a, ..self }
     }
 
+    pub fn darken(self, factor: f32) -> Self {
+        Self {
+            r: (self.r * (1.0 - factor)).max(0.0),
+            g: (self.g * (1.0 - factor)).max(0.0),
+            b: (self.b * (1.0 - factor)).max(0.0),
+            a: self.a,
+        }
+    }
+
+    pub fn with_lightness(self, l: f32) -> Self {
+        Self {
+            r: l.clamp(0.0, 1.0),
+            g: l.clamp(0.0, 1.0),
+            b: l.clamp(0.0, 1.0),
+            a: self.a,
+        }
+    }
+
     #[inline]
     pub fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]

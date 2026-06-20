@@ -3,7 +3,7 @@ use std::sync::Arc;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, PointerButton};
 use reactive_core::{RwSignal, create_rw_signal};
-use renderer_core::{BorderRadius, Color, RectStyle, TextStyle};
+use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use theme_core::use_widget_theme;
 use ui_tree::{Component, EventResult, RenderNode};
 

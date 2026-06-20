@@ -23,12 +23,12 @@ pub use context::{
 pub use drawing_area::Canvas;
 pub use group::Group;
 pub use image::Image;
-pub use layout_item::{LayoutItem, LeafWidget};
+pub use layout_item::{LayoutItem, LeafWidget, box_item};
 pub use layout_leaf::LayoutLeaf;
 pub use line::Line;
 pub use path::Path;
 pub use rect::RectView;
-pub use scroll_area::{ScrollArea, ScrollbarStyle};
+pub use scroll_area::{LayoutScrollArea, ScrollArea, ScrollbarStyle};
 pub use scrollable_page::ScrollablePage;
 pub use text::Text;
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};

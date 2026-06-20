@@ -168,7 +168,7 @@ impl ComponentList {
 mod tests {
     use geometry_core::Rect;
     use reactive_core::create_rw_signal;
-    use renderer_core::{Color, RectStyle};
+    use renderer_core::{Color, RectStyle, ShapeStyle};
     use std::sync::Arc;
 
     use super::*;

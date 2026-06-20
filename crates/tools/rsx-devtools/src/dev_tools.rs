@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
-use renderer_core::{BorderRadius, Color, DrawCommand, Paint, RectStyle, TextStyle};
+use renderer_core::{BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle};
 
 fn rect_cmd(rect: Rect, style: RectStyle) -> DrawCommand {
     DrawCommand::Rect {

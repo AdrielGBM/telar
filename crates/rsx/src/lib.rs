@@ -55,7 +55,7 @@ pub use reactive_core::{
 pub use renderer_core::{
     BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, LineStyle, Paint, PathData,
-    PathStyle, PathVerb, RectStyle, Shadow, Stroke, TextStyle,
+    PathStyle, PathVerb, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
 #[cfg(feature = "runtime")]
 pub use rsx_devtools::{DevAction, DevPlugin};
@@ -66,9 +66,9 @@ pub use theme_core::{
 };
 pub use ui_core::{
     Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Group, Image,
-    LayoutItem, Line, NodeId, NodeVec, Path, RectView, RenderNode, ScrollArea, ScrollablePage,
-    ScrollbarStyle, Text, WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf,
-    track_layout, update_style, with_context,
+    LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, RectView, RenderNode, ScrollArea,
+    ScrollablePage, ScrollbarStyle, Text, WidgetCtx, box_item, compute_layout, mark_dirty,
+    new_container, new_leaf, track_layout, update_style, with_context,
 };
 
 #[cfg(all(feature = "preview", not(target_os = "android")))]

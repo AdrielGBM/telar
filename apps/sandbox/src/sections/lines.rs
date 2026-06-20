@@ -2,16 +2,15 @@ use std::sync::Arc;
 
 use rsx::{
     Canvas, Color, Component, LayoutError, Line, LineCap, LineStyle, Point, Rect, RenderNode,
-    TextStyle, WidgetCtx, use_theme,
+    TextStyle, WidgetCtx,
 };
 
-use crate::sections::draw_section_header;
-use crate::theme::SandboxTheme;
+use crate::theme::{draw_section_header, theme};
 
 pub fn lines_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
     Canvas::with_intrinsic_height(ctx, 330.0, |rect| {
         let w = rect.width;
-        let t = use_theme::<SandboxTheme>();
+        let t = theme();
         let primary = t.primary;
         let success = t.success;
         let danger = t.danger;

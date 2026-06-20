@@ -17,6 +17,18 @@ impl<T: LeafWidget + Component> LayoutItem for T {
     }
 }
 
+// pub so the `children!` macro can call it from any crate without naming the module
+pub fn box_item(item: impl LayoutItem + 'static) -> Box<dyn LayoutItem> {
+    Box::new(item)
+}
+
+#[macro_export]
+macro_rules! children {
+    ($($item:expr),* $(,)?) => {
+        vec![$($crate::layout_item::box_item($item)),*]
+    };
+}
+
 /// Implements `LeafWidget` for a struct that has a `leaf: LayoutLeaf` field.
 #[macro_export]
 macro_rules! impl_leaf_widget {

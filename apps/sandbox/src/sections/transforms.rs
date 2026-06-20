@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use rsx::{
     BorderRadius, Canvas, Color, LayoutError, Paint, PathData, PathStyle, Point, Rect, RectStyle,
-    RenderNode, Stroke, TextStyle, WidgetCtx, use_theme,
+    RenderNode, Stroke, TextStyle, WidgetCtx,
 };
 
-use crate::sections::draw_section_header;
-use crate::theme::SandboxTheme;
+use crate::theme::{draw_section_header, theme};
 
 fn rotation_matrix(angle_deg: f32, cx: f32, cy: f32) -> [f32; 6] {
     let a = angle_deg.to_radians();
@@ -44,7 +43,7 @@ fn arrow_path(cx: f32, cy: f32, size: f32) -> PathData {
 pub fn transforms_section(ctx: &mut WidgetCtx) -> Result<Canvas, LayoutError> {
     Canvas::with_intrinsic_height(ctx, 580.0, |rect| {
         let w = rect.width;
-        let t = use_theme::<SandboxTheme>();
+        let t = theme();
         let primary = t.primary;
         let success = t.success;
         let danger = t.danger;

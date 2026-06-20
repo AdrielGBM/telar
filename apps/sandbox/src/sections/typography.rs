@@ -1,8 +1,5 @@
-use crate::theme::SandboxTheme;
-use crate::theme::section;
-use rsx::{
-    Color, Container, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, WidgetCtx, use_theme,
-};
+use crate::theme::{section, theme};
+use rsx::{Color, Container, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, WidgetCtx};
 
 pub fn type_line(
     ctx: &mut WidgetCtx,
@@ -15,28 +12,26 @@ pub fn type_line(
         move || label.to_string(),
         move || TextStyle::new(size, color_fn()),
     )?;
-    Ok(Box::new(text) as Box<dyn LayoutItem>)
+    Ok(rsx::box_item(text))
 }
 
 pub fn typography_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
     let t1 = type_line(ctx, "Small — 12px — The quick brown fox", 12.0, || {
-        use_theme::<SandboxTheme>().dark
+        theme().dark
     })?;
     let t2 = type_line(
         ctx,
         "Regular — 14px — The quick brown fox",
         14.0,
-        || use_theme::<SandboxTheme>().dark,
+        || theme().dark,
     )?;
     let t3 = type_line(ctx, "Medium — 18px — The quick brown fox", 18.0, || {
-        use_theme::<SandboxTheme>().dark
+        theme().dark
     })?;
     let t4 = type_line(ctx, "Large — 24px — The quick brown fox", 24.0, || {
-        use_theme::<SandboxTheme>().dark
+        theme().dark
     })?;
-    let t5 = type_line(ctx, "Display — 32px", 32.0, || {
-        use_theme::<SandboxTheme>().primary
-    })?;
+    let t5 = type_line(ctx, "Display — 32px", 32.0, || theme().primary)?;
     let content = Container::new(
         ctx,
         LayoutStyle::new().flex_column().gap(8.0),

@@ -1,8 +1,7 @@
-use crate::theme::SandboxTheme;
-use crate::theme::section;
+use crate::theme::{section, theme};
 use rsx::{
-    BorderRadius, Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Paint, Rect,
-    RectStyle, RenderNode, Stroke, TextStyle, WidgetCtx, use_theme,
+    BorderRadius, Canvas, Color, Container, LayoutError, LayoutStyle, Rect, RectStyle, RenderNode,
+    ShapeStyle, Stroke, TextStyle, WidgetCtx, children,
 };
 
 pub fn info_card(
@@ -44,7 +43,7 @@ pub fn info_card(
                         width: 340.0,
                         height: 52.0,
                     },
-                    TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
+                    TextStyle::new(13.0, theme().muted),
                 ),
             ])
         },
@@ -52,30 +51,27 @@ pub fn info_card(
 }
 
 pub fn cards_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
-    let c1 = Box::new(info_card(
+    let c1 = info_card(
         ctx,
-        || RectStyle {
-            fill: Some(Paint::Solid(use_theme::<SandboxTheme>().dark)),
-            stroke: None,
-            shadow: None,
-            radius: BorderRadius::all(10.0),
-        },
+        || RectStyle::filled(theme().dark, BorderRadius::all(10.0)),
         "Dark Card",
         || Color::WHITE,
         "White text on a dark background.",
-    )?) as Box<dyn LayoutItem>;
-    let c2 = Box::new(info_card(
+    )?;
+    let c2 = info_card(
         ctx,
-        || RectStyle {
-            fill: Some(Paint::Solid(Color::WHITE)),
-            stroke: Some(Stroke::new(use_theme::<SandboxTheme>().card_border, 1.0)),
-            shadow: None,
-            radius: BorderRadius::all(10.0),
+        || {
+            RectStyle::filled(Color::WHITE, BorderRadius::all(10.0))
+                .with_stroke(Stroke::new(theme().card_border, 1.0))
         },
         "Light Card",
-        || use_theme::<SandboxTheme>().dark,
+        || theme().dark,
         "Dark text on a white background.",
-    )?) as Box<dyn LayoutItem>;
-    let row = Container::new(ctx, LayoutStyle::new().flex_row().gap(16.0), vec![c1, c2])?;
+    )?;
+    let row = Container::new(
+        ctx,
+        LayoutStyle::new().flex_row().gap(16.0),
+        children![c1, c2],
+    )?;
     section(ctx, "Cards", row)
 }

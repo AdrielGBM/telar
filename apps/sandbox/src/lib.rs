@@ -1,6 +1,6 @@
 pub mod app;
-pub mod images;
 pub mod sections;
+pub mod test_assets;
 pub mod theme;
 pub mod utils;
 

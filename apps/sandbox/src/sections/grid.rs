@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use rsx::{
-    BorderRadius, Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Paint, Rect,
-    RectStyle, RenderNode, TemplateTrack, TextStyle, WidgetCtx, use_theme,
+    Canvas, Color, Container, LayoutError, LayoutStyle, Rect, RectStyle, RenderNode, TemplateTrack,
+    TextStyle, WidgetCtx, box_item, children,
 };
 
-use crate::theme::section;
-use crate::theme::{SandboxTheme, heading};
+use crate::theme::{heading, section, theme};
 
 pub fn grid_cell(
     ctx: &mut WidgetCtx,
@@ -25,12 +24,7 @@ pub fn grid_cell(
                     width: w,
                     height: h,
                 },
-                RectStyle {
-                    fill: Some(Paint::Solid(color_fn())),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(6.0),
-                },
+                RectStyle::filled(color_fn(), rsx::BorderRadius::all(6.0)),
             ),
             RenderNode::text(
                 label_arc.clone(),
@@ -40,32 +34,26 @@ pub fn grid_cell(
                     width: w,
                     height: h,
                 },
-                TextStyle::new(13.0, use_theme::<SandboxTheme>().on_color),
+                TextStyle::new(13.0, theme().on_color),
             ),
         ])
     })
 }
 
 pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
-    let gc1 = Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().primary, "1")?)
-        as Box<dyn LayoutItem>;
-    let gc2 = Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().success, "2")?)
-        as Box<dyn LayoutItem>;
-    let gc3 = Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().danger, "3")?)
-        as Box<dyn LayoutItem>;
-    let gc4 = Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().warning, "4")?)
-        as Box<dyn LayoutItem>;
-    let gc5 = Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().purple, "5")?)
-        as Box<dyn LayoutItem>;
-    let gc6 =
-        Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().dark, "6")?) as Box<dyn LayoutItem>;
+    let gc1 = grid_cell(ctx, || theme().primary, "1")?;
+    let gc2 = grid_cell(ctx, || theme().success, "2")?;
+    let gc3 = grid_cell(ctx, || theme().danger, "3")?;
+    let gc4 = grid_cell(ctx, || theme().warning, "4")?;
+    let gc5 = grid_cell(ctx, || theme().purple, "5")?;
+    let gc6 = grid_cell(ctx, || theme().dark, "6")?;
     let auto_grid = Container::new(
         ctx,
         LayoutStyle::new()
             .display_grid()
             .grid_template_columns(vec![TemplateTrack::repeat(3, TemplateTrack::fr(1.0))])
             .gap(12.0),
-        vec![gc1, gc2, gc3, gc4, gc5, gc6],
+        children![gc1, gc2, gc3, gc4, gc5, gc6],
     )?;
 
     let header = Canvas::new(
@@ -74,7 +62,7 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         |rect| {
             let w = rect.width;
             let h = rect.height;
-            let t = use_theme::<SandboxTheme>();
+            let t = theme();
             RenderNode::group([
                 RenderNode::rect(
                     Rect {
@@ -83,12 +71,7 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
                         width: w,
                         height: h,
                     },
-                    RectStyle {
-                        fill: Some(Paint::Solid(t.dark)),
-                        stroke: None,
-                        shadow: None,
-                        radius: BorderRadius::all(6.0),
-                    },
+                    RectStyle::filled(t.dark, rsx::BorderRadius::all(6.0)),
                 ),
                 RenderNode::text(
                     crate::static_rc_str!("header — span 3"),
@@ -103,36 +86,21 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
             ])
         },
     )?;
-    let gca = Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().success, "A")?)
-        as Box<dyn LayoutItem>;
-    let gcb = Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().danger, "B")?)
-        as Box<dyn LayoutItem>;
+    let gca = grid_cell(ctx, || theme().success, "A")?;
+    let gcb = grid_cell(ctx, || theme().danger, "B")?;
     let explicit_grid = Container::new(
         ctx,
         LayoutStyle::new()
             .display_grid()
             .grid_template_columns(vec![TemplateTrack::repeat(3, TemplateTrack::fr(1.0))])
             .gap(12.0),
-        vec![Box::new(header) as Box<dyn LayoutItem>, gca, gcb],
+        children![header, gca, gcb],
     )?;
 
-    let gcg1 = Box::new(grid_cell(
-        ctx,
-        || use_theme::<SandboxTheme>().primary,
-        "G1",
-    )?) as Box<dyn LayoutItem>;
-    let gcg2 = Box::new(grid_cell(
-        ctx,
-        || use_theme::<SandboxTheme>().success,
-        "G2",
-    )?) as Box<dyn LayoutItem>;
-    let gcg3 = Box::new(grid_cell(ctx, || use_theme::<SandboxTheme>().danger, "G3")?)
-        as Box<dyn LayoutItem>;
-    let gcg4 = Box::new(grid_cell(
-        ctx,
-        || use_theme::<SandboxTheme>().warning,
-        "G4",
-    )?) as Box<dyn LayoutItem>;
+    let gcg1 = grid_cell(ctx, || theme().primary, "G1")?;
+    let gcg2 = grid_cell(ctx, || theme().success, "G2")?;
+    let gcg3 = grid_cell(ctx, || theme().danger, "G3")?;
+    let gcg4 = grid_cell(ctx, || theme().warning, "G4")?;
     let inner_grid = Container::new(
         ctx,
         LayoutStyle::new()
@@ -140,29 +108,24 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
             .grid_template_columns(vec![TemplateTrack::fr(1.0), TemplateTrack::fr(1.0)])
             .flex_grow(1.0)
             .gap(8.0),
-        vec![gcg1, gcg2, gcg3, gcg4],
+        children![gcg1, gcg2, gcg3, gcg4],
     )?;
     let side_label = Canvas::new(ctx, LayoutStyle::new().width(180.0), |rect| {
-        let w = rect.width;
-        let h = rect.height;
         RenderNode::text(
             crate::static_rc_str!("Grid nested\ninside flex →"),
             Rect {
                 x: 0.0,
                 y: 0.0,
-                width: w,
-                height: h,
+                width: rect.width,
+                height: rect.height,
             },
-            TextStyle::new(13.0, use_theme::<SandboxTheme>().muted),
+            TextStyle::new(13.0, theme().muted),
         )
     })?;
     let nested_row = Container::new(
         ctx,
         LayoutStyle::new().flex_row().gap(16.0),
-        vec![
-            Box::new(side_label) as Box<dyn LayoutItem>,
-            Box::new(inner_grid) as Box<dyn LayoutItem>,
-        ],
+        children![side_label, inner_grid],
     )?;
 
     let h2 = heading(ctx, "Auto-placed (repeat(3, 1fr))")?;
@@ -173,11 +136,11 @@ pub fn grid_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
         LayoutStyle::new().flex_column().gap(16.0),
         vec![
             h2,
-            Box::new(auto_grid) as Box<dyn LayoutItem>,
+            box_item(auto_grid),
             h3,
-            Box::new(explicit_grid) as Box<dyn LayoutItem>,
+            box_item(explicit_grid),
             h4,
-            Box::new(nested_row) as Box<dyn LayoutItem>,
+            box_item(nested_row),
         ],
     )?;
     section(ctx, "Grid", content)

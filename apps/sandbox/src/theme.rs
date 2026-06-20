@@ -1,6 +1,6 @@
 use rsx::{
-    Color, Container, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, Theme, WidgetCtx,
-    WidgetTheme, use_theme,
+    Color, Component, Container, LayoutError, LayoutItem, LayoutStyle, Line, LineStyle, Point,
+    Rect, RenderNode, Text, TextStyle, Theme, WidgetCtx, WidgetTheme, use_theme,
 };
 
 #[derive(Clone)]
@@ -88,6 +88,32 @@ impl SandboxTheme {
     }
 }
 
+pub fn theme() -> SandboxTheme {
+    use_theme::<SandboxTheme>()
+}
+
+pub(crate) fn draw_section_header(children: &mut Vec<RenderNode>, w: f32, title: &'static str) {
+    let muted = theme().muted;
+    children.push(
+        Line::new(
+            || Point::new(0.0, 0.0),
+            move || Point::new(w, 0.0),
+            move || LineStyle::new(theme().card_border, 1.0),
+        )
+        .view(),
+    );
+    children.push(RenderNode::text(
+        title,
+        Rect {
+            x: 0.0,
+            y: 12.0,
+            width: 200.0,
+            height: 20.0,
+        },
+        TextStyle::new(12.0, muted),
+    ));
+}
+
 pub fn heading(
     ctx: &mut WidgetCtx,
     label: &'static str,
@@ -97,7 +123,7 @@ pub fn heading(
         move || label.to_string(),
         || TextStyle::new(12.0, use_theme::<SandboxTheme>().muted),
     )?;
-    Ok(Box::new(text) as Box<dyn LayoutItem>)
+    Ok(rsx::box_item(text))
 }
 
 pub fn section(
@@ -109,6 +135,6 @@ pub fn section(
     Container::new(
         ctx,
         LayoutStyle::new().flex_column().gap(8.0),
-        vec![h, Box::new(content) as Box<dyn LayoutItem>],
+        vec![h, rsx::box_item(content)],
     )
 }

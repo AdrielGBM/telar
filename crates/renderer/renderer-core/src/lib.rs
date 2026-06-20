@@ -31,7 +31,7 @@ pub use preprocess::{blur_padding, blur_sigma, expand_fill_layers, scale_command
 pub use renderer::RenderBackend;
 pub use style::{
     BorderRadius, FillRule, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineJoin,
-    LineStyle, Paint, PathStyle, RectStyle, Shadow, Stroke, TextStyle,
+    LineStyle, Paint, PathStyle, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
 pub use style_pool::{
     FRAME_STYLE_POOL, FrameStylePool, StyleHandle, hash_path_style, hash_rect_style,
