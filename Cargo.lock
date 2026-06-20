@@ -2617,6 +2617,7 @@ name = "theme-core"
 version = "0.1.0"
 dependencies = [
  "reactive-core",
+ "renderer-core",
 ]
 
 [[package]]
@@ -2879,6 +2880,7 @@ dependencies = [
  "platform-core",
  "reactive-core",
  "renderer-core",
+ "theme-core",
  "ui-tree",
 ]
 

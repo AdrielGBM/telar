@@ -8,15 +8,22 @@ use rsx_parser::{StyleClass, StyleConst, StyleSection, StyleValue};
 use crate::naming::{const_name, style_fn_name};
 
 /// Renders all constants and style functions for the document's style section.
-pub fn generate_style_section(section: &StyleSection) -> String {
+/// When `skip_color_consts` is set (a theme type is active), color constants are
+/// omitted because color references resolve through `use_theme` instead.
+pub fn generate_style_section(section: &StyleSection, skip_color_consts: bool) -> String {
     let mut out = String::new();
 
+    let mut emitted_const = false;
     for c in &section.constants {
+        if skip_color_consts && matches!(c.value, StyleValue::Hex(_)) {
+            continue;
+        }
         out.push_str(&generate_const(c));
         out.push('\n');
+        emitted_const = true;
     }
 
-    if !section.constants.is_empty() && !section.classes.is_empty() {
+    if emitted_const && !section.classes.is_empty() {
         out.push('\n');
     }
 

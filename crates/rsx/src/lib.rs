@@ -61,7 +61,9 @@ pub use renderer_core::{
 pub use rsx_devtools::{DevAction, DevPlugin};
 pub use services_core::AppPathsProvider;
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
-pub use theme_core::{Theme, set_theme, use_theme};
+pub use theme_core::{
+    Theme, WidgetTheme, set_theme, set_theme_with_widgets, use_theme, use_widget_theme,
+};
 pub use ui_core::{
     Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Group, Image,
     LayoutItem, Line, NodeId, NodeVec, Path, RectView, RenderNode, ScrollArea, ScrollablePage,

@@ -1,6 +1,6 @@
 use crate::theme::SandboxTheme;
 use crate::theme::section;
-use rsx::set_theme;
+use rsx::set_theme_with_widgets;
 use rsx::{
     BorderRadius, Button, ButtonStyle, Color, Container, LayoutError, LayoutItem, LayoutStyle,
     RectStyle, Text, TextStyle, WidgetCtx, use_theme,
@@ -28,7 +28,7 @@ pub fn theme_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
                 text_hover: TextStyle::new(14.0, theme.on_color),
             }
         })
-        .on_click(|| set_theme(SandboxTheme::modern()));
+        .on_click(|| set_theme_with_widgets(SandboxTheme::modern()));
 
     let btn_pastel = Button::new(ctx, "Pastel")?
         .style(|| {
@@ -50,7 +50,7 @@ pub fn theme_section(ctx: &mut WidgetCtx) -> Result<Container, LayoutError> {
                 text_hover: TextStyle::new(14.0, p.on_color),
             }
         })
-        .on_click(|| set_theme(SandboxTheme::pastel()));
+        .on_click(|| set_theme_with_widgets(SandboxTheme::pastel()));
 
     let btn_row = Container::new(
         ctx,

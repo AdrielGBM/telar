@@ -1,5 +1,6 @@
 //! Generates the body of the component function from the `[view]` section.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use rsx_parser::{Attr, Element, ForBlock, IfBlock, StyleClass, StyleConst, ViewNode};
@@ -22,7 +23,11 @@ pub struct ViewGen<'a> {
     /// Declared style classes, used to validate class references in elements.
     classes: &'a [StyleClass],
     constants: &'a [StyleConst],
-    counter: usize,
+    /// Per-widget-type variable counters, keyed by the descriptive prefix.
+    counters: HashMap<String, usize>,
+    /// When set, `[style]` color references resolve to `use_theme::<Type>().field`
+    /// instead of generated `COLOR_*` consts, so theme switching takes effect.
+    theme_type: Option<String>,
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,
     /// Loop-variable identifiers currently in scope, cloned per closure like signals.
@@ -30,25 +35,37 @@ pub struct ViewGen<'a> {
 }
 
 impl<'a> ViewGen<'a> {
-    pub fn new(
+    pub fn with_theme(
         signals: &'a [SignalInfo],
         classes: &'a [StyleClass],
         constants: &'a [StyleConst],
+        theme_type: Option<&str>,
     ) -> Self {
         Self {
             signals,
             classes,
             constants,
-            counter: 0,
+            counters: HashMap::new(),
+            theme_type: theme_type.map(str::to_string),
             indent: 1,
             loop_vars: Vec::new(),
         }
     }
 
-    fn next_var(&mut self) -> String {
-        let v = format!("__w{}", self.counter);
-        self.counter += 1;
-        v
+    fn next_var(&mut self, tag: &str) -> String {
+        let prefix = match tag {
+            "text" => "text",
+            "btn" | "button" => "btn",
+            "col" | "column" => "col",
+            "row" => "row",
+            "rect" => "rect",
+            "img" | "image" => "img",
+            _ => "node",
+        };
+        let count = self.counters.entry(prefix.to_string()).or_insert(0);
+        let name = format!("__{prefix}_{count}");
+        *count += 1;
+        name
     }
 
     fn pad(&self) -> String {
@@ -129,7 +146,7 @@ impl<'a> ViewGen<'a> {
     // ----- Leaf widgets -----------------------------------------------------
 
     fn emit_text(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var();
+        let var = self.next_var(&el.tag);
         let pad = self.pad();
         let content = el.content.as_deref().unwrap_or("");
         let content_fn = self.interpolate_content(content);
@@ -141,8 +158,10 @@ impl<'a> ViewGen<'a> {
             .find(|a| a.key == "size")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(14.0);
-        let line_height = format_f32(font_size * 1.4);
-        let layout_style = format!("LayoutStyle::new().height({line_height})");
+        // Emit the multiplication at runtime so the generated source stays free
+        // of f32 rounding noise (`25.199999`) from precomputing line-height.
+        let font_size = format_f32(font_size);
+        let layout_style = format!("LayoutStyle::new().height({font_size}_f32 * 1.4)");
 
         // Each `move` closure consumes its captures; clone the signals they use
         // into block locals so both closures can capture independently.
@@ -199,7 +218,7 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_button(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var();
+        let var = self.next_var(&el.tag);
         let pad = self.pad();
         let label = el.content.as_deref().unwrap_or("");
         let style = self.button_style(&el.attrs, pad.as_str());
@@ -293,7 +312,7 @@ impl<'a> ViewGen<'a> {
     // ----- Containers -------------------------------------------------------
 
     fn emit_container(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var();
+        let var = self.next_var(&el.tag);
         let pad = self.pad();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attrs);
 
@@ -358,7 +377,7 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_scroll(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var();
+        let var = self.next_var(&el.tag);
         let pad = self.pad();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attrs);
 
@@ -435,7 +454,7 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_canvas(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var();
+        let var = self.next_var(&el.tag);
         let pad = self.pad();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attrs);
 
@@ -618,16 +637,26 @@ impl<'a> ViewGen<'a> {
             return v.to_string();
         }
         let snake = to_snake_case(v);
-        if self
+        let is_declared = self
             .constants
             .iter()
-            .any(|c| to_snake_case(&c.name) == snake)
-        {
+            .any(|c| to_snake_case(&c.name) == snake);
+        if is_declared {
+            // With a known theme type, resolve color names to live theme fields so
+            // `set_theme(...)` re-renders pick up the change; field names are public.
+            if let Some(theme) = &self.theme_type {
+                return format!("use_theme::<{theme}>().{snake}");
+            }
             return const_name("COLOR_", v);
         }
         // Unknown reference; fall back to the screaming-snake constant name so
         // the user gets a clear missing-symbol error rather than silent wrong output.
         const_name("COLOR_", v)
+    }
+
+    /// Whether codegen resolves any color through `use_theme`, requiring the import.
+    pub fn uses_theme(&self) -> bool {
+        self.theme_type.is_some()
     }
 }
 
@@ -753,7 +782,7 @@ mod tests {
     use crate::signal_scan::{SignalInfo, SignalKind};
 
     fn make_gen<'a>(signals: &'a [SignalInfo]) -> ViewGen<'a> {
-        ViewGen::new(signals, &[], &[])
+        ViewGen::with_theme(signals, &[], &[], None)
     }
 
     #[test]

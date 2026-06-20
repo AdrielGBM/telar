@@ -1,6 +1,6 @@
 use rsx::{
     Color, Container, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle, Theme, WidgetCtx,
-    use_theme,
+    WidgetTheme, use_theme,
 };
 
 #[derive(Clone)]
@@ -19,7 +19,38 @@ pub struct SandboxTheme {
     pub on_color: Color,
 }
 
-impl Theme for SandboxTheme {}
+impl Theme for SandboxTheme {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl WidgetTheme for SandboxTheme {
+    fn widget_primary(&self) -> Color {
+        self.primary
+    }
+    fn widget_on_primary(&self) -> Color {
+        self.on_color
+    }
+    fn widget_surface(&self) -> Color {
+        self.background
+    }
+    fn widget_on_surface(&self) -> Color {
+        self.dark
+    }
+    fn widget_danger(&self) -> Color {
+        self.danger
+    }
+    fn widget_success(&self) -> Color {
+        self.success
+    }
+    fn widget_muted(&self) -> Color {
+        self.muted
+    }
+    fn widget_scrollbar(&self) -> Color {
+        Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.6)
+    }
+}
 
 impl SandboxTheme {
     pub fn modern() -> Self {

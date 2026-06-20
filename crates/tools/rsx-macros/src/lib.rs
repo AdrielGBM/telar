@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{ToTokens, quote};
 use std::path::{Path, PathBuf};
 use syn::{
     Token,
@@ -8,6 +8,7 @@ use syn::{
 };
 
 struct AppInput {
+    theme_type: syn::Path,
     setup: syn::Block,
     config: syn::Expr,
     app_expr: syn::Expr,
@@ -15,6 +16,8 @@ struct AppInput {
 
 impl Parse for AppInput {
     fn parse(input: ParseStream) -> ParseResult<Self> {
+        let theme_type = input.parse::<syn::Path>()?;
+        input.parse::<Token![,]>()?;
         let setup = input.parse::<syn::Block>()?;
         input.parse::<Token![,]>()?;
         let config = input.parse::<syn::Expr>()?;
@@ -22,6 +25,7 @@ impl Parse for AppInput {
         let app_expr = input.parse::<syn::Expr>()?;
         let _ = input.parse::<Token![,]>();
         Ok(AppInput {
+            theme_type,
             setup,
             config,
             app_expr,
@@ -67,6 +71,7 @@ fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
 #[proc_macro]
 pub fn app(input: TokenStream) -> TokenStream {
     let AppInput {
+        theme_type,
         setup,
         config,
         app_expr,
@@ -74,6 +79,14 @@ pub fn app(input: TokenStream) -> TokenStream {
         Ok(v) => v,
         Err(e) => return e.to_compile_error().into(),
     };
+
+    // The transpiler is a proc-macro dependency with no runtime access to the
+    // theme type, so the path is passed through as a source-text string.
+    // `to_string` inserts spaces around `::`; collapse them for a clean turbofish.
+    let theme_type_str = theme_type
+        .to_token_stream()
+        .to_string()
+        .replace(" :: ", "::");
 
     let manifest_dir = match std::env::var("CARGO_MANIFEST_DIR") {
         Ok(d) => PathBuf::from(d),
@@ -110,7 +123,11 @@ pub fn app(input: TokenStream) -> TokenStream {
             .to_string_lossy()
             .to_string();
 
-        let result = match rsx_transpiler::transpile_source(&source, &stem) {
+        let result = match rsx_transpiler::transpile_source_with_theme(
+            &source,
+            &stem,
+            Some(theme_type_str.as_str()),
+        ) {
             Ok(r) => r,
             Err(e) => {
                 let msg = format!("Failed to transpile {}: {e}", rsx_file.display());

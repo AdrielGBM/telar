@@ -4,10 +4,20 @@ use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, PointerButton};
 use reactive_core::{RwSignal, create_rw_signal};
 use renderer_core::{BorderRadius, Color, RectStyle, TextStyle};
+use theme_core::use_widget_theme;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
+
+fn darken(c: Color, factor: f32) -> Color {
+    Color::rgba(
+        (c.r * factor).min(1.0),
+        (c.g * factor).min(1.0),
+        (c.b * factor).min(1.0),
+        c.a,
+    )
+}
 
 pub struct ButtonStyle {
     pub rect: RectStyle,
@@ -34,15 +44,23 @@ impl Button {
             label: Arc::from(label.into()),
             leaf,
             on_click: None,
-            style_fn: Box::new(|| ButtonStyle {
-                rect: RectStyle::default()
-                    .with_fill(Color::rgba(0.24, 0.47, 0.98, 1.0))
-                    .with_radius(BorderRadius::all(4.0)),
-                rect_hover: RectStyle::default()
-                    .with_fill(Color::rgba(0.15, 0.39, 0.92, 1.0))
-                    .with_radius(BorderRadius::all(4.0)),
-                text: TextStyle::new(14.0, Color::WHITE),
-                text_hover: TextStyle::new(14.0, Color::WHITE),
+            style_fn: Box::new(|| {
+                let primary = use_widget_theme()
+                    .map(|t| t.widget_primary())
+                    .unwrap_or(Color::rgba(0.24, 0.47, 0.98, 1.0));
+                let on_primary = use_widget_theme()
+                    .map(|t| t.widget_on_primary())
+                    .unwrap_or(Color::WHITE);
+                ButtonStyle {
+                    rect: RectStyle::default()
+                        .with_fill(primary)
+                        .with_radius(BorderRadius::all(4.0)),
+                    rect_hover: RectStyle::default()
+                        .with_fill(darken(primary, 0.85))
+                        .with_radius(BorderRadius::all(4.0)),
+                    text: TextStyle::new(14.0, on_primary),
+                    text_hover: TextStyle::new(14.0, on_primary),
+                }
             }),
             hovered: create_rw_signal(false),
         })
