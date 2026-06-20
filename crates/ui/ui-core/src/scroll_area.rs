@@ -118,11 +118,9 @@ impl Component for ScrollArea {
         let content_rect = self.content_size.get();
 
         let scrollable = RenderNode::Clip {
-            node_key: 0,
             rect: vp,
             radius: BorderRadius::zero(),
             children: NodeVec::collect([RenderNode::Transform {
-                node_key: 0,
                 matrix: [1.0, 0.0, 0.0, 1.0, vp.x - scroll_x, vp.y - scroll_y],
                 children: NodeVec::collect([self.content.view()]),
             }]),

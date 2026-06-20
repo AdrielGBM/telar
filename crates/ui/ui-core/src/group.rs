@@ -51,22 +51,18 @@ impl Component for Group {
         let children = NodeVec::collect(self.children.iter().map(|c| c.view()));
         match (&self.clip, &self.matrix) {
             (Some((rect_fn, radius)), None) => RenderNode::Clip {
-                node_key: 0,
                 rect: (rect_fn)(),
                 radius: *radius,
                 children,
             },
             (None, Some(matrix_fn)) => RenderNode::Transform {
-                node_key: 0,
                 matrix: (matrix_fn)(),
                 children,
             },
             (Some((rect_fn, radius)), Some(matrix_fn)) => RenderNode::Clip {
-                node_key: 0,
                 rect: (rect_fn)(),
                 radius: *radius,
                 children: NodeVec::collect([RenderNode::Transform {
-                    node_key: 0,
                     matrix: (matrix_fn)(),
                     children,
                 }]),

@@ -1,5 +1,7 @@
 use geometry_core::Rect;
 
+use crate::DrawCommand;
+
 pub const IDENTITY_MATRIX: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
 // Computes parent(child(point)) for two affine matrices [a, b, c, d, e, f].
@@ -81,5 +83,21 @@ impl DrawState {
 impl Default for DrawState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Iterates `cmds` calling `f(cmd, cumulative_matrix)` for every command. PushMatrix/PopMatrix update the matrix before the callback; all other commands see the matrix that was active when they were emitted.
+pub fn for_each_with_matrix<F>(cmds: &[DrawCommand], mut f: F)
+where
+    F: FnMut(&DrawCommand, [f32; 6]),
+{
+    let mut state = DrawState::new();
+    for cmd in cmds {
+        match cmd {
+            DrawCommand::PushMatrix { matrix } => state.push_matrix(*matrix),
+            DrawCommand::PopMatrix => state.pop_matrix(),
+            _ => {}
+        }
+        f(cmd, state.cum_matrix);
     }
 }

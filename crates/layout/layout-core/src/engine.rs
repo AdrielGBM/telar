@@ -1,4 +1,4 @@
-use taffy::{LengthPercentage, TaffyTree, TraversePartialTree};
+use taffy::{TaffyTree, TraversePartialTree};
 
 use crate::error::LayoutError;
 use crate::style::{AvailableSpace, LayoutStyle};
@@ -79,32 +79,6 @@ impl LayoutEngine {
         let style = self.tree.style(node).ok()?;
         let w = style.size.width.into_option()?;
         let h = style.size.height.into_option()?;
-        if style.flex_grow > 0.0 {
-            return None;
-        }
-        Some((w, h))
-    }
-
-    pub fn is_fixed_px_leaf(&self, node: NodeId) -> Option<(f32, f32)> {
-        let style = self.tree.style(node).ok()?;
-        if self.tree.child_count(node) > 0 {
-            return None;
-        }
-        let w = style.size.width.into_option()?;
-        let h = style.size.height.into_option()?;
-        let zero_lp = LengthPercentage::length(0.0);
-        let zero_rect = taffy::geometry::Rect {
-            left: zero_lp,
-            right: zero_lp,
-            top: zero_lp,
-            bottom: zero_lp,
-        };
-        if style.padding != zero_rect {
-            return None;
-        }
-        if style.border != zero_rect {
-            return None;
-        }
         if style.flex_grow > 0.0 {
             return None;
         }

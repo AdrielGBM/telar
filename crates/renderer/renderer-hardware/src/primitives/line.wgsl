@@ -78,6 +78,7 @@ fn sdf_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    if apply_clip_sdf(in.screen_pos) { discard; }
     let ab = in.p2 - in.p1;
     let len = length(ab);
     let dir = ab / max(len, 0.0001);

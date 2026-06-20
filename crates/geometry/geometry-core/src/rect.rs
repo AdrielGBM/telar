@@ -31,6 +31,21 @@ impl Rect {
             None
         }
     }
+
+    pub fn union(self, other: Rect) -> Rect {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let right = (self.x + self.width).max(other.x + other.width);
+        let bottom = (self.y + self.height).max(other.y + other.height);
+        Rect::new(x, y, right - x, bottom - y)
+    }
+
+    pub fn overlaps(self, other: Rect) -> bool {
+        self.x < other.x + other.width
+            && self.x + self.width > other.x
+            && self.y < other.y + other.height
+            && self.y + self.height > other.y
+    }
 }
 
 impl Default for Rect {

@@ -38,7 +38,7 @@ pub use window_signals::WindowSignals;
 
 #[cfg(feature = "runtime")]
 pub use app::App;
-pub use geometry_core::{Point, Rect, Size};
+pub use geometry_core::{Point, Rect};
 pub use layout_core::{
     AlignItems, AutoTrack, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
     TemplateTrack,

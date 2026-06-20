@@ -116,6 +116,7 @@ fn sdf_rounded_rect(p: vec2<f32>, b: vec2<f32>, radii: vec4<f32>) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    if apply_clip_sdf(in.world_pos) { discard; }
     let inst = instances[in.instance_index];
 
     let a = inst.transform_abcd.x;

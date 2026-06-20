@@ -4,10 +4,29 @@ use crate::DrawCommand;
 
 pub use crate::geometry::union_rects;
 
+/// Font ascender/line-height metrics expressed as ratios relative to `font_size`.
+/// Default values are conservative approximations that hold for most common fonts.
+#[derive(Clone, Copy)]
+pub struct FontMetrics {
+    /// Multiplier for line height: `font_size * line_height_factor` gives the full line height.
+    pub line_height_factor: f32,
+    /// Fraction of `font_size` by which glyphs can extend above the rect's top edge (ascender overshoot).
+    pub ascender_ratio: f32,
+}
+
+impl Default for FontMetrics {
+    fn default() -> Self {
+        Self {
+            line_height_factor: 1.2,
+            ascender_ratio: 0.25,
+        }
+    }
+}
+
 pub fn overlaps(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
     match clip {
         None => true,
-        Some(c) => x < c.x + c.width && x + w > c.x && y < c.y + c.height && y + h > c.y,
+        Some(c) => Rect::new(x, y, w, h).overlaps(c),
     }
 }
 
@@ -58,7 +77,11 @@ fn transform_rect_aabb(matrix: [f32; 6], rx: f32, ry: f32, rw: f32, rh: f32) -> 
     Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
 }
 
-pub fn command_visual_rect(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Rect> {
+pub fn command_visual_rect(
+    cmd: &DrawCommand,
+    matrix: [f32; 6],
+    font_metrics: &FontMetrics,
+) -> Option<Rect> {
     match cmd {
         DrawCommand::Rect { rect, style } => {
             let r = transform_rect_aabb(matrix, rect.x, rect.y, rect.width, rect.height);
@@ -69,11 +92,11 @@ pub fn command_visual_rect(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Rect> 
             })
         }
         DrawCommand::Text { rect, style, .. } => {
-            // Glyphs can extend outside rect: ascenders above rect.y and line_height (font_size*1.2) may exceed rect.height. Expand the visual rect to cover the real glyph extent so that dirty-rect computation and culling never under-estimate the painted area.
+            // Glyphs can extend outside rect: ascenders above rect.y and the line height may exceed rect.height. Expand the visual rect to cover the real glyph extent so that dirty-rect computation and culling never under-estimate the painted area.
             let font_size = style.font_size;
             let shadow = style.shadow;
-            let line_h = font_size * 1.2;
-            let ascender_overshoot = font_size * 0.25;
+            let line_h = font_size * font_metrics.line_height_factor;
+            let ascender_overshoot = font_size * font_metrics.ascender_ratio;
             let extra_bottom = (line_h - rect.height).max(0.0);
             let r = transform_rect_aabb(
                 matrix,

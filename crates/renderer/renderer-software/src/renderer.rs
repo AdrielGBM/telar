@@ -7,8 +7,7 @@ use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers, hash_path_style,
-    hash_rect_style, hash_text_style, union_rects,
+    Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers, union_rects,
 };
 use renderer_text::{TextShaper, TextShaperConfig};
 use rustc_hash::{FxBuildHasher, FxHasher};
@@ -45,10 +44,6 @@ fn fill_mask_region(data: &mut [u8], stride: usize, region: (u32, u32, u32, u32)
     }
 }
 
-fn rect_overlaps(a: Rect, b: Rect) -> bool {
-    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
-}
-
 fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
     Some(match acc {
         None => r,
@@ -60,6 +55,7 @@ fn compute_layer_bboxes(
     commands: &[DrawCommand],
     window_w: u32,
     window_h: u32,
+    font_metrics: &renderer_core::FontMetrics,
 ) -> Vec<Option<(i32, i32, u32, u32)>> {
     let mut result = vec![None; commands.len()];
     let mut stack: Vec<(usize, Option<Rect>)> = Vec::new();
@@ -109,7 +105,9 @@ fn compute_layer_bboxes(
                 }
             }
             _ => {
-                if let Some(vr) = renderer_core::culling::command_visual_rect(cmd, cum_matrix) {
+                if let Some(vr) =
+                    renderer_core::culling::command_visual_rect(cmd, cum_matrix, font_metrics)
+                {
                     if !stack.is_empty() {
                         let last_idx = stack.len() - 1;
                         stack[last_idx].1 = union_opt_rect(stack[last_idx].1, vr);
@@ -270,106 +268,12 @@ fn fill_rounded_mask(
     }
 }
 
-// Hashes the draw-command slice (plus optional dimensions) structurally, mirroring the fields compared by PartialEq, so that two equal slices always produce the same hash. Uses FxHasher for speed; f32 fields are fed as bit patterns to avoid undefined behavior on NaN.
-fn hash_commands(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
+// Hashes the draw-command slice together with the viewport dimensions, used to key the layer-bbox cache which depends on both the commands and the surface size.
+fn hash_commands_with_dims(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
     let mut h = FxHasher::default();
     width.hash(&mut h);
     height.hash(&mut h);
-    commands.len().hash(&mut h);
-    for cmd in commands {
-        match cmd {
-            DrawCommand::Rect { rect, style } => {
-                0u8.hash(&mut h);
-                rect.x.to_bits().hash(&mut h);
-                rect.y.to_bits().hash(&mut h);
-                rect.width.to_bits().hash(&mut h);
-                rect.height.to_bits().hash(&mut h);
-                hash_rect_style(style).hash(&mut h);
-            }
-            DrawCommand::Text { text, rect, style } => {
-                1u8.hash(&mut h);
-                text.len().hash(&mut h);
-                text.as_bytes().hash(&mut h);
-                rect.x.to_bits().hash(&mut h);
-                rect.y.to_bits().hash(&mut h);
-                rect.width.to_bits().hash(&mut h);
-                rect.height.to_bits().hash(&mut h);
-                hash_text_style(style).hash(&mut h);
-            }
-            DrawCommand::Image { data, rect, filter } => {
-                2u8.hash(&mut h);
-                data.id.hash(&mut h);
-                rect.x.to_bits().hash(&mut h);
-                rect.y.to_bits().hash(&mut h);
-                rect.width.to_bits().hash(&mut h);
-                rect.height.to_bits().hash(&mut h);
-                (*filter as u8).hash(&mut h);
-            }
-            DrawCommand::Line { p1, p2, style } => {
-                3u8.hash(&mut h);
-                p1.x.to_bits().hash(&mut h);
-                p1.y.to_bits().hash(&mut h);
-                p2.x.to_bits().hash(&mut h);
-                p2.y.to_bits().hash(&mut h);
-                style.width.to_bits().hash(&mut h);
-            }
-            DrawCommand::Path { data, style } => {
-                4u8.hash(&mut h);
-                // PathData equality uses Arc pointer identity; use the raw pointer as the key.
-                (std::sync::Arc::as_ptr(data) as usize).hash(&mut h);
-                hash_path_style(style).hash(&mut h);
-            }
-            DrawCommand::PushClip { rect, radius } => {
-                5u8.hash(&mut h);
-                rect.x.to_bits().hash(&mut h);
-                rect.y.to_bits().hash(&mut h);
-                rect.width.to_bits().hash(&mut h);
-                rect.height.to_bits().hash(&mut h);
-                radius.top_left.to_bits().hash(&mut h);
-                radius.top_right.to_bits().hash(&mut h);
-                radius.bottom_right.to_bits().hash(&mut h);
-                radius.bottom_left.to_bits().hash(&mut h);
-            }
-            DrawCommand::PopClip => {
-                6u8.hash(&mut h);
-            }
-            DrawCommand::PushMatrix { matrix } => {
-                7u8.hash(&mut h);
-                for v in matrix {
-                    v.to_bits().hash(&mut h);
-                }
-            }
-            DrawCommand::PopMatrix => {
-                8u8.hash(&mut h);
-            }
-            DrawCommand::PushLayer {
-                opacity,
-                backdrop_blur,
-            } => {
-                9u8.hash(&mut h);
-                opacity.to_bits().hash(&mut h);
-                backdrop_blur.to_bits().hash(&mut h);
-            }
-            DrawCommand::PopLayer => {
-                10u8.hash(&mut h);
-            }
-            #[cfg(target_os = "android")]
-            DrawCommand::AndroidHardwareBufferImage {
-                handle,
-                rect,
-                filter,
-                ..
-            } => {
-                11u8.hash(&mut h);
-                handle.hash(&mut h);
-                rect.x.to_bits().hash(&mut h);
-                rect.y.to_bits().hash(&mut h);
-                rect.width.to_bits().hash(&mut h);
-                rect.height.to_bits().hash(&mut h);
-                (*filter as u8).hash(&mut h);
-            }
-        }
-    }
+    renderer_core::hash_draw_commands_into(commands, &mut h, renderer_core::HashPolicy::ByContent);
     h.finish()
 }
 
@@ -380,6 +284,8 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     height: u32,
     pub(crate) pixmap: Option<Pixmap>,
     pub(crate) text_shaper: TextShaper,
+    // Real font ascender/line-height metrics for the default face, queried once at construction so dirty-rect computation does not under-estimate the text region.
+    font_metrics: renderer_core::FontMetrics,
     image_cache: ImageCache,
     blur_scratch: Vec<u8>,
     pixmap_pool: Vec<tiny_skia::Pixmap>,
@@ -423,18 +329,21 @@ where
         })?;
         let surface =
             Surface::new(&context, window).map_err(|e| RendererError::Surface(e.to_string()))?;
+        let mut text_shaper = TextShaper::with_config(TextShaperConfig {
+            pixel_cache_budget_bytes: budget.text_pixel_cache_bytes,
+            alpha_cache_budget_bytes: budget.text_alpha_cache_bytes,
+            shaping_cache_budget_bytes: budget.text_shaping_cache_bytes,
+            font: budget.font,
+        });
+        let font_metrics = text_shaper.font_metrics();
         Ok(Self {
             _context: context,
             surface,
             width: 0,
             height: 0,
             pixmap: None,
-            text_shaper: TextShaper::with_config(TextShaperConfig {
-                pixel_cache_budget_bytes: budget.text_pixel_cache_bytes,
-                alpha_cache_budget_bytes: budget.text_alpha_cache_bytes,
-                shaping_cache_budget_bytes: budget.text_shaping_cache_bytes,
-                font: budget.font,
-            }),
+            text_shaper,
+            font_metrics,
             image_cache: crate::primitives::image::new_image_cache(budget.image_cache_bytes),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
@@ -629,15 +538,14 @@ where
         } else if self.prev_commands.is_empty() {
             None // first frame → full clear
         } else {
-            renderer_core::dirty::compute_dirty_rect(
-                commands,
-                &self.prev_commands,
-                renderer_core::culling::command_visual_rect,
-            )
+            renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
+                renderer_core::culling::command_visual_rect(cmd, m, &self.font_metrics)
+            })
         };
 
         let clear_color_changed = clear_color != self.prev_clear_color;
-        let current_hash = hash_commands(commands, 0, 0);
+        let current_hash =
+            renderer_core::hash_draw_commands(commands, renderer_core::HashPolicy::ByContent);
         if current_hash != self.prev_commands_hash {
             self.prev_commands.clear();
             self.prev_commands.extend(commands.iter().cloned());
@@ -650,25 +558,13 @@ where
             Some(drs) if !drs.is_empty() => {
                 // Precompute each command's window-space visual rect once so expanding every dirty region is O(rects + commands) rather than O(rects * commands).
                 let mut visual_rects: Vec<Rect> = Vec::with_capacity(commands.len());
-                let mut sr_matrix = renderer_core::IDENTITY_MATRIX;
-                let mut sr_matrix_stk: Vec<[f32; 6]> = Vec::new();
-                for cmd in commands.iter() {
-                    match cmd {
-                        DrawCommand::PushMatrix { matrix } => {
-                            sr_matrix_stk.push(sr_matrix);
-                            sr_matrix = renderer_core::compose_matrix(sr_matrix, *matrix);
-                        }
-                        DrawCommand::PopMatrix => {
-                            if let Some(prev) = sr_matrix_stk.pop() {
-                                sr_matrix = prev;
-                            }
-                        }
-                        _ => {}
-                    }
-                    if let Some(vr) = renderer_core::culling::command_visual_rect(cmd, sr_matrix) {
+                renderer_core::for_each_with_matrix(commands, |cmd, matrix| {
+                    if let Some(vr) =
+                        renderer_core::culling::command_visual_rect(cmd, matrix, &self.font_metrics)
+                    {
                         visual_rects.push(vr);
                     }
-                }
+                });
 
                 let mut out: SmallVec<[Rect; 8]> = SmallVec::new();
                 for dr in drs.iter() {
@@ -694,7 +590,7 @@ where
                     loop {
                         let before = sr;
                         for vr in &visual_rects {
-                            if rect_overlaps(*vr, sr) {
+                            if vr.overlaps(sr) {
                                 let nx = sr.x.min(vr.x);
                                 let ny = sr.y.min(vr.y);
                                 let nx2 = (sr.x + sr.width).max(vr.x + vr.width);
@@ -791,11 +687,12 @@ where
         };
 
         // Task 2.12: skip compute_layer_bboxes when commands and dimensions haven't changed.
-        let bbox_hash = hash_commands(commands, self.width, self.height);
+        let bbox_hash = hash_commands_with_dims(commands, self.width, self.height);
         let layer_bboxes = match &self.layer_bboxes_cache {
             Some((cached_hash, cached)) if *cached_hash == bbox_hash => cached.clone(),
             _ => {
-                let result = compute_layer_bboxes(commands, self.width, self.height);
+                let result =
+                    compute_layer_bboxes(commands, self.width, self.height, &self.font_metrics);
                 self.layer_bboxes_cache = Some((bbox_hash, result.clone()));
                 result
             }
@@ -841,10 +738,12 @@ where
             // window-space region is dirty.
             if let Some(ref dirty_rects) = skip_rect {
                 if !inside_layer {
-                    if let Some(vr) =
-                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
-                    {
-                        if dirty_rects.iter().all(|dr| !rect_overlaps(vr, *dr)) {
+                    if let Some(vr) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cum_matrix,
+                        &self.font_metrics,
+                    ) {
+                        if dirty_rects.iter().all(|dr| !vr.overlaps(*dr)) {
                             continue;
                         }
                     }
@@ -861,9 +760,11 @@ where
                     {
                         continue;
                     }
-                    if let Some(vr) =
-                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
-                    {
+                    if let Some(vr) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cum_matrix,
+                        &self.font_metrics,
+                    ) {
                         if !renderer_core::culling::overlaps(
                             vr.x,
                             vr.y,
@@ -898,9 +799,11 @@ where
                 DrawCommand::Text { text, rect, style } => {
                     let rect = *rect;
                     let style = **style;
-                    if let Some(vr) =
-                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
-                    {
+                    if let Some(vr) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cum_matrix,
+                        &self.font_metrics,
+                    ) {
                         if !renderer_core::culling::overlaps(
                             vr.x,
                             vr.y,
@@ -941,9 +844,11 @@ where
                     );
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    if let Some(vr) =
-                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
-                    {
+                    if let Some(vr) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cum_matrix,
+                        &self.font_metrics,
+                    ) {
                         if !renderer_core::culling::overlaps(
                             vr.x,
                             vr.y,
@@ -975,9 +880,11 @@ where
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    if let Some(vr) =
-                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
-                    {
+                    if let Some(vr) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cum_matrix,
+                        &self.font_metrics,
+                    ) {
                         if !renderer_core::culling::overlaps(
                             vr.x,
                             vr.y,
@@ -1014,9 +921,11 @@ where
                 }
                 DrawCommand::Path { data, style } => {
                     let style = **style;
-                    if let Some(vr) =
-                        renderer_core::culling::command_visual_rect(cmd, self.draw_state.cum_matrix)
-                    {
+                    if let Some(vr) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cum_matrix,
+                        &self.font_metrics,
+                    ) {
                         if !renderer_core::culling::overlaps(
                             vr.x,
                             vr.y,
@@ -1123,7 +1032,7 @@ where
                                     width: bw as f32,
                                     height: bh as f32,
                                 };
-                                if dirty_rects.iter().all(|dr| !rect_overlaps(layer_rect, *dr)) {
+                                if dirty_rects.iter().all(|dr| !layer_rect.overlaps(*dr)) {
                                     skip_layer_depth = 1;
                                     continue;
                                 }

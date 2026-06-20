@@ -3,9 +3,16 @@ use smallvec::{SmallVec, smallvec};
 
 use crate::{
     DrawCommand, culling,
-    draw_state::{IDENTITY_MATRIX, compose_matrix},
+    culling::FontMetrics,
+    draw_state::{IDENTITY_MATRIX, for_each_with_matrix},
     geometry::union_rects,
 };
+
+fn compute_matrices(cmds: &[DrawCommand]) -> Vec<[f32; 6]> {
+    let mut result = Vec::with_capacity(cmds.len());
+    for_each_with_matrix(cmds, |_cmd, matrix| result.push(matrix));
+    result
+}
 
 /// Inline capacity for the dirty-rect list. Beyond this the rects are collapsed into a single union (see MAX_DIRTY_RECTS).
 pub type DirtyRects = SmallVec<[Rect; 8]>;
@@ -89,36 +96,12 @@ pub fn compute_dirty_rect(
     }
 
     let mut dirty: DirtyRects = SmallVec::new();
-    let mut new_matrix_stack: Vec<[f32; 6]> = Vec::new();
-    let mut old_matrix_stack: Vec<[f32; 6]> = Vec::new();
-    let mut new_matrix = IDENTITY_MATRIX;
-    let mut old_matrix = IDENTITY_MATRIX;
+    let new_matrices = compute_matrices(new_cmds);
+    let old_matrices = compute_matrices(old_cmds);
 
-    for (new_cmd, old_cmd) in new_cmds.iter().zip(old_cmds.iter()) {
-        match new_cmd {
-            DrawCommand::PushMatrix { matrix } => {
-                new_matrix_stack.push(new_matrix);
-                new_matrix = compose_matrix(new_matrix, *matrix);
-            }
-            DrawCommand::PopMatrix => {
-                if let Some(prev) = new_matrix_stack.pop() {
-                    new_matrix = prev;
-                }
-            }
-            _ => {}
-        }
-        match old_cmd {
-            DrawCommand::PushMatrix { matrix } => {
-                old_matrix_stack.push(old_matrix);
-                old_matrix = compose_matrix(old_matrix, *matrix);
-            }
-            DrawCommand::PopMatrix => {
-                if let Some(prev) = old_matrix_stack.pop() {
-                    old_matrix = prev;
-                }
-            }
-            _ => {}
-        }
+    for (i, (new_cmd, old_cmd)) in new_cmds.iter().zip(old_cmds.iter()).enumerate() {
+        let new_matrix = new_matrices[i];
+        let old_matrix = old_matrices[i];
 
         if new_cmd != old_cmd {
             // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible due to the new clip require a full re-render.
@@ -199,10 +182,9 @@ pub fn detect_scroll_blit(
     let scroll_clip = *clip_stack.last()?;
 
     // apply_scroll_blit shifts every pixel row inside scroll_clip. Visual commands that sit before the scroll PushTransform (headers, separators, etc.) are always identical to their prev-frame counterparts (scroll_idx is the first diff), so they will never land in extra_dirty and will never be redrawn — their pixels drift with each scroll step until they disappear. Bail out to compute_dirty_rect when any such element exists.
-    if new_cmds[..scroll_idx]
-        .iter()
-        .any(|c| culling::command_visual_rect(c, IDENTITY_MATRIX).is_some())
-    {
+    if new_cmds[..scroll_idx].iter().any(|c| {
+        culling::command_visual_rect(c, IDENTITY_MATRIX, &FontMetrics::default()).is_some()
+    }) {
         return None;
     }
 
@@ -275,44 +257,23 @@ pub fn detect_scroll_blit(
         Rect::new(scroll_clip.x, scroll_clip.y, scroll_clip.width, band_h)
     };
 
-    // Reconstruct cumulative matrix at the end of the scroll block.
-    let mut matrix_stack: Vec<[f32; 6]> = Vec::new();
-    let mut cum_matrix = IDENTITY_MATRIX;
-    for cmd in new_cmds[..=pop_idx].iter() {
-        match cmd {
-            DrawCommand::PushMatrix { matrix } => {
-                matrix_stack.push(cum_matrix);
-                cum_matrix = compose_matrix(cum_matrix, *matrix);
-            }
-            DrawCommand::PopMatrix => {
-                if let Some(prev) = matrix_stack.pop() {
-                    cum_matrix = prev;
-                }
-            }
-            _ => {}
-        }
-    }
+    // Compute cumulative matrices for all commands after the scroll block. We walk the full slice
+    // from the start to preserve outer matrix context, then use positions from pop_idx+1 onward.
+    let all_matrices = compute_matrices(&new_cmds[..n]);
 
     // Collect dirty rects for any overlay changes after the scroll block (e.g. scrollbar).
     let mut extra_dirty: Option<Rect> = None;
     for j in (pop_idx + 1)..n {
-        match &new_cmds[j] {
-            DrawCommand::PushMatrix { matrix } => {
-                matrix_stack.push(cum_matrix);
-                cum_matrix = compose_matrix(cum_matrix, *matrix);
-            }
-            DrawCommand::PopMatrix => {
-                if let Some(prev) = matrix_stack.pop() {
-                    cum_matrix = prev;
-                }
-            }
-            _ => {}
-        }
+        let cmd_matrix = all_matrices[j];
         if new_cmds[j] != old_cmds[j] {
-            if let Some(r) = culling::command_visual_rect(&new_cmds[j], cum_matrix) {
+            if let Some(r) =
+                culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default())
+            {
                 extra_dirty = Some(extra_dirty.map_or(r, |d| union_rects(d, r)));
             }
-        } else if culling::command_visual_rect(&new_cmds[j], cum_matrix).is_some() {
+        } else if culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default())
+            .is_some()
+        {
             // Unchanged visual after the scroll block: blit shifted its pixels but it won't land in extra_dirty, so it will never be redrawn at the correct position.
             return None;
         }
@@ -345,20 +306,37 @@ mod tests {
     fn compute_dirty_rect_len_mismatch_returns_none() {
         let a = vec![rect_cmd(0.0, 0.0, 10.0, 10.0)];
         let b = vec![];
-        assert!(compute_dirty_rect(&a, &b, culling::command_visual_rect).is_none());
+        assert!(
+            compute_dirty_rect(&a, &b, |cmd, m| culling::command_visual_rect(
+                cmd,
+                m,
+                &FontMetrics::default()
+            ))
+            .is_none()
+        );
     }
 
     #[test]
     fn compute_dirty_rect_no_change_returns_none() {
         let a = vec![rect_cmd(0.0, 0.0, 10.0, 10.0)];
-        assert!(compute_dirty_rect(&a, &a, culling::command_visual_rect).is_none());
+        assert!(
+            compute_dirty_rect(&a, &a, |cmd, m| culling::command_visual_rect(
+                cmd,
+                m,
+                &FontMetrics::default()
+            ))
+            .is_none()
+        );
     }
 
     #[test]
     fn compute_dirty_rect_single_change() {
         let old = vec![rect_cmd(0.0, 0.0, 10.0, 10.0)];
         let new = vec![rect_cmd(5.0, 0.0, 10.0, 10.0)];
-        let rects = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
+        let rects = compute_dirty_rect(&new, &old, |cmd, m| {
+            culling::command_visual_rect(cmd, m, &FontMetrics::default())
+        })
+        .unwrap();
         // overlapping old/new positions merge into a single region covering both
         let dirty = rects.iter().copied().reduce(union_rects).unwrap();
         assert!(dirty.x <= 0.0);
@@ -376,7 +354,10 @@ mod tests {
             rect_cmd(0.0, 0.0, 20.0, 20.0),
             rect_cmd(500.0, 500.0, 20.0, 20.0),
         ];
-        let rects = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
+        let rects = compute_dirty_rect(&new, &old, |cmd, m| {
+            culling::command_visual_rect(cmd, m, &FontMetrics::default())
+        })
+        .unwrap();
         assert_eq!(rects.len(), 2);
         // Neither region should span the gap between the two corners.
         for r in &rects {
@@ -400,7 +381,10 @@ mod tests {
             rect_cmd(0.0, 0.0, 10.0, 10.0),
             DrawCommand::PopMatrix,
         ];
-        let rects = compute_dirty_rect(&new, &old, culling::command_visual_rect).unwrap();
+        let rects = compute_dirty_rect(&new, &old, |cmd, m| {
+            culling::command_visual_rect(cmd, m, &FontMetrics::default())
+        })
+        .unwrap();
         let dirty = rects.iter().copied().reduce(union_rects).unwrap();
         // must cover both positions
         assert!(dirty.x <= 0.0);
@@ -428,7 +412,14 @@ mod tests {
             rect_cmd(0.0, 100.0, 100.0, 20.0),
             DrawCommand::PopClip,
         ];
-        assert!(compute_dirty_rect(&new, &old, culling::command_visual_rect).is_none());
+        assert!(
+            compute_dirty_rect(&new, &old, |cmd, m| culling::command_visual_rect(
+                cmd,
+                m,
+                &FontMetrics::default()
+            ))
+            .is_none()
+        );
     }
 
     #[test]

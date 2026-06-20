@@ -6,6 +6,7 @@ mod draw_state;
 mod error;
 pub mod font_config;
 mod geometry;
+mod hash;
 mod image;
 mod path;
 mod preprocess;
@@ -17,12 +18,13 @@ pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 
 pub use color::Color;
 pub use command::DrawCommand;
-pub use culling::{apply_matrix, union_rects};
+pub use culling::{FontMetrics, apply_matrix, union_rects};
 #[doc(hidden)]
 pub use dirty::ScrollBlit;
-pub use draw_state::{DrawState, IDENTITY_MATRIX, compose_matrix};
+pub use draw_state::{DrawState, IDENTITY_MATRIX, compose_matrix, for_each_with_matrix};
 pub use error::RendererError;
 pub use font_config::FontConfig;
+pub use hash::{HashPolicy, hash_draw_commands, hash_draw_commands_into};
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use path::{PathData, PathVerb};
 pub use preprocess::{blur_padding, blur_sigma, expand_fill_layers, scale_commands};

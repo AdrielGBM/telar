@@ -41,6 +41,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    if apply_clip_sdf(in.world_pos) { discard; }
     let fd = fill_data[in.fill_index];
     let grad_colors = array<vec4<f32>, 4>(
         fd.grad_colors_0,

@@ -58,22 +58,18 @@ pub enum RenderNode {
     Empty,
     Primitive(DrawCommand),
     Group {
-        node_key: u64,
         children: NodeVec,
     },
     Transform {
-        node_key: u64,
         matrix: [f32; 6],
         children: NodeVec,
     },
     Clip {
-        node_key: u64,
         rect: Rect,
         radius: BorderRadius,
         children: NodeVec,
     },
     Layer {
-        node_key: u64,
         opacity: f32,
         backdrop_blur: f32,
         children: NodeVec,
@@ -83,14 +79,6 @@ pub enum RenderNode {
 impl RenderNode {
     pub fn group(children: impl IntoIterator<Item = RenderNode>) -> Self {
         Self::Group {
-            node_key: 0,
-            children: NodeVec::collect(children),
-        }
-    }
-
-    pub fn group_keyed(key: u64, children: impl IntoIterator<Item = RenderNode>) -> Self {
-        Self::Group {
-            node_key: key,
             children: NodeVec::collect(children),
         }
     }
@@ -123,21 +111,6 @@ impl RenderNode {
         children: impl IntoIterator<Item = RenderNode>,
     ) -> Self {
         Self::Layer {
-            node_key: 0,
-            opacity,
-            backdrop_blur,
-            children: NodeVec::collect(children),
-        }
-    }
-
-    pub fn layer_keyed(
-        key: u64,
-        opacity: f32,
-        backdrop_blur: f32,
-        children: impl IntoIterator<Item = RenderNode>,
-    ) -> Self {
-        Self::Layer {
-            node_key: key,
             opacity,
             backdrop_blur,
             children: NodeVec::collect(children),
@@ -149,19 +122,6 @@ impl RenderNode {
         children: impl IntoIterator<Item = RenderNode>,
     ) -> Self {
         Self::Transform {
-            node_key: 0,
-            matrix,
-            children: NodeVec::collect(children),
-        }
-    }
-
-    pub fn transform_keyed(
-        key: u64,
-        matrix: [f32; 6],
-        children: impl IntoIterator<Item = RenderNode>,
-    ) -> Self {
-        Self::Transform {
-            node_key: key,
             matrix,
             children: NodeVec::collect(children),
         }

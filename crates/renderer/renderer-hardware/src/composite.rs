@@ -13,6 +13,10 @@ pub(crate) struct CompositePipeline {
     pub(crate) pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
     pub(crate) bgl: wgpu::BindGroupLayout,
+    // Free uniform buffers available for reuse; create_bind_group pops from here (or creates a fresh one on miss) and pushes the used buffer into params_buffer_in_use. recycle_params_buffers moves them all back at frame start.
+    params_buffer_pool: Vec<wgpu::Buffer>,
+    // Uniform buffers handed to bind groups during the current frame; kept alive until the frame's GPU work is submitted, then recycled into params_buffer_pool at the next begin_frame.
+    params_buffer_in_use: Vec<wgpu::Buffer>,
 }
 
 impl CompositePipeline {
@@ -115,12 +119,21 @@ impl CompositePipeline {
             pipeline,
             sampler,
             bgl,
+            params_buffer_pool: Vec::new(),
+            params_buffer_in_use: Vec::new(),
         }
     }
 
+    // Moves all uniform buffers used by the previous frame back into the free pool. Must be called once per frame before any create_bind_group, after the previous frame's queue.submit so the buffers are no longer referenced by in-flight GPU work.
+    pub(crate) fn recycle_params_buffers(&mut self) {
+        self.params_buffer_pool
+            .append(&mut self.params_buffer_in_use);
+    }
+
     pub(crate) fn create_bind_group(
-        &self,
+        &mut self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         view: &wgpu::TextureView,
         rect: [f32; 4],
         alpha: f32,
@@ -133,12 +146,19 @@ impl CompositePipeline {
             clip_radius,
             content_uv_scale,
         };
-        let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("rsx-composite-params"),
-            contents: bytemuck::bytes_of(&params),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
+        // Reuse a pooled UNIFORM buffer (writing the new params in place) or create one on a pool miss; COPY_DST is required for queue.write_buffer.
+        let params_buf = match self.params_buffer_pool.pop() {
+            Some(buf) => {
+                queue.write_buffer(&buf, 0, bytemuck::bytes_of(&params));
+                buf
+            }
+            None => device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("rsx-composite-params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            }),
+        };
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rsx-composite-bind-group"),
             layout: &self.bgl,
             entries: &[
@@ -155,6 +175,9 @@ impl CompositePipeline {
                     resource: params_buf.as_entire_binding(),
                 },
             ],
-        })
+        });
+        // Retain the buffer for the duration of the frame; recycle_params_buffers returns it to the pool next frame.
+        self.params_buffer_in_use.push(params_buf);
+        bind_group
     }
 }

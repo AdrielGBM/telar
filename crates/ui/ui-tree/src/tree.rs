@@ -4,7 +4,6 @@ use std::rc::Rc;
 use platform_core::Event;
 use reactive_core::{Effect, RwSignal, batch, create_effect, create_rw_signal};
 use renderer_core::DrawCommand;
-use rustc_hash::FxHashMap;
 
 use crate::component::{Component, EventResult};
 use crate::render_node::RenderNode;
@@ -15,8 +14,6 @@ struct ComponentSlot {
     commands: Rc<RefCell<Vec<DrawCommand>>>,
     dirty: Rc<Cell<bool>>,
     _stack: Rc<RefCell<Vec<RenderNode>>>,
-    // Persisted across frames so keyed structural nodes can fingerprint their flattened ranges and short-circuit unchanged subtrees.
-    _key_cache: Rc<RefCell<FxHashMap<u64, (usize, usize, u64)>>>,
     _effect: Effect,
     // Bumped by on_event to force a re-run of the view effect in hot-reload mode, where
     // signals in the dylib's reactive RUNTIME are not tracked by the binary's effect.
@@ -29,27 +26,19 @@ impl ComponentSlot {
         let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
         let dirty = Rc::new(Cell::new(true));
         let stack: Rc<RefCell<Vec<RenderNode>>> = Default::default();
-        let key_cache: Rc<RefCell<FxHashMap<u64, (usize, usize, u64)>>> =
-            Rc::new(RefCell::new(FxHashMap::default()));
         let force_tick = create_rw_signal(0u64);
 
         let comp_clone = Rc::clone(&component);
         let cmds_clone = Rc::clone(&commands);
         let dirty_clone = Rc::clone(&dirty);
         let stack_clone = Rc::clone(&stack);
-        let key_cache_clone = Rc::clone(&key_cache);
         let force_tick_inner = force_tick.clone();
         let _effect = create_effect(move || {
             force_tick_inner.get(); // subscribe so on_event bumps can force a re-run
             let node = comp_clone.borrow().view();
             let mut stk = stack_clone.borrow_mut();
             let mut cmds = cmds_clone.borrow_mut();
-            let changed = view_flatten::flatten_view(
-                node,
-                &mut *cmds,
-                &mut *stk,
-                &mut *key_cache_clone.borrow_mut(),
-            );
+            let changed = view_flatten::flatten_view(node, &mut *cmds, &mut *stk);
             if changed {
                 dirty_clone.set(true);
                 // Bump the shared generation so consumers can detect content changes with a single integer compare instead of an O(n) command-slice scan.
@@ -62,7 +51,6 @@ impl ComponentSlot {
             commands,
             dirty,
             _stack: stack,
-            _key_cache: key_cache,
             _effect,
             force_tick,
         }

@@ -2,7 +2,14 @@ struct Viewport {
     size: vec2<f32>,
     offset: vec2<f32>,
     scale: f32,
-    _pad: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
+    clip_rect: vec4<f32>,
+    clip_radius: f32,
+    _clip_pad0: f32,
+    _clip_pad1: f32,
+    _clip_pad2: f32,
 }
 @group(0) @binding(0) var<uniform> viewport: Viewport;
 

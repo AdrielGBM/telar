@@ -10,9 +10,10 @@ struct TextInstance {
 @group(2) @binding(1) var                   atlas_sampler: sampler;
 
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0)       uv:       vec2<f32>,
-    @location(1)       color:    vec4<f32>,
+    @builtin(position) position:  vec4<f32>,
+    @location(0)       uv:        vec2<f32>,
+    @location(1)       color:     vec4<f32>,
+    @location(2)       world_pos: vec2<f32>,
 }
 
 @vertex
@@ -28,14 +29,16 @@ fn vs_main(
     let ndc  = to_ndc(px, py);
 
     var out: VertexOutput;
-    out.position = vec4(ndc.x, ndc.y, 0.0, 1.0);
-    out.uv       = inst.uv_min + off * (inst.uv_max - inst.uv_min);
-    out.color    = inst.color;
+    out.position  = vec4(ndc.x, ndc.y, 0.0, 1.0);
+    out.uv        = inst.uv_min + off * (inst.uv_max - inst.uv_min);
+    out.color     = inst.color;
+    out.world_pos = vec2<f32>(px, py);
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    if apply_clip_sdf(in.world_pos) { discard; }
     let rgba = textureSample(atlas_texture, atlas_sampler, in.uv) * in.color;
     // Premultiply alpha: pipeline uses PREMULTIPLIED_ALPHA_BLENDING, so src.rgb must already be multiplied by src.a.
     return vec4(rgba.rgb * rgba.a, rgba.a);
