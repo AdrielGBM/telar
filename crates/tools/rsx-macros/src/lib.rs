@@ -178,7 +178,7 @@ pub fn app(input: TokenStream) -> TokenStream {
                 }
                 #setup
                 if ::std::env::var("RSX_PREVIEW").is_ok() {
-                    if ::rsx::try_run_preview(rsx_all_preview_entries()) {
+                    if ::rsx::try_run_preview(rsx_all_preview_entries(), ::rsx::AppConfig::from(#config)) {
                         return;
                     }
                 }
@@ -195,7 +195,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub fn run() {
                 #setup
                 if ::std::env::var("RSX_PREVIEW").is_ok() {
-                    if ::rsx::try_run_preview(rsx_all_preview_entries()) {
+                    if ::rsx::try_run_preview(rsx_all_preview_entries(), ::rsx::AppConfig::from(#config)) {
                         return;
                     }
                 }

@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use platform_core::{Key, ModifiersState};
 use renderer_core::DrawCommand;
+use ui_tree::DevTreeView;
 
 pub enum DevAction {
     None,
@@ -30,6 +31,8 @@ pub trait DevPlugin: Default + 'static {
     fn set_build_error(&mut self, error: Option<String>) {
         let _ = error;
     }
+
+    fn on_tree(&mut self, _tree: &dyn DevTreeView) {}
 }
 
 impl DevPlugin for () {

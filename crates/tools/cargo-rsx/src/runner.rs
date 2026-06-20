@@ -402,6 +402,36 @@ fn split_android_flag(args: Vec<String>) -> (bool, Vec<String>) {
     (android, rest)
 }
 
+fn apply_dev_window_env(envs: &mut Vec<(String, String)>, w: &WindowConfig) {
+    if let Some(title) = &w.title {
+        envs.push(("RSX_DEV_WINDOW_TITLE".to_string(), title.clone()));
+    }
+    if let Some(width) = w.width {
+        envs.push(("RSX_DEV_WINDOW_WIDTH".to_string(), width.to_string()));
+    }
+    if let Some(height) = w.height {
+        envs.push(("RSX_DEV_WINDOW_HEIGHT".to_string(), height.to_string()));
+    }
+    if let Some(dec) = w.decorations {
+        envs.push((
+            "RSX_DEV_WINDOW_DECORATIONS".to_string(),
+            if dec { "1" } else { "0" }.to_string(),
+        ));
+    }
+    if let Some(res) = w.resizable {
+        envs.push((
+            "RSX_DEV_WINDOW_RESIZABLE".to_string(),
+            if res { "1" } else { "0" }.to_string(),
+        ));
+    }
+    if let Some(tr) = w.transparent {
+        envs.push((
+            "RSX_DEV_WINDOW_TRANSPARENT".to_string(),
+            if tr { "1" } else { "0" }.to_string(),
+        ));
+    }
+}
+
 fn load_dotenv(cmd: &mut Command) {
     let cwd = std::env::current_dir().unwrap_or_default();
     let root = find_workspace_root(&cwd).unwrap_or(cwd);
@@ -778,6 +808,10 @@ fn run_dev_cmd(args: DevArgs) {
     if let Some(backend) = args.backend {
         config.backend = Some(backend_from_arg(backend));
     }
+    // CLI `--devtools off` overrides any rsx.toml setting.
+    if let Some(devtools) = args.devtools {
+        config.devtools = Some(matches!(devtools, DevtoolsArg::On));
+    }
     run_hot_loop(
         HotMode::Dev,
         HotLoopOpts {
@@ -941,6 +975,17 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     )];
     if is_preview {
         launch_envs.push(("RSX_PREVIEW".to_string(), "1".to_string()));
+    }
+    // Disable the devtools overlay when turned off via CLI flag or rsx.toml.
+    let devtools_disabled = config.devtools == Some(false)
+        || config.dev.as_ref().and_then(|d| d.devtools) == Some(false);
+    if devtools_disabled {
+        launch_envs.push(("RSX_DEVTOOLS".to_string(), "0".to_string()));
+    }
+    if let Some(dev) = &config.dev
+        && let Some(w) = &dev.window
+    {
+        apply_dev_window_env(&mut launch_envs, w);
     }
 
     let mut cargo_args = vec!["run".to_string()];

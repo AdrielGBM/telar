@@ -4,4 +4,4 @@ pub mod window;
 
 pub use error::PlatformError;
 pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta};
-pub use window::{EventHandler, Platform, Window, WindowConfig};
+pub use window::{EventHandler, FullscreenMode, Platform, Window, WindowConfig, WindowPosition};

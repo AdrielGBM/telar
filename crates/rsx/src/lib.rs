@@ -93,14 +93,14 @@ pub fn make_hot_preview_app(entries: Vec<PreviewEntry>) -> Box<dyn App> {
 }
 
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub fn try_run_preview(entries: Vec<PreviewEntry>) -> bool {
+pub fn try_run_preview(entries: Vec<PreviewEntry>, config: AppConfig) -> bool {
     #[cfg(feature = "preview")]
     {
-        run_preview_window(entries);
+        run_preview_window(entries, config);
         return true;
     }
     #[allow(unreachable_code)]
-    let _ = entries;
+    let _ = (entries, config);
     false
 }
 

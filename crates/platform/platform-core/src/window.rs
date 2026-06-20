@@ -1,11 +1,39 @@
 use crate::{Event, PlatformError};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum FullscreenMode {
+    #[default]
+    None,
+    Borderless,
+    Exclusive,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowPosition {
+    Centered,
+    At(i32, i32),
+}
+
+impl Default for WindowPosition {
+    fn default() -> Self {
+        WindowPosition::Centered
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WindowConfig {
     pub title: String,
     pub width: u32,
     pub height: u32,
+    pub min_size: Option<(u32, u32)>,
+    pub max_size: Option<(u32, u32)>,
+    pub resizable: bool,
+    pub decorations: bool,
+    pub transparent: bool,
+    pub fullscreen: FullscreenMode,
+    pub position: WindowPosition,
+    pub always_on_top: bool,
 }
 
 impl Default for WindowConfig {
@@ -14,6 +42,14 @@ impl Default for WindowConfig {
             title: String::from("RSX App"),
             width: 800,
             height: 600,
+            min_size: None,
+            max_size: None,
+            resizable: true,
+            decorations: true,
+            transparent: false,
+            fullscreen: FullscreenMode::None,
+            position: WindowPosition::Centered,
+            always_on_top: false,
         }
     }
 }

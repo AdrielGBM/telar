@@ -29,6 +29,7 @@ services-core = { workspace = true }
 layout-core = { workspace = true }
 theme-core = { workspace = true }
 ui-core = { workspace = true }
+ui-tree = { workspace = true }
 geometry-core = { workspace = true }
 rsx-devtools = { workspace = true }
 rsx-macros = { workspace = true }
@@ -43,3 +44,9 @@ platform-android = { workspace = true }
 
 [target.'cfg(any(target_os = "android", unix))'.dependencies]
 libc = "0.2.186"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(rsx_hot_reload)',
+    'cfg(rsx_preview)',
+] }

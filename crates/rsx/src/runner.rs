@@ -454,6 +454,9 @@ where
             let commands_ref = self.tree.as_ref().map(|t| t.commands());
             let base_slice: &[renderer_core::DrawCommand] =
                 commands_ref.as_deref().map(|r| r.as_slice()).unwrap_or(&[]);
+            if let Some(tree) = &self.tree {
+                self.dev.on_tree(tree);
+            }
             let logical_w = w as f32 / self.scale_factor;
             let logical_h = h as f32 / self.scale_factor;
             let frame_commands = self
@@ -499,6 +502,9 @@ where
         let commands_ref = self.tree.as_ref().map(|t| t.commands());
         let base_slice: &[renderer_core::DrawCommand] =
             commands_ref.as_deref().map(|r| r.as_slice()).unwrap_or(&[]);
+        if let Some(tree) = &self.tree {
+            self.dev.on_tree(tree);
+        }
         let logical_w = w as f32 / self.scale_factor;
         let logical_h = h as f32 / self.scale_factor;
         let frame_commands = self
@@ -653,6 +659,32 @@ where
     (tx, join)
 }
 
+#[cfg(rsx_hot_reload)]
+fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
+    if let Ok(v) = std::env::var("RSX_DEV_WINDOW_TITLE") {
+        config.title = v;
+    }
+    if let Ok(v) = std::env::var("RSX_DEV_WINDOW_WIDTH") {
+        if let Ok(n) = v.parse() {
+            config.width = n;
+        }
+    }
+    if let Ok(v) = std::env::var("RSX_DEV_WINDOW_HEIGHT") {
+        if let Ok(n) = v.parse() {
+            config.height = n;
+        }
+    }
+    if let Ok(v) = std::env::var("RSX_DEV_WINDOW_DECORATIONS") {
+        config.decorations = v == "1";
+    }
+    if let Ok(v) = std::env::var("RSX_DEV_WINDOW_RESIZABLE") {
+        config.resizable = v == "1";
+    }
+    if let Ok(v) = std::env::var("RSX_DEV_WINDOW_TRANSPARENT") {
+        config.transparent = v == "1";
+    }
+}
+
 #[cfg(not(target_os = "android"))]
 fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
     let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
@@ -667,10 +699,15 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
         }
     };
     let AppConfig {
-        window,
+        mut window,
         font_paths,
         font_data,
     } = config;
+    #[cfg(rsx_hot_reload)]
+    apply_dev_window_overrides(&mut window);
+    if let Some(custom) = app.window_config() {
+        window = custom;
+    }
     if let Err(e) = platform.run(
         window,
         AppHandler::<WinitWindow, D> {
@@ -706,7 +743,14 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
 #[cfg(not(target_os = "android"))]
 pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     #[cfg(feature = "dev")]
-    run_with_plugin::<A, rsx_devtools::DevTools>(config, app, app_name);
+    {
+        // RSX_DEVTOOLS=0 disables the overlay even in a dev build.
+        if std::env::var("RSX_DEVTOOLS").as_deref() == Ok("0") {
+            run_with_plugin::<A, ()>(config, app, app_name);
+        } else {
+            run_with_plugin::<A, rsx_devtools::DevTools>(config, app, app_name);
+        }
+    }
     #[cfg(not(feature = "dev"))]
     run_with_plugin::<A, ()>(config, app, app_name);
 }
@@ -745,10 +789,15 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
         }
     };
     let AppConfig {
-        window,
+        mut window,
         font_paths,
         font_data,
     } = config;
+    #[cfg(rsx_hot_reload)]
+    apply_dev_window_overrides(&mut window);
+    if let Some(custom) = app.window_config() {
+        window = custom;
+    }
     if let Err(e) = platform.run(
         window,
         AppHandler::<AndroidWindow, D> {
@@ -809,10 +858,15 @@ pub fn run_hot_reload_host(
         }
     };
     let crate::app_config::AppConfig {
-        window,
+        mut window,
         font_paths,
         font_data,
     } = config;
+    #[cfg(rsx_hot_reload)]
+    apply_dev_window_overrides(&mut window);
+    if let Some(custom) = initial_app.window_config() {
+        window = custom;
+    }
     if let Err(e) = platform.run(
         window,
         AppHandler::<WinitWindow, rsx_devtools::DevTools> {

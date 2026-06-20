@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
-use renderer_core::{BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{
+    BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, Stroke, TextStyle,
+};
 
 fn rect_cmd(rect: Rect, style: RectStyle) -> DrawCommand {
     DrawCommand::Rect {
@@ -26,8 +28,16 @@ const BADGE_W: f32 = 100.0;
 const BADGE_H: f32 = 24.0;
 const MARGIN: f32 = 10.0;
 const PANEL_W: f32 = 200.0;
-const PANEL_H: f32 = 148.0;
+const PANEL_H: f32 = 178.0;
 const GAP: f32 = 4.0;
+
+const INSPECTOR_W: f32 = 300.0;
+const INSPECTOR_BG: Color = Color::rgba(0.08, 0.08, 0.12, 0.92);
+const INSPECTOR_SEL_BG: Color = Color::rgba(0.2, 0.4, 0.8, 0.25);
+const HIGHLIGHT_FILL: Color = Color::rgba(0.2, 0.5, 1.0, 0.18);
+const HIGHLIGHT_BORDER: Color = Color::rgba(0.3, 0.6, 1.0, 0.85);
+const ROW_H: f32 = 20.0;
+const INSPECTOR_HEADER_H: f32 = 32.0;
 
 const BG: Color = Color::rgba(0.05, 0.05, 0.05, 0.75);
 const BADGE_BG: Color = Color::rgba(0.0, 0.0, 0.0, 0.70);
@@ -41,6 +51,12 @@ const GRAY_DIM: Color = Color::rgba(0.3, 0.3, 0.3, 1.0);
 const FPS_WINDOW: Duration = Duration::from_secs(1);
 const KEEPALIVE: Duration = Duration::from_millis(1000);
 
+struct CachedNode {
+    id: u64,
+    rect: Rect,
+    depth: usize,
+}
+
 pub struct DevTools {
     frame_times: VecDeque<Instant>,
     last_fps: u32,
@@ -48,6 +64,12 @@ pub struct DevTools {
     badge_rect: Rect,
     renderer_info: Option<String>,
     build_error: Option<String>,
+    inspector_open: bool,
+    selected_node: Option<u64>,
+    nodes: Vec<CachedNode>,
+    inspector_rect: Rect,
+    frame_time_ms: f32,
+    node_count: usize,
 }
 
 impl Default for DevTools {
@@ -59,6 +81,12 @@ impl Default for DevTools {
             badge_rect: Rect::default(),
             renderer_info: None,
             build_error: None,
+            inspector_open: false,
+            selected_node: None,
+            nodes: Vec::new(),
+            inspector_rect: Rect::default(),
+            frame_time_ms: 0.0,
+            node_count: 0,
         }
     }
 }
@@ -88,12 +116,86 @@ impl DevPlugin for DevTools {
         }
         self.last_fps = self.frame_times.len() as u32;
 
+        // Average frame time in ms across the rolling window.
+        self.frame_time_ms = if self.frame_times.len() >= 2 {
+            let oldest = self.frame_times[0];
+            let newest = self.frame_times[self.frame_times.len() - 1];
+            let elapsed_ms = newest.duration_since(oldest).as_secs_f32() * 1000.0;
+            elapsed_ms / (self.frame_times.len() - 1) as f32
+        } else {
+            0.0
+        };
+
         let badge_x = window_w - BADGE_W - MARGIN;
         let badge_y = window_h - BADGE_H - MARGIN;
         self.badge_rect = Rect::new(badge_x, badge_y, BADGE_W, BADGE_H);
 
         let mut cmds = Vec::with_capacity(base.len() + 16);
         cmds.extend_from_slice(base);
+
+        if self.inspector_open {
+            // Selected node highlight drawn on the canvas, behind the inspector panel.
+            if let Some(sel_id) = self.selected_node
+                && let Some(node) = self.nodes.iter().find(|n| n.id == sel_id)
+                && node.rect.width > 0.0
+                && node.rect.height > 0.0
+            {
+                cmds.push(rect_cmd(
+                    node.rect,
+                    RectStyle::default()
+                        .with_fill(Paint::Solid(HIGHLIGHT_FILL))
+                        .with_stroke(Stroke::new(HIGHLIGHT_BORDER, 1.5)),
+                ));
+            }
+
+            let panel_rect = Rect::new(0.0, 0.0, INSPECTOR_W, window_h);
+            self.inspector_rect = panel_rect;
+            cmds.push(rect_cmd(
+                panel_rect,
+                RectStyle::default().with_fill(Paint::Solid(INSPECTOR_BG)),
+            ));
+
+            let header_text = format!("Inspector  {} nodes", self.nodes.len());
+            cmds.push(text_cmd(
+                header_text.into(),
+                Rect::new(12.0, 8.0, INSPECTOR_W - 24.0, 18.0),
+                TextStyle::new(12.0, WHITE),
+            ));
+            cmds.push(rect_cmd(
+                Rect::new(0.0, INSPECTOR_HEADER_H, INSPECTOR_W, 1.0),
+                RectStyle::default().with_fill(Paint::Solid(GRAY_DIM)),
+            ));
+
+            let max_visible = ((window_h - INSPECTOR_HEADER_H) / ROW_H) as usize;
+            for (i, node) in self.nodes.iter().take(max_visible).enumerate() {
+                let row_y = INSPECTOR_HEADER_H + i as f32 * ROW_H;
+                let is_selected = self.selected_node == Some(node.id);
+
+                if is_selected {
+                    cmds.push(rect_cmd(
+                        Rect::new(0.0, row_y, INSPECTOR_W, ROW_H),
+                        RectStyle::default().with_fill(Paint::Solid(INSPECTOR_SEL_BG)),
+                    ));
+                }
+
+                let indent = node.depth as f32 * 8.0;
+                let r = node.rect;
+                let label = format!(
+                    "#{} draw  {:.0}\u{00d7}{:.0} @ ({:.0},{:.0})",
+                    node.id, r.width, r.height, r.x, r.y
+                );
+                cmds.push(text_cmd(
+                    label.into(),
+                    Rect::new(
+                        12.0 + indent,
+                        row_y + 3.0,
+                        INSPECTOR_W - 24.0 - indent,
+                        ROW_H - 6.0,
+                    ),
+                    TextStyle::new(10.0, if is_selected { WHITE } else { GRAY }),
+                ));
+            }
+        }
 
         // Badge wrapped in a clip + backdrop-blur layer so the semi-transparent fill samples a blurred copy of the underlying content.
         cmds.push(DrawCommand::PushClip {
@@ -167,17 +269,28 @@ impl DevPlugin for DevTools {
                 TextStyle::new(20.0, GREEN),
             ));
 
+            // Frame time + node count metrics
+            let ft_label = format!(
+                "{:.1} ms/frame  {} nodes",
+                self.frame_time_ms, self.node_count
+            );
+            cmds.push(text_cmd(
+                ft_label.into(),
+                Rect::new(panel_x + 12.0, panel_y + 70.0, PANEL_W - 24.0, 14.0),
+                TextStyle::new(10.0, GRAY),
+            ));
+
             // Renderer info line (only when set)
             let renderer_text_y = if let Some(ref info) = self.renderer_info {
                 let renderer_label = format!("renderer: {}", info);
                 cmds.push(text_cmd(
                     renderer_label.into(),
-                    Rect::new(panel_x + 12.0, panel_y + 80.0, PANEL_W - 24.0, 16.0),
+                    Rect::new(panel_x + 12.0, panel_y + 90.0, PANEL_W - 24.0, 16.0),
                     TextStyle::new(11.0, GRAY),
                 ));
-                96.0
+                108.0
             } else {
-                80.0
+                90.0
             };
 
             // Keyboard shortcut hints
@@ -193,10 +306,21 @@ impl DevPlugin for DevTools {
             ));
 
             cmds.push(text_cmd(
+                "ctrl+shift+i  inspector".into(),
+                Rect::new(
+                    panel_x + 12.0,
+                    panel_y + renderer_text_y + 16.0,
+                    PANEL_W - 24.0,
+                    14.0,
+                ),
+                TextStyle::new(10.0, GRAY_DIM),
+            ));
+
+            cmds.push(text_cmd(
                 "click badge  close".into(),
                 Rect::new(
                     panel_x + 12.0,
-                    panel_y + renderer_text_y + 18.0,
+                    panel_y + renderer_text_y + 32.0,
                     PANEL_W - 24.0,
                     14.0,
                 ),
@@ -259,6 +383,10 @@ impl DevPlugin for DevTools {
                     self.panel_open = !self.panel_open;
                     return DevAction::Redraw;
                 }
+                Key::Char('i' | 'I') => {
+                    self.inspector_open = !self.inspector_open;
+                    return DevAction::Redraw;
+                }
                 _ => {}
             }
         }
@@ -266,6 +394,31 @@ impl DevPlugin for DevTools {
     }
 
     fn on_pointer_pressed(&mut self, x: f32, y: f32) -> bool {
+        // Inspector panel click: select node from the list.
+        if self.inspector_open && self.inspector_rect.contains(x, y) {
+            let list_y = y - INSPECTOR_HEADER_H;
+            if list_y >= 0.0 {
+                let idx = (list_y / ROW_H) as usize;
+                if let Some(node) = self.nodes.get(idx) {
+                    self.selected_node = Some(node.id);
+                }
+            }
+            return true;
+        }
+
+        // Canvas click with inspector open: select the deepest node under the cursor.
+        if self.inspector_open {
+            let clicked = self
+                .nodes
+                .iter()
+                .filter(|n| n.rect.width > 0.0 && n.rect.height > 0.0 && n.rect.contains(x, y))
+                .max_by_key(|n| n.depth);
+            if let Some(node) = clicked {
+                self.selected_node = Some(node.id);
+                return true;
+            }
+        }
+
         if self.badge_rect.contains(x, y) {
             self.panel_open = !self.panel_open;
             return true;
@@ -275,5 +428,17 @@ impl DevPlugin for DevTools {
 
     fn set_build_error(&mut self, error: Option<String>) {
         self.build_error = error;
+    }
+
+    fn on_tree(&mut self, tree: &dyn ui_tree::DevTreeView) {
+        self.node_count = tree.node_count();
+        self.nodes.clear();
+        tree.for_each_node(&mut |info| {
+            self.nodes.push(CachedNode {
+                id: info.id,
+                rect: info.rect,
+                depth: info.depth,
+            });
+        });
     }
 }

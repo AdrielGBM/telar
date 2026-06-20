@@ -2300,6 +2300,7 @@ dependencies = [
  "toml",
  "tracing",
  "ui-core",
+ "ui-tree",
 ]
 
 [[package]]
@@ -2309,6 +2310,7 @@ dependencies = [
  "geometry-core",
  "platform-core",
  "renderer-core",
+ "ui-tree",
 ]
 
 [[package]]

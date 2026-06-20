@@ -63,6 +63,6 @@ impl App for PreviewApp {
     }
 }
 
-pub fn run_preview_window(entries: Vec<PreviewEntry>) {
-    crate::run_app_with_name(AppConfig::default(), PreviewApp { entries }, "rsx-preview");
+pub fn run_preview_window(entries: Vec<PreviewEntry>, config: AppConfig) {
+    crate::run_app_with_name(config, PreviewApp { entries }, "rsx-preview");
 }

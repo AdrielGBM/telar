@@ -1,6 +1,6 @@
 use platform_core::{
-    Event, EventHandler, Platform, PlatformError, PointerButton, PointerSource, ScrollDelta,
-    Window, WindowConfig,
+    Event, EventHandler, FullscreenMode, Platform, PlatformError, PointerButton, PointerSource,
+    ScrollDelta, Window, WindowConfig, WindowPosition,
 };
 use winit::application::ApplicationHandler;
 use winit::event::{
@@ -9,7 +9,7 @@ use winit::event::{
 };
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key as WinitKey, NamedKey as WinitNamedKey};
-use winit::window::{WindowAttributes, WindowId};
+use winit::window::{Fullscreen, WindowAttributes, WindowId, WindowLevel};
 
 use crate::window::WinitWindow;
 
@@ -57,12 +57,36 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let attrs = WindowAttributes::default()
+        let mut attrs = WindowAttributes::default()
             .with_title(self.config.title.as_str())
             .with_inner_size(winit::dpi::LogicalSize::new(
                 self.config.width,
                 self.config.height,
-            ));
+            ))
+            .with_resizable(self.config.resizable)
+            .with_decorations(self.config.decorations)
+            .with_transparent(self.config.transparent);
+
+        if let Some((w, h)) = self.config.min_size {
+            attrs = attrs.with_min_inner_size(winit::dpi::LogicalSize::new(w, h));
+        }
+        if let Some((w, h)) = self.config.max_size {
+            attrs = attrs.with_max_inner_size(winit::dpi::LogicalSize::new(w, h));
+        }
+        match self.config.fullscreen {
+            FullscreenMode::None => {}
+            // Exclusive requires a concrete video mode; fall back to borderless for now.
+            FullscreenMode::Borderless | FullscreenMode::Exclusive => {
+                attrs = attrs.with_fullscreen(Some(Fullscreen::Borderless(None)));
+            }
+        }
+        if let WindowPosition::At(x, y) = self.config.position {
+            attrs = attrs.with_position(winit::dpi::PhysicalPosition::new(x, y));
+        }
+        if self.config.always_on_top {
+            attrs = attrs.with_window_level(WindowLevel::AlwaysOnTop);
+        }
+
         use std::sync::Arc;
         match event_loop.create_window(attrs) {
             Ok(w) => {
