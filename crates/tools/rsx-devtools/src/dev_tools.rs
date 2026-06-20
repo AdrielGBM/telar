@@ -47,6 +47,7 @@ pub struct DevTools {
     panel_open: bool,
     badge_rect: Rect,
     renderer_info: Option<String>,
+    build_error: Option<String>,
 }
 
 impl Default for DevTools {
@@ -57,6 +58,7 @@ impl Default for DevTools {
             panel_open: false,
             badge_rect: Rect::default(),
             renderer_info: None,
+            build_error: None,
         }
     }
 }
@@ -205,6 +207,43 @@ impl DevPlugin for DevTools {
             cmds.push(DrawCommand::PopClip);
         }
 
+        // Error banner — shown on top of everything when a build fails
+        if let Some(ref error_msg) = self.build_error {
+            const BANNER_PAD: f32 = 16.0;
+            const BANNER_LINE_H: f32 = 16.0;
+            const ERROR_BG: Color = Color::rgba(0.7, 0.1, 0.1, 0.92);
+            const ERROR_TEXT: Color = Color::rgba(1.0, 0.9, 0.9, 1.0);
+            const TITLE_COLOR: Color = Color::rgba(1.0, 0.5, 0.5, 1.0);
+
+            let lines: Vec<&str> = error_msg.lines().take(20).collect();
+            let banner_h =
+                BANNER_PAD * 2.0 + BANNER_LINE_H + lines.len() as f32 * (BANNER_LINE_H + 2.0);
+            let banner_rect = Rect::new(0.0, 0.0, window_w, banner_h);
+
+            cmds.push(rect_cmd(
+                banner_rect,
+                RectStyle::default().with_fill(Paint::Solid(ERROR_BG)),
+            ));
+            cmds.push(text_cmd(
+                "Build failed".into(),
+                Rect::new(
+                    BANNER_PAD,
+                    BANNER_PAD,
+                    window_w - BANNER_PAD * 2.0,
+                    BANNER_LINE_H,
+                ),
+                TextStyle::new(13.0, TITLE_COLOR),
+            ));
+            for (i, line) in lines.iter().enumerate() {
+                let y = BANNER_PAD + BANNER_LINE_H + 4.0 + i as f32 * (BANNER_LINE_H + 2.0);
+                cmds.push(text_cmd(
+                    (*line).to_string().into(),
+                    Rect::new(BANNER_PAD, y, window_w - BANNER_PAD * 2.0, BANNER_LINE_H),
+                    TextStyle::new(11.0, ERROR_TEXT),
+                ));
+            }
+        }
+
         Cow::Owned(cmds)
     }
 
@@ -232,5 +271,9 @@ impl DevPlugin for DevTools {
             return true;
         }
         false
+    }
+
+    fn set_build_error(&mut self, error: Option<String>) {
+        self.build_error = error;
     }
 }

@@ -75,8 +75,8 @@ where
     render_tx: Option<std::sync::mpsc::SyncSender<HwFrameMsg>>,
     render_join: Option<std::thread::JoinHandle<HardwareRenderer<W>>>,
     hw_renderer: Option<HardwareRenderer<W>>,
-    #[cfg(feature = "dev")]
-    hot_reload_rx: Option<std::sync::mpsc::Receiver<std::path::PathBuf>>,
+    #[cfg(all(feature = "dev", not(target_os = "android")))]
+    hot_reload_rx: Option<std::sync::mpsc::Receiver<crate::hot::HotEvent>>,
     #[cfg(target_os = "android")]
     hint_session: Option<*mut std::ffi::c_void>,
     #[cfg(target_os = "android")]
@@ -161,15 +161,15 @@ where
             window.height() as f32 / sf,
         ));
         self.tree = Some(ComponentList::new(self.app.root()));
-        #[cfg(feature = "dev")]
+        #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
-            let (relay_tx, relay_rx) = std::sync::mpsc::channel::<std::path::PathBuf>();
+            let (relay_tx, relay_rx) = std::sync::mpsc::channel::<crate::hot::HotEvent>();
             let window_clone = window.clone();
             std::thread::Builder::new()
                 .name("rsx-hot-relay".to_string())
                 .spawn(move || {
-                    while let Ok(path) = rx.recv() {
-                        if relay_tx.send(path).is_err() {
+                    while let Ok(event) = rx.recv() {
+                        if relay_tx.send(event).is_err() {
                             break;
                         }
                         window_clone.request_redraw();
@@ -281,30 +281,40 @@ where
     fn on_redraw(&mut self, window: &W) {
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = &self.hot_reload_rx {
-            if let Ok(new_path) = rx.try_recv() {
-                match crate::hot::load_hot_app(&new_path) {
-                    Ok(new_app) => {
-                        // Drop the old tree first so effect closures (which contain code from
-                        // the old dylib) are destroyed while the old lib is still mapped.
-                        // Only then replace self.app, which dlcloses the old dylib.
-                        self.tree = None;
-                        self.app = Box::new(new_app);
-                        self.tree = Some(ComponentList::new(self.app.root()));
-                        // Synthesize WindowResized so the new tree's layout (e.g. ScrollablePage)
-                        // starts with the correct logical dimensions instead of its 0×0 defaults.
-                        let resize = platform_core::Event::WindowResized {
-                            width: (window.width() as f32 / self.scale_factor) as u32,
-                            height: (window.height() as f32 / self.scale_factor) as u32,
-                        };
-                        if let Some(ref mut tree) = self.tree {
-                            tree.on_event(&resize);
-                            tree.bump_force_ticks();
+            if let Ok(event) = rx.try_recv() {
+                match event {
+                    crate::hot::HotEvent::Reload(new_path) => {
+                        match crate::hot::load_hot_app(&new_path) {
+                            Ok(new_app) => {
+                                // Drop the old tree first so effect closures (which contain code from
+                                // the old dylib) are destroyed while the old lib is still mapped.
+                                // Only then replace self.app, which dlcloses the old dylib.
+                                self.tree = None;
+                                self.app = Box::new(new_app);
+                                self.tree = Some(ComponentList::new(self.app.root()));
+                                // A successful reload clears any banner from the previous failed build.
+                                self.dev.set_build_error(None);
+                                // Synthesize WindowResized so the new tree's layout (e.g. ScrollablePage)
+                                // starts with the correct logical dimensions instead of its 0×0 defaults.
+                                let resize = platform_core::Event::WindowResized {
+                                    width: (window.width() as f32 / self.scale_factor) as u32,
+                                    height: (window.height() as f32 / self.scale_factor) as u32,
+                                };
+                                if let Some(ref mut tree) = self.tree {
+                                    tree.on_event(&resize);
+                                    tree.bump_force_ticks();
+                                }
+                                eprintln!("[rsx] Hot reloaded: {}", new_path.display());
+                                window.request_redraw();
+                                return;
+                            }
+                            Err(e) => eprintln!("[rsx] Hot reload failed: {e}"),
                         }
-                        eprintln!("[rsx] Hot reloaded: {}", new_path.display());
-                        window.request_redraw();
-                        return;
                     }
-                    Err(e) => eprintln!("[rsx] Hot reload failed: {e}"),
+                    crate::hot::HotEvent::BuildError(msg) => {
+                        self.dev.set_build_error(Some(msg));
+                        window.request_redraw();
+                    }
                 }
             }
         }
@@ -685,7 +695,7 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
             render_tx: None,
             render_join: None,
             hw_renderer: None,
-            #[cfg(feature = "dev")]
+            #[cfg(all(feature = "dev", not(target_os = "android")))]
             hot_reload_rx: None,
         },
     ) {
@@ -763,7 +773,7 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             render_tx: None,
             render_join: None,
             hw_renderer: None,
-            #[cfg(feature = "dev")]
+            #[cfg(all(feature = "dev", not(target_os = "android")))]
             hot_reload_rx: None,
             hint_session: None,
             frame_start: std::time::Instant::now(),

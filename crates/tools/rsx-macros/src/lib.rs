@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, quote};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use syn::{
     Token,
     parse::{Parse, ParseStream, Result as ParseResult},
@@ -52,22 +52,6 @@ fn preview_const_ident(file_stem: &str) -> Ident {
     Ident::new(&name, Span::call_site())
 }
 
-fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
-    let mut result = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                result.extend(find_rsx_files(&path));
-            } else if path.extension().map(|e| e == "rsx").unwrap_or(false) {
-                result.push(path);
-            }
-        }
-    }
-    result.sort();
-    result
-}
-
 #[proc_macro]
 pub fn app(input: TokenStream) -> TokenStream {
     let AppInput {
@@ -102,7 +86,7 @@ pub fn app(input: TokenStream) -> TokenStream {
     }
 
     let src_dir = manifest_dir.join("src");
-    let rsx_files = find_rsx_files(&src_dir);
+    let rsx_files = rsx_transpiler::find_rsx_files(&src_dir);
 
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
@@ -129,6 +113,10 @@ pub fn app(input: TokenStream) -> TokenStream {
             Some(theme_type_str.as_str()),
         ) {
             Ok(r) => r,
+            Err(rsx_transpiler::TranspileError::Parse(ref pe)) => {
+                let msg = format!("{}:{}: {}", rsx_file.display(), pe.line, pe.message);
+                return quote! { compile_error!(#msg) }.into();
+            }
             Err(e) => {
                 let msg = format!("Failed to transpile {}: {e}", rsx_file.display());
                 return quote! { compile_error!(#msg) }.into();

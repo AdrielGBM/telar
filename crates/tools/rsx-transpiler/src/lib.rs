@@ -10,6 +10,8 @@ mod view;
 
 pub use error::TranspileError;
 
+use std::path::{Path, PathBuf};
+
 use rsx_parser::RsxDocument;
 
 use crate::naming::{mentions_ident, replace_whole_word, to_snake_case};
@@ -55,6 +57,63 @@ pub fn transpile_source_with_theme(
         component_name,
         theme_type,
     })
+}
+
+/// Finds all `.rsx` files recursively in a directory.
+pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                result.extend(find_rsx_files(&path));
+            } else if path.extension().map(|e| e == "rsx").unwrap_or(false) {
+                result.push(path);
+            }
+        }
+    }
+    result.sort();
+    result
+}
+
+/// The transpiled output for a single `.rsx` source file in a project.
+pub struct ProjectFile {
+    pub stem: String,
+    pub source_path: PathBuf,
+    pub rust_code: String,
+    pub preview_names: Vec<String>,
+}
+
+/// The transpiled output for an entire project's `.rsx` files.
+pub struct ProjectOutput {
+    pub files: Vec<ProjectFile>,
+}
+
+/// Transpiles all `.rsx` files found in `src_dir`.
+pub fn transpile_project(
+    src_dir: &Path,
+    theme_type: Option<&str>,
+) -> Result<ProjectOutput, TranspileError> {
+    let rsx_files = find_rsx_files(src_dir);
+    let mut files = Vec::new();
+    for path in rsx_files {
+        let source = std::fs::read_to_string(&path).map_err(|e| {
+            TranspileError::Codegen(format!("Failed to read {}: {e}", path.display()))
+        })?;
+        let stem = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let result = transpile_source_with_theme(&source, &stem, theme_type)?;
+        files.push(ProjectFile {
+            stem,
+            source_path: path,
+            rust_code: result.rust_code,
+            preview_names: result.preview_names,
+        });
+    }
+    Ok(ProjectOutput { files })
 }
 
 /// Transpiles a parsed document into Rust source.
@@ -122,7 +181,8 @@ pub fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, Transpil
                 continue;
             }
             // Preview attributes are metadata for the bundler, not Rust code; strip them.
-            if line.trim().starts_with("#[preview(") {
+            let trimmed_line = line.trim();
+            if trimmed_line.starts_with("#[preview(") || trimmed_line == "#[preview]" {
                 continue;
             }
             // If this line has a `move` closure that captures a previously declared

@@ -4,27 +4,48 @@ pub struct PreviewInfo {
 
 pub fn scan_previews(logic_source: &str) -> Vec<PreviewInfo> {
     let mut previews = Vec::new();
-    for line in logic_source.lines() {
-        let trimmed = line.trim();
-        if !trimmed.starts_with("#[preview(") {
-            continue;
-        }
-        if let Some(name) = extract_preview_name(trimmed) {
-            previews.push(PreviewInfo { name });
+    let bytes = logic_source.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if logic_source[i..].starts_with("#[preview(") {
+            let start = i + "#[preview(".len();
+            let mut depth = 1usize;
+            let mut j = start;
+            while j < bytes.len() && depth > 0 {
+                match bytes[j] {
+                    b'(' => depth += 1,
+                    b')' => depth -= 1,
+                    _ => {}
+                }
+                if depth > 0 {
+                    j += 1;
+                }
+            }
+            if depth == 0 {
+                let inner = &logic_source[start..j];
+                if let Some(name) = extract_preview_name(inner) {
+                    previews.push(PreviewInfo { name });
+                }
+            }
+            // Skip past ')' and the following ']'.
+            i = j + 2;
+        } else {
+            i += 1;
         }
     }
     previews
 }
 
-fn extract_preview_name(attr: &str) -> Option<String> {
-    let inner = attr.strip_prefix("#[preview(")?.strip_suffix(")]")?;
+fn extract_preview_name(inner: &str) -> Option<String> {
     for part in inner.split(',') {
         let part = part.trim();
         if let Some(rest) = part.strip_prefix("name") {
             let rest = rest.trim().strip_prefix('=')?;
             let rest = rest.trim();
-            let name = rest.strip_prefix('"')?.strip_suffix('"')?;
-            return Some(name.to_string());
+            if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {
+                let name = &rest[1..rest.len() - 1];
+                return Some(name.replace("\\\"", "\""));
+            }
         }
     }
     None

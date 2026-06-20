@@ -55,8 +55,14 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
     Ok(HotApp { inner, _lib: lib })
 }
 
+#[cfg(feature = "dev")]
+pub enum HotEvent {
+    Reload(std::path::PathBuf),
+    BuildError(String),
+}
+
 #[cfg(all(feature = "dev", unix))]
-pub fn listen_hot_reload(socket_path: &str) -> std::sync::mpsc::Receiver<std::path::PathBuf> {
+pub fn listen_hot_reload(socket_path: &str) -> std::sync::mpsc::Receiver<HotEvent> {
     use std::io::BufRead;
     use std::os::unix::net::UnixListener;
     let _ = std::fs::remove_file(socket_path);
@@ -74,8 +80,16 @@ pub fn listen_hot_reload(socket_path: &str) -> std::sync::mpsc::Receiver<std::pa
                 let mut buf = String::new();
                 let mut reader = std::io::BufReader::new(&mut stream);
                 if reader.read_line(&mut buf).is_ok() {
-                    let path = std::path::PathBuf::from(buf.trim());
-                    if tx.send(path).is_err() {
+                    let line = buf.trim();
+                    let event = if let Some(path_str) = line.strip_prefix("hot:") {
+                        HotEvent::Reload(std::path::PathBuf::from(path_str))
+                    } else if let Some(msg) = line.strip_prefix("err:") {
+                        HotEvent::BuildError(msg.replace(" | ", "\n"))
+                    } else {
+                        // Legacy: bare path (no prefix) — treat as reload
+                        HotEvent::Reload(std::path::PathBuf::from(line))
+                    };
+                    if tx.send(event).is_err() {
                         break;
                     }
                 }

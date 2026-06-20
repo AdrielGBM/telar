@@ -3,14 +3,195 @@ use std::process::Command;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use clap::{Parser, Subcommand, ValueEnum};
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rsx::RendererBackend;
 use serde::Deserialize;
+
+#[derive(Parser)]
+#[command(
+    name = "cargo-rsx",
+    bin_name = "cargo rsx",
+    disable_help_subcommand = true
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<RsxCommand>,
+}
+
+#[derive(Subcommand)]
+enum RsxCommand {
+    /// Start the app with hot reload (default)
+    Dev(DevArgs),
+    /// Show all component previews with hot reload
+    Preview(PreviewArgs),
+    /// Build the app for distribution
+    Build(BuildArgs),
+    /// Run tests (not yet implemented)
+    Test,
+    /// Create a new RSX project (not yet implemented)
+    New {
+        /// Project name
+        name: String,
+    },
+    /// Check the development environment (not yet implemented)
+    Doctor,
+}
+
+#[derive(clap::Args)]
+struct DevArgs {
+    /// Package to run
+    #[arg(short = 'p', long)]
+    package: Option<String>,
+    /// Build in release mode
+    #[arg(long)]
+    release: bool,
+    /// Additional Cargo features
+    #[arg(short = 'F', long, value_name = "FEATURES")]
+    features: Option<String>,
+    /// Target platform
+    #[arg(long, value_enum, default_value = "desktop")]
+    target: Target,
+    /// Renderer backend
+    #[arg(long, value_enum)]
+    backend: Option<BackendArg>,
+    /// Disable hot reload, restart process on changes instead
+    #[arg(long)]
+    no_hot_reload: bool,
+    /// Devtools overlay
+    #[arg(long, value_enum)]
+    devtools: Option<DevtoolsArg>,
+    /// Extra args passed directly to cargo (after --)
+    #[arg(last = true)]
+    cargo_args: Vec<String>,
+}
+
+#[derive(clap::Args)]
+struct PreviewArgs {
+    /// Package to run
+    #[arg(short = 'p', long)]
+    package: Option<String>,
+    /// Build in release mode
+    #[arg(long)]
+    release: bool,
+    /// Additional Cargo features
+    #[arg(short = 'F', long, value_name = "FEATURES")]
+    features: Option<String>,
+    /// Target platform
+    #[arg(long, value_enum, default_value = "desktop")]
+    target: Target,
+    /// Renderer backend
+    #[arg(long, value_enum)]
+    backend: Option<BackendArg>,
+    /// Disable hot reload
+    #[arg(long)]
+    no_hot_reload: bool,
+    /// Preview a specific component by name
+    #[arg(long)]
+    component: Option<String>,
+    /// List all available previews and exit
+    #[arg(long)]
+    list: bool,
+    /// Extra args passed directly to cargo (after --)
+    #[arg(last = true)]
+    cargo_args: Vec<String>,
+}
+
+#[derive(clap::Args)]
+struct BuildArgs {
+    /// Package to build
+    #[arg(short = 'p', long)]
+    package: Option<String>,
+    /// Additional Cargo features
+    #[arg(short = 'F', long, value_name = "FEATURES")]
+    features: Option<String>,
+    /// Target platform
+    #[arg(long, value_enum, default_value = "desktop")]
+    target: Target,
+    /// Renderer backend
+    #[arg(long, value_enum)]
+    backend: Option<BackendArg>,
+    /// Output package format
+    #[arg(long, value_name = "FORMAT")]
+    format: Option<BuildFormat>,
+    /// Output directory
+    #[arg(long, value_name = "DIR")]
+    out: Option<String>,
+    /// Extra args passed directly to cargo (after --)
+    #[arg(last = true)]
+    cargo_args: Vec<String>,
+}
+
+#[derive(Clone, ValueEnum)]
+enum Target {
+    Desktop,
+    Android,
+}
+
+#[derive(Clone, ValueEnum)]
+enum BackendArg {
+    Auto,
+    Hardware,
+    Software,
+}
+
+#[derive(Clone, ValueEnum)]
+enum DevtoolsArg {
+    On,
+    Off,
+}
+
+#[derive(Clone, ValueEnum)]
+enum BuildFormat {
+    Appimage,
+    Deb,
+    Dmg,
+    Apk,
+    Dir,
+}
+
+#[derive(Deserialize, Default, Clone)]
+struct WindowConfig {
+    pub title: Option<String>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub decorations: Option<bool>,
+    pub resizable: Option<bool>,
+    pub transparent: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Clone)]
+struct DevConfig {
+    #[serde(default)]
+    pub window: Option<WindowConfig>,
+    #[serde(default)]
+    pub devtools: Option<bool>,
+}
+
+#[derive(Deserialize, Default, Clone)]
+struct BuildConfig {
+    pub format: Option<String>,
+    pub out: Option<String>,
+}
 
 #[derive(Deserialize, Default)]
 struct RsxConfig {
     #[serde(default)]
     pub backend: Option<RendererBackend>,
+    #[serde(default)]
+    pub devtools: Option<bool>,
+    #[serde(default)]
+    pub window: Option<WindowConfig>,
+    #[serde(default)]
+    pub dev: Option<DevConfig>,
+    #[serde(default)]
+    pub build: Option<BuildConfig>,
+}
+
+#[derive(Deserialize, Default)]
+struct RsxToml {
+    #[serde(default)]
+    pub rsx: RsxConfig,
 }
 
 #[derive(Deserialize, Default)]
@@ -172,13 +353,17 @@ fn apk_path(args: &[String]) -> PathBuf {
 fn load_config(args: &[String]) -> RsxConfig {
     let path = find_package_dir(args).join("rsx.toml");
     match std::fs::read_to_string(&path) {
-        Ok(content) => toml::from_str(&content).unwrap_or_else(|e| {
-            eprintln!(
-                "[cargo-rsx] Warning: failed to parse {}: {e}",
-                path.display()
-            );
-            RsxConfig::default()
-        }),
+        Ok(content) => {
+            toml::from_str::<RsxToml>(&content)
+                .unwrap_or_else(|e| {
+                    eprintln!(
+                        "[cargo-rsx] Warning: failed to parse {}: {e}",
+                        path.display()
+                    );
+                    RsxToml::default()
+                })
+                .rsx
+        }
         Err(_) => RsxConfig::default(),
     }
 }
@@ -349,14 +534,26 @@ fn package_bin_path(workspace_root: &Path, pkg_name: &str, profile: &str) -> Pat
 
 #[cfg(unix)]
 fn notify_hot_reload(socket_path: &str, lib_path: &str) {
+    send_socket_message(socket_path, &format!("hot:{lib_path}"));
+}
+
+#[cfg(unix)]
+fn notify_build_error(socket_path: &str, message: &str) {
+    // Flatten multi-line error to a single line for the simple line-based protocol
+    let single_line = message.replace('\n', " | ").replace('\r', "");
+    send_socket_message(socket_path, &format!("err:{single_line}"));
+}
+
+#[cfg(unix)]
+fn send_socket_message(socket_path: &str, message: &str) {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
     // Retry a few times — app may still be initializing the socket
     for attempt in 0..10 {
         match UnixStream::connect(socket_path) {
             Ok(mut stream) => {
-                if let Err(e) = writeln!(stream, "{lib_path}") {
-                    eprintln!("[cargo-rsx] Failed to write hot-reload path to socket: {e}");
+                if let Err(e) = writeln!(stream, "{message}") {
+                    eprintln!("[cargo-rsx] Failed to write to socket: {e}");
                 }
                 return;
             }
@@ -427,18 +624,21 @@ fn watch_and_hot_reload(
             pending_rebuild = false;
             while rx.try_recv().is_ok() {}
             eprintln!("[cargo-rsx] Change detected, rebuilding...");
-            let status = Command::new("cargo")
+            let output = Command::new("cargo")
                 .args(&build_args)
                 .env("RSX_HOT_RELOAD_BUILD", "1")
                 .env("RUSTFLAGS", &rustflags)
                 .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
-                .status()
+                .output()
                 .expect("[cargo-rsx] failed to invoke cargo");
-            if status.success() {
+            if output.status.success() {
                 notify_hot_reload(&socket_path, lib_path.to_str().unwrap_or_default());
                 eprintln!("[cargo-rsx] Hot reloaded.");
             } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                eprintln!("{stderr}");
                 eprintln!("[cargo-rsx] Build failed, waiting for changes...");
+                notify_build_error(&socket_path, &stderr);
             }
         }
 
@@ -539,24 +739,189 @@ fn watch_and_run(
 }
 
 pub fn run(args: Vec<String>) {
-    match args.first().map(String::as_str) {
-        Some("dev") => run_dev(args[1..].to_vec()),
-        Some("bundle") => run_bundle(args[1..].to_vec()),
-        Some("preview") => run_preview(args[1..].to_vec()),
-        _ => run_passthrough(args),
+    let cli = Cli::parse_from(std::iter::once("cargo-rsx".to_string()).chain(args));
+    match cli.command.unwrap_or(RsxCommand::Dev(DevArgs {
+        package: None,
+        release: false,
+        features: None,
+        target: Target::Desktop,
+        backend: None,
+        no_hot_reload: false,
+        devtools: None,
+        cargo_args: vec![],
+    })) {
+        RsxCommand::Dev(args) => run_dev_cmd(args),
+        RsxCommand::Preview(args) => run_preview_cmd(args),
+        RsxCommand::Build(args) => run_build_cmd(args),
+        RsxCommand::Test => {
+            eprintln!("[cargo-rsx] `cargo rsx test` is not yet implemented.");
+            std::process::exit(1);
+        }
+        RsxCommand::New { name } => {
+            eprintln!("[cargo-rsx] `cargo rsx new {name}` is not yet implemented.");
+            std::process::exit(1);
+        }
+        RsxCommand::Doctor => {
+            eprintln!("[cargo-rsx] `cargo rsx doctor` is not yet implemented.");
+            std::process::exit(1);
+        }
     }
 }
 
-fn run_dev(args: Vec<String>) {
+fn run_dev_cmd(args: DevArgs) {
+    let mut cargo_args = build_cargo_args(&args.package, args.release, &args.features);
+    cargo_args.extend(args.cargo_args);
+    if matches!(args.target, Target::Android) {
+        cargo_args.push("--android".to_string());
+    }
+    let mut config = load_config(&cargo_args);
+    if let Some(backend) = args.backend {
+        config.backend = Some(backend_from_arg(backend));
+    }
+    run_hot_loop(
+        HotMode::Dev,
+        HotLoopOpts {
+            args: cargo_args,
+            config,
+            no_hot_reload: args.no_hot_reload,
+        },
+    );
+}
+
+fn run_preview_cmd(args: PreviewArgs) {
+    if args.list {
+        eprintln!("[cargo-rsx] --list is not yet implemented (requires project scan).");
+        std::process::exit(1);
+    }
+    let mut cargo_args = build_cargo_args(&args.package, args.release, &args.features);
+    cargo_args.extend(args.cargo_args);
+    if matches!(args.target, Target::Android) {
+        cargo_args.push("--android".to_string());
+    }
+    let mut config = load_config(&cargo_args);
+    if let Some(backend) = args.backend {
+        config.backend = Some(backend_from_arg(backend));
+    }
+    run_hot_loop(
+        HotMode::Preview {
+            component: args.component,
+        },
+        HotLoopOpts {
+            args: cargo_args,
+            config,
+            no_hot_reload: args.no_hot_reload,
+        },
+    );
+}
+
+fn run_build_cmd(args: BuildArgs) {
+    if let Some(ref fmt) = args.format {
+        let fmt_name = match fmt {
+            BuildFormat::Appimage => "appimage",
+            BuildFormat::Deb => "deb",
+            BuildFormat::Dmg => "dmg",
+            BuildFormat::Apk => "apk",
+            BuildFormat::Dir => "dir",
+        };
+        eprintln!("[cargo-rsx] Packaging format `{fmt_name}` is not yet implemented.");
+        std::process::exit(1);
+    }
+    eprintln!(
+        "[cargo-rsx] Building release binary. Use --format <FORMAT> to package for distribution."
+    );
+    // Build always implies --release.
+    let mut cargo_args = build_cargo_args(&args.package, true, &args.features);
+    cargo_args.extend(args.cargo_args);
+    let android = matches!(args.target, Target::Android);
+    let mut config = load_config(&cargo_args);
+    if let Some(backend) = args.backend {
+        config.backend = Some(backend_from_arg(backend));
+    }
+    run_bundle_inner(android, cargo_args, config);
+}
+
+fn build_cargo_args(
+    package: &Option<String>,
+    release: bool,
+    features: &Option<String>,
+) -> Vec<String> {
+    let mut args = Vec::new();
+    if let Some(pkg) = package {
+        args.push("-p".to_string());
+        args.push(pkg.clone());
+    }
+    if release {
+        args.push("--release".to_string());
+    }
+    if let Some(feats) = features {
+        args.push("--features".to_string());
+        args.push(feats.clone());
+    }
+    args
+}
+
+fn backend_from_arg(b: BackendArg) -> RendererBackend {
+    match b {
+        BackendArg::Auto => RendererBackend::Auto,
+        BackendArg::Hardware => RendererBackend::Hardware,
+        BackendArg::Software => RendererBackend::Software,
+    }
+}
+
+enum HotMode {
+    Dev,
+    Preview {
+        #[allow(dead_code)]
+        component: Option<String>,
+    },
+}
+
+impl HotMode {
+    fn is_preview(&self) -> bool {
+        matches!(self, HotMode::Preview { .. })
+    }
+
+    fn features(&self) -> &'static [&'static str] {
+        match self {
+            HotMode::Dev => &["rsx/dev"],
+            HotMode::Preview { .. } => &["rsx/preview", "rsx/dev"],
+        }
+    }
+
+    fn rustflags(&self) -> String {
+        match self {
+            HotMode::Dev => hot_reload_rustflags(),
+            HotMode::Preview { .. } => preview_rustflags(),
+        }
+    }
+}
+
+struct HotLoopOpts {
+    args: Vec<String>,
+    config: RsxConfig,
+    no_hot_reload: bool,
+}
+
+fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
+    let HotLoopOpts {
+        args,
+        config,
+        no_hot_reload,
+    } = opts;
+
     let (android, rest) = split_android_flag(args);
+    let features = mode.features();
+    let backend_value = backend_str(config.backend.unwrap_or_default());
+    let is_preview = mode.is_preview();
 
     if android {
         // `cargo apk run --lib` crashes on UID parsing when launching;
         // work around by doing build → adb install → adb shell am start manually.
-        let config = load_config(&rest);
         let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
         build_args.extend(rest.iter().cloned());
-        inject_feature(&mut build_args, "rsx/dev");
+        for feature in features {
+            inject_feature(&mut build_args, feature);
+        }
 
         let status = make_android_cmd(build_args, config)
             .status()
@@ -566,122 +931,57 @@ fn run_dev(args: Vec<String>) {
         }
 
         android_install_and_launch(&rest);
-    } else {
-        let config = load_config(&rest);
-        let backend_value = backend_str(config.backend.unwrap_or_default());
-
-        let mut cargo_args = vec!["run".to_string()];
-        cargo_args.extend(rest.clone());
-        inject_feature(&mut cargo_args, "rsx/dev");
-
-        let pkg_dir = find_package_dir(&rest);
-        let workspace_root = find_workspace_root(&pkg_dir).unwrap_or(pkg_dir.clone());
-        let profile = if rest.contains(&"--release".to_string()) {
-            "release"
-        } else {
-            "debug"
-        };
-
-        #[cfg(unix)]
-        {
-            let pkg_name = read_package_manifest(&rest)
-                .map(|p| p.name)
-                .unwrap_or_else(|| "app".to_string());
-            let lib_path = package_lib_path(&workspace_root, &pkg_name, profile);
-            let bin_path = package_bin_path(&workspace_root, &pkg_name, profile);
-
-            // Initial build (produces both binary and dylib)
-            let mut build_args = vec!["build".to_string()];
-            build_args.extend(rest.clone());
-            inject_feature(&mut build_args, "rsx/dev");
-            eprintln!("[cargo-rsx] Building...");
-            let status = Command::new("cargo")
-                .args(&build_args)
-                .env("RSX_HOT_RELOAD_BUILD", "1")
-                .env("RUSTFLAGS", hot_reload_rustflags())
-                .status()
-                .expect("[cargo-rsx] failed to invoke cargo");
-            if !status.success() {
-                eprintln!("[cargo-rsx] Initial build failed. Watching for changes...");
-            }
-
-            if bin_path.exists() && lib_path.exists() {
-                // Hot reload mode: only rebuild lib on changes
-                let lib_build_args = make_lib_build_args(&rest, &["rsx/dev"]);
-
-                let socket_path = format!("/tmp/rsx-hot-{}.sock", std::process::id());
-                watch_and_hot_reload(
-                    lib_build_args,
-                    bin_path,
-                    lib_path,
-                    socket_path,
-                    vec![(
-                        "RSX_RENDERER_BACKEND".to_string(),
-                        backend_value.to_string(),
-                    )],
-                    hot_reload_rustflags(),
-                    workspace_root,
-                );
-            }
-            // Fallback if binary or lib not found: use process-restart watch
-        }
-
-        watch_and_run(
-            cargo_args,
-            vec![(
-                "RSX_RENDERER_BACKEND".to_string(),
-                backend_value.to_string(),
-            )],
-            workspace_root,
-        );
+        std::process::exit(0);
     }
-}
 
-fn run_preview(args: Vec<String>) {
-    let config = load_config(&args);
-    let backend_value = backend_str(config.backend.unwrap_or_default());
+    // Envs passed when launching the app binary (and to cargo run in fallback mode).
+    let mut launch_envs = vec![(
+        "RSX_RENDERER_BACKEND".to_string(),
+        backend_value.to_string(),
+    )];
+    if is_preview {
+        launch_envs.push(("RSX_PREVIEW".to_string(), "1".to_string()));
+    }
 
     let mut cargo_args = vec!["run".to_string()];
-    cargo_args.extend(args.clone());
-    inject_feature(&mut cargo_args, "rsx/preview");
-    inject_feature(&mut cargo_args, "rsx/dev");
+    cargo_args.extend(rest.clone());
+    for feature in features {
+        inject_feature(&mut cargo_args, feature);
+    }
 
-    let pkg_dir = find_package_dir(&args);
+    let pkg_dir = find_package_dir(&rest);
     let workspace_root = find_workspace_root(&pkg_dir).unwrap_or(pkg_dir.clone());
-    let profile = if args.contains(&"--release".to_string()) {
+    let profile = if rest.contains(&"--release".to_string()) {
         "release"
     } else {
         "debug"
     };
 
-    let make_envs = || {
-        vec![
-            (
-                "RSX_RENDERER_BACKEND".to_string(),
-                backend_value.to_string(),
-            ),
-            ("RSX_PREVIEW".to_string(), "1".to_string()),
-        ]
-    };
-
     #[cfg(unix)]
-    {
-        let pkg_name = read_package_manifest(&args)
+    if !no_hot_reload {
+        let rustflags = mode.rustflags();
+        let pkg_name = read_package_manifest(&rest)
             .map(|p| p.name)
             .unwrap_or_else(|| "app".to_string());
         let lib_path = package_lib_path(&workspace_root, &pkg_name, profile);
         let bin_path = package_bin_path(&workspace_root, &pkg_name, profile);
 
+        // Initial build (produces both binary and dylib).
         let mut build_args = vec!["build".to_string()];
-        build_args.extend(args.clone());
-        inject_feature(&mut build_args, "rsx/preview");
-        inject_feature(&mut build_args, "rsx/dev");
+        build_args.extend(rest.clone());
+        for feature in features {
+            inject_feature(&mut build_args, feature);
+        }
         eprintln!("[cargo-rsx] Building...");
-        let status = Command::new("cargo")
+        let mut build_cmd = Command::new("cargo");
+        build_cmd
             .args(&build_args)
             .env("RSX_HOT_RELOAD_BUILD", "1")
-            .env("RSX_PREVIEW_BUILD", "1")
-            .env("RUSTFLAGS", preview_rustflags())
+            .env("RUSTFLAGS", &rustflags);
+        if is_preview {
+            build_cmd.env("RSX_PREVIEW_BUILD", "1");
+        }
+        let status = build_cmd
             .status()
             .expect("[cargo-rsx] failed to invoke cargo");
         if !status.success() {
@@ -689,10 +989,15 @@ fn run_preview(args: Vec<String>) {
         }
 
         if bin_path.exists() && lib_path.exists() {
-            let lib_build_args = make_lib_build_args(&args, &["rsx/preview", "rsx/dev"]);
+            // Hot reload mode: only rebuild lib on changes.
+            let lib_build_args = make_lib_build_args(&rest, features);
 
-            let mut build_envs = make_envs();
-            build_envs.push(("RSX_PREVIEW_BUILD".to_string(), "1".to_string()));
+            // Build envs include launch envs plus preview build marker.
+            let mut build_envs = launch_envs.clone();
+            if is_preview {
+                build_envs.push(("RSX_PREVIEW_BUILD".to_string(), "1".to_string()));
+            }
+
             let socket_path = format!("/tmp/rsx-hot-{}.sock", std::process::id());
             watch_and_hot_reload(
                 lib_build_args,
@@ -700,25 +1005,22 @@ fn run_preview(args: Vec<String>) {
                 lib_path,
                 socket_path,
                 build_envs,
-                preview_rustflags(),
+                rustflags,
                 workspace_root,
             );
         }
-        // Fallback if binary or lib not found: restart on every change
+        // Fallback if binary or lib not found: use process-restart watch.
     }
 
-    watch_and_run(cargo_args, make_envs(), workspace_root);
+    watch_and_run(cargo_args, launch_envs, workspace_root);
 }
 
-fn run_bundle(args: Vec<String>) {
-    let (android, mut rest) = split_android_flag(args);
-
+fn run_bundle_inner(android: bool, mut rest: Vec<String>, config: RsxConfig) -> ! {
     if !rest.contains(&"--release".to_string()) {
         rest.push("--release".to_string());
     }
 
     if android {
-        let config = load_config(&rest);
         let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
         build_args.extend(rest);
 
@@ -727,7 +1029,6 @@ fn run_bundle(args: Vec<String>) {
             .expect("[cargo-rsx] failed to invoke cargo");
         std::process::exit(status.code().unwrap_or(1));
     } else {
-        let config = load_config(&rest);
         let backend_value = backend_str(config.backend.unwrap_or_default());
 
         let mut cargo_args = vec!["build".to_string()];
@@ -741,19 +1042,6 @@ fn run_bundle(args: Vec<String>) {
 
         std::process::exit(status.code().unwrap_or(1));
     }
-}
-
-fn run_passthrough(args: Vec<String>) {
-    let config = load_config(&args);
-    let backend_value = backend_str(config.backend.unwrap_or_default());
-
-    let status = Command::new("cargo")
-        .args(&args)
-        .env("RSX_RENDERER_BACKEND", backend_value)
-        .status()
-        .expect("[cargo-rsx] failed to invoke cargo");
-
-    std::process::exit(status.code().unwrap_or(1));
 }
 
 fn backend_str(backend: RendererBackend) -> &'static str {
