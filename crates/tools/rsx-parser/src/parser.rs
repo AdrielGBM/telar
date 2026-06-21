@@ -20,9 +20,15 @@ impl Parser {
 
     pub fn parse(mut self) -> Result<RsxDocument, ParseError> {
         let logic = self.parse_logic();
+        let props = self.parse_props()?;
         let style = self.parse_style()?;
         let view = self.parse_view()?;
-        Ok(RsxDocument { logic, style, view })
+        Ok(RsxDocument {
+            logic,
+            props,
+            style,
+            view,
+        })
     }
 
     // ------------------------------------------------------------------
@@ -54,6 +60,36 @@ impl Parser {
         };
 
         LogicZone { source }
+    }
+
+    // ------------------------------------------------------------------
+    // Props section
+    // ------------------------------------------------------------------
+
+    fn parse_props(&mut self) -> Result<PropsSection, ParseError> {
+        let mut section = PropsSection::default();
+
+        while let Some(line) = self.lines.get(self.pos) {
+            if line.section != Section::Props {
+                break;
+            }
+            if line.is_blank() {
+                self.pos += 1;
+                continue;
+            }
+            let (name, ty) = split_once_colon(&line.content).ok_or_else(|| ParseError {
+                message: format!("expected `name: Type` in [props], got `{}`", line.content),
+                line: line.number,
+            })?;
+            section.params.push(PropParam {
+                name: name.trim().to_string(),
+                ty: ty.trim().to_string(),
+                line: line.number,
+            });
+            self.pos += 1;
+        }
+
+        Ok(section)
     }
 
     // ------------------------------------------------------------------
@@ -486,6 +522,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                 element.attrs.push(Attr {
                     key: key.trim().to_string(),
                     value: value.trim().to_string(),
+                    is_quoted: false,
                 });
                 break;
             }
@@ -501,6 +538,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                 element.attrs.push(Attr {
                     key: key.trim().to_string(),
                     value: text,
+                    is_quoted: true,
                 });
                 i = next;
                 continue;
@@ -512,6 +550,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
             element.attrs.push(Attr {
                 key: key.trim().to_string(),
                 value,
+                is_quoted: false,
             });
             i = k;
             continue;
@@ -534,6 +573,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
             element.attrs.push(Attr {
                 key: token,
                 value: String::new(),
+                is_quoted: false,
             });
         }
     }

@@ -12,6 +12,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
     Logic,
+    Props,
     Style,
     View,
 }
@@ -46,6 +47,10 @@ pub fn lex(source: &str) -> Vec<Line> {
         let number = idx + 1;
         let trimmed = raw.trim();
 
+        if trimmed == "[props]" {
+            section = Section::Props;
+            continue;
+        }
         if trimmed == "[style]" {
             section = Section::Style;
             continue;

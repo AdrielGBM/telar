@@ -30,7 +30,11 @@ pub fn scan_previews(logic_source: &str) -> Vec<PreviewInfo> {
             // Skip past ')' and the following ']'.
             i = j + 2;
         } else {
-            i += 1;
+            i += logic_source[i..]
+                .chars()
+                .next()
+                .map(|c| c.len_utf8())
+                .unwrap_or(1);
         }
     }
     previews

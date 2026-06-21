@@ -8,16 +8,13 @@ use rsx_parser::{StyleClass, StyleConst, StyleSection, StyleValue};
 use crate::naming::{const_name, style_fn_name};
 
 /// Renders all constants and style functions for the document's style section.
-/// When `skip_color_consts` is set (a theme type is active), color constants are
-/// omitted because color references resolve through `use_theme` instead.
-pub fn generate_style_section(section: &StyleSection, skip_color_consts: bool) -> String {
+/// `[style]` color constants always become file-local `COLOR_*` values regardless
+/// of whether a theme type is active — they act as explicit local overrides.
+pub fn generate_style_section(section: &StyleSection) -> String {
     let mut out = String::new();
 
     let mut emitted_const = false;
     for c in &section.constants {
-        if skip_color_consts && matches!(c.value, StyleValue::Hex(_)) {
-            continue;
-        }
         out.push_str(&generate_const(c));
         out.push('\n');
         emitted_const = true;
@@ -79,12 +76,26 @@ pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
         "height" => format!(".height({})", num(value)),
         "min-width" => format!(".min_width({})", num(value)),
         "min-height" => format!(".min_height({})", num(value)),
-        "padding" => format!(".padding_all({})", num(value)),
-        "padding-x" => format!(".padding_horizontal({})", num(value)),
-        "padding-y" => format!(".padding_vertical({})", num(value)),
+        "padding" | "pad" => format!(".padding_all({})", num(value)),
+        "padding-x" | "pad-x" => format!(".padding_horizontal({})", num(value)),
+        "padding-y" | "pad-y" => format!(".padding_vertical({})", num(value)),
         "gap" => format!(".gap({})", num(value)),
         "gap-x" => format!(".gap_x({})", num(value)),
         "gap-y" => format!(".gap_y({})", num(value)),
+        "grow" => format!(".flex_grow({})", num(value)),
+        "shrink" => format!(".flex_shrink({})", num(value)),
+        "span" => match value.trim().parse::<u16>() {
+            Ok(n) => format!(".grid_column_span({n})"),
+            Err(_) => return None,
+        },
+        "row-span" => match value.trim().parse::<u16>() {
+            Ok(n) => format!(".grid_row_span({n})"),
+            Err(_) => return None,
+        },
+        "cols" => match parse_grid_template(value) {
+            Some(tracks) => format!(".display_grid().grid_template_columns(vec![{tracks}])"),
+            None => return None,
+        },
         "direction" => match value {
             "col" | "column" => ".flex_column()".to_string(),
             "row" => ".flex_row()".to_string(),
@@ -122,6 +133,35 @@ fn justify_variant(value: &str) -> Option<&'static str> {
         "evenly" | "space-evenly" => "SPACE_EVENLY",
         _ => return None,
     })
+}
+
+/// Parses a `cols` value into a comma-separated `TemplateTrack` expression list.
+/// `"3"` → `repeat(3, 1fr)`; `"1fr 2fr"` → individual tracks.
+fn parse_grid_template(value: &str) -> Option<String> {
+    let s = value.trim();
+    if let Ok(n) = s.parse::<u32>() {
+        return Some(format!(
+            "TemplateTrack::repeat({n}, TemplateTrack::fr(1.0))"
+        ));
+    }
+    let tracks: Option<Vec<String>> = s.split_whitespace().map(parse_track_token).collect();
+    tracks.map(|v| v.join(", "))
+}
+
+fn parse_track_token(s: &str) -> Option<String> {
+    if let Some(rest) = s.strip_suffix("fr") {
+        let n: f32 = rest.parse().ok()?;
+        return Some(format!("TemplateTrack::fr({})", format_f32(n)));
+    }
+    if let Some(rest) = s.strip_suffix("px") {
+        let n: f32 = rest.parse().ok()?;
+        return Some(format!("TemplateTrack::px({})", format_f32(n)));
+    }
+    if s == "auto" {
+        return Some("TemplateTrack::auto()".to_string());
+    }
+    let n: f32 = s.parse().ok()?;
+    Some(format!("TemplateTrack::px({})", format_f32(n)))
 }
 
 /// Renders a numeric literal as a float suffix-free Rust expression. Non-numeric

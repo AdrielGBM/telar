@@ -4,11 +4,6 @@ let double = create_memo(move || count.get() * 2);
 
 [style]
 
-primary: #3d78fa
-danger: #eb4444
-dark: #141424
-muted: #808098
-
 .counter-card
     width: 300
     padding: 20

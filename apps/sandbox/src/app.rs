@@ -1,9 +1,3 @@
-use crate::counter;
-use crate::sections::{
-    cards_section, colors_section, gradients_section, grid_section, images_section, layers_section,
-    lines_section, paths_section, shadows_section, shapes_section, theme_section,
-    transforms_section, typography_section,
-};
 use crate::test_assets::{make_checker, make_gradient, make_radial_alpha};
 use crate::theme::theme;
 use rsx::{
@@ -18,35 +12,34 @@ fn build_content(
     checker: Arc<ImageData>,
     alpha: Arc<ImageData>,
 ) -> Result<Container, LayoutError> {
-    let s_theme = theme_section(ctx)?;
-    let s_shapes = shapes_section(ctx)?;
-    let s_colors = colors_section(ctx)?;
-    let s_typography = typography_section(ctx)?;
-    let s_cards = cards_section(ctx)?;
-    let s_images = images_section(ctx, gradient, checker, alpha)?;
-    let s_lines = lines_section(ctx)?;
-    let s_paths = paths_section(ctx)?;
-    let s_gradients = gradients_section(ctx)?;
-    let s_layers = layers_section(ctx)?;
-    let s_shadows = shadows_section(ctx)?;
-    let s_grid = grid_section(ctx)?;
-    let s_transforms = transforms_section(ctx)?;
-    let mut sections: Vec<Box<dyn LayoutItem>> = rsx::children![
-        s_theme,
-        s_shapes,
-        s_colors,
-        s_typography,
-        s_cards,
-        s_images,
-        s_lines,
-        s_paths,
-        s_gradients,
-        s_layers,
-        s_shadows,
-        s_grid,
-        s_transforms,
-    ];
-    sections.push(counter(ctx)?);
+    let s_theme = crate::theme_section(ctx)?;
+    let s_shapes = crate::shapes_section(ctx)?;
+    let s_colors = crate::colors_section(ctx)?;
+    let s_typography = crate::typography_section(ctx)?;
+    let s_cards = crate::cards_section(ctx)?;
+    let s_images = crate::images_section(ctx, gradient, checker, alpha)?;
+    let s_lines = crate::lines_section(ctx)?;
+    let s_paths = crate::paths_section(ctx)?;
+    let s_gradients = crate::gradients_section(ctx)?;
+    let s_layers = crate::layers_section(ctx)?;
+    let s_shadows = crate::shadows_section(ctx)?;
+    let s_grid = crate::grid_section(ctx)?;
+    let s_transforms = crate::transforms_section(ctx)?;
+    let mut sections: Vec<Box<dyn LayoutItem>> = Vec::new();
+    sections.push(s_theme);
+    sections.push(s_shapes);
+    sections.push(s_colors);
+    sections.push(s_typography);
+    sections.push(s_cards);
+    sections.push(s_images);
+    sections.push(s_lines);
+    sections.push(s_paths);
+    sections.push(s_gradients);
+    sections.push(s_layers);
+    sections.push(s_shadows);
+    sections.push(s_grid);
+    sections.push(s_transforms);
+    sections.push(crate::counter(ctx)?);
     Container::new(
         ctx,
         LayoutStyle::new().flex_column().padding_all(24.0).gap(24.0),

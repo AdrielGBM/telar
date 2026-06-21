@@ -67,8 +67,8 @@ pub use theme_core::{
 pub use ui_core::{
     Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Group, Image,
     LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, RectView, RenderNode, ScrollArea,
-    ScrollablePage, ScrollbarStyle, Text, WidgetCtx, box_item, compute_layout, mark_dirty,
-    new_container, new_leaf, track_layout, update_style, with_context,
+    ScrollablePage, ScrollbarStyle, StyledContainer, Text, WidgetCtx, box_item, compute_layout,
+    mark_dirty, new_container, new_leaf, track_layout, update_style, with_context,
 };
 
 #[cfg(all(feature = "preview", not(target_os = "android")))]

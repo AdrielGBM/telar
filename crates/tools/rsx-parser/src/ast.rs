@@ -1,11 +1,26 @@
 //! Abstract syntax tree for `.rsx` documents.
 
-/// A fully parsed `.rsx` document with its three top-level sections.
+/// A fully parsed `.rsx` document with its top-level sections.
 #[derive(Debug, Clone)]
 pub struct RsxDocument {
     pub logic: LogicZone,
+    pub props: PropsSection,
     pub style: StyleSection,
     pub view: ViewSection,
+}
+
+/// The `[props]` section: named parameters appended to the generated function signature.
+#[derive(Debug, Clone, Default)]
+pub struct PropsSection {
+    pub params: Vec<PropParam>,
+}
+
+/// A single `name: Type` entry in `[props]`.
+#[derive(Debug, Clone)]
+pub struct PropParam {
+    pub name: String,
+    pub ty: String,
+    pub line: usize,
 }
 
 /// The leading Rust verbatim zone, captured untouched up to the first section header.
@@ -80,10 +95,13 @@ pub struct Element {
 }
 
 /// A `key: value` attribute on an element. The value is kept raw (closures included).
+/// `is_quoted` is `true` when the value was written with double-quotes (`label:"text"`),
+/// allowing callers to distinguish string literals from identifier references.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attr {
     pub key: String,
     pub value: String,
+    pub is_quoted: bool,
 }
 
 /// An `if` / `else` conditional block in the view.

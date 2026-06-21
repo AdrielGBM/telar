@@ -14,6 +14,23 @@ pub fn to_snake_case(name: &str) -> String {
     out
 }
 
+/// Converts an RSX name (`shape_card`, `info-card`) into PascalCase (`ShapeCard`, `InfoCard`).
+pub fn to_pascal_case(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut next_upper = true;
+    for c in name.chars() {
+        if c == '_' || c == '-' || c == ' ' {
+            next_upper = true;
+        } else if next_upper {
+            out.extend(c.to_uppercase());
+            next_upper = false;
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// Generated `LayoutStyle` constructor name for a style class: `card` -> `style_card`.
 pub fn style_fn_name(class: &str) -> String {
     format!("style_{}", to_snake_case(class))
