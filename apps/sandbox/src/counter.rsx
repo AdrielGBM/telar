@@ -1,3 +1,4 @@
+[logic]
 let count = create_rw_signal(0i32);
 let double = create_memo(move || count.get() * 2);
 #[preview(name = "Counter — default state")]

@@ -1,0 +1,12 @@
+[package]
+name = "rsx-analyzer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rsx-parser = { workspace = true }
+rsx-transpiler = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+toml = { workspace = true }
+tower-lsp = { workspace = true }

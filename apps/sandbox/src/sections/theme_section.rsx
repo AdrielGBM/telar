@@ -1,3 +1,4 @@
+[logic]
 use crate::theme::{SandboxTheme, theme};
 
 let theme_name = create_memo(move || theme().name.to_string());

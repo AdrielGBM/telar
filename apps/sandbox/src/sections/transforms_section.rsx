@@ -1,3 +1,4 @@
+[logic]
 use std::sync::Arc;
 use crate::theme::theme;
 

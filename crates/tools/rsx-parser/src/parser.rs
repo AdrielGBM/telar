@@ -19,6 +19,16 @@ impl Parser {
     }
 
     pub fn parse(mut self) -> Result<RsxDocument, ParseError> {
+        if let Some(line) = self
+            .lines
+            .iter()
+            .find(|l| l.section == Section::Unknown && !l.is_blank())
+        {
+            return Err(ParseError {
+                line: line.number,
+                message: "content before [logic]: add a [logic] section header".into(),
+            });
+        }
         let logic = self.parse_logic();
         let props = self.parse_props()?;
         let style = self.parse_style()?;

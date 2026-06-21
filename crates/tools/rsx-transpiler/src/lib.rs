@@ -9,6 +9,7 @@ mod style;
 mod view;
 
 pub use error::TranspileError;
+pub use signal_scan::{SignalInfo, SignalKind, scan_signals};
 
 use std::path::{Path, PathBuf};
 
@@ -16,7 +17,6 @@ use rsx_parser::RsxDocument;
 
 use crate::naming::{mentions_ident, replace_whole_word, to_pascal_case, to_snake_case};
 use crate::preview_scan::scan_previews;
-use crate::signal_scan::scan_signals;
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
 

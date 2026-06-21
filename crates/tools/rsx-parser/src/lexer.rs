@@ -11,6 +11,7 @@
 /// Which section a line belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
+    Unknown,
     Logic,
     Props,
     Style,
@@ -38,15 +39,19 @@ impl Line {
     }
 }
 
-/// Splits `source` into classified lines, switching sections on `[style]` / `[view]` headers.
+/// Splits `source` into classified lines, switching sections on `[logic]` / `[style]` / `[view]` headers.
 pub fn lex(source: &str) -> Vec<Line> {
     let mut lines = Vec::new();
-    let mut section = Section::Logic;
+    let mut section = Section::Unknown;
 
     for (idx, raw) in source.lines().enumerate() {
         let number = idx + 1;
         let trimmed = raw.trim();
 
+        if trimmed == "[logic]" {
+            section = Section::Logic;
+            continue;
+        }
         if trimmed == "[props]" {
             section = Section::Props;
             continue;
