@@ -2,19 +2,23 @@
 //! source code that depends on `rsx::*`.
 
 mod error;
-mod naming;
+pub mod naming;
 mod preview_scan;
+mod registry;
 mod signal_scan;
 mod style;
 mod view;
 
 pub use error::TranspileError;
+pub use registry::{builtin_tags, layout_attr_keys};
 
 use std::path::{Path, PathBuf};
 
 use rsx_parser::RsxDocument;
 
-use crate::naming::{mentions_ident, replace_whole_word, to_pascal_case, to_snake_case};
+use crate::naming::{
+    mentions_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
+};
 use crate::preview_scan::scan_previews;
 use crate::signal_scan::scan_signals;
 use crate::style::generate_style_section;
@@ -51,21 +55,47 @@ pub fn transpile_source_with_theme(
     })
 }
 
-/// Finds all `.rsx` files recursively in a directory.
-pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
-    let mut result = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
+/// Recursively collects files with `extension` under `dir`, descending into a
+/// subdirectory only when `keep_dir` returns true for its name. The result is sorted.
+pub fn collect_files_by_ext(
+    dir: &Path,
+    extension: &str,
+    keep_dir: &dyn Fn(&str) -> bool,
+) -> Vec<PathBuf> {
+    fn walk(
+        dir: &Path,
+        extension: &str,
+        keep_dir: &dyn Fn(&str) -> bool,
+        result: &mut Vec<PathBuf>,
+    ) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                result.extend(find_rsx_files(&path));
-            } else if path.extension().map(|e| e == "rsx").unwrap_or(false) {
+                let skip = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|name| !keep_dir(name));
+                if !skip {
+                    walk(&path, extension, keep_dir, result);
+                }
+            } else if path.extension().and_then(|e| e.to_str()) == Some(extension) {
                 result.push(path);
             }
         }
     }
+
+    let mut result = Vec::new();
+    walk(dir, extension, keep_dir, &mut result);
     result.sort();
     result
+}
+
+/// Finds all `.rsx` files recursively in a directory.
+pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
+    collect_files_by_ext(dir, "rsx", &|_| true)
 }
 
 /// Derives a unique stem for a `.rsx` file from its path relative to `src_dir`,
@@ -224,10 +254,7 @@ pub fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, Transpil
 
     if !previews.is_empty() {
         out.push('\n');
-        let const_name = format!(
-            "{}_PREVIEW_ENTRIES",
-            fn_name.to_uppercase().replace('-', "_")
-        );
+        let const_name = preview_entries_const_name(&fn_name);
         out.push_str(&format!(
             "pub const {const_name}: &[::rsx::PreviewEntry] = &[\n"
         ));

@@ -463,24 +463,7 @@ impl<'a> ViewGen<'a> {
         let uses_r = gradient.is_some();
         let param = if uses_r { "r" } else { "_" };
 
-        let rect_style = if shadow.is_some() || stroke.is_some() || gradient.is_some() {
-            let fill_s = gradient
-                .map(|g| format!("Some({g})"))
-                .or_else(|| solid_fill.map(|f| format!("Some(Paint::Solid({f}))")))
-                .unwrap_or_else(|| "None".to_string());
-            let stroke_s = stroke
-                .map(|s| format!("Some(Stroke::new({s}, {}))", format_f32(stroke_w)))
-                .unwrap_or_else(|| "None".to_string());
-            let shadow_s = shadow.unwrap_or_else(|| "None".to_string());
-            format!(
-                "RectStyle {{ fill: {fill_s}, stroke: {stroke_s}, shadow: {shadow_s}, radius: {radius} }}"
-            )
-        } else {
-            match solid_fill {
-                Some(f) => format!("RectStyle::filled({f}, {radius})"),
-                None => "RectStyle::default()".to_string(),
-            }
-        };
+        let rect_style = build_rect_style(gradient, solid_fill, stroke, stroke_w, shadow, &radius);
 
         let opacity_call = opacity
             .map(|o| format!(".with_opacity({})", format_f32(o)))
@@ -573,14 +556,7 @@ impl<'a> ViewGen<'a> {
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(0.5);
 
-        let stops = if let Some(m) = mid {
-            format!(
-                "&[(0.0, {from}), ({}, {m}), (1.0, {to})]",
-                format_f32(mid_pos)
-            )
-        } else {
-            format!("&[(0.0, {from}), (1.0, {to})]")
-        };
+        let stops = build_gradient_stops(&from, &to, mid.as_deref(), mid_pos);
 
         match direction.trim() {
             "horizontal" => Some(format!(
@@ -789,24 +765,7 @@ impl<'a> ViewGen<'a> {
             .find(|a| a.key == "fill")
             .map(|a| self.color_expr(&a.value));
 
-        let rect_style = if shadow.is_some() || stroke.is_some() || gradient.is_some() {
-            let fill_s = gradient
-                .map(|g| format!("Some({g})"))
-                .or_else(|| solid_fill.map(|f| format!("Some(Paint::Solid({f}))")))
-                .unwrap_or_else(|| "None".to_string());
-            let stroke_s = stroke
-                .map(|s| format!("Some(Stroke::new({s}, {}))", format_f32(stroke_w)))
-                .unwrap_or_else(|| "None".to_string());
-            let shadow_s = shadow.unwrap_or_else(|| "None".to_string());
-            format!(
-                "RectStyle {{ fill: {fill_s}, stroke: {stroke_s}, shadow: {shadow_s}, radius: {radius} }}"
-            )
-        } else {
-            match solid_fill {
-                Some(f) => format!("RectStyle::filled({f}, {radius})"),
-                None => "RectStyle::default()".to_string(),
-            }
-        };
+        let rect_style = build_rect_style(gradient, solid_fill, stroke, stroke_w, shadow, &radius);
 
         format!(
             "RenderNode::rect(Rect {{ x: {x}, y: {y}, width: {w}, height: {h} }}, {rect_style})"
@@ -836,14 +795,7 @@ impl<'a> ViewGen<'a> {
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(0.5);
 
-        let stops = if let Some(m) = mid {
-            format!(
-                "&[(0.0, {from}), ({}, {m}), (1.0, {to})]",
-                format_f32(mid_pos)
-            )
-        } else {
-            format!("&[(0.0, {from}), (1.0, {to})]")
-        };
+        let stops = build_gradient_stops(&from, &to, mid.as_deref(), mid_pos);
 
         let coord = |key: &str| {
             attrs
@@ -1407,6 +1359,50 @@ fn normalize_closure(value: &str) -> String {
         v.to_string()
     } else {
         format!("|| {{ {v} }}")
+    }
+}
+
+/// Assembles a `&[(pos, color)]` gradient stops expression from the resolved
+/// `from`, `to`, and optional `mid`/`mid_pos` values.
+fn build_gradient_stops(from: &str, to: &str, mid: Option<&str>, mid_pos: f32) -> String {
+    if let Some(m) = mid {
+        format!(
+            "&[(0.0, {from}), ({}, {m}), (1.0, {to})]",
+            format_f32(mid_pos)
+        )
+    } else {
+        format!("&[(0.0, {from}), (1.0, {to})]")
+    }
+}
+
+/// Builds a `RectStyle { … }` or shorthand expression from the resolved fill,
+/// stroke, shadow, and radius values. Mirrors the branching logic shared by
+/// `emit_box` and `emit_canvas_rect`.
+fn build_rect_style(
+    gradient: Option<String>,
+    solid_fill: Option<String>,
+    stroke: Option<String>,
+    stroke_w: f32,
+    shadow: Option<String>,
+    radius: &str,
+) -> String {
+    if shadow.is_some() || stroke.is_some() || gradient.is_some() {
+        let fill_s = gradient
+            .map(|g| format!("Some({g})"))
+            .or_else(|| solid_fill.map(|f| format!("Some(Paint::Solid({f}))")))
+            .unwrap_or_else(|| "None".to_string());
+        let stroke_s = stroke
+            .map(|s| format!("Some(Stroke::new({s}, {}))", format_f32(stroke_w)))
+            .unwrap_or_else(|| "None".to_string());
+        let shadow_s = shadow.unwrap_or_else(|| "None".to_string());
+        format!(
+            "RectStyle {{ fill: {fill_s}, stroke: {stroke_s}, shadow: {shadow_s}, radius: {radius} }}"
+        )
+    } else {
+        match solid_fill {
+            Some(f) => format!("RectStyle::filled({f}, {radius})"),
+            None => "RectStyle::default()".to_string(),
+        }
     }
 }
 

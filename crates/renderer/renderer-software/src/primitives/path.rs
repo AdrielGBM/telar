@@ -109,8 +109,7 @@ pub(crate) fn draw_path(
 
     if let Some(shadow) = style.shadow {
         let sigma = renderer_core::blur_sigma(shadow.blur_radius);
-        // blur_padding + 1 extra: paths can extend slightly outside their bounds box
-        let padding = (sigma * 3.0).ceil() as i32 + 2;
+        let padding = renderer_core::blur_padding(sigma);
 
         let shadow_x = b.x() + shadow.offset_x - padding as f32;
         let shadow_y = b.y() + shadow.offset_y - padding as f32;

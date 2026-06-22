@@ -39,6 +39,18 @@ impl Line {
     }
 }
 
+/// Returns the [`Section`] a `[...]` header line switches into, or `None` for a
+/// non-header line. `trimmed` must already have surrounding whitespace removed.
+pub fn header_section(trimmed: &str) -> Option<Section> {
+    match trimmed {
+        "[logic]" => Some(Section::Logic),
+        "[props]" => Some(Section::Props),
+        "[style]" => Some(Section::Style),
+        "[view]" => Some(Section::View),
+        _ => None,
+    }
+}
+
 /// Splits `source` into classified lines, switching sections on `[logic]` / `[style]` / `[view]` headers.
 pub fn lex(source: &str) -> Vec<Line> {
     let mut lines = Vec::new();
@@ -48,20 +60,8 @@ pub fn lex(source: &str) -> Vec<Line> {
         let number = idx + 1;
         let trimmed = raw.trim();
 
-        if trimmed == "[logic]" {
-            section = Section::Logic;
-            continue;
-        }
-        if trimmed == "[props]" {
-            section = Section::Props;
-            continue;
-        }
-        if trimmed == "[style]" {
-            section = Section::Style;
-            continue;
-        }
-        if trimmed == "[view]" {
-            section = Section::View;
+        if let Some(new_section) = header_section(trimmed) {
+            section = new_section;
             continue;
         }
 

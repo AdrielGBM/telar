@@ -71,6 +71,15 @@ pub fn const_name(prefix: &str, name: &str) -> String {
     format!("{prefix}{}", to_snake_case(name).to_ascii_uppercase())
 }
 
+/// Generated preview entries const name for a file stem: `card` -> `CARD_PREVIEW_ENTRIES`.
+/// This must match the name emitted by the transpiler in the generated `.rs` file.
+pub fn preview_entries_const_name(stem: &str) -> String {
+    format!(
+        "{}_PREVIEW_ENTRIES",
+        to_snake_case(stem).to_ascii_uppercase()
+    )
+}
+
 pub(crate) fn is_ident_byte(b: u8) -> bool {
     b == b'_' || b.is_ascii_alphanumeric()
 }

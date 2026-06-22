@@ -101,3 +101,10 @@ pub fn hash_draw_commands(cmds: &[DrawCommand]) -> u64 {
     hash_draw_commands_into(cmds, &mut h);
     h.finish()
 }
+
+pub fn hash_pod_slice<T: bytemuck::Pod>(data: &[T]) -> u64 {
+    let bytes: &[u8] = bytemuck::cast_slice(data);
+    let mut hasher = FxHasher::default();
+    bytes.hash(&mut hasher);
+    hasher.finish()
+}

@@ -35,6 +35,10 @@ fn clamp_to_pixels(rect: Rect, width: u32, height: u32) -> Option<(u32, u32, u32
     }
 }
 
+fn cull_bounds(vr: geometry_core::Rect, clip: Option<geometry_core::Rect>) -> bool {
+    !renderer_core::culling::overlaps(vr.x, vr.y, vr.width, vr.height, clip)
+}
+
 fn fill_mask_region(data: &mut [u8], stride: usize, region: (u32, u32, u32, u32), value: u8) {
     let (x0, y0, x1, y1) = region;
     let row_len = (x1 - x0) as usize;
@@ -766,13 +770,7 @@ where
                         self.draw_state.cum_matrix,
                         &self.font_metrics,
                     ) {
-                        if !renderer_core::culling::overlaps(
-                            vr.x,
-                            vr.y,
-                            vr.width,
-                            vr.height,
-                            self.draw_state.current_clip(),
-                        ) {
+                        if cull_bounds(vr, self.draw_state.current_clip()) {
                             continue;
                         }
                     }
@@ -805,13 +803,7 @@ where
                         self.draw_state.cum_matrix,
                         &self.font_metrics,
                     ) {
-                        if !renderer_core::culling::overlaps(
-                            vr.x,
-                            vr.y,
-                            vr.width,
-                            vr.height,
-                            self.draw_state.current_clip(),
-                        ) {
+                        if cull_bounds(vr, self.draw_state.current_clip()) {
                             continue;
                         }
                     }
@@ -850,13 +842,7 @@ where
                         self.draw_state.cum_matrix,
                         &self.font_metrics,
                     ) {
-                        if !renderer_core::culling::overlaps(
-                            vr.x,
-                            vr.y,
-                            vr.width,
-                            vr.height,
-                            self.draw_state.current_clip(),
-                        ) {
+                        if cull_bounds(vr, self.draw_state.current_clip()) {
                             continue;
                         }
                     }
@@ -886,13 +872,7 @@ where
                         self.draw_state.cum_matrix,
                         &self.font_metrics,
                     ) {
-                        if !renderer_core::culling::overlaps(
-                            vr.x,
-                            vr.y,
-                            vr.width,
-                            vr.height,
-                            self.draw_state.current_clip(),
-                        ) {
+                        if cull_bounds(vr, self.draw_state.current_clip()) {
                             continue;
                         }
                     }
@@ -927,13 +907,7 @@ where
                         self.draw_state.cum_matrix,
                         &self.font_metrics,
                     ) {
-                        if !renderer_core::culling::overlaps(
-                            vr.x,
-                            vr.y,
-                            vr.width,
-                            vr.height,
-                            self.draw_state.current_clip(),
-                        ) {
+                        if cull_bounds(vr, self.draw_state.current_clip()) {
                             continue;
                         }
                     }

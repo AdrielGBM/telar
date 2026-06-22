@@ -47,14 +47,14 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
 }
 
 pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
-    let builtins = [
-        "text", "btn", "col", "row", "grid", "box", "img", "scroll", "canvas", "widget",
-    ];
-    let builtin_set: HashSet<&str> = builtins.iter().copied().collect();
-
-    let mut items: Vec<CompletionItem> = builtins
+    let builtin_set: HashSet<&str> = rsx_transpiler::builtin_tags()
         .iter()
-        .map(|name| CompletionItem {
+        .map(|(tag, _)| *tag)
+        .collect();
+
+    let mut items: Vec<CompletionItem> = rsx_transpiler::builtin_tags()
+        .iter()
+        .map(|(name, _)| CompletionItem {
             label: name.to_string(),
             kind: Some(CompletionItemKind::KEYWORD),
             ..Default::default()
@@ -90,42 +90,23 @@ fn attr_items(keys: &[&str]) -> Vec<CompletionItem> {
 }
 
 pub fn attr_key_items(tag: &str) -> Vec<CompletionItem> {
-    const LAYOUT: &[&str] = &[
-        "width",
-        "height",
-        "min-width",
-        "min-height",
-        "padding",
-        "pad",
-        "padding-x",
-        "pad-x",
-        "padding-y",
-        "pad-y",
-        "gap",
-        "gap-x",
-        "gap-y",
-        "grow",
-        "shrink",
-        "direction",
-        "align",
-        "justify",
-    ];
+    let layout = rsx_transpiler::layout_attr_keys();
 
     match tag {
         "text" => attr_items(&["size", "color"]),
         "widget" => vec![],
         "btn" | "button" => {
-            let mut keys: Vec<&str> = LAYOUT.to_vec();
+            let mut keys: Vec<&str> = layout.to_vec();
             keys.extend_from_slice(&["on_press", "fill", "outline"]);
             attr_items(&keys)
         }
         "grid" => {
-            let mut keys: Vec<&str> = LAYOUT.to_vec();
+            let mut keys: Vec<&str> = layout.to_vec();
             keys.extend_from_slice(&["cols", "span", "row-span"]);
             attr_items(&keys)
         }
         "box" => {
-            let mut keys: Vec<&str> = LAYOUT.to_vec();
+            let mut keys: Vec<&str> = layout.to_vec();
             keys.extend_from_slice(&[
                 "fill",
                 "stroke",
@@ -138,11 +119,11 @@ pub fn attr_key_items(tag: &str) -> Vec<CompletionItem> {
             attr_items(&keys)
         }
         "img" => {
-            let mut keys: Vec<&str> = LAYOUT.to_vec();
+            let mut keys: Vec<&str> = layout.to_vec();
             keys.push("src");
             attr_items(&keys)
         }
-        _ => attr_items(LAYOUT),
+        _ => attr_items(layout),
     }
 }
 

@@ -10,32 +10,18 @@ pub struct ProjectInfo {
 impl ProjectInfo {
     pub fn find_theme_field_location(&self, field_name: &str) -> Option<(PathBuf, usize)> {
         let type_name = self.theme_type.as_deref()?;
-        let struct_marker = format!("struct {type_name}");
         for path in collect_rs_files(&self.root) {
             let Ok(content) = std::fs::read_to_string(&path) else {
                 continue;
             };
-            let mut in_struct = false;
-            let mut depth = 0i32;
-            for (i, line) in content.lines().enumerate() {
-                let trimmed = line.trim();
-                if !in_struct {
-                    if trimmed.contains(&struct_marker) {
-                        in_struct = true;
-                        depth = 0;
-                    }
-                    continue;
+            let mut location = None;
+            scan_theme_fields(&content, type_name, |name, line| {
+                if location.is_none() && name == field_name {
+                    location = Some(line + 1);
                 }
-                depth += trimmed.chars().filter(|&c| c == '{').count() as i32;
-                depth -= trimmed.chars().filter(|&c| c == '}').count() as i32;
-                if depth <= 0 {
-                    break;
-                }
-                if let Some(name) = parse_color_field(trimmed) {
-                    if name == field_name {
-                        return Some((path, i + 1));
-                    }
-                }
+            });
+            if let Some(line) = location {
+                return Some((path, line));
             }
         }
         None
@@ -46,7 +32,7 @@ impl ProjectInfo {
         let toml_path = root.join("rsx.toml");
         let theme_type = read_theme_type(&toml_path);
         let theme_fields = if let Some(ref type_name) = theme_type {
-            scan_theme_fields(&root, type_name)
+            scan_project_theme_fields(&root, type_name)
         } else {
             HashSet::new()
         };
@@ -82,42 +68,31 @@ fn read_theme_type(toml_path: &Path) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-fn scan_theme_fields(root: &Path, type_name: &str) -> HashSet<String> {
+fn scan_project_theme_fields(root: &Path, type_name: &str) -> HashSet<String> {
     let mut fields = HashSet::new();
     let rs_files = collect_rs_files(root);
     for path in rs_files {
         if let Ok(content) = std::fs::read_to_string(&path) {
-            extract_theme_fields(&content, type_name, &mut fields);
+            scan_theme_fields(&content, type_name, |name, _line| {
+                fields.insert(name.to_string());
+            });
         }
     }
     fields
 }
 
 fn collect_rs_files(dir: &Path) -> Vec<PathBuf> {
-    let mut result = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if dir_name == "target" || dir_name == ".rsx" {
-                        continue;
-                    }
-                }
-                result.extend(collect_rs_files(&path));
-            } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
-                result.push(path);
-            }
-        }
-    }
-    result
+    // Unlike the transpiler's `.rsx` walk, this prunes build output (`target`, `.rsx`) so theme scanning stays fast and skips generated code.
+    rsx_transpiler::collect_files_by_ext(dir, "rs", &|name| name != "target" && name != ".rsx")
 }
 
-fn extract_theme_fields(source: &str, type_name: &str, fields: &mut HashSet<String>) {
+/// Scans `source` for `Color` fields inside the `type_name` theme struct, invoking
+/// `on_field` with each field name and its 0-based line number in `source`.
+fn scan_theme_fields(source: &str, type_name: &str, mut on_field: impl FnMut(&str, usize)) {
     let struct_marker = format!("struct {type_name}");
     let mut in_struct = false;
     let mut depth = 0i32;
-    for line in source.lines() {
+    for (i, line) in source.lines().enumerate() {
         let trimmed = line.trim();
         if !in_struct {
             if trimmed.contains(&struct_marker) {
@@ -128,11 +103,11 @@ fn extract_theme_fields(source: &str, type_name: &str, fields: &mut HashSet<Stri
         }
         depth += trimmed.chars().filter(|&c| c == '{').count() as i32;
         depth -= trimmed.chars().filter(|&c| c == '}').count() as i32;
-        if depth <= 0 && in_struct {
+        if depth <= 0 {
             break;
         }
         if let Some(field) = parse_color_field(trimmed) {
-            fields.insert(field);
+            on_field(&field, i);
         }
     }
 }

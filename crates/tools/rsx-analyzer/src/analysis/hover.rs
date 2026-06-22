@@ -58,16 +58,10 @@ fn hover_color(doc: &RsxDocument, value: &str, project: Option<&ProjectInfo>) ->
 }
 
 fn hover_tag(tag: &str) -> Option<Hover> {
-    let rust_type = match tag {
-        "text" => "Text::new",
-        "btn" | "button" => "Button::new",
-        "col" | "column" | "row" | "grid" => "Container::new",
-        "canvas" => "Canvas::new",
-        "img" => "Image::new",
-        "scroll" => "Scroll::new",
-        "box" => "Box::new",
-        _ => return None,
-    };
+    let rust_type = rsx_transpiler::builtin_tags()
+        .iter()
+        .find(|(name, _)| *name == tag)
+        .map(|(_, ctor)| *ctor)?;
     Some(make_hover(format!("`{tag}` → `{rust_type}()`")))
 }
 

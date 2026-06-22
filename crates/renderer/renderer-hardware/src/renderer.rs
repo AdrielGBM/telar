@@ -7,7 +7,8 @@ use rustc_hash::FxHasher;
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers, union_rects,
+    Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers,
+    hash_pod_slice, union_rects,
 };
 
 use wgpu::util::DeviceExt;
@@ -200,9 +201,6 @@ enum DrawStep {
     ShadowPlaceholder {
         op_idx: usize,
     },
-    PathShadowPlaceholder {
-        op_idx: usize,
-    },
     CompositeShadow {
         bind_group: wgpu::BindGroup,
     },
@@ -244,50 +242,57 @@ fn try_merge_steps(a: DrawStep, b: DrawStep) -> Result<DrawStep, (DrawStep, Draw
     }
 }
 
-#[inline]
-fn hash_instances<T: bytemuck::Pod>(data: &[T]) -> u64 {
-    let bytes: &[u8] = bytemuck::cast_slice(data);
-    let mut hasher = FxHasher::default();
-    bytes.hash(&mut hasher);
-    hasher.finish()
+// Geometry source for a shadow op: text shadows draw glyph instances, path shadows draw indexed vertices.
+enum ShadowKind {
+    Text {
+        instance_start: u32,
+        instance_end: u32,
+    },
+    Path {
+        index_start: u32,
+        index_end: u32,
+    },
 }
 
 struct ShadowOp {
-    instance_start: u32,
-    instance_end: u32,
+    kind: ShadowKind,
     sigma: f32,
     tex_w: u32,
     tex_h: u32,
     dest: [f32; 4],
 }
 
-struct PathShadowOp {
-    index_start: u32,
-    index_end: u32,
-    sigma: f32,
-    tex_w: u32,
-    tex_h: u32,
-    dest: [f32; 4],
+// Cache-key discriminator mirroring ShadowKind: text keys on instance range + instance hash, path keys on index range + geometry hash.
+#[derive(Hash, PartialEq, Eq, Clone)]
+enum ShadowCacheKind {
+    Text {
+        instance_start: u32,
+        instance_count: u32,
+        instances_hash: u64,
+    },
+    Path {
+        index_start: u32,
+        index_count: u32,
+        geometry_hash: u64,
+    },
 }
 
 #[derive(Hash, PartialEq, Eq, Clone)]
 struct ShadowCacheKey {
-    instance_start: u32,
-    instance_count: u32,
+    kind: ShadowCacheKind,
     sigma_bits: u32,
     tex_w: u32,
     tex_h: u32,
-    instances_hash: u64,
 }
 
-#[derive(Hash, PartialEq, Eq, Clone)]
-struct PathShadowCacheKey {
-    index_start: u32,
-    index_count: u32,
-    sigma_bits: u32,
-    tex_w: u32,
-    tex_h: u32,
-    geometry_hash: u64,
+struct PooledTexture {
+    msaa_texture: wgpu::Texture,
+    msaa_view: wgpu::TextureView,
+    resolve_texture: wgpu::Texture,
+    resolve_view: wgpu::TextureView,
+    // Physical pixel dimensions of the bucket this texture was allocated for.
+    bucket_width: u32,
+    bucket_height: u32,
 }
 
 #[inline]
@@ -384,11 +389,10 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     blur_pipeline: BlurPipeline,
     composite_pipeline: CompositePipeline,
     pending_shadow_instances: Vec<TextInstance>,
-    pending_shadow_ops: Vec<ShadowOp>,
+    pending_shadows: Vec<ShadowOp>,
     pending_shadow_path_vertices: Vec<PathVertex>,
     pending_shadow_path_indices: Vec<u32>,
     pending_shadow_path_fill_data: Vec<PathFillData>,
-    pending_path_shadow_ops: Vec<PathShadowOp>,
     pending_path_vertices: Vec<PathVertex>,
     pending_path_indices: Vec<u32>,
     pending_path_fill_data: Vec<PathFillData>,
@@ -402,30 +406,13 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     batch_image_start: Option<u32>,
     batch_image_bind_group: Option<wgpu::BindGroup>,
     draw_state: renderer_core::DrawState,
-    layer_texture_pool: Vec<(
-        wgpu::Texture,
-        wgpu::TextureView,
-        wgpu::Texture,
-        wgpu::TextureView,
-        u32,
-        u32,
-    )>,
-    shadow_capture_pool: Vec<(
-        wgpu::Texture,
-        wgpu::TextureView,
-        wgpu::Texture,
-        wgpu::TextureView,
-        u32,
-        u32,
-    )>,
+    layer_texture_pool: Vec<PooledTexture>,
+    shadow_capture_pool: Vec<PooledTexture>,
     shadow_resolved_cache: HashMap<ShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
     // Retained frame-wide shadow instance buffer + bind group, keyed by a hash of all pending shadow instances. Reused across frames so unchanged shadows skip per-frame create_buffer_init + create_bind_group.
     shadow_instances_cache: Option<(u64, wgpu::Buffer, wgpu::BindGroup)>,
     // LRU eviction order for shadow_resolved_cache: front is least-recently-used, back is most-recently-used.
     shadow_resolved_cache_order: VecDeque<ShadowCacheKey>,
-    path_shadow_resolved_cache: HashMap<PathShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
-    // LRU eviction order for path_shadow_resolved_cache: front is least-recently-used, back is most-recently-used.
-    path_shadow_resolved_cache_order: VecDeque<PathShadowCacheKey>,
     // Resolved layer textures keyed by a hash of their draw commands + layer params. Value is (resolve_texture, resolve_view, pixel_count). Lets unchanged static layers skip their whole render pass and composite directly.
     layer_resolved_cache: HashMap<u64, (wgpu::Texture, wgpu::TextureView, u64)>,
     // LRU eviction order for layer_resolved_cache: front is least-recently-used, back is most-recently-used.
@@ -773,11 +760,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             blur_pipeline,
             composite_pipeline,
             pending_shadow_instances: Vec::new(),
-            pending_shadow_ops: Vec::new(),
+            pending_shadows: Vec::new(),
             pending_shadow_path_vertices: Vec::new(),
             pending_shadow_path_indices: Vec::new(),
             pending_shadow_path_fill_data: Vec::new(),
-            pending_path_shadow_ops: Vec::new(),
             text_shaper,
             font_metrics,
             surface_format,
@@ -812,8 +798,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             shadow_resolved_cache: HashMap::new(),
             shadow_instances_cache: None,
             shadow_resolved_cache_order: VecDeque::new(),
-            path_shadow_resolved_cache: HashMap::new(),
-            path_shadow_resolved_cache_order: VecDeque::new(),
             layer_resolved_cache: HashMap::new(),
             layer_resolved_cache_order: VecDeque::new(),
             layer_cache_pixel_budget: 0,
@@ -966,11 +950,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.batch_image_start = None;
         self.batch_image_bind_group = None;
         self.pending_shadow_instances.clear();
-        self.pending_shadow_ops.clear();
+        self.pending_shadows.clear();
         self.pending_shadow_path_vertices.clear();
         self.pending_shadow_path_indices.clear();
         self.pending_shadow_path_fill_data.clear();
-        self.pending_path_shadow_ops.clear();
     }
 
     fn flush_rect(&mut self) {
@@ -1345,7 +1328,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                         let sigma = renderer_core::blur_sigma(shadow.blur_radius);
                         let sigma_phys = sigma * self.scale_factor;
-                        let padding = (sigma * 3.0).ceil() as u32 + 2;
+                        let padding = renderer_core::blur_padding(sigma) as u32;
                         let shadow_rect = Rect::new(
                             translated.x + shadow.offset_x,
                             translated.y + shadow.offset_y,
@@ -1380,16 +1363,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             inst.dest_rect[1] -= origin_y;
                         }
 
-                        self.pending_shadow_ops.push(ShadowOp {
-                            instance_start,
-                            instance_end,
+                        self.pending_shadows.push(ShadowOp {
+                            kind: ShadowKind::Text {
+                                instance_start,
+                                instance_end,
+                            },
                             sigma: sigma_phys,
                             tex_w,
                             tex_h,
                             dest: [origin_x, origin_y, tex_w_log as f32, tex_h_log as f32],
                         });
                         self.pending_steps.push(DrawStep::ShadowPlaceholder {
-                            op_idx: self.pending_shadow_ops.len() - 1,
+                            op_idx: self.pending_shadows.len() - 1,
                         });
                     }
                     if self.batch_text_start.is_none() {
@@ -1543,7 +1528,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                             let sigma = renderer_core::blur_sigma(shadow.blur_radius);
                             let sigma_phys = sigma * self.scale_factor;
-                            let padding = (sigma * 3.0).ceil() as u32 + 2;
+                            let padding = renderer_core::blur_padding(sigma) as u32;
 
                             let origin_x = world_min_x - padding as f32;
                             let origin_y = world_min_y - padding as f32;
@@ -1561,16 +1546,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 v.position[1] = wy + shadow.offset_y - origin_y;
                             }
 
-                            self.pending_path_shadow_ops.push(PathShadowOp {
-                                index_start: si_start,
-                                index_end: si_end,
+                            self.pending_shadows.push(ShadowOp {
+                                kind: ShadowKind::Path {
+                                    index_start: si_start,
+                                    index_end: si_end,
+                                },
                                 sigma: sigma_phys,
                                 tex_w,
                                 tex_h,
                                 dest: [origin_x, origin_y, tex_w_log as f32, tex_h_log as f32],
                             });
-                            self.pending_steps.push(DrawStep::PathShadowPlaceholder {
-                                op_idx: self.pending_path_shadow_ops.len() - 1,
+                            self.pending_steps.push(DrawStep::ShadowPlaceholder {
+                                op_idx: self.pending_shadows.len() - 1,
                             });
                         }
                     }
@@ -1652,13 +1639,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         let bucket_w = bucket_size(tex_w);
                         let bucket_h = bucket_size(tex_h);
                         let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
-                            if let Some(pos) = self
-                                .layer_texture_pool
-                                .iter()
-                                .position(|(_, _, _, _, pw, ph)| *pw == bucket_w && *ph == bucket_h)
+                            if let Some(pos) =
+                                self.layer_texture_pool
+                                    .iter()
+                                    .position(|p: &PooledTexture| {
+                                        p.bucket_width == bucket_w && p.bucket_height == bucket_h
+                                    })
                             {
-                                let (mt, mv, rt, rv, _, _) = self.layer_texture_pool.remove(pos);
-                                (mt, mv, rt, rv)
+                                let p = self.layer_texture_pool.remove(pos);
+                                (
+                                    p.msaa_texture,
+                                    p.msaa_view,
+                                    p.resolve_texture,
+                                    p.resolve_view,
+                                )
                             } else {
                                 self.layer_pipeline.create_layer_textures(
                                     &self.device,
@@ -1877,12 +1871,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             }
                         } else {
                             let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
-                                if let Some(pos) = self.layer_texture_pool.iter().position(
-                                    |(_, _, _, _, pw, ph)| *pw == bucket_w && *ph == bucket_h,
-                                ) {
-                                    let (mt, mv, rt, rv, _, _) =
-                                        self.layer_texture_pool.remove(pos);
-                                    (mt, mv, rt, rv)
+                                if let Some(pos) =
+                                    self.layer_texture_pool
+                                        .iter()
+                                        .position(|p: &PooledTexture| {
+                                            p.bucket_width == bucket_w
+                                                && p.bucket_height == bucket_h
+                                        })
+                                {
+                                    let p = self.layer_texture_pool.remove(pos);
+                                    (
+                                        p.msaa_texture,
+                                        p.msaa_view,
+                                        p.resolve_texture,
+                                        p.resolve_view,
+                                    )
                                 } else {
                                     self.layer_pipeline.create_layer_textures(
                                         &self.device,
@@ -2027,7 +2030,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             .sync_atlas(&self.queue, &mut self.text_shaper.atlas);
 
         if !self.pending_instances.is_empty() {
-            let h = hash_instances(&self.pending_instances);
+            let h = hash_pod_slice(&self.pending_instances);
             if h != self.prev_rect_hash {
                 self.rect_pipeline
                     .instances
@@ -2044,7 +2047,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         if !self.pending_text_instances.is_empty() {
-            let h = hash_instances(&self.pending_text_instances);
+            let h = hash_pod_slice(&self.pending_text_instances);
             if h != self.prev_text_hash {
                 self.text_pipeline
                     .instances
@@ -2061,7 +2064,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         if !self.pending_line_instances.is_empty() {
-            let h = hash_instances(&self.pending_line_instances);
+            let h = hash_pod_slice(&self.pending_line_instances);
             if h != self.prev_line_hash {
                 self.line_pipeline
                     .instances
@@ -2078,7 +2081,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         if !self.pending_image_instances.is_empty() {
-            let h = hash_instances(&self.pending_image_instances);
+            let h = hash_pod_slice(&self.pending_image_instances);
             if h != self.prev_image_hash {
                 self.image_pipeline
                     .instances
@@ -2123,9 +2126,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             );
         }
 
-        let has_text_shadows =
-            !self.pending_shadow_ops.is_empty() && !self.pending_shadow_instances.is_empty();
-        let has_path_shadows = !self.pending_path_shadow_ops.is_empty();
+        let has_text_shadows = self
+            .pending_shadows
+            .iter()
+            .any(|op| matches!(op.kind, ShadowKind::Text { .. }))
+            && !self.pending_shadow_instances.is_empty();
+        let has_path_shadows = self
+            .pending_shadows
+            .iter()
+            .any(|op| matches!(op.kind, ShadowKind::Path { .. }));
 
         // Single encoder for both the shadow pre-passes and the main pass; wgpu inserts the necessary barriers between render passes, so a separate pre-encoder and extra queue.submit are unnecessary.
         let mut encoder = self
@@ -2134,13 +2143,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 label: Some("rsx-encoder"),
             });
 
-        let (shadow_results, path_shadow_results): (
-            Vec<Option<wgpu::BindGroup>>,
-            Vec<Option<wgpu::BindGroup>>,
-        ) = if has_text_shadows || has_path_shadows {
+        let shadow_results: Vec<Option<wgpu::BindGroup>> = if has_text_shadows || has_path_shadows {
             // Reuse the retained shadow instance buffer + bind group when the instance data is unchanged; otherwise (re)create and cache them. This avoids a create_buffer_init + create_bind_group round-trip every frame for static shadows.
             let shadow_instances_bg_opt = if has_text_shadows {
-                let instances_hash = hash_instances(&self.pending_shadow_instances);
+                let instances_hash = hash_pod_slice(&self.pending_shadow_instances);
                 let cache_valid = self
                     .shadow_instances_cache
                     .as_ref()
@@ -2216,361 +2222,252 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 None
             };
 
-            let mut text_results: Vec<Option<wgpu::BindGroup>> = Vec::new();
-            let mut path_results: Vec<Option<wgpu::BindGroup>> = Vec::new();
+            let mut results: Vec<Option<wgpu::BindGroup>> =
+                Vec::with_capacity(self.pending_shadows.len());
 
-            if has_text_shadows {
-                let shadow_instances_bg = shadow_instances_bg_opt.unwrap();
-                for op in &self.pending_shadow_ops {
-                    let instance_count = op.instance_end - op.instance_start;
-                    let instances_hash = hash_instances(
-                        &self.pending_shadow_instances
-                            [op.instance_start as usize..op.instance_end as usize],
-                    );
-                    let key = ShadowCacheKey {
-                        instance_start: op.instance_start,
-                        instance_count,
-                        sigma_bits: op.sigma.to_bits(),
-                        tex_w: op.tex_w,
-                        tex_h: op.tex_h,
-                        instances_hash,
-                    };
+            // Hoist the shared geometry bind groups/buffers out of the loop so both shadow kinds can read them. They are only created when the corresponding shadow kind is present.
+            let shadow_instances_bg = shadow_instances_bg_opt;
+            let shadow_path_vb = shadow_path_vb_opt;
+            let shadow_path_ib = shadow_path_ib_opt;
+            let shadow_path_fd_bg = shadow_path_fd_bg_opt;
 
-                    if let Some((_, cached_view)) = self.shadow_resolved_cache.get(&key) {
-                        let cbw = bucket_size(op.tex_w);
-                        let cbh = bucket_size(op.tex_h);
-                        let bg = self.composite_pipeline.create_bind_group(
-                            &self.device,
-                            &self.queue,
-                            cached_view,
-                            op.dest,
-                            1.0,
-                            0.0,
-                            [op.tex_w as f32 / cbw as f32, op.tex_h as f32 / cbh as f32],
+            for op in &self.pending_shadows {
+                let key = match &op.kind {
+                    ShadowKind::Text {
+                        instance_start,
+                        instance_end,
+                    } => {
+                        let instance_count = instance_end - instance_start;
+                        let instances_hash = hash_pod_slice(
+                            &self.pending_shadow_instances
+                                [*instance_start as usize..*instance_end as usize],
                         );
-                        text_results.push(Some(bg));
-                        if let Some(pos) = self
-                            .shadow_resolved_cache_order
-                            .iter()
-                            .position(|k| *k == key)
-                        {
-                            self.shadow_resolved_cache_order.remove(pos);
+                        ShadowCacheKey {
+                            kind: ShadowCacheKind::Text {
+                                instance_start: *instance_start,
+                                instance_count,
+                                instances_hash,
+                            },
+                            sigma_bits: op.sigma.to_bits(),
+                            tex_w: op.tex_w,
+                            tex_h: op.tex_h,
                         }
-                        self.shadow_resolved_cache_order.push_back(key);
-                        continue;
                     }
-
-                    let cap_bucket_w = bucket_size(op.tex_w);
-                    let cap_bucket_h = bucket_size(op.tex_h);
-                    let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
-                        if let Some(pos) = self
-                            .shadow_capture_pool
-                            .iter()
-                            .position(|(_, _, _, _, w, h)| *w == cap_bucket_w && *h == cap_bucket_h)
-                        {
-                            let (mt, mv, rt, rv, _, _) = self.shadow_capture_pool.remove(pos);
-                            (mt, mv, rt, rv)
-                        } else {
-                            self.layer_pipeline.create_layer_textures(
-                                &self.device,
-                                cap_bucket_w,
-                                cap_bucket_h,
-                            )
+                    ShadowKind::Path {
+                        index_start,
+                        index_end,
+                    } => {
+                        let index_count = index_end - index_start;
+                        let geometry_hash = {
+                            let verts = &self.pending_shadow_path_vertices;
+                            let idxs = &self.pending_shadow_path_indices
+                                [*index_start as usize..*index_end as usize];
+                            let h = hash_pod_slice(verts);
+                            let mut hasher = FxHasher::default();
+                            h.hash(&mut hasher);
+                            hash_pod_slice(idxs).hash(&mut hasher);
+                            hasher.finish()
                         };
-
-                    // Use bucket dimensions: vertices are local to the shadow texture (0-based),
-                    // so size must match the physical texture dimensions, not the logical ones.
-                    let vp_data = Viewport::new(
-                        [cap_bucket_w as f32, cap_bucket_h as f32],
-                        [0.0, 0.0],
-                        self.scale_factor,
-                    );
-                    let vp_buf = crate::primitives::create_viewport_buffer(
-                        &self.device,
-                        "rsx-shadow-vp",
-                        &vp_data,
-                    );
-                    let shadow_vp_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some("rsx-shadow-vp-bg"),
-                        layout: &self.viewport_bgl,
-                        entries: &[wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: vp_buf.as_entire_binding(),
-                        }],
-                    });
-
-                    {
-                        let cap_draw_view = if self.msaa_samples > 1 {
-                            &cap_msaa_view
-                        } else {
-                            &cap_resolve_view
-                        };
-                        let cap_resolve_opt = if self.msaa_samples > 1 {
-                            Some(&cap_resolve_view)
-                        } else {
-                            None
-                        };
-                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("rsx-shadow-capture"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: cap_draw_view,
-                                resolve_target: cap_resolve_opt,
-                                depth_slice: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                    store: if self.msaa_samples > 1 && cap_resolve_opt.is_some() {
-                                        wgpu::StoreOp::Discard
-                                    } else {
-                                        wgpu::StoreOp::Store
-                                    },
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            occlusion_query_set: None,
-                            timestamp_writes: None,
-                            multiview_mask: None,
-                        });
-                        pass.set_pipeline(&self.text_pipeline.pipeline);
-                        pass.set_bind_group(0, &shadow_vp_bg, &[]);
-                        pass.set_bind_group(1, &shadow_instances_bg, &[]);
-                        pass.set_bind_group(2, &self.text_pipeline.atlas_bind_group, &[]);
-                        pass.draw(0..6, op.instance_start..op.instance_end);
+                        ShadowCacheKey {
+                            kind: ShadowCacheKind::Path {
+                                index_start: *index_start,
+                                index_count,
+                                geometry_hash,
+                            },
+                            sigma_bits: op.sigma.to_bits(),
+                            tex_w: op.tex_w,
+                            tex_h: op.tex_h,
+                        }
                     }
+                };
 
-                    let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
-                        &self.device,
-                        &mut encoder,
-                        &cap_resolve_view,
-                        cap_bucket_w,
-                        cap_bucket_h,
-                        op.sigma,
-                    );
-                    let shadow_uv_scale = [
-                        op.tex_w as f32 / cap_bucket_w as f32,
-                        op.tex_h as f32 / cap_bucket_h as f32,
-                    ];
+                if let Some((_, cached_view)) = self.shadow_resolved_cache.get(&key) {
+                    let cbw = bucket_size(op.tex_w);
+                    let cbh = bucket_size(op.tex_h);
                     let bg = self.composite_pipeline.create_bind_group(
                         &self.device,
                         &self.queue,
-                        &blurred_view,
+                        cached_view,
                         op.dest,
                         1.0,
                         0.0,
-                        shadow_uv_scale,
+                        [op.tex_w as f32 / cbw as f32, op.tex_h as f32 / cbh as f32],
                     );
-                    text_results.push(Some(bg));
-                    if self.shadow_resolved_cache.len() >= 128 {
-                        if let Some(oldest) = self.shadow_resolved_cache_order.pop_front() {
-                            self.shadow_resolved_cache.remove(&oldest);
-                        }
-                    }
-                    self.shadow_resolved_cache_order.push_back(key.clone());
-                    self.shadow_resolved_cache
-                        .insert(key, (blurred_texture, blurred_view));
-                    self.shadow_capture_pool.push((
-                        cap_msaa_texture,
-                        cap_msaa_view,
-                        cap_resolve_texture,
-                        cap_resolve_view,
-                        cap_bucket_w,
-                        cap_bucket_h,
-                    ));
-                }
-            }
-
-            if has_path_shadows {
-                let shadow_path_vb = shadow_path_vb_opt.unwrap();
-                let shadow_path_ib = shadow_path_ib_opt.unwrap();
-                let shadow_path_fd_bg = shadow_path_fd_bg_opt.unwrap();
-                for op in &self.pending_path_shadow_ops {
-                    let index_count = op.index_end - op.index_start;
-                    let geometry_hash = {
-                        let verts = &self.pending_shadow_path_vertices;
-                        let idxs = &self.pending_shadow_path_indices
-                            [op.index_start as usize..op.index_end as usize];
-                        let h = hash_instances(verts);
-                        let mut hasher = FxHasher::default();
-                        h.hash(&mut hasher);
-                        hash_instances(idxs).hash(&mut hasher);
-                        hasher.finish()
-                    };
-                    let path_key = PathShadowCacheKey {
-                        index_start: op.index_start,
-                        index_count,
-                        sigma_bits: op.sigma.to_bits(),
-                        tex_w: op.tex_w,
-                        tex_h: op.tex_h,
-                        geometry_hash,
-                    };
-
-                    if let Some((_, cached_view)) = self.path_shadow_resolved_cache.get(&path_key) {
-                        let cbw = bucket_size(op.tex_w);
-                        let cbh = bucket_size(op.tex_h);
-                        let bg = self.composite_pipeline.create_bind_group(
-                            &self.device,
-                            &self.queue,
-                            cached_view,
-                            op.dest,
-                            1.0,
-                            0.0,
-                            [op.tex_w as f32 / cbw as f32, op.tex_h as f32 / cbh as f32],
-                        );
-                        path_results.push(Some(bg));
-                        if let Some(pos) = self
-                            .path_shadow_resolved_cache_order
-                            .iter()
-                            .position(|k| *k == path_key)
-                        {
-                            self.path_shadow_resolved_cache_order.remove(pos);
-                        }
-                        self.path_shadow_resolved_cache_order.push_back(path_key);
-                        continue;
-                    }
-
-                    let cap_bucket_w = bucket_size(op.tex_w);
-                    let cap_bucket_h = bucket_size(op.tex_h);
-                    let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
-                        if let Some(pos) = self
-                            .shadow_capture_pool
-                            .iter()
-                            .position(|(_, _, _, _, w, h)| *w == cap_bucket_w && *h == cap_bucket_h)
-                        {
-                            let (mt, mv, rt, rv, _, _) = self.shadow_capture_pool.remove(pos);
-                            (mt, mv, rt, rv)
-                        } else {
-                            self.layer_pipeline.create_layer_textures(
-                                &self.device,
-                                cap_bucket_w,
-                                cap_bucket_h,
-                            )
-                        };
-
-                    // Use bucket dimensions: vertices are local to the shadow texture (0-based),
-                    // so size must match the physical texture dimensions, not the logical ones.
-                    let vp_data = Viewport::new(
-                        [cap_bucket_w as f32, cap_bucket_h as f32],
-                        [0.0, 0.0],
-                        self.scale_factor,
-                    );
-                    let vp_buf = crate::primitives::create_viewport_buffer(
-                        &self.device,
-                        "rsx-shadow-path-vp",
-                        &vp_data,
-                    );
-                    let shadow_vp_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some("rsx-shadow-path-vp-bg"),
-                        layout: &self.viewport_bgl,
-                        entries: &[wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: vp_buf.as_entire_binding(),
-                        }],
-                    });
-
+                    results.push(Some(bg));
+                    if let Some(pos) = self
+                        .shadow_resolved_cache_order
+                        .iter()
+                        .position(|k| *k == key)
                     {
-                        let cap_draw_view = if self.msaa_samples > 1 {
-                            &cap_msaa_view
-                        } else {
-                            &cap_resolve_view
-                        };
-                        let cap_resolve_opt = if self.msaa_samples > 1 {
-                            Some(&cap_resolve_view)
-                        } else {
-                            None
-                        };
-                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("rsx-shadow-path-capture"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: cap_draw_view,
-                                resolve_target: cap_resolve_opt,
-                                depth_slice: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                    store: if self.msaa_samples > 1 && cap_resolve_opt.is_some() {
-                                        wgpu::StoreOp::Discard
-                                    } else {
-                                        wgpu::StoreOp::Store
-                                    },
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            occlusion_query_set: None,
-                            timestamp_writes: None,
-                            multiview_mask: None,
-                        });
-                        pass.set_pipeline(&self.path_pipeline.pipeline);
-                        pass.set_bind_group(0, &shadow_vp_bg, &[]);
-                        pass.set_bind_group(1, &shadow_path_fd_bg, &[]);
-                        pass.set_vertex_buffer(0, shadow_path_vb.slice(..));
-                        pass.set_index_buffer(shadow_path_ib.slice(..), wgpu::IndexFormat::Uint32);
-                        pass.draw_indexed(op.index_start..op.index_end, 0, 0..1);
+                        self.shadow_resolved_cache_order.remove(pos);
                     }
+                    self.shadow_resolved_cache_order.push_back(key);
+                    continue;
+                }
 
-                    let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
-                        &self.device,
-                        &mut encoder,
-                        &cap_resolve_view,
-                        cap_bucket_w,
-                        cap_bucket_h,
-                        op.sigma,
-                    );
-                    let shadow_uv_scale = [
-                        op.tex_w as f32 / cap_bucket_w as f32,
-                        op.tex_h as f32 / cap_bucket_h as f32,
-                    ];
-                    let bg = self.composite_pipeline.create_bind_group(
-                        &self.device,
-                        &self.queue,
-                        &blurred_view,
-                        op.dest,
-                        1.0,
-                        0.0,
-                        shadow_uv_scale,
-                    );
-                    path_results.push(Some(bg));
-                    if self.path_shadow_resolved_cache.len() >= 128 {
-                        if let Some(oldest) = self.path_shadow_resolved_cache_order.pop_front() {
-                            self.path_shadow_resolved_cache.remove(&oldest);
+                let cap_bucket_w = bucket_size(op.tex_w);
+                let cap_bucket_h = bucket_size(op.tex_h);
+                let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
+                    if let Some(pos) =
+                        self.shadow_capture_pool
+                            .iter()
+                            .position(|p: &PooledTexture| {
+                                p.bucket_width == cap_bucket_w && p.bucket_height == cap_bucket_h
+                            })
+                    {
+                        let p = self.shadow_capture_pool.remove(pos);
+                        (
+                            p.msaa_texture,
+                            p.msaa_view,
+                            p.resolve_texture,
+                            p.resolve_view,
+                        )
+                    } else {
+                        self.layer_pipeline.create_layer_textures(
+                            &self.device,
+                            cap_bucket_w,
+                            cap_bucket_h,
+                        )
+                    };
+
+                // Use bucket dimensions: vertices are local to the shadow texture (0-based),
+                // so size must match the physical texture dimensions, not the logical ones.
+                let vp_data = Viewport::new(
+                    [cap_bucket_w as f32, cap_bucket_h as f32],
+                    [0.0, 0.0],
+                    self.scale_factor,
+                );
+                let vp_buf = crate::primitives::create_viewport_buffer(
+                    &self.device,
+                    "rsx-shadow-vp",
+                    &vp_data,
+                );
+                let shadow_vp_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("rsx-shadow-vp-bg"),
+                    layout: &self.viewport_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: vp_buf.as_entire_binding(),
+                    }],
+                });
+
+                {
+                    let cap_draw_view = if self.msaa_samples > 1 {
+                        &cap_msaa_view
+                    } else {
+                        &cap_resolve_view
+                    };
+                    let cap_resolve_opt = if self.msaa_samples > 1 {
+                        Some(&cap_resolve_view)
+                    } else {
+                        None
+                    };
+                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("rsx-shadow-capture"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: cap_draw_view,
+                            resolve_target: cap_resolve_opt,
+                            depth_slice: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                store: if self.msaa_samples > 1 && cap_resolve_opt.is_some() {
+                                    wgpu::StoreOp::Discard
+                                } else {
+                                    wgpu::StoreOp::Store
+                                },
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                        multiview_mask: None,
+                    });
+                    match &op.kind {
+                        ShadowKind::Text {
+                            instance_start,
+                            instance_end,
+                        } => {
+                            let shadow_instances_bg = shadow_instances_bg.as_ref().unwrap();
+                            pass.set_pipeline(&self.text_pipeline.pipeline);
+                            pass.set_bind_group(0, &shadow_vp_bg, &[]);
+                            pass.set_bind_group(1, shadow_instances_bg, &[]);
+                            pass.set_bind_group(2, &self.text_pipeline.atlas_bind_group, &[]);
+                            pass.draw(0..6, *instance_start..*instance_end);
+                        }
+                        ShadowKind::Path {
+                            index_start,
+                            index_end,
+                        } => {
+                            let shadow_path_vb = shadow_path_vb.as_ref().unwrap();
+                            let shadow_path_ib = shadow_path_ib.as_ref().unwrap();
+                            let shadow_path_fd_bg = shadow_path_fd_bg.as_ref().unwrap();
+                            pass.set_pipeline(&self.path_pipeline.pipeline);
+                            pass.set_bind_group(0, &shadow_vp_bg, &[]);
+                            pass.set_bind_group(1, shadow_path_fd_bg, &[]);
+                            pass.set_vertex_buffer(0, shadow_path_vb.slice(..));
+                            pass.set_index_buffer(
+                                shadow_path_ib.slice(..),
+                                wgpu::IndexFormat::Uint32,
+                            );
+                            pass.draw_indexed(*index_start..*index_end, 0, 0..1);
                         }
                     }
-                    self.path_shadow_resolved_cache_order
-                        .push_back(path_key.clone());
-                    self.path_shadow_resolved_cache
-                        .insert(path_key, (blurred_texture, blurred_view));
-                    self.shadow_capture_pool.push((
-                        cap_msaa_texture,
-                        cap_msaa_view,
-                        cap_resolve_texture,
-                        cap_resolve_view,
-                        cap_bucket_w,
-                        cap_bucket_h,
-                    ));
                 }
+
+                let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
+                    &self.device,
+                    &mut encoder,
+                    &cap_resolve_view,
+                    cap_bucket_w,
+                    cap_bucket_h,
+                    op.sigma,
+                );
+                let shadow_uv_scale = [
+                    op.tex_w as f32 / cap_bucket_w as f32,
+                    op.tex_h as f32 / cap_bucket_h as f32,
+                ];
+                let bg = self.composite_pipeline.create_bind_group(
+                    &self.device,
+                    &self.queue,
+                    &blurred_view,
+                    op.dest,
+                    1.0,
+                    0.0,
+                    shadow_uv_scale,
+                );
+                results.push(Some(bg));
+                if self.shadow_resolved_cache.len() >= 128 {
+                    if let Some(oldest) = self.shadow_resolved_cache_order.pop_front() {
+                        self.shadow_resolved_cache.remove(&oldest);
+                    }
+                }
+                self.shadow_resolved_cache_order.push_back(key.clone());
+                self.shadow_resolved_cache
+                    .insert(key, (blurred_texture, blurred_view));
+                self.shadow_capture_pool.push(PooledTexture {
+                    msaa_texture: cap_msaa_texture,
+                    msaa_view: cap_msaa_view,
+                    resolve_texture: cap_resolve_texture,
+                    resolve_view: cap_resolve_view,
+                    bucket_width: cap_bucket_w,
+                    bucket_height: cap_bucket_h,
+                });
             }
 
             // Shadow passes are recorded into the shared `encoder` and submitted with the main pass; no separate submit here.
-            (text_results, path_results)
+            results
         } else {
-            (Vec::new(), Vec::new())
+            Vec::new()
         };
 
-        let (mut shadow_results, mut path_shadow_results) = (shadow_results, path_shadow_results);
+        let mut shadow_results = shadow_results;
         for step in &mut self.pending_steps {
-            match step {
-                DrawStep::ShadowPlaceholder { op_idx } => {
-                    if let Some(entry) = shadow_results.get_mut(*op_idx) {
-                        if let Some(bg) = entry.take() {
-                            *step = DrawStep::CompositeShadow { bind_group: bg };
-                        }
+            if let DrawStep::ShadowPlaceholder { op_idx } = step {
+                if let Some(entry) = shadow_results.get_mut(*op_idx) {
+                    if let Some(bg) = entry.take() {
+                        *step = DrawStep::CompositeShadow { bind_group: bg };
                     }
                 }
-                DrawStep::PathShadowPlaceholder { op_idx } => {
-                    if let Some(entry) = path_shadow_results.get_mut(*op_idx) {
-                        if let Some(bg) = entry.take() {
-                            *step = DrawStep::CompositeShadow { bind_group: bg };
-                        }
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -2949,8 +2846,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 render_pass.set_bind_group(1, bind_group, &[]);
                                 render_pass.draw(0..6, 0..1);
                             }
-                            DrawStep::ShadowPlaceholder { .. }
-                            | DrawStep::PathShadowPlaceholder { .. } => {}
+                            DrawStep::ShadowPlaceholder { .. } => {}
                             DrawStep::BeginLayer { .. }
                             | DrawStep::EndLayerComposite { .. }
                             | DrawStep::PrerenderedLayer { .. } => {
@@ -3289,14 +3185,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             }
                         }
                     } else {
-                        self.layer_texture_pool.push((
-                            l_msaa_tex,
-                            l_msaa_view,
-                            l_resolve_tex,
-                            l_resolve_view,
-                            lw,
-                            lh,
-                        ));
+                        self.layer_texture_pool.push(PooledTexture {
+                            msaa_texture: l_msaa_tex,
+                            msaa_view: l_msaa_view,
+                            resolve_texture: l_resolve_tex,
+                            resolve_view: l_resolve_view,
+                            bucket_width: lw,
+                            bucket_height: lh,
+                        });
                     }
                 }
 

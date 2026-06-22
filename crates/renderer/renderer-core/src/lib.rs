@@ -23,7 +23,7 @@ pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, IDENTITY_MATRIX, compose_matrix, for_each_with_matrix};
 pub use error::RendererError;
 pub use font_config::FontConfig;
-pub use hash::{hash_draw_commands, hash_draw_commands_into};
+pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use path::{PathData, PathVerb};
 pub use preprocess::{blur_padding, blur_sigma, expand_fill_layers, scale_commands};

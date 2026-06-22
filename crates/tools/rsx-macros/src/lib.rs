@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, quote};
+use rsx_transpiler::naming::preview_entries_const_name;
 use std::path::PathBuf;
 use syn::{
     Token,
@@ -33,23 +34,8 @@ impl Parse for AppInput {
     }
 }
 
-fn rsx_to_snake_case(s: &str) -> String {
-    s.chars()
-        .filter_map(|c| match c {
-            '-' | ' ' => Some('_'),
-            '_' => Some('_'),
-            c if c.is_ascii_alphanumeric() => Some(c.to_ascii_lowercase()),
-            _ => None,
-        })
-        .collect()
-}
-
 fn preview_const_ident(file_stem: &str) -> Ident {
-    let name = format!(
-        "{}_PREVIEW_ENTRIES",
-        rsx_to_snake_case(file_stem).to_ascii_uppercase()
-    );
-    Ident::new(&name, Span::call_site())
+    Ident::new(&preview_entries_const_name(file_stem), Span::call_site())
 }
 
 #[proc_macro]

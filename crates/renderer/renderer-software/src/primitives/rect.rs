@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 
 use geometry_core::Rect;
-use renderer_core::{BorderRadius, LineCap, LineJoin, RectStyle, Shadow};
+use renderer_core::{BorderRadius, RectStyle, Shadow};
 
 use crate::primitives::fill_to_paint;
 use crate::primitives::image::{ShadowCache, ShadowCacheKey};
+use crate::primitives::{to_skia_line_cap, to_skia_line_join};
 
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
     let x = rect.x;
@@ -209,16 +210,8 @@ pub(crate) fn draw_rect(
             paint.anti_alias = true;
             let stroke = tiny_skia::Stroke {
                 width: s.width,
-                line_cap: match s.cap {
-                    LineCap::Butt => tiny_skia::LineCap::Butt,
-                    LineCap::Round => tiny_skia::LineCap::Round,
-                    LineCap::Square => tiny_skia::LineCap::Square,
-                },
-                line_join: match s.join {
-                    LineJoin::Miter => tiny_skia::LineJoin::Miter,
-                    LineJoin::Round => tiny_skia::LineJoin::Round,
-                    LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
-                },
+                line_cap: to_skia_line_cap(s.cap),
+                line_join: to_skia_line_join(s.join),
                 ..Default::default()
             };
             pixmap.stroke_path(&path, &paint, &stroke, transform, clip);

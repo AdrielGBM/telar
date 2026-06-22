@@ -5,10 +5,11 @@ use rsx_parser::RsxDocument;
 use std::path::Path;
 use tower_lsp::lsp_types::{GotoDefinitionResponse, Location, Url};
 
-const BUILTIN_TAGS: &[&str] = &[
-    "text", "btn", "button", "col", "column", "row", "grid", "box", "img", "scroll", "canvas",
-    "widget",
-];
+fn is_builtin_tag(tag: &str) -> bool {
+    rsx_transpiler::builtin_tags()
+        .iter()
+        .any(|(name, _)| *name == tag)
+}
 
 pub fn goto_definition(
     doc: &RsxDocument,
@@ -43,7 +44,7 @@ pub fn goto_definition(
     }
 
     let prefix_before_word = line_text[..word_start].trim();
-    if prefix_before_word.is_empty() && !BUILTIN_TAGS.contains(&word) {
+    if prefix_before_word.is_empty() && !is_builtin_tag(word) {
         return find_component(word, project, uri);
     }
 
