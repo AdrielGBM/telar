@@ -220,6 +220,12 @@ struct LayerAccum {
     image_inst_start: u32,
 }
 
+impl LayerAccum {
+    fn extend(&mut self, rect: Rect) {
+        self.bounds = renderer_core::extend_bounds(self.bounds, rect);
+    }
+}
+
 // Tries to merge two consecutive same-type batch steps whose instance index ranges are contiguous. Returns Ok(merged) on success, Err((a, b)) if they cannot be merged.
 fn try_merge_steps(a: DrawStep, b: DrawStep) -> Result<DrawStep, (DrawStep, DrawStep)> {
     match (a, b) {
@@ -1276,8 +1282,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.bounds =
-                                Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
+                            accum.extend(bounds);
                         }
                     }
                     self.flush_text();
@@ -1306,8 +1311,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.bounds =
-                                Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
+                            accum.extend(bounds);
                         }
                     }
                     self.flush_rect();
@@ -1326,21 +1330,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     if let Some(shadow) = style.shadow {
                         self.flush_text();
 
-                        let sigma = renderer_core::blur_sigma(shadow.blur_radius);
-                        let sigma_phys = sigma * self.scale_factor;
-                        let padding = renderer_core::blur_padding(sigma) as u32;
                         let shadow_rect = Rect::new(
                             translated.x + shadow.offset_x,
                             translated.y + shadow.offset_y,
                             translated.width,
                             translated.height,
                         );
-                        let origin_x = shadow_rect.x - padding as f32;
-                        let origin_y = shadow_rect.y - padding as f32;
-                        let tex_w_log = (shadow_rect.width.ceil() as u32 + 2 * padding).max(1);
-                        let tex_h_log = (shadow_rect.height.ceil() as u32 + 2 * padding).max(1);
-                        let tex_w = (tex_w_log as f32 * self.scale_factor).ceil() as u32;
-                        let tex_h = (tex_h_log as f32 * self.scale_factor).ceil() as u32;
+                        let shadow_layout = renderer_core::ShadowLayout::compute(
+                            shadow.blur_radius,
+                            shadow_rect.x,
+                            shadow_rect.x + shadow_rect.width,
+                            shadow_rect.y,
+                            shadow_rect.y + shadow_rect.height,
+                            self.scale_factor,
+                        );
+                        let sigma_phys = shadow_layout.sigma;
+                        let origin_x = shadow_layout.origin_x;
+                        let origin_y = shadow_layout.origin_y;
+                        let tex_w_log = shadow_layout.tex_w_log;
+                        let tex_h_log = shadow_layout.tex_h_log;
+                        let tex_w = shadow_layout.tex_w;
+                        let tex_h = shadow_layout.tex_h;
 
                         let shadow_style = renderer_core::TextStyle {
                             paint: renderer_core::Paint::Solid(shadow.color),
@@ -1401,8 +1411,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.bounds =
-                                Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
+                            accum.extend(bounds);
                         }
                     }
                     self.flush_rect();
@@ -1446,8 +1455,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.bounds =
-                                Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
+                            accum.extend(bounds);
                         }
                     }
                     self.flush_rect();
@@ -1476,8 +1484,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.bounds =
-                                Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
+                            accum.extend(bounds);
                         }
                     }
                     self.flush_all();
@@ -1526,18 +1533,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             let world_max_x = wmin_x.max(wmax_x) + shadow.offset_x;
                             let world_max_y = wmin_y.max(wmax_y) + shadow.offset_y;
 
-                            let sigma = renderer_core::blur_sigma(shadow.blur_radius);
-                            let sigma_phys = sigma * self.scale_factor;
-                            let padding = renderer_core::blur_padding(sigma) as u32;
-
-                            let origin_x = world_min_x - padding as f32;
-                            let origin_y = world_min_y - padding as f32;
-                            let tex_w_log =
-                                ((world_max_x - world_min_x).ceil() as u32 + 2 * padding).max(1);
-                            let tex_h_log =
-                                ((world_max_y - world_min_y).ceil() as u32 + 2 * padding).max(1);
-                            let tex_w = (tex_w_log as f32 * self.scale_factor).ceil() as u32;
-                            let tex_h = (tex_h_log as f32 * self.scale_factor).ceil() as u32;
+                            let shadow_layout = renderer_core::ShadowLayout::compute(
+                                shadow.blur_radius,
+                                world_min_x,
+                                world_max_x,
+                                world_min_y,
+                                world_max_y,
+                                self.scale_factor,
+                            );
+                            let sigma_phys = shadow_layout.sigma;
+                            let origin_x = shadow_layout.origin_x;
+                            let origin_y = shadow_layout.origin_y;
+                            let tex_w_log = shadow_layout.tex_w_log;
+                            let tex_h_log = shadow_layout.tex_h_log;
+                            let tex_w = shadow_layout.tex_w;
+                            let tex_h = shadow_layout.tex_h;
 
                             for v in &mut self.pending_shadow_path_vertices[sv_start..] {
                                 let (wx, wy) =

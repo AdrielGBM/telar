@@ -10,6 +10,7 @@ mod image;
 mod path;
 mod preprocess;
 mod renderer;
+mod shadow;
 mod style;
 pub mod style_pool;
 
@@ -17,7 +18,7 @@ pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 
 pub use color::Color;
 pub use command::DrawCommand;
-pub use culling::{FontMetrics, apply_matrix, union_rects};
+pub use culling::{FontMetrics, apply_matrix, extend_bounds, union_rects};
 #[doc(hidden)]
 pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, IDENTITY_MATRIX, compose_matrix, for_each_with_matrix};
@@ -28,6 +29,7 @@ pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use path::{PathData, PathVerb};
 pub use preprocess::{blur_padding, blur_sigma, expand_fill_layers, scale_commands};
 pub use renderer::RenderBackend;
+pub use shadow::ShadowLayout;
 pub use style::{
     BorderRadius, FillRule, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineJoin,
     LineStyle, Paint, PathStyle, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextStyle,

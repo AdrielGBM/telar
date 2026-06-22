@@ -103,28 +103,17 @@ fn handle_scroll_event(
     content.on_event(effective)
 }
 
-// Closure-based viewport; cannot be used as a LayoutItem.
-pub struct ScrollArea {
-    viewport: Box<dyn Fn() -> Rect>,
+pub(crate) struct ScrollCore {
     content_size: RwSignal<Rect>,
-    // Reactive model: signal writes automatically trigger view() re-evaluation.
     scroll_x: RwSignal<f32>,
-    // Reactive model: signal writes automatically trigger view() re-evaluation.
     scroll_y: RwSignal<f32>,
     content: Box<dyn LayoutItem>,
     scrollbar_style: ScrollbarStyle,
 }
 
-impl ScrollArea {
-    pub fn new(
-        ctx: &WidgetCtx,
-        viewport: impl Fn() -> Rect + 'static,
-        content: Box<dyn LayoutItem>,
-    ) -> Self {
-        let content_size =
-            track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
+impl ScrollCore {
+    fn new(content_size: RwSignal<Rect>, content: Box<dyn LayoutItem>) -> Self {
         Self {
-            viewport: Box::new(viewport),
             content_size,
             scroll_x: create_rw_signal(0.0),
             scroll_y: create_rw_signal(0.0),
@@ -133,13 +122,7 @@ impl ScrollArea {
         }
     }
 
-    pub fn scrollbar_style(mut self, style: ScrollbarStyle) -> Self {
-        self.scrollbar_style = style;
-        self
-    }
-
-    pub fn clamp_scroll(&mut self) {
-        let vp = (self.viewport)();
+    fn clamp_scroll(&mut self, vp: Rect) {
         let content_rect = self.content_size.get();
         let max_x = (content_rect.width - vp.width).max(0.0);
         let max_y = (content_rect.height - vp.height).max(0.0);
@@ -152,15 +135,11 @@ impl ScrollArea {
             self.scroll_y.set(cy);
         }
     }
-}
 
-impl Component for ScrollArea {
-    fn view(&self) -> RenderNode {
-        let vp = (self.viewport)();
+    fn view(&self, vp: Rect) -> RenderNode {
         let scroll_x = self.scroll_x.get();
         let scroll_y = self.scroll_y.get();
         let content_rect = self.content_size.get();
-
         let scrollable = RenderNode::Clip {
             rect: vp,
             radius: BorderRadius::zero(),
@@ -169,14 +148,12 @@ impl Component for ScrollArea {
                 children: NodeVec::collect([self.content.view()]),
             }]),
         };
-
         let (vbar, hbar) =
             draw_scrollbars(vp, scroll_x, scroll_y, content_rect, &self.scrollbar_style);
         RenderNode::group([scrollable, vbar, hbar])
     }
 
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        let vp = (self.viewport)();
+    fn on_event(&mut self, event: &Event, vp: Rect) -> EventResult {
         handle_scroll_event(
             event,
             vp,
@@ -188,16 +165,50 @@ impl Component for ScrollArea {
     }
 }
 
+// Closure-based viewport; cannot be used as a LayoutItem.
+pub struct ScrollArea {
+    viewport: Box<dyn Fn() -> Rect>,
+    core: ScrollCore,
+}
+
+impl ScrollArea {
+    pub fn new(
+        ctx: &WidgetCtx,
+        viewport: impl Fn() -> Rect + 'static,
+        content: Box<dyn LayoutItem>,
+    ) -> Self {
+        let content_size =
+            track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
+        Self {
+            viewport: Box::new(viewport),
+            core: ScrollCore::new(content_size, content),
+        }
+    }
+
+    pub fn scrollbar_style(mut self, style: ScrollbarStyle) -> Self {
+        self.core.scrollbar_style = style;
+        self
+    }
+
+    pub fn clamp_scroll(&mut self) {
+        self.core.clamp_scroll((self.viewport)());
+    }
+}
+
+impl Component for ScrollArea {
+    fn view(&self) -> RenderNode {
+        self.core.view((self.viewport)())
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        self.core.on_event(event, (self.viewport)())
+    }
+}
+
 // Taffy-layout viewport; always valid as a LayoutItem — no panic possible.
 pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
-    content_size: RwSignal<Rect>,
-    // Reactive model: signal writes automatically trigger view() re-evaluation.
-    scroll_x: RwSignal<f32>,
-    // Reactive model: signal writes automatically trigger view() re-evaluation.
-    scroll_y: RwSignal<f32>,
-    content: Box<dyn LayoutItem>,
-    scrollbar_style: ScrollbarStyle,
+    core: ScrollCore,
 }
 
 impl LayoutScrollArea {
@@ -211,32 +222,17 @@ impl LayoutScrollArea {
         let leaf = LayoutLeaf::register(ctx, layout_style)?;
         Ok(Self {
             leaf,
-            content_size,
-            scroll_x: create_rw_signal(0.0),
-            scroll_y: create_rw_signal(0.0),
-            content,
-            scrollbar_style: ScrollbarStyle::default(),
+            core: ScrollCore::new(content_size, content),
         })
     }
 
     pub fn scrollbar_style(mut self, style: ScrollbarStyle) -> Self {
-        self.scrollbar_style = style;
+        self.core.scrollbar_style = style;
         self
     }
 
     pub fn clamp_scroll(&mut self) {
-        let vp = self.leaf.rect.get();
-        let content_rect = self.content_size.get();
-        let max_x = (content_rect.width - vp.width).max(0.0);
-        let max_y = (content_rect.height - vp.height).max(0.0);
-        let cx = self.scroll_x.get().clamp(0.0, max_x);
-        let cy = self.scroll_y.get().clamp(0.0, max_y);
-        if self.scroll_x.get() != cx {
-            self.scroll_x.set(cx);
-        }
-        if self.scroll_y.get() != cy {
-            self.scroll_y.set(cy);
-        }
+        self.core.clamp_scroll(self.leaf.rect.get());
     }
 
     pub fn viewport_rect(&self) -> Rect {
@@ -248,35 +244,11 @@ impl_leaf_widget!(LayoutScrollArea);
 
 impl Component for LayoutScrollArea {
     fn view(&self) -> RenderNode {
-        let vp = self.leaf.rect.get();
-        let scroll_x = self.scroll_x.get();
-        let scroll_y = self.scroll_y.get();
-        let content_rect = self.content_size.get();
-
-        let scrollable = RenderNode::Clip {
-            rect: vp,
-            radius: BorderRadius::zero(),
-            children: NodeVec::collect([RenderNode::Transform {
-                matrix: [1.0, 0.0, 0.0, 1.0, vp.x - scroll_x, vp.y - scroll_y],
-                children: NodeVec::collect([self.content.view()]),
-            }]),
-        };
-
-        let (vbar, hbar) =
-            draw_scrollbars(vp, scroll_x, scroll_y, content_rect, &self.scrollbar_style);
-        RenderNode::group([scrollable, vbar, hbar])
+        self.core.view(self.leaf.rect.get())
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let vp = self.leaf.rect.get();
-        handle_scroll_event(
-            event,
-            vp,
-            self.scroll_x.clone(),
-            self.scroll_y.clone(),
-            self.content_size.clone(),
-            &mut self.content,
-        )
+        self.core.on_event(event, self.leaf.rect.get())
     }
 }
 
@@ -429,7 +401,7 @@ mod tests {
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Lines { x: 0.0, y: -3.0 },
         });
-        assert_eq!(sa.scroll_y.get(), 60.0);
+        assert_eq!(sa.core.scroll_y.get(), 60.0);
     }
 
     #[test]
@@ -438,7 +410,7 @@ mod tests {
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Pixels { x: 0.0, y: -80.0 },
         });
-        assert_eq!(sa.scroll_y.get(), 80.0);
+        assert_eq!(sa.core.scroll_y.get(), 80.0);
     }
 
     #[test]
@@ -447,7 +419,7 @@ mod tests {
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Pixels { x: 0.0, y: -9999.0 },
         });
-        assert_eq!(sa.scroll_y.get(), 700.0);
+        assert_eq!(sa.core.scroll_y.get(), 700.0);
     }
 
     #[test]
@@ -456,7 +428,7 @@ mod tests {
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Pixels { x: 0.0, y: 9999.0 },
         });
-        assert_eq!(sa.scroll_y.get(), 0.0);
+        assert_eq!(sa.core.scroll_y.get(), 0.0);
     }
 
     #[test]
@@ -591,7 +563,7 @@ mod tests {
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Lines { x: -3.0, y: 0.0 },
         });
-        assert_eq!(sa.scroll_x.get(), 60.0);
+        assert_eq!(sa.core.scroll_x.get(), 60.0);
     }
 
     #[test]
@@ -600,7 +572,7 @@ mod tests {
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Pixels { x: -80.0, y: 0.0 },
         });
-        assert_eq!(sa.scroll_x.get(), 80.0);
+        assert_eq!(sa.core.scroll_x.get(), 80.0);
     }
 
     #[test]
@@ -609,7 +581,7 @@ mod tests {
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Pixels { x: -9999.0, y: 0.0 },
         });
-        assert_eq!(sa.scroll_x.get(), 600.0);
+        assert_eq!(sa.core.scroll_x.get(), 600.0);
     }
 
     #[test]
@@ -618,7 +590,7 @@ mod tests {
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Pixels { x: 9999.0, y: 0.0 },
         });
-        assert_eq!(sa.scroll_x.get(), 0.0);
+        assert_eq!(sa.core.scroll_x.get(), 0.0);
     }
 
     #[test]

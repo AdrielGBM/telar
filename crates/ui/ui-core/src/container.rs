@@ -6,7 +6,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{WidgetCtx, new_container, track_layout};
 use crate::layout_item::LayoutItem;
-use crate::pointer::{dispatch_to_children_filtered, pointer_coords};
+use crate::pointer::dispatch_container_event;
 
 pub struct Container {
     node: NodeId,
@@ -69,33 +69,7 @@ impl Component for Container {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        if matches!(event, Event::PointerMoved { .. }) {
-            // Broadcast to every child without short-circuiting so each widget can reset its own
-            // hover state when the pointer leaves — dispatch_to_children_filtered stops at the first
-            // Handled result and would skip siblings that still need to clear their hover state.
-            let mut any_handled = false;
-            for (child, _) in &mut self.children {
-                if child.on_event(event) == EventResult::Handled {
-                    any_handled = true;
-                }
-            }
-            return if any_handled {
-                EventResult::Handled
-            } else {
-                EventResult::Ignored
-            };
-        }
-        let pointer_pos = pointer_coords(event).map(|(x, y)| (x as f32, y as f32));
-        dispatch_to_children_filtered(
-            &mut self.children,
-            |(_, rect_signal)| match pointer_pos {
-                Some((px, py)) => rect_signal
-                    .as_ref()
-                    .map_or(true, |sig| sig.get().contains(px, py)),
-                None => true,
-            },
-            |(child, _)| child.on_event(event),
-        )
+        dispatch_container_event(&mut self.children, event)
     }
 }
 

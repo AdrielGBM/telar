@@ -149,6 +149,10 @@ pub fn command_visual_rect(
     }
 }
 
+pub fn extend_bounds(current: Option<Rect>, new_rect: Rect) -> Option<Rect> {
+    Some(current.map_or(new_rect, |b| union_rects(b, new_rect)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

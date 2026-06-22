@@ -135,8 +135,15 @@ pub(crate) fn draw_text(
     if let Some(shadow) = style.shadow {
         let (arc, tex_w, tex_h) = shaper.rasterize_alpha(text, rect, style);
         if tex_w > 0 && tex_h > 0 {
-            let sigma = renderer_core::blur_sigma(shadow.blur_radius);
-            let padding = renderer_core::blur_padding(sigma);
+            let shadow_layout = renderer_core::ShadowLayout::compute(
+                shadow.blur_radius,
+                rect.x + shadow.offset_x,
+                rect.x + shadow.offset_x + tex_w as f32,
+                rect.y + shadow.offset_y,
+                rect.y + shadow.offset_y + tex_h as f32,
+                1.0,
+            );
+            let padding = shadow_layout.padding;
 
             let shadow_x = rect.x + shadow.offset_x - padding as f32;
             let shadow_y = rect.y + shadow.offset_y - padding as f32;

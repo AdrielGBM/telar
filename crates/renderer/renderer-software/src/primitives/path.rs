@@ -108,8 +108,15 @@ pub(crate) fn draw_path(
     let b = path.bounds();
 
     if let Some(shadow) = style.shadow {
-        let sigma = renderer_core::blur_sigma(shadow.blur_radius);
-        let padding = renderer_core::blur_padding(sigma);
+        let shadow_layout = renderer_core::ShadowLayout::compute(
+            shadow.blur_radius,
+            b.x() + shadow.offset_x,
+            b.x() + shadow.offset_x + b.width(),
+            b.y() + shadow.offset_y,
+            b.y() + shadow.offset_y + b.height(),
+            1.0,
+        );
+        let padding = shadow_layout.padding;
 
         let shadow_x = b.x() + shadow.offset_x - padding as f32;
         let shadow_y = b.y() + shadow.offset_y - padding as f32;
