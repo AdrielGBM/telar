@@ -7,12 +7,12 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
-pub struct RectView {
+pub struct Rectangle {
     leaf: LayoutLeaf,
     style: Box<dyn Fn() -> RectStyle>,
 }
 
-impl RectView {
+impl Rectangle {
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
         layout_style: LayoutStyle,
@@ -26,7 +26,7 @@ impl RectView {
     }
 }
 
-impl Component for RectView {
+impl Component for Rectangle {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         let style = (self.style)();
@@ -46,4 +46,4 @@ impl Component for RectView {
     }
 }
 
-impl_leaf_widget!(RectView);
+impl_leaf_widget!(Rectangle);

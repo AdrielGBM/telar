@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 platform-core = { workspace = true }
-winit = "0.30"
+winit = { workspace = true }
 raw-window-handle = { workspace = true }

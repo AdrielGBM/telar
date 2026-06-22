@@ -21,12 +21,12 @@ impl Text {
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
         content_fn: impl Fn() -> String + 'static,
-        layout: LayoutStyle,
+        layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
         // Stretch overrides any parent align-items (e.g. center) so text always
         // fills the parent's cross-axis width instead of collapsing to 0.
-        let leaf = LayoutLeaf::register(ctx, layout.align_self_stretch())?;
+        let leaf = LayoutLeaf::register(ctx, layout_style.align_self_stretch())?;
         Ok(Self {
             content_fn: Box::new(content_fn),
             cached_content: RefCell::new((String::new(), Arc::from(""))),

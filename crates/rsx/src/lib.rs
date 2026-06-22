@@ -55,7 +55,7 @@ pub use reactive_core::{
 pub use renderer_core::{
     BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, LineStyle, Paint, PathData,
-    PathStyle, PathVerb, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
+    PathStyle, PathVerb, RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
 #[cfg(feature = "runtime")]
 pub use rsx_devtools::{DevAction, DevPlugin};
@@ -64,7 +64,7 @@ pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, wit
 pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme};
 pub use ui_core::{
     Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Image,
-    LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, RectView, RenderNode, ScrollArea,
+    LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, Rectangle, RenderNode, ScrollArea,
     ScrollablePage, ScrollbarStyle, StyledContainer, Text, WidgetCtx, box_item, compute_layout,
     new_container, new_leaf, track_layout, with_context,
 };

@@ -3,7 +3,7 @@ use platform_core::Event;
 use renderer_core::{DrawCommand, LineStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
-/// `Line` is designed for use inside `Canvas`/`DrawingArea` closures where you control absolute coordinates. It does not implement `LayoutItem` because its `p1`/`p2` points are absolute, not relative to a layout rect. To use `Line` in a layout context, embed it in a `Canvas` widget.
+/// `Line` is designed for use inside `Canvas` closures where you control absolute coordinates. It does not implement `LayoutItem` because its `p1`/`p2` points are absolute, not relative to a layout rect. To use `Line` in a layout context, embed it in a `Canvas` widget.
 pub struct Line {
     p1: Box<dyn Fn() -> Point>,
     p2: Box<dyn Fn() -> Point>,

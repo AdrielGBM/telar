@@ -472,6 +472,8 @@ where
         _scale_factor: f32,
         _generation: u64,
     ) -> Result<(), RendererError> {
+        // `scale_factor` and `generation` are ignored because draw commands arrive pre-scaled by the caller; software backend does not need to track them.
+
         if width != self.width || height != self.height {
             self.width = width;
             self.height = height;

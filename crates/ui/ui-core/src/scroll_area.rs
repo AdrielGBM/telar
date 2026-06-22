@@ -9,7 +9,8 @@ use ui_tree::{Component, EventResult, RenderNode};
 use ui_tree::NodeVec;
 
 use crate::context::{WidgetCtx, track_layout};
-use crate::layout_item::{LayoutItem, LeafWidget};
+use crate::impl_leaf_widget;
+use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, offset_pointer};
 
@@ -202,12 +203,12 @@ pub struct LayoutScrollArea {
 impl LayoutScrollArea {
     pub fn new(
         ctx: &mut WidgetCtx,
-        layout: LayoutStyle,
+        layout_style: LayoutStyle,
         content: Box<dyn LayoutItem>,
     ) -> Result<Self, LayoutError> {
         let content_size =
             track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
-        let leaf = LayoutLeaf::register(ctx, layout)?;
+        let leaf = LayoutLeaf::register(ctx, layout_style)?;
         Ok(Self {
             leaf,
             content_size,
@@ -243,11 +244,7 @@ impl LayoutScrollArea {
     }
 }
 
-impl LeafWidget for LayoutScrollArea {
-    fn layout_leaf(&self) -> &LayoutLeaf {
-        &self.leaf
-    }
-}
+impl_leaf_widget!(LayoutScrollArea);
 
 impl Component for LayoutScrollArea {
     fn view(&self) -> RenderNode {
@@ -292,8 +289,8 @@ mod tests {
     use ui_tree::{Component, EventResult, RenderNode};
 
     use super::*;
+    use crate::canvas::Canvas;
     use crate::context::{WidgetCtx, compute_layout, new_container, with_context};
-    use crate::drawing_area::Canvas;
     use crate::layout_item::LayoutItem;
     use crate::layout_leaf::LayoutLeaf;
 

@@ -1249,7 +1249,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         } else {
             None
         };
-        // compute_dirty_rect now returns the changed regions as disjoint rects; the hardware path uses a single scissor, so collapse them into their union here.
+        // Multiple dirty rects are collapsed to their bounding union because GPUs support only a single scissor rect per pass (hardware limitation asymmetry vs. software backend which can clip per-rect).
         let dirty_scissor: Option<Rect> =
             if clear_color.is_none() && scroll_blit.is_none() && !self.prev_commands.is_empty() {
                 renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
@@ -1405,35 +1405,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         &mut self.glyph_scratch,
                     );
                 }
-                DrawCommand::Line { p1, p2, style } => {
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cum_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
-                        {
-                            continue;
-                        }
-                        if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.bounds =
-                                Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
-                        }
-                    }
-                    self.flush_rect();
-                    self.flush_text();
-                    self.flush_image();
-                    if self.batch_line_start.is_none() {
-                        self.batch_line_start = Some(self.pending_line_instances.len() as u32);
-                    }
-                    use geometry_core::Point;
-                    let (lx1, ly1) = self.draw_state.apply_point(p1.x, p1.y);
-                    let (lx2, ly2) = self.draw_state.apply_point(p2.x, p2.y);
-                    let tp1 = Point::new(lx1, ly1);
-                    let tp2 = Point::new(lx2, ly2);
-                    self.pending_line_instances
-                        .push(crate::primitives::line::prepare_line(tp1, tp2, *style));
-                }
                 DrawCommand::Image { data, rect, filter } => {
                     if let Some(bounds) = renderer_core::culling::command_visual_rect(
                         cmd,
@@ -1478,6 +1449,35 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     let translated = Rect::new(imin_x, imin_y, imax_x - imin_x, imax_y - imin_y);
                     self.pending_image_instances
                         .push(crate::primitives::image::prepare_image(translated));
+                }
+                DrawCommand::Line { p1, p2, style } => {
+                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cum_matrix,
+                        &self.font_metrics,
+                    ) {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
+                        {
+                            continue;
+                        }
+                        if let Some(accum) = layer_accum_stack.last_mut() {
+                            accum.bounds =
+                                Some(accum.bounds.map_or(bounds, |b| union_rects(b, bounds)));
+                        }
+                    }
+                    self.flush_rect();
+                    self.flush_text();
+                    self.flush_image();
+                    if self.batch_line_start.is_none() {
+                        self.batch_line_start = Some(self.pending_line_instances.len() as u32);
+                    }
+                    use geometry_core::Point;
+                    let (lx1, ly1) = self.draw_state.apply_point(p1.x, p1.y);
+                    let (lx2, ly2) = self.draw_state.apply_point(p2.x, p2.y);
+                    let tp1 = Point::new(lx1, ly1);
+                    let tp2 = Point::new(lx2, ly2);
+                    self.pending_line_instances
+                        .push(crate::primitives::line::prepare_line(tp1, tp2, *style));
                 }
                 DrawCommand::Path { data, style } => {
                     let style = **style;

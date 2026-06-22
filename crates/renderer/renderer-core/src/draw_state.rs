@@ -18,6 +18,7 @@ pub fn compose_matrix(parent: [f32; 6], child: [f32; 6]) -> [f32; 6] {
     ]
 }
 
+/// Flat draw state tracking clips and transforms. Note: `PushLayer` and `PopLayer` commands are intentionally not tracked here; layers are managed outside this struct by the caller.
 pub struct DrawState {
     clip_stack: Vec<Rect>,
     transform_stack: Vec<[f32; 6]>,

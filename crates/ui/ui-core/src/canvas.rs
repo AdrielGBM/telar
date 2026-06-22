@@ -13,10 +13,10 @@ pub struct Canvas {
 impl Canvas {
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
-        layout: LayoutStyle,
+        layout_style: LayoutStyle,
         draw_fn: impl Fn(Rect) -> RenderNode + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, layout)?;
+        let leaf = LayoutLeaf::register(ctx, layout_style)?;
         Ok(Self {
             leaf,
             draw_fn: Box::new(draw_fn),

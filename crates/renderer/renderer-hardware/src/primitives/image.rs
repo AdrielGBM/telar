@@ -13,6 +13,7 @@ pub(crate) struct ImageInstance {
 }
 
 struct GpuImage {
+    // Keeps the GPU texture alive via RAII; held to ensure the texture is not dropped while the image is in use.
     #[allow(dead_code)]
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,

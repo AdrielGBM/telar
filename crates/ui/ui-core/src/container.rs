@@ -17,11 +17,11 @@ pub struct Container {
 impl Container {
     pub fn new(
         ctx: &mut WidgetCtx,
-        style: LayoutStyle,
+        layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
     ) -> Result<Self, LayoutError> {
         let child_nodes = children.iter().map(|c| c.layout_node()).collect::<Vec<_>>();
-        let node = new_container(ctx, style, &child_nodes)?;
+        let node = new_container(ctx, layout_style, &child_nodes)?;
         // track_layout retrieves the signal already stored in the context's registry by new_container
         let rect = track_layout(ctx, node).expect("new_container always registers a signal");
         let children = children

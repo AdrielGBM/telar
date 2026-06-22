@@ -254,8 +254,8 @@ impl<'a> ViewGen<'a> {
              {pad}    let __src = {src}.clone();\n\
              {pad}    Image::new(\n\
              {pad}        ctx,\n\
-             {pad}        move || __src.clone(),\n\
              {pad}        {layout_style},\n\
+             {pad}        move || __src.clone(),\n\
              {pad}        move || {filter},\n\
              {pad}    )?\n\
              {pad}}};"

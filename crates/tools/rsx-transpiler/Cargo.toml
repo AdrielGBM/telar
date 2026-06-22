@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 rsx-parser = { workspace = true }
+thiserror = { workspace = true }

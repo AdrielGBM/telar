@@ -71,6 +71,11 @@ wide = "1.4"
 clru = "0.6.3"
 smallvec = { version = "1.15.1", features = ["union"] }
 lru = "0.18.0"
+tower-lsp = "0.20"
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+winit = "0.30"
+tiny-skia = "0.12.0"
 
 platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }
@@ -92,6 +97,3 @@ rsx-devtools = { path = "crates/tools/rsx-devtools" }
 rsx-parser = { path = "crates/tools/rsx-parser" }
 rsx-transpiler = { path = "crates/tools/rsx-transpiler" }
 rsx-macros = { path = "crates/tools/rsx-macros" }
-tower-lsp = "0.20"
-tokio = { version = "1", features = ["full"] }
-serde_json = "1"

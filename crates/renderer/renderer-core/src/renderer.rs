@@ -1,6 +1,7 @@
 use crate::{Color, DrawCommand, RendererError};
 
 pub trait RenderBackend {
+    /// Begin a new frame. Note: `scale_factor` and `generation` may be ignored by backends that receive pre-scaled commands (see `SoftwareRenderer::begin_frame`).
     fn begin_frame(
         &mut self,
         width: u32,
