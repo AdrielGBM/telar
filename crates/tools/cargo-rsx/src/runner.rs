@@ -837,9 +837,7 @@ fn run_preview_cmd(args: PreviewArgs) {
         config.backend = Some(backend_from_arg(backend));
     }
     run_hot_loop(
-        HotMode::Preview {
-            component: args.component,
-        },
+        HotMode::Preview,
         HotLoopOpts {
             args: cargo_args,
             config,
@@ -904,28 +902,25 @@ fn backend_from_arg(b: BackendArg) -> RendererBackend {
 
 enum HotMode {
     Dev,
-    Preview {
-        #[allow(dead_code)]
-        component: Option<String>,
-    },
+    Preview,
 }
 
 impl HotMode {
     fn is_preview(&self) -> bool {
-        matches!(self, HotMode::Preview { .. })
+        matches!(self, HotMode::Preview)
     }
 
     fn features(&self) -> &'static [&'static str] {
         match self {
             HotMode::Dev => &["rsx/dev"],
-            HotMode::Preview { .. } => &["rsx/preview", "rsx/dev"],
+            HotMode::Preview => &["rsx/preview", "rsx/dev"],
         }
     }
 
     fn rustflags(&self) -> String {
         match self {
             HotMode::Dev => hot_reload_rustflags(),
-            HotMode::Preview { .. } => preview_rustflags(),
+            HotMode::Preview => preview_rustflags(),
         }
     }
 }

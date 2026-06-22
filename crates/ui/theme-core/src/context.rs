@@ -48,14 +48,6 @@ thread_local! {
         ManuallyDrop::new(create_rw_signal(None));
 }
 
-// Installs a theme readable via `use_theme`. Clears any previously registered
-// widget theme since the new theme does not implement `WidgetTheme`.
-pub fn set_theme<T: Theme + Clone + 'static>(theme: T) {
-    let theme: Rc<dyn Theme> = Rc::new(theme);
-    THEME.with(|s| s.set(Some(theme)));
-    WIDGET_THEME.with(|s| s.set(None));
-}
-
 // Installs a theme that also drives built-in widgets. The same value is stored
 // behind both trait objects so `use_theme` and `use_widget_theme` stay in sync.
 pub fn set_theme_with_widgets<T: Theme + WidgetTheme + Clone + 'static>(theme: T) {

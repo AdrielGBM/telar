@@ -2587,7 +2587,6 @@ version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "rsx-parser",
  "rsx-transpiler",
  "syn",
 ]

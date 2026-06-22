@@ -655,7 +655,7 @@ impl<'a> ViewGen<'a> {
             );
             let _ = writeln!(
                 code,
-                "{inner_pad}ScrollArea::as_layout_item(ctx, {style}, Box::new(__scroll_content))?"
+                "{inner_pad}LayoutScrollArea::new(ctx, {style}, Box::new(__scroll_content))?"
             );
         } else {
             let mut names = Vec::new();
@@ -677,7 +677,7 @@ impl<'a> ViewGen<'a> {
 
             let _ = writeln!(
                 code,
-                "{inner_pad}ScrollArea::as_layout_item(ctx, {style}, Box::new({content}))?"
+                "{inner_pad}LayoutScrollArea::new(ctx, {style}, Box::new({content}))?"
             );
         }
 
@@ -1466,15 +1466,15 @@ mod tests {
 
     #[test]
     fn widget_ref_passthrough() {
-        let src = "let canvas = build_canvas(ctx)?;\n[view]\nwidget \"canvas\"\n";
-        let out = crate::transpile_source(src, "my_section").unwrap();
+        let src = "[logic]\nlet canvas = build_canvas(ctx)?;\n[view]\nwidget \"canvas\"\n";
+        let out = crate::transpile_source_with_theme(src, "my_section", None).unwrap();
         assert!(out.rust_code.contains("Ok(Box::new(canvas))"));
     }
 
     #[test]
     fn canvas_with_rect_and_text_children() {
-        let src = "[view]\ncanvas width:100 height:50\n    rect fill:#3c77fa radius:8\n    text \"hi\" x:0 y:4 w:full h:42 size:12 color:white\n";
-        let out = crate::transpile_source(src, "demo").unwrap();
+        let src = "[logic]\n[view]\ncanvas width:100 height:50\n    rect fill:#3c77fa radius:8\n    text \"hi\" x:0 y:4 w:full h:42 size:12 color:white\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None).unwrap();
         let code = &out.rust_code;
         assert!(code.contains("Canvas::new(ctx,"), "missing Canvas::new");
         assert!(
@@ -1506,8 +1506,8 @@ mod tests {
 
     #[test]
     fn unknown_tag_becomes_component_call() {
-        let src = "[view]\nmy_card\n";
-        let out = crate::transpile_source(src, "demo").unwrap();
+        let src = "[logic]\n[view]\nmy_card\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None).unwrap();
         assert!(
             out.rust_code.contains("my_card(ctx)?"),
             "no-attr tag should call fn directly"

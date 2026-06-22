@@ -1803,7 +1803,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             use std::hash::{Hash, Hasher};
                             let base = renderer_core::hash_draw_commands(
                                 &commands[accum.cmd_start..cmd_idx],
-                                renderer_core::HashPolicy::ByContent,
                             );
                             let mut h = FxHasher::default();
                             base.hash(&mut h);
@@ -3474,8 +3473,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
         output.present();
-        let current_hash =
-            renderer_core::hash_draw_commands(orig_commands, renderer_core::HashPolicy::ByContent);
+        let current_hash = renderer_core::hash_draw_commands(orig_commands);
         if current_hash != self.prev_commands_hash {
             self.prev_commands = orig_commands.to_vec();
             self.prev_commands_hash = current_hash;

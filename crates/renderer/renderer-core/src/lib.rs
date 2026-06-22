@@ -5,7 +5,6 @@ pub mod dirty;
 mod draw_state;
 mod error;
 pub mod font_config;
-mod geometry;
 mod hash;
 mod image;
 mod path;
@@ -24,7 +23,7 @@ pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, IDENTITY_MATRIX, compose_matrix, for_each_with_matrix};
 pub use error::RendererError;
 pub use font_config::FontConfig;
-pub use hash::{HashPolicy, hash_draw_commands, hash_draw_commands_into};
+pub use hash::{hash_draw_commands, hash_draw_commands_into};
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use path::{PathData, PathVerb};
 pub use preprocess::{blur_padding, blur_sigma, expand_fill_layers, scale_commands};
@@ -33,7 +32,4 @@ pub use style::{
     BorderRadius, FillRule, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineJoin,
     LineStyle, Paint, PathStyle, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
-pub use style_pool::{
-    FRAME_STYLE_POOL, FrameStylePool, StyleHandle, hash_path_style, hash_rect_style,
-    hash_text_style,
-};
+pub use style_pool::{hash_path_style, hash_rect_style, hash_text_style};

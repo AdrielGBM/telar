@@ -9,7 +9,6 @@ mod style;
 mod view;
 
 pub use error::TranspileError;
-pub use signal_scan::{SignalInfo, SignalKind, scan_signals};
 
 use std::path::{Path, PathBuf};
 
@@ -17,6 +16,7 @@ use rsx_parser::RsxDocument;
 
 use crate::naming::{mentions_ident, replace_whole_word, to_pascal_case, to_snake_case};
 use crate::preview_scan::scan_previews;
+use crate::signal_scan::scan_signals;
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
 
@@ -36,16 +36,8 @@ pub struct TranspiledSource {
     pub preview_names: Vec<String>,
 }
 
-/// Transpiles `source` directly: parses it, then generates Rust for `component_name`.
-pub fn transpile_source(
-    source: &str,
-    component_name: &str,
-) -> Result<TranspiledSource, TranspileError> {
-    transpile_source_with_theme(source, component_name, None)
-}
-
-/// Like [`transpile_source`], but resolves `[style]` colors through the given
-/// theme type so theme switching at runtime takes effect.
+/// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors
+/// through `theme_type` when provided so theme switching at runtime takes effect.
 pub fn transpile_source_with_theme(
     source: &str,
     component_name: &str,
@@ -76,44 +68,17 @@ pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
     result
 }
 
-/// The transpiled output for a single `.rsx` source file in a project.
-pub struct ProjectFile {
-    pub stem: String,
-    pub source_path: PathBuf,
-    pub rust_code: String,
-    pub preview_names: Vec<String>,
-}
-
-/// The transpiled output for an entire project's `.rsx` files.
-pub struct ProjectOutput {
-    pub files: Vec<ProjectFile>,
-}
-
-/// Transpiles all `.rsx` files found in `src_dir`.
-pub fn transpile_project(
-    src_dir: &Path,
-    theme_type: Option<&str>,
-) -> Result<ProjectOutput, TranspileError> {
-    let rsx_files = find_rsx_files(src_dir);
-    let mut files = Vec::new();
-    for path in rsx_files {
-        let source = std::fs::read_to_string(&path).map_err(|e| {
-            TranspileError::Codegen(format!("Failed to read {}: {e}", path.display()))
-        })?;
-        let stem = path
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        let result = transpile_source_with_theme(&source, &stem, theme_type)?;
-        files.push(ProjectFile {
-            stem,
-            source_path: path,
-            rust_code: result.rust_code,
-            preview_names: result.preview_names,
-        });
-    }
-    Ok(ProjectOutput { files })
+/// Derives a unique stem for a `.rsx` file from its path relative to `src_dir`,
+/// flattening subdirectories with `_` so files in different directories don't
+/// collide (e.g. `src/components/button.rsx` -> `components_button`).
+pub fn relative_stem(path: &Path, src_dir: &Path) -> String {
+    let rel = path.strip_prefix(src_dir).unwrap_or(path);
+    let without_ext = rel.with_extension("");
+    without_ext
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("_")
 }
 
 /// Transpiles a parsed document into Rust source.
@@ -342,7 +307,8 @@ mod tests {
 
     // COUNTER has explicit [style] color declarations — they become local COLOR_*
     // constants and take precedence over the theme (non-reactive overrides).
-    const COUNTER: &str = r#"let count = create_rw_signal(0i32);
+    const COUNTER: &str = r#"[logic]
+let count = create_rw_signal(0i32);
 
 [style]
 primary: #3d78fa
@@ -363,7 +329,8 @@ col .card
 
     // COUNTER_THEMED has no [style] color declarations — colors flow through the
     // live theme so they react to `set_theme(...)` calls at runtime.
-    const COUNTER_THEMED: &str = r#"let count = create_rw_signal(0i32);
+    const COUNTER_THEMED: &str = r#"[logic]
+let count = create_rw_signal(0i32);
 
 [style]
 .card
@@ -381,7 +348,7 @@ col .card
 
     #[test]
     fn generates_counter() {
-        let out = transpile_source(COUNTER, "counter").unwrap();
+        let out = transpile_source_with_theme(COUNTER, "counter", None).unwrap();
         let code = out.rust_code;
         assert!(code.contains("pub fn counter(ctx: &mut WidgetCtx)"));
         // [style]-declared colors become local constants.
@@ -428,9 +395,8 @@ col .card
 
     #[test]
     fn extracts_props_struct_to_file_scope() {
-        let src =
-            "#[derive(Props)]\npub struct Props { pub title: &'static str }\n[view]\ntext \"hi\"\n";
-        let out = transpile_source(src, "card").unwrap();
+        let src = "[logic]\n#[derive(Props)]\npub struct Props { pub title: &'static str }\n[view]\ntext \"hi\"\n";
+        let out = transpile_source_with_theme(src, "card", None).unwrap();
         let code = &out.rust_code;
         // Props struct is renamed and lifted before the fn declaration.
         assert!(
@@ -457,8 +423,8 @@ col .card
 
     #[test]
     fn component_with_quoted_string_attr() {
-        let src = "[view]\nmy_widget label:\"hello\" size:16\n";
-        let out = transpile_source(src, "demo").unwrap();
+        let src = "[logic]\n[view]\nmy_widget label:\"hello\" size:16\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("my_widget(ctx, crate::MyWidgetProps {"),

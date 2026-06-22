@@ -22,15 +22,15 @@ impl Canvas {
             draw_fn: Box::new(draw_fn),
         })
     }
+}
 
-    /// Creates a `Canvas` with only the height set, using a default `LayoutStyle`.
-    /// Use this when height is the only layout constraint — avoids constructing a full `LayoutStyle` for the common case.
+impl Canvas {
     pub fn with_intrinsic_height(
         ctx: &mut crate::context::WidgetCtx,
         height: f32,
-        draw_fn: impl Fn(Rect) -> RenderNode + 'static,
-    ) -> Result<Self, LayoutError> {
-        Self::new(ctx, LayoutStyle::new().height(height), draw_fn)
+        draw_fn: impl Fn(geometry_core::Rect) -> ui_tree::RenderNode + 'static,
+    ) -> Result<Self, layout_core::LayoutError> {
+        Self::new(ctx, layout_core::LayoutStyle::new().height(height), draw_fn)
     }
 }
 

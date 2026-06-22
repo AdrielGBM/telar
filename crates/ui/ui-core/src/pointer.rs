@@ -1,7 +1,6 @@
 use geometry_core::Rect;
 use platform_core::Event;
-use renderer_core::BorderRadius;
-use ui_tree::{Component, EventResult};
+use ui_tree::EventResult;
 
 pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
     match event {
@@ -83,58 +82,6 @@ pub(crate) fn clip_pointer_event<'a>(event: &'a Event, rect: Rect) -> Option<&'a
         Some((x, y)) if !rect.contains(x as f32, y as f32) => None,
         _ => Some(event),
     }
-}
-
-pub(crate) fn clip_pointer_event_rounded<'a>(
-    event: &'a Event,
-    rect: Rect,
-    radius: BorderRadius,
-) -> Option<&'a Event> {
-    match pointer_coords(event) {
-        Some((x, y)) if !point_in_rounded_rect(x as f32, y as f32, rect, radius) => None,
-        _ => Some(event),
-    }
-}
-
-fn point_in_rounded_rect(px: f32, py: f32, rect: Rect, radius: BorderRadius) -> bool {
-    if !rect.contains(px, py) {
-        return false;
-    }
-    let (x, y, w, h) = (rect.x, rect.y, rect.width, rect.height);
-    let check_corner = |cx: f32, cy: f32, r: f32| -> bool {
-        let dx = px - cx;
-        let dy = py - cy;
-        dx * dx + dy * dy <= r * r
-    };
-    let r = radius.top_left;
-    if r > 0.0 && px < x + r && py < y + r && !check_corner(x + r, y + r, r) {
-        return false;
-    }
-    let r = radius.top_right;
-    if r > 0.0 && px > x + w - r && py < y + r && !check_corner(x + w - r, y + r, r) {
-        return false;
-    }
-    let r = radius.bottom_right;
-    if r > 0.0 && px > x + w - r && py > y + h - r && !check_corner(x + w - r, y + h - r, r) {
-        return false;
-    }
-    let r = radius.bottom_left;
-    if r > 0.0 && px < x + r && py > y + h - r && !check_corner(x + r, y + h - r, r) {
-        return false;
-    }
-    true
-}
-
-pub(crate) fn dispatch_to_children(
-    children: &mut [Box<dyn Component>],
-    event: &Event,
-) -> EventResult {
-    for child in children {
-        if child.on_event(event).is_handled() {
-            return EventResult::Handled;
-        }
-    }
-    EventResult::Ignored
 }
 
 // Like dispatch_to_children but skips entries for which the predicate returns false.

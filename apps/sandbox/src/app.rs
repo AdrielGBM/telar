@@ -12,19 +12,19 @@ fn build_content(
     checker: Arc<ImageData>,
     alpha: Arc<ImageData>,
 ) -> Result<Container, LayoutError> {
-    let s_theme = crate::theme_section(ctx)?;
-    let s_shapes = crate::shapes_section(ctx)?;
-    let s_colors = crate::colors_section(ctx)?;
-    let s_typography = crate::typography_section(ctx)?;
-    let s_cards = crate::cards_section(ctx)?;
-    let s_images = crate::images_section(ctx, gradient, checker, alpha)?;
-    let s_lines = crate::lines_section(ctx)?;
-    let s_paths = crate::paths_section(ctx)?;
-    let s_gradients = crate::gradients_section(ctx)?;
-    let s_layers = crate::layers_section(ctx)?;
-    let s_shadows = crate::shadows_section(ctx)?;
-    let s_grid = crate::grid_section(ctx)?;
-    let s_transforms = crate::transforms_section(ctx)?;
+    let s_theme = crate::sections_theme_section(ctx)?;
+    let s_shapes = crate::sections_shapes_section(ctx)?;
+    let s_colors = crate::sections_colors_section(ctx)?;
+    let s_typography = crate::sections_typography_section(ctx)?;
+    let s_cards = crate::sections_cards_section(ctx)?;
+    let s_images = crate::sections_images_section(ctx, gradient, checker, alpha)?;
+    let s_lines = crate::sections_lines_section(ctx)?;
+    let s_paths = crate::sections_paths_section(ctx)?;
+    let s_gradients = crate::sections_gradients_section(ctx)?;
+    let s_layers = crate::sections_layers_section(ctx)?;
+    let s_shadows = crate::sections_shadows_section(ctx)?;
+    let s_grid = crate::sections_grid_section(ctx)?;
+    let s_transforms = crate::sections_transforms_section(ctx)?;
     let mut sections: Vec<Box<dyn LayoutItem>> = Vec::new();
     sections.push(s_theme);
     sections.push(s_shapes);

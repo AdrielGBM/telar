@@ -105,6 +105,16 @@ impl RenderNode {
         })
     }
 
+    pub fn transform_with(
+        matrix: [f32; 6],
+        children: impl IntoIterator<Item = RenderNode>,
+    ) -> Self {
+        Self::Transform {
+            matrix,
+            children: NodeVec::collect(children),
+        }
+    }
+
     pub fn layer(
         opacity: f32,
         backdrop_blur: f32,
@@ -113,16 +123,6 @@ impl RenderNode {
         Self::Layer {
             opacity,
             backdrop_blur,
-            children: NodeVec::collect(children),
-        }
-    }
-
-    pub fn transform_with(
-        matrix: [f32; 6],
-        children: impl IntoIterator<Item = RenderNode>,
-    ) -> Self {
-        Self::Transform {
-            matrix,
             children: NodeVec::collect(children),
         }
     }

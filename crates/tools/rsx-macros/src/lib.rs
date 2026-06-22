@@ -101,11 +101,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             }
         };
 
-        let stem = rsx_file
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
+        let stem = rsx_transpiler::relative_stem(rsx_file, &src_dir);
 
         let result = match rsx_transpiler::transpile_source_with_theme(
             &source,

@@ -24,7 +24,8 @@ pub fn parse(source: &str) -> Result<RsxDocument, ParseError> {
 mod tests {
     use super::*;
 
-    const SAMPLE: &str = r#"use rsx::prelude::*;
+    const SAMPLE: &str = r#"[logic]
+use rsx::prelude::*;
 let count = create_rw_signal(0i32);
 #[derive(Props)]
 pub struct Props {
@@ -223,7 +224,7 @@ col .card
 
     #[test]
     fn parses_if_else_block() {
-        let src = "[view]\ncol\n    if count > 0\n        text \"positive\"\n    else\n        text \"zero\"\n";
+        let src = "[logic]\n[view]\ncol\n    if count > 0\n        text \"positive\"\n    else\n        text \"zero\"\n";
         let doc = parse(src).unwrap();
         let ViewNode::Element(col) = &doc.view.nodes[0] else {
             panic!();
@@ -239,8 +240,7 @@ col .card
 
     #[test]
     fn parses_for_block() {
-        let src =
-            "[view]\ncol\n    for (i, item) in items.iter().enumerate()\n        text \"{item}\"\n";
+        let src = "[logic]\n[view]\ncol\n    for (i, item) in items.iter().enumerate()\n        text \"{item}\"\n";
         let doc = parse(src).unwrap();
         let ViewNode::Element(col) = &doc.view.nodes[0] else {
             panic!();
@@ -255,7 +255,7 @@ col .card
 
     #[test]
     fn parses_let_statement_in_view() {
-        let src = "[view]\ncol\n    let bar_w = (w - 16.0) / 2.0\n    text \"x\"\n";
+        let src = "[logic]\n[view]\ncol\n    let bar_w = (w - 16.0) / 2.0\n    text \"x\"\n";
         let doc = parse(src).unwrap();
         let ViewNode::Element(col) = &doc.view.nodes[0] else {
             panic!();
@@ -268,7 +268,7 @@ col .card
 
     #[test]
     fn parses_canvas_with_params() {
-        let src = "[view]\ncanvas .chart\n    |w, h|\n    rect\n";
+        let src = "[logic]\n[view]\ncanvas .chart\n    |w, h|\n    rect\n";
         let doc = parse(src).unwrap();
         let ViewNode::Element(canvas) = &doc.view.nodes[0] else {
             panic!();
@@ -286,7 +286,7 @@ col .card
 
     #[test]
     fn parses_named_closure_param_attribute() {
-        let src = "[view]\nbtn \"x\" on_press:|ev| handle(ev)\n";
+        let src = "[logic]\n[view]\nbtn \"x\" on_press:|ev| handle(ev)\n";
         let doc = parse(src).unwrap();
         let ViewNode::Element(btn) = &doc.view.nodes[0] else {
             panic!();
@@ -297,7 +297,7 @@ col .card
 
     #[test]
     fn parses_number_style_constant() {
-        let src = "[style]\nradius: 6\nlabel: hello\n[view]\ncol\n";
+        let src = "[logic]\n[style]\nradius: 6\nlabel: hello\n[view]\ncol\n";
         let doc = parse(src).unwrap();
         assert_eq!(doc.style.constants[0].value, StyleValue::Number(6.0));
         assert_eq!(
@@ -316,7 +316,7 @@ col .card
 
     #[test]
     fn document_without_logic_zone() {
-        let src = "[view]\ntext \"hello\"\n";
+        let src = "[logic]\n[view]\ntext \"hello\"\n";
         let doc = parse(src).unwrap();
         assert!(doc.logic.source.is_empty());
         assert_eq!(doc.view.nodes.len(), 1);

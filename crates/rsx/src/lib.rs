@@ -61,14 +61,12 @@ pub use renderer_core::{
 pub use rsx_devtools::{DevAction, DevPlugin};
 pub use services_core::AppPathsProvider;
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
-pub use theme_core::{
-    Theme, WidgetTheme, set_theme, set_theme_with_widgets, use_theme, use_widget_theme,
-};
+pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme};
 pub use ui_core::{
-    Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Group, Image,
+    Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Image,
     LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, RectView, RenderNode, ScrollArea,
     ScrollablePage, ScrollbarStyle, StyledContainer, Text, WidgetCtx, box_item, compute_layout,
-    mark_dirty, new_container, new_leaf, track_layout, update_style, with_context,
+    new_container, new_leaf, track_layout, with_context,
 };
 
 #[cfg(all(feature = "preview", not(target_os = "android")))]

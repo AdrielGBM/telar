@@ -22,10 +22,7 @@ impl Path {
     }
 
     pub fn static_data(data: Arc<PathData>, style: impl Fn() -> PathStyle + 'static) -> Self {
-        Self {
-            data: Box::new(move || data.clone()),
-            style: Box::new(style),
-        }
+        Self::new(move || data.clone(), style)
     }
 }
 

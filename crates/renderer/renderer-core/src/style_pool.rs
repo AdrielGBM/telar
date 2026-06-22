@@ -1,99 +1,11 @@
 use std::hash::Hasher;
 
-use rustc_hash::{FxHashMap, FxHasher};
+use rustc_hash::FxHasher;
 
 use crate::{
     BorderRadius, FillRule, Gradient, GradientKind, Paint, PathStyle, RectStyle, Shadow, Stroke,
     TextStyle,
 };
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct StyleHandle(pub u32);
-
-/// Per-frame interner that maps style content to small `u32` handles so `DrawCommand` variants
-/// can store an inline handle instead of an `Arc`-boxed style. Identical content within a frame
-/// (and across frames while the pool persists) collapses to the same handle.
-pub struct FrameStylePool {
-    rect_styles: Vec<RectStyle>,
-    text_styles: Vec<TextStyle>,
-    path_styles: Vec<PathStyle>,
-    rect_index: FxHashMap<u64, u32>,
-    text_index: FxHashMap<u64, u32>,
-    path_index: FxHashMap<u64, u32>,
-}
-
-impl FrameStylePool {
-    pub fn new() -> Self {
-        Self {
-            rect_styles: Vec::new(),
-            text_styles: Vec::new(),
-            path_styles: Vec::new(),
-            rect_index: FxHashMap::default(),
-            text_index: FxHashMap::default(),
-            path_index: FxHashMap::default(),
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.rect_styles.clear();
-        self.text_styles.clear();
-        self.path_styles.clear();
-        self.rect_index.clear();
-        self.text_index.clear();
-        self.path_index.clear();
-    }
-
-    pub fn intern_rect(&mut self, style: RectStyle) -> StyleHandle {
-        let hash = hash_rect_style(&style);
-        if let Some(&h) = self.rect_index.get(&hash) {
-            return StyleHandle(h);
-        }
-        let idx = self.rect_styles.len() as u32;
-        self.rect_styles.push(style);
-        self.rect_index.insert(hash, idx);
-        StyleHandle(idx)
-    }
-
-    pub fn intern_text(&mut self, style: TextStyle) -> StyleHandle {
-        let hash = hash_text_style(&style);
-        if let Some(&h) = self.text_index.get(&hash) {
-            return StyleHandle(h);
-        }
-        let idx = self.text_styles.len() as u32;
-        self.text_styles.push(style);
-        self.text_index.insert(hash, idx);
-        StyleHandle(idx)
-    }
-
-    pub fn intern_path(&mut self, style: PathStyle) -> StyleHandle {
-        let hash = hash_path_style(&style);
-        if let Some(&h) = self.path_index.get(&hash) {
-            return StyleHandle(h);
-        }
-        let idx = self.path_styles.len() as u32;
-        self.path_styles.push(style);
-        self.path_index.insert(hash, idx);
-        StyleHandle(idx)
-    }
-
-    pub fn get_rect(&self, h: StyleHandle) -> &RectStyle {
-        &self.rect_styles[h.0 as usize]
-    }
-
-    pub fn get_text(&self, h: StyleHandle) -> &TextStyle {
-        &self.text_styles[h.0 as usize]
-    }
-
-    pub fn get_path(&self, h: StyleHandle) -> &PathStyle {
-        &self.path_styles[h.0 as usize]
-    }
-}
-
-impl Default for FrameStylePool {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 // Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`;
 // each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
@@ -215,6 +127,3 @@ fn hash_border_radius(r: &BorderRadius, h: &mut FxHasher) {
     h.write_u32(r.bottom_right.to_bits());
     h.write_u32(r.bottom_left.to_bits());
 }
-
-pub static FRAME_STYLE_POOL: std::sync::LazyLock<std::sync::Mutex<FrameStylePool>> =
-    std::sync::LazyLock::new(|| std::sync::Mutex::new(FrameStylePool::new()));

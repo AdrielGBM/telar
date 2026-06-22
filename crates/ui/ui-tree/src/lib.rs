@@ -8,4 +8,3 @@ pub use component::{Component, EventResult};
 pub use dev_tree_view::{DevNodeInfo, DevTreeView};
 pub use render_node::{NodeVec, RenderNode};
 pub use tree::ComponentList;
-pub use view_flatten::flatten_view;

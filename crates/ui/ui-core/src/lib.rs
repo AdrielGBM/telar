@@ -2,7 +2,6 @@ mod button;
 mod container;
 mod context;
 mod drawing_area;
-mod group;
 mod image;
 mod layout_item;
 mod layout_leaf;
@@ -22,9 +21,8 @@ pub use context::{
     update_style, with_context,
 };
 pub use drawing_area::Canvas;
-pub use group::Group;
 pub use image::Image;
-pub use layout_item::{LayoutItem, LeafWidget, box_item};
+pub use layout_item::{LayoutItem, box_item};
 pub use layout_leaf::LayoutLeaf;
 pub use line::Line;
 pub use path::Path;

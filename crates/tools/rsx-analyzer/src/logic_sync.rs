@@ -5,7 +5,11 @@ pub fn lsp_dir(project_root: &Path) -> PathBuf {
 }
 
 pub fn logic_file_path(project_root: &Path, rsx_path: &Path) -> Option<PathBuf> {
-    let stem = rsx_path.file_stem()?.to_str()?;
+    let src_dir = project_root.join("src");
+    let stem = rsx_transpiler::relative_stem(rsx_path, &src_dir);
+    if stem.is_empty() {
+        return None;
+    }
     Some(lsp_dir(project_root).join(format!("{stem}.rs")))
 }
 

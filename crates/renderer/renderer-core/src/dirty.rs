@@ -3,9 +3,8 @@ use smallvec::{SmallVec, smallvec};
 
 use crate::{
     DrawCommand, culling,
-    culling::FontMetrics,
+    culling::{FontMetrics, union_rects},
     draw_state::{IDENTITY_MATRIX, for_each_with_matrix},
-    geometry::union_rects,
 };
 
 fn compute_matrices(cmds: &[DrawCommand]) -> Vec<[f32; 6]> {

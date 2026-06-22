@@ -2,7 +2,9 @@ use geometry_core::Rect;
 
 use crate::DrawCommand;
 
-pub use crate::geometry::union_rects;
+pub fn union_rects(a: Rect, b: Rect) -> Rect {
+    a.union(b)
+}
 
 /// Font ascender/line-height metrics expressed as ratios relative to `font_size`.
 /// Default values are conservative approximations that hold for most common fonts.

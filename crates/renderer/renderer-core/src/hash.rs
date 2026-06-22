@@ -6,14 +6,7 @@ use rustc_hash::FxHasher;
 use crate::DrawCommand;
 use crate::style_pool::{hash_path_style, hash_rect_style, hash_text_style};
 
-pub enum HashPolicy {
-    /// Hash text by byte content and image by its ID field. For renderer dirty-tracking.
-    ByContent,
-    /// Hash text and image Arc payloads by pointer identity. For subtree fingerprinting in view_flatten.
-    ByPtr,
-}
-
-pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H, policy: HashPolicy) {
+pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
     cmds.len().hash(h);
     for cmd in cmds {
         match cmd {
@@ -27,13 +20,7 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H, polic
             }
             DrawCommand::Text { text, rect, style } => {
                 1u8.hash(h);
-                match policy {
-                    HashPolicy::ByContent => text.as_bytes().hash(h),
-                    HashPolicy::ByPtr => {
-                        text.len().hash(h);
-                        (text.as_ptr() as usize).hash(h);
-                    }
-                }
+                text.as_bytes().hash(h);
                 rect.x.to_bits().hash(h);
                 rect.y.to_bits().hash(h);
                 rect.width.to_bits().hash(h);
@@ -42,10 +29,7 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H, polic
             }
             DrawCommand::Image { data, rect, filter } => {
                 2u8.hash(h);
-                match policy {
-                    HashPolicy::ByContent => data.id.hash(h),
-                    HashPolicy::ByPtr => (Arc::as_ptr(data) as usize).hash(h),
-                }
+                data.id.hash(h);
                 rect.x.to_bits().hash(h);
                 rect.y.to_bits().hash(h);
                 rect.width.to_bits().hash(h);
@@ -112,8 +96,8 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H, polic
     }
 }
 
-pub fn hash_draw_commands(cmds: &[DrawCommand], policy: HashPolicy) -> u64 {
+pub fn hash_draw_commands(cmds: &[DrawCommand]) -> u64 {
     let mut h = FxHasher::default();
-    hash_draw_commands_into(cmds, &mut h, policy);
+    hash_draw_commands_into(cmds, &mut h);
     h.finish()
 }

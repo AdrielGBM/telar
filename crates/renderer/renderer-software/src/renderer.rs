@@ -273,7 +273,7 @@ fn hash_commands_with_dims(commands: &[DrawCommand], width: u32, height: u32) ->
     let mut h = FxHasher::default();
     width.hash(&mut h);
     height.hash(&mut h);
-    renderer_core::hash_draw_commands_into(commands, &mut h, renderer_core::HashPolicy::ByContent);
+    renderer_core::hash_draw_commands_into(commands, &mut h);
     h.finish()
 }
 
@@ -544,8 +544,7 @@ where
         };
 
         let clear_color_changed = clear_color != self.prev_clear_color;
-        let current_hash =
-            renderer_core::hash_draw_commands(commands, renderer_core::HashPolicy::ByContent);
+        let current_hash = renderer_core::hash_draw_commands(commands);
         if current_hash != self.prev_commands_hash {
             self.prev_commands.clear();
             self.prev_commands.extend(commands.iter().cloned());
@@ -1112,7 +1111,12 @@ where
                     }
                 }
                 #[cfg(target_os = "android")]
-                DrawCommand::AndroidHardwareBufferImage { .. } => {}
+                DrawCommand::AndroidHardwareBufferImage { .. } => {
+                    debug_assert!(
+                        false,
+                        "AndroidHardwareBufferImage is not supported in the software renderer"
+                    );
+                }
             }
         }
 
