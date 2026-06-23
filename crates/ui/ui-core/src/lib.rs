@@ -11,6 +11,7 @@ mod pointer;
 mod rect;
 mod scroll_area;
 mod scrollable_page;
+mod section;
 mod styled_container;
 mod text;
 
@@ -29,6 +30,7 @@ pub use path::Path;
 pub use rect::Rectangle;
 pub use scroll_area::{LayoutScrollArea, ScrollArea, ScrollbarStyle};
 pub use scrollable_page::ScrollablePage;
+pub use section::{Heading, Section};
 pub use styled_container::StyledContainer;
 pub use text::Text;
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};

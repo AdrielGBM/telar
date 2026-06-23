@@ -76,6 +76,65 @@ impl PathData {
         self
     }
 
+    /// A closed polygon through `points` (first point is the start; the path is closed back to it).
+    pub fn polygon(points: &[Point]) -> Self {
+        let mut path = Self::new();
+        let Some((first, rest)) = points.split_first() else {
+            return path;
+        };
+        path = path.move_to(*first);
+        for p in rest {
+            path = path.line_to(*p);
+        }
+        path.close()
+    }
+
+    /// A regular `sides`-gon inscribed in a circle of `radius` around `center`. `start_angle_deg` rotates the first vertex (0° points right, increasing clockwise).
+    pub fn regular_polygon(center: Point, radius: f32, sides: u32, start_angle_deg: f32) -> Self {
+        if sides < 3 {
+            return Self::new();
+        }
+        let start = start_angle_deg.to_radians();
+        let step = std::f32::consts::TAU / sides as f32;
+        let points: Vec<Point> = (0..sides)
+            .map(|i| {
+                let a = start + step * i as f32;
+                Point::new(center.x + radius * a.cos(), center.y + radius * a.sin())
+            })
+            .collect();
+        Self::polygon(&points)
+    }
+
+    /// A closed circle of `radius` around `center`, approximated with four cubic Béziers.
+    pub fn circle(center: Point, radius: f32) -> Self {
+        // Kappa: control-point offset that makes a cubic Bézier approximate a quarter circle.
+        const K: f32 = 0.552_284_8;
+        let (cx, cy, r, kr) = (center.x, center.y, radius, radius * K);
+        Self::new()
+            .move_to(Point::new(cx + r, cy))
+            .cubic_to(
+                Point::new(cx + r, cy + kr),
+                Point::new(cx + kr, cy + r),
+                Point::new(cx, cy + r),
+            )
+            .cubic_to(
+                Point::new(cx - kr, cy + r),
+                Point::new(cx - r, cy + kr),
+                Point::new(cx - r, cy),
+            )
+            .cubic_to(
+                Point::new(cx - r, cy - kr),
+                Point::new(cx - kr, cy - r),
+                Point::new(cx, cy - r),
+            )
+            .cubic_to(
+                Point::new(cx + kr, cy - r),
+                Point::new(cx + r, cy - kr),
+                Point::new(cx + r, cy),
+            )
+            .close()
+    }
+
     pub fn bounds(&self) -> Option<Rect> {
         *self.bounds_cache.get_or_init(|| {
             let mut min_x = f32::INFINITY;

@@ -13,6 +13,8 @@
 pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
     &[
         ("text", "Text::new"),
+        ("heading", "Heading::new"),
+        ("section", "Section::new"),
         ("btn", "Button::new"),
         ("button", "Button::new"),
         ("col", "Container::new"),

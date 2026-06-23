@@ -37,6 +37,18 @@ pub trait WidgetTheme: 'static {
     fn widget_muted(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
+    fn widget_warning(&self) -> Color {
+        Color::rgba(0.95, 0.72, 0.18, 1.0)
+    }
+    fn widget_accent(&self) -> Color {
+        Color::rgba(0.2, 0.75, 0.9, 1.0)
+    }
+    fn widget_border(&self) -> Color {
+        Color::rgba(0.8, 0.8, 0.88, 1.0)
+    }
+    fn widget_purple(&self) -> Color {
+        Color::rgba(0.6, 0.28, 0.98, 1.0)
+    }
 }
 
 thread_local! {

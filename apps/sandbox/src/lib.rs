@@ -1,7 +1,6 @@
 pub mod app;
-pub mod test_assets;
+pub mod demo_images;
 pub mod theme;
-pub mod utils;
 
 rsx::app!(
     theme::SandboxTheme,

@@ -1,6 +1,5 @@
 [view]
-col gap:8
-    text "Cards" size:12 color:muted
+section "Cards"
     row gap:16
         box fill:dark radius:10 width:368 height:110 pad:16 gap:10
             text "Dark Card" size:16 color:white

@@ -1,6 +1,5 @@
 [view]
-col gap:8
-    text "Lines" size:12 color:muted
+section "Lines"
     row gap:32 align:start
         col gap:8 grow:1
             text "Width" size:11 color:muted

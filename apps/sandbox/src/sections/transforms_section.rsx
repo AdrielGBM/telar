@@ -2,17 +2,6 @@
 use std::sync::Arc;
 use crate::theme::theme;
 
-fn rotation_matrix(angle_deg: f32, cx: f32, cy: f32) -> [f32; 6] {
-    let a = angle_deg.to_radians();
-    let cos = a.cos();
-    let sin = a.sin();
-    [cos, sin, -sin, cos, cx - cx * cos + cy * sin, cy - cx * sin - cy * cos]
-}
-
-fn scale_matrix(sx: f32, sy: f32, cx: f32, cy: f32) -> [f32; 6] {
-    [sx, 0.0, 0.0, sy, cx - sx * cx, cy - sy * cy]
-}
-
 fn arrow_path(cx: f32, cy: f32, size: f32) -> PathData {
     let hs = size * 0.5;
     let head = size * 0.35;
@@ -40,7 +29,7 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
     let mut children: Vec<RenderNode> = Vec::new();
 
     children.push(RenderNode::text(
-        crate::static_rc_str!("Uniform scale around center — 0.5× / 0.75× / 1× / 1.5× / 2×"),
+        rsx::static_rc_str!("Uniform scale around center — 0.5× / 0.75× / 1× / 1.5× / 2×"),
         Rect { x: 0.0, y: 40.0, width: 600.0, height: 16.0 },
         TextStyle::new(10.5, muted),
     ));
@@ -55,7 +44,7 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
     for (i, (&scale, &color)) in scales.iter().zip(colors.iter()).enumerate() {
         let cx = i as f32 * 140.0 + base_w * 0.5;
         let cy = scale_y + base_h * 0.5;
-        let matrix = scale_matrix(scale, scale, cx, cy);
+        let matrix = Transform::scale_around(scale, scale, cx, cy).to_array();
         children.push(RenderNode::transform_with(
             matrix,
             [RenderNode::rect(
@@ -76,7 +65,7 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
     }
 
     children.push(RenderNode::text(
-        crate::static_rc_str!("Rotation — arrow shape at 0° / 30° / 60° / 90° / 120° / 150°"),
+        rsx::static_rc_str!("Rotation — arrow shape at 0° / 30° / 60° / 90° / 120° / 150°"),
         Rect { x: 0.0, y: 178.0, width: 600.0, height: 16.0 },
         TextStyle::new(10.5, muted),
     ));
@@ -103,7 +92,7 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
         let cx = i as f32 * 110.0 + arrow_size * 0.5 + 10.0;
         let cy = rot_y + arrow_size * 0.5;
         let path = arrow_path(cx, cy, arrow_size);
-        let matrix = rotation_matrix(angle, cx, cy);
+        let matrix = Transform::rotate_around(angle, cx, cy).to_array();
         children.push(RenderNode::transform_with(
             matrix,
             [RenderNode::path(
@@ -124,7 +113,7 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
     }
 
     children.push(RenderNode::text(
-        crate::static_rc_str!("Combined — rotation then scale (transforms compose)"),
+        rsx::static_rc_str!("Combined — rotation then scale (transforms compose)"),
         Rect { x: 0.0, y: 300.0, width: 600.0, height: 16.0 },
         TextStyle::new(10.5, muted),
     ));
@@ -136,22 +125,14 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
     for (i, (&angle, &scale)) in combo_angles.iter().zip(combo_scale.iter()).enumerate() {
         let cx = i as f32 * 100.0 + 36.0;
         let cy = combo_y + 36.0;
-        let rot = rotation_matrix(angle, cx, cy);
-        let scl = scale_matrix(scale, scale, cx, cy);
-        let [a1, b1, c1, d1, e1, f1] = rot;
-        let [a2, b2, c2, d2, e2, f2] = scl;
-        let combined = [
-            a2 * a1 + c2 * b1,
-            b2 * a1 + d2 * b1,
-            a2 * c1 + c2 * d1,
-            b2 * c1 + d2 * d1,
-            a2 * e1 + c2 * f1 + e2,
-            b2 * e1 + d2 * f1 + f2,
-        ];
+        // Rotate first, then scale — both around the cell center.
+        let matrix = Transform::rotate_around(angle, cx, cy)
+            .then(Transform::scale_around(scale, scale, cx, cy))
+            .to_array();
         let hue_t = i as f32 / (combo_angles.len() - 1) as f32;
         let color = Color::from_hsl(hue_t * 240.0, 0.7, 0.55);
         children.push(RenderNode::transform_with(
-            combined,
+            matrix,
             [RenderNode::rect(
                 Rect { x: cx - 28.0, y: cy - 28.0, width: 56.0, height: 56.0 },
                 RectStyle {
@@ -165,7 +146,7 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
     }
 
     children.push(RenderNode::text(
-        crate::static_rc_str!("Nested translate + rotation — grid of rotated stroked rects"),
+        rsx::static_rc_str!("Nested translate + rotation — grid of rotated stroked rects"),
         Rect { x: 0.0, y: 430.0, width: 600.0, height: 16.0 },
         TextStyle::new(10.5, muted),
     ));
@@ -176,7 +157,7 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
             let cx = col as f32 * 90.0 + 30.0;
             let cy = grid_y + row as f32 * 60.0 + 24.0;
             let angle = (row * 7 + col) as f32 * 12.0;
-            let matrix = rotation_matrix(angle, cx, cy);
+            let matrix = Transform::rotate_around(angle, cx, cy).to_array();
             children.push(RenderNode::transform_with(
                 matrix,
                 [RenderNode::rect(

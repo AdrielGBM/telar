@@ -1,6 +1,5 @@
 [view]
-col gap:8
-    text "Shadows" size:12 color:muted
+section "Shadows"
     col gap:16
         text "Rect shadows — offset / blur" size:11 color:muted
         row gap:16

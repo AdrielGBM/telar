@@ -47,6 +47,18 @@ impl WidgetTheme for SandboxTheme {
     fn widget_muted(&self) -> Color {
         self.muted
     }
+    fn widget_warning(&self) -> Color {
+        self.warning
+    }
+    fn widget_accent(&self) -> Color {
+        self.cyan
+    }
+    fn widget_border(&self) -> Color {
+        self.card_border
+    }
+    fn widget_purple(&self) -> Color {
+        self.purple
+    }
     fn widget_scrollbar(&self) -> Color {
         Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.6)
     }

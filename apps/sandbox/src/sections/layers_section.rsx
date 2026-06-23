@@ -1,6 +1,5 @@
 [view]
-col gap:8
-    text "Layers" size:12 color:muted
+section "Layers"
     col gap:16
         text "Opacity — same red rect at 1.0 / 0.6 / 0.3 / 0.1" size:11 color:muted
         row gap:16

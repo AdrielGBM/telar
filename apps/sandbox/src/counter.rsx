@@ -15,7 +15,7 @@ let double = create_memo(move || count.get() * 2);
 [view]
 
 col .counter-card
-    text "🚀 Counter v15" size:18 color:primary
+    text "🚀 Counter" size:18 color:primary
     text "{count} / 10" size:14 color:dark
     text "Double: {double}" size:12 color:muted
     row gap:8

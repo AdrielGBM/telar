@@ -1,6 +1,5 @@
 [view]
-col gap:8
-    text "Colors" size:12 color:muted
+section "Colors"
     row gap:16
         box fill:primary radius:6 width:100 height:44 align:center justify:center
             text "primary" size:11 color:on_color

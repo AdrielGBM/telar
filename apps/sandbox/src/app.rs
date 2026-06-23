@@ -1,4 +1,4 @@
-use crate::test_assets::{make_checker, make_gradient, make_radial_alpha};
+use crate::demo_images::{make_checker, make_gradient, make_radial_alpha};
 use crate::theme::theme;
 use rsx::{
     App, Color, Container, ImageData, LayoutError, LayoutItem, LayoutStyle, ScrollablePage,

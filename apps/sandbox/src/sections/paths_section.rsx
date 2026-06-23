@@ -15,18 +15,16 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
     let mut children: Vec<RenderNode> = Vec::new();
 
     children.push(RenderNode::text(
-        crate::static_rc_str!("Polygon shapes"),
+        rsx::static_rc_str!("Polygon shapes"),
         Rect { x: 0.0, y: 36.0, width: 300.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
 
-    let triangle_data = Arc::new(
-        PathData::new()
-            .move_to(Point::new(75.0, 56.0))
-            .line_to(Point::new(135.0, 166.0))
-            .line_to(Point::new(15.0, 166.0))
-            .close(),
-    );
+    let triangle_data = Arc::new(PathData::polygon(&[
+        Point::new(75.0, 56.0),
+        Point::new(135.0, 166.0),
+        Point::new(15.0, 166.0),
+    ]));
     children.push(
         Path::static_data(triangle_data.clone(), move || PathStyle {
             fill: Some(Paint::Solid(primary)),
@@ -37,7 +35,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("triangle"),
+        rsx::static_rc_str!("triangle"),
         Rect { x: 0.0, y: 176.0, width: 150.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -47,15 +45,14 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         let cy = 111.0f32;
         let outer = 55.0f32;
         let inner = 22.0f32;
-        let mut path = PathData::new();
-        for i in 0..10usize {
-            let angle = std::f32::consts::TAU * i as f32 / 10.0 - std::f32::consts::FRAC_PI_2;
-            let r = if i % 2 == 0 { outer } else { inner };
-            let p = Point::new(cx + r * angle.cos(), cy + r * angle.sin());
-            path = if i == 0 { path.move_to(p) } else { path.line_to(p) };
-        }
-        path = path.close();
-        let star_data = Arc::new(path);
+        let points: Vec<Point> = (0..10usize)
+            .map(|i| {
+                let angle = std::f32::consts::TAU * i as f32 / 10.0 - std::f32::consts::FRAC_PI_2;
+                let r = if i % 2 == 0 { outer } else { inner };
+                Point::new(cx + r * angle.cos(), cy + r * angle.sin())
+            })
+            .collect();
+        let star_data = Arc::new(PathData::polygon(&points));
         children.push(
             Path::static_data(star_data.clone(), move || PathStyle {
                 fill: Some(Paint::Solid(danger)),
@@ -66,7 +63,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
             .view(),
         );
         children.push(RenderNode::text(
-            crate::static_rc_str!("star (fill + stroke)"),
+            rsx::static_rc_str!("star (fill + stroke)"),
             Rect { x: 175.0, y: 176.0, width: 200.0, height: 16.0 },
             TextStyle::new(11.0, muted),
         ));
@@ -95,13 +92,13 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("even-odd fill"),
+        rsx::static_rc_str!("even-odd fill"),
         Rect { x: 350.0, y: 176.0, width: 200.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
 
     children.push(RenderNode::text(
-        crate::static_rc_str!("Bézier curves"),
+        rsx::static_rc_str!("Bézier curves"),
         Rect { x: 0.0, y: 212.0, width: 300.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -121,7 +118,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("quad_to arch"),
+        rsx::static_rc_str!("quad_to arch"),
         Rect { x: 0.0, y: 318.0, width: 200.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -141,7 +138,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("cubic_to S-curve"),
+        rsx::static_rc_str!("cubic_to S-curve"),
         Rect { x: 296.0, y: 318.0, width: 200.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -171,13 +168,13 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("closed cubic (petal)"),
+        rsx::static_rc_str!("closed cubic (petal)"),
         Rect { x: 446.0, y: 318.0, width: 200.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
 
     children.push(RenderNode::text(
-        crate::static_rc_str!("Stroke style"),
+        rsx::static_rc_str!("Stroke style"),
         Rect { x: 0.0, y: 354.0, width: 300.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -199,7 +196,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("Butt / Miter (default)"),
+        rsx::static_rc_str!("Butt / Miter (default)"),
         Rect { x: 0.0, y: 448.0, width: 230.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -225,13 +222,13 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("Round cap / Round join"),
+        rsx::static_rc_str!("Round cap / Round join"),
         Rect { x: 300.0, y: 448.0, width: 240.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
 
     children.push(RenderNode::text(
-        crate::static_rc_str!("Path shadows"),
+        rsx::static_rc_str!("Path shadows"),
         Rect { x: 0.0, y: 490.0, width: 300.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -272,7 +269,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("drop shadow"),
+        rsx::static_rc_str!("drop shadow"),
         Rect { x: 32.0, y: 624.0, width: 88.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -306,7 +303,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("glow"),
+        rsx::static_rc_str!("glow"),
         Rect { x: 248.0, y: 624.0, width: 48.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -329,7 +326,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("hard offset"),
+        rsx::static_rc_str!("hard offset"),
         Rect { x: 428.0, y: 624.0, width: 80.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));
@@ -357,7 +354,7 @@ let result = Canvas::with_intrinsic_height(ctx, 620.0, |rect| {
         .view(),
     );
     children.push(RenderNode::text(
-        crate::static_rc_str!("stroke shadow"),
+        rsx::static_rc_str!("stroke shadow"),
         Rect { x: 600.0, y: 624.0, width: 100.0, height: 16.0 },
         TextStyle::new(11.0, muted),
     ));

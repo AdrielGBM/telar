@@ -1,6 +1,5 @@
 [view]
-col gap:8
-    text "Gradients" size:12 color:muted
+section "Gradients"
     col gap:16
         text "Linear" size:11 color:muted
         row gap:16

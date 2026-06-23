@@ -389,6 +389,22 @@ col .card
     }
 
     #[test]
+    fn section_and_heading_emit_framework_widgets() {
+        let src = "[view]\nsection \"Cards\"\n    heading \"Subtitle\"\n    text \"Body\" size:14 color:dark\n";
+        let code = transpile_source_with_theme(src, "cards", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("Section::new(ctx, "),
+            "expected Section::new in:\n{code}"
+        );
+        assert!(
+            code.contains("Heading::new(ctx, "),
+            "expected Heading::new in:\n{code}"
+        );
+    }
+
+    #[test]
     fn theme_type_resolves_colors_via_use_theme() {
         // Colors not declared in [style] resolve reactively through the theme.
         let out =

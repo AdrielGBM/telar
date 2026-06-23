@@ -1,6 +1,5 @@
 [view]
-col gap:8
-    text "Grid" size:12 color:muted
+section "Grid"
     col gap:16
         text "Auto-placed (repeat(3, 1fr))" size:12 color:muted
         grid cols:3 gap:12

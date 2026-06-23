@@ -135,6 +135,8 @@ impl<'a> ViewGen<'a> {
     fn emit_element(&mut self, el: &Element) -> ChildEmit {
         match el.tag.as_str() {
             "text" => self.emit_text(el),
+            "heading" => self.emit_heading(el),
+            "section" => self.emit_section(el),
             "btn" => self.emit_button(el),
             "col" | "row" | "grid" => self.emit_container(el),
             "box" => self.emit_box(el),
@@ -187,6 +189,96 @@ impl<'a> ViewGen<'a> {
              {pad}    )?\n\
              {pad}}};"
         );
+        ChildEmit::Simple { name: var, code }
+    }
+
+    // A muted section caption; styling lives in the `Heading` widget (theme-aware).
+    fn emit_heading(&mut self, el: &Element) -> ChildEmit {
+        let var = self.next_var("heading");
+        let pad = self.pad();
+        let content = el.content.as_deref().unwrap_or("");
+        let content_fn = self.interpolate_content(content);
+        let clones = self.clone_bindings(&[&content_fn], &pad, "    ");
+        let code = format!(
+            "{pad}let {var} = {{\n\
+             {clones}\
+             {pad}    Heading::new(ctx, {content_fn})?\n\
+             {pad}}};"
+        );
+        ChildEmit::Simple { name: var, code }
+    }
+
+    // A titled column: `Section::new` prepends a `Heading` to the children, so
+    // child emission mirrors `emit_container` but the title comes from `content`.
+    fn emit_section(&mut self, el: &Element) -> ChildEmit {
+        let var = self.next_var("section");
+        let pad = self.pad();
+        let content = el.content.as_deref().unwrap_or("");
+        let title_fn = self.interpolate_content(content);
+
+        let has_dynamic = el.children.iter().any(|n| {
+            matches!(
+                n,
+                ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::LetStmt { .. }
+            )
+        });
+
+        self.indent += 1;
+        let inner_pad = self.pad();
+        let mut child_emits = Vec::new();
+        for child in &el.children {
+            child_emits.push(self.emit_node(child));
+        }
+        self.indent -= 1;
+
+        // Clone signals captured by the title closure so children can still use them.
+        let clones = self.clone_bindings(&[&title_fn], &inner_pad, "");
+
+        let mut code = String::new();
+        let _ = writeln!(code, "{pad}let {var} = {{");
+        let _ = write!(code, "{clones}");
+
+        if has_dynamic {
+            let _ = writeln!(
+                code,
+                "{inner_pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
+            );
+            for emit in &child_emits {
+                match emit {
+                    ChildEmit::Simple { name, code: c } => {
+                        let _ = writeln!(code, "{c}");
+                        let _ = writeln!(
+                            code,
+                            "{inner_pad}__children.push(Box::new({name}) as Box<dyn LayoutItem>);"
+                        );
+                    }
+                    ChildEmit::Dynamic { code: c } => {
+                        let _ = writeln!(code, "{c}");
+                    }
+                }
+            }
+            let _ = writeln!(
+                code,
+                "{inner_pad}Section::new(ctx, {title_fn}, __children)?"
+            );
+        } else {
+            let mut names = Vec::new();
+            for emit in &child_emits {
+                if let ChildEmit::Simple { name, code: c } = emit {
+                    let _ = writeln!(code, "{c}");
+                    names.push(name.clone());
+                } else if let ChildEmit::Dynamic { code: c } = emit {
+                    let _ = writeln!(code, "{c}");
+                }
+            }
+            let items = names.join(", ");
+            let _ = writeln!(
+                code,
+                "{inner_pad}Section::new(ctx, {title_fn}, children![{items}])?"
+            );
+        }
+
+        let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
     }
 

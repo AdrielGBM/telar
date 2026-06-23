@@ -40,7 +40,7 @@ pub use window_signals::WindowSignals;
 #[cfg(feature = "runtime")]
 pub use app::App;
 #[cfg(feature = "runtime")]
-pub use geometry_core::{Point, Rect};
+pub use geometry_core::{Point, Rect, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
     AlignItems, AutoTrack, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
@@ -67,13 +67,15 @@ pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
 #[cfg(feature = "runtime")]
-pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme};
+pub use theme_core::{
+    DefaultTheme, Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme,
+};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Image,
+    Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Heading, Image,
     LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, Rectangle, RenderNode, ScrollArea,
-    ScrollablePage, ScrollbarStyle, StyledContainer, Text, WidgetCtx, box_item, compute_layout,
-    new_container, new_leaf, track_layout, with_context,
+    ScrollablePage, ScrollbarStyle, Section, StyledContainer, Text, WidgetCtx, box_item,
+    compute_layout, new_container, new_leaf, track_layout, with_context,
 };
 
 #[cfg(all(feature = "preview", not(target_os = "android")))]
@@ -126,4 +128,16 @@ macro_rules! children {
     ($($item:expr),* $(,)?) => {
         vec![$(Box::new($item) as Box<dyn $crate::LayoutItem>),*]
     }
+}
+
+/// Returns a per-call-site cached `Arc<str>` for a string literal, allocating at most once per thread.
+/// Useful for `RenderNode::text`/`Canvas` content built from `&'static str` without re-allocating each frame.
+#[macro_export]
+macro_rules! static_rc_str {
+    ($s:literal) => {{
+        thread_local! {
+            static V: ::std::sync::Arc<str> = ::std::sync::Arc::from($s as &str);
+        }
+        V.with(::std::sync::Arc::clone)
+    }};
 }
