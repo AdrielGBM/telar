@@ -324,6 +324,7 @@ dependencies = [
  "clap",
  "notify",
  "rsx",
+ "rsx-workspace",
  "serde",
  "toml",
 ]
@@ -2586,6 +2587,7 @@ version = "0.1.0"
 dependencies = [
  "rsx-parser",
  "rsx-transpiler",
+ "rsx-workspace",
  "serde_json",
  "tokio",
  "toml",
@@ -2625,6 +2627,13 @@ version = "0.1.0"
 dependencies = [
  "rsx-parser",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "rsx-workspace"
+version = "0.1.0"
+dependencies = [
+ "toml",
 ]
 
 [[package]]

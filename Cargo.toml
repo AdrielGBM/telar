@@ -23,6 +23,7 @@ members = [
     "crates/tools/rsx-devtools",
     "crates/tools/rsx-analyzer",
     "crates/tools/rsx-macros",
+    "crates/tools/rsx-workspace",
     "apps/sandbox",
 ]
 
@@ -46,7 +47,9 @@ default-members = [
     "crates/tools/rsx-parser",
     "crates/tools/rsx-transpiler",
     "crates/tools/rsx-devtools",
+    "crates/tools/rsx-analyzer",
     "crates/tools/rsx-macros",
+    "crates/tools/rsx-workspace",
     "apps/sandbox",
 ]
 
@@ -97,3 +100,4 @@ rsx-devtools = { path = "crates/tools/rsx-devtools" }
 rsx-parser = { path = "crates/tools/rsx-parser" }
 rsx-transpiler = { path = "crates/tools/rsx-transpiler" }
 rsx-macros = { path = "crates/tools/rsx-macros" }
+rsx-workspace = { path = "crates/tools/rsx-workspace" }

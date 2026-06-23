@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use platform_core::{Key, ModifiersState};
 use renderer_core::DrawCommand;
-use ui_tree::DevTreeView;
+
+use crate::dev_tree_view::DevTreeView;
 
 pub enum DevAction {
     None,

@@ -28,10 +28,8 @@ pub(crate) struct ImagePipeline {
     sampler_linear: wgpu::Sampler,
     texture_cache: FxHashMap<(u64, ImageFilter), GpuImage>,
     current_frame: u64,
+    gpu_max_age_frames: u64,
 }
-
-// Approximately 1 second at 60 fps; GPU textures are expensive so evict aggressively.
-const IMAGE_GPU_MAX_AGE_FRAMES: u64 = 60;
 
 impl ImagePipeline {
     pub(crate) fn new(
@@ -40,6 +38,7 @@ impl ImagePipeline {
         viewport_bgl: &wgpu::BindGroupLayout,
         cache: Option<&wgpu::PipelineCache>,
         msaa_samples: u32,
+        gpu_max_age_frames: u64,
     ) -> Self {
         let instances = InstancePipeline::<ImageInstance>::new(device, "image", 16);
 
@@ -88,6 +87,7 @@ impl ImagePipeline {
             sampler_linear,
             texture_cache: FxHashMap::default(),
             current_frame: 0,
+            gpu_max_age_frames,
         }
     }
 
@@ -264,7 +264,7 @@ impl ImagePipeline {
 
     pub fn begin_frame(&mut self) {
         self.current_frame += 1;
-        self.evict_unused(IMAGE_GPU_MAX_AGE_FRAMES);
+        self.evict_unused(self.gpu_max_age_frames);
     }
 }
 

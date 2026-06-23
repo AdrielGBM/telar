@@ -28,7 +28,7 @@ impl ProjectInfo {
     }
 
     pub fn discover(file_path: &Path) -> Option<Self> {
-        let root = find_project_root(file_path)?;
+        let root = rsx_workspace::find_rsx_root(file_path)?;
         let toml_path = root.join("rsx.toml");
         let theme_type = read_theme_type(&toml_path);
         let theme_fields = if let Some(ref type_name) = theme_type {
@@ -41,20 +41,6 @@ impl ProjectInfo {
             theme_type,
             theme_fields,
         })
-    }
-}
-
-fn find_project_root(start: &Path) -> Option<PathBuf> {
-    let mut dir = if start.is_file() {
-        start.parent()?
-    } else {
-        start
-    };
-    loop {
-        if dir.join("rsx.toml").exists() {
-            return Some(dir.to_path_buf());
-        }
-        dir = dir.parent()?;
     }
 }
 

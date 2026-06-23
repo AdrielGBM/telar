@@ -16,6 +16,7 @@ use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
 use crate::blur::{BlurParams, BlurPipeline};
 use crate::composite::CompositePipeline;
+use crate::config::HardwareRendererConfig;
 use crate::primitives::image::{ImageInstance, ImagePipeline};
 use crate::primitives::layer::LayerPipeline;
 use crate::primitives::line::{LineInstance, LinePipeline};
@@ -37,11 +38,6 @@ fn preferred_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
         .copied()
         .unwrap_or(caps.formats[0])
 }
-
-// Number of viewport buffer/bind-group slots pre-allocated for per-layer uniforms; frames with more concurrent layers fall back to ad-hoc allocations.
-const VIEWPORT_POOL_SIZE: usize = 8;
-// Upper bound on cached scratch textures per (width, height, format); prevents unbounded GPU memory growth.
-const MAX_TEXTURE_POOL_PER_SIZE: usize = 4;
 
 fn create_viewport_pool_slot(
     device: &wgpu::Device,
@@ -110,7 +106,7 @@ fn take_pooled_texture(
     (width, height, format, texture, view)
 }
 
-// Returns a scratch texture to the pool for reuse, bounded to MAX_TEXTURE_POOL_PER_SIZE entries per (width, height, format) so memory does not grow without limit.
+// Returns a scratch texture to the pool for reuse, bounded to max_per_size entries per (width, height, format) so memory does not grow without limit.
 fn return_pooled_texture(
     pool: &mut Vec<(
         u32,
@@ -126,13 +122,14 @@ fn return_pooled_texture(
         wgpu::Texture,
         wgpu::TextureView,
     ),
+    max_per_size: usize,
 ) {
     let (w, h, f, _, _) = entry;
     let count = pool
         .iter()
         .filter(|(pw, ph, pf, _, _)| *pw == w && *ph == h && *pf == f)
         .count();
-    if count < MAX_TEXTURE_POOL_PER_SIZE {
+    if count < max_per_size {
         pool.push(entry);
     }
 }
@@ -366,6 +363,8 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
         wgpu::Texture,
         wgpu::TextureView,
     )>,
+    // Upper bound on cached scratch textures per (width, height, format) in texture_pool.
+    max_texture_pool_per_size: usize,
     rect_pipeline: RectPipeline,
     text_pipeline: TextPipeline,
     line_pipeline: LinePipeline,
@@ -512,12 +511,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
+        config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
         pollster::block_on(Self::new_async(
             window,
             cache_path,
             vulkan_only,
             font_config,
+            config,
         ))
     }
 
@@ -526,6 +527,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
+        config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
         let window = std::sync::Arc::new(window);
 
@@ -716,8 +718,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             &viewport_bgl,
             pipeline_cache.as_ref(),
             msaa_samples,
+            config.image_gpu_max_age_frames,
         );
-        let path_tess_cache = PathTessCache::new();
+        let path_tess_cache = PathTessCache::new(config.path_tess_max_age_frames);
 
         // Persist pipeline cache data so subsequent startups skip shader compilation.
         if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path) {
@@ -732,9 +735,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }
         }
 
-        // Pre-allocate the per-layer viewport buffer/bind-group pool so the common case (<=8 layers per frame) never hits create_buffer_init/create_bind_group during rendering.
-        let mut viewport_buffer_pool = Vec::with_capacity(VIEWPORT_POOL_SIZE);
-        for _ in 0..VIEWPORT_POOL_SIZE {
+        // Pre-allocate the per-layer viewport buffer/bind-group pool so the common case (few layers per frame) never hits create_buffer_init/create_bind_group during rendering.
+        let mut viewport_buffer_pool = Vec::with_capacity(config.viewport_pool_size);
+        for _ in 0..config.viewport_pool_size {
             viewport_buffer_pool.push(create_viewport_pool_slot(&device, &viewport_bgl));
         }
 
@@ -756,6 +759,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             viewport_buffer_pool,
             viewport_buffer_pool_idx: 0,
             texture_pool: Vec::new(),
+            max_texture_pool_per_size: config.max_texture_pool_per_size,
             rect_pipeline,
             text_pipeline,
             line_pipeline,
@@ -3374,7 +3378,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.queue.submit(std::iter::once(encoder.finish()));
         // Safe to recycle now: the encoder is submitted, so no in-flight pass within this frame can alias these textures.
         for entry in frame_scratch_textures.drain(..) {
-            return_pooled_texture(&mut self.texture_pool, entry);
+            return_pooled_texture(
+                &mut self.texture_pool,
+                entry,
+                self.max_texture_pool_per_size,
+            );
         }
 
         tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);

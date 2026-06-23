@@ -4,5 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rustc-hash = { workspace = true }
-thiserror = { workspace = true }
+rustc-hash = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+
+[features]
+default = []
+# Dependency-injection scope/registry. Off by default; no runtime consumer wires it yet, so it stays opt-in to keep the default build lean.
+di = ["dep:rustc-hash", "dep:thiserror"]

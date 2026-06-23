@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 rsx-parser = { workspace = true }
+rsx-workspace = { workspace = true }
 rsx-transpiler = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

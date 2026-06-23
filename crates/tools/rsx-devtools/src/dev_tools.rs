@@ -430,7 +430,7 @@ impl DevPlugin for DevTools {
         self.build_error = error;
     }
 
-    fn on_tree(&mut self, tree: &dyn ui_tree::DevTreeView) {
+    fn on_tree(&mut self, tree: &dyn crate::DevTreeView) {
         self.node_count = tree.node_count();
         self.nodes.clear();
         tree.for_each_node(&mut |info| {

@@ -217,23 +217,6 @@ struct AndroidMetadata {
     package: Option<String>,
 }
 
-fn find_workspace_root(dir: &Path) -> Option<PathBuf> {
-    let mut current = dir.to_path_buf();
-    loop {
-        let manifest_path = current.join("Cargo.toml");
-        if let Ok(content) = std::fs::read_to_string(&manifest_path)
-            && let Ok(manifest) = toml::from_str::<CargoManifest>(&content)
-            && manifest.workspace.is_some()
-        {
-            return Some(current);
-        }
-        match current.parent() {
-            Some(p) => current = p.to_path_buf(),
-            None => return None,
-        }
-    }
-}
-
 fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
     if let Some(prefix) = pattern.strip_suffix("/*") {
         std::fs::read_dir(workspace_root.join(prefix))
@@ -275,7 +258,7 @@ fn find_package_dir(args: &[String]) -> PathBuf {
 
     if let Some(name) = package_name {
         let cwd = std::env::current_dir().unwrap_or_default();
-        if let Some(root) = find_workspace_root(&cwd)
+        if let Some(root) = rsx_workspace::find_workspace_root(&cwd)
             && let Some(dir) = find_package_dir_in_workspace(&root, name)
         {
             return dir;
@@ -334,7 +317,8 @@ fn android_package_id(args: &[String]) -> String {
 
 fn apk_path(args: &[String]) -> PathBuf {
     let crate_dir = find_package_dir(args);
-    let workspace_root = find_workspace_root(&crate_dir).unwrap_or(crate_dir.clone());
+    let workspace_root =
+        rsx_workspace::find_workspace_root(&crate_dir).unwrap_or(crate_dir.clone());
     let profile = if args.contains(&"--release".to_string()) {
         "release"
     } else {
@@ -434,7 +418,7 @@ fn apply_dev_window_env(envs: &mut Vec<(String, String)>, w: &WindowConfig) {
 
 fn load_dotenv(cmd: &mut Command) {
     let cwd = std::env::current_dir().unwrap_or_default();
-    let root = find_workspace_root(&cwd).unwrap_or(cwd);
+    let root = rsx_workspace::find_workspace_root(&cwd).unwrap_or(cwd);
     let path = root.join(".env");
     let Ok(content) = std::fs::read_to_string(&path) else {
         return;
@@ -990,7 +974,7 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     }
 
     let pkg_dir = find_package_dir(&rest);
-    let workspace_root = find_workspace_root(&pkg_dir).unwrap_or(pkg_dir.clone());
+    let workspace_root = rsx_workspace::find_workspace_root(&pkg_dir).unwrap_or(pkg_dir.clone());
     let profile = if rest.contains(&"--release".to_string()) {
         "release"
     } else {

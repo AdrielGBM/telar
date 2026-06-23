@@ -20,6 +20,7 @@ pub mod runner;
 
 pub use config::{RendererBackend, compile_time_backend};
 
+#[cfg(feature = "runtime")]
 #[derive(Clone)]
 pub struct PreviewEntry {
     pub component_name: &'static str,
@@ -38,7 +39,9 @@ pub use window_signals::WindowSignals;
 
 #[cfg(feature = "runtime")]
 pub use app::App;
+#[cfg(feature = "runtime")]
 pub use geometry_core::{Point, Rect};
+#[cfg(feature = "runtime")]
 pub use layout_core::{
     AlignItems, AutoTrack, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
     TemplateTrack,
@@ -47,6 +50,7 @@ pub use layout_core::{
 pub use paths::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use platform_core::{Event, ScrollDelta, WindowConfig};
+#[cfg(feature = "runtime")]
 pub use reactive_core::{
     Effect, Memo, ReadSignal, RwSignal, WriteSignal, batch, create_effect, create_memo,
     create_rw_signal, create_signal, reset_runtime,
@@ -60,8 +64,11 @@ pub use renderer_core::{
 #[cfg(feature = "runtime")]
 pub use rsx_devtools::{DevAction, DevPlugin};
 pub use services_core::AppPathsProvider;
+#[cfg(feature = "di")]
 pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
+#[cfg(feature = "runtime")]
 pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme};
+#[cfg(feature = "runtime")]
 pub use ui_core::{
     Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Image,
     LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, Rectangle, RenderNode, ScrollArea,

@@ -141,8 +141,6 @@ struct StrokeGeomKey {
     join: u8,
 }
 
-const PATH_TESS_MAX_AGE_FRAMES: u64 = 120; // ~2 s at 60 fps
-
 struct CachedGeom {
     positions: Vec<[f32; 2]>,
     indices: Vec<u32>,
@@ -155,16 +153,18 @@ pub(crate) struct PathTessCache {
     fill_lru: VecDeque<(FillGeomKey, u64)>,
     stroke_lru: VecDeque<(StrokeGeomKey, u64)>,
     frame: u64,
+    max_age_frames: u64,
 }
 
 impl PathTessCache {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(max_age_frames: u64) -> Self {
         Self {
             fill: FxHashMap::default(),
             stroke: FxHashMap::default(),
             fill_lru: VecDeque::new(),
             stroke_lru: VecDeque::new(),
             frame: 0,
+            max_age_frames,
         }
     }
 
@@ -174,7 +174,7 @@ impl PathTessCache {
 
         // queue is oldest-first; stop at first entry within threshold
         while let Some(&(key, queued_frame)) = self.fill_lru.front() {
-            if current - queued_frame <= PATH_TESS_MAX_AGE_FRAMES {
+            if current - queued_frame <= self.max_age_frames {
                 break;
             }
             self.fill_lru.pop_front();
@@ -187,7 +187,7 @@ impl PathTessCache {
         }
 
         while let Some(&(key, queued_frame)) = self.stroke_lru.front() {
-            if current - queued_frame <= PATH_TESS_MAX_AGE_FRAMES {
+            if current - queued_frame <= self.max_age_frames {
                 break;
             }
             self.stroke_lru.pop_front();

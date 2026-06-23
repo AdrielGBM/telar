@@ -1,7 +1,6 @@
 use geometry_core::Rect;
 use renderer_core::DrawCommand;
-
-use crate::tree::ComponentList;
+use ui_tree::ComponentList;
 
 pub struct DevNodeInfo {
     pub id: u64,

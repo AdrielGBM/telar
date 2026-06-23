@@ -48,7 +48,7 @@ use crate::window_signals::WindowSignals;
 use crate::paths::DesktopPathsProvider;
 #[cfg(not(target_os = "android"))]
 use platform_winit::{WinitPlatform, WinitWindow};
-use renderer_hardware::HardwareRenderer;
+use renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
 
 struct AppHandler<W, D: DevPlugin>
 where
@@ -121,6 +121,7 @@ where
                         cache_path.as_deref(),
                         android,
                         font_config,
+                        HardwareRendererConfig::default(),
                     )
                 };
                 match hw_result {
@@ -250,6 +251,7 @@ where
                                     cache_path.as_deref(),
                                     android,
                                     font_config,
+                                    HardwareRendererConfig::default(),
                                 )
                             });
                             self.pending_renderer = Some(handle);
@@ -406,6 +408,7 @@ where
                         cache_path.as_deref(),
                         android,
                         font_config,
+                        HardwareRendererConfig::default(),
                     ) {
                         Ok(hw) => {
                             let (tx, join) = spawn_hw_render_thread(hw);

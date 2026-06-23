@@ -1,12 +1,16 @@
 pub mod paths;
+#[cfg(feature = "di")]
 mod registry;
+#[cfg(feature = "di")]
 mod scope;
 
 pub use paths::AppPathsProvider;
+#[cfg(feature = "di")]
 pub use registry::{ServiceError, ServiceRegistry};
+#[cfg(feature = "di")]
 pub use scope::{Scope, inject, provide, try_inject, with_service};
 
-#[cfg(test)]
+#[cfg(all(test, feature = "di"))]
 mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
