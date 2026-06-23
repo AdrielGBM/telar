@@ -1,4 +1,4 @@
-use geometry_core::Rect as Bounds;
+use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use renderer_core::RectStyle;
@@ -31,7 +31,7 @@ impl Component for Rectangle {
         let r = self.leaf.rect.get();
         let style = (self.style)();
         self.leaf.at_layout_position(RenderNode::rect(
-            Bounds {
+            Rect {
                 x: 0.0,
                 y: 0.0,
                 width: r.width,

@@ -6,4 +6,4 @@ mod track;
 pub use engine::{LayoutEngine, NodeId};
 pub use error::LayoutError;
 pub use style::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle, SizeDimension};
-pub use track::{AutoTrack, TemplateTrack, TrackSizing};
+pub use track::TemplateTrack;

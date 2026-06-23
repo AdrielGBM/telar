@@ -31,32 +31,6 @@ impl Transform {
         f: 0.0,
     };
 
-    pub fn identity() -> Self {
-        Self::IDENTITY
-    }
-
-    pub fn translate(tx: f32, ty: f32) -> Self {
-        Self {
-            a: 1.0,
-            b: 0.0,
-            c: 0.0,
-            d: 1.0,
-            e: tx,
-            f: ty,
-        }
-    }
-
-    pub fn scale(sx: f32, sy: f32) -> Self {
-        Self {
-            a: sx,
-            b: 0.0,
-            c: 0.0,
-            d: sy,
-            e: 0.0,
-            f: 0.0,
-        }
-    }
-
     /// Scale by `(sx, sy)` keeping the point `(cx, cy)` fixed.
     pub fn scale_around(sx: f32, sy: f32, cx: f32, cy: f32) -> Self {
         Self {
@@ -67,11 +41,6 @@ impl Transform {
             e: cx - sx * cx,
             f: cy - sy * cy,
         }
-    }
-
-    /// Rotate by `angle_deg` degrees (clockwise in screen space) around the origin.
-    pub fn rotate(angle_deg: f32) -> Self {
-        Self::rotate_around(angle_deg, 0.0, 0.0)
     }
 
     /// Rotate by `angle_deg` degrees keeping the point `(cx, cy)` fixed.
@@ -112,17 +81,6 @@ impl Transform {
     pub fn to_array(&self) -> [f32; 6] {
         [self.a, self.b, self.c, self.d, self.e, self.f]
     }
-
-    pub fn from_array(m: [f32; 6]) -> Self {
-        Self {
-            a: m[0],
-            b: m[1],
-            c: m[2],
-            d: m[3],
-            e: m[4],
-            f: m[5],
-        }
-    }
 }
 
 #[cfg(test)]
@@ -137,8 +95,16 @@ mod tests {
 
     #[test]
     fn then_composes_in_application_order() {
-        let t = Transform::translate(10.0, 0.0).then(Transform::scale(2.0, 2.0));
-        // translate first: (0,0)->(10,0); then scale x2: ->(20,0)
+        let translate = Transform {
+            e: 10.0,
+            ..Transform::IDENTITY
+        };
+        let scale = Transform {
+            a: 2.0,
+            d: 2.0,
+            ..Transform::IDENTITY
+        };
+        let t = translate.then(scale);
         assert_eq!(t.apply(Point::new(0.0, 0.0)), Point::new(20.0, 0.0));
     }
 

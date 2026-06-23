@@ -88,7 +88,6 @@ mod choreographer {
 
     // The frame callback: wakes the event loop via the proxy pointer stored in `data`, then clears the pending flag so about_to_wait can re-register on the next animation request.
     pub unsafe extern "C" fn frame_callback(_frame_time_ns: i64, data: *mut core::ffi::c_void) {
-        // data points to a VsyncCallbackData on the heap; we only borrow it here.
         let cb_data = unsafe { &*(data as *const VsyncCallbackData) };
         // Clear pending first so about_to_wait sees the frame was delivered.
         cb_data.pending.store(false, Ordering::Release);
@@ -160,7 +159,7 @@ pub struct AndroidPlatform {
 }
 
 impl AndroidPlatform {
-    pub fn new(app: AndroidApp) -> Result<Self, PlatformError> {
+    pub fn try_new(app: AndroidApp) -> Result<Self, PlatformError> {
         android_logger::init_once(
             android_logger::Config::default().with_max_level(log::LevelFilter::Debug),
         );
@@ -240,7 +239,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
         use std::sync::Arc;
         match event_loop.create_window(attrs) {
             Ok(w) => {
-                // Read before move into Arc; ScaleFactorChanged may not fire on first resume.
+                // ScaleFactorChanged may not fire on first resume, so seed scale_factor here.
                 self.scale_factor = w.scale_factor();
                 #[cfg(target_os = "android")]
                 {

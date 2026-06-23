@@ -6,17 +6,15 @@ use smallvec::SmallVec;
 use crate::runtime::{self, EffectId};
 
 enum MemoState<T> {
-    Computing, // closure currently executing (cycle detection)
-    Clean(T),  // value is fresh, sources verified
-    Dirty,     // must recompute (no valid cached value)
+    Computing, // reading while Computing means the closure re-entered itself: a cycle
+    Clean(T),
+    Dirty,
 }
 
 struct MemoInner<T> {
     state: MemoState<T>,
     subscribers: SmallVec<[EffectId; 4]>,
     effect_id: EffectId,
-    // Mirrors EffectEntry.height for this memo.
-    height: u32,
 }
 
 pub struct Memo<T: 'static> {
@@ -79,7 +77,6 @@ pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<
         state: MemoState::Dirty,
         subscribers: SmallVec::new(),
         effect_id: 0,
-        height: 0,
     }));
 
     let weak: Weak<RefCell<MemoInner<T>>> = Rc::downgrade(&inner);
@@ -103,11 +100,6 @@ pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<
                 SmallVec::new()
             }
         };
-        // Sync height from EffectEntry so other memos can read it (future SubscriberSet impl).
-        let effect_id = inner.borrow().effect_id;
-        if let Some(h) = runtime::effect_height(effect_id) {
-            inner.borrow_mut().height = h;
-        }
         let mut dead: Option<Vec<EffectId>> = None;
         for id in subs {
             if runtime::is_alive(id) {

@@ -4,8 +4,8 @@ use platform_core::Event;
 use reactive_core::RwSignal;
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::context::{WidgetCtx, new_container, track_layout};
-use crate::layout_item::LayoutItem;
+use crate::context::WidgetCtx;
+use crate::layout_item::{LayoutItem, register_container};
 use crate::pointer::dispatch_container_event;
 
 pub struct Container {
@@ -20,17 +20,7 @@ impl Container {
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
     ) -> Result<Self, LayoutError> {
-        let child_nodes = children.iter().map(|c| c.layout_node()).collect::<Vec<_>>();
-        let node = new_container(ctx, layout_style, &child_nodes)?;
-        // track_layout retrieves the signal already stored in the context's registry by new_container
-        let rect = track_layout(ctx, node).expect("new_container always registers a signal");
-        let children = children
-            .into_iter()
-            .map(|c| {
-                let rect = track_layout(ctx, c.layout_node());
-                (c, rect)
-            })
-            .collect();
+        let (node, rect, children) = register_container(ctx, layout_style, children)?;
         Ok(Container {
             node,
             rect,
@@ -40,13 +30,6 @@ impl Container {
 
     pub fn rect(&self) -> RwSignal<Rect> {
         self.rect.clone()
-    }
-
-    pub fn row(
-        ctx: &mut WidgetCtx,
-        children: Vec<Box<dyn LayoutItem>>,
-    ) -> Result<Self, LayoutError> {
-        Self::new(ctx, LayoutStyle::new().flex_row(), children)
     }
 
     pub fn column(
@@ -100,7 +83,12 @@ mod tests {
             move || text_style,
         )
         .unwrap();
-        let container = Container::row(&mut ctx, vec![Box::new(text_a), Box::new(text_b)]).unwrap();
+        let container = Container::new(
+            &mut ctx,
+            LayoutStyle::new().flex_row(),
+            vec![Box::new(text_a), Box::new(text_b)],
+        )
+        .unwrap();
         let root = new_container(
             &mut ctx,
             LayoutStyle::new().flex_row().width(200.0).height(100.0),
@@ -120,7 +108,7 @@ mod tests {
     #[test]
     fn container_row_creates_ok() {
         let mut ctx = WidgetCtx::new();
-        let result = Container::row(&mut ctx, vec![]);
+        let result = Container::new(&mut ctx, LayoutStyle::new().flex_row(), vec![]);
         assert!(result.is_ok());
     }
 
@@ -156,7 +144,7 @@ mod tests {
     #[test]
     fn container_layout_node_is_valid() {
         let mut ctx = WidgetCtx::new();
-        let container = Container::row(&mut ctx, vec![]).unwrap();
+        let container = Container::new(&mut ctx, LayoutStyle::new().flex_row(), vec![]).unwrap();
         let node = container.layout_node();
         let _root = new_container(&mut ctx, LayoutStyle::new().flex_row(), &[node])
             .expect("should register");
@@ -166,7 +154,11 @@ mod tests {
     fn container_can_be_nested_as_layout_item() {
         let mut ctx = WidgetCtx::new();
         let inner = Container::column(&mut ctx, vec![]).unwrap();
-        let outer = Container::row(&mut ctx, vec![Box::new(inner)]);
+        let outer = Container::new(
+            &mut ctx,
+            LayoutStyle::new().flex_row(),
+            vec![Box::new(inner)],
+        );
         assert!(outer.is_ok());
     }
 }

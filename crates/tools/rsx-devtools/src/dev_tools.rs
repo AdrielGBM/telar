@@ -207,7 +207,6 @@ impl DevPlugin for DevTools {
             backdrop_blur: BACKDROP_BLUR_SIGMA,
         });
 
-        // Badge background
         cmds.push(rect_cmd(
             self.badge_rect,
             RectStyle::default()
@@ -215,7 +214,6 @@ impl DevPlugin for DevTools {
                 .with_radius(BorderRadius::all(4.0)),
         ));
 
-        // Badge label
         let badge_label = format!("DEV \u{2022} {} fps", self.last_fps);
         cmds.push(text_cmd(
             badge_label.into(),
@@ -240,7 +238,6 @@ impl DevPlugin for DevTools {
                 backdrop_blur: BACKDROP_BLUR_SIGMA,
             });
 
-            // Panel background
             cmds.push(rect_cmd(
                 Rect::new(panel_x, panel_y, PANEL_W, PANEL_H),
                 RectStyle::default()
@@ -248,20 +245,17 @@ impl DevPlugin for DevTools {
                     .with_radius(BorderRadius::all(8.0)),
             ));
 
-            // Title
             cmds.push(text_cmd(
                 "rsx devtools".into(),
                 Rect::new(panel_x + 12.0, panel_y + 12.0, PANEL_W - 24.0, 16.0),
                 TextStyle::new(11.0, WHITE),
             ));
 
-            // Horizontal separator
             cmds.push(rect_cmd(
                 Rect::new(panel_x + 12.0, panel_y + 36.0, PANEL_W - 24.0, 1.0),
                 RectStyle::default().with_fill(Paint::Solid(GRAY_DIM)),
             ));
 
-            // FPS value
             let fps_label = format!("{} fps", self.last_fps);
             cmds.push(text_cmd(
                 fps_label.into(),
@@ -269,7 +263,6 @@ impl DevPlugin for DevTools {
                 TextStyle::new(20.0, GREEN),
             ));
 
-            // Frame time + node count metrics
             let ft_label = format!(
                 "{:.1} ms/frame  {} nodes",
                 self.frame_time_ms, self.node_count
@@ -280,7 +273,6 @@ impl DevPlugin for DevTools {
                 TextStyle::new(10.0, GRAY),
             ));
 
-            // Renderer info line (only when set)
             let renderer_text_y = if let Some(ref info) = self.renderer_info {
                 let renderer_label = format!("renderer: {}", info);
                 cmds.push(text_cmd(
@@ -293,7 +285,6 @@ impl DevPlugin for DevTools {
                 90.0
             };
 
-            // Keyboard shortcut hints
             cmds.push(text_cmd(
                 "ctrl+shift+b  toggle renderer".into(),
                 Rect::new(

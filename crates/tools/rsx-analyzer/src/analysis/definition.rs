@@ -2,7 +2,6 @@ use crate::analysis::util::{attr_key_before_colon, word_at_cursor};
 use crate::position::{Section, find_section_at, parser_line_to_lsp_range};
 use crate::project::ProjectInfo;
 use rsx_parser::RsxDocument;
-use std::path::Path;
 use tower_lsp::lsp_types::{GotoDefinitionResponse, Location, Url};
 
 fn is_builtin_tag(tag: &str) -> bool {
@@ -88,18 +87,15 @@ fn find_component(
     project: Option<&ProjectInfo>,
     current_uri: &Url,
 ) -> Option<GotoDefinitionResponse> {
-    let search_dirs: Vec<&Path> = project.map(|p| vec![p.root.as_path()]).unwrap_or_default();
-
     let current_dir = current_uri
         .to_file_path()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()));
 
-    let all_dirs: Vec<&Path> = search_dirs
-        .iter()
-        .copied()
-        .chain(current_dir.as_deref())
-        .collect();
+    let all_dirs = project
+        .map(|p| p.root.as_path())
+        .into_iter()
+        .chain(current_dir.as_deref());
 
     for dir in all_dirs {
         let files = rsx_transpiler::find_rsx_files(dir);

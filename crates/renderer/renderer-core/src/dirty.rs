@@ -3,7 +3,7 @@ use smallvec::{SmallVec, smallvec};
 
 use crate::{
     DrawCommand, culling,
-    culling::{FontMetrics, union_rects},
+    culling::FontMetrics,
     draw_state::{IDENTITY_MATRIX, for_each_with_matrix},
 };
 
@@ -35,13 +35,13 @@ fn push_dirty_rect(rects: &mut DirtyRects, r: Rect) {
         .iter()
         .position(|e| rects_adjacent_or_overlapping(*e, r, SLOP))
     {
-        let mut merged = union_rects(rects[idx], r);
+        let mut merged = rects[idx].union(r);
         rects.swap_remove(idx);
         // The merged rect may now touch other entries; keep folding until it is disjoint from all of them.
         let mut i = 0;
         while i < rects.len() {
             if rects_adjacent_or_overlapping(rects[i], merged, SLOP) {
-                merged = union_rects(rects[i], merged);
+                merged = rects[i].union(merged);
                 rects.swap_remove(i);
             } else {
                 i += 1;
@@ -56,7 +56,7 @@ fn push_dirty_rect(rects: &mut DirtyRects, r: Rect) {
         let union = rects
             .iter()
             .copied()
-            .reduce(union_rects)
+            .reduce(Rect::union)
             .expect("non-empty");
         *rects = smallvec![union];
     }
@@ -268,7 +268,7 @@ pub fn detect_scroll_blit(
             if let Some(r) =
                 culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default())
             {
-                extra_dirty = Some(extra_dirty.map_or(r, |d| union_rects(d, r)));
+                extra_dirty = Some(extra_dirty.map_or(r, |d| d.union(r)));
             }
         } else if culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default())
             .is_some()
@@ -337,7 +337,7 @@ mod tests {
         })
         .unwrap();
         // overlapping old/new positions merge into a single region covering both
-        let dirty = rects.iter().copied().reduce(union_rects).unwrap();
+        let dirty = rects.iter().copied().reduce(Rect::union).unwrap();
         assert!(dirty.x <= 0.0);
         assert!(dirty.x + dirty.width >= 15.0);
     }
@@ -384,7 +384,7 @@ mod tests {
             culling::command_visual_rect(cmd, m, &FontMetrics::default())
         })
         .unwrap();
-        let dirty = rects.iter().copied().reduce(union_rects).unwrap();
+        let dirty = rects.iter().copied().reduce(Rect::union).unwrap();
         // must cover both positions
         assert!(dirty.x <= 0.0);
         assert!(dirty.y <= 0.0);

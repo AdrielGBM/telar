@@ -4,7 +4,6 @@ use ui_tree::ComponentList;
 
 pub struct DevNodeInfo {
     pub id: u64,
-    pub tag: &'static str,
     pub rect: Rect,
     pub depth: usize,
 }
@@ -31,7 +30,6 @@ impl DevTreeView for ComponentList {
             };
             f(&DevNodeInfo {
                 id: idx as u64,
-                tag: "draw",
                 rect,
                 depth: 0,
             });

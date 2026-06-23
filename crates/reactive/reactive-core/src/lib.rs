@@ -1,21 +1,19 @@
-//! Factory functions (`create_signal`, `create_effect`, `create_memo`) create
+//! Factory functions (`create_rw_signal`, `create_effect`, `create_memo`) create
 //! nodes in the reactive graph. Struct constructors (`Runtime::new`, etc.) own
 //! their state. Free functions (`batch`, `set_flush_notify`) operate on the
 //! thread-local runtime.
 
 mod effect;
 mod memo;
-mod owner;
 mod runtime;
 mod signal;
 
 pub use effect::{Effect, create_effect};
 pub use memo::{Memo, create_memo};
-pub use owner::{OwnerId, create_owner, drop_owner, with_owner};
 pub use runtime::{
     FlushNotifyHandle, batch, begin_batch, end_batch, reset_runtime, set_flush_notify,
 };
-pub use signal::{ReadSignal, RwSignal, WriteSignal, create_rw_signal, create_signal};
+pub use signal::{ReadSignal, RwSignal, create_rw_signal};
 
 #[cfg(test)]
 mod tests {
@@ -26,22 +24,22 @@ mod tests {
 
     #[test]
     fn signal_get_set() {
-        let (count, set_count) = create_signal(0i32);
+        let count = create_rw_signal(0i32);
         assert_eq!(count.get(), 0);
-        set_count.set(42);
+        count.set(42);
         assert_eq!(count.get(), 42);
     }
 
     #[test]
     fn signal_update() {
-        let (count, set_count) = create_signal(10i32);
-        set_count.update(|v| *v *= 2);
+        let count = create_rw_signal(10i32);
+        count.update(|v| *v *= 2);
         assert_eq!(count.get(), 20);
     }
 
     #[test]
     fn signal_with() {
-        let (name, _) = create_signal(String::from("rsx"));
+        let name = create_rw_signal(String::from("rsx"));
         let len = name.with(|s| s.len());
         assert_eq!(len, 3);
     }
@@ -56,11 +54,10 @@ mod tests {
     }
 
     #[test]
-    fn rw_signal_split() {
+    fn rw_signal_read_only() {
         let sig = create_rw_signal(0i32);
         let read = sig.read_only();
-        let write = sig.write_only();
-        write.set(7);
+        sig.set(7);
         assert_eq!(read.get(), 7);
     }
 
@@ -76,58 +73,64 @@ mod tests {
 
     #[test]
     fn effect_reruns_on_signal_change() {
-        let (count, set_count) = create_signal(0i32);
+        let count = create_rw_signal(0i32);
         let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
         let log_clone = Rc::clone(&log);
 
+        let read = count.read_only();
         let _e = create_effect(move || {
-            log_clone.borrow_mut().push(count.get());
+            log_clone.borrow_mut().push(read.get());
         });
 
-        set_count.set(1);
-        set_count.set(2);
+        count.set(1);
+        count.set(2);
 
         assert_eq!(*log.borrow(), vec![0, 1, 2]);
     }
 
     #[test]
     fn memo_derives_value() {
-        let (count, set_count) = create_signal(2i32);
-        let doubled = create_memo(move || count.get() * 2);
+        let count = create_rw_signal(2i32);
+        let read = count.read_only();
+        let doubled = create_memo(move || read.get() * 2);
 
         assert_eq!(doubled.get(), 4);
-        set_count.set(5);
+        count.set(5);
         assert_eq!(doubled.get(), 10);
     }
 
     #[test]
     fn memo_chains() {
-        let (n, set_n) = create_signal(3i32);
-        let doubled = create_memo(move || n.get() * 2);
-        let quadrupled = create_memo(move || doubled.get() * 2);
+        let n = create_rw_signal(3i32);
+        let read = n.read_only();
+        let doubled = create_memo(move || read.get() * 2);
+        let doubled_for_quad = doubled.clone();
+        let quadrupled = create_memo(move || doubled_for_quad.get() * 2);
 
         assert_eq!(quadrupled.get(), 12);
-        set_n.set(5);
+        n.set(5);
         assert_eq!(quadrupled.get(), 20);
     }
 
     #[test]
     fn batch_fires_effect_once() {
-        let (a, set_a) = create_signal(0i32);
-        let (b, set_b) = create_signal(0i32);
+        let a = create_rw_signal(0i32);
+        let b = create_rw_signal(0i32);
         let runs = Rc::new(RefCell::new(0usize));
         let runs_clone = Rc::clone(&runs);
 
+        let a_read = a.read_only();
+        let b_read = b.read_only();
         let _e = create_effect(move || {
-            let _ = a.get() + b.get();
+            let _ = a_read.get() + b_read.get();
             *runs_clone.borrow_mut() += 1;
         });
 
         assert_eq!(*runs.borrow(), 1);
 
         batch(|| {
-            set_a.set(1);
-            set_b.set(2);
+            a.set(1);
+            b.set(2);
         });
 
         assert_eq!(*runs.borrow(), 2);

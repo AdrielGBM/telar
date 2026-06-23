@@ -1,7 +1,8 @@
 //! Hand-written parser for `.rsx` source files (Proposal 4 syntax).
 //!
-//! A `.rsx` file has three sections:
+//! A `.rsx` file has four sections:
 //! - a leading **logic** zone of verbatim Rust,
+//! - a `[props]` section of named function-parameter declarations,
 //! - a `[style]` section of constants and style classes,
 //! - a `[view]` section describing an indentation-based node tree.
 //!

@@ -5,16 +5,22 @@
 //! (completions, hover, go-to-definition). Keep them in sync with the `match`
 //! arms in [`crate::view`] (`emit_element`) and [`crate::style`] (`layout_prop_call`).
 
+/// Sentinel constructor for tags that have no constructor because they reference
+/// an existing in-scope variable rather than building a widget (e.g. `widget`).
+pub const TAG_REFERENCES_VARIABLE: &str = "<in-scope variable>";
+
 /// Built-in RSX tags paired with the Rust constructor path they transpile to.
 ///
 /// Mirrors the tag dispatch in `ViewGen::emit_element`. Tags that share a
 /// constructor (e.g. `col`/`row`/`grid` -> `Container::new`) are listed once per
-/// spelling so lookups by tag name resolve every alias.
+/// spelling so lookups by tag name resolve every alias. A tag whose constructor
+/// is [`TAG_REFERENCES_VARIABLE`] emits no constructor: `widget` inlines the
+/// in-scope variable named by its content.
 pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
     &[
         ("text", "Text::new"),
-        ("heading", "Heading::new"),
-        ("section", "Section::new"),
+        ("heading", "Text::new"),
+        ("section", "Container::new"),
         ("btn", "Button::new"),
         ("button", "Button::new"),
         ("col", "Container::new"),
@@ -26,7 +32,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("image", "Image::new"),
         ("scroll", "LayoutScrollArea::new"),
         ("canvas", "Canvas::new"),
-        ("widget", "WidgetRef"),
+        ("widget", TAG_REFERENCES_VARIABLE),
     ]
 }
 

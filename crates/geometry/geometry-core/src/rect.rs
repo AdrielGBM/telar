@@ -20,7 +20,7 @@ impl Rect {
         x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 
-    pub fn intersect(&self, other: Rect) -> Option<Rect> {
+    pub fn intersect(self, other: Rect) -> Option<Rect> {
         let x = self.x.max(other.x);
         let y = self.y.max(other.y);
         let right = (self.x + self.width).min(other.x + other.width);

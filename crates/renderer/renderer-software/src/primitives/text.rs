@@ -156,7 +156,7 @@ pub(crate) fn draw_text(
                 shadow_h,
                 current_clip_rect,
             ) {
-                let q_blur = (shadow.blur_radius * 2.0).round() / 2.0;
+                let q_blur = crate::primitives::quantize_blur(shadow.blur_radius);
                 let [sr, sg, sb, sa] = shadow.color.to_rgba8();
                 let shadow_key = TextShadowCacheKey {
                     text_hash: hash_text(text),

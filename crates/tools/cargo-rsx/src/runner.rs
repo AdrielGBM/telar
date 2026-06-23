@@ -39,13 +39,10 @@ enum RsxCommand {
 }
 
 #[derive(clap::Args)]
-struct DevArgs {
-    /// Package to run
+struct CommonArgs {
+    /// Package to use
     #[arg(short = 'p', long)]
     package: Option<String>,
-    /// Build in release mode
-    #[arg(long)]
-    release: bool,
     /// Additional Cargo features
     #[arg(short = 'F', long, value_name = "FEATURES")]
     features: Option<String>,
@@ -55,34 +52,33 @@ struct DevArgs {
     /// Renderer backend
     #[arg(long, value_enum)]
     backend: Option<BackendArg>,
-    /// Disable hot reload, restart process on changes instead
-    #[arg(long)]
-    no_hot_reload: bool,
-    /// Devtools overlay
-    #[arg(long, value_enum)]
-    devtools: Option<DevtoolsArg>,
     /// Extra args passed directly to cargo (after --)
     #[arg(last = true)]
     cargo_args: Vec<String>,
 }
 
 #[derive(clap::Args)]
-struct PreviewArgs {
-    /// Package to run
-    #[arg(short = 'p', long)]
-    package: Option<String>,
+struct DevArgs {
+    #[command(flatten)]
+    common: CommonArgs,
     /// Build in release mode
     #[arg(long)]
     release: bool,
-    /// Additional Cargo features
-    #[arg(short = 'F', long, value_name = "FEATURES")]
-    features: Option<String>,
-    /// Target platform
-    #[arg(long, value_enum, default_value = "desktop")]
-    target: Target,
-    /// Renderer backend
+    /// Disable hot reload, restart process on changes instead
+    #[arg(long)]
+    no_hot_reload: bool,
+    /// Devtools overlay
     #[arg(long, value_enum)]
-    backend: Option<BackendArg>,
+    devtools: Option<DevtoolsArg>,
+}
+
+#[derive(clap::Args)]
+struct PreviewArgs {
+    #[command(flatten)]
+    common: CommonArgs,
+    /// Build in release mode
+    #[arg(long)]
+    release: bool,
     /// Disable hot reload
     #[arg(long)]
     no_hot_reload: bool,
@@ -92,34 +88,15 @@ struct PreviewArgs {
     /// List all available previews and exit
     #[arg(long)]
     list: bool,
-    /// Extra args passed directly to cargo (after --)
-    #[arg(last = true)]
-    cargo_args: Vec<String>,
 }
 
 #[derive(clap::Args)]
 struct BuildArgs {
-    /// Package to build
-    #[arg(short = 'p', long)]
-    package: Option<String>,
-    /// Additional Cargo features
-    #[arg(short = 'F', long, value_name = "FEATURES")]
-    features: Option<String>,
-    /// Target platform
-    #[arg(long, value_enum, default_value = "desktop")]
-    target: Target,
-    /// Renderer backend
-    #[arg(long, value_enum)]
-    backend: Option<BackendArg>,
+    #[command(flatten)]
+    common: CommonArgs,
     /// Output package format
     #[arg(long, value_name = "FORMAT")]
     format: Option<BuildFormat>,
-    /// Output directory
-    #[arg(long, value_name = "DIR")]
-    out: Option<String>,
-    /// Extra args passed directly to cargo (after --)
-    #[arg(last = true)]
-    cargo_args: Vec<String>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -168,24 +145,12 @@ struct DevConfig {
     pub devtools: Option<bool>,
 }
 
-#[derive(Deserialize, Default, Clone)]
-struct BuildConfig {
-    pub format: Option<String>,
-    pub out: Option<String>,
-}
-
 #[derive(Deserialize, Default)]
 struct RsxConfig {
     #[serde(default)]
     pub backend: Option<RendererBackend>,
     #[serde(default)]
-    pub devtools: Option<bool>,
-    #[serde(default)]
-    pub window: Option<WindowConfig>,
-    #[serde(default)]
     pub dev: Option<DevConfig>,
-    #[serde(default)]
-    pub build: Option<BuildConfig>,
 }
 
 #[derive(Deserialize, Default)]
@@ -431,10 +396,9 @@ fn load_dotenv(cmd: &mut Command) {
         if let Some((key, value)) = line.split_once('=') {
             let key = key.trim();
             let value = value.trim();
-            // Only set if not already set in the calling environment.
+            // Explicit env wins over .env: only set keys absent from the calling environment.
             if std::env::var(key).is_err() {
-                // Resolve relative paths against the workspace root so values like
-                // "android-release.keystore" work regardless of the cwd at signing time.
+                // Resolve relative paths against the workspace root so values like "android-release.keystore" work regardless of the cwd at signing time.
                 let resolved = root.join(value);
                 let final_value = if resolved.exists() {
                     resolved.to_string_lossy().into_owned()
@@ -513,8 +477,7 @@ fn collect_src_dirs(workspace_root: &Path) -> Vec<PathBuf> {
 
 fn hot_reload_rustflags() -> String {
     let existing = std::env::var("RUSTFLAGS").unwrap_or_default();
-    // Adding --cfg=rsx_hot_reload changes the Cargo fingerprint, forcing a recompile so
-    // the proc macro re-runs with RSX_HOT_RELOAD_BUILD=1 and generates the hot reload code.
+    // Adding --cfg=rsx_hot_reload changes the Cargo fingerprint, forcing a recompile so the proc macro re-runs with RSX_HOT_RELOAD_BUILD=1 and generates the hot reload code.
     let flag = "--cfg=rsx_hot_reload";
     if existing.is_empty() {
         flag.to_string()
@@ -524,9 +487,7 @@ fn hot_reload_rustflags() -> String {
 }
 
 fn preview_rustflags() -> String {
-    // --cfg=rsx_preview is in the fingerprint so Cargo always recompiles the crate when
-    // switching between dev and preview, ensuring the proc-macro-generated _rsx_hot_create_app
-    // includes or omits the preview branch correctly.
+    // --cfg=rsx_preview is in the fingerprint so Cargo always recompiles when switching between dev and preview, ensuring the proc-macro-generated _rsx_hot_create_app includes or omits the preview branch correctly.
     format!("{} --cfg=rsx_preview", hot_reload_rustflags())
 }
 
@@ -581,6 +542,25 @@ fn send_socket_message(socket_path: &str, message: &str) {
     }
 }
 
+fn make_watcher(
+    tx: mpsc::Sender<notify::Result<notify::Event>>,
+    workspace_root: &Path,
+) -> RecommendedWatcher {
+    let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default())
+        .expect("[cargo-rsx] failed to create file watcher");
+    for src_dir in collect_src_dirs(workspace_root) {
+        watcher
+            .watch(&src_dir, RecursiveMode::Recursive)
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "[cargo-rsx] warning: could not watch {}: {e}",
+                    src_dir.display()
+                )
+            });
+    }
+    watcher
+}
+
 #[cfg(unix)]
 fn watch_and_hot_reload(
     build_args: Vec<String>,
@@ -592,18 +572,7 @@ fn watch_and_hot_reload(
     workspace_root: PathBuf,
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
-    let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default())
-        .expect("[cargo-rsx] failed to create file watcher");
-    for src_dir in collect_src_dirs(&workspace_root) {
-        watcher
-            .watch(&src_dir, RecursiveMode::Recursive)
-            .unwrap_or_else(|e| {
-                eprintln!(
-                    "[cargo-rsx] warning: could not watch {}: {e}",
-                    src_dir.display()
-                )
-            });
-    }
+    let _watcher = make_watcher(tx, &workspace_root);
 
     eprintln!("[cargo-rsx] Starting with hot reload...");
     let mut child = Command::new(&bin_path)
@@ -656,7 +625,6 @@ fn watch_and_hot_reload(
             }
         }
 
-        // Block until next event or timeout (replaces the sleep)
         if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
             if is_source_event(&event) {
                 last_event = Instant::now();
@@ -672,19 +640,7 @@ fn watch_and_run(
     workspace_root: PathBuf,
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
-    let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default())
-        .expect("[cargo-rsx] failed to create file watcher");
-
-    for src_dir in collect_src_dirs(&workspace_root) {
-        watcher
-            .watch(&src_dir, RecursiveMode::Recursive)
-            .unwrap_or_else(|e| {
-                eprintln!(
-                    "[cargo-rsx] warning: could not watch {}: {e}",
-                    src_dir.display()
-                )
-            });
-    }
+    let _watcher = make_watcher(tx, &workspace_root);
 
     loop {
         eprintln!("[cargo-rsx] Starting...");
@@ -741,7 +697,6 @@ fn watch_and_run(
                 break 'watch;
             }
 
-            // Block until next event or timeout (replaces the sleep)
             if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
                 if is_source_event(&event) {
                     last_event = Instant::now();
@@ -755,14 +710,16 @@ fn watch_and_run(
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-rsx".to_string()).chain(args));
     match cli.command.unwrap_or(RsxCommand::Dev(DevArgs {
-        package: None,
+        common: CommonArgs {
+            package: None,
+            features: None,
+            target: Target::Desktop,
+            backend: None,
+            cargo_args: vec![],
+        },
         release: false,
-        features: None,
-        target: Target::Desktop,
-        backend: None,
         no_hot_reload: false,
         devtools: None,
-        cargo_args: vec![],
     })) {
         RsxCommand::Dev(args) => run_dev_cmd(args),
         RsxCommand::Preview(args) => run_preview_cmd(args),
@@ -783,18 +740,20 @@ pub fn run(args: Vec<String>) {
 }
 
 fn run_dev_cmd(args: DevArgs) {
-    let mut cargo_args = build_cargo_args(&args.package, args.release, &args.features);
-    cargo_args.extend(args.cargo_args);
-    if matches!(args.target, Target::Android) {
+    let mut cargo_args =
+        build_cargo_args(&args.common.package, args.release, &args.common.features);
+    cargo_args.extend(args.common.cargo_args);
+    if matches!(args.common.target, Target::Android) {
         cargo_args.push("--android".to_string());
     }
     let mut config = load_config(&cargo_args);
-    if let Some(backend) = args.backend {
+    if let Some(backend) = args.common.backend {
         config.backend = Some(backend_from_arg(backend));
     }
     // CLI `--devtools off` overrides any rsx.toml setting.
     if let Some(devtools) = args.devtools {
-        config.devtools = Some(matches!(devtools, DevtoolsArg::On));
+        config.dev.get_or_insert_with(Default::default).devtools =
+            Some(matches!(devtools, DevtoolsArg::On));
     }
     run_hot_loop(
         HotMode::Dev,
@@ -811,13 +770,14 @@ fn run_preview_cmd(args: PreviewArgs) {
         eprintln!("[cargo-rsx] --list is not yet implemented (requires project scan).");
         std::process::exit(1);
     }
-    let mut cargo_args = build_cargo_args(&args.package, args.release, &args.features);
-    cargo_args.extend(args.cargo_args);
-    if matches!(args.target, Target::Android) {
+    let mut cargo_args =
+        build_cargo_args(&args.common.package, args.release, &args.common.features);
+    cargo_args.extend(args.common.cargo_args);
+    if matches!(args.common.target, Target::Android) {
         cargo_args.push("--android".to_string());
     }
     let mut config = load_config(&cargo_args);
-    if let Some(backend) = args.backend {
+    if let Some(backend) = args.common.backend {
         config.backend = Some(backend_from_arg(backend));
     }
     run_hot_loop(
@@ -846,11 +806,11 @@ fn run_build_cmd(args: BuildArgs) {
         "[cargo-rsx] Building release binary. Use --format <FORMAT> to package for distribution."
     );
     // Build always implies --release.
-    let mut cargo_args = build_cargo_args(&args.package, true, &args.features);
-    cargo_args.extend(args.cargo_args);
-    let android = matches!(args.target, Target::Android);
+    let mut cargo_args = build_cargo_args(&args.common.package, true, &args.common.features);
+    cargo_args.extend(args.common.cargo_args);
+    let android = matches!(args.common.target, Target::Android);
     let mut config = load_config(&cargo_args);
-    if let Some(backend) = args.backend {
+    if let Some(backend) = args.common.backend {
         config.backend = Some(backend_from_arg(backend));
     }
     run_bundle_inner(android, cargo_args, config);
@@ -956,8 +916,7 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         launch_envs.push(("RSX_PREVIEW".to_string(), "1".to_string()));
     }
     // Disable the devtools overlay when turned off via CLI flag or rsx.toml.
-    let devtools_disabled = config.devtools == Some(false)
-        || config.dev.as_ref().and_then(|d| d.devtools) == Some(false);
+    let devtools_disabled = config.dev.as_ref().and_then(|d| d.devtools) == Some(false);
     if devtools_disabled {
         launch_envs.push(("RSX_DEVTOOLS".to_string(), "0".to_string()));
     }

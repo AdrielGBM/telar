@@ -1,39 +1,30 @@
-use geometry_core::Rect as Bounds;
+use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::RwSignal;
 use renderer_core::RectStyle;
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::context::{WidgetCtx, new_container, track_layout};
-use crate::layout_item::LayoutItem;
+use crate::context::WidgetCtx;
+use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 
 pub struct StyledContainer {
     node: NodeId,
-    rect: RwSignal<Bounds>,
-    style: Box<dyn Fn(Bounds) -> RectStyle>,
+    rect: RwSignal<Rect>,
+    style: Box<dyn Fn(Rect) -> RectStyle>,
     opacity: f32,
-    children: Vec<(Box<dyn LayoutItem>, Option<RwSignal<Bounds>>)>,
+    children: TrackedChildren,
 }
 
 impl StyledContainer {
     pub fn new(
         ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
-        style: impl Fn(Bounds) -> RectStyle + 'static,
+        style: impl Fn(Rect) -> RectStyle + 'static,
         children: Vec<Box<dyn LayoutItem>>,
     ) -> Result<Self, LayoutError> {
-        let child_nodes = children.iter().map(|c| c.layout_node()).collect::<Vec<_>>();
-        let node = new_container(ctx, layout_style, &child_nodes)?;
-        let rect = track_layout(ctx, node).expect("new_container always registers a signal");
-        let children = children
-            .into_iter()
-            .map(|c| {
-                let rect = track_layout(ctx, c.layout_node());
-                (c, rect)
-            })
-            .collect();
+        let (node, rect, children) = register_container(ctx, layout_style, children)?;
         Ok(Self {
             node,
             rect,
@@ -59,7 +50,7 @@ impl Component for StyledContainer {
     fn view(&self) -> RenderNode {
         let r = self.rect.get();
         let bg = RenderNode::rect(
-            Bounds {
+            Rect {
                 x: r.x,
                 y: r.y,
                 width: r.width,

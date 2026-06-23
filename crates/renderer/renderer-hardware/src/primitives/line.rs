@@ -1,5 +1,5 @@
 use geometry_core::Point;
-use renderer_core::{LineCap, LineStyle};
+use renderer_core::{LineCap, Stroke};
 use wgpu::Device;
 
 use super::InstancePipeline;
@@ -50,7 +50,7 @@ impl LinePipeline {
 }
 
 #[inline]
-pub(crate) fn prepare_line(p1: Point, p2: Point, style: LineStyle) -> LineInstance {
+pub(crate) fn prepare_line(p1: Point, p2: Point, style: Stroke) -> LineInstance {
     let cap = match style.cap {
         LineCap::Butt => 0.0f32,
         LineCap::Round => 1.0f32,

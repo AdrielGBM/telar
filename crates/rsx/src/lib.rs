@@ -18,7 +18,7 @@ pub mod paths;
 #[cfg(feature = "runtime")]
 pub mod runner;
 
-pub use config::{RendererBackend, compile_time_backend};
+pub use config::RendererBackend;
 
 #[cfg(feature = "runtime")]
 #[derive(Clone)]
@@ -43,7 +43,7 @@ pub use app::App;
 pub use geometry_core::{Point, Rect, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
-    AlignItems, AutoTrack, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
+    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
     TemplateTrack,
 };
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
@@ -52,30 +52,28 @@ pub use paths::DesktopPathsProvider;
 pub use platform_core::{Event, ScrollDelta, WindowConfig};
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
-    Effect, Memo, ReadSignal, RwSignal, WriteSignal, batch, create_effect, create_memo,
-    create_rw_signal, create_signal, reset_runtime,
+    Effect, Memo, ReadSignal, RwSignal, batch, create_effect, create_memo, create_rw_signal,
+    reset_runtime,
 };
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
-    GradientStops, ImageData, ImageFilter, LineCap, LineJoin, LineStyle, Paint, PathData,
-    PathStyle, PathVerb, RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
+    GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint, PathData, PathStyle, PathVerb,
+    RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
 #[cfg(feature = "runtime")]
 pub use rsx_devtools::{DevAction, DevPlugin};
 pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]
-pub use services_core::{Scope, ServiceRegistry, inject, provide, try_inject, with_service};
+pub use services_core::{Scope, provide, try_inject, with_service};
 #[cfg(feature = "runtime")]
-pub use theme_core::{
-    DefaultTheme, Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme,
-};
+pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Heading, Image,
-    LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, Rectangle, RenderNode, ScrollArea,
-    ScrollablePage, ScrollbarStyle, Section, StyledContainer, Text, WidgetCtx, box_item,
-    compute_layout, new_container, new_leaf, track_layout, with_context,
+    Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Image,
+    LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, Rectangle, RenderNode,
+    ScrollbarStyle, StyledContainer, Text, WidgetCtx, box_item, compute_layout, mark_dirty,
+    new_container, new_leaf, track_layout,
 };
 
 #[cfg(all(feature = "preview", not(target_os = "android")))]
@@ -111,27 +109,14 @@ pub fn try_run_preview(entries: Vec<PreviewEntry>, config: AppConfig) -> bool {
     false
 }
 
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
-#[macro_export]
-macro_rules! run_app {
-    ($config:expr, $app:expr) => {
-        $crate::run_app_with_name(
-            $crate::AppConfig::from($config),
-            $app,
-            env!("CARGO_PKG_NAME"),
-        )
-    };
-}
-
 #[macro_export]
 macro_rules! children {
     ($($item:expr),* $(,)?) => {
-        vec![$(Box::new($item) as Box<dyn $crate::LayoutItem>),*]
+        vec![$($crate::box_item($item)),*]
     }
 }
 
-/// Returns a per-call-site cached `Arc<str>` for a string literal, allocating at most once per thread.
-/// Useful for `RenderNode::text`/`Canvas` content built from `&'static str` without re-allocating each frame.
+/// Caches an `Arc<str>` per call site in thread-local storage so a string literal allocates at most once per thread instead of once per frame.
 #[macro_export]
 macro_rules! static_rc_str {
     ($s:literal) => {{

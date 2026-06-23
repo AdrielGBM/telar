@@ -28,7 +28,6 @@ pub fn to_snake_case(name: &str) -> String {
             }
             out.push(c.to_ascii_lowercase());
         }
-        // non-separator, non-alphanumeric chars are silently dropped
     }
     out
 }
@@ -56,7 +55,6 @@ pub fn to_pascal_case(name: &str) -> String {
             }
             next_upper = false;
         }
-        // non-separator, non-alphanumeric chars are silently dropped
     }
     out
 }
@@ -82,6 +80,16 @@ pub fn preview_entries_const_name(stem: &str) -> String {
 
 pub(crate) fn is_ident_byte(b: u8) -> bool {
     b == b'_' || b.is_ascii_alphanumeric()
+}
+
+/// Returns true if `s` is a valid Rust identifier: starts with `_` or a letter, rest `_`/alphanumeric.
+pub(crate) fn is_ident(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c == '_' || c.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
 
 pub(crate) fn mentions_ident(code: &str, ident: &str) -> bool {

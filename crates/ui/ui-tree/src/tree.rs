@@ -100,8 +100,7 @@ impl ComponentList {
             slot.dirty.set(false);
             return slot.commands.borrow();
         }
-        let any_dirty = self.slots.iter().any(|s| s.dirty.get());
-        if any_dirty {
+        if self.is_dirty() {
             let mut cached = self.cached.borrow_mut();
             let mut starts = self.slot_starts.borrow_mut();
             if starts.len() != self.slots.len() {

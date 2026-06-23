@@ -1,6 +1,6 @@
 use crate::limits::*;
 
-/// Per-cache memory budgets for the software renderer. Pass to `SoftwareRenderer::new()` to override the compiled-in defaults without editing internal constants.
+/// Renderer configuration for the software backend: per-cache memory budgets plus font config. Pass to `SoftwareRenderer::new()` to override the compiled-in defaults without editing internal constants.
 pub struct SoftwareRendererConfig {
     pub image_cache_bytes: usize,
     pub shadow_cache_bytes: usize,

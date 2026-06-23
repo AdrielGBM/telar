@@ -5,7 +5,7 @@ use taffy::{
 
 pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
 
-use crate::track::{AutoTrack, TemplateTrack};
+use crate::track::TemplateTrack;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SizeDimension {
@@ -58,11 +58,6 @@ impl LayoutStyle {
 
     pub fn flex_wrap(mut self) -> Self {
         self.inner.flex_wrap = FlexWrap::Wrap;
-        self
-    }
-
-    pub fn flex_wrap_reverse(mut self) -> Self {
-        self.inner.flex_wrap = FlexWrap::WrapReverse;
         self
     }
 
@@ -128,21 +123,9 @@ impl LayoutStyle {
         self
     }
 
-    pub fn padding_horizontal_percent(mut self, pct: f32) -> Self {
-        self.inner.padding.left = LengthPercentage::percent(pct);
-        self.inner.padding.right = LengthPercentage::percent(pct);
-        self
-    }
-
     pub fn padding_vertical(mut self, px: f32) -> Self {
         self.inner.padding.top = LengthPercentage::length(px);
         self.inner.padding.bottom = LengthPercentage::length(px);
-        self
-    }
-
-    pub fn padding_vertical_percent(mut self, pct: f32) -> Self {
-        self.inner.padding.top = LengthPercentage::percent(pct);
-        self.inner.padding.bottom = LengthPercentage::percent(pct);
         self
     }
 
@@ -151,18 +134,8 @@ impl LayoutStyle {
         self
     }
 
-    pub fn padding_top_percent(mut self, pct: f32) -> Self {
-        self.inner.padding.top = LengthPercentage::percent(pct);
-        self
-    }
-
     pub fn padding_bottom(mut self, px: f32) -> Self {
         self.inner.padding.bottom = LengthPercentage::length(px);
-        self
-    }
-
-    pub fn padding_bottom_percent(mut self, pct: f32) -> Self {
-        self.inner.padding.bottom = LengthPercentage::percent(pct);
         self
     }
 
@@ -171,18 +144,8 @@ impl LayoutStyle {
         self
     }
 
-    pub fn padding_left_percent(mut self, pct: f32) -> Self {
-        self.inner.padding.left = LengthPercentage::percent(pct);
-        self
-    }
-
     pub fn padding_right(mut self, px: f32) -> Self {
         self.inner.padding.right = LengthPercentage::length(px);
-        self
-    }
-
-    pub fn padding_right_percent(mut self, pct: f32) -> Self {
-        self.inner.padding.right = LengthPercentage::percent(pct);
         self
     }
 
@@ -203,21 +166,9 @@ impl LayoutStyle {
         self
     }
 
-    pub fn margin_horizontal_percent(mut self, pct: f32) -> Self {
-        self.inner.margin.left = LengthPercentageAuto::percent(pct);
-        self.inner.margin.right = LengthPercentageAuto::percent(pct);
-        self
-    }
-
     pub fn margin_vertical(mut self, px: f32) -> Self {
         self.inner.margin.top = LengthPercentageAuto::length(px);
         self.inner.margin.bottom = LengthPercentageAuto::length(px);
-        self
-    }
-
-    pub fn margin_vertical_percent(mut self, pct: f32) -> Self {
-        self.inner.margin.top = LengthPercentageAuto::percent(pct);
-        self.inner.margin.bottom = LengthPercentageAuto::percent(pct);
         self
     }
 
@@ -226,18 +177,8 @@ impl LayoutStyle {
         self
     }
 
-    pub fn margin_top_percent(mut self, pct: f32) -> Self {
-        self.inner.margin.top = LengthPercentageAuto::percent(pct);
-        self
-    }
-
     pub fn margin_bottom(mut self, px: f32) -> Self {
         self.inner.margin.bottom = LengthPercentageAuto::length(px);
-        self
-    }
-
-    pub fn margin_bottom_percent(mut self, pct: f32) -> Self {
-        self.inner.margin.bottom = LengthPercentageAuto::percent(pct);
         self
     }
 
@@ -246,18 +187,8 @@ impl LayoutStyle {
         self
     }
 
-    pub fn margin_left_percent(mut self, pct: f32) -> Self {
-        self.inner.margin.left = LengthPercentageAuto::percent(pct);
-        self
-    }
-
     pub fn margin_right(mut self, px: f32) -> Self {
         self.inner.margin.right = LengthPercentageAuto::length(px);
-        self
-    }
-
-    pub fn margin_right_percent(mut self, pct: f32) -> Self {
-        self.inner.margin.right = LengthPercentageAuto::percent(pct);
         self
     }
 
@@ -315,22 +246,6 @@ impl LayoutStyle {
         self
     }
 
-    pub fn grid_auto_rows(mut self, tracks: Vec<AutoTrack>) -> Self {
-        self.inner.grid_auto_rows = tracks
-            .into_iter()
-            .map(|t| t.into_sizing_function())
-            .collect();
-        self
-    }
-
-    pub fn grid_auto_columns(mut self, tracks: Vec<AutoTrack>) -> Self {
-        self.inner.grid_auto_columns = tracks
-            .into_iter()
-            .map(|t| t.into_sizing_function())
-            .collect();
-        self
-    }
-
     pub fn grid_auto_flow_row(mut self) -> Self {
         self.inner.grid_auto_flow = GridAutoFlow::Row;
         self
@@ -338,16 +253,6 @@ impl LayoutStyle {
 
     pub fn grid_auto_flow_column(mut self) -> Self {
         self.inner.grid_auto_flow = GridAutoFlow::Column;
-        self
-    }
-
-    pub fn grid_auto_flow_row_dense(mut self) -> Self {
-        self.inner.grid_auto_flow = GridAutoFlow::RowDense;
-        self
-    }
-
-    pub fn grid_auto_flow_column_dense(mut self) -> Self {
-        self.inner.grid_auto_flow = GridAutoFlow::ColumnDense;
         self
     }
 
@@ -492,12 +397,6 @@ mod tests {
     fn style_padding_top_sets_field() {
         let style = LayoutStyle::new().padding_top(4.0);
         assert_eq!(style.inner.padding.top, LengthPercentage::length(4.0));
-    }
-
-    #[test]
-    fn style_padding_left_percent_sets_field() {
-        let style = LayoutStyle::new().padding_left_percent(0.1);
-        assert_eq!(style.inner.padding.left, LengthPercentage::percent(0.1));
     }
 
     #[test]

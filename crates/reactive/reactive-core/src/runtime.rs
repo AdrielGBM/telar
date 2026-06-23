@@ -29,13 +29,6 @@ pub(crate) struct SignalStorage {
     pub(crate) ref_count: usize,
 }
 
-pub(crate) type OwnerId = usize;
-
-pub(crate) struct OwnerData {
-    pub(crate) effects: Vec<EffectId>,
-    pub(crate) signals: Vec<SignalId>,
-}
-
 pub(crate) struct Runtime {
     pub(crate) observer_stack: Vec<EffectId>,
     pub(crate) effects: slab::Slab<EffectEntry>,
@@ -48,8 +41,6 @@ pub(crate) struct Runtime {
     next_flush_notify_id: u64,
     pub(crate) flushing: bool,
     flush_epoch: u64,
-    owner_stack: Vec<OwnerId>,
-    owners: slab::Slab<OwnerData>,
 }
 
 impl Runtime {
@@ -66,8 +57,6 @@ impl Runtime {
             next_flush_notify_id: 0,
             flushing: false,
             flush_epoch: 0,
-            owner_stack: Vec::new(),
-            owners: slab::Slab::new(),
         }
     }
 }
@@ -137,11 +126,6 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
             source_versions: Vec::new(),
             height: 0,
         });
-        if let Some(&owner_id) = rt.owner_stack.last() {
-            if rt.owners.contains(owner_id) {
-                rt.owners[owner_id].effects.push(id);
-            }
-        }
         id
     })
 }
@@ -158,62 +142,8 @@ pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
             source_versions: Vec::new(),
             height: 0,
         });
-        if let Some(&owner_id) = rt.owner_stack.last() {
-            if rt.owners.contains(owner_id) {
-                rt.owners[owner_id].effects.push(id);
-            }
-        }
         id
     })
-}
-
-pub(crate) fn create_owner() -> OwnerId {
-    RUNTIME.with(|rt| {
-        rt.borrow_mut().owners.insert(OwnerData {
-            effects: Vec::new(),
-            signals: Vec::new(),
-        })
-    })
-}
-
-pub(crate) fn drop_owner(id: OwnerId) {
-    let owner = RUNTIME.with(|rt| rt.borrow_mut().owners.try_remove(id));
-    let Some(owner) = owner else { return };
-    for effect_id in owner.effects {
-        deregister_effect(effect_id);
-    }
-    // Remove owned signals from the slab and detach them from any still-live subscribers.
-    for sig_id in owner.signals {
-        RUNTIME.with(|rt| {
-            let mut rt = rt.borrow_mut();
-            if let Some(sig) = rt.signals.try_remove(sig_id) {
-                for &sub_id in &sig.subscribers {
-                    if let Some(entry) = rt.effects.get_mut(sub_id) {
-                        // Drop this signal from the subscriber's source lists, keeping them aligned.
-                        let mut i = 0;
-                        while i < entry.sources.len() {
-                            if entry.sources[i] == sig_id {
-                                entry.sources.swap_remove(i);
-                                entry.source_slots.swap_remove(i);
-                                if i < entry.source_versions.len() {
-                                    entry.source_versions.swap_remove(i);
-                                }
-                            } else {
-                                i += 1;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-}
-
-pub(crate) fn with_owner<R>(id: OwnerId, f: impl FnOnce() -> R) -> R {
-    RUNTIME.with(|rt| rt.borrow_mut().owner_stack.push(id));
-    let result = f();
-    RUNTIME.with(|rt| rt.borrow_mut().owner_stack.pop());
-    result
 }
 
 pub(crate) fn deregister_effect(id: EffectId) {
@@ -234,10 +164,6 @@ pub(crate) fn deregister_effect(id: EffectId) {
 
 pub(crate) fn is_alive(id: EffectId) -> bool {
     RUNTIME.with(|rt| rt.borrow().effects.contains(id))
-}
-
-pub(crate) fn effect_height(id: EffectId) -> Option<u32> {
-    RUNTIME.with(|rt| rt.borrow().effects.get(id).map(|e| e.height))
 }
 
 pub(crate) fn schedule(id: EffectId) {
@@ -269,11 +195,6 @@ pub(crate) fn create_signal_storage<T: 'static>(value: T, initial_ref_count: usi
             observer_slots: Vec::new(),
             ref_count: initial_ref_count,
         });
-        if let Some(&owner_id) = rt.owner_stack.last() {
-            if rt.owners.contains(owner_id) {
-                rt.owners[owner_id].signals.push(id);
-            }
-        }
         id
     })
 }
@@ -409,7 +330,7 @@ pub(crate) fn notify_signal(id: SignalId) {
         any_scheduled && rt.batch_depth == 0 && !rt.flushing
     });
     if should_flush {
-        flush_public();
+        flush();
     }
 }
 
@@ -546,10 +467,6 @@ pub(crate) fn run_effect(id: EffectId) {
     }
 }
 
-pub(crate) fn flush_public() {
-    flush();
-}
-
 const MAX_FLUSH_ITERATIONS: usize = 1_000;
 
 fn flush() {
@@ -652,8 +569,8 @@ pub fn reset_runtime() {
     RUNTIME.with(|cell| {
         let old_ptr = cell.0.get();
         // Install a fresh runtime BEFORE dropping the old one. Any re-entrant RUNTIME
-        // access during the old runtime's drop glue (drop_signal, drop_owner, etc.)
-        // will see the new empty runtime and return early — no borrow conflict, no double-free.
+        // access during the old runtime's drop glue (drop_signal, etc.) will see the new
+        // empty runtime and return early — no borrow conflict, no double-free.
         cell.0
             .set(Box::into_raw(Box::new(RefCell::new(Runtime::new()))));
         if !old_ptr.is_null() {

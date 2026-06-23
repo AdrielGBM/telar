@@ -3,7 +3,7 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 
 use crate::{
-    BorderRadius, ImageData, ImageFilter, LineStyle, PathData, PathStyle, RectStyle, TextStyle,
+    BorderRadius, ImageData, ImageFilter, PathData, PathStyle, RectStyle, Stroke, TextStyle,
 };
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ pub enum DrawCommand {
     Line {
         p1: Point,
         p2: Point,
-        style: LineStyle,
+        style: Stroke,
     },
     Path {
         data: Arc<PathData>,

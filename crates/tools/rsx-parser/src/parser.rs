@@ -94,7 +94,6 @@ impl Parser {
             section.params.push(PropParam {
                 name: name.trim().to_string(),
                 ty: ty.trim().to_string(),
-                line: line.number,
             });
             self.pos += 1;
         }
@@ -254,9 +253,7 @@ impl Parser {
             if line.indent < min_indent {
                 break;
             }
-            // A deeper line without a preceding parent at this level is unexpected;
-            // treat it as belonging to the previous sibling's children (handled by recursion),
-            // so at this point indent must equal min_indent.
+            // Indent exceeds min_indent: children are consumed by recursion, so this means over-indentation; stop the sibling scan.
             if line.indent > min_indent {
                 break;
             }
@@ -270,9 +267,7 @@ impl Parser {
 
     /// Parses one view node (element, if, for, or let) starting at `indent`.
     fn parse_view_node(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
-        let line = &self.lines[self.pos];
-        let content = line.content.clone();
-        let number = line.number;
+        let content = self.lines[self.pos].content.clone();
         let first_word = content.split_whitespace().next().unwrap_or("");
 
         match first_word {
@@ -280,19 +275,16 @@ impl Parser {
             "for" => self.parse_for_block(indent),
             "let" => {
                 self.pos += 1;
-                Ok(ViewNode::LetStmt {
-                    source: content,
-                    line: number,
-                })
+                Ok(ViewNode::LetStmt { source: content })
             }
             _ => self.parse_element(indent),
         }
     }
 
     fn parse_if_block(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
-        let line = &self.lines[self.pos];
-        let number = line.number;
-        let condition = line.content["if".len()..].trim().to_string();
+        let condition = self.lines[self.pos].content["if".len()..]
+            .trim()
+            .to_string();
         self.pos += 1;
 
         let then_branch = self.parse_children(indent)?;
@@ -313,7 +305,6 @@ impl Parser {
             condition,
             then_branch,
             else_branch,
-            line: number,
         }))
     }
 
@@ -335,7 +326,6 @@ impl Parser {
             pattern,
             iterable,
             body,
-            line: number,
         }))
     }
 
@@ -598,8 +588,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
     Ok(element)
 }
 
-/// Reads a double-quoted string starting at index `start` (which must be `"`).
-/// Returns the unescaped-free inner text (escapes kept verbatim) and the index past the closing quote.
+/// Reads a double-quoted string starting at `start`; returns the inner text with escape sequences preserved verbatim, plus the index past the closing quote.
 fn read_quoted(chars: &[char], start: usize) -> Option<(String, usize)> {
     debug_assert_eq!(chars.get(start), Some(&'"'));
     let mut i = start + 1;

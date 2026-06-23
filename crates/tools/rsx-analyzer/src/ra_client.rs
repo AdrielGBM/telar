@@ -51,7 +51,7 @@ impl RaClient {
         let next_id = Arc::new(AtomicU64::new(1));
         let child_arc = Arc::new(Mutex::new(child));
 
-        // Build a temporary client to perform the initialize handshake
+        // Temporary client with an empty legend: the real semantic-tokens legend only arrives in the initialize response, so we need a client to send the handshake before we can build the final one.
         let tmp = Self {
             stdin: stdin.clone(),
             pending: pending.clone(),
@@ -307,7 +307,6 @@ fn parse_completion_response(response: Option<Value>) -> Vec<CompletionItem> {
     let Some(result) = response.as_ref().and_then(|r| r.get("result")) else {
         return vec![];
     };
-    // result is either CompletionList { items: [...] } or [...] directly
     let items = if let Some(arr) = result.as_array() {
         arr.clone()
     } else if let Some(arr) = result.get("items").and_then(|v| v.as_array()) {

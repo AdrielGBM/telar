@@ -38,10 +38,3 @@ impl PlatformWindow for WinitWindow {
         self.0.scale_factor()
     }
 }
-
-impl WinitWindow {
-    pub fn size(&self) -> (u32, u32) {
-        let s = self.0.inner_size();
-        (s.width, s.height)
-    }
-}

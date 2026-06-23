@@ -8,7 +8,7 @@ use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
     Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers,
-    hash_pod_slice, union_rects,
+    hash_pod_slice,
 };
 
 use wgpu::util::DeviceExt;
@@ -441,10 +441,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     _window: std::sync::Arc<W>,
 }
 
-// Safety: HardwareRenderer is always constructed with prev_commands: Vec::new() (no Rc<> values).
-// The cross-thread transfer via JoinHandle happens before any DrawCommands are processed,
-// so no Rc<> values exist at transfer time. After joining, the renderer lives exclusively
-// on the main thread.
+// Safety: cross-thread transfer via JoinHandle happens before any DrawCommands are processed, so no Rc<> values exist at transfer time (prev_commands starts empty); after joining the renderer lives exclusively on the main thread.
 unsafe impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Send
     for HardwareRenderer<W>
 {
@@ -452,11 +449,9 @@ unsafe impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Send
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for HardwareRenderer<W> {
     fn drop(&mut self) {
-        // Wait for all pending GPU work before the device is destroyed so the Vulkan driver
-        // frees GEM objects synchronously. Without this, wgpu may defer cleanup to a later
-        // maintenance cycle, keeping GPU memory allocated beyond this drop.
-        // Release cached layer textures before the device so the driver frees their GEM objects synchronously.
+        // Release cached layer textures before the device so the driver can free their GPU memory.
         self.layer_resolved_cache.clear();
+        // Block on pending GPU work before the device is destroyed; otherwise wgpu defers cleanup to a later maintenance cycle, keeping GPU memory allocated beyond this drop.
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
     }
 }
@@ -503,6 +498,20 @@ fn cull_bounds(
         }
     }
     false
+}
+
+// Converts a logical scissor rect into clamped physical (x, y, w, h) for set_scissor_rect; width/height >= 1 since wgpu rejects empty scissors.
+fn physical_scissor(rect: Rect, width: u32, height: u32, scale: f32) -> (u32, u32, u32, u32) {
+    let x = ((rect.x * scale).max(0.0).floor() as u32).min(width.saturating_sub(1));
+    let y = ((rect.y * scale).max(0.0).floor() as u32).min(height.saturating_sub(1));
+    let right = (((rect.x + rect.width) * scale).ceil() as u32).min(width);
+    let bottom = (((rect.y + rect.height) * scale).ceil() as u32).min(height);
+    let w = right.saturating_sub(x).max(1).min(width.saturating_sub(x));
+    let h = bottom
+        .saturating_sub(y)
+        .max(1)
+        .min(height.saturating_sub(y));
+    (x, y, w, h)
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
@@ -1248,7 +1257,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
                     renderer_core::culling::command_visual_rect(cmd, m, &self.font_metrics)
                 })
-                .and_then(|rects| rects.into_iter().reduce(union_rects))
+                .and_then(|rects| rects.into_iter().reduce(Rect::union))
             } else {
                 None
             };
@@ -1259,7 +1268,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let mut round_clip_composite: Vec<wgpu::BindGroup> = Vec::new();
         // Parallel to draw_state clip stack: true = rounded mini-layer, false = scissor rect.
         let mut clip_is_round: Vec<bool> = Vec::new();
-        let layer_blit_stack: Vec<wgpu::BindGroup> = Vec::new();
 
         let orig_commands = commands;
         let expanded_commands = expand_fill_layers(commands);
@@ -1800,11 +1808,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         if let Some(parent) = layer_accum_stack.last_mut() {
                             let footprint =
                                 Rect::new(offset_x, offset_y, tex_w_log as f32, tex_h_log as f32);
-                            parent.bounds = Some(
-                                parent
-                                    .bounds
-                                    .map_or(footprint, |b| union_rects(b, footprint)),
-                            );
+                            parent.bounds =
+                                Some(parent.bounds.map_or(footprint, |b| b.union(footprint)));
                         }
                         // Backdrop-blur layers read framebuffer content, so they are never cacheable.
                         let layer_hash: Option<u64> = if accum.backdrop_blur == 0.0 {
@@ -1875,10 +1880,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 bind_group,
                                 scissor: current_scissor,
                             });
-                            // Re-apply the outer scissor after the segment boundary. Skip when
-                            // current_scissor is None: the new render pass already defaults to the
-                            // full target, and emitting (0,0,w,h) inside a nested layer render
-                            // pass would use window dimensions on a smaller texture → validation error.
+                            // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
                             if let Some(s) = current_scissor {
                                 self.pending_steps
                                     .push(DrawStep::SetScissor { rect: Some(s) });
@@ -1953,17 +1955,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                 },
                                 scissor: current_scissor,
                             });
-                            // Re-apply the outer scissor after the segment boundary. Skip when
-                            // current_scissor is None: the new render pass already defaults to the
-                            // full target, and emitting (0,0,w,h) inside a nested layer render
-                            // pass would use window dimensions on a smaller texture → validation error.
+                            // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
                             if let Some(s) = current_scissor {
                                 self.pending_steps
                                     .push(DrawStep::SetScissor { rect: Some(s) });
                             }
                         }
                     }
-                    let _ = layer_blit_stack; // suppresses unused variable warning
                 }
                 #[cfg(target_os = "android")]
                 DrawCommand::AndroidHardwareBufferImage { .. } => {}
@@ -2344,8 +2342,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         )
                     };
 
-                // Use bucket dimensions: vertices are local to the shadow texture (0-based),
-                // so size must match the physical texture dimensions, not the logical ones.
+                // Use bucket dimensions: shadow-texture vertices are 0-based local coords, so the viewport size must match the physical texture, not the logical one.
                 let vp_data = Viewport::new(
                     [cap_bucket_w as f32, cap_bucket_h as f32],
                     [0.0, 0.0],
@@ -2829,23 +2826,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                                         render_pass.set_scissor_rect(0, 0, self.width, self.height);
                                     }
                                     Some(r) => {
-                                        let sf = self.scale_factor;
-                                        let x = ((r.x * sf).max(0.0).floor() as u32)
-                                            .min(self.width.saturating_sub(1));
-                                        let y = ((r.y * sf).max(0.0).floor() as u32)
-                                            .min(self.height.saturating_sub(1));
-                                        let right =
-                                            (((r.x + r.width) * sf).ceil() as u32).min(self.width);
-                                        let bottom = (((r.y + r.height) * sf).ceil() as u32)
-                                            .min(self.height);
-                                        let w = right
-                                            .saturating_sub(x)
-                                            .max(1)
-                                            .min(self.width.saturating_sub(x));
-                                        let h = bottom
-                                            .saturating_sub(y)
-                                            .max(1)
-                                            .min(self.height.saturating_sub(y));
+                                        let (x, y, w, h) = physical_scissor(
+                                            r,
+                                            self.width,
+                                            self.height,
+                                            self.scale_factor,
+                                        );
                                         render_pass.set_scissor_rect(x, y, w, h);
                                     }
                                 }
@@ -3150,21 +3136,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         blit.set_bind_group(0, parent_vp_bg, &[]);
                         blit.set_bind_group(1, &bind_group, &[]);
                         if let Some(s) = scissor {
-                            let sf = self.scale_factor;
-                            let x = ((s.x * sf).max(0.0).floor() as u32)
-                                .min(self.width.saturating_sub(1));
-                            let y = ((s.y * sf).max(0.0).floor() as u32)
-                                .min(self.height.saturating_sub(1));
-                            let right = (((s.x + s.width) * sf).ceil() as u32).min(self.width);
-                            let bottom = (((s.y + s.height) * sf).ceil() as u32).min(self.height);
-                            let w = right
-                                .saturating_sub(x)
-                                .max(1)
-                                .min(self.width.saturating_sub(x));
-                            let h = bottom
-                                .saturating_sub(y)
-                                .max(1)
-                                .min(self.height.saturating_sub(y));
+                            let (x, y, w, h) =
+                                physical_scissor(s, self.width, self.height, self.scale_factor);
                             blit.set_scissor_rect(x, y, w, h);
                         }
                         blit.draw(0..6, 0..1);
@@ -3247,21 +3220,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     blit.set_bind_group(0, parent_vp_bg, &[]);
                     blit.set_bind_group(1, &bind_group, &[]);
                     if let Some(s) = scissor {
-                        let sf = self.scale_factor;
-                        let x =
-                            ((s.x * sf).max(0.0).floor() as u32).min(self.width.saturating_sub(1));
-                        let y =
-                            ((s.y * sf).max(0.0).floor() as u32).min(self.height.saturating_sub(1));
-                        let right = (((s.x + s.width) * sf).ceil() as u32).min(self.width);
-                        let bottom = (((s.y + s.height) * sf).ceil() as u32).min(self.height);
-                        let w = right
-                            .saturating_sub(x)
-                            .max(1)
-                            .min(self.width.saturating_sub(x));
-                        let h = bottom
-                            .saturating_sub(y)
-                            .max(1)
-                            .min(self.height.saturating_sub(y));
+                        let (x, y, w, h) =
+                            physical_scissor(s, self.width, self.height, self.scale_factor);
                         blit.set_scissor_rect(x, y, w, h);
                     }
                     blit.draw(0..6, 0..1);

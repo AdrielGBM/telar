@@ -79,8 +79,12 @@ pub(crate) fn fill_to_paint(fill: renderer_core::Paint) -> tiny_skia::Paint<'sta
     paint
 }
 
-/// Creates a temporary pixmap of the given size, calls `draw_fn` to draw the shadow shape,
-/// then Gaussian-blurs the result. Returns None if pixmap allocation fails.
+/// Quantizes blur radius to half-pixel steps so near-identical blurs share one shadow-cache entry.
+pub(crate) fn quantize_blur(blur_radius: f32) -> f32 {
+    (blur_radius * 2.0).round() / 2.0
+}
+
+/// Returns None if pixmap allocation fails.
 pub(crate) fn render_shadow_pixmap(
     width: u32,
     height: u32,
@@ -201,8 +205,6 @@ pub(crate) fn blit_cached_shadow_async<K, H, S>(
     }
 }
 
-/// Ensures a shadow pixmap is in `cache` under `key`. If absent, renders it via `draw_fn`.
-/// Then blits it onto `pixmap` at `(blit_x, blit_y)`.
 pub(crate) fn blit_cached_shadow<K, H, S>(
     pixmap: &mut tiny_skia::Pixmap,
     cache: &mut clru::CLruCache<K, tiny_skia::Pixmap, H, S>,

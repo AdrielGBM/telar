@@ -130,14 +130,12 @@ fn check_element(
         }
     }
 
-    for child in &el.children {
-        check_nodes(
-            std::slice::from_ref(child),
-            defined_classes,
-            local_constants,
-            project,
-            theme_configured,
-            diags,
-        );
-    }
+    check_nodes(
+        &el.children,
+        defined_classes,
+        local_constants,
+        project,
+        theme_configured,
+        diags,
+    );
 }

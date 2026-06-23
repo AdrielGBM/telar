@@ -3,11 +3,8 @@ use std::sync::Arc;
 use crate::style::Scale;
 use crate::{Color, DrawCommand, Paint, RectStyle};
 
-// Returns Some(fill_alpha) when the rect should be rendered via an intermediate
-// layer to avoid the AA-fringe artifact on semi-transparent rounded rects.
 fn fill_layer_alpha(style: &RectStyle) -> Option<f32> {
-    // Skip when shadow is present: shadow.color.a controls shadow opacity
-    // independently and would be incorrectly scaled inside a fill-alpha layer.
+    // Skip when a shadow is present: shadow.color.a controls shadow opacity independently and would be incorrectly scaled inside a fill-alpha layer.
     if style.radius.is_zero() || style.shadow.is_some() {
         return None;
     }
@@ -17,9 +14,6 @@ fn fill_layer_alpha(style: &RectStyle) -> Option<f32> {
     }
 }
 
-// Expands each semi-transparent solid-fill rounded rect into PushLayer{opacity}
-// + opaque Rect + PopLayer, so AA coverage and fill transparency are composited
-// separately.
 pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
     let needs_expand = commands.iter().any(|cmd| match cmd {
         DrawCommand::Rect { style, .. } => fill_layer_alpha(style).is_some(),
@@ -123,8 +117,7 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
         },
         DrawCommand::PopClip => DrawCommand::PopClip,
         DrawCommand::PushMatrix { matrix } => DrawCommand::PushMatrix {
-            // Only the translation components (e, f at indices 4-5) are scaled to physical pixels.
-            // The linear part (a,b,c,d) is unchanged: sf*(a*x + c*y + e) = a*(sf*x) + c*(sf*y) + sf*e.
+            // Only the translation components (e, f at 4-5) are scaled; the linear part stays since sf*(a*x + c*y + e) = a*(sf*x) + c*(sf*y) + sf*e.
             matrix: [
                 matrix[0],
                 matrix[1],

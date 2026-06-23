@@ -6,9 +6,9 @@ mod scope;
 
 pub use paths::AppPathsProvider;
 #[cfg(feature = "di")]
-pub use registry::{ServiceError, ServiceRegistry};
+pub use registry::ServiceError;
 #[cfg(feature = "di")]
-pub use scope::{Scope, inject, provide, try_inject, with_service};
+pub use scope::{Scope, provide, try_inject, with_service};
 
 #[cfg(all(test, feature = "di"))]
 mod tests {
@@ -16,29 +16,13 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
+    use crate::registry::ServiceRegistry;
 
     #[test]
     fn registry_insert_get() {
         let mut reg = ServiceRegistry::new();
         reg.insert(42u32).unwrap();
         assert_eq!(reg.get::<u32>(), Some(&42));
-    }
-
-    #[test]
-    fn registry_get_mut() {
-        let mut reg = ServiceRegistry::new();
-        reg.insert(0u32).unwrap();
-        *reg.get_mut::<u32>().unwrap() = 7;
-        assert_eq!(reg.get::<u32>(), Some(&7));
-    }
-
-    #[test]
-    fn registry_remove() {
-        let mut reg = ServiceRegistry::new();
-        reg.insert(String::from("hello")).unwrap();
-        let v = reg.remove::<String>();
-        assert_eq!(v, Some(String::from("hello")));
-        assert!(!reg.contains::<String>());
     }
 
     #[test]
@@ -60,7 +44,6 @@ mod tests {
         Scope::with(|| {
             provide(99u32).unwrap();
             assert_eq!(try_inject::<u32>(), Some(99));
-            assert_eq!(inject::<u32>(), 99);
         });
     }
 
@@ -80,7 +63,7 @@ mod tests {
             provide(1u32).unwrap();
             Scope::with(|| {
                 provide(2u32).unwrap();
-                assert_eq!(inject::<u32>(), 2);
+                assert_eq!(try_inject::<u32>(), Some(2));
             });
         });
     }
@@ -91,9 +74,9 @@ mod tests {
             provide(String::from("parent")).unwrap();
             Scope::with(|| {
                 provide(String::from("child")).unwrap();
-                assert_eq!(inject::<String>(), "child");
+                assert_eq!(try_inject::<String>().as_deref(), Some("child"));
             });
-            assert_eq!(inject::<String>(), "parent");
+            assert_eq!(try_inject::<String>().as_deref(), Some("parent"));
         });
     }
 
@@ -117,9 +100,8 @@ mod tests {
     fn scope_with_provides_service() {
         Scope::with(|| {
             provide(42u32).unwrap();
-            assert_eq!(inject::<u32>(), 42);
+            assert_eq!(try_inject::<u32>(), Some(42));
         });
-        // service no longer available after with() returns
         assert_eq!(try_inject::<u32>(), None);
     }
 
@@ -137,22 +119,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not found in any scope")]
-    fn inject_panics_when_service_not_provided() {
-        Scope::with(|| {
-            inject::<i128>();
-        });
-    }
-
-    #[test]
     fn scope_with_nested() {
         Scope::with(|| {
             provide(String::from("outer")).unwrap();
             Scope::with(|| {
                 provide(String::from("inner")).unwrap();
-                assert_eq!(inject::<String>(), "inner");
+                assert_eq!(try_inject::<String>().as_deref(), Some("inner"));
             });
-            assert_eq!(inject::<String>(), "outer");
+            assert_eq!(try_inject::<String>().as_deref(), Some("outer"));
         });
     }
 }

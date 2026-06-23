@@ -134,7 +134,7 @@ pub(crate) fn draw_path(
             let draw_x = (b.x() + shadow.offset_x) as i32 - padding;
             let draw_y = (b.y() + shadow.offset_y) as i32 - padding;
 
-            let q_blur = (shadow.blur_radius * 2.0).round() / 2.0;
+            let q_blur = crate::primitives::quantize_blur(shadow.blur_radius);
             let [sc_r, sc_g, sc_b, sc_a] = shadow.color.to_rgba8();
             let cache_key = PathShadowCacheKey {
                 path_hash,

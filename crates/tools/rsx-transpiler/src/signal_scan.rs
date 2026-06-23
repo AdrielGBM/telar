@@ -1,6 +1,8 @@
 //! Detects reactive signals declared in the logic zone so the view generator
 //! knows which identifiers must be read with `.get()` inside closures.
 
+use crate::naming::is_ident;
+
 #[derive(Debug, Clone)]
 pub struct SignalInfo {
     pub name: String,
@@ -13,7 +15,6 @@ pub struct SignalInfo {
 pub enum SignalKind {
     RwSignal,
     Memo,
-    ReadSignal,
 }
 
 /// Scans the logic source for signal declarations and returns their names.
@@ -21,8 +22,6 @@ pub enum SignalKind {
 /// Recognised forms:
 /// - `let NAME = create_rw_signal(...)`
 /// - `let NAME = create_memo(...)`
-/// - `let NAME = create_signal(...)` (treated as a read handle)
-/// - `let (NAME, _) = create_signal(...)` (the read half is the signal)
 pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
     let mut signals = Vec::new();
 
@@ -42,25 +41,9 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
             SignalKind::RwSignal
         } else if expr.starts_with("create_memo") {
             SignalKind::Memo
-        } else if expr.starts_with("create_signal") {
-            SignalKind::ReadSignal
         } else {
             continue;
         };
-
-        // Tuple binding: the read handle is the first element.
-        if let Some(inner) = binding.strip_prefix('(').and_then(|b| b.strip_suffix(')')) {
-            if let Some(first) = inner.split(',').next() {
-                let name = first.trim();
-                if is_ident(name) {
-                    signals.push(SignalInfo {
-                        name: name.to_string(),
-                        kind,
-                    });
-                }
-            }
-            continue;
-        }
 
         // Simple binding: strip an optional `mut` and a type annotation.
         let name = binding
@@ -81,15 +64,6 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
     signals
 }
 
-fn is_ident(s: &str) -> bool {
-    let mut chars = s.chars();
-    match chars.next() {
-        Some(c) if c == '_' || c.is_ascii_alphabetic() => {}
-        _ => return false,
-    }
-    chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,14 +81,6 @@ mod tests {
         let s = scan_signals("let double = create_memo(move |_| count.get() * 2);");
         assert_eq!(s[0].name, "double");
         assert_eq!(s[0].kind, SignalKind::Memo);
-    }
-
-    #[test]
-    fn detects_tuple_signal() {
-        let s = scan_signals("let (value, set_value) = create_signal(0);");
-        assert_eq!(s.len(), 1);
-        assert_eq!(s[0].name, "value");
-        assert_eq!(s[0].kind, SignalKind::ReadSignal);
     }
 
     #[test]

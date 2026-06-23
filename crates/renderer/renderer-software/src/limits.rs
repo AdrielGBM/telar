@@ -1,6 +1,3 @@
-// Cache budget constants for the software renderer.
-// Edit this file to tune all cache memory limits from one place.
-
 /// Byte budget for the decoded image pixmap cache. A single 4K RGBA image is ~33 MiB, so an entry-count cap would let the cache grow into the gigabytes; a byte budget bounds memory regardless of image size.
 pub const IMAGE_CACHE_BUDGET_BYTES: usize = 256 * 1024 * 1024;
 

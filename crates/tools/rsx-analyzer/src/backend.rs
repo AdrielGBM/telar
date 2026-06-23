@@ -40,11 +40,7 @@ impl Backend {
     async fn reparse_and_diagnose(&self, uri: Url, text: String, is_open: bool) -> Vec<Diagnostic> {
         let file_path = uri.to_file_path().ok();
         let mut store = self.store.write().await;
-        let parse_diags = if is_open {
-            store.open(uri.clone(), text)
-        } else {
-            store.change(uri.clone(), text)
-        };
+        let parse_diags = store.reparse(uri.clone(), text);
         if !parse_diags.is_empty() {
             return parse_diags;
         }

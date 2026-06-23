@@ -6,9 +6,7 @@ use std::sync::mpsc;
 use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::{
-    Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers, union_rects,
-};
+use renderer_core::{Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers};
 use renderer_text::{TextShaper, TextShaperConfig};
 use rustc_hash::{FxBuildHasher, FxHasher};
 use smallvec::SmallVec;
@@ -51,7 +49,7 @@ fn fill_mask_region(data: &mut [u8], stride: usize, region: (u32, u32, u32, u32)
 fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
     Some(match acc {
         None => r,
-        Some(a) => union_rects(a, r),
+        Some(a) => a.union(r),
     })
 }
 
@@ -222,47 +220,7 @@ fn fill_rounded_mask(
     rect: geometry_core::Rect,
     radius: renderer_core::BorderRadius,
 ) {
-    let (x, y, w, h) = (rect.x, rect.y, rect.width, rect.height);
-    let (tl, tr, br, bl) = (
-        radius.top_left,
-        radius.top_right,
-        radius.bottom_right,
-        radius.bottom_left,
-    );
-    let k = renderer_core::BEZIER_CIRCLE_K;
-    let mut pb = tiny_skia::PathBuilder::new();
-    pb.move_to(x + tl, y);
-    pb.line_to(x + w - tr, y);
-    pb.cubic_to(
-        x + w - tr * (1.0 - k),
-        y,
-        x + w,
-        y + tr * (1.0 - k),
-        x + w,
-        y + tr,
-    );
-    pb.line_to(x + w, y + h - br);
-    pb.cubic_to(
-        x + w,
-        y + h - br * (1.0 - k),
-        x + w - br * (1.0 - k),
-        y + h,
-        x + w - br,
-        y + h,
-    );
-    pb.line_to(x + bl, y + h);
-    pb.cubic_to(
-        x + bl * (1.0 - k),
-        y + h,
-        x,
-        y + h - bl * (1.0 - k),
-        x,
-        y + h - bl,
-    );
-    pb.line_to(x, y + tl);
-    pb.cubic_to(x, y + tl * (1.0 - k), x + tl * (1.0 - k), y, x + tl, y);
-    pb.close();
-    if let Some(path) = pb.finish() {
+    if let Some(path) = crate::primitives::rect::build_rect_path(rect, radius) {
         mask.fill_path(
             &path,
             tiny_skia::FillRule::Winding,
@@ -326,7 +284,7 @@ where
     pub fn new(
         display: D,
         window: W,
-        budget: crate::SoftwareRendererConfig,
+        config: crate::SoftwareRendererConfig,
     ) -> Result<Self, RendererError> {
         let context = Context::new(display).map_err(|e| {
             RendererError::Backend(format!("softbuffer context creation failed: {}", e))
@@ -334,10 +292,10 @@ where
         let surface =
             Surface::new(&context, window).map_err(|e| RendererError::Surface(e.to_string()))?;
         let mut text_shaper = TextShaper::with_config(TextShaperConfig {
-            pixel_cache_budget_bytes: budget.text_pixel_cache_bytes,
-            alpha_cache_budget_bytes: budget.text_alpha_cache_bytes,
-            shaping_cache_budget_bytes: budget.text_shaping_cache_bytes,
-            font: budget.font,
+            pixel_cache_budget_bytes: config.text_pixel_cache_bytes,
+            alpha_cache_budget_bytes: config.text_alpha_cache_bytes,
+            shaping_cache_budget_bytes: config.text_shaping_cache_bytes,
+            font: config.font,
         });
         let font_metrics = text_shaper.font_metrics();
         Ok(Self {
@@ -348,22 +306,22 @@ where
             pixmap: None,
             text_shaper,
             font_metrics,
-            image_cache: crate::primitives::image::new_image_cache(budget.image_cache_bytes),
+            image_cache: crate::primitives::image::new_image_cache(config.image_cache_bytes),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
             clip_mask_buf: None,
             clip_mask_dirty: None,
             draw_state: renderer_core::DrawState::new(),
             shadow_cache: CLruCache::with_config(
-                CLruCacheConfig::new(NonZeroUsize::new(budget.shadow_cache_bytes).unwrap())
+                CLruCacheConfig::new(NonZeroUsize::new(config.shadow_cache_bytes).unwrap())
                     .with_hasher(FxBuildHasher::default())
                     .with_scale(PixmapByteScale),
             ),
             text_pixmap_cache: lru::LruCache::new(
-                std::num::NonZeroUsize::new(budget.text_pixmap_cache_entries).unwrap(),
+                std::num::NonZeroUsize::new(config.text_pixmap_cache_entries).unwrap(),
             ),
-            text_shadow_cache: new_text_shadow_cache(budget.text_shadow_cache_bytes),
-            path_shadow_cache: new_path_shadow_cache(budget.path_shadow_cache_bytes),
+            text_shadow_cache: new_text_shadow_cache(config.text_shadow_cache_bytes),
+            path_shadow_cache: new_path_shadow_cache(config.path_shadow_cache_bytes),
             pending_shadows: HashMap::new(),
             pending_text_shadows: HashMap::new(),
             pending_path_shadows: HashMap::new(),
@@ -662,34 +620,14 @@ where
         self.layer_stack.clear();
 
         let input_hash = current_hash;
-        let expanded_commands = match &self.expanded_commands_cache {
-            Some((cached_hash, _)) if *cached_hash == input_hash => None, // signals "use cache"
+        match &self.expanded_commands_cache {
+            Some((cached_hash, _)) if *cached_hash == input_hash => {}
             _ => {
-                let result = expand_fill_layers(commands);
-                // Store the expanded result (or a clone of the original if no expansion needed).
-                let stored = result.clone().unwrap_or_else(|| commands.to_vec());
+                let stored = expand_fill_layers(commands).unwrap_or_else(|| commands.to_vec());
                 self.expanded_commands_cache = Some((input_hash, stored));
-                result
             }
         };
-        // When expanded_commands is None and cache hit occurred, we still need to know if expansion happened.
-        // The cache stores the final resolved slice (expanded or original), so we use it directly.
-        let commands: &[DrawCommand] = match &expanded_commands {
-            Some(v) => v.as_slice(),
-            None => {
-                // Either no semi-transparent rects (expand_fill_layers returned None) OR cache hit.
-                // In both cases the cache holds the correct resolved slice.
-                if let Some((cached_hash, cached)) = &self.expanded_commands_cache {
-                    if *cached_hash == input_hash {
-                        cached.as_slice()
-                    } else {
-                        commands
-                    }
-                } else {
-                    commands
-                }
-            }
-        };
+        let commands: &[DrawCommand] = &self.expanded_commands_cache.as_ref().unwrap().1;
 
         // Task 2.12: skip compute_layer_bboxes when commands and dimensions haven't changed.
         let bbox_hash = hash_commands_with_dims(commands, self.width, self.height);

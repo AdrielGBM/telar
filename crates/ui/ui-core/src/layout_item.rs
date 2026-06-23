@@ -1,9 +1,14 @@
-use layout_core::NodeId;
+use geometry_core::Rect;
+use layout_core::{LayoutError, LayoutStyle, NodeId};
+use reactive_core::RwSignal;
 use ui_tree::Component;
 
+use crate::context::{WidgetCtx, new_container, track_layout};
 use crate::layout_leaf::LayoutLeaf;
 
-pub trait LeafWidget {
+pub(crate) type TrackedChildren = Vec<(Box<dyn LayoutItem>, Option<RwSignal<Rect>>)>;
+
+pub(crate) trait LeafWidget {
     fn layout_leaf(&self) -> &LayoutLeaf;
 }
 
@@ -22,11 +27,22 @@ pub fn box_item(item: impl LayoutItem + 'static) -> Box<dyn LayoutItem> {
     Box::new(item)
 }
 
-#[macro_export]
-macro_rules! children {
-    ($($item:expr),* $(,)?) => {
-        vec![$($crate::layout_item::box_item($item)),*]
-    };
+pub(crate) fn register_container(
+    ctx: &mut WidgetCtx,
+    layout_style: LayoutStyle,
+    children: Vec<Box<dyn LayoutItem>>,
+) -> Result<(NodeId, RwSignal<Rect>, TrackedChildren), LayoutError> {
+    let child_nodes = children.iter().map(|c| c.layout_node()).collect::<Vec<_>>();
+    let node = new_container(ctx, layout_style, &child_nodes)?;
+    let rect = track_layout(ctx, node).expect("new_container always registers a signal");
+    let children = children
+        .into_iter()
+        .map(|c| {
+            let rect = track_layout(ctx, c.layout_node());
+            (c, rect)
+        })
+        .collect();
+    Ok((node, rect, children))
 }
 
 /// Implements `LeafWidget` for a struct that has a `leaf: LayoutLeaf` field.

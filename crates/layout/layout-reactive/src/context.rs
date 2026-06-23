@@ -31,25 +31,8 @@ pub fn track_layout(ctx: &WidgetCtx, node: NodeId) -> Option<RwSignal<Rect>> {
     ctx.track_layout(node)
 }
 
-pub fn update_style(
-    ctx: &mut WidgetCtx,
-    node: NodeId,
-    style: LayoutStyle,
-) -> Result<(), LayoutError> {
-    ctx.update_style(node, style)
-}
-
 pub fn mark_dirty(ctx: &mut WidgetCtx, node: NodeId) -> Result<(), LayoutError> {
-    ctx.mark_dirty_node(node)
-}
-
-pub fn with_context<F, R>(ctx: WidgetCtx, f: F) -> (R, WidgetCtx)
-where
-    F: FnOnce(&mut WidgetCtx) -> R,
-{
-    let mut ctx = ctx;
-    let result = f(&mut ctx);
-    (result, ctx)
+    ctx.mark_dirty(node)
 }
 
 pub struct WidgetCtx {
@@ -74,7 +57,7 @@ impl WidgetCtx {
         }
     }
 
-    pub fn new_leaf(
+    pub(crate) fn new_leaf(
         &mut self,
         style: LayoutStyle,
     ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
@@ -87,7 +70,7 @@ impl WidgetCtx {
         Ok((node, signal))
     }
 
-    pub fn new_container(
+    pub(crate) fn new_container(
         &mut self,
         style: LayoutStyle,
         children: &[NodeId],
@@ -104,7 +87,7 @@ impl WidgetCtx {
         Ok(node)
     }
 
-    pub fn compute_layout(
+    pub(crate) fn compute_layout(
         &mut self,
         root: NodeId,
         width: AvailableSpace,
@@ -197,24 +180,11 @@ impl WidgetCtx {
         }
     }
 
-    pub fn track_layout(&self, node: NodeId) -> Option<RwSignal<Rect>> {
+    pub(crate) fn track_layout(&self, node: NodeId) -> Option<RwSignal<Rect>> {
         self.registry.get(&node).cloned()
     }
 
-    pub fn update_style(&mut self, node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
-        self.engine.set_style(node, style)?;
-        match self.engine.is_fixed_size_node(node) {
-            Some(dims) => {
-                self.boundary_nodes.insert(node, dims);
-            }
-            None => {
-                self.boundary_nodes.remove(&node);
-            }
-        }
-        Ok(())
-    }
-
-    pub fn mark_dirty_node(&mut self, node: NodeId) -> Result<(), LayoutError> {
+    pub(crate) fn mark_dirty(&mut self, node: NodeId) -> Result<(), LayoutError> {
         self.engine.mark_dirty(node)
     }
 }

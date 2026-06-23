@@ -18,14 +18,6 @@ impl Store {
         }
     }
 
-    pub fn open(&mut self, uri: Url, source: String) -> Vec<Diagnostic> {
-        self.reparse(uri, source)
-    }
-
-    pub fn change(&mut self, uri: Url, source: String) -> Vec<Diagnostic> {
-        self.reparse(uri, source)
-    }
-
     pub fn close(&mut self, uri: &Url) {
         self.docs.remove(uri);
     }
@@ -34,7 +26,7 @@ impl Store {
         self.docs.get(uri)
     }
 
-    fn reparse(&mut self, uri: Url, source: String) -> Vec<Diagnostic> {
+    pub fn reparse(&mut self, uri: Url, source: String) -> Vec<Diagnostic> {
         match parse(&source) {
             Ok(document) => {
                 self.docs.insert(uri, ParsedDocument { source, document });

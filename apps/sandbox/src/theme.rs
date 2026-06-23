@@ -32,32 +32,8 @@ impl WidgetTheme for SandboxTheme {
     fn widget_on_primary(&self) -> Color {
         self.on_color
     }
-    fn widget_surface(&self) -> Color {
-        self.background
-    }
-    fn widget_on_surface(&self) -> Color {
-        self.dark
-    }
-    fn widget_danger(&self) -> Color {
-        self.danger
-    }
-    fn widget_success(&self) -> Color {
-        self.success
-    }
     fn widget_muted(&self) -> Color {
         self.muted
-    }
-    fn widget_warning(&self) -> Color {
-        self.warning
-    }
-    fn widget_accent(&self) -> Color {
-        self.cyan
-    }
-    fn widget_border(&self) -> Color {
-        self.card_border
-    }
-    fn widget_purple(&self) -> Color {
-        self.purple
     }
     fn widget_scrollbar(&self) -> Color {
         Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.6)

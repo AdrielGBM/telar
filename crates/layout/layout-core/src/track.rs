@@ -3,15 +3,6 @@ use taffy::{
     style_helpers,
 };
 
-pub trait TrackSizing: Sized {
-    fn fr(flex: f32) -> Self;
-    fn px(px: f32) -> Self;
-    fn auto() -> Self;
-    fn min_content() -> Self;
-    fn max_content() -> Self;
-    fn minmax(min: Self, max: Self) -> Self;
-}
-
 pub enum TemplateTrack {
     Single(TrackSizingFunction),
     Repeat(RepetitionCount, TrackSizingFunction),
@@ -80,79 +71,5 @@ impl TemplateTrack {
                 })
             }
         }
-    }
-}
-
-impl TrackSizing for TemplateTrack {
-    fn fr(flex: f32) -> Self {
-        TemplateTrack::fr(flex)
-    }
-    fn px(px: f32) -> Self {
-        TemplateTrack::px(px)
-    }
-    fn auto() -> Self {
-        TemplateTrack::auto()
-    }
-    fn min_content() -> Self {
-        TemplateTrack::min_content()
-    }
-    fn max_content() -> Self {
-        TemplateTrack::max_content()
-    }
-    fn minmax(min: Self, max: Self) -> Self {
-        TemplateTrack::minmax(min, max)
-    }
-}
-
-pub struct AutoTrack(TrackSizingFunction);
-
-impl AutoTrack {
-    pub fn fr(flex: f32) -> Self {
-        AutoTrack(style_helpers::fr(flex))
-    }
-
-    pub fn px(px: f32) -> Self {
-        AutoTrack(style_helpers::length(px))
-    }
-
-    pub fn auto() -> Self {
-        AutoTrack(style_helpers::auto())
-    }
-
-    pub fn min_content() -> Self {
-        AutoTrack(style_helpers::min_content())
-    }
-
-    pub fn max_content() -> Self {
-        AutoTrack(style_helpers::max_content())
-    }
-
-    pub fn minmax(min: AutoTrack, max: AutoTrack) -> Self {
-        AutoTrack(style_helpers::minmax(min.0.min, max.0.max))
-    }
-
-    pub(crate) fn into_sizing_function(self) -> TrackSizingFunction {
-        self.0
-    }
-}
-
-impl TrackSizing for AutoTrack {
-    fn fr(flex: f32) -> Self {
-        AutoTrack::fr(flex)
-    }
-    fn px(px: f32) -> Self {
-        AutoTrack::px(px)
-    }
-    fn auto() -> Self {
-        AutoTrack::auto()
-    }
-    fn min_content() -> Self {
-        AutoTrack::min_content()
-    }
-    fn max_content() -> Self {
-        AutoTrack::max_content()
-    }
-    fn minmax(min: Self, max: Self) -> Self {
-        AutoTrack::minmax(min, max)
     }
 }

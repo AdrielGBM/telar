@@ -19,65 +19,6 @@ impl Color {
         Self::rgba(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0)
     }
 
-    pub fn from_rgba_u8(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self::rgba(
-            r as f32 / 255.0,
-            g as f32 / 255.0,
-            b as f32 / 255.0,
-            a as f32 / 255.0,
-        )
-    }
-
-    pub fn from_hex(hex: &str) -> Option<Self> {
-        let hex = hex.strip_prefix('#').unwrap_or(hex);
-        let (r, g, b, a) = match hex.len() {
-            3 => {
-                let r = Self::parse_hex_byte(hex.as_bytes()[0], hex.as_bytes()[0])?;
-                let g = Self::parse_hex_byte(hex.as_bytes()[1], hex.as_bytes()[1])?;
-                let b = Self::parse_hex_byte(hex.as_bytes()[2], hex.as_bytes()[2])?;
-                (r, g, b, 255)
-            }
-            4 => {
-                let r = Self::parse_hex_byte(hex.as_bytes()[0], hex.as_bytes()[0])?;
-                let g = Self::parse_hex_byte(hex.as_bytes()[1], hex.as_bytes()[1])?;
-                let b = Self::parse_hex_byte(hex.as_bytes()[2], hex.as_bytes()[2])?;
-                let a = Self::parse_hex_byte(hex.as_bytes()[3], hex.as_bytes()[3])?;
-                (r, g, b, a)
-            }
-            6 => {
-                let r = Self::parse_hex_byte(hex.as_bytes()[0], hex.as_bytes()[1])?;
-                let g = Self::parse_hex_byte(hex.as_bytes()[2], hex.as_bytes()[3])?;
-                let b = Self::parse_hex_byte(hex.as_bytes()[4], hex.as_bytes()[5])?;
-                (r, g, b, 255)
-            }
-            8 => {
-                let r = Self::parse_hex_byte(hex.as_bytes()[0], hex.as_bytes()[1])?;
-                let g = Self::parse_hex_byte(hex.as_bytes()[2], hex.as_bytes()[3])?;
-                let b = Self::parse_hex_byte(hex.as_bytes()[4], hex.as_bytes()[5])?;
-                let a = Self::parse_hex_byte(hex.as_bytes()[6], hex.as_bytes()[7])?;
-                (r, g, b, a)
-            }
-            _ => return None,
-        };
-        Some(Self::from_rgba_u8(r, g, b, a))
-    }
-
-    fn parse_hex_byte(hi: u8, lo: u8) -> Option<u8> {
-        let hi_val = match hi {
-            b'0'..=b'9' => hi - b'0',
-            b'a'..=b'f' => hi - b'a' + 10,
-            b'A'..=b'F' => hi - b'A' + 10,
-            _ => return None,
-        };
-        let lo_val = match lo {
-            b'0'..=b'9' => lo - b'0',
-            b'a'..=b'f' => lo - b'a' + 10,
-            b'A'..=b'F' => lo - b'A' + 10,
-            _ => return None,
-        };
-        Some((hi_val << 4) | lo_val)
-    }
-
     pub fn from_hsl(h: f32, s: f32, l: f32) -> Self {
         Self::from_hsla(h, s, l, 1.0)
     }
@@ -107,22 +48,14 @@ impl Color {
         }
     }
 
-    pub fn with_lightness(self, l: f32) -> Self {
-        Self {
-            r: l.clamp(0.0, 1.0),
-            g: l.clamp(0.0, 1.0),
-            b: l.clamp(0.0, 1.0),
-            a: self.a,
-        }
-    }
-
     #[inline]
     pub fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
 
     fn hue_to_rgb(c: f32, x: f32, h: f32) -> (f32, f32, f32) {
-        match ((h % 360.0 + 360.0) % 360.0) as u32 / 60 {
+        // Callers pass h already normalized to [0, 360) (from_hsla applies rem_euclid).
+        match h as u32 / 60 {
             0 => (c, x, 0.0),
             1 => (x, c, 0.0),
             2 => (0.0, c, x),
@@ -155,152 +88,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn from_hex_red() {
-        let color = Color::from_hex("#FF0000").unwrap();
-        assert_eq!(color.r, 1.0);
-        assert_eq!(color.g, 0.0);
-        assert_eq!(color.b, 0.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_green() {
-        let color = Color::from_hex("#00FF00").unwrap();
-        assert_eq!(color.r, 0.0);
-        assert_eq!(color.g, 1.0);
-        assert_eq!(color.b, 0.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_blue() {
-        let color = Color::from_hex("#0000FF").unwrap();
-        assert_eq!(color.r, 0.0);
-        assert_eq!(color.g, 0.0);
-        assert_eq!(color.b, 1.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_black() {
-        let color = Color::from_hex("#000000").unwrap();
-        assert_eq!(color.r, 0.0);
-        assert_eq!(color.g, 0.0);
-        assert_eq!(color.b, 0.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_white() {
-        let color = Color::from_hex("#FFFFFF").unwrap();
-        assert_eq!(color.r, 1.0);
-        assert_eq!(color.g, 1.0);
-        assert_eq!(color.b, 1.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_lowercase() {
-        let color = Color::from_hex("#ff0000").unwrap();
-        assert_eq!(color.r, 1.0);
-        assert_eq!(color.g, 0.0);
-        assert_eq!(color.b, 0.0);
-    }
-
-    #[test]
-    fn from_hex_8digit_with_full_alpha() {
-        let color = Color::from_hex("#00FF00FF").unwrap();
-        assert_eq!(color.r, 0.0);
-        assert_eq!(color.g, 1.0);
-        assert_eq!(color.b, 0.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_8digit_with_zero_alpha() {
-        let color = Color::from_hex("#FF000000").unwrap();
-        assert_eq!(color.a, 0.0);
-    }
-
-    #[test]
-    fn from_hex_3digit_white() {
-        let color = Color::from_hex("#FFF").unwrap();
-        assert_eq!(color.r, 1.0);
-        assert_eq!(color.g, 1.0);
-        assert_eq!(color.b, 1.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_3digit_black() {
-        let color = Color::from_hex("#000").unwrap();
-        assert_eq!(color.r, 0.0);
-        assert_eq!(color.g, 0.0);
-        assert_eq!(color.b, 0.0);
-    }
-
-    #[test]
-    fn from_hex_4digit_with_alpha() {
-        let color = Color::from_hex("#FFFF").unwrap();
-        assert_eq!(color.r, 1.0);
-        assert_eq!(color.g, 1.0);
-        assert_eq!(color.b, 1.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_no_hash_prefix() {
-        let color = Color::from_hex("FF0000").unwrap();
-        assert_eq!(color.r, 1.0);
-        assert_eq!(color.g, 0.0);
-        assert_eq!(color.b, 0.0);
-    }
-
-    #[test]
-    fn from_hex_invalid_characters_returns_none() {
-        assert!(Color::from_hex("#GGGGGG").is_none());
-    }
-
-    #[test]
-    fn from_hex_wrong_length_returns_none() {
-        assert!(Color::from_hex("#12345").is_none());
-    }
-
-    #[test]
-    fn from_hex_wrong_length_5_no_hash_returns_none() {
-        assert!(Color::from_hex("ff000").is_none());
-    }
-
-    #[test]
-    fn from_hex_wrong_length_9_returns_none() {
-        assert!(Color::from_hex("ff0000ff0").is_none());
-    }
-
-    #[test]
-    fn from_hex_whitespace_prefix_returns_none() {
-        assert!(Color::from_hex(" ff0000").is_none());
-    }
-
-    #[test]
-    fn from_hex_invalid_hex_chars_returns_none() {
-        assert!(Color::from_hex("zz0000").is_none());
-    }
-
-    #[test]
-    fn from_hex_uppercase_parses_correctly() {
-        let color = Color::from_hex("FF0000").unwrap();
-        assert_eq!(color.r, 1.0);
-        assert_eq!(color.g, 0.0);
-        assert_eq!(color.b, 0.0);
-        assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_hex_empty_returns_none() {
-        assert!(Color::from_hex("").is_none());
-    }
-
-    #[test]
     fn rgb_sets_alpha_to_one() {
         let color = Color::rgb(0.5, 0.5, 0.5);
         assert_eq!(color.a, 1.0);
@@ -322,12 +109,6 @@ mod tests {
         assert_eq!(color.g, 0.0);
         assert_eq!(color.b, 0.0);
         assert_eq!(color.a, 1.0);
-    }
-
-    #[test]
-    fn from_rgba_u8_normalizes_alpha() {
-        let color = Color::from_rgba_u8(0, 0, 0, 128);
-        assert!((color.a - 128.0 / 255.0).abs() < 1e-6);
     }
 
     #[test]

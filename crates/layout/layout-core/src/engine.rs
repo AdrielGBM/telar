@@ -71,10 +71,6 @@ impl LayoutEngine {
         ))
     }
 
-    pub fn get_content_size(&self, node: NodeId) -> Option<taffy::geometry::Size<f32>> {
-        self.tree.layout(node).ok().map(|l| l.content_size)
-    }
-
     pub fn is_fixed_size_node(&self, node: NodeId) -> Option<(f32, f32)> {
         let style = self.tree.style(node).ok()?;
         let w = style.size.width.into_option()?;

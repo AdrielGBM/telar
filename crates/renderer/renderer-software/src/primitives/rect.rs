@@ -77,8 +77,6 @@ fn draw_rect_shadow(
     pending_shadows: &mut HashMap<ShadowCacheKey, mpsc::Receiver<tiny_skia::Pixmap>>,
     blur_scratch: &mut Vec<u8>,
 ) {
-    let sigma = renderer_core::blur_sigma(shadow.blur_radius);
-    let padding = renderer_core::blur_padding(sigma);
     let spread = shadow.spread;
 
     let shadow_rect = Rect::new(
@@ -87,6 +85,16 @@ fn draw_rect_shadow(
         rect.width + 2.0 * spread,
         rect.height + 2.0 * spread,
     );
+
+    let padding = renderer_core::ShadowLayout::compute(
+        shadow.blur_radius,
+        shadow_rect.x,
+        shadow_rect.x + shadow_rect.width,
+        shadow_rect.y,
+        shadow_rect.y + shadow_rect.height,
+        1.0,
+    )
+    .padding;
     let shadow_radius = BorderRadius {
         top_left: (radius.top_left + spread).max(0.0),
         top_right: (radius.top_right + spread).max(0.0),
@@ -102,7 +110,7 @@ fn draw_rect_shadow(
         return;
     }
 
-    let q_blur = (shadow.blur_radius * 2.0).round() / 2.0;
+    let q_blur = crate::primitives::quantize_blur(shadow.blur_radius);
     let [cr, cg, cb, ca] = shadow.color.to_rgba8();
     let color_rgba8 = u32::from_le_bytes([cr, cg, cb, ca]);
     let cache_key: crate::primitives::image::ShadowCacheKey = (

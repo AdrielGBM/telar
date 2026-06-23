@@ -20,7 +20,6 @@ pub struct PropsSection {
 pub struct PropParam {
     pub name: String,
     pub ty: String,
-    pub line: usize,
 }
 
 /// The leading Rust verbatim zone, captured untouched up to the first section header.
@@ -79,7 +78,7 @@ pub enum ViewNode {
     Element(Element),
     IfBlock(IfBlock),
     ForBlock(ForBlock),
-    LetStmt { source: String, line: usize },
+    LetStmt { source: String },
 }
 
 /// A view element: a layout container or a leaf widget.
@@ -110,7 +109,6 @@ pub struct IfBlock {
     pub condition: String,
     pub then_branch: Vec<ViewNode>,
     pub else_branch: Option<Vec<ViewNode>>,
-    pub line: usize,
 }
 
 /// A `for ... in ...` loop block in the view.
@@ -119,5 +117,4 @@ pub struct ForBlock {
     pub pattern: String,
     pub iterable: String,
     pub body: Vec<ViewNode>,
-    pub line: usize,
 }

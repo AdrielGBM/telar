@@ -18,7 +18,7 @@ pub struct ShapingCacheKey {
     pub font_size_bits: u32,
     pub width: u32,
     pub scale_factor_bits: u32,
-    // height removed — shaping only depends on wrap width, not container height
+    // shaping is height-independent: it depends only on wrap width, not container height
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -63,11 +63,6 @@ pub fn make_text_cache_key(
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct GlyphKey {
-    pub cache_key: CacheKey,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct AtlasEntry {
     pub uv_min: [f32; 2],
@@ -88,12 +83,14 @@ pub struct GlyphInfo {
 
 pub const ATLAS_SIZE: u32 = 2048;
 
+const LINE_HEIGHT_FACTOR: f32 = 1.2;
+
 pub struct GlyphAtlas {
     pub pixels: Vec<u8>,
     pub dirty_rects: Vec<[u32; 4]>,
-    entries: FxHashMap<GlyphKey, AtlasEntry>,
+    entries: FxHashMap<CacheKey, AtlasEntry>,
     allocator: BucketedAtlasAllocator,
-    lru_cache: LruCache<GlyphKey, AllocId>,
+    lru_cache: LruCache<CacheKey, AllocId>,
 }
 
 impl GlyphAtlas {
@@ -113,7 +110,7 @@ impl GlyphAtlas {
 
     fn insert(
         &mut self,
-        key: GlyphKey,
+        key: CacheKey,
         pixels: &[u8],
         w: u32,
         h: u32,
@@ -151,14 +148,13 @@ impl GlyphAtlas {
         Some(entry)
     }
 
-    pub fn get_and_touch(&mut self, key: &GlyphKey) -> Option<AtlasEntry> {
-        // Promote to MRU position in O(1); if not present in lru_cache, entry doesn't exist.
+    pub fn get_and_touch(&mut self, key: &CacheKey) -> Option<AtlasEntry> {
+        // lru_cache.get promotes to MRU; returned value is discarded — only the side effect matters.
         self.lru_cache.get(key)?;
         self.entries.get(key).copied()
     }
 
-    /// Evicts one LRU entry from the glyph atlas when it becomes full. O(1) via lru_cache.pop_lru(). Returns the key of the evicted glyph if successful.
-    fn evict_lru(&mut self) -> Option<GlyphKey> {
+    fn evict_lru(&mut self) -> Option<CacheKey> {
         let (key, alloc_id) = self.lru_cache.pop_lru()?;
         self.allocator.deallocate(alloc_id);
         self.entries.remove(&key);
@@ -234,7 +230,7 @@ pub struct TextShaper {
 }
 
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
-    let metrics = Metrics::new(font_size, font_size * 1.2);
+    let metrics = Metrics::new(font_size, font_size * LINE_HEIGHT_FACTOR);
     let mut buffer = Buffer::new(font_system, metrics);
     buffer.set_size(Some(rect.width), Some(rect.height));
     buffer.set_text(text, &Attrs::new(), Shaping::Advanced, None);
@@ -361,9 +357,7 @@ impl TextShaper {
         out.reserve(positions.len());
 
         for &(cache_key, px, py) in positions.iter() {
-            let glyph_key = GlyphKey { cache_key };
-
-            if let Some(entry) = self.atlas.get_and_touch(&glyph_key) {
+            if let Some(entry) = self.atlas.get_and_touch(&cache_key) {
                 // px/py and placement offsets are in physical pixels; divide by scale_factor
                 // to get logical pixel screen coordinates expected by the viewport shader.
                 let screen_x = rect.x + (px as f32 + entry.placement_left as f32) / scale_factor;
@@ -452,17 +446,17 @@ impl TextShaper {
 
             let entry = if let Some(e) =
                 self.atlas
-                    .insert(glyph_key, &pixels, w, h, pl, pt, is_color_glyph)
+                    .insert(cache_key, &pixels, w, h, pl, pt, is_color_glyph)
             {
                 e
             } else {
                 let mut inserted = None;
                 loop {
                     if let Some(evicted_key) = self.atlas.evict_lru() {
-                        self.swash_cache.image_cache.remove(&evicted_key.cache_key);
+                        self.swash_cache.image_cache.remove(&evicted_key);
                         if let Some(e) =
                             self.atlas
-                                .insert(glyph_key, &pixels, w, h, pl, pt, is_color_glyph)
+                                .insert(cache_key, &pixels, w, h, pl, pt, is_color_glyph)
                         {
                             inserted = Some(e);
                             break;
@@ -643,7 +637,7 @@ impl TextShaper {
 
         let mut width: f32 = 0.0;
         let mut height: f32 = 0.0;
-        let line_height = font_size * 1.2;
+        let line_height = font_size * LINE_HEIGHT_FACTOR;
 
         for run in buffer.layout_runs() {
             height = (run.line_y + line_height) as f32;

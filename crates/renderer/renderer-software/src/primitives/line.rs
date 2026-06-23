@@ -1,5 +1,5 @@
 use geometry_core::{Point, Rect};
-use renderer_core::LineStyle;
+use renderer_core::Stroke;
 
 use crate::primitives::{fill_to_paint, to_skia_line_cap};
 
@@ -7,7 +7,7 @@ pub(crate) fn draw_line(
     pixmap: &mut tiny_skia::Pixmap,
     p1: Point,
     p2: Point,
-    style: LineStyle,
+    style: Stroke,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
     current_clip_rect: Option<Rect>,

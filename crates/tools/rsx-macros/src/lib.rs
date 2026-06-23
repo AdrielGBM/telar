@@ -50,9 +50,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
 
-    // The transpiler is a proc-macro dependency with no runtime access to the
-    // theme type, so the path is passed through as a source-text string.
-    // `to_string` inserts spaces around `::`; collapse them for a clean turbofish.
+    // The transpiler has no runtime access to the theme type, so it is passed as a source string; to_string inserts spaces around `::` so we collapse them for a valid turbofish.
     let theme_type_str = theme_type
         .to_token_stream()
         .to_string()
@@ -141,59 +139,50 @@ pub fn app(input: TokenStream) -> TokenStream {
     let is_hot_reload = std::env::var("RSX_HOT_RELOAD_BUILD").is_ok();
     let is_preview = std::env::var("RSX_PREVIEW_BUILD").is_ok();
 
-    let desktop_run = if is_hot_reload {
+    // Shared tail: setup → optional preview branch → run_app_with_name.
+    let run_tail = quote! {
+        #setup
+        if ::std::env::var("RSX_PREVIEW").is_ok() {
+            if ::rsx::try_run_preview(rsx_all_preview_entries(), ::rsx::AppConfig::from(#config)) {
+                return;
+            }
+        }
+        ::rsx::run_app_with_name(
+            ::rsx::AppConfig::from(#config),
+            #app_expr,
+            env!("CARGO_PKG_NAME"),
+        )
+    };
+
+    let hot_reload_prefix = if is_hot_reload {
         quote! {
-            #[cfg(not(target_os = "android"))]
-            pub fn run() {
-                if let (::std::result::Result::Ok(lib_path), ::std::result::Result::Ok(socket_path)) = (
-                    ::std::env::var("RSX_HOT_LIB"),
-                    ::std::env::var("RSX_HOT_SOCKET"),
-                ) {
-                    #setup
-                    ::rsx::run_hot_reload_host(
-                        &lib_path,
-                        &socket_path,
-                        ::rsx::AppConfig::from(#config),
-                        env!("CARGO_PKG_NAME"),
-                    );
-                    return;
-                }
+            if let (::std::result::Result::Ok(lib_path), ::std::result::Result::Ok(socket_path)) = (
+                ::std::env::var("RSX_HOT_LIB"),
+                ::std::env::var("RSX_HOT_SOCKET"),
+            ) {
                 #setup
-                if ::std::env::var("RSX_PREVIEW").is_ok() {
-                    if ::rsx::try_run_preview(rsx_all_preview_entries(), ::rsx::AppConfig::from(#config)) {
-                        return;
-                    }
-                }
-                ::rsx::run_app_with_name(
+                ::rsx::run_hot_reload_host(
+                    &lib_path,
+                    &socket_path,
                     ::rsx::AppConfig::from(#config),
-                    #app_expr,
                     env!("CARGO_PKG_NAME"),
-                )
+                );
+                return;
             }
         }
     } else {
-        quote! {
-            #[cfg(not(target_os = "android"))]
-            pub fn run() {
-                #setup
-                if ::std::env::var("RSX_PREVIEW").is_ok() {
-                    if ::rsx::try_run_preview(rsx_all_preview_entries(), ::rsx::AppConfig::from(#config)) {
-                        return;
-                    }
-                }
-                ::rsx::run_app_with_name(
-                    ::rsx::AppConfig::from(#config),
-                    #app_expr,
-                    env!("CARGO_PKG_NAME"),
-                )
-            }
+        quote! {}
+    };
+
+    let desktop_run = quote! {
+        #[cfg(not(target_os = "android"))]
+        pub fn run() {
+            #hot_reload_prefix
+            #run_tail
         }
     };
 
-    // Only emitted when cargo-rsx sets RSX_HOT_RELOAD_BUILD so dlopen can find the app factory.
-    // cargo-rsx also passes --cfg=rsx_preview in RUSTFLAGS (purely for fingerprinting, to force
-    // recompilation when switching modes) and sets RSX_PREVIEW_BUILD=1 so the macro can branch
-    // here at expansion time without emitting any custom cfg into the output.
+    // Only emitted under RSX_HOT_RELOAD_BUILD so dlopen can find the factory; RSX_PREVIEW_BUILD lets the macro branch here without leaking a custom cfg into generated output (--cfg=rsx_preview in RUSTFLAGS is only for cache-busting recompilation when switching modes).
     let hot_export = if is_hot_reload {
         let body: TokenStream2 = if is_preview {
             quote! {

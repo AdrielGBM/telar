@@ -296,8 +296,7 @@ where
                                 self.tree = Some(ComponentList::new(self.app.root()));
                                 // A successful reload clears any banner from the previous failed build.
                                 self.dev.set_build_error(None);
-                                // Synthesize WindowResized so the new tree's layout (e.g. ScrollablePage)
-                                // starts with the correct logical dimensions instead of its 0×0 defaults.
+                                // Synthesize WindowResized so the new tree's layout starts with the correct logical dimensions instead of its 0×0 defaults.
                                 let resize = platform_core::Event::WindowResized {
                                     width: (window.width() as f32 / self.scale_factor) as u32,
                                     height: (window.height() as f32 / self.scale_factor) as u32,
@@ -306,11 +305,11 @@ where
                                     tree.on_event(&resize);
                                     tree.bump_force_ticks();
                                 }
-                                eprintln!("[rsx] Hot reloaded: {}", new_path.display());
+                                tracing::info!("hot reloaded: {}", new_path.display());
                                 window.request_redraw();
                                 return;
                             }
-                            Err(e) => eprintln!("[rsx] Hot reload failed: {e}"),
+                            Err(e) => tracing::error!("hot reload failed: {e}"),
                         }
                     }
                     crate::hot::HotEvent::BuildError(msg) => {
@@ -784,7 +783,7 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
 
-    let platform = match AndroidPlatform::new(android_app) {
+    let platform = match AndroidPlatform::try_new(android_app) {
         Ok(p) => p,
         Err(e) => {
             tracing::error!("Failed to create Android event loop: {e}");
@@ -845,7 +844,7 @@ pub fn run_hot_reload_host(
     let initial_app = match crate::hot::load_hot_app(std::path::Path::new(lib_path)) {
         Ok(app) => app,
         Err(e) => {
-            eprintln!("[rsx] Failed to load dylib: {e}");
+            tracing::error!("failed to load dylib: {e}");
             return;
         }
     };

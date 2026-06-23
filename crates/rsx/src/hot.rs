@@ -72,7 +72,7 @@ pub fn listen_hot_reload(socket_path: &str) -> std::sync::mpsc::Receiver<HotEven
         .name("rsx-hot-reload".to_string())
         .spawn(move || {
             let Ok(listener) = UnixListener::bind(&socket_path) else {
-                eprintln!("[rsx] Hot reload socket bind failed");
+                tracing::error!("hot reload socket bind failed");
                 return;
             };
             for stream in listener.incoming() {

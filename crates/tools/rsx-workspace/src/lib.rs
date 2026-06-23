@@ -33,12 +33,6 @@ pub fn find_workspace_root(start: &Path) -> Option<PathBuf> {
     find_ancestor_dir(start, dir_is_workspace_root)
 }
 
-/// The canonical rsx project root: the `rsx.toml` directory, falling back to
-/// the Cargo workspace root when no `rsx.toml` is present.
-pub fn find_project_root(start: &Path) -> Option<PathBuf> {
-    find_rsx_root(start).or_else(|| find_workspace_root(start))
-}
-
 fn dir_is_workspace_root(dir: &Path) -> bool {
     let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
         return false;

@@ -13,41 +13,17 @@ pub trait Theme: 'static {
 
 // Opt-in contract that built-in widgets read through. A theme implements this so
 // widgets can resolve semantic colors without knowing the concrete theme type.
-// Only the two primary tokens are mandatory; the rest carry defaults so new
-// widget tokens can be added later without breaking existing themes.
+// Only the two primary tokens are mandatory; muted/scrollbar carry defaults so a
+// theme can omit them.
 pub trait WidgetTheme: 'static {
     fn widget_primary(&self) -> Color;
     fn widget_on_primary(&self) -> Color;
 
-    fn widget_surface(&self) -> Color {
-        Color::rgba(1.0, 1.0, 1.0, 1.0)
-    }
-    fn widget_on_surface(&self) -> Color {
-        Color::rgba(0.1, 0.1, 0.1, 1.0)
-    }
-    fn widget_scrollbar(&self) -> Color {
-        Color::rgba(0.5, 0.5, 0.6, 0.6)
-    }
-    fn widget_danger(&self) -> Color {
-        Color::rgba(0.9, 0.2, 0.2, 1.0)
-    }
-    fn widget_success(&self) -> Color {
-        Color::rgba(0.1, 0.7, 0.4, 1.0)
-    }
     fn widget_muted(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
-    fn widget_warning(&self) -> Color {
-        Color::rgba(0.95, 0.72, 0.18, 1.0)
-    }
-    fn widget_accent(&self) -> Color {
-        Color::rgba(0.2, 0.75, 0.9, 1.0)
-    }
-    fn widget_border(&self) -> Color {
-        Color::rgba(0.8, 0.8, 0.88, 1.0)
-    }
-    fn widget_purple(&self) -> Color {
-        Color::rgba(0.6, 0.28, 0.98, 1.0)
+    fn widget_scrollbar(&self) -> Color {
+        Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
 }
 
@@ -74,7 +50,7 @@ pub fn use_theme<T: Theme + Clone + 'static>() -> T {
     THEME.with(|s| {
         let theme = s.get().unwrap_or_else(|| {
             panic!(
-                "use_theme::<{}> called but no theme has been set; call set_theme first",
+                "use_theme::<{}> called but no theme has been set; call set_theme_with_widgets first",
                 std::any::type_name::<T>()
             )
         });

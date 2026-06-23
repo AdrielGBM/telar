@@ -24,51 +24,6 @@ impl BorderRadius {
         Self::all(0.0)
     }
 
-    pub fn new(top_left: f32, top_right: f32, bottom_right: f32, bottom_left: f32) -> Self {
-        Self {
-            top_left,
-            top_right,
-            bottom_right,
-            bottom_left,
-        }
-    }
-
-    pub fn top(radius: f32) -> Self {
-        Self {
-            top_left: radius,
-            top_right: radius,
-            bottom_right: 0.0,
-            bottom_left: 0.0,
-        }
-    }
-
-    pub fn bottom(radius: f32) -> Self {
-        Self {
-            top_left: 0.0,
-            top_right: 0.0,
-            bottom_right: radius,
-            bottom_left: radius,
-        }
-    }
-
-    pub fn left(radius: f32) -> Self {
-        Self {
-            top_left: radius,
-            top_right: 0.0,
-            bottom_right: 0.0,
-            bottom_left: radius,
-        }
-    }
-
-    pub fn right(radius: f32) -> Self {
-        Self {
-            top_left: 0.0,
-            top_right: radius,
-            bottom_right: radius,
-            bottom_left: 0.0,
-        }
-    }
-
     pub fn is_zero(&self) -> bool {
         self.top_left == 0.0
             && self.top_right == 0.0
@@ -97,11 +52,6 @@ impl TextStyle {
             paint: paint.into(),
             shadow: None,
         }
-    }
-
-    pub fn with_shadow(mut self, shadow: Shadow) -> Self {
-        self.shadow = Some(shadow);
-        self
     }
 }
 
@@ -253,9 +203,6 @@ impl Stroke {
     }
 }
 
-/// Type alias for [`Stroke`]; line segments don't use the `join` field (it defaults to `Miter`).
-pub type LineStyle = Stroke;
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Shadow {
     pub offset_x: f32,
@@ -314,15 +261,6 @@ pub struct RectStyle {
 }
 
 impl RectStyle {
-    pub fn filled(color: impl Into<Paint>, radius: BorderRadius) -> Self {
-        Self {
-            fill: Some(color.into()),
-            stroke: None,
-            shadow: None,
-            radius,
-        }
-    }
-
     pub fn with_radius(mut self, radius: BorderRadius) -> Self {
         self.radius = radius;
         self
@@ -508,25 +446,6 @@ mod tests {
     fn text_style_new_stores_color() {
         let style = TextStyle::new(12.0, Color::WHITE);
         assert_eq!(style.paint, Paint::Solid(Color::WHITE));
-    }
-
-    #[test]
-    fn line_style_new_stores_color_and_width() {
-        let style = LineStyle::new(Color::RED, 2.0);
-        assert_eq!(style.paint, Paint::Solid(Color::RED));
-        assert_eq!(style.width, 2.0);
-    }
-
-    #[test]
-    fn line_style_new_defaults_cap_to_butt() {
-        let style = LineStyle::new(Color::BLACK, 1.0);
-        assert_eq!(style.cap, LineCap::Butt);
-    }
-
-    #[test]
-    fn line_style_with_cap_sets_cap() {
-        let style = LineStyle::new(Color::BLACK, 1.0).with_cap(LineCap::Round);
-        assert_eq!(style.cap, LineCap::Round);
     }
 
     #[test]

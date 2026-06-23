@@ -9,16 +9,11 @@ pub enum FullscreenMode {
     Exclusive,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub enum WindowPosition {
+    #[default]
     Centered,
     At(i32, i32),
-}
-
-impl Default for WindowPosition {
-    fn default() -> Self {
-        WindowPosition::Centered
-    }
 }
 
 #[derive(Debug, Clone)]

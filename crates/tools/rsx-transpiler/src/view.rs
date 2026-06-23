@@ -5,9 +5,18 @@ use std::fmt::Write;
 
 use rsx_parser::{Attr, Element, ForBlock, IfBlock, StyleClass, StyleConst, ViewNode};
 
-use crate::naming::{const_name, mentions_ident, style_fn_name, to_pascal_case, to_snake_case};
+use crate::naming::{
+    const_name, is_ident, mentions_ident, style_fn_name, to_pascal_case, to_snake_case,
+};
 use crate::signal_scan::SignalInfo;
 use crate::style::{format_f32, hex_to_color_expr, layout_prop_call};
+
+// `heading`/`section` styling reproduced inline (the library no longer ships
+// `Heading`/`Section`): a 12px caption colored from the theme's `widget_muted`
+// token, and an 8px-gap column wrapping the heading above its content.
+const HEADING_FONT_SIZE: &str = "12.0";
+const SECTION_GAP: &str = "8.0";
+const HEADING_STYLE_FN: &str = "move || { let color = use_widget_theme().map(|t| t.widget_muted()).unwrap_or(Color::rgba(0.5, 0.5, 0.6, 1.0)); TextStyle::new(12.0, color) }";
 
 /// A piece of generated child code together with how it contributes to a
 /// parent's child collection.
@@ -59,7 +68,6 @@ impl<'a> ViewGen<'a> {
             "col" | "column" => "col",
             "row" => "row",
             "box" => "sbox",
-            "rect" => "rect",
             "img" | "image" => "img",
             "canvas" => "canvas",
             _ => "node",
@@ -192,29 +200,39 @@ impl<'a> ViewGen<'a> {
         ChildEmit::Simple { name: var, code }
     }
 
-    // A muted section caption; styling lives in the `Heading` widget (theme-aware).
+    // A muted section caption: a single-line `Text` whose color reads `widget_muted`
+    // from the active theme (falling back to a neutral gray when none is set).
     fn emit_heading(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_var("heading");
         let pad = self.pad();
         let content = el.content.as_deref().unwrap_or("");
         let content_fn = self.interpolate_content(content);
         let clones = self.clone_bindings(&[&content_fn], &pad, "    ");
+        let style_fn = HEADING_STYLE_FN;
         let code = format!(
             "{pad}let {var} = {{\n\
              {clones}\
-             {pad}    Heading::new(ctx, {content_fn})?\n\
+             {pad}    Text::new(\n\
+             {pad}        ctx,\n\
+             {pad}        {content_fn},\n\
+             {pad}        LayoutStyle::new().height({HEADING_FONT_SIZE}_f32 * 1.4),\n\
+             {pad}        {style_fn},\n\
+             {pad}    )?\n\
              {pad}}};"
         );
         ChildEmit::Simple { name: var, code }
     }
 
-    // A titled column: `Section::new` prepends a `Heading` to the children, so
-    // child emission mirrors `emit_container` but the title comes from `content`.
+    // A titled column: a muted `heading` Text prepended to the children inside a
+    // `flex_column` Container with a small gap. Child emission mirrors
+    // `emit_container`; the title comes from `content` rather than a child node.
     fn emit_section(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_var("section");
+        let heading_var = self.next_var("heading");
         let pad = self.pad();
         let content = el.content.as_deref().unwrap_or("");
         let title_fn = self.interpolate_content(content);
+        let style_fn = HEADING_STYLE_FN;
 
         let has_dynamic = el.children.iter().any(|n| {
             matches!(
@@ -237,49 +255,77 @@ impl<'a> ViewGen<'a> {
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
         let _ = write!(code, "{clones}");
+        let _ = writeln!(
+            code,
+            "{inner_pad}let {heading_var} = Text::new(ctx, {title_fn}, LayoutStyle::new().height({HEADING_FONT_SIZE}_f32 * 1.4), {style_fn})?;"
+        );
 
+        let children = self.emit_children_collection(
+            &mut code,
+            &child_emits,
+            &inner_pad,
+            has_dynamic,
+            std::slice::from_ref(&heading_var),
+        );
+        let _ = writeln!(
+            code,
+            "{inner_pad}Container::new(ctx, LayoutStyle::new().flex_column().gap({SECTION_GAP}), {children})?"
+        );
+
+        let _ = write!(code, "{pad}}};");
+        ChildEmit::Simple { name: var, code }
+    }
+
+    /// Emits the children of a container-like element into `code` and returns the
+    /// expression to pass as the constructor's children argument. `seed` names are
+    /// prepended before the emitted children (e.g. a `section`'s heading). When any
+    /// child is dynamic control flow, this builds a mutable `__children` vec and
+    /// returns `__children`; otherwise it returns a `children![...]` literal. Used
+    /// by `emit_section`/`emit_container`/`emit_box`; `emit_scroll` differs and is
+    /// intentionally excluded.
+    fn emit_children_collection(
+        &self,
+        code: &mut String,
+        child_emits: &[ChildEmit],
+        inner_pad: &str,
+        has_dynamic: bool,
+        seed: &[String],
+    ) -> String {
         if has_dynamic {
             let _ = writeln!(
                 code,
                 "{inner_pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
             );
-            for emit in &child_emits {
+            for name in seed {
+                let _ = writeln!(code, "{inner_pad}__children.push(box_item({name}));");
+            }
+            for emit in child_emits {
                 match emit {
                     ChildEmit::Simple { name, code: c } => {
                         let _ = writeln!(code, "{c}");
-                        let _ = writeln!(
-                            code,
-                            "{inner_pad}__children.push(Box::new({name}) as Box<dyn LayoutItem>);"
-                        );
+                        let _ = writeln!(code, "{inner_pad}__children.push(box_item({name}));");
                     }
                     ChildEmit::Dynamic { code: c } => {
                         let _ = writeln!(code, "{c}");
                     }
                 }
             }
-            let _ = writeln!(
-                code,
-                "{inner_pad}Section::new(ctx, {title_fn}, __children)?"
-            );
+            "__children".to_string()
         } else {
-            let mut names = Vec::new();
-            for emit in &child_emits {
-                if let ChildEmit::Simple { name, code: c } = emit {
-                    let _ = writeln!(code, "{c}");
-                    names.push(name.clone());
-                } else if let ChildEmit::Dynamic { code: c } = emit {
-                    let _ = writeln!(code, "{c}");
+            let mut names: Vec<String> = seed.to_vec();
+            for emit in child_emits {
+                match emit {
+                    ChildEmit::Simple { name, code: c } => {
+                        let _ = writeln!(code, "{c}");
+                        names.push(name.clone());
+                    }
+                    ChildEmit::Dynamic { code: c } => {
+                        let _ = writeln!(code, "{c}");
+                    }
                 }
             }
-            let items = names.join(", ");
-            let _ = writeln!(
-                code,
-                "{inner_pad}Section::new(ctx, {title_fn}, children![{items}])?"
-            );
+            format!("children![{}]", names.join(", "))
         }
-
-        let _ = write!(code, "{pad}}};");
-        ChildEmit::Simple { name: var, code }
     }
 
     /// Emits `let sig = sig.clone();` bindings for every signal that appears in
@@ -474,42 +520,9 @@ impl<'a> ViewGen<'a> {
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
 
-        if has_dynamic {
-            let _ = writeln!(
-                code,
-                "{inner_pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
-            );
-            for emit in &child_emits {
-                match emit {
-                    ChildEmit::Simple { name, code: c } => {
-                        let _ = writeln!(code, "{c}");
-                        let _ = writeln!(
-                            code,
-                            "{inner_pad}__children.push(Box::new({name}) as Box<dyn LayoutItem>);"
-                        );
-                    }
-                    ChildEmit::Dynamic { code: c } => {
-                        let _ = writeln!(code, "{c}");
-                    }
-                }
-            }
-            let _ = writeln!(code, "{inner_pad}Container::new(ctx, {style}, __children)?");
-        } else {
-            let mut names = Vec::new();
-            for emit in &child_emits {
-                if let ChildEmit::Simple { name, code: c } = emit {
-                    let _ = writeln!(code, "{c}");
-                    names.push(name.clone());
-                } else if let ChildEmit::Dynamic { code: c } = emit {
-                    let _ = writeln!(code, "{c}");
-                }
-            }
-            let items = names.join(", ");
-            let _ = writeln!(
-                code,
-                "{inner_pad}Container::new(ctx, {style}, children![{items}])?"
-            );
-        }
+        let children =
+            self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
+        let _ = writeln!(code, "{inner_pad}Container::new(ctx, {style}, {children})?");
 
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
@@ -579,45 +592,12 @@ impl<'a> ViewGen<'a> {
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
 
-        if has_dynamic {
-            let _ = writeln!(
-                code,
-                "{inner_pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
-            );
-            for emit in &child_emits {
-                match emit {
-                    ChildEmit::Simple { name, code: c } => {
-                        let _ = writeln!(code, "{c}");
-                        let _ = writeln!(
-                            code,
-                            "{inner_pad}__children.push(Box::new({name}) as Box<dyn LayoutItem>);"
-                        );
-                    }
-                    ChildEmit::Dynamic { code: c } => {
-                        let _ = writeln!(code, "{c}");
-                    }
-                }
-            }
-            let _ = writeln!(
-                code,
-                "{inner_pad}StyledContainer::new(ctx, {layout_style}, move |{param}| {rect_style}, __children)?{opacity_call}"
-            );
-        } else {
-            let mut names = Vec::new();
-            for emit in &child_emits {
-                if let ChildEmit::Simple { name, code: c } = emit {
-                    let _ = writeln!(code, "{c}");
-                    names.push(name.clone());
-                } else if let ChildEmit::Dynamic { code: c } = emit {
-                    let _ = writeln!(code, "{c}");
-                }
-            }
-            let items = names.join(", ");
-            let _ = writeln!(
-                code,
-                "{inner_pad}StyledContainer::new(ctx, {layout_style}, move |{param}| {rect_style}, children![{items}])?{opacity_call}"
-            );
-        }
+        let children =
+            self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
+        let _ = writeln!(
+            code,
+            "{inner_pad}StyledContainer::new(ctx, {layout_style}, move |{param}| {rect_style}, {children})?{opacity_call}"
+        );
 
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
@@ -666,7 +646,7 @@ impl<'a> ViewGen<'a> {
                     .iter()
                     .find(|a| a.key == "gr")
                     .and_then(|a| a.value.parse::<f32>().ok())
-                    .map(|n| format_f32(n))
+                    .map(format_f32)
                     .unwrap_or_else(|| "r.width.min(r.height) * 0.5".to_string());
                 Some(format!(
                     "Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), {radius_expr}, {stops}))"
@@ -683,8 +663,7 @@ impl<'a> ViewGen<'a> {
 
         self.indent += 1;
         let inner_pad = self.pad();
-        // ScrollArea wraps a single content item; if multiple children exist,
-        // wrap them in a column first.
+        // LayoutScrollArea wraps a single content item; if multiple children exist, wrap them in a column first.
         let mut child_emits = Vec::new();
         for child in &el.children {
             child_emits.push(self.emit_node(child));
@@ -707,10 +686,7 @@ impl<'a> ViewGen<'a> {
                 match emit {
                     ChildEmit::Simple { name, code: c } => {
                         let _ = writeln!(code, "{c}");
-                        let _ = writeln!(
-                            code,
-                            "{inner_pad}__children.push(Box::new({name}) as Box<dyn LayoutItem>);"
-                        );
+                        let _ = writeln!(code, "{inner_pad}__children.push(box_item({name}));");
                     }
                     ChildEmit::Dynamic { code: c } => {
                         let _ = writeln!(code, "{c}");
@@ -980,7 +956,7 @@ impl<'a> ViewGen<'a> {
             .map(format_f32)
             .unwrap_or_else(|| "1.0".to_string());
         format!(
-            "Line::new(move || Point::new({x1}, {y1}), move || Point::new({x2}, {y2}), move || LineStyle::new({color}, {width})).view()"
+            "Line::new(move || Point::new({x1}, {y1}), move || Point::new({x2}, {y2}), move || Stroke::new({color}, {width})).view()"
         )
     }
 
@@ -1123,17 +1099,17 @@ impl<'a> ViewGen<'a> {
         }
         let v = attr.value.trim();
         if v.starts_with('#') {
-            return crate::style::hex_to_color_expr(v);
+            return hex_to_color_expr(v);
         }
         if let Ok(n) = v.parse::<f32>() {
             return format_f32(n);
         }
-        let snake = crate::naming::to_snake_case(v);
+        let snake = to_snake_case(v);
         let in_style = self
             .constants
             .iter()
-            .any(|c| crate::naming::to_snake_case(&c.name) == snake);
-        let looks_like_color_name = is_simple_ident(v)
+            .any(|c| to_snake_case(&c.name) == snake);
+        let looks_like_color_name = is_ident(v)
             && v.chars()
                 .next()
                 .is_some_and(|c| c.is_ascii_lowercase() || c == '_');
@@ -1258,10 +1234,7 @@ impl<'a> ViewGen<'a> {
             match self.emit_node(node) {
                 ChildEmit::Simple { name, code: c } => {
                     let _ = writeln!(code, "{c}");
-                    let _ = writeln!(
-                        code,
-                        "{pad}__children.push(Box::new({name}) as Box<dyn LayoutItem>);"
-                    );
+                    let _ = writeln!(code, "{pad}__children.push(box_item({name}));");
                 }
                 ChildEmit::Dynamic { code: c } => {
                     let _ = writeln!(code, "{c}");
@@ -1303,7 +1276,7 @@ impl<'a> ViewGen<'a> {
         let trimmed = expr.trim();
         if self.signals.iter().any(|s| s.name == trimmed) {
             format!("{trimmed}.get()")
-        } else if is_simple_ident(trimmed) {
+        } else if is_ident(trimmed) {
             trimmed.to_string()
         } else {
             format!("{{ {trimmed} }}")
@@ -1428,15 +1401,6 @@ fn pattern_idents(pattern: &str) -> Vec<String> {
         .collect()
 }
 
-fn is_simple_ident(s: &str) -> bool {
-    let mut chars = s.chars();
-    match chars.next() {
-        Some(c) if c == '_' || c.is_ascii_alphabetic() => {}
-        _ => return false,
-    }
-    chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
-}
-
 /// Renders a Rust string literal, escaping quotes and backslashes.
 fn rust_str(s: &str) -> String {
     let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
@@ -1492,7 +1456,7 @@ fn build_rect_style(
         )
     } else {
         match solid_fill {
-            Some(f) => format!("RectStyle::filled({f}, {radius})"),
+            Some(f) => format!("RectStyle::default().with_fill({f}).with_radius({radius})"),
             None => "RectStyle::default()".to_string(),
         }
     }

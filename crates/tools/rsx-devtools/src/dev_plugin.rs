@@ -25,10 +25,9 @@ pub trait DevPlugin: Default + 'static {
 
     fn on_key(&mut self, key: &Key, modifiers: ModifiersState) -> DevAction;
 
-    // Returns true if the press was consumed and should not propagate to the widget tree.
     fn on_pointer_pressed(&mut self, x: f32, y: f32) -> bool;
 
-    // Sets (or clears with None) the build error banner shown over the app. Default no-op.
+    /// Sets (or clears with `None`) the build error banner shown over the app.
     fn set_build_error(&mut self, error: Option<String>) {
         let _ = error;
     }

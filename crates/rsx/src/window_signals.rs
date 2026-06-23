@@ -8,7 +8,7 @@ pub struct WindowSignals {
 }
 
 impl WindowSignals {
-    pub fn new(width: f32, height: f32) -> Self {
+    pub(crate) fn new(width: f32, height: f32) -> Self {
         let width_w = create_rw_signal(width);
         let height_w = create_rw_signal(height);
         Self {
@@ -19,7 +19,7 @@ impl WindowSignals {
         }
     }
 
-    pub fn update(&self, width: f32, height: f32) {
+    pub(crate) fn update(&self, width: f32, height: f32) {
         self.width_w.set(width);
         self.height_w.set(height);
     }

@@ -1,5 +1,5 @@
 mod budget;
-pub mod limits;
+mod limits;
 mod primitives;
 pub(crate) mod renderer;
 

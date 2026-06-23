@@ -101,7 +101,7 @@ where
         if !should_dispatch(entry) {
             continue;
         }
-        if get_result(entry).is_handled() {
+        if get_result(entry) == EventResult::Handled {
             return EventResult::Handled;
         }
     }

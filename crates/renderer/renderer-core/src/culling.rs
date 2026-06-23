@@ -2,10 +2,6 @@ use geometry_core::Rect;
 
 use crate::DrawCommand;
 
-pub fn union_rects(a: Rect, b: Rect) -> Rect {
-    a.union(b)
-}
-
 /// Font ascender/line-height metrics expressed as ratios relative to `font_size`.
 /// Default values are conservative approximations that hold for most common fonts.
 #[derive(Clone, Copy)]
@@ -39,10 +35,7 @@ pub fn expand_for_shadow(
     offset_x: f32,
     offset_y: f32,
 ) -> Rect {
-    // The shadow pixmap extends blur_padding = ceil(blur_radius * 1.5) + 1 pixels beyond
-    // the shape edge (matching the padding calculation in the software renderer).
-    // Using only blur_radius underestimates by ~0.5*blur_radius, leaving stale shadow
-    // pixels outside the dirty rect when shadows move.
+    // Must match the software renderer's blur padding (ceil(blur_radius * 1.5) + 1); using only blur_radius leaves stale shadow pixels outside the dirty rect when shadows move.
     let expand = (blur_radius * 1.5).ceil() + 1.0 + spread;
     let expanded = Rect::new(
         rect.x - expand,
@@ -56,7 +49,7 @@ pub fn expand_for_shadow(
         expanded.width,
         expanded.height,
     );
-    union_rects(rect, shifted)
+    rect.union(shifted)
 }
 
 #[inline]
@@ -65,7 +58,6 @@ pub fn apply_matrix(matrix: [f32; 6], x: f32, y: f32) -> (f32, f32) {
     (a * x + c * y + e, b * x + d * y + f)
 }
 
-// Returns the axis-aligned bounding box of a transformed rectangle.
 #[inline]
 fn transform_rect_aabb(matrix: [f32; 6], rx: f32, ry: f32, rw: f32, rh: f32) -> Rect {
     let (x0, y0) = apply_matrix(matrix, rx, ry);
@@ -150,7 +142,7 @@ pub fn command_visual_rect(
 }
 
 pub fn extend_bounds(current: Option<Rect>, new_rect: Rect) -> Option<Rect> {
-    Some(current.map_or(new_rect, |b| union_rects(b, new_rect)))
+    Some(current.map_or(new_rect, |b| b.union(new_rect)))
 }
 
 #[cfg(test)]

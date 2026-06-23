@@ -10,15 +10,6 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
-fn darken(c: Color, factor: f32) -> Color {
-    Color::rgba(
-        (c.r * factor).min(1.0),
-        (c.g * factor).min(1.0),
-        (c.b * factor).min(1.0),
-        c.a,
-    )
-}
-
 pub struct ButtonStyle {
     pub rect: RectStyle,
     pub rect_hover: RectStyle,
@@ -56,7 +47,7 @@ impl Button {
                         .with_fill(primary)
                         .with_radius(BorderRadius::all(4.0)),
                     rect_hover: RectStyle::default()
-                        .with_fill(darken(primary, 0.85))
+                        .with_fill(primary.darken(0.15))
                         .with_radius(BorderRadius::all(4.0)),
                     text: TextStyle::new(14.0, on_primary),
                     text_hover: TextStyle::new(14.0, on_primary),
@@ -105,7 +96,7 @@ impl Component for Button {
         ]))
     }
 
-    // NOTE: expects coords pre-adjusted to layout space; callers are responsible for subtracting any PushTransform offsets. DPI normalization (physical → logical pixels) is handled upstream by platform-winit before events are emitted.
+    // Pointer coords must already be in layout space; callers subtract any PushTransform offset.
     fn on_event(&mut self, event: &Event) -> EventResult {
         let rect = self.leaf.rect.get();
         match event {

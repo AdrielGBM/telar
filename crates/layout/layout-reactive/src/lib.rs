@@ -1,10 +1,7 @@
 mod context;
 
-pub use context::{
-    WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf, track_layout, update_style,
-    with_context,
-};
+pub use context::{WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf, track_layout};
 pub use layout_core::{
-    AlignItems, AutoTrack, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, NodeId,
-    SizeDimension, TemplateTrack,
+    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, NodeId, SizeDimension,
+    TemplateTrack,
 };

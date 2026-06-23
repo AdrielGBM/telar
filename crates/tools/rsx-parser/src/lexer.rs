@@ -51,7 +51,7 @@ pub fn header_section(trimmed: &str) -> Option<Section> {
     }
 }
 
-/// Splits `source` into classified lines, switching sections on `[logic]` / `[style]` / `[view]` headers.
+/// Splits `source` into classified lines, switching sections on `[logic]` / `[props]` / `[style]` / `[view]` headers.
 pub fn lex(source: &str) -> Vec<Line> {
     let mut lines = Vec::new();
     let mut section = Section::Unknown;

@@ -10,7 +10,7 @@ mod style;
 mod view;
 
 pub use error::TranspileError;
-pub use registry::{builtin_tags, layout_attr_keys};
+pub use registry::{TAG_REFERENCES_VARIABLE, builtin_tags, layout_attr_keys};
 
 use std::path::{Path, PathBuf};
 
@@ -26,7 +26,7 @@ use crate::view::ViewGen;
 
 /// Input to a single transpilation: the parsed document plus the desired
 /// component function name (typically derived from the source file stem).
-pub struct TranspileInput<'a> {
+pub(crate) struct TranspileInput<'a> {
     pub document: &'a RsxDocument,
     pub component_name: &'a str,
     /// Concrete theme type path (e.g. `SandboxTheme`). When set, `[style]` color
@@ -112,7 +112,7 @@ pub fn relative_stem(path: &Path, src_dir: &Path) -> String {
 }
 
 /// Transpiles a parsed document into Rust source.
-pub fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
+fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
     let doc = input.document;
     let fn_name = to_snake_case(input.component_name);
     if fn_name.is_empty() {
@@ -355,7 +355,7 @@ col .card
 "#;
 
     // COUNTER_THEMED has no [style] color declarations — colors flow through the
-    // live theme so they react to `set_theme(...)` calls at runtime.
+    // live theme so they react to `set_theme_with_widgets(...)` calls at runtime.
     const COUNTER_THEMED: &str = r#"[logic]
 let count = create_rw_signal(0i32);
 
@@ -389,18 +389,29 @@ col .card
     }
 
     #[test]
-    fn section_and_heading_emit_framework_widgets() {
+    fn section_and_heading_expand_to_primitives() {
         let src = "[view]\nsection \"Cards\"\n    heading \"Subtitle\"\n    text \"Body\" size:14 color:dark\n";
         let code = transpile_source_with_theme(src, "cards", None)
             .unwrap()
             .rust_code;
+        // `section`/`heading` no longer reference removed library components.
         assert!(
-            code.contains("Section::new(ctx, "),
-            "expected Section::new in:\n{code}"
+            !code.contains("Section::new") && !code.contains("Heading::new"),
+            "section/heading must not reference removed components in:\n{code}"
+        );
+        // `section` becomes a muted-heading Text inside a flex-column Container.
+        assert!(
+            code.contains("Container::new(ctx, LayoutStyle::new().flex_column().gap(8.0)"),
+            "expected section's flex-column Container in:\n{code}"
+        );
+        // `heading` becomes a Text colored from the theme's widget_muted token.
+        assert!(
+            code.contains("use_widget_theme().map(|t| t.widget_muted())"),
+            "expected heading's muted style in:\n{code}"
         );
         assert!(
-            code.contains("Heading::new(ctx, "),
-            "expected Heading::new in:\n{code}"
+            code.contains("TextStyle::new(12.0, color)"),
+            "expected heading's 12px caption in:\n{code}"
         );
     }
 

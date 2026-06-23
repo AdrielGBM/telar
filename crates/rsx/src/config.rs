@@ -9,7 +9,7 @@ pub enum RendererBackend {
     Software,
 }
 
-pub fn compile_time_backend() -> RendererBackend {
+pub(crate) fn compile_time_backend() -> RendererBackend {
     match option_env!("RSX_RENDERER_BACKEND") {
         Some("hardware") => RendererBackend::Hardware,
         Some("software") => RendererBackend::Software,
