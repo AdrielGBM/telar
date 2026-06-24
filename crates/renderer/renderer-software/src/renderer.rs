@@ -1024,13 +1024,6 @@ where
                         self.pixmap_pool.push(layer);
                     }
                 }
-                #[cfg(target_os = "android")]
-                DrawCommand::AndroidHardwareBufferImage { .. } => {
-                    debug_assert!(
-                        false,
-                        "AndroidHardwareBufferImage is not supported in the software renderer"
-                    );
-                }
             }
         }
 

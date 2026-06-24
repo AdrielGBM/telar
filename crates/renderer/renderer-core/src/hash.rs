@@ -77,21 +77,6 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 backdrop_blur.to_bits().hash(h);
             }
             DrawCommand::PopLayer => 10u8.hash(h),
-            #[cfg(target_os = "android")]
-            DrawCommand::AndroidHardwareBufferImage {
-                handle,
-                rect,
-                filter,
-                ..
-            } => {
-                11u8.hash(h);
-                handle.hash(h);
-                rect.x.to_bits().hash(h);
-                rect.y.to_bits().hash(h);
-                rect.width.to_bits().hash(h);
-                rect.height.to_bits().hash(h);
-                (*filter as u8).hash(h);
-            }
         }
     }
 }

@@ -137,7 +137,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     let signals = scan_signals(logic_source);
     let previews = scan_previews(logic_source);
 
-    let style_section = generate_style_section(&doc.style);
+    let style_section = generate_style_section(&doc.style, input.theme_type.is_some());
 
     let mut view_gen = ViewGen::with_theme(
         &signals,
@@ -332,8 +332,7 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> (Option<String>, String) 
 mod tests {
     use super::*;
 
-    // COUNTER has explicit [style] color declarations — they become local COLOR_*
-    // constants and take precedence over the theme (non-reactive overrides).
+    // COUNTER declares [style] colors: with no theme they become local COLOR_* consts; with a theme_type they resolve through use_theme instead (see the theme tests below).
     const COUNTER: &str = r#"[logic]
 let count = create_rw_signal(0i32);
 
@@ -431,20 +430,17 @@ col .card
     }
 
     #[test]
-    fn style_declared_colors_are_local_consts_even_with_theme() {
-        // Explicitly declaring a color in [style] creates a local override that
-        // does NOT go through use_theme, even when theme_type is configured.
+    fn style_declared_colors_resolve_via_theme_when_active() {
+        // With a theme configured, [style]-declared colors resolve reactively through use_theme like undeclared ones, and their now-dead COLOR_* consts are omitted.
         let out = transpile_source_with_theme(COUNTER, "counter", Some("SandboxTheme")).unwrap();
         let code = out.rust_code;
-        // The [style] consts are still emitted (for potential use in layout classes).
-        assert!(code.contains("const COLOR_PRIMARY: Color = Color::rgba(61.0 / 255.0"));
-        // Inside the function, color references go to local consts, not use_theme.
+        assert!(code.contains("use_theme::<SandboxTheme>().primary"));
+        assert!(code.contains("use_theme::<SandboxTheme>().dark"));
+        // The now-unused color consts are not emitted.
+        assert!(!code.contains("const COLOR_PRIMARY"));
+        assert!(!code.contains("const COLOR_DARK"));
         let fn_start = code.find("pub fn counter").unwrap();
-        assert!(
-            code[fn_start..].contains("COLOR_PRIMARY"),
-            "should use local const"
-        );
-        assert!(!code[fn_start..].contains("use_theme::<SandboxTheme>().primary"));
+        assert!(!code[fn_start..].contains("COLOR_PRIMARY"));
     }
 
     #[test]

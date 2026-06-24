@@ -8,13 +8,16 @@ use rsx_parser::{StyleClass, StyleConst, StyleSection, StyleValue};
 use crate::naming::{const_name, style_fn_name};
 
 /// Renders all constants and style functions for the document's style section.
-/// `[style]` color constants always become file-local `COLOR_*` values regardless
-/// of whether a theme type is active — they act as explicit local overrides.
-pub fn generate_style_section(section: &StyleSection) -> String {
+/// When a theme is active (`theme_active`), `[style]` color constants are omitted: color references resolve through `use_theme` instead (see `color_expr`), so they react to theme switches. Number/raw constants are always emitted.
+pub fn generate_style_section(section: &StyleSection, theme_active: bool) -> String {
     let mut out = String::new();
 
     let mut emitted_const = false;
     for c in &section.constants {
+        // With a theme active the color const would be dead code (every use goes through use_theme), so skip it.
+        if theme_active && matches!(c.value, StyleValue::Hex(_)) {
+            continue;
+        }
         out.push_str(&generate_const(c));
         out.push('\n');
         emitted_const = true;

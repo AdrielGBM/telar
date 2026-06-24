@@ -1295,13 +1295,8 @@ impl<'a> ViewGen<'a> {
     ///
     /// Lookup order:
     /// 1. Inline hex / `Color::*` / CSS keyword → static expression.
-    /// 2. Declared in `[style]` → file-local `COLOR_*` constant (non-reactive).
-    /// 3. Not declared + `theme_type` set → `use_theme::<T>().field` (reactive).
-    /// 4. Not declared + no theme → `COLOR_*` (rustc catches the missing symbol).
-    ///
-    /// Declaring a color in `[style]` therefore acts as a local override that
-    /// takes precedence over the theme, which is the common case for one-off
-    /// palette values that should not track theme switches.
+    /// 2. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
+    /// 3. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
     fn color_expr(&self, value: &str) -> String {
         let v = value.trim();
         if v.starts_with('#') {
@@ -1316,16 +1311,8 @@ impl<'a> ViewGen<'a> {
             "transparent" => return "Color::TRANSPARENT".to_string(),
             _ => {}
         }
-        let snake = to_snake_case(v);
-        if self
-            .constants
-            .iter()
-            .any(|c| to_snake_case(&c.name) == snake)
-        {
-            return const_name("COLOR_", v);
-        }
         if let Some(theme) = &self.theme_type {
-            return format!("use_theme::<{theme}>().{snake}");
+            return format!("use_theme::<{theme}>().{}", to_snake_case(v));
         }
         const_name("COLOR_", v)
     }

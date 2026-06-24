@@ -136,8 +136,6 @@ pub fn command_visual_rect(
         | DrawCommand::PopMatrix
         | DrawCommand::PushLayer { .. }
         | DrawCommand::PopLayer => None,
-        #[cfg(target_os = "android")]
-        DrawCommand::AndroidHardwareBufferImage { .. } => None,
     }
 }
 

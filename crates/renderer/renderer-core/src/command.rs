@@ -45,18 +45,6 @@ pub enum DrawCommand {
         backdrop_blur: f32,
     },
     PopLayer,
-    // AHardwareBuffer* (cast to u64 for FFI safety) imported directly as a GPU texture,
-    // bypassing the staging buffer copy used by the normal Image variant.
-    #[cfg(target_os = "android")]
-    AndroidHardwareBufferImage {
-        handle: u64,
-        rect: geometry_core::Rect,
-        filter: crate::ImageFilter,
-        width: u32,
-        height: u32,
-        /// AHardwareBuffer format constant (e.g. AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM = 1).
-        format: u32,
-    },
 }
 
 impl PartialEq for DrawCommand {
@@ -144,21 +132,6 @@ impl PartialEq for DrawCommand {
                 },
             ) => o1 == o2 && b1 == b2,
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
-            #[cfg(target_os = "android")]
-            (
-                DrawCommand::AndroidHardwareBufferImage {
-                    handle: h1,
-                    rect: r1,
-                    filter: f1,
-                    ..
-                },
-                DrawCommand::AndroidHardwareBufferImage {
-                    handle: h2,
-                    rect: r2,
-                    filter: f2,
-                    ..
-                },
-            ) => h1 == h2 && r1 == r2 && f1 == f2,
             _ => false,
         }
     }

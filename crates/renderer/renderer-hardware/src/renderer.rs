@@ -428,7 +428,6 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     retained_texture: Option<wgpu::Texture>,
     retained_view: Option<wgpu::TextureView>,
     prev_commands: Vec<DrawCommand>,
-    prev_commands_hash: u64,
     // ComponentList generation of the last fully rendered frame. Initialized to u64::MAX so the first frame never matches and always renders. Set to the incoming generation after each successful render.
     prev_generation: u64,
     // Generation received from the current begin_frame call; used by render_frame to decide the idle-blit fast path.
@@ -823,7 +822,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             retained_texture: None,
             retained_view: None,
             prev_commands: Vec::new(),
-            prev_commands_hash: 0,
             prev_generation: u64::MAX,
             incoming_generation: 0,
             retained_blit_pipeline,
@@ -954,7 +952,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.retained_texture = Some(retained);
         // Invalidate prev_commands on resize so scroll blit is never applied across size changes.
         self.prev_commands.clear();
-        self.prev_commands_hash = 0;
     }
 
     fn clear_pending(&mut self) {
@@ -1974,8 +1971,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         }
                     }
                 }
-                #[cfg(target_os = "android")]
-                DrawCommand::AndroidHardwareBufferImage { .. } => {}
             }
         }
 
@@ -3340,10 +3335,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
         output.present();
-        let current_hash = renderer_core::hash_draw_commands(orig_commands);
-        if current_hash != self.prev_commands_hash {
+        // generation already bumps iff content changed (same invariant the idle-blit fast path relies on), so it replaces the per-frame O(n) hash_draw_commands here; the is_empty() guard repopulates prev_commands after a resize cleared it without a content change.
+        if self.incoming_generation != self.prev_generation || self.prev_commands.is_empty() {
             self.prev_commands = orig_commands.to_vec();
-            self.prev_commands_hash = current_hash;
         }
         self.prev_generation = self.incoming_generation;
         self.clear_pending();

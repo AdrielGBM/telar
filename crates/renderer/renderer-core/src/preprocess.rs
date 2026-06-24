@@ -138,8 +138,6 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             backdrop_blur: backdrop_blur * sf,
         },
         DrawCommand::PopLayer => DrawCommand::PopLayer,
-        #[cfg(target_os = "android")]
-        DrawCommand::AndroidHardwareBufferImage { .. } => cmd.clone(),
     }
 }
 
