@@ -55,11 +55,13 @@ pub struct WidgetCtx {
     // node itself is clean. Without this, resizing an independently-computed root
     // is silently a no-op and its layout freezes at the first size.
     last_space: FxHashMap<NodeId, (AvailableSpace, AvailableSpace)>,
-    // Nodes with a definite `max-width` and their original style. taffy sizes a
-    // max-width box's intrinsic height at its uncapped width, so a wrapping child
-    // reports a 1-line height and the box ends up too short. compute_layout pins
-    // each resolved width as a definite width and re-runs so heights are correct.
-    constrained: Vec<(NodeId, LayoutStyle)>,
+    // Nodes with a definite `max-width`, their original style, and the width pinned on
+    // the previous compute (`None` = unpinned). taffy sizes a max-width box's intrinsic
+    // height at its uncapped width, so a wrapping child reports a 1-line height and the
+    // box ends up too short. compute_layout pins each resolved width as a definite width
+    // and re-runs so heights are correct. The stored pin lets the undo pass stay
+    // idempotent: an unpinned box whose space did not change is left untouched.
+    constrained: Vec<(NodeId, LayoutStyle, Option<f32>)>,
     // Whether each compute-root's width/height were originally `auto`, captured the
     // first time it is computed. An auto-sized root fills the definite space it is
     // computed in, so a top-level page need not declare width:100% to avoid
@@ -87,7 +89,7 @@ impl WidgetCtx {
 
     fn track_constrained(&mut self, node: NodeId, style: &LayoutStyle) {
         if style.max_width_px().is_some() {
-            self.constrained.push((node, style.clone()));
+            self.constrained.push((node, style.clone(), None));
         }
     }
 
@@ -184,11 +186,20 @@ impl WidgetCtx {
         }
         // Undo any width pins from a previous layout so each max-width box resolves
         // against the new available space before we re-pin it after the first pass.
+        // Idempotent: only touch a box when the space changed (everything must
+        // re-resolve) or it actually carried a pin to lift. Leaving unpinned boxes alone
+        // when the space is unchanged avoids dirtying their ancestors, which would
+        // otherwise force find_boundary_root to fall back to global_root every frame.
         for i in 0..self.constrained.len() {
             let node = self.constrained[i].0;
+            let had_pin = self.constrained[i].2.is_some();
+            if !space_changed && !had_pin {
+                continue;
+            }
             let style = self.constrained[i].1.clone();
             self.engine.set_style(node, style).ok();
             self.engine.mark_dirty(node).ok();
+            self.constrained[i].2 = None;
         }
         let mut dirty_nodes = Vec::new();
         self.engine.collect_dirty_nodes(root, &mut dirty_nodes);
@@ -227,6 +238,7 @@ impl WidgetCtx {
                 if laid.width > 0.0 && laid.width <= max_w + 0.5 {
                     self.engine.set_style(node, style.width(laid.width)).ok();
                     self.engine.mark_dirty(node).ok();
+                    self.constrained[i].2 = Some(laid.width);
                     pinned_any = true;
                 }
             }
@@ -384,6 +396,68 @@ mod tests {
         assert!(
             box_rect.height >= row_rect.height - 0.5,
             "box too short for wrapped content: box={box_rect:?} row={row_rect:?}"
+        );
+    }
+
+    // Re-running compute_layout against the SAME available space (root re-dirtied by an
+    // unrelated change) must keep the max-width box correctly sized: the idempotent undo
+    // must still lift and re-pin a previously pinned box so its wrapped height holds.
+    #[test]
+    fn maxwidth_box_stable_across_recompute() {
+        let mut ctx = WidgetCtx::new();
+        let mut items = Vec::new();
+        for _ in 0..4 {
+            let (n, _) = new_leaf(
+                &mut ctx,
+                LayoutStyle::new()
+                    .width(200.0)
+                    .height(100.0)
+                    .min_width(200.0)
+                    .flex_grow(1.0),
+            )
+            .unwrap();
+            items.push(n);
+        }
+        let row = new_container(
+            &mut ctx,
+            LayoutStyle::new().flex_row().flex_wrap().gap(24.0),
+            &items,
+        )
+        .unwrap();
+        let boxed = new_container(
+            &mut ctx,
+            LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0))
+                .max_width(500.0),
+            &[row],
+        )
+        .unwrap();
+        let page = new_container(
+            &mut ctx,
+            LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0)),
+            &[boxed],
+        )
+        .unwrap();
+
+        let space = (AvailableSpace::Definite(900.0), AvailableSpace::MaxContent);
+        compute_layout(&mut ctx, page, space.0, space.1).unwrap();
+        let first = track_layout(&ctx, boxed).unwrap().get();
+
+        // Re-dirty the root and recompute at the SAME space: exercises the idempotent undo on an already-pinned box.
+        mark_dirty(&mut ctx, page).unwrap();
+        compute_layout(&mut ctx, page, space.0, space.1).unwrap();
+        let second = track_layout(&ctx, boxed).unwrap().get();
+
+        assert!(
+            (second.width - 500.0).abs() < 1.0,
+            "box not capped on recompute: {second:?}"
+        );
+        assert!(
+            (first.width - second.width).abs() < 0.5 && (first.height - second.height).abs() < 0.5,
+            "box layout drifted across recompute: first={first:?} second={second:?}"
         );
     }
 

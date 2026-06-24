@@ -904,9 +904,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.surface.configure(&self.device, &config);
         self.config = Some(config);
         self.viewport_dirty = true;
-        // msaa_samples==1: the "resolve" is a texture copy, so COPY_SRC is required.
+        // msaa_samples==1: the "resolve" is a texture copy (COPY_SRC), and the idle-blit samples this
+        // texture directly (TEXTURE_BINDING) instead of a separate retained copy. A multisample
+        // texture cannot be sampled, so TEXTURE_BINDING is added only on the single-sample branch.
         let msaa_usage = if self.msaa_samples == 1 {
-            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC
+            wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING
         } else {
             wgpu::TextureUsages::RENDER_ATTACHMENT
         };
@@ -1194,11 +1198,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
             {
-                let retained_view = self.retained_view.clone().unwrap(); // safe: outer if checks is_some()
+                // Idle-blit source: on the msaa_samples==1 (Android) path, sample msaa_texture
+                // directly — it still holds the last active frame (its render pass stores and idle
+                // frames never write it), so the per-frame msaa→retained copy is gone. On MSAA>1
+                // msaa_texture is multisampled and unsamplable, so use the resolved retained texture.
+                let idle_source_view = match (self.msaa_samples, self.msaa_texture.as_ref()) {
+                    (1, Some(t)) => t.create_view(&wgpu::TextureViewDescriptor::default()),
+                    _ => self.retained_view.clone().unwrap(), // safe: outer if checks is_some()
+                };
                 let retained_bg = self.retained_blit_pipeline.create_bind_group(
                     &self.device,
                     &self.queue,
-                    &retained_view,
+                    &idle_source_view,
                     [
                         0.0,
                         0.0,
@@ -3311,28 +3322,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     depth_or_array_layers: 1,
                 },
             );
-            // Copy msaa_texture → retained_texture so the idle-blit path has valid content for the next idle frame.
-            if let Some(retained) = self.retained_texture.as_ref() {
-                encoder.copy_texture_to_texture(
-                    wgpu::TexelCopyTextureInfo {
-                        texture: msaa_tex,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    wgpu::TexelCopyTextureInfo {
-                        texture: retained,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    wgpu::Extent3d {
-                        width: self.width,
-                        height: self.height,
-                        depth_or_array_layers: 1,
-                    },
-                );
-            }
+            // The former second full-screen copy (msaa_texture → retained_texture, to feed the
+            // idle-blit) is gone: the idle-blit now samples msaa_texture directly, halving the
+            // per-active-frame copy_texture_to_texture traffic on Android. retained_texture stays
+            // allocated but unused on this path — it is shared with the MSAA>1 (Desktop) branch.
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

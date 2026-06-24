@@ -201,8 +201,11 @@ where
 
         let w = window.clone();
         self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
+        // Only the SW/fallback path reports ADPF from this (the UI/layout) thread, so only it needs a
+        // session keyed to this TID. The HW path renders on a dedicated thread and creates its own
+        // session there (correct TID); creating one here too would register the wrong thread.
         #[cfg(target_os = "android")]
-        {
+        if !self.renderer_is_hardware {
             let session = unsafe {
                 let manager = adpf::APerformanceHint_getManager();
                 if manager.is_null() {
@@ -653,6 +656,21 @@ where
             let mut renderer = renderer;
             let mut cur_w = 0u32;
             let mut cur_h = 0u32;
+            // ADPF lives on THIS thread: create the hint session with the render thread's own TID so
+            // reportActualWorkDuration drives the scheduler for the thread that actually submits GPU
+            // work. The session handle is not Send, so it is created, used, and closed here and never
+            // crosses a thread boundary. (The SW/fallback path keeps its own session on the UI thread.)
+            #[cfg(target_os = "android")]
+            let hint_session = unsafe {
+                let manager = adpf::APerformanceHint_getManager();
+                if manager.is_null() {
+                    None
+                } else {
+                    let tid = libc::syscall(libc::SYS_gettid) as i32;
+                    let s = adpf::APerformanceHint_createSession(manager, &tid, 1, 16_666_667);
+                    if s.is_null() { None } else { Some(s) }
+                }
+            };
             while let Ok(msg) = rx.recv() {
                 // Drop stale frames to stay responsive, but never skip one that resizes
                 // the surface: the wgpu surface is reconfigured inside begin_frame, so a
@@ -662,6 +680,8 @@ where
                 if !size_changed && msg.at.elapsed() > FRAME_BUDGET {
                     continue;
                 }
+                #[cfg(target_os = "android")]
+                let frame_start = std::time::Instant::now();
                 if renderer
                     .begin_frame(msg.w, msg.h, msg.sf, msg.generation)
                     .is_err()
@@ -671,6 +691,19 @@ where
                 cur_w = msg.w;
                 cur_h = msg.h;
                 let _ = renderer.render_frame(&msg.commands, msg.clear);
+                #[cfg(target_os = "android")]
+                if let Some(session) = hint_session {
+                    let dur = frame_start.elapsed().as_nanos() as std::ffi::c_long;
+                    unsafe {
+                        adpf::APerformanceHint_reportActualWorkDuration(session, dur);
+                    }
+                }
+            }
+            #[cfg(target_os = "android")]
+            if let Some(session) = hint_session {
+                unsafe {
+                    adpf::APerformanceHint_closeSession(session);
+                }
             }
             // Return the renderer so on_suspend can reclaim it and keep warm caches across resume.
             renderer
