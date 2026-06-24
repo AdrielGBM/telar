@@ -1421,6 +1421,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "landing"
+version = "0.1.0"
+dependencies = [
+ "rsx",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "layout-core"
 version = "0.1.0"
 dependencies = [
@@ -3478,6 +3486,7 @@ dependencies = [
  "platform-core",
  "reactive-core",
  "renderer-core",
+ "renderer-text",
  "theme-core",
  "ui-tree",
 ]

@@ -72,10 +72,23 @@ fn generate_class_fn(class: &StyleClass) -> String {
 pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
     let value = value.trim();
     Some(match key {
-        "width" => format!(".width({})", num(value)),
-        "height" => format!(".height({})", num(value)),
-        "min-width" => format!(".min_width({})", num(value)),
-        "min-height" => format!(".min_height({})", num(value)),
+        "width" => format!(".width({})", dimension(value)),
+        "height" => format!(".height({})", dimension(value)),
+        "min-width" => format!(".min_width({})", dimension(value)),
+        "min-height" => format!(".min_height({})", dimension(value)),
+        "max-width" => format!(".max_width({})", dimension(value)),
+        "max-height" => format!(".max_height({})", dimension(value)),
+        "basis" | "flex-basis" => format!(".flex_basis({})", dimension(value)),
+        // `wrap` is a flag (no value) or `wrap`/`true`; anything else is ignored.
+        "wrap" => match value {
+            "" | "wrap" | "true" => ".flex_wrap()".to_string(),
+            _ => return None,
+        },
+        // Per-child cross-axis stretch, e.g. `self:stretch` to override a parent `align:center`.
+        "self" => match value {
+            "stretch" => ".align_self_stretch()".to_string(),
+            _ => return None,
+        },
         "padding" | "pad" => format!(".padding_all({})", num(value)),
         "padding-x" | "pad-x" => format!(".padding_horizontal({})", num(value)),
         "padding-y" | "pad-y" => format!(".padding_vertical({})", num(value)),
@@ -136,9 +149,21 @@ fn justify_variant(value: &str) -> Option<&'static str> {
 }
 
 /// Parses a `cols` value into a comma-separated `TemplateTrack` expression list.
-/// `"3"` → `repeat(3, 1fr)`; `"1fr 2fr"` → individual tracks.
+/// `"3"` → `repeat(3, 1fr)`; `"1fr 2fr"` → individual tracks;
+/// `"fill 260"` / `"fit 260"` → `repeat(auto-fill|auto-fit, minmax(260px, 1fr))`
+/// — a responsive grid that reflows like flex-wrap but, unlike it, reports a
+/// correct height when nested in another container.
 fn parse_grid_template(value: &str) -> Option<String> {
     let s = value.trim();
+    let tokens: Vec<&str> = s.split_whitespace().collect();
+    if let [kind @ ("fill" | "fit"), min] = tokens.as_slice() {
+        let min_px = min.trim_end_matches("px").parse::<f32>().ok()?;
+        let repeat = if *kind == "fill" { "fill" } else { "fit" };
+        return Some(format!(
+            "TemplateTrack::{repeat}(TemplateTrack::minmax(TemplateTrack::px({}), TemplateTrack::fr(1.0)))",
+            format_f32(min_px)
+        ));
+    }
     if let Ok(n) = s.parse::<u32>() {
         return Some(format!(
             "TemplateTrack::repeat({n}, TemplateTrack::fr(1.0))"
@@ -171,6 +196,20 @@ fn num(value: &str) -> String {
         Ok(n) => format_f32(n),
         Err(_) => value.to_string(),
     }
+}
+
+/// Renders a sizing value for `width`/`height`/`min-*`/`max-*`/`basis`. A `%`
+/// suffix becomes `SizeDimension::Percent` (where `100%` == `1.0`); a bare
+/// number stays an `f32` literal (coerced to `Px` via `Into<SizeDimension>`),
+/// and anything else is forwarded verbatim (e.g. a `[style]` constant name).
+fn dimension(value: &str) -> String {
+    let v = value.trim();
+    if let Some(pct) = v.strip_suffix('%') {
+        if let Ok(n) = pct.trim().parse::<f32>() {
+            return format!("SizeDimension::Percent({})", format_f32(n / 100.0));
+        }
+    }
+    num(v)
 }
 
 /// Formats an f32 so it always carries a decimal point (`240` -> `240.0`).

@@ -5,8 +5,13 @@ use crate::style::{AvailableSpace, LayoutStyle};
 
 pub type NodeId = taffy::NodeId;
 
+/// Per-node measure callback: given the available main-axis width, returns the
+/// node's intrinsic (width, height). Used for text nodes whose height depends on
+/// how many lines the content wraps into at the resolved width.
+pub type MeasureFn = Box<dyn FnMut(f32) -> (f32, f32)>;
+
 pub struct LayoutEngine {
-    tree: TaffyTree,
+    tree: TaffyTree<MeasureFn>,
 }
 
 impl LayoutEngine {
@@ -18,6 +23,16 @@ impl LayoutEngine {
 
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
         self.tree.new_leaf(style.inner).map_err(LayoutError::from)
+    }
+
+    pub fn new_measured_leaf(
+        &mut self,
+        style: LayoutStyle,
+        measure: MeasureFn,
+    ) -> Result<NodeId, LayoutError> {
+        self.tree
+            .new_leaf_with_context(style.inner, measure)
+            .map_err(LayoutError::from)
     }
 
     pub fn new_container(
@@ -40,6 +55,32 @@ impl LayoutEngine {
         self.tree.mark_dirty(node).map_err(LayoutError::from)
     }
 
+    /// Whether the node's `width`/`height` are `auto` (i.e. content-sized).
+    pub fn size_is_auto(&self, node: NodeId) -> (bool, bool) {
+        match self.tree.style(node) {
+            Ok(s) => (s.size.width.is_auto(), s.size.height.is_auto()),
+            Err(_) => (false, false),
+        }
+    }
+
+    /// Sets the node's width to a definite length, or back to `auto` when `None`.
+    pub fn set_width(&mut self, node: NodeId, width: Option<f32>) {
+        if let Ok(s) = self.tree.style(node) {
+            let mut style = s.clone();
+            style.size.width = width.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
+            let _ = self.tree.set_style(node, style);
+        }
+    }
+
+    /// Sets the node's height to a definite length, or back to `auto` when `None`.
+    pub fn set_height(&mut self, node: NodeId, height: Option<f32>) {
+        if let Ok(s) = self.tree.style(node) {
+            let mut style = s.clone();
+            style.size.height = height.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
+            let _ = self.tree.set_style(node, style);
+        }
+    }
+
     pub fn compute_layout(
         &mut self,
         root: NodeId,
@@ -47,11 +88,28 @@ impl LayoutEngine {
         available_height: AvailableSpace,
     ) -> Result<(), LayoutError> {
         self.tree
-            .compute_layout(
+            .compute_layout_with_measure(
                 root,
                 taffy::geometry::Size {
                     width: available_width.into(),
                     height: available_height.into(),
+                },
+                |known, available, _node, context, _style| {
+                    let Some(measure) = context else {
+                        return taffy::geometry::Size::ZERO;
+                    };
+                    // Width to wrap against: a resolved width wins, else the definite
+                    // available width, else a large bound so MaxContent stays single-line.
+                    let width = known.width.unwrap_or(match available.width {
+                        taffy::AvailableSpace::Definite(w) => w,
+                        taffy::AvailableSpace::MaxContent => 1.0e6,
+                        taffy::AvailableSpace::MinContent => 0.0,
+                    });
+                    let (mw, mh) = measure(width);
+                    taffy::geometry::Size {
+                        width: known.width.unwrap_or(mw),
+                        height: known.height.unwrap_or(mh),
+                    }
                 },
             )
             .map_err(LayoutError::from)

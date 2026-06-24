@@ -1,6 +1,8 @@
 pub mod colr;
+mod measure;
 mod shaper;
 
+pub use measure::{measure_text, set_measure_font_config};
 pub use shaper::{
     ATLAS_SIZE, ColrGlyph, GlyphAtlas, GlyphInfo, TextCacheKey, TextShaper, TextShaperConfig,
     make_text_cache_key,

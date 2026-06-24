@@ -336,23 +336,29 @@ impl TextShaper {
             scale_factor_bits: scale_factor.to_bits(),
         };
 
-        let positions: std::sync::Arc<Vec<(CacheKey, i32, i32)>> =
-            if let Some(cached) = self.shaping_cache.get(&shaping_key) {
-                cached.clone()
-            } else {
-                let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
-                let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
-                for run in buffer.layout_runs() {
-                    for glyph in run.glyphs.iter() {
-                        let physical = glyph.physical((0., run.line_y), scale_factor);
-                        pos.push((physical.cache_key, physical.x, physical.y));
-                    }
+        let positions: std::sync::Arc<Vec<(CacheKey, i32, i32)>> = if let Some(cached) =
+            self.shaping_cache.get(&shaping_key)
+        {
+            cached.clone()
+        } else {
+            let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+            let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
+            for run in buffer.layout_runs() {
+                for glyph in run.glyphs.iter() {
+                    // cosmic-text's `physical` adds the offset WITHOUT scaling it
+                    // (`y = glyph_y * scale + offset.1`), and `screen_y` below divides
+                    // the whole thing by `scale_factor`. So `line_y` must be pre-scaled
+                    // here or it collapses to `line_y / scale_factor`, packing every
+                    // line onto the first one at high-DPI (e.g. Android).
+                    let physical = glyph.physical((0., run.line_y * scale_factor), scale_factor);
+                    pos.push((physical.cache_key, physical.x, physical.y));
                 }
-                drop(buffer);
-                let arc = std::sync::Arc::new(pos);
-                let _ = self.shaping_cache.put_with_weight(shaping_key, arc.clone());
-                arc
-            };
+            }
+            drop(buffer);
+            let arc = std::sync::Arc::new(pos);
+            let _ = self.shaping_cache.put_with_weight(shaping_key, arc.clone());
+            arc
+        };
 
         out.reserve(positions.len());
 
@@ -641,14 +647,14 @@ impl TextShaper {
 
         for run in buffer.layout_runs() {
             height = (run.line_y + line_height) as f32;
-            for glyph in run.glyphs.iter() {
-                let physical = glyph.physical((0., run.line_y), 1.0);
-                let right_edge = (physical.x as f32 + glyph.w as f32).max(0.0_f32);
-                width = width.max(right_edge);
-            }
+            // Use the line's advance width, not the glyph ink boxes: the last glyph's
+            // advance extends past its ink, so an ink-based width leaves the box a hair
+            // too narrow and the renderer wraps the final glyph onto a new line.
+            width = width.max(run.line_w);
         }
 
-        let result = (width, height);
+        // Round the wrap width up so sub-pixel rounding never re-wraps the last glyph.
+        let result = (width.ceil(), height);
         if self.measure_cache.len() >= 1000 {
             self.measure_cache.clear();
         }
@@ -822,6 +828,35 @@ pub struct ColrGlyph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Text positions are logical, so a multi-line block must occupy the same
+    // vertical extent regardless of the device scale factor. cosmic-text's
+    // `physical` adds the y-offset unscaled, so passing the line baseline there
+    // unscaled collapsed every line onto the first one at high-DPI (e.g. Android).
+    #[test]
+    fn line_layout_is_scale_independent() {
+        let mut sh = TextShaper::new();
+        let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa";
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 90.0,
+            height: 100000.0,
+        };
+        let style = TextStyle::new(20.0, renderer_core::Color::rgba(0.0, 0.0, 0.0, 1.0));
+        let bottom_extent = |sh: &mut TextShaper, sf: f32| -> f32 {
+            let mut out = Vec::new();
+            sh.layout_glyphs(text, rect, &style, sf, &mut out);
+            out.iter().map(|g| g.dest_rect[1]).fold(0.0_f32, f32::max)
+        };
+        let at_1x = bottom_extent(&mut sh, 1.0);
+        let at_3x = bottom_extent(&mut sh, 3.0);
+        assert!(at_1x > 40.0, "text did not wrap to multiple lines: {at_1x}");
+        assert!(
+            (at_1x - at_3x).abs() < 5.0,
+            "line layout collapsed at high DPI: 1x bottom={at_1x}, 3x bottom={at_3x}"
+        );
+    }
 
     #[test]
     fn text_shaper_new_does_not_panic() {

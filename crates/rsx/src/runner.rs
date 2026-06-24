@@ -92,6 +92,14 @@ where
 {
     fn on_resume(&mut self, window: &W) -> bool {
         let android = cfg!(target_os = "android");
+        // Point the layout-time text measurer at the same fonts as the renderer,
+        // on this (the layout) thread, before any layout runs. Otherwise it falls
+        // back to system defaults and aborts on Android ("no default font found").
+        renderer_text::set_measure_font_config(build_font_config(
+            self.font_paths.clone(),
+            self.font_data.clone(),
+            android,
+        ));
         let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
         match self.backend {
             RendererBackend::Software => {
@@ -642,8 +650,15 @@ where
         .name("rsx-render".to_string())
         .spawn(move || {
             let mut renderer = renderer;
+            let mut cur_w = 0u32;
+            let mut cur_h = 0u32;
             while let Ok(msg) = rx.recv() {
-                if msg.at.elapsed() > FRAME_BUDGET {
+                // Drop stale frames to stay responsive, but never skip one that resizes
+                // the surface: the wgpu surface is reconfigured inside begin_frame, so a
+                // dropped resize frame leaves it at the old size and the window shows
+                // clipped content or empty margins until the next accepted frame.
+                let size_changed = msg.w != cur_w || msg.h != cur_h;
+                if !size_changed && msg.at.elapsed() > FRAME_BUDGET {
                     continue;
                 }
                 if renderer
@@ -652,6 +667,8 @@ where
                 {
                     continue;
                 }
+                cur_w = msg.w;
+                cur_h = msg.h;
                 let _ = renderer.render_frame(&msg.commands, msg.clear);
             }
             // Return the renderer so on_suspend can reclaim it and keep warm caches across resume.

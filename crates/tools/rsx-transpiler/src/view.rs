@@ -165,22 +165,29 @@ impl<'a> ViewGen<'a> {
         let content_fn = self.interpolate_content(content);
         let style = self.text_style(&el.attrs);
 
-        let font_size = el
+        // Forward responsive sizing attrs (width/min-width/max-width/grow/…) onto the leaf.
+        let mut extra = String::new();
+        for a in &el.attrs {
+            if matches!(a.key.as_str(), "size" | "color" | "lines" | "height") {
+                continue;
+            }
+            if let Some(call) = layout_prop_call(&a.key, &a.value) {
+                extra.push_str(&call);
+            }
+        }
+        // An explicit `height:` pins the box; otherwise the leaf measures its own
+        // height from the wrapped content (`Text::auto`) so multi-line text reserves
+        // real space and pushes following siblings down instead of overflowing.
+        let explicit_height = el
             .attrs
             .iter()
-            .find(|a| a.key == "size")
-            .and_then(|a| a.value.parse::<f32>().ok())
-            .unwrap_or(14.0);
-        // Emit the multiplication at runtime so the generated source stays free
-        // of f32 rounding noise (`25.199999`) from precomputing line-height.
-        let font_size = format_f32(font_size);
-        let width_call = el
-            .attrs
-            .iter()
-            .find(|a| a.key == "width")
-            .and_then(|a| layout_prop_call("width", &a.value))
-            .unwrap_or_default();
-        let layout_style = format!("LayoutStyle::new().height({font_size}_f32 * 1.4){width_call}");
+            .find(|a| a.key == "height")
+            .and_then(|a| layout_prop_call("height", &a.value));
+
+        let (ctor, layout_style) = match explicit_height {
+            Some(h) => ("Text::new", format!("LayoutStyle::new(){h}{extra}")),
+            None => ("Text::auto", format!("LayoutStyle::new(){extra}")),
+        };
 
         // Each `move` closure consumes its captures; clone the signals they use
         // into block locals so both closures can capture independently.
@@ -189,7 +196,7 @@ impl<'a> ViewGen<'a> {
         let code = format!(
             "{pad}let {var} = {{\n\
              {clones}\
-             {pad}    Text::new(\n\
+             {pad}    {ctor}(\n\
              {pad}        ctx,\n\
              {pad}        {content_fn},\n\
              {pad}        {layout_style},\n\

@@ -10,5 +10,6 @@ layout-reactive = { workspace = true }
 platform-core = { workspace = true }
 reactive-core = { workspace = true }
 renderer-core = { workspace = true }
+renderer-text = { workspace = true }
 theme-core = { workspace = true }
 ui-tree = { workspace = true }

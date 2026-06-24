@@ -25,6 +25,7 @@ members = [
     "crates/tools/rsx-macros",
     "crates/tools/rsx-workspace",
     "apps/sandbox",
+    "apps/landing",
 ]
 
 default-members = [

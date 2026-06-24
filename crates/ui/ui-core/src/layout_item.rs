@@ -1,7 +1,8 @@
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
+use platform_core::Event;
 use reactive_core::RwSignal;
-use ui_tree::Component;
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{WidgetCtx, new_container, track_layout};
 use crate::layout_leaf::LayoutLeaf;
@@ -19,6 +20,25 @@ pub trait LayoutItem: Component {
 impl<T: LeafWidget + Component> LayoutItem for T {
     fn layout_node(&self) -> NodeId {
         self.layout_leaf().node
+    }
+}
+
+// Lets an already-boxed child (e.g. the `Box<dyn LayoutItem>` returned by a
+// transpiled `.rsx` component) pass back through `box_item`/`children!` without
+// a second manual wrap, so components compose as `[view]` children.
+impl Component for Box<dyn LayoutItem> {
+    fn view(&self) -> RenderNode {
+        (**self).view()
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        (**self).on_event(event)
+    }
+}
+
+impl LayoutItem for Box<dyn LayoutItem> {
+    fn layout_node(&self) -> NodeId {
+        (**self).layout_node()
     }
 }
 

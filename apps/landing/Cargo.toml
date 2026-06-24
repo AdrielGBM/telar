@@ -1,0 +1,23 @@
+[package]
+name = "landing"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[[bin]]
+name = "landing"
+path = "src/main.rs"
+
+[dependencies]
+rsx = { workspace = true, features = ["runtime"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[package.metadata.android]
+package = "com.example.rsx.landing"
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 33
+target_sdk_version = 36

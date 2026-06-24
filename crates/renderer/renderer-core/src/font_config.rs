@@ -1,4 +1,5 @@
 /// Shared font configuration for both software and hardware renderers. Lets callers supply extra fonts, raw font bytes, a system fonts directory, and preferred sans-serif families without duplicating these fields across renderer-specific config structs.
+#[derive(Clone)]
 pub struct FontConfig {
     pub extra_font_paths: Vec<std::path::PathBuf>,
     pub font_data: Vec<Vec<u8>>,
