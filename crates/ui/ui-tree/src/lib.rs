@@ -1,8 +1,9 @@
 mod component;
 mod render_node;
+mod segment;
 mod tree;
-mod view_flatten;
 
 pub use component::{Component, EventResult};
 pub use render_node::{NodeVec, RenderNode};
+pub use segment::{Segment, SegmentRoot};
 pub use tree::ComponentList;

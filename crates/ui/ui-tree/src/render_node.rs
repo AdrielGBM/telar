@@ -70,6 +70,12 @@ pub enum RenderNode {
         backdrop_blur: f32,
         children: NodeVec,
     },
+    // A reactive boundary: the child segment maintains its own flattened commands via its own
+    // effect, so the parent's view() references it without re-running the child's view(). Composed
+    // lazily at collect time (see segment.rs). Enables O(changed component) updates instead of O(tree).
+    Boundary {
+        child: std::rc::Rc<crate::segment::Segment>,
+    },
 }
 
 impl RenderNode {

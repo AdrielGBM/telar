@@ -5,13 +5,13 @@ use reactive_core::RwSignal;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::WidgetCtx;
-use crate::layout_item::{LayoutItem, register_container};
+use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 
 pub struct Container {
     node: NodeId,
     rect: RwSignal<Rect>,
-    children: Vec<(Box<dyn LayoutItem>, Option<RwSignal<Rect>>)>,
+    children: TrackedChildren,
 }
 
 impl Container {
@@ -48,7 +48,9 @@ impl LayoutItem for Container {
 
 impl Component for Container {
     fn view(&self) -> RenderNode {
-        RenderNode::group(self.children.iter().map(|(c, _)| c.view()))
+        // Each child is its own segment: referencing it is a cheap Rc clone, so this view() does not
+        // re-run children and is not subscribed to their signals.
+        RenderNode::group(self.children.iter().map(|c| c.segment.boundary()))
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -148,6 +150,65 @@ mod tests {
         let node = container.layout_node();
         let _root = new_container(&mut ctx, LayoutStyle::new().flex_row(), &[node])
             .expect("should register");
+    }
+
+    #[test]
+    fn click_with_force_tick_does_not_panic() {
+        use crate::button::Button;
+        use crate::context::track_layout;
+        use platform_core::PointerButton;
+        use reactive_core::{begin_batch, create_rw_signal, end_batch};
+
+        let mut ctx = WidgetCtx::new();
+        let s = create_rw_signal(0i32);
+        let s_cb = s.clone();
+        let btn = Button::new(&mut ctx, "x").unwrap();
+        let btn_node = btn.layout_node();
+        let btn = btn.on_click(move || s_cb.update(|n| *n += 1));
+        let s_txt = s.clone();
+        let txt = crate::text::Text::new(
+            &mut ctx,
+            move || format!("{}", s_txt.get()),
+            LayoutStyle::new().width(50.0).height(20.0),
+            || renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK),
+        )
+        .unwrap();
+        let root = Container::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            vec![Box::new(btn), Box::new(txt)],
+        )
+        .unwrap();
+        let root_node = root.layout_node();
+        compute_layout(
+            &mut ctx,
+            root_node,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        let br = track_layout(&ctx, btn_node).unwrap().get();
+
+        let mut tree = crate::ComponentList::new(root);
+        let _ = tree.commands();
+
+        // Mimic the runner's event cycle, including the dev-only force-tick.
+        begin_batch();
+        let handled = tree.on_event(&Event::PointerPressed {
+            x: (br.x + br.width / 2.0) as f64,
+            y: (br.y + br.height / 2.0) as f64,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        if handled == EventResult::Handled {
+            tree.bump_force_ticks();
+            end_batch();
+            begin_batch();
+        }
+        let _ = tree.commands();
+        end_batch();
+
+        assert_eq!(s.get(), 1, "click should have incremented the signal");
     }
 
     #[test]

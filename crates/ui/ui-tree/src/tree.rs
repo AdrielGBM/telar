@@ -1,165 +1,52 @@
-use std::cell::{Cell, Ref, RefCell};
+use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use platform_core::Event;
-use reactive_core::{Effect, RwSignal, batch, create_effect, create_rw_signal};
+use reactive_core::batch;
 use renderer_core::DrawCommand;
 
 use crate::component::{Component, EventResult};
-use crate::render_node::RenderNode;
-use crate::view_flatten;
-
-struct ComponentSlot {
-    component: Rc<RefCell<dyn Component>>,
-    commands: Rc<RefCell<Vec<DrawCommand>>>,
-    dirty: Rc<Cell<bool>>,
-    _stack: Rc<RefCell<Vec<RenderNode>>>,
-    _effect: Effect,
-    // Bumped by on_event to force a re-run of the view effect in hot-reload mode, where
-    // signals in the dylib's reactive RUNTIME are not tracked by the binary's effect.
-    force_tick: RwSignal<u64>,
-}
-
-impl ComponentSlot {
-    fn new<C: Component + 'static>(component: C, generation: Rc<Cell<u64>>) -> Self {
-        let component: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(component));
-        let commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
-        let dirty = Rc::new(Cell::new(true));
-        let stack: Rc<RefCell<Vec<RenderNode>>> = Default::default();
-        let force_tick = create_rw_signal(0u64);
-
-        let comp_clone = Rc::clone(&component);
-        let cmds_clone = Rc::clone(&commands);
-        let dirty_clone = Rc::clone(&dirty);
-        let stack_clone = Rc::clone(&stack);
-        let force_tick_inner = force_tick.clone();
-        let _effect = create_effect(move || {
-            force_tick_inner.get(); // subscribe so on_event bumps can force a re-run
-            let node = comp_clone.borrow().view();
-            let mut stk = stack_clone.borrow_mut();
-            let mut cmds = cmds_clone.borrow_mut();
-            let changed = view_flatten::flatten_view(node, &mut *cmds, &mut *stk);
-            if changed {
-                dirty_clone.set(true);
-                // Bump the shared generation so consumers can detect content changes with a single integer compare instead of an O(n) command-slice scan.
-                generation.set(generation.get().wrapping_add(1));
-            }
-        });
-
-        ComponentSlot {
-            component,
-            commands,
-            dirty,
-            _stack: stack,
-            _effect,
-            force_tick,
-        }
-    }
-}
+use crate::segment::{self, Segment, SegmentRoot};
 
 pub struct ComponentList {
-    slots: Vec<ComponentSlot>,
-    cached: RefCell<Vec<DrawCommand>>,
-    slot_starts: RefCell<Vec<usize>>,
-    // Monotonically increasing counter bumped by any slot whose flattened commands change; lets renderers detect "nothing changed" with one integer compare.
-    generation: Rc<Cell<u64>>,
+    // Shared with the root segment: the segment borrows it immutably to render; on_event borrows it
+    // mutably. They never overlap because event dispatch is batched (flush happens after on_event).
+    root: Rc<RefCell<dyn Component>>,
+    segment_root: SegmentRoot,
 }
 
 impl ComponentList {
     pub fn new<C: Component + 'static>(component: C) -> Self {
-        let generation = Rc::new(Cell::new(0));
+        let root: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(component));
+        let seg = Segment::mount_dyn(Rc::clone(&root));
         Self {
-            slots: vec![ComponentSlot::new(component, Rc::clone(&generation))],
-            cached: RefCell::new(Vec::new()),
-            slot_starts: RefCell::new(Vec::new()),
-            generation,
+            root,
+            segment_root: SegmentRoot::from_segment(seg),
         }
     }
 
-    pub fn add<C: Component + 'static>(&mut self, component: C) {
-        self.slots
-            .push(ComponentSlot::new(component, Rc::clone(&self.generation)));
-        self.slot_starts.borrow_mut().clear();
-        // Adding a slot changes the rendered output; bump so consumers rebuild.
-        self.generation.set(self.generation.get().wrapping_add(1));
-    }
-
-    /// Current content generation. Increments whenever any component's flattened draw commands change. Two reads returning the same value guarantee identical `commands()` output.
+    /// Current content generation. Increments whenever the composed draw commands are rebuilt. Two reads returning the same value guarantee identical `commands()` output.
     pub fn generation(&self) -> u64 {
-        self.generation.get()
+        self.segment_root.generation()
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.slots.iter().any(|s| s.dirty.get())
+        self.segment_root.is_dirty()
     }
 
     pub fn commands(&self) -> Ref<'_, Vec<DrawCommand>> {
-        // single-slot fast path: flatten_view already wrote into the slot vec in-place,
-        // so we can return a ref to it directly without copying into `cached`
-        if let [slot] = self.slots.as_slice() {
-            slot.dirty.set(false);
-            return slot.commands.borrow();
-        }
-        if self.is_dirty() {
-            let mut cached = self.cached.borrow_mut();
-            let mut starts = self.slot_starts.borrow_mut();
-            if starts.len() != self.slots.len() {
-                // Full rebuild when slot count changed or on first use.
-                cached.clear();
-                starts.clear();
-                for slot in &self.slots {
-                    starts.push(cached.len());
-                    cached.extend(slot.commands.borrow().iter().cloned());
-                    slot.dirty.set(false);
-                }
-            } else {
-                // Incremental: splice only dirty slots, leaving clean slots untouched.
-                let mut offset: isize = 0;
-                for (i, slot) in self.slots.iter().enumerate() {
-                    if slot.dirty.get() {
-                        let start = (starts[i] as isize + offset) as usize;
-                        let end = if i + 1 < self.slots.len() {
-                            (starts[i + 1] as isize + offset) as usize
-                        } else {
-                            cached.len()
-                        };
-                        let new_cmds: Vec<DrawCommand> =
-                            slot.commands.borrow().iter().cloned().collect();
-                        let delta = new_cmds.len() as isize - (end - start) as isize;
-                        cached.splice(start..end, new_cmds);
-                        offset += delta;
-                        slot.dirty.set(false);
-                    }
-                }
-                let mut off = 0;
-                for (i, slot) in self.slots.iter().enumerate() {
-                    starts[i] = off;
-                    off += slot.commands.borrow().len();
-                }
-            }
-        }
-        self.cached.borrow()
+        self.segment_root.commands()
     }
 
     pub fn on_event(&mut self, event: &Event) -> EventResult {
-        batch(|| {
-            for slot in &mut self.slots {
-                let result = slot.component.borrow_mut().on_event(event);
-                if result == EventResult::Handled {
-                    return EventResult::Handled;
-                }
-            }
-            EventResult::Ignored
-        })
+        // Batch so any signals mutated by handlers flush their effects AFTER on_event returns (and
+        // releases the borrow_mut), never re-entering a segment effect mid-borrow.
+        batch(|| self.root.borrow_mut().on_event(event))
     }
 
-    // In hot-reload mode the dylib's reactive signals are not tracked by the binary's effect, so state changes from on_event (e.g. WindowResized updating layout) would never trigger a re-render. Call this after on_event to force every slot's view effect to re-run so it reads fresh layout and state from the component.
+    // In hot-reload mode the dylib's reactive signals are not tracked by the binary's effects, so state changes from on_event (e.g. WindowResized updating layout) would never trigger a re-render. Call this after on_event to force every segment's view effect to re-run so it reads fresh layout and state.
     pub fn bump_force_ticks(&self) {
-        batch(|| {
-            for slot in &self.slots {
-                slot.force_tick.set(slot.force_tick.peek().wrapping_add(1));
-            }
-        });
+        batch(segment::bump_force_ticks);
     }
 }
 

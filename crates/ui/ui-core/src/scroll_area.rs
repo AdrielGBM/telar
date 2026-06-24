@@ -1,16 +1,19 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, ScrollDelta};
 use reactive_core::{RwSignal, create_rw_signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_widget_theme;
-use ui_tree::{Component, EventResult, RenderNode};
+use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use ui_tree::NodeVec;
 
 use crate::context::{WidgetCtx, track_layout};
 use crate::impl_leaf_widget;
-use crate::layout_item::LayoutItem;
+use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, offset_pointer};
 
@@ -77,7 +80,7 @@ fn handle_scroll_event(
     scroll_x: RwSignal<f32>,
     scroll_y: RwSignal<f32>,
     content_size: RwSignal<Rect>,
-    content: &mut Box<dyn LayoutItem>,
+    content: &Rc<RefCell<Box<dyn LayoutItem>>>,
 ) -> EventResult {
     if let Event::Scrolled { delta } = event {
         let (dx, dy) = match delta {
@@ -100,24 +103,31 @@ fn handle_scroll_event(
     let sy = scroll_y.get() as f64;
     let adjusted = offset_pointer(event, vp.x as f64 - sx, vp.y as f64 - sy);
     let effective = adjusted.as_ref().unwrap_or(event);
-    content.on_event(effective)
+    content.borrow_mut().on_event(effective)
 }
 
 pub(crate) struct ScrollCore {
     content_size: RwSignal<Rect>,
     scroll_x: RwSignal<f32>,
     scroll_y: RwSignal<f32>,
-    content: Box<dyn LayoutItem>,
+    // Shared between event dispatch (borrow_mut) and the content segment (borrow). The content is its
+    // own segment so a scroll tick only re-runs this core's view() to rewrite the Transform matrix —
+    // the content is referenced as a cheap boundary and is NOT re-flattened on scroll.
+    content: Rc<RefCell<Box<dyn LayoutItem>>>,
+    content_segment: Rc<Segment>,
     scrollbar_style: ScrollbarStyle,
 }
 
 impl ScrollCore {
     fn new(content_size: RwSignal<Rect>, content: Box<dyn LayoutItem>) -> Self {
+        let content = Rc::new(RefCell::new(content));
+        let content_segment = mount_item_segment(Rc::clone(&content));
         Self {
             content_size,
             scroll_x: create_rw_signal(0.0),
             scroll_y: create_rw_signal(0.0),
             content,
+            content_segment,
             scrollbar_style: ScrollbarStyle::default(),
         }
     }
@@ -145,7 +155,7 @@ impl ScrollCore {
             radius: BorderRadius::zero(),
             children: NodeVec::collect([RenderNode::Transform {
                 matrix: [1.0, 0.0, 0.0, 1.0, vp.x - scroll_x, vp.y - scroll_y],
-                children: NodeVec::collect([self.content.view()]),
+                children: NodeVec::collect([self.content_segment.boundary()]),
             }]),
         };
         let (vbar, hbar) =
@@ -160,7 +170,7 @@ impl ScrollCore {
             self.scroll_x.clone(),
             self.scroll_y.clone(),
             self.content_size.clone(),
-            &mut self.content,
+            &self.content,
         )
     }
 }
@@ -296,6 +306,65 @@ mod tests {
         )
         .unwrap();
         sa
+    }
+
+    #[test]
+    fn scroll_content_click_force_tick_no_panic() {
+        use crate::button::Button;
+        use crate::container::Container;
+        use crate::context::track_layout;
+        use platform_core::PointerButton;
+        use reactive_core::{begin_batch, create_rw_signal, end_batch};
+
+        let mut ctx = WidgetCtx::new();
+        let s = create_rw_signal(0i32);
+        let s_cb = s.clone();
+        let btn = Button::new(&mut ctx, "x").unwrap();
+        let btn_node = btn.layout_node();
+        let btn = btn.on_click(move || s_cb.update(|n| *n += 1));
+        let s_txt = s.clone();
+        let txt = crate::text::Text::new(
+            &mut ctx,
+            move || format!("{}", s_txt.get()),
+            LayoutStyle::new().width(50.0).height(20.0),
+            || renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK),
+        )
+        .unwrap();
+        let content = Container::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column().width(400.0).height(1000.0),
+            vec![Box::new(btn), Box::new(txt)],
+        )
+        .unwrap();
+        let content_node = content.layout_node();
+        let sa = ScrollArea::new(&ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+        compute_layout(
+            &mut ctx,
+            content_node,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        let br = track_layout(&ctx, btn_node).unwrap().get();
+
+        let mut tree = crate::ComponentList::new(sa);
+        let _ = tree.commands();
+
+        begin_batch();
+        let handled = tree.on_event(&Event::PointerPressed {
+            x: (br.x + br.width / 2.0) as f64,
+            y: (br.y + br.height / 2.0) as f64,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        if handled == EventResult::Handled {
+            tree.bump_force_ticks();
+            end_batch();
+            begin_batch();
+        }
+        let _ = tree.commands();
+        end_batch();
+        assert_eq!(s.get(), 1, "scroll-content click should increment the signal");
     }
 
     #[test]

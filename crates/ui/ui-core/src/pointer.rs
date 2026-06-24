@@ -1,6 +1,5 @@
 use geometry_core::Rect;
 use platform_core::Event;
-use reactive_core::RwSignal;
 use ui_tree::EventResult;
 
 pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
@@ -109,16 +108,13 @@ where
 }
 
 pub(crate) fn dispatch_container_event(
-    children: &mut Vec<(
-        Box<dyn crate::layout_item::LayoutItem>,
-        Option<RwSignal<Rect>>,
-    )>,
+    children: &mut crate::layout_item::TrackedChildren,
     event: &Event,
 ) -> EventResult {
     if matches!(event, Event::PointerMoved { .. }) {
         let mut any_handled = false;
-        for (child, _) in children.iter_mut() {
-            if child.on_event(event) == EventResult::Handled {
+        for child in children.iter() {
+            if child.item.borrow_mut().on_event(event) == EventResult::Handled {
                 any_handled = true;
             }
         }
@@ -131,12 +127,13 @@ pub(crate) fn dispatch_container_event(
     let pointer_pos = pointer_coords(event).map(|(x, y)| (x as f32, y as f32));
     dispatch_to_children_filtered(
         children,
-        |(_, rect_signal)| match pointer_pos {
-            Some((px, py)) => rect_signal
+        |child| match pointer_pos {
+            Some((px, py)) => child
+                .rect
                 .as_ref()
                 .map_or(true, |sig| sig.get().contains(px, py)),
             None => true,
         },
-        |(child, _)| child.on_event(event),
+        |child| child.item.borrow_mut().on_event(event),
     )
 }

@@ -9,3 +9,10 @@ renderer-core = { workspace = true }
 platform-core = { workspace = true }
 geometry-core = { workspace = true }
 rustc-hash = { workspace = true }
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "tree_flatten"
+harness = false

@@ -3643,6 +3643,7 @@ dependencies = [
 name = "ui-tree"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "geometry-core",
  "platform-core",
  "reactive-core",
