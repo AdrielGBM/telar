@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use rustc_hash::FxHashMap;
+
 use crate::style::Scale;
-use crate::{Color, DrawCommand, Paint, RectStyle};
+use crate::{Color, DrawCommand, Paint, PathData, PathStyle, RectStyle, TextStyle};
 
 fn fill_layer_alpha(style: &RectStyle) -> Option<f32> {
     // Skip when a shadow is present: shadow.color.a controls shadow opacity independently and would be incorrectly scaled inside a fill-alpha layer.
@@ -138,5 +140,167 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
         DrawCommand::PopLayer => DrawCommand::PopLayer,
         #[cfg(target_os = "android")]
         DrawCommand::AndroidHardwareBufferImage { .. } => cmd.clone(),
+    }
+}
+
+/// Reusable scratch for scaling draw commands to physical pixels on the software path. Holds the
+/// output buffer plus per-frame caches keyed by the source `Arc` pointer, so a style shared by many
+/// commands (the common case for a UI tree) is scaled and heap-allocated once per frame rather than
+/// once per command.
+#[derive(Default)]
+pub struct ScaleScratch {
+    storage: Vec<DrawCommand>,
+    rect_styles: FxHashMap<usize, Arc<RectStyle>>,
+    text_styles: FxHashMap<usize, Arc<TextStyle>>,
+    path_styles: FxHashMap<usize, Arc<PathStyle>>,
+    path_data: FxHashMap<usize, Arc<PathData>>,
+}
+
+impl ScaleScratch {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Scales every command in `commands` by `sf` into the reusable internal buffer and returns it.
+    /// The pointer-keyed caches are cleared on entry, so a recycled allocator address can never yield
+    /// a stale hit (ABA-safe); cache reuse only spans commands within this single call.
+    pub fn scale_into(&mut self, commands: &[DrawCommand], sf: f32) -> &[DrawCommand] {
+        // Destructure so the output buffer and the caches are borrowed as disjoint fields in the loop.
+        let Self {
+            storage,
+            rect_styles,
+            text_styles,
+            path_styles,
+            path_data,
+        } = self;
+        storage.clear();
+        rect_styles.clear();
+        text_styles.clear();
+        path_styles.clear();
+        path_data.clear();
+        storage.reserve(commands.len());
+        for cmd in commands {
+            storage.push(scale_command_cached(
+                cmd,
+                sf,
+                rect_styles,
+                text_styles,
+                path_styles,
+                path_data,
+            ));
+        }
+        storage
+    }
+}
+
+#[inline]
+fn scaled_style_arc<T: Scale + Copy>(
+    cache: &mut FxHashMap<usize, Arc<T>>,
+    style: &Arc<T>,
+    sf: f32,
+) -> Arc<T> {
+    let key = Arc::as_ptr(style) as usize;
+    cache
+        .entry(key)
+        .or_insert_with(|| Arc::new((**style).scale(sf)))
+        .clone()
+}
+
+#[inline]
+fn scaled_path_arc(
+    cache: &mut FxHashMap<usize, Arc<PathData>>,
+    data: &Arc<PathData>,
+    sf: f32,
+) -> Arc<PathData> {
+    let key = Arc::as_ptr(data) as usize;
+    cache
+        .entry(key)
+        .or_insert_with(|| Arc::new(spath_data(data, sf)))
+        .clone()
+}
+
+fn scale_command_cached(
+    cmd: &DrawCommand,
+    sf: f32,
+    rect_styles: &mut FxHashMap<usize, Arc<RectStyle>>,
+    text_styles: &mut FxHashMap<usize, Arc<TextStyle>>,
+    path_styles: &mut FxHashMap<usize, Arc<PathStyle>>,
+    path_data: &mut FxHashMap<usize, Arc<PathData>>,
+) -> DrawCommand {
+    match cmd {
+        DrawCommand::Rect { rect, style } => DrawCommand::Rect {
+            rect: sr(*rect, sf),
+            style: scaled_style_arc(rect_styles, style, sf),
+        },
+        DrawCommand::Text { text, rect, style } => DrawCommand::Text {
+            text: text.clone(),
+            rect: sr(*rect, sf),
+            style: scaled_style_arc(text_styles, style, sf),
+        },
+        DrawCommand::Path { data, style } => DrawCommand::Path {
+            data: scaled_path_arc(path_data, data, sf),
+            style: scaled_style_arc(path_styles, style, sf),
+        },
+        // The remaining variants either allocate nothing per command (Line/clip/matrix/layer) or only bump an Arc refcount (Image), so the uncached path is already cheap.
+        other => scale_command(other, sf),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{BorderRadius, RectStyle};
+    use geometry_core::Rect;
+
+    fn rect_cmd(style: &Arc<RectStyle>, x: f32) -> DrawCommand {
+        DrawCommand::Rect {
+            rect: Rect::new(x, 0.0, 10.0, 10.0),
+            style: style.clone(),
+        }
+    }
+
+    #[test]
+    fn scale_into_matches_scale_commands_and_shares_arcs() {
+        let style = Arc::new(RectStyle::default().with_radius(BorderRadius::all(4.0)));
+        let cmds = vec![
+            rect_cmd(&style, 0.0),
+            rect_cmd(&style, 20.0),
+            rect_cmd(&style, 40.0),
+        ];
+        let sf = 3.0;
+
+        // Same scaled commands as the per-command path (value equality).
+        let expected = scale_commands(&cmds, sf).unwrap();
+        let mut scratch = ScaleScratch::new();
+        let got = scratch.scale_into(&cmds, sf);
+        assert_eq!(got.len(), expected.len());
+        for (g, e) in got.iter().zip(expected.iter()) {
+            assert!(g == e);
+        }
+
+        // The three commands shared one input style Arc, so the scaled output Arcs are shared too (one Arc::new instead of three).
+        let style_of = |c: &DrawCommand| match c {
+            DrawCommand::Rect { style, .. } => style.clone(),
+            _ => unreachable!(),
+        };
+        let a0 = style_of(&got[0]);
+        let a1 = style_of(&got[1]);
+        let a2 = style_of(&got[2]);
+        assert!(Arc::ptr_eq(&a0, &a1));
+        assert!(Arc::ptr_eq(&a1, &a2));
+        assert_eq!(a0.radius.top_left, 12.0);
+    }
+
+    #[test]
+    fn scale_into_reuses_buffer_across_frames() {
+        let style = Arc::new(RectStyle::default());
+        let cmds = vec![rect_cmd(&style, 0.0), rect_cmd(&style, 10.0)];
+        let mut scratch = ScaleScratch::new();
+        let _ = scratch.scale_into(&cmds, 2.0);
+        let cap = scratch.storage.capacity();
+        assert!(cap >= cmds.len());
+        let _ = scratch.scale_into(&cmds, 2.0);
+        // Buffer capacity persists between frames: no per-frame Vec reallocation for the same command count.
+        assert_eq!(scratch.storage.capacity(), cap);
     }
 }

@@ -135,4 +135,38 @@ mod tests {
 
         assert_eq!(*runs.borrow(), 2);
     }
+
+    #[test]
+    fn dropping_one_subscriber_keeps_others_consistent() {
+        // Three effects subscribe to the same signal. Dropping the middle one and then writing repeatedly must keep the survivors firing and must not panic — exercising the in-place subscriber-list cleanup that runs alongside notify_signal's reused scratch buffer (the cleanup must stay correct now that subscribers are no longer cloned per write).
+        let count = create_rw_signal(0i32);
+        let a = Rc::new(RefCell::new(0i32));
+        let b = Rc::new(RefCell::new(0i32));
+        let c = Rc::new(RefCell::new(0i32));
+
+        let mk = |sink: &Rc<RefCell<i32>>, sig: &RwSignal<i32>| {
+            let read = sig.read_only();
+            let sink = Rc::clone(sink);
+            create_effect(move || {
+                *sink.borrow_mut() = read.get();
+            })
+        };
+
+        let _ea = mk(&a, &count);
+        let eb = mk(&b, &count);
+        let _ec = mk(&c, &count);
+
+        count.set(1);
+        assert_eq!((*a.borrow(), *b.borrow(), *c.borrow()), (1, 1, 1));
+
+        // Drop the middle subscriber, then keep writing to the same signal.
+        drop(eb);
+        count.set(2);
+        count.set(3);
+
+        // Survivors tracked every write; the dropped one is frozen at its last value, with no panic and no lost survivor.
+        assert_eq!(*a.borrow(), 3);
+        assert_eq!(*c.borrow(), 3);
+        assert_eq!(*b.borrow(), 1);
+    }
 }

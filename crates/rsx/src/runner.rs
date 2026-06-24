@@ -65,6 +65,8 @@ where
     pending_renderer: Option<std::thread::JoinHandle<Result<HardwareRenderer<W>, RendererError>>>,
     _flush_notify: Option<FlushNotifyHandle>,
     scale_factor: f32,
+    // Reused across frames so the SW/HiDPI command scaling allocates neither a fresh Vec nor redundant per-command style Arcs.
+    scale_scratch: renderer_core::ScaleScratch,
     window_signals: Option<WindowSignals>,
     app_name: String,
     last_frame: std::time::Instant,
@@ -521,11 +523,10 @@ where
             .dev
             .on_frame(base_slice, logical_w, logical_h, tree_dirty);
         let frame_commands: &[renderer_core::DrawCommand] = &frame_commands;
-        let scaled_storage: Vec<renderer_core::DrawCommand>;
+        // Scale into a reusable buffer (no per-frame Vec) reusing the scaled Arc for styles shared across commands (no redundant per-command Arc::new). HW scales in the shader, so this only runs on the SW/HiDPI fallback path.
         let frame_commands = if self.scale_factor != 1.0 {
-            scaled_storage = renderer_core::scale_commands(frame_commands, self.scale_factor)
-                .unwrap_or_default();
-            &scaled_storage
+            self.scale_scratch
+                .scale_into(frame_commands, self.scale_factor)
         } else {
             frame_commands
         };
@@ -740,6 +741,7 @@ fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &s
             pending_renderer: None,
             _flush_notify: None,
             scale_factor: 1.0,
+            scale_scratch: renderer_core::ScaleScratch::new(),
             window_signals: None,
             app_name: app_name.to_owned(),
             last_frame: std::time::Instant::now(),
@@ -830,6 +832,7 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             pending_renderer: None,
             _flush_notify: None,
             scale_factor: 1.0,
+            scale_scratch: renderer_core::ScaleScratch::new(),
             window_signals: None,
             app_name: app_name.to_owned(),
             last_frame: std::time::Instant::now(),
@@ -899,6 +902,7 @@ pub fn run_hot_reload_host(
             pending_renderer: None,
             _flush_notify: None,
             scale_factor: 1.0,
+            scale_scratch: renderer_core::ScaleScratch::new(),
             window_signals: None,
             app_name: app_name.to_owned(),
             last_frame: std::time::Instant::now(),

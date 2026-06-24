@@ -37,6 +37,8 @@ pub(crate) struct Runtime {
     pub(crate) pending: Vec<EffectId>,
     pub(crate) memo_pending: BinaryHeap<(Reverse<u32>, EffectId)>,
     pub(crate) pending_set: FxHashSet<EffectId>,
+    // Reused by notify_signal to copy a signal's subscribers out before scheduling, instead of allocating a fresh Vec per write.
+    notify_scratch: Vec<EffectId>,
     on_flush: Vec<(u64, Rc<dyn Fn()>)>,
     next_flush_notify_id: u64,
     pub(crate) flushing: bool,
@@ -53,6 +55,7 @@ impl Runtime {
             pending: Vec::new(),
             memo_pending: BinaryHeap::new(),
             pending_set: FxHashSet::default(),
+            notify_scratch: Vec::new(),
             on_flush: Vec::new(),
             next_flush_notify_id: 0,
             flushing: false,
@@ -290,8 +293,12 @@ pub(crate) fn notify_signal(id: SignalId) {
             return false;
         }
         rt.signals[id].version += 1;
-        let subs: Vec<EffectId> = rt.signals[id].subscribers.clone();
+        // Copy subscriber ids into a reused scratch buffer rather than cloning a fresh Vec per write. We deliberately copy out (not mem::take) so the dead-subscriber cleanup below can still swap_remove from `subscribers` in place; taking it would make that cleanup operate on an empty Vec and the swap-back would clobber the removals.
+        let mut subs = std::mem::take(&mut rt.notify_scratch);
+        subs.clear();
+        subs.extend_from_slice(&rt.signals[id].subscribers);
         if subs.is_empty() {
+            rt.notify_scratch = subs;
             return false;
         }
 
@@ -327,7 +334,10 @@ pub(crate) fn notify_signal(id: SignalId) {
             }
         }
 
-        any_scheduled && rt.batch_depth == 0 && !rt.flushing
+        let should_flush = any_scheduled && rt.batch_depth == 0 && !rt.flushing;
+        // Return the buffer (with its grown capacity) for the next write to reuse.
+        rt.notify_scratch = subs;
+        should_flush
     });
     if should_flush {
         flush();

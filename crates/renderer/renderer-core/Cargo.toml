@@ -10,3 +10,10 @@ rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 wide = { workspace = true }
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "scale_commands"
+harness = false

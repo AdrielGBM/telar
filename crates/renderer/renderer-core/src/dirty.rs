@@ -4,13 +4,16 @@ use smallvec::{SmallVec, smallvec};
 use crate::{
     DrawCommand, culling,
     culling::FontMetrics,
-    draw_state::{IDENTITY_MATRIX, for_each_with_matrix},
+    draw_state::{DrawState, IDENTITY_MATRIX},
 };
 
-fn compute_matrices(cmds: &[DrawCommand]) -> Vec<[f32; 6]> {
-    let mut result = Vec::with_capacity(cmds.len());
-    for_each_with_matrix(cmds, |_cmd, matrix| result.push(matrix));
-    result
+// Advances a DrawState's cumulative matrix by a single command, mirroring for_each_with_matrix: PushMatrix/PopMatrix update the matrix first and every command then reads state.cum_matrix.
+fn advance_matrix(state: &mut DrawState, cmd: &DrawCommand) {
+    match cmd {
+        DrawCommand::PushMatrix { matrix } => state.push_matrix(*matrix),
+        DrawCommand::PopMatrix => state.pop_matrix(),
+        _ => {}
+    }
 }
 
 /// Inline capacity for the dirty-rect list. Beyond this the rects are collapsed into a single union (see MAX_DIRTY_RECTS).
@@ -95,12 +98,15 @@ pub fn compute_dirty_rect(
     }
 
     let mut dirty: DirtyRects = SmallVec::new();
-    let new_matrices = compute_matrices(new_cmds);
-    let old_matrices = compute_matrices(old_cmds);
+    // Advance one cumulative matrix per slice inline instead of materializing two full Vecs: cum_matrix at command i is identical to the old matrices[i] by construction.
+    let mut new_state = DrawState::new();
+    let mut old_state = DrawState::new();
 
-    for (i, (new_cmd, old_cmd)) in new_cmds.iter().zip(old_cmds.iter()).enumerate() {
-        let new_matrix = new_matrices[i];
-        let old_matrix = old_matrices[i];
+    for (new_cmd, old_cmd) in new_cmds.iter().zip(old_cmds.iter()) {
+        advance_matrix(&mut new_state, new_cmd);
+        advance_matrix(&mut old_state, old_cmd);
+        let new_matrix = new_state.cum_matrix;
+        let old_matrix = old_state.cum_matrix;
 
         if new_cmd != old_cmd {
             // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible due to the new clip require a full re-render.
@@ -256,14 +262,18 @@ pub fn detect_scroll_blit(
         Rect::new(scroll_clip.x, scroll_clip.y, scroll_clip.width, band_h)
     };
 
-    // Compute cumulative matrices for all commands after the scroll block. We walk the full slice
-    // from the start to preserve outer matrix context, then use positions from pop_idx+1 onward.
-    let all_matrices = compute_matrices(&new_cmds[..n]);
+    // Walk a single DrawState through the scroll block (0..=pop_idx) to inherit the outer matrix
+    // context, then keep advancing it inline over the suffix — no Vec of matrices for the whole slice.
+    let mut state = DrawState::new();
+    for cmd in &new_cmds[..=pop_idx] {
+        advance_matrix(&mut state, cmd);
+    }
 
     // Collect dirty rects for any overlay changes after the scroll block (e.g. scrollbar).
     let mut extra_dirty: Option<Rect> = None;
     for j in (pop_idx + 1)..n {
-        let cmd_matrix = all_matrices[j];
+        advance_matrix(&mut state, &new_cmds[j]);
+        let cmd_matrix = state.cum_matrix;
         if new_cmds[j] != old_cmds[j] {
             if let Some(r) =
                 culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default())
@@ -500,6 +510,34 @@ mod tests {
             DrawCommand::PopClip,
         ];
         assert!(detect_scroll_blit(&new, &old).is_none());
+    }
+
+    #[test]
+    fn compute_dirty_rect_nested_matrix_position_change() {
+        // Two nested PushMatrix levels: a translation change in the OUTER matrix must dirty the inner rect at both its old and new composed positions. Exercises the inline DrawState's cumulative-matrix composition (the former two-Vec walk).
+        let make = |outer_ty: f32| {
+            vec![
+                DrawCommand::PushMatrix {
+                    matrix: [1.0, 0.0, 0.0, 1.0, 0.0, outer_ty],
+                },
+                DrawCommand::PushMatrix {
+                    matrix: [1.0, 0.0, 0.0, 1.0, 10.0, 10.0],
+                },
+                rect_cmd(0.0, 0.0, 10.0, 10.0),
+                DrawCommand::PopMatrix,
+                DrawCommand::PopMatrix,
+            ]
+        };
+        let old = make(0.0);
+        let new = make(50.0);
+        let rects = compute_dirty_rect(&new, &old, |cmd, m| {
+            culling::command_visual_rect(cmd, m, &FontMetrics::default())
+        })
+        .unwrap();
+        let dirty = rects.iter().copied().reduce(Rect::union).unwrap();
+        // Inner rect composes to (10, 10) in old and (10, 60) in new.
+        assert!(dirty.y <= 10.0);
+        assert!(dirty.y + dirty.height >= 70.0);
     }
 
     #[test]

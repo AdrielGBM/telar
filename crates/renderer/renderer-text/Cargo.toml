@@ -14,3 +14,10 @@ renderer-core = { workspace = true }
 rustc-hash = { workspace = true }
 skrifa = "0.43"
 tiny-skia = { workspace = true }
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "colr_text"
+harness = false

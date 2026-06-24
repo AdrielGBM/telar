@@ -85,6 +85,10 @@ pub const ATLAS_SIZE: u32 = 2048;
 
 const LINE_HEIGHT_FACTOR: f32 = 1.2;
 
+// Entry caps for the measure and has-COLR caches. Values are tiny (a few bytes each), so the cap trades negligible memory for a high hit rate.
+const MEASURE_CACHE_CAP: usize = 1000;
+const HAS_COLR_CACHE_CAP: usize = 1000;
+
 pub struct GlyphAtlas {
     pub pixels: Vec<u8>,
     pub dirty_rects: Vec<[u32; 4]>,
@@ -219,8 +223,10 @@ pub struct TextShaper {
         FxBuildHasher,
         ShapingCacheScale,
     >,
-    // Keyed by (text_hash, max_width_bits, font_size_bits); cleared when it exceeds 1000 entries.
-    measure_cache: FxHashMap<(u64, u32, u32), (f32, f32)>,
+    // Keyed by (text_hash, max_width_bits, font_size_bits); LRU-evicted at MEASURE_CACHE_CAP so a hot subset survives the cap instead of a full clear dropping everything.
+    measure_cache: LruCache<(u64, u32, u32), (f32, f32), FxBuildHasher>,
+    // Whether a (text_hash, font_size_bits) shapes to any COLR glyph. Lets the software COLR fallback skip make_buffer + per-glyph get_image for plain UI text after the first evaluation. Symmetric with `blank_glyphs`.
+    has_colr_cache: LruCache<(u64, u32), bool, FxBuildHasher>,
     // Raw font bytes + face index, cached by font id so COLR rasterization does not re-read the font file on every atlas miss.
     colr_font_cache: FxHashMap<cosmic_text::fontdb::ID, Arc<(Vec<u8>, u32)>>,
     // Glyphs that swash cannot rasterize and that are not COLR glyphs either (e.g. whitespace); skipped on later frames so we do not re-attempt COLR rasterization for them every frame.
@@ -300,7 +306,14 @@ impl TextShaper {
                     .with_hasher(FxBuildHasher::default())
                     .with_scale(ShapingCacheScale),
             ),
-            measure_cache: FxHashMap::default(),
+            measure_cache: LruCache::with_hasher(
+                NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
+                FxBuildHasher,
+            ),
+            has_colr_cache: LruCache::with_hasher(
+                NonZeroUsize::new(HAS_COLR_CACHE_CAP).unwrap(),
+                FxBuildHasher,
+            ),
             colr_font_cache: FxHashMap::default(),
             blank_glyphs: FxHashSet::default(),
             font_metrics_cache: None,
@@ -655,10 +668,7 @@ impl TextShaper {
 
         // Round the wrap width up so sub-pixel rounding never re-wraps the last glyph.
         let result = (width.ceil(), height);
-        if self.measure_cache.len() >= 1000 {
-            self.measure_cache.clear();
-        }
-        self.measure_cache.insert(cache_key, result);
+        self.measure_cache.put(cache_key, result);
         result
     }
 
@@ -674,6 +684,12 @@ impl TextShaper {
         if text.is_empty() {
             return;
         }
+        // Plain UI text (no emoji / COLR glyphs) is the overwhelmingly common case. Once a (text, font_size) is known to shape to zero COLR glyphs, skip the whole buffer build + per-glyph swash probe. COLR-ness depends only on the font + codepoint, never on rect/wrap, so this flag is layout-independent.
+        let flag_key = (hash_text(text), style.font_size.to_bits());
+        if self.has_colr_cache.get(&flag_key) == Some(&false) {
+            return;
+        }
+        let start_len = out.len();
         let buffer = make_buffer(&mut self.font_system, text, rect, style.font_size);
         let color = style.paint.solid_color();
         for run in buffer.layout_runs() {
@@ -701,6 +717,8 @@ impl TextShaper {
                 }
             }
         }
+        // Record whether this text produced any COLR glyph so later calls can short-circuit.
+        self.has_colr_cache.put(flag_key, out.len() > start_len);
     }
 
     /// Rasterizes a COLR v1 color glyph swash could not handle, returning atlas-ready data
@@ -728,6 +746,22 @@ impl TextShaper {
             bmp.rgba,
             true,
         ))
+    }
+
+    /// Cached raw font bytes + face index for `font_id`, for the software COLR fallback. Routes the
+    /// software path through the same per-font cache the GPU atlas path uses, so emoji bytes (often
+    /// several MB, e.g. NotoColorEmoji) are read once instead of re-read and copied on every frame.
+    pub fn colr_font_bytes_cached(
+        &mut self,
+        font_id: cosmic_text::fontdb::ID,
+    ) -> Option<Arc<(Vec<u8>, u32)>> {
+        self.colr_font_bytes(font_id)
+    }
+
+    /// Bench/test helper: id of the default sans-serif face, or `None` if the font system resolved none.
+    #[doc(hidden)]
+    pub fn default_face_id(&self) -> Option<cosmic_text::fontdb::ID> {
+        self.default_font_id()
     }
 
     /// Returns cached raw font bytes + face index for `font_id`, reading them from the font db on first use.
@@ -899,5 +933,53 @@ mod tests {
         let (w, h) = shaper.measure_text("", 500.0, 16.0);
         assert_eq!(w, 0.0);
         assert_eq!(h, 0.0);
+    }
+
+    #[test]
+    fn measure_cache_keeps_hot_entry_past_cap() {
+        // The old policy cleared the whole cache at 1000 entries, evicting even constantly-used keys. The LRU must keep a re-touched "hot" entry alive while cold ones flood past the cap. Pure cache bookkeeping: independent of whether fonts are installed.
+        let mut sh = TextShaper::new();
+        let hot = "hot text that stays warm";
+        let hot_key = (hash_text(hot), 200.0f32.to_bits(), 16.0f32.to_bits());
+        sh.measure_text(hot, 200.0, 16.0);
+        for i in 0..(MEASURE_CACHE_CAP as u32 + 50) {
+            sh.measure_text(&format!("cold entry {i}"), 200.0, 16.0);
+            // Keep the hot entry most-recently-used so the LRU never evicts it.
+            sh.measure_text(hot, 200.0, 16.0);
+        }
+        assert!(sh.measure_cache.contains(&hot_key));
+        assert!(sh.measure_cache.len() <= MEASURE_CACHE_CAP);
+    }
+
+    #[test]
+    fn collect_colr_gating_records_and_skips() {
+        // The first call records a has-COLR flag for (text, font_size); a later call with a cached `false` must short-circuit (no re-shaping, empty result). Both halves are font-independent: the flag VALUE depends on installed fonts, but that a flag is recorded and that a false flag skips collection do not.
+        let mut sh = TextShaper::new();
+        let text = "ui label";
+        let style = TextStyle::new(16.0, Color::BLACK);
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 100.0,
+        };
+        let flag_key = (hash_text(text), 16.0f32.to_bits());
+
+        assert!(sh.has_colr_cache.peek(&flag_key).is_none());
+        let mut out = Vec::new();
+        sh.collect_colr_glyphs(text, rect, &style, &mut out);
+        assert!(
+            sh.has_colr_cache.peek(&flag_key).is_some(),
+            "first call must record the COLR flag"
+        );
+
+        // Force the "no COLR glyphs" flag and confirm the next call short-circuits to an empty result.
+        sh.has_colr_cache.put(flag_key, false);
+        let mut out2 = Vec::new();
+        sh.collect_colr_glyphs(text, rect, &style, &mut out2);
+        assert!(
+            out2.is_empty(),
+            "a cached false flag must skip COLR collection"
+        );
     }
 }
