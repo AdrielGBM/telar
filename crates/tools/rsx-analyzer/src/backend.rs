@@ -117,6 +117,9 @@ fn sync_logic_zone_str(
     let _ = std::fs::create_dir_all(&dir);
     ensure_cargo_toml(&dir, project_root);
     if let Some(lf) = logic_file_path(project_root, rsx_path) {
+        if let Some(parent) = lf.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
         let _ = std::fs::write(lf, logic_source);
     }
 }

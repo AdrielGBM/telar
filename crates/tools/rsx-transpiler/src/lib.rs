@@ -111,6 +111,22 @@ pub fn relative_stem(path: &Path, src_dir: &Path) -> String {
         .join("_")
 }
 
+/// Derives the output `.rs` path (relative to the output root) for a `.rsx`
+/// file by mirroring its location under `src_dir`, so files in different
+/// directories never collide (e.g. `src/components/button.rsx` ->
+/// `components/button.rs`). Shared by the transpiler's `.rsx/build/` output and
+/// the analyzer's `.rsx/lsp/` mirror so the two tools never diverge. Returns
+/// `None` for files outside `src_dir`: those are never transpiled, so they have
+/// no place in the mirror — and flattening their absolute path would escape the
+/// output root entirely.
+pub fn relative_output_path(path: &Path, src_dir: &Path) -> Option<PathBuf> {
+    let rel = path.strip_prefix(src_dir).ok()?;
+    if rel.as_os_str().is_empty() {
+        return None;
+    }
+    Some(rel.with_extension("rs"))
+}
+
 /// Transpiles a parsed document into Rust source.
 fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
     let doc = input.document;
@@ -371,6 +387,28 @@ col .card
     text "Count: {count}" size:14 color:dark
     btn "Increment" fill:primary on_press:|| count.update(|n| *n += 1)
 "#;
+
+    #[test]
+    fn relative_output_path_mirrors_tree_and_rejects_out_of_src() {
+        let src = Path::new("/proj/src");
+        // Nested file mirrors its location relative to src/.
+        assert_eq!(
+            relative_output_path(Path::new("/proj/src/sections/cards.rsx"), src),
+            Some(PathBuf::from("sections/cards.rs"))
+        );
+        // Root-level file stays at the output root.
+        assert_eq!(
+            relative_output_path(Path::new("/proj/src/counter.rsx"), src),
+            Some(PathBuf::from("counter.rs"))
+        );
+        // Out-of-src files have no mirror — flattening their absolute path would escape the output root.
+        assert_eq!(
+            relative_output_path(Path::new("/proj/examples/foo.rsx"), src),
+            None
+        );
+        // src/ itself is not a file.
+        assert_eq!(relative_output_path(src, src), None);
+    }
 
     #[test]
     fn generates_counter() {

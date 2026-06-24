@@ -63,9 +63,9 @@ pub fn app(input: TokenStream) -> TokenStream {
         }
     };
 
-    let generated_dir = manifest_dir.join(".rsx");
+    let generated_dir = manifest_dir.join(".rsx").join("build");
     if let Err(e) = std::fs::create_dir_all(&generated_dir) {
-        let msg = format!("Failed to create .rsx/: {e}");
+        let msg = format!("Failed to create .rsx/build/: {e}");
         return quote! { compile_error!(#msg) }.into();
     }
 
@@ -103,7 +103,18 @@ pub fn app(input: TokenStream) -> TokenStream {
             }
         };
 
-        let out_path = generated_dir.join(format!("{stem}.rs"));
+        // Mirror the source tree under .rsx/build/ so files in different directories never collide.
+        // find_rsx_files only yields paths under src_dir, so None is unreachable here.
+        let Some(rel_out) = rsx_transpiler::relative_output_path(rsx_file, &src_dir) else {
+            continue;
+        };
+        let out_path = generated_dir.join(rel_out);
+        if let Some(parent) = out_path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                let msg = format!("Failed to create {}: {e}", parent.display());
+                return quote! { compile_error!(#msg) }.into();
+            }
+        }
 
         // Only write when content changed to avoid spurious recompilation.
         let needs_write = std::fs::read_to_string(&out_path)
