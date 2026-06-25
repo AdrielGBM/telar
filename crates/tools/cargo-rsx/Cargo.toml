@@ -10,3 +10,4 @@ rsx = { workspace = true, default-features = false }
 notify = "8.2.0"
 clap = { version = "4.6.1", features = ["derive"] }
 rsx-workspace = { workspace = true }
+rsx-analyzer = { workspace = true }

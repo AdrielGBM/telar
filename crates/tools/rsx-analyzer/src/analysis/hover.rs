@@ -1,8 +1,8 @@
 use crate::analysis::util::{attribute_key_before_colon, word_at_cursor};
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
+use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 use rsx_parser::{RsxDocument, StyleValue};
-use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
 pub fn hover_info(
     doc: &RsxDocument,

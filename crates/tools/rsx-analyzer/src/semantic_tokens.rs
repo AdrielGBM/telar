@@ -1,4 +1,4 @@
-use tower_lsp::lsp_types::SemanticToken;
+use lsp_types::SemanticToken;
 
 pub fn decode_tokens(data: &[u32]) -> Vec<(u32, u32, u32, u32, u32)> {
     let mut result = Vec::with_capacity(data.len() / 5);

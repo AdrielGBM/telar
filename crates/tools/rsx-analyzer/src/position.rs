@@ -2,11 +2,11 @@ pub use rsx_parser::Section;
 
 use rsx_parser::header_section;
 
-pub fn parser_line_to_lsp_range(parser_line: usize) -> tower_lsp::lsp_types::Range {
+pub fn parser_line_to_lsp_range(parser_line: usize) -> lsp_types::Range {
     let line = parser_line.saturating_sub(1) as u32;
-    tower_lsp::lsp_types::Range {
-        start: tower_lsp::lsp_types::Position { line, character: 0 },
-        end: tower_lsp::lsp_types::Position {
+    lsp_types::Range {
+        start: lsp_types::Position { line, character: 0 },
+        end: lsp_types::Position {
             line,
             character: u32::MAX,
         },

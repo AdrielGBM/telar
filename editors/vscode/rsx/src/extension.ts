@@ -15,7 +15,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const serverPath = resolveServerPath();
   if (!serverPath) {
     vscode.window.showErrorMessage(
-      "rsx-analyzer not found. Install it with `cargo install rsx-analyzer` or set rsx.serverPath."
+      "rsx-analyzer not found. Install it with `cargo install cargo-rsx` or set rsx.serverPath."
     );
     return;
   }

@@ -1,19 +1,19 @@
+use lsp_types::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::BufReader;
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{Mutex, oneshot};
-use tower_lsp::lsp_types::*;
 
 pub struct RaClient {
     stdin: Arc<Mutex<ChildStdin>>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>>,
     next_id: Arc<AtomicU64>,
     _child: Arc<Mutex<Child>>,
-    legend: tower_lsp::lsp_types::SemanticTokensLegend,
+    legend: lsp_types::SemanticTokensLegend,
 }
 
 impl RaClient {
@@ -35,7 +35,7 @@ impl RaClient {
         tokio::spawn(async move {
             let mut reader = BufReader::new(stdout);
             loop {
-                match read_lsp_message(&mut reader).await {
+                match crate::rpc::read_message(&mut reader).await {
                     Ok(msg) => {
                         if let Some(id) = msg.get("id").and_then(|v| v.as_u64()) {
                             if let Some(tx) = pending_clone.lock().await.remove(&id) {
@@ -57,13 +57,13 @@ impl RaClient {
             pending: pending.clone(),
             next_id: next_id.clone(),
             _child: child_arc.clone(),
-            legend: tower_lsp::lsp_types::SemanticTokensLegend {
+            legend: lsp_types::SemanticTokensLegend {
                 token_types: vec![],
                 token_modifiers: vec![],
             },
         };
 
-        let workspace_uri = Url::from_file_path(workspace_root).ok()?;
+        let workspace_uri = crate::uri::from_path(workspace_root)?;
         let init_resp = tmp
             .send_request(
                 "initialize",
@@ -94,10 +94,8 @@ impl RaClient {
             .and_then(|c| c.get("semanticTokensProvider"))
             .and_then(|p| p.get("legend"))
             .cloned()
-            .and_then(|v| {
-                serde_json::from_value::<tower_lsp::lsp_types::SemanticTokensLegend>(v).ok()
-            })
-            .unwrap_or_else(|| tower_lsp::lsp_types::SemanticTokensLegend {
+            .and_then(|v| serde_json::from_value::<lsp_types::SemanticTokensLegend>(v).ok())
+            .unwrap_or_else(|| lsp_types::SemanticTokensLegend {
                 token_types: vec![],
                 token_modifiers: vec![],
             });
@@ -125,7 +123,7 @@ impl RaClient {
         });
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(id, tx);
-        write_lsp_message(&mut *self.stdin.lock().await, &msg)
+        crate::rpc::write_message(&mut *self.stdin.lock().await, &msg)
             .await
             .ok()?;
         tokio::time::timeout(std::time::Duration::from_secs(10), rx)
@@ -140,10 +138,10 @@ impl RaClient {
             "method": method,
             "params": params
         });
-        let _ = write_lsp_message(&mut *self.stdin.lock().await, &msg).await;
+        let _ = crate::rpc::write_message(&mut *self.stdin.lock().await, &msg).await;
     }
 
-    pub async fn did_open(&self, uri: &Url, text: &str) {
+    pub async fn did_open(&self, uri: &Uri, text: &str) {
         self.send_notification(
             "textDocument/didOpen",
             json!({
@@ -158,7 +156,7 @@ impl RaClient {
         .await;
     }
 
-    pub async fn did_change(&self, uri: &Url, text: &str, version: i32) {
+    pub async fn did_change(&self, uri: &Uri, text: &str, version: i32) {
         self.send_notification(
             "textDocument/didChange",
             json!({
@@ -169,7 +167,7 @@ impl RaClient {
         .await;
     }
 
-    pub async fn did_close(&self, uri: &Url) {
+    pub async fn did_close(&self, uri: &Uri) {
         self.send_notification(
             "textDocument/didClose",
             json!({
@@ -179,7 +177,7 @@ impl RaClient {
         .await;
     }
 
-    pub async fn completion(&self, uri: &Url, line: u32, character: u32) -> Vec<CompletionItem> {
+    pub async fn completion(&self, uri: &Uri, line: u32, character: u32) -> Vec<CompletionItem> {
         let result = self
             .send_request(
                 "textDocument/completion",
@@ -192,7 +190,7 @@ impl RaClient {
         parse_completion_response(result)
     }
 
-    pub async fn hover(&self, uri: &Url, line: u32, character: u32) -> Option<Hover> {
+    pub async fn hover(&self, uri: &Uri, line: u32, character: u32) -> Option<Hover> {
         let result = self
             .send_request(
                 "textDocument/hover",
@@ -207,7 +205,7 @@ impl RaClient {
 
     pub async fn definition(
         &self,
-        uri: &Url,
+        uri: &Uri,
         line: u32,
         character: u32,
     ) -> Option<GotoDefinitionResponse> {
@@ -223,11 +221,11 @@ impl RaClient {
         parse_definition_response(result)
     }
 
-    pub fn legend(&self) -> &tower_lsp::lsp_types::SemanticTokensLegend {
+    pub fn legend(&self) -> &lsp_types::SemanticTokensLegend {
         &self.legend
     }
 
-    pub async fn semantic_tokens_full(&self, uri: &Url) -> Option<Vec<u32>> {
+    pub async fn semantic_tokens_full(&self, uri: &Uri) -> Option<Vec<u32>> {
         let result = self
             .send_request(
                 "textDocument/semanticTokens/full",
@@ -239,43 +237,6 @@ impl RaClient {
         let data = result.get("result")?.get("data")?;
         serde_json::from_value::<Vec<u32>>(data.clone()).ok()
     }
-}
-
-async fn write_lsp_message(stdin: &mut ChildStdin, msg: &Value) -> tokio::io::Result<()> {
-    let body = serde_json::to_string(msg)
-        .map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::InvalidData, e))?;
-    let header = format!("Content-Length: {}\r\n\r\n", body.len());
-    stdin.write_all(header.as_bytes()).await?;
-    stdin.write_all(body.as_bytes()).await?;
-    stdin.flush().await
-}
-
-async fn read_lsp_message<R>(reader: &mut BufReader<R>) -> tokio::io::Result<Value>
-where
-    R: tokio::io::AsyncRead + Unpin,
-{
-    let mut content_length = 0usize;
-    loop {
-        let mut line = String::new();
-        let bytes_read = reader.read_line(&mut line).await?;
-        if bytes_read == 0 {
-            return Err(tokio::io::Error::new(
-                tokio::io::ErrorKind::UnexpectedEof,
-                "rust-analyzer closed",
-            ));
-        }
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            break;
-        }
-        if let Some(v) = trimmed.strip_prefix("Content-Length: ") {
-            content_length = v.parse().unwrap_or(0);
-        }
-    }
-    let mut body = vec![0u8; content_length];
-    reader.read_exact(&mut body).await?;
-    serde_json::from_slice(&body)
-        .map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::InvalidData, e))
 }
 
 fn find_rust_analyzer() -> Option<PathBuf> {

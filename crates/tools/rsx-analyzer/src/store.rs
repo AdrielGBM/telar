@@ -1,6 +1,6 @@
+use lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Uri};
 use rsx_parser::{RsxDocument, parse};
 use std::collections::HashMap;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 pub struct ParsedDocument {
     pub source: String,
@@ -8,7 +8,7 @@ pub struct ParsedDocument {
 }
 
 pub struct Store {
-    docs: HashMap<Url, ParsedDocument>,
+    docs: HashMap<Uri, ParsedDocument>,
 }
 
 impl Store {
@@ -18,15 +18,15 @@ impl Store {
         }
     }
 
-    pub fn close(&mut self, uri: &Url) {
+    pub fn close(&mut self, uri: &Uri) {
         self.docs.remove(uri);
     }
 
-    pub fn get(&self, uri: &Url) -> Option<&ParsedDocument> {
+    pub fn get(&self, uri: &Uri) -> Option<&ParsedDocument> {
         self.docs.get(uri)
     }
 
-    pub fn reparse(&mut self, uri: Url, source: String) -> Vec<Diagnostic> {
+    pub fn reparse(&mut self, uri: Uri, source: String) -> Vec<Diagnostic> {
         match parse(&source) {
             Ok(document) => {
                 self.docs.insert(uri, ParsedDocument { source, document });

@@ -1,6 +1,6 @@
 [logic]
-use std::sync::Arc;
 use crate::theme::theme;
+use std::sync::Arc;
 
 fn arrow_path(cx: f32, cy: f32, size: f32) -> PathData {
     let hs = size * 0.5;
@@ -30,7 +30,12 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
 
     children.push(RenderNode::text(
         rsx::static_rc_str!("Uniform scale around center — 0.5× / 0.75× / 1× / 1.5× / 2×"),
-        Rect { x: 0.0, y: 40.0, width: 600.0, height: 16.0 },
+        Rect {
+            x: 0.0,
+            y: 40.0,
+            width: 600.0,
+            height: 16.0,
+        },
         TextStyle::new(10.5, muted),
     ));
 
@@ -48,7 +53,12 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
         children.push(RenderNode::transform_with(
             matrix,
             [RenderNode::rect(
-                Rect { x: cx - base_w * 0.5, y: scale_y, width: base_w, height: base_h },
+                Rect {
+                    x: cx - base_w * 0.5,
+                    y: scale_y,
+                    width: base_w,
+                    height: base_h,
+                },
                 RectStyle {
                     fill: Some(Paint::Solid(color)),
                     stroke: None,
@@ -59,14 +69,24 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
         ));
         children.push(RenderNode::text(
             labels[i],
-            Rect { x: i as f32 * 140.0, y: scale_y + base_h + 4.0, width: 80.0, height: 16.0 },
+            Rect {
+                x: i as f32 * 140.0,
+                y: scale_y + base_h + 4.0,
+                width: 80.0,
+                height: 16.0,
+            },
             TextStyle::new(10.0, muted),
         ));
     }
 
     children.push(RenderNode::text(
         rsx::static_rc_str!("Rotation — arrow shape at 0° / 30° / 60° / 90° / 120° / 150°"),
-        Rect { x: 0.0, y: 178.0, width: 600.0, height: 16.0 },
+        Rect {
+            x: 0.0,
+            y: 178.0,
+            width: 600.0,
+            height: 16.0,
+        },
         TextStyle::new(10.5, muted),
     ));
 
@@ -107,14 +127,24 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
         ));
         children.push(RenderNode::text(
             *label,
-            Rect { x: i as f32 * 110.0 + 10.0, y: rot_y + arrow_size + 6.0, width: 60.0, height: 16.0 },
+            Rect {
+                x: i as f32 * 110.0 + 10.0,
+                y: rot_y + arrow_size + 6.0,
+                width: 60.0,
+                height: 16.0,
+            },
             TextStyle::new(10.0, muted),
         ));
     }
 
     children.push(RenderNode::text(
         rsx::static_rc_str!("Combined — rotation then scale (transforms compose)"),
-        Rect { x: 0.0, y: 300.0, width: 600.0, height: 16.0 },
+        Rect {
+            x: 0.0,
+            y: 300.0,
+            width: 600.0,
+            height: 16.0,
+        },
         TextStyle::new(10.5, muted),
     ));
 
@@ -134,7 +164,12 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
         children.push(RenderNode::transform_with(
             matrix,
             [RenderNode::rect(
-                Rect { x: cx - 28.0, y: cy - 28.0, width: 56.0, height: 56.0 },
+                Rect {
+                    x: cx - 28.0,
+                    y: cy - 28.0,
+                    width: 56.0,
+                    height: 56.0,
+                },
                 RectStyle {
                     fill: Some(Paint::Solid(color)),
                     stroke: None,
@@ -147,7 +182,12 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
 
     children.push(RenderNode::text(
         rsx::static_rc_str!("Nested translate + rotation — grid of rotated stroked rects"),
-        Rect { x: 0.0, y: 430.0, width: 600.0, height: 16.0 },
+        Rect {
+            x: 0.0,
+            y: 430.0,
+            width: 600.0,
+            height: 16.0,
+        },
         TextStyle::new(10.5, muted),
     ));
 
@@ -161,10 +201,23 @@ let result = Canvas::with_intrinsic_height(ctx, 540.0, |_rect| {
             children.push(RenderNode::transform_with(
                 matrix,
                 [RenderNode::rect(
-                    Rect { x: cx - 22.0, y: cy - 18.0, width: 44.0, height: 36.0 },
+                    Rect {
+                        x: cx - 22.0,
+                        y: cy - 18.0,
+                        width: 44.0,
+                        height: 36.0,
+                    },
                     RectStyle {
-                        fill: Some(Paint::Solid(Color::from_hsla(angle % 360.0, 0.65, 0.55, 0.18))),
-                        stroke: Some(Stroke::new(Color::from_hsl(angle % 360.0, 0.65, 0.55), 2.0)),
+                        fill: Some(Paint::Solid(Color::from_hsla(
+                            angle % 360.0,
+                            0.65,
+                            0.55,
+                            0.18,
+                        ))),
+                        stroke: Some(Stroke::new(
+                            Color::from_hsl(angle % 360.0, 0.65, 0.55),
+                            2.0,
+                        )),
                         shadow: None,
                         radius: BorderRadius::all(4.0),
                     },

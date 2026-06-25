@@ -1,8 +1,8 @@
 use crate::position::parser_line_to_lsp_range;
 use crate::project::ProjectInfo;
+use lsp_types::{Diagnostic, DiagnosticSeverity};
 use rsx_parser::{Element, RsxDocument, ViewNode};
 use std::collections::HashSet;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity};
 
 pub fn semantic_diagnostics(doc: &RsxDocument, project: Option<&ProjectInfo>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();

@@ -7,7 +7,6 @@ let radial_img = std::sync::Arc::new(crate::demo_images::make_radial_alpha(640, 
 #[preview(name = "Landing — full page")]
 
 [style]
-
 primary: #4361ee
 
 .page
@@ -52,7 +51,6 @@ primary: #4361ee
     gap: 32
 
 [view]
-
 col .page
     box .navband fill:surface
         row .navwrap
@@ -62,7 +60,6 @@ col .page
                 text "Gallery" size:14 color:muted
                 text "Pricing" size:14 color:muted
                 btn "Get started" fill:primary on_press:|| signups.update(|n| *n += 1)
-
     box .band fill:surface
         col .wrap
             row gap:48 wrap align:center
@@ -75,7 +72,6 @@ col .page
                     text "{spots_left} of 200 early-access seats left" size:13 color:accent
                 col grow:1 min-width:320
                     img src:gradient_img width:100% height:320
-
     box .band fill:surface_alt
         col .wrap gap:24
             text "Trusted primitives" size:14 color:muted
@@ -92,7 +88,6 @@ col .page
                 box fill:surface stroke:border radius:14 grow:1 min-width:170 pad:24 gap:6 direction:col align:center
                     text "0" size:30 color:primary
                     text "runtime GC pauses" size:13 color:muted
-
     box .band fill:surface
         col .wrap gap:28
             col gap:8
@@ -103,7 +98,6 @@ col .page
                 feature_card icon:"🧩" title:"Composable" body:"Signals, memos and reusable .rsx components compose right inside the markup."
                 feature_card icon:"🎨" title:"Themeable" body:"Semantic color tokens resolve reactively, so dark mode is a single swap."
                 feature_card icon:"📱" title:"Cross-platform" body:"One codebase targets desktop and Android with native event loops."
-
     box .band fill:surface_alt
         col .wrap gap:28
             col gap:8
@@ -119,7 +113,6 @@ col .page
                 col grow:1 min-width:280 gap:8
                     img src:radial_img width:100% height:200
                     text "Radial alpha" size:13 color:muted
-
     box .band fill:surface
         col .wrap
             row gap:48 wrap align:center
@@ -129,7 +122,6 @@ col .page
                     text "Reactivity that stays out of your way" size:26 color:dark
                     text "Fine-grained signals update only the widgets that depend on them — no virtual DOM, no diffing, no re-render storms." size:16 color:muted
                     text "→ create_rw_signal, create_memo, create_effect" size:14 color:primary
-
     box .band fill:primary
         col .wrap align:center gap:16
             text "Join the private beta" size:30 color:on_primary
@@ -137,7 +129,6 @@ col .page
             row gap:12 align:center wrap
                 btn "Reserve a seat" fill:accent on_press:|| signups.update(|n| *n += 1)
                 text "{signups} developers reserved" size:14 color:on_primary
-
     box .footband fill:dark
         row .footwrap
             col gap:8 grow:1 min-width:200

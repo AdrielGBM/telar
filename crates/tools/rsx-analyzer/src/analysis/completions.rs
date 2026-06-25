@@ -1,9 +1,9 @@
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
+use lsp_types::{CompletionItem, CompletionItemKind};
 use rsx_parser::RsxDocument;
 use std::collections::HashSet;
 use std::path::Path;
-use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind};
 
 pub enum CompletionKind {
     ElementName,
