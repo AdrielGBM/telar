@@ -44,11 +44,13 @@ impl Parser {
     /// Captures consecutive logic lines verbatim (blanks and comments preserved).
     fn parse_logic(&mut self) -> LogicZone {
         let mut raws = Vec::new();
+        let mut numbers = Vec::new();
         while let Some(line) = self.lines.get(self.pos) {
             if line.section != Section::Logic {
                 break;
             }
             raws.push(line.raw.clone());
+            numbers.push(line.number);
             self.pos += 1;
         }
 
@@ -59,13 +61,13 @@ impl Parser {
             .rposition(|l| !l.trim().is_empty())
             .map(|i| i + 1)
             .unwrap_or(0);
-        let source = if start < end {
-            raws[start..end].join("\n")
+        let (source, start_line) = if start < end {
+            (raws[start..end].join("\n"), numbers[start])
         } else {
-            String::new()
+            (String::new(), 0)
         };
 
-        LogicZone { source }
+        LogicZone { source, start_line }
     }
 
     fn parse_props(&mut self) -> Result<PropsSection, ParseError> {
@@ -83,9 +85,16 @@ impl Parser {
                 message: format!("expected `name: Type` in [props], got `{}`", line.content),
                 line: line.number,
             })?;
+            let (name, ty) = (name.trim(), ty.trim());
+            if ty.is_empty() {
+                return Err(ParseError {
+                    message: format!("prop `{name}` is missing a type after `:`"),
+                    line: line.number,
+                });
+            }
             section.parameters.push(PropParameter {
-                name: name.trim().to_string(),
-                ty: ty.trim().to_string(),
+                name: name.to_string(),
+                ty: ty.to_string(),
             });
             self.pos += 1;
         }
@@ -129,11 +138,18 @@ impl Parser {
         })?;
 
         let name = name.trim().to_string();
-        let value = parse_style_value(value.trim());
+        let value = value.trim();
+        if value.is_empty() {
+            return Err(ParseError {
+                message: format!("style constant `{name}` is missing a value after `:`"),
+                line: line.number,
+            });
+        }
+        check_hex_value(value, line.number)?;
 
         Ok(StyleConstant {
             name,
-            value,
+            value: parse_style_value(value),
             line: line.number,
         })
     }
@@ -191,9 +207,11 @@ impl Parser {
                 ),
                 line: line.number,
             })?;
+            let (key, value) = (key.trim(), value.trim());
+            check_style_prop_value(key, value, line.number)?;
             props.push(StyleProp {
-                key: key.trim().to_string(),
-                value: value.trim().to_string(),
+                key: key.to_string(),
+                value: value.to_string(),
             });
             self.pos += 1;
         }
@@ -217,6 +235,23 @@ impl Parser {
             .unwrap_or(0);
 
         let nodes = self.parse_view_nodes(base_indent)?;
+
+        // Any view line left unconsumed here is stranded at an indentation that lines up with no
+        // enclosing block (e.g. a child indented one space deeper than its siblings). Erroring is
+        // what keeps the formatter from silently dropping it when it re-serializes the AST.
+        self.skip_blank_view_lines();
+        if let Some(line) = self.lines.get(self.pos)
+            && line.section == Section::View
+            && !line.is_blank()
+        {
+            return Err(ParseError {
+                line: line.number,
+                message:
+                    "inconsistent indentation: this line does not line up with any enclosing element"
+                        .into(),
+            });
+        }
+
         Ok(ViewSection { nodes })
     }
 
@@ -265,6 +300,7 @@ impl Parser {
     }
 
     fn parse_if_block(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
+        let number = self.lines[self.pos].number;
         let condition = self.lines[self.pos].content["if".len()..]
             .trim()
             .to_string();
@@ -288,6 +324,7 @@ impl Parser {
             condition,
             then_branch,
             else_branch,
+            line: number,
         }))
     }
 
@@ -309,6 +346,7 @@ impl Parser {
             pattern,
             iterable,
             body,
+            line: number,
         }))
     }
 
@@ -382,6 +420,38 @@ fn split_once_colon(s: &str) -> Option<(&str, &str)> {
     None
 }
 
+/// A hex color body (the part after `#`) is valid only at the lengths the transpiler expands:
+/// `#rgb`, `#rrggbb`, `#rrggbbaa`, all hex digits.
+fn is_valid_hex(hex: &str) -> bool {
+    matches!(hex.len(), 3 | 6 | 8) && hex.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// `#` is reserved for hex colors in `.rsx`, so any `#`-prefixed value must be a well-formed hex.
+/// Catches typos (`#zzz`, `#12`) at parse time instead of silently rendering them as black.
+fn check_hex_value(value: &str, line: usize) -> Result<(), ParseError> {
+    if let Some(hex) = value.strip_prefix('#')
+        && !is_valid_hex(hex)
+    {
+        return Err(ParseError {
+            message: format!("invalid hex color `{value}`: expected #rgb, #rrggbb or #rrggbbaa"),
+            line,
+        });
+    }
+    Ok(())
+}
+
+/// Validates a style-class property `key: value`: the value must be present and, when it is a hex
+/// color, well-formed.
+fn check_style_prop_value(key: &str, value: &str, line: usize) -> Result<(), ParseError> {
+    if value.is_empty() {
+        return Err(ParseError {
+            message: format!("style property `{key}` is missing a value after `:`"),
+            line,
+        });
+    }
+    check_hex_value(value, line)
+}
+
 /// Classifies a style constant value.
 fn parse_style_value(raw: &str) -> StyleValue {
     if let Some(hex) = raw.strip_prefix('#') {
@@ -401,9 +471,11 @@ fn parse_inline_props(s: &str, line: usize) -> Result<Vec<StyleProp>, ParseError
             message: format!("expected `key:value` in inline style class, got `{token}`"),
             line,
         })?;
+        let (key, value) = (key.trim(), value.trim());
+        check_style_prop_value(key, value, line)?;
         props.push(StyleProp {
-            key: key.trim().to_string(),
-            value: value.trim().to_string(),
+            key: key.to_string(),
+            value: value.to_string(),
         });
     }
     Ok(props)
@@ -520,6 +592,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                 k += 1;
             }
             let value: String = chars[val_start..k].iter().collect();
+            check_hex_value(&value, line)?;
             element.attributes.push(Attr {
                 key: key.trim().to_string(),
                 value,

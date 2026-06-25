@@ -8,6 +8,14 @@ pub struct ProjectInfo {
 }
 
 impl ProjectInfo {
+    /// A filesystem-free borrow of the theme data for `rsx_diagnostics::semantic_diagnostics`.
+    pub fn theme_view(&self) -> rsx_diagnostics::ThemeView<'_> {
+        rsx_diagnostics::ThemeView {
+            theme_type: self.theme_type.as_deref(),
+            theme_fields: &self.theme_fields,
+        }
+    }
+
     pub fn find_theme_field_location(&self, field_name: &str) -> Option<(PathBuf, usize)> {
         let type_name = self.theme_type.as_deref()?;
         for path in collect_rs_files(&self.root) {

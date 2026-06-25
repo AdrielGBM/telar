@@ -326,4 +326,98 @@ col .card
         assert!(doc.logic.source.is_empty());
         assert_eq!(doc.view.nodes.len(), 1);
     }
+
+    #[test]
+    fn inconsistent_indentation_errors_instead_of_dropping_nodes() {
+        // The first child sets the child indent (5); the next two siblings sit at 4, which lines up
+        // with no enclosing block. This used to parse Ok while silently discarding them.
+        let src = "[view]\nbox\n     text \"a\"\n    text \"b\"\n    text \"c\"\n";
+        let err = parse(src).unwrap_err();
+        // The error points at the first stranded line so the editor can flag it.
+        assert_eq!(err.line, 4);
+        assert!(err.message.contains("indentation"));
+    }
+
+    #[test]
+    fn consistent_sibling_indentation_keeps_all_children() {
+        let src = "[view]\nbox\n    text \"a\"\n    text \"b\"\n    text \"c\"\n";
+        let doc = parse(src).unwrap();
+        let ViewNode::Element(box_el) = &doc.view.nodes[0] else {
+            panic!();
+        };
+        assert_eq!(box_el.children.len(), 3);
+    }
+
+    #[test]
+    fn prop_without_type_errors() {
+        let err = parse("[props]\ntitle:\n[view]\ncol\n").unwrap_err();
+        assert_eq!(err.line, 2);
+        assert!(err.message.contains("missing a type"));
+        // A real type still parses.
+        assert!(parse("[props]\ntitle: &'static str\n[view]\ncol\n").is_ok());
+    }
+
+    #[test]
+    fn style_constant_without_value_errors() {
+        let err = parse("[style]\nprimary:\n[view]\ncol\n").unwrap_err();
+        assert_eq!(err.line, 2);
+        assert!(err.message.contains("missing a value"));
+    }
+
+    #[test]
+    fn view_attribute_bad_hex_errors_but_valid_passes() {
+        let err = parse("[view]\nbox fill:#zz\n").unwrap_err();
+        assert_eq!(err.line, 2);
+        assert!(err.message.contains("invalid hex"));
+        // An 8-digit hex (as real files use for shadow-color) is accepted.
+        assert!(parse("[view]\nbox shadow-color:#00000040\n").is_ok());
+        // A quoted value that happens to start with `#` is a string, not a color — not validated.
+        assert!(parse("[view]\ntext label:\"#hashtag\"\n").is_ok());
+    }
+
+    #[test]
+    fn style_class_prop_empty_or_bad_hex_errors() {
+        // Empty value in a multi-line class prop.
+        let err = parse("[style]\n.card\n    width:\n[view]\ncol\n").unwrap_err();
+        assert_eq!(err.line, 3);
+        assert!(err.message.contains("missing a value"));
+        // Bad hex in an inline class prop.
+        let err = parse("[style]\n.card: bg:#zz\n[view]\ncol\n").unwrap_err();
+        assert_eq!(err.line, 2);
+        assert!(err.message.contains("invalid hex"));
+    }
+
+    #[test]
+    fn invalid_hex_constant_errors_but_valid_hex_parses() {
+        for bad in ["#zzz", "#12", "#abcd", "#1234567"] {
+            let src = format!("[style]\nc: {bad}\n[view]\ncol\n");
+            let err = parse(&src).unwrap_err();
+            assert!(
+                err.message.contains("invalid hex"),
+                "expected reject of {bad}"
+            );
+        }
+        for good in ["#abc", "#3d78fa", "#3d78fa80"] {
+            let src = format!("[style]\nc: {good}\n[view]\ncol\n");
+            assert!(parse(&src).is_ok(), "expected accept of {good}");
+        }
+    }
+
+    #[test]
+    fn control_flow_nodes_carry_their_source_line() {
+        let src =
+            "[view]\ncol\n    if flag\n        text \"a\"\n    for x in xs\n        text \"{x}\"\n";
+        let doc = parse(src).unwrap();
+        let ViewNode::Element(col) = &doc.view.nodes[0] else {
+            panic!();
+        };
+        let ViewNode::IfBlock(if_block) = &col.children[0] else {
+            panic!();
+        };
+        assert_eq!(if_block.line, 3);
+        let ViewNode::ForBlock(for_block) = &col.children[1] else {
+            panic!();
+        };
+        assert_eq!(for_block.line, 5);
+    }
 }

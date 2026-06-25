@@ -1,10 +1,20 @@
-use crate::position::parser_line_to_lsp_range;
-use crate::project::ProjectInfo;
-use lsp_types::{Diagnostic, DiagnosticSeverity};
-use rsx_parser::{Element, RsxDocument, ViewNode};
 use std::collections::HashSet;
 
-pub fn semantic_diagnostics(doc: &RsxDocument, project: Option<&ProjectInfo>) -> Vec<Diagnostic> {
+use rsx_parser::{Element, RsxDocument, ViewNode};
+
+use crate::{Diagnostic, Span};
+
+/// A filesystem-free view of the project's theme, used to validate color references against the
+/// declared theme fields. Producers (e.g. the analyzer's `ProjectInfo`) build this so the crate
+/// never has to touch disk.
+pub struct ThemeView<'a> {
+    pub theme_type: Option<&'a str>,
+    pub theme_fields: &'a HashSet<String>,
+}
+
+/// Runs the `.rsx` semantic checks (undefined style classes, unknown color references) over a parsed
+/// document, returning neutral diagnostics. `theme` is `None` when the project has no theme configured.
+pub fn semantic_diagnostics(doc: &RsxDocument, theme: Option<&ThemeView>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
     let defined_classes: HashSet<&str> =
@@ -16,13 +26,13 @@ pub fn semantic_diagnostics(doc: &RsxDocument, project: Option<&ProjectInfo>) ->
         .map(|c| c.name.as_str())
         .collect();
 
-    let theme_configured = project.map(|p| p.theme_type.is_some()).unwrap_or(false);
+    let theme_configured = theme.map(|t| t.theme_type.is_some()).unwrap_or(false);
 
     check_nodes(
         &doc.view.nodes,
         &defined_classes,
         &local_constants,
-        project,
+        theme,
         theme_configured,
         &mut diagnostics,
     );
@@ -34,7 +44,7 @@ fn check_nodes(
     nodes: &[ViewNode],
     defined_classes: &HashSet<&str>,
     local_constants: &HashSet<&str>,
-    project: Option<&ProjectInfo>,
+    theme: Option<&ThemeView>,
     theme_configured: bool,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -44,7 +54,7 @@ fn check_nodes(
                 el,
                 defined_classes,
                 local_constants,
-                project,
+                theme,
                 theme_configured,
                 diagnostics,
             ),
@@ -53,7 +63,7 @@ fn check_nodes(
                     &b.then_branch,
                     defined_classes,
                     local_constants,
-                    project,
+                    theme,
                     theme_configured,
                     diagnostics,
                 );
@@ -62,7 +72,7 @@ fn check_nodes(
                         else_b,
                         defined_classes,
                         local_constants,
-                        project,
+                        theme,
                         theme_configured,
                         diagnostics,
                     );
@@ -73,7 +83,7 @@ fn check_nodes(
                     &b.body,
                     defined_classes,
                     local_constants,
-                    project,
+                    theme,
                     theme_configured,
                     diagnostics,
                 );
@@ -87,25 +97,23 @@ fn check_element(
     el: &Element,
     defined_classes: &HashSet<&str>,
     local_constants: &HashSet<&str>,
-    project: Option<&ProjectInfo>,
+    theme: Option<&ThemeView>,
     theme_configured: bool,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let range = parser_line_to_lsp_range(el.line);
+    let span = Span::line(el.line);
 
     for class in &el.classes {
         if !defined_classes.contains(class.as_str()) {
-            diagnostics.push(Diagnostic {
-                range,
-                severity: Some(DiagnosticSeverity::WARNING),
-                message: format!("Style class `.{class}` is not defined in [style]"),
-                ..Default::default()
-            });
+            diagnostics.push(Diagnostic::warning(
+                format!("Style class `.{class}` is not defined in [style]"),
+                span.clone(),
+            ));
         }
     }
 
     if theme_configured {
-        let theme_fields = project.map(|p| &p.theme_fields);
+        let theme_fields = theme.map(|t| t.theme_fields);
         for attr in &el.attributes {
             if matches!(attr.key.as_str(), "color" | "fill" | "stroke" | "outline") {
                 let val = &attr.value;
@@ -117,14 +125,10 @@ fn check_element(
                         .map(|f| f.contains(val.as_str()))
                         .unwrap_or(false);
                 if !known {
-                    diagnostics.push(Diagnostic {
-                        range,
-                        severity: Some(DiagnosticSeverity::ERROR),
-                        message: format!(
-                            "Unknown color `{val}` — not in [style] constants or theme fields"
-                        ),
-                        ..Default::default()
-                    });
+                    diagnostics.push(Diagnostic::error(
+                        format!("Unknown color `{val}` — not in [style] constants or theme fields"),
+                        span.clone(),
+                    ));
                 }
             }
         }
@@ -134,7 +138,7 @@ fn check_element(
         &el.children,
         defined_classes,
         local_constants,
-        project,
+        theme,
         theme_configured,
         diagnostics,
     );

@@ -126,6 +126,17 @@ pub fn app(input: TokenStream) -> TokenStream {
             }
         }
 
+        // Persist the per-line source map next to the build file so the editor extension can map
+        // rust-analyzer's diagnostics on the generated Rust back onto the original `.rsx` lines.
+        let map_path = out_path.with_extension("rs.map");
+        let map_json = rsx_transpiler::source_map_to_json(&result.source_map);
+        let map_stale = std::fs::read_to_string(&map_path)
+            .map(|existing| existing != map_json)
+            .unwrap_or(true);
+        if map_stale {
+            let _ = std::fs::write(&map_path, &map_json);
+        }
+
         let out_path_str = out_path.to_string_lossy().to_string();
         include_stmts.extend(quote! { include!(#out_path_str); });
 

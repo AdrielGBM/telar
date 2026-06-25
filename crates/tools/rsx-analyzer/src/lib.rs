@@ -7,19 +7,16 @@
 mod analysis;
 mod backend;
 mod format;
-mod logic_sync;
 mod position;
 mod project;
-mod ra_client;
 mod rpc;
-mod semantic_tokens;
 mod server;
 mod store;
 mod uri;
 
 /// Runs the language server on stdio until the client disconnects.
 ///
-/// An LSP server is IO-bound (stdio plus one rust-analyzer subprocess), so a
+/// An LSP server is IO-bound (stdio over a single connection), so a
 /// single-threaded runtime is enough and keeps `rt-multi-thread` out of the tree.
 pub fn run() {
     let runtime = tokio::runtime::Builder::new_current_thread()

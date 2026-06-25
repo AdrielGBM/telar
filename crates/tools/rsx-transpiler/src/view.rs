@@ -16,6 +16,47 @@ const HEADING_FONT_SIZE: &str = "12.0";
 const SECTION_GAP: &str = "8.0";
 const HEADING_STYLE_CLOSURE: &str = "move || { let color = use_widget_theme().map(|t| t.widget_muted()).unwrap_or(Color::rgba(0.5, 0.5, 0.6, 1.0)); TextStyle::new(12.0, color) }";
 
+/// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came
+/// from. They are emitted into the view body during generation and stripped by [`resolve_source_map`]
+/// in the transpiler, which turns them into the per-line origin map. The prefix is deliberately
+/// un-generatable by normal codegen so it can never collide with real output.
+const SRC_PUSH: &str = "//@RSX@PUSH:";
+const SRC_POP: &str = "//@RSX@POP";
+
+/// Wraps `emit`'s code in `SRC_PUSH`/`SRC_POP` markers carrying the 0-based `.rsx` `line`.
+fn wrap_source_markers(emit: ChildEmit, line: usize) -> ChildEmit {
+    let src0 = line.saturating_sub(1);
+    let wrap = |code: String| format!("{SRC_PUSH}{src0}\n{code}\n{SRC_POP}");
+    match emit {
+        ChildEmit::Simple { name, code } => ChildEmit::Simple {
+            name,
+            code: wrap(code),
+        },
+        ChildEmit::Dynamic { code } => ChildEmit::Dynamic { code: wrap(code) },
+    }
+}
+
+/// Strips the source markers from a generated view body, returning each real line paired with the
+/// `.rsx` line it originated from (a stack tracks nesting, so a node's own lines map to itself and
+/// its children's lines map to the children). Lines outside any marker (root boilerplate) map to
+/// `None`.
+pub(crate) fn resolve_source_map(marked: &str) -> Vec<(String, Option<u32>)> {
+    let mut stack: Vec<u32> = Vec::new();
+    let mut out = Vec::new();
+    for line in marked.split('\n') {
+        if let Some(rest) = line.strip_prefix(SRC_PUSH) {
+            if let Ok(n) = rest.parse::<u32>() {
+                stack.push(n);
+            }
+        } else if line == SRC_POP {
+            stack.pop();
+        } else {
+            out.push((line.to_string(), stack.last().copied()));
+        }
+    }
+    out
+}
+
 /// A piece of generated child code together with how it contributes to a
 /// parent's child collection.
 enum ChildEmit {
@@ -127,13 +168,22 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_node(&mut self, node: &ViewNode) -> ChildEmit {
-        match node {
+        let emit = match node {
             ViewNode::Element(el) => self.emit_element(el),
             ViewNode::LetStmt { source, .. } => ChildEmit::Dynamic {
                 code: format!("{}{source};", self.indent_str()),
             },
             ViewNode::IfBlock(block) => self.emit_if(block),
             ViewNode::ForBlock(block) => self.emit_for(block),
+        };
+        // Bracket this node's generated lines with source markers so the transpiler can map them
+        // back to the `.rsx` line. Nested nodes nest their own markers; `let` statements have no
+        // line of their own and inherit the enclosing node's mapping.
+        match node {
+            ViewNode::Element(el) => wrap_source_markers(emit, el.line),
+            ViewNode::IfBlock(block) => wrap_source_markers(emit, block.line),
+            ViewNode::ForBlock(block) => wrap_source_markers(emit, block.line),
+            ViewNode::LetStmt { .. } => emit,
         }
     }
 

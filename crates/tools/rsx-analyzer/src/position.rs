@@ -26,25 +26,3 @@ pub fn find_section_at(source: &str, lsp_line: u32) -> Section {
     }
     current
 }
-
-pub fn logic_zone_start(source: &str) -> Option<u32> {
-    for (i, line) in source.lines().enumerate() {
-        if line.trim() == "[logic]" {
-            return Some(i as u32 + 1);
-        }
-    }
-    None
-}
-
-pub fn rsx_to_rs_line(source: &str, rsx_line: u32) -> Option<u32> {
-    let start = logic_zone_start(source)?;
-    if rsx_line < start {
-        return None;
-    }
-    Some(rsx_line - start)
-}
-
-pub fn rs_to_rsx_line(source: &str, rs_line: u32) -> u32 {
-    let start = logic_zone_start(source).unwrap_or(0);
-    rs_line + start
-}

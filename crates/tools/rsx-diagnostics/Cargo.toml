@@ -1,0 +1,11 @@
+[package]
+name = "rsx-diagnostics"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lsp-types = { version = "0.97", optional = true }
+rsx-parser.workspace = true
+
+[features]
+lsp = ["dep:lsp-types"]

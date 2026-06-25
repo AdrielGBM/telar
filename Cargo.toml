@@ -22,6 +22,7 @@ members = [
     "crates/tools/rsx-transpiler",
     "crates/tools/rsx-devtools",
     "crates/tools/rsx-analyzer",
+    "crates/tools/rsx-diagnostics",
     "crates/tools/rsx-macros",
     "crates/tools/rsx-workspace",
     "apps/sandbox",
@@ -49,6 +50,7 @@ default-members = [
     "crates/tools/rsx-transpiler",
     "crates/tools/rsx-devtools",
     "crates/tools/rsx-analyzer",
+    "crates/tools/rsx-diagnostics",
     "crates/tools/rsx-macros",
     "crates/tools/rsx-workspace",
     "apps/sandbox",
@@ -69,6 +71,7 @@ raw-window-handle = "0.6"
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"
 tracing = { version = "0.1.44", features = ["log"] }
+tracing-subscriber = "0.3.23"
 bytemuck = "1.25.0"
 rustc-hash = "2.1.2"
 wide = "1.4"
@@ -95,6 +98,7 @@ ui-core = { path = "crates/ui/ui-core" }
 ui-tree = { path = "crates/ui/ui-tree" }
 rsx = { path = "crates/rsx", default-features = false }
 rsx-devtools = { path = "crates/tools/rsx-devtools" }
+rsx-diagnostics = { path = "crates/tools/rsx-diagnostics" }
 rsx-parser = { path = "crates/tools/rsx-parser" }
 rsx-transpiler = { path = "crates/tools/rsx-transpiler" }
 rsx-analyzer = { path = "crates/tools/rsx-analyzer" }

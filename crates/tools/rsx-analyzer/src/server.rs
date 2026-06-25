@@ -76,9 +76,6 @@ async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Res
         "textDocument/hover" => ok(backend.hover(parse(params)?).await),
         "textDocument/definition" => ok(backend.goto_definition(parse(params)?).await),
         "textDocument/formatting" => ok(backend.formatting(parse(params)?).await),
-        "textDocument/semanticTokens/full" => {
-            ok(backend.semantic_tokens_full(parse(params)?).await)
-        }
         _ => return Err(method_not_found(method)),
     };
     Ok(result)

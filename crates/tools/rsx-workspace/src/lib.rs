@@ -1,9 +1,9 @@
 //! Shared project-root resolution for the rsx toolchain.
 //!
 //! `cargo-rsx` (the dev/build CLI) and `rsx-analyzer` (the LSP) both need to
-//! anchor file discovery — generated `.rsx/` output, `.rsx/lsp/`, theme
-//! scanning — to the same directory. Keeping the upward-walk and the marker
-//! definitions in one place stops the two tools from diverging.
+//! anchor file discovery — generated `.rsx/` output, theme scanning — to the
+//! same directory. Keeping the upward-walk and the marker definitions in one
+//! place stops the two tools from diverging.
 
 use std::path::{Path, PathBuf};
 

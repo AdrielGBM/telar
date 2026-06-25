@@ -1,12 +1,8 @@
 //! JSON-RPC framing over stdio plus the server→client message channel.
 //!
-//! Shared by the server loop (talking to the editor) and [`crate::ra_client`]
-//! (talking to rust-analyzer), so both speak the same `Content-Length` framing.
+//! Used by the server loop to talk to the editor with `Content-Length` framing.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, Ordering};
-
-use lsp_types::{Diagnostic, MessageType, PublishDiagnosticsParams, Registration, Uri};
+use lsp_types::{Diagnostic, MessageType, PublishDiagnosticsParams, Uri};
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc::UnboundedSender;
@@ -59,15 +55,11 @@ where
 #[derive(Clone)]
 pub struct OutgoingSender {
     tx: UnboundedSender<Value>,
-    next_id: Arc<AtomicI64>,
 }
 
 impl OutgoingSender {
     pub fn new(tx: UnboundedSender<Value>) -> Self {
-        Self {
-            tx,
-            next_id: Arc::new(AtomicI64::new(1)),
-        }
+        Self { tx }
     }
 
     pub fn send(&self, msg: Value) {
@@ -91,17 +83,6 @@ impl OutgoingSender {
             "window/logMessage",
             json!({ "type": typ, "message": message.into() }),
         );
-    }
-
-    /// Fires a `client/registerCapability` request; the client's response is ignored.
-    pub fn register_capability(&self, registrations: Vec<Registration>) {
-        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        self.send(json!({
-            "jsonrpc": "2.0",
-            "id": format!("rsx-reg-{id}"),
-            "method": "client/registerCapability",
-            "params": { "registrations": registrations },
-        }));
     }
 
     fn notify(&self, method: &str, params: Value) {

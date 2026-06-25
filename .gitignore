@@ -4,3 +4,5 @@
 *.keystore
 *.jks
 .env
+
+/docs

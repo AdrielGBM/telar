@@ -25,6 +25,9 @@ pub struct PropParameter {
 #[derive(Debug, Clone, Default)]
 pub struct LogicZone {
     pub source: String,
+    /// 1-based `.rsx` line of the first content line in `source` (0 when the zone is empty). Lets
+    /// the transpiler map positions in the generated Rust back to the original `.rsx`.
+    pub start_line: usize,
 }
 
 /// The `[style]` section: a flat list of constants and style classes.
@@ -105,6 +108,8 @@ pub struct IfBlock {
     pub condition: String,
     pub then_branch: Vec<ViewNode>,
     pub else_branch: Option<Vec<ViewNode>>,
+    /// 1-based `.rsx` line of the `if` header, used to map generated code back to source.
+    pub line: usize,
 }
 
 /// A `for ... in ...` loop block in the view.
@@ -113,4 +118,6 @@ pub struct ForBlock {
     pub pattern: String,
     pub iterable: String,
     pub body: Vec<ViewNode>,
+    /// 1-based `.rsx` line of the `for` header, used to map generated code back to source.
+    pub line: usize,
 }
