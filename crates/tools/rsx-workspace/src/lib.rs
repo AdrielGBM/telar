@@ -30,10 +30,10 @@ pub fn find_rsx_root(start: &Path) -> Option<PathBuf> {
 
 /// Nearest ancestor directory whose `Cargo.toml` declares a `[workspace]` table.
 pub fn find_workspace_root(start: &Path) -> Option<PathBuf> {
-    find_ancestor_dir(start, dir_is_workspace_root)
+    find_ancestor_dir(start, is_workspace_root_dir)
 }
 
-fn dir_is_workspace_root(dir: &Path) -> bool {
+fn is_workspace_root_dir(dir: &Path) -> bool {
     let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
         return false;
     };

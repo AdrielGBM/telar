@@ -53,7 +53,7 @@ impl PathFillData {
 }
 
 pub(crate) struct FillDataBuffer {
-    pub bgl: wgpu::BindGroupLayout,
+    pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
     pub buffer: wgpu::Buffer,
     capacity: usize,
@@ -61,7 +61,7 @@ pub(crate) struct FillDataBuffer {
 
 impl FillDataBuffer {
     pub(crate) fn new(device: &wgpu::Device) -> Self {
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-path-fill-bgl"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -76,18 +76,19 @@ impl FillDataBuffer {
                 count: None,
             }],
         });
-        let (buffer, bind_group) = Self::create_buffer_and_bg(device, &bgl, 64);
+        let (buffer, bind_group) =
+            Self::create_buffer_and_bind_group(device, &bind_group_layout, 64);
         Self {
-            bgl,
+            bind_group_layout,
             bind_group,
             buffer,
             capacity: 64,
         }
     }
 
-    fn create_buffer_and_bg(
+    fn create_buffer_and_bind_group(
         device: &wgpu::Device,
-        bgl: &wgpu::BindGroupLayout,
+        bind_group_layout: &wgpu::BindGroupLayout,
         capacity: usize,
     ) -> (wgpu::Buffer, wgpu::BindGroup) {
         let size = (std::mem::size_of::<PathFillData>() * capacity.max(1)) as u64;
@@ -99,7 +100,7 @@ impl FillDataBuffer {
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rsx-path-fill-bg"),
-            layout: bgl,
+            layout: bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: buffer.as_entire_binding(),
@@ -111,7 +112,8 @@ impl FillDataBuffer {
     pub(crate) fn ensure_capacity(&mut self, device: &wgpu::Device, count: usize) {
         if count > self.capacity {
             let new_cap = (count * 2).max(self.capacity * 2);
-            let (buffer, bind_group) = Self::create_buffer_and_bg(device, &self.bgl, new_cap);
+            let (buffer, bind_group) =
+                Self::create_buffer_and_bind_group(device, &self.bind_group_layout, new_cap);
             self.buffer = buffer;
             self.bind_group = bind_group;
             self.capacity = new_cap;
@@ -462,7 +464,7 @@ impl PathPipeline {
             device,
             "path",
             &shader_source,
-            &[viewport_bgl, &fill_data.bgl],
+            &[viewport_bgl, &fill_data.bind_group_layout],
             &[path_vertex_layout],
             surface_format,
             msaa_samples,

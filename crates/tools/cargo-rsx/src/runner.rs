@@ -351,32 +351,32 @@ fn split_android_flag(args: Vec<String>) -> (bool, Vec<String>) {
     (android, rest)
 }
 
-fn apply_dev_window_env(envs: &mut Vec<(String, String)>, w: &WindowConfig) {
-    if let Some(title) = &w.title {
+fn apply_dev_window_env(envs: &mut Vec<(String, String)>, window: &WindowConfig) {
+    if let Some(title) = &window.title {
         envs.push(("RSX_DEV_WINDOW_TITLE".to_string(), title.clone()));
     }
-    if let Some(width) = w.width {
+    if let Some(width) = window.width {
         envs.push(("RSX_DEV_WINDOW_WIDTH".to_string(), width.to_string()));
     }
-    if let Some(height) = w.height {
+    if let Some(height) = window.height {
         envs.push(("RSX_DEV_WINDOW_HEIGHT".to_string(), height.to_string()));
     }
-    if let Some(dec) = w.decorations {
+    if let Some(decorations) = window.decorations {
         envs.push((
             "RSX_DEV_WINDOW_DECORATIONS".to_string(),
-            if dec { "1" } else { "0" }.to_string(),
+            if decorations { "1" } else { "0" }.to_string(),
         ));
     }
-    if let Some(res) = w.resizable {
+    if let Some(resizable) = window.resizable {
         envs.push((
             "RSX_DEV_WINDOW_RESIZABLE".to_string(),
-            if res { "1" } else { "0" }.to_string(),
+            if resizable { "1" } else { "0" }.to_string(),
         ));
     }
-    if let Some(tr) = w.transparent {
+    if let Some(transparent) = window.transparent {
         envs.push((
             "RSX_DEV_WINDOW_TRANSPARENT".to_string(),
-            if tr { "1" } else { "0" }.to_string(),
+            if transparent { "1" } else { "0" }.to_string(),
         ));
     }
 }
@@ -413,7 +413,7 @@ fn load_dotenv(cmd: &mut Command) {
 
 fn make_android_cmd(cargo_args: Vec<String>, config: RsxConfig) -> Command {
     let ndk_root = resolve_ndk_root();
-    let backend_value = backend_str(config.backend.unwrap_or_default());
+    let backend_value = backend_as_str(config.backend.unwrap_or_default());
     let mut cmd = Command::new("cargo");
     cmd.args(cargo_args)
         .env("RSX_RENDERER_BACKEND", backend_value);
@@ -491,8 +491,8 @@ fn preview_rustflags() -> String {
     format!("{} --cfg=rsx_preview", hot_reload_rustflags())
 }
 
-fn package_lib_path(workspace_root: &Path, pkg_name: &str, profile: &str) -> PathBuf {
-    let lib_name = pkg_name.replace('-', "_");
+fn package_lib_path(workspace_root: &Path, package_name: &str, profile: &str) -> PathBuf {
+    let lib_name = package_name.replace('-', "_");
     #[cfg(target_os = "macos")]
     let ext = "dylib";
     #[cfg(not(target_os = "macos"))]
@@ -503,8 +503,11 @@ fn package_lib_path(workspace_root: &Path, pkg_name: &str, profile: &str) -> Pat
         .join(format!("lib{lib_name}.{ext}"))
 }
 
-fn package_bin_path(workspace_root: &Path, pkg_name: &str, profile: &str) -> PathBuf {
-    workspace_root.join("target").join(profile).join(pkg_name)
+fn package_bin_path(workspace_root: &Path, package_name: &str, profile: &str) -> PathBuf {
+    workspace_root
+        .join("target")
+        .join(profile)
+        .join(package_name)
 }
 
 #[cfg(unix)]
@@ -666,7 +669,6 @@ fn watch_and_run(
                         std::process::exit(0);
                     }
                     eprintln!("[cargo-rsx] Process exited ({code}). Watching for changes...");
-                    // Block until a source file changes, then restart
                     loop {
                         match rx.recv() {
                             Ok(Ok(event)) if is_source_event(&event) => {
@@ -791,15 +793,15 @@ fn run_preview_cmd(args: PreviewArgs) {
 }
 
 fn run_build_cmd(args: BuildArgs) {
-    if let Some(ref fmt) = args.format {
-        let fmt_name = match fmt {
+    if let Some(ref format) = args.format {
+        let format_name = match format {
             BuildFormat::Appimage => "appimage",
             BuildFormat::Deb => "deb",
             BuildFormat::Dmg => "dmg",
             BuildFormat::Apk => "apk",
             BuildFormat::Dir => "dir",
         };
-        eprintln!("[cargo-rsx] Packaging format `{fmt_name}` is not yet implemented.");
+        eprintln!("[cargo-rsx] Packaging format `{format_name}` is not yet implemented.");
         std::process::exit(1);
     }
     eprintln!(
@@ -813,7 +815,7 @@ fn run_build_cmd(args: BuildArgs) {
     if let Some(backend) = args.common.backend {
         config.backend = Some(backend_from_arg(backend));
     }
-    run_bundle_inner(android, cargo_args, config);
+    run_build_inner(android, cargo_args, config);
 }
 
 fn build_cargo_args(
@@ -829,15 +831,15 @@ fn build_cargo_args(
     if release {
         args.push("--release".to_string());
     }
-    if let Some(feats) = features {
+    if let Some(features) = features {
         args.push("--features".to_string());
-        args.push(feats.clone());
+        args.push(features.clone());
     }
     args
 }
 
-fn backend_from_arg(b: BackendArg) -> RendererBackend {
-    match b {
+fn backend_from_arg(backend: BackendArg) -> RendererBackend {
+    match backend {
         BackendArg::Auto => RendererBackend::Auto,
         BackendArg::Hardware => RendererBackend::Hardware,
         BackendArg::Software => RendererBackend::Software,
@@ -884,12 +886,11 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
 
     let (android, rest) = split_android_flag(args);
     let features = mode.features();
-    let backend_value = backend_str(config.backend.unwrap_or_default());
+    let backend_value = backend_as_str(config.backend.unwrap_or_default());
     let is_preview = mode.is_preview();
 
     if android {
-        // `cargo apk run --lib` crashes on UID parsing when launching;
-        // work around by doing build → adb install → adb shell am start manually.
+        // `cargo apk run --lib` crashes on UID parsing when launching; work around by doing build → adb install → adb shell am start manually.
         let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
         build_args.extend(rest.iter().cloned());
         for feature in features {
@@ -907,7 +908,6 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         std::process::exit(0);
     }
 
-    // Envs passed when launching the app binary (and to cargo run in fallback mode).
     let mut launch_envs = vec![(
         "RSX_RENDERER_BACKEND".to_string(),
         backend_value.to_string(),
@@ -915,15 +915,14 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     if is_preview {
         launch_envs.push(("RSX_PREVIEW".to_string(), "1".to_string()));
     }
-    // Disable the devtools overlay when turned off via CLI flag or rsx.toml.
     let devtools_disabled = config.dev.as_ref().and_then(|d| d.devtools) == Some(false);
     if devtools_disabled {
         launch_envs.push(("RSX_DEVTOOLS".to_string(), "0".to_string()));
     }
     if let Some(dev) = &config.dev
-        && let Some(w) = &dev.window
+        && let Some(window) = &dev.window
     {
-        apply_dev_window_env(&mut launch_envs, w);
+        apply_dev_window_env(&mut launch_envs, window);
     }
 
     let mut cargo_args = vec!["run".to_string()];
@@ -932,8 +931,9 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         inject_feature(&mut cargo_args, feature);
     }
 
-    let pkg_dir = find_package_dir(&rest);
-    let workspace_root = rsx_workspace::find_workspace_root(&pkg_dir).unwrap_or(pkg_dir.clone());
+    let package_dir = find_package_dir(&rest);
+    let workspace_root =
+        rsx_workspace::find_workspace_root(&package_dir).unwrap_or(package_dir.clone());
     let profile = if rest.contains(&"--release".to_string()) {
         "release"
     } else {
@@ -943,11 +943,11 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     #[cfg(unix)]
     if !no_hot_reload {
         let rustflags = mode.rustflags();
-        let pkg_name = read_package_manifest(&rest)
+        let package_name = read_package_manifest(&rest)
             .map(|p| p.name)
             .unwrap_or_else(|| "app".to_string());
-        let lib_path = package_lib_path(&workspace_root, &pkg_name, profile);
-        let bin_path = package_bin_path(&workspace_root, &pkg_name, profile);
+        let lib_path = package_lib_path(&workspace_root, &package_name, profile);
+        let bin_path = package_bin_path(&workspace_root, &package_name, profile);
 
         // Initial build (produces both binary and dylib).
         let mut build_args = vec!["build".to_string()];
@@ -972,10 +972,8 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         }
 
         if bin_path.exists() && lib_path.exists() {
-            // Hot reload mode: only rebuild lib on changes.
             let lib_build_args = make_lib_build_args(&rest, features);
 
-            // Build envs include launch envs plus preview build marker.
             let mut build_envs = launch_envs.clone();
             if is_preview {
                 build_envs.push(("RSX_PREVIEW_BUILD".to_string(), "1".to_string()));
@@ -998,7 +996,7 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     watch_and_run(cargo_args, launch_envs, workspace_root);
 }
 
-fn run_bundle_inner(android: bool, mut rest: Vec<String>, config: RsxConfig) -> ! {
+fn run_build_inner(android: bool, mut rest: Vec<String>, config: RsxConfig) -> ! {
     if !rest.contains(&"--release".to_string()) {
         rest.push("--release".to_string());
     }
@@ -1012,7 +1010,7 @@ fn run_bundle_inner(android: bool, mut rest: Vec<String>, config: RsxConfig) -> 
             .expect("[cargo-rsx] failed to invoke cargo");
         std::process::exit(status.code().unwrap_or(1));
     } else {
-        let backend_value = backend_str(config.backend.unwrap_or_default());
+        let backend_value = backend_as_str(config.backend.unwrap_or_default());
 
         let mut cargo_args = vec!["build".to_string()];
         cargo_args.extend(rest);
@@ -1027,7 +1025,7 @@ fn run_bundle_inner(android: bool, mut rest: Vec<String>, config: RsxConfig) -> 
     }
 }
 
-fn backend_str(backend: RendererBackend) -> &'static str {
+fn backend_as_str(backend: RendererBackend) -> &'static str {
     match backend {
         RendererBackend::Auto => "auto",
         RendererBackend::Hardware => "hardware",

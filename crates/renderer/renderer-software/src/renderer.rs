@@ -53,7 +53,7 @@ fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
     })
 }
 
-fn compute_layer_bboxes(
+fn compute_layer_bounds(
     commands: &[DrawCommand],
     window_w: u32,
     window_h: u32,
@@ -61,18 +61,18 @@ fn compute_layer_bboxes(
 ) -> Vec<Option<(i32, i32, u32, u32)>> {
     let mut result = vec![None; commands.len()];
     let mut stack: Vec<(usize, Option<Rect>)> = Vec::new();
-    let mut cum_matrix = renderer_core::IDENTITY_MATRIX;
+    let mut cumulative_matrix = renderer_core::IDENTITY_MATRIX;
     let mut matrix_stack: Vec<[f32; 6]> = Vec::new();
 
     for (idx, cmd) in commands.iter().enumerate() {
         match cmd {
             DrawCommand::PushMatrix { matrix } => {
-                matrix_stack.push(cum_matrix);
-                cum_matrix = renderer_core::compose_matrix(cum_matrix, *matrix);
+                matrix_stack.push(cumulative_matrix);
+                cumulative_matrix = renderer_core::compose_matrix(cumulative_matrix, *matrix);
             }
             DrawCommand::PopMatrix => {
                 if let Some(prev) = matrix_stack.pop() {
-                    cum_matrix = prev;
+                    cumulative_matrix = prev;
                 }
             }
             DrawCommand::PushLayer { .. } => {
@@ -92,8 +92,7 @@ fn compute_layer_bboxes(
                         (0, 0, window_w, window_h)
                     };
                     result[push_idx] = Some((ox, oy, bw, bh));
-                    // Propagate this layer's visual footprint to the parent layer's accumulator so
-                    // the parent layer is sized to contain the composited result of all nested layers.
+                    // Propagate this layer's visual footprint to the parent layer's accumulator so the parent layer is sized to contain the composited result of all nested layers.
                     if !stack.is_empty() {
                         let footprint = Rect {
                             x: ox as f32,
@@ -107,9 +106,11 @@ fn compute_layer_bboxes(
                 }
             }
             _ => {
-                if let Some(vr) =
-                    renderer_core::culling::command_visual_rect(cmd, cum_matrix, font_metrics)
-                {
+                if let Some(vr) = renderer_core::culling::command_visual_rect(
+                    cmd,
+                    cumulative_matrix,
+                    font_metrics,
+                ) {
                     if !stack.is_empty() {
                         let last_idx = stack.len() - 1;
                         stack[last_idx].1 = union_opt_rect(stack[last_idx].1, vr);
@@ -231,7 +232,7 @@ fn fill_rounded_mask(
 }
 
 // Hashes the draw-command slice together with the viewport dimensions, used to key the layer-bbox cache which depends on both the commands and the surface size.
-fn hash_commands_with_dims(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
+fn hash_commands_with_dimensions(commands: &[DrawCommand], width: u32, height: u32) -> u64 {
     let mut h = FxHasher::default();
     width.hash(&mut h);
     height.hash(&mut h);
@@ -251,8 +252,8 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     image_cache: ImageCache,
     blur_scratch: Vec<u8>,
     pixmap_pool: Vec<tiny_skia::Pixmap>,
-    clip_mask_buf: Option<tiny_skia::Mask>,
-    // Last region written as 0xFF into clip_mask_buf. Tracked across frames so the next PushClip can zero stale bits left by the previous frame without re-zeroing the whole mask.
+    clip_mask_buffer: Option<tiny_skia::Mask>,
+    // Last region written as 0xFF into clip_mask_buffer. Tracked across frames so the next PushClip can zero stale bits left by the previous frame without re-zeroing the whole mask.
     clip_mask_dirty: Option<Rect>,
     draw_state: renderer_core::DrawState,
     shadow_cache: ShadowCache,
@@ -272,8 +273,8 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     prev_clear_color: Option<Color>,
     // Cache for expand_fill_layers: avoids re-expanding on idle frames where commands didn't change.
     expanded_commands_cache: Option<(u64, Vec<DrawCommand>)>,
-    // Cache for compute_layer_bboxes: avoids re-traversing commands when input and dimensions are unchanged.
-    layer_bboxes_cache: Option<(u64, Vec<Option<(i32, i32, u32, u32)>>)>,
+    // Cache for compute_layer_bounds: avoids re-traversing commands when input and dimensions are unchanged.
+    layer_bounds_cache: Option<(u64, Vec<Option<(i32, i32, u32, u32)>>)>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -309,7 +310,7 @@ where
             image_cache: crate::primitives::image::new_image_cache(config.image_cache_bytes),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
-            clip_mask_buf: None,
+            clip_mask_buffer: None,
             clip_mask_dirty: None,
             draw_state: renderer_core::DrawState::new(),
             shadow_cache: CLruCache::with_config(
@@ -330,7 +331,7 @@ where
             prev_commands_hash: 0,
             prev_clear_color: None,
             expanded_commands_cache: None,
-            layer_bboxes_cache: None,
+            layer_bounds_cache: None,
         })
     }
     // Drains finished background shadow computations into their respective caches. Returns true if at least one shadow became available this frame.
@@ -379,8 +380,7 @@ where
             return Ok(());
         }
         if let Ok(mut buffer) = self.surface.buffer_mut() {
-            // Pixel format: tiny_skia RGBA bytes → softbuffer LE u32 0x00RRGGBB.
-            // u32 bit trick: output = (input>>16 & 0xFF) | (input & 0xFF00) | ((input & 0xFF)<<16)
+            // Pixel format: tiny_skia RGBA bytes → softbuffer LE u32 0x00RRGGBB. u32 bit trick: output = (input>>16 & 0xFF) | (input & 0xFF00) | ((input & 0xFF)<<16)
             #[cfg(target_endian = "little")]
             {
                 use wide::u32x8;
@@ -440,14 +440,14 @@ where
             self.width = width;
             self.height = height;
             self.pixmap = Pixmap::new(width, height);
-            self.clip_mask_buf = tiny_skia::Mask::new(width, height);
+            self.clip_mask_buffer = tiny_skia::Mask::new(width, height);
             self.clip_mask_dirty = None;
             self.pixmap_pool.clear();
             self.prev_commands.clear();
             self.prev_commands_hash = 0;
             self.prev_clear_color = None;
             self.expanded_commands_cache = None;
-            self.layer_bboxes_cache = None;
+            self.layer_bounds_cache = None;
             if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
                 self.surface
                     .resize(w, h)
@@ -481,12 +481,7 @@ where
         };
         if let Some(ref sb) = maybe_scroll {
             if let Some(pixmap) = &mut self.pixmap {
-                apply_scroll_blit(
-                    pixmap,
-                    sb.scroll_clip,
-                    sb.delta_tx as f32,
-                    sb.delta_ty as f32,
-                );
+                apply_scroll_blit(pixmap, sb.scroll_clip, sb.delta_x as f32, sb.delta_y as f32);
             }
         }
 
@@ -539,7 +534,6 @@ where
                     let x1 = (dr.x + dr.width + 1.0).min(self.width as f32);
                     let y1 = (dr.y + dr.height + 1.0).min(self.height as f32);
                     if x1 <= x0 || y1 <= y0 {
-                        // This region is entirely off-screen; skip it.
                         continue;
                     }
                     // Expand the region to fully contain every command it partially intersects: a partially-overlapping command is still fully redrawn, overwriting pixels of earlier commands that fall outside the region and won't be redrawn themselves.
@@ -570,7 +564,6 @@ where
                             break;
                         }
                     }
-                    // Re-clamp to viewport after expansion.
                     let fx0 = sr.x.max(0.0);
                     let fy0 = sr.y.max(0.0);
                     let fx1 = (sr.x + sr.width).min(self.width as f32);
@@ -593,8 +586,7 @@ where
             _ => None,
         };
 
-        // If the clear color changed, the dirty-rect only covers command-changed regions, leaving
-        // background areas untouched with stale pixels from the previous frame. Force a full clear.
+        // If the clear color changed, the dirty-rect only covers command-changed regions, leaving background areas untouched with stale pixels from the previous frame. Force a full clear.
         let skip_rect = if clear_color_changed { None } else { skip_rect };
 
         if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
@@ -629,14 +621,14 @@ where
         };
         let commands: &[DrawCommand] = &self.expanded_commands_cache.as_ref().unwrap().1;
 
-        // Task 2.12: skip compute_layer_bboxes when commands and dimensions haven't changed.
-        let bbox_hash = hash_commands_with_dims(commands, self.width, self.height);
-        let layer_bboxes = match &self.layer_bboxes_cache {
+        // Task 2.12: skip compute_layer_bounds when commands and dimensions haven't changed.
+        let bbox_hash = hash_commands_with_dimensions(commands, self.width, self.height);
+        let layer_bboxes = match &self.layer_bounds_cache {
             Some((cached_hash, cached)) if *cached_hash == bbox_hash => cached.clone(),
             _ => {
                 let result =
-                    compute_layer_bboxes(commands, self.width, self.height, &self.font_metrics);
-                self.layer_bboxes_cache = Some((bbox_hash, result.clone()));
+                    compute_layer_bounds(commands, self.width, self.height, &self.font_metrics);
+                self.layer_bounds_cache = Some((bbox_hash, result.clone()));
                 result
             }
         };
@@ -665,7 +657,7 @@ where
                 .map(|(_, _, ox, oy)| (*ox, *oy))
                 .unwrap_or((0, 0));
 
-            let [ma, mb, mc, md, me, mf] = self.draw_state.cum_matrix;
+            let [ma, mb, mc, md, me, mf] = self.draw_state.cumulative_matrix;
             let transform = tiny_skia::Transform::from_row(
                 ma,
                 mb,
@@ -675,15 +667,12 @@ where
                 mf - layer_oy as f32,
             );
 
-            // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region.
-            // Only applies at the top level (not inside layers): a layer is a fresh isolated pixmap
-            // rendered from scratch every frame, so all its commands must run regardless of which
-            // window-space region is dirty.
+            // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region. Only applies at the top level (not inside layers): a layer is a fresh isolated pixmap rendered from scratch every frame, so all its commands must run regardless of which window-space region is dirty.
             if let Some(ref dirty_rects) = skip_rect {
                 if !inside_layer {
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
                         cmd,
-                        self.draw_state.cum_matrix,
+                        self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
                         if dirty_rects.iter().all(|dr| !vr.overlaps(*dr)) {
@@ -705,7 +694,7 @@ where
                     }
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
                         cmd,
-                        self.draw_state.cum_matrix,
+                        self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
                         if cull_bounds(vr, self.draw_state.current_clip()) {
@@ -718,7 +707,7 @@ where
                         self.pixmap.as_mut().unwrap()
                     };
                     let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
-                        self.clip_mask_buf.as_ref()
+                        self.clip_mask_buffer.as_ref()
                     } else {
                         None
                     };
@@ -738,7 +727,7 @@ where
                     let style = **style;
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
                         cmd,
-                        self.draw_state.cum_matrix,
+                        self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
                         if cull_bounds(vr, self.draw_state.current_clip()) {
@@ -751,7 +740,7 @@ where
                         self.pixmap.as_mut().unwrap()
                     };
                     let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
-                        self.clip_mask_buf.as_ref()
+                        self.clip_mask_buffer.as_ref()
                     } else {
                         None
                     };
@@ -777,7 +766,7 @@ where
                 DrawCommand::Image { data, rect, filter } => {
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
                         cmd,
-                        self.draw_state.cum_matrix,
+                        self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
                         if cull_bounds(vr, self.draw_state.current_clip()) {
@@ -790,7 +779,7 @@ where
                         self.pixmap.as_mut().unwrap()
                     };
                     let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
-                        self.clip_mask_buf.as_ref()
+                        self.clip_mask_buffer.as_ref()
                     } else {
                         None
                     };
@@ -807,7 +796,7 @@ where
                 DrawCommand::Line { p1, p2, style } => {
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
                         cmd,
-                        self.draw_state.cum_matrix,
+                        self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
                         if cull_bounds(vr, self.draw_state.current_clip()) {
@@ -820,7 +809,7 @@ where
                         self.pixmap.as_mut().unwrap()
                     };
                     let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
-                        self.clip_mask_buf.as_ref()
+                        self.clip_mask_buffer.as_ref()
                     } else {
                         None
                     };
@@ -842,7 +831,7 @@ where
                     let style = **style;
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
                         cmd,
-                        self.draw_state.cum_matrix,
+                        self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
                         if cull_bounds(vr, self.draw_state.current_clip()) {
@@ -855,7 +844,7 @@ where
                         self.pixmap.as_mut().unwrap()
                     };
                     let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
-                        self.clip_mask_buf.as_ref()
+                        self.clip_mask_buffer.as_ref()
                     } else {
                         None
                     };
@@ -878,7 +867,7 @@ where
                 DrawCommand::PushClip { rect, radius } => {
                     let prev_dirty = self.clip_mask_dirty;
                     let effective = self.draw_state.push_clip(*rect);
-                    if let Some(ref mut m) = self.clip_mask_buf {
+                    if let Some(ref mut m) = self.clip_mask_buffer {
                         if radius.is_zero() {
                             repaint_mask(m, effective, prev_dirty, self.width, self.height);
                         } else {
@@ -906,14 +895,14 @@ where
                     let effective = self.draw_state.pop_clip();
                     match effective {
                         Some(r) => {
-                            if let Some(ref mut m) = self.clip_mask_buf {
+                            if let Some(ref mut m) = self.clip_mask_buffer {
                                 repaint_mask(m, r, prev_dirty, self.width, self.height);
                             }
                             self.clip_mask_dirty = Some(r);
                         }
                         None => {
                             if let (Some(ref mut m), Some(prev_rect)) =
-                                (self.clip_mask_buf.as_mut(), prev_dirty)
+                                (self.clip_mask_buffer.as_mut(), prev_dirty)
                             {
                                 if let Some(region) =
                                     clamp_to_pixels(prev_rect, self.width, self.height)

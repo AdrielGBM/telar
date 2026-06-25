@@ -4,7 +4,7 @@ use wgpu::{Device, TextureFormat};
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct BlurParams {
     direction: [f32; 2],
-    tex_size: [f32; 2],
+    texture_size: [f32; 2],
     sigma: f32,
     _pad: [f32; 3],
 }
@@ -15,7 +15,7 @@ pub(crate) struct BlurPipeline {
     downsample_pipeline: wgpu::RenderPipeline,
     upsample_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
-    bgl: wgpu::BindGroupLayout,
+    bind_group_layout: wgpu::BindGroupLayout,
     format: TextureFormat,
     use_immediates: bool,
     // Pool of intermediate textures keyed by (width, height). The intermediate is rewritten every horizontal pass (loaded with Clear), so leftover contents from a previous use are harmless.
@@ -67,7 +67,7 @@ impl BlurPipeline {
             ..Default::default()
         });
 
-        let mut bgl_entries = vec![
+        let mut bind_group_layout_entries = vec![
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::FRAGMENT,
@@ -86,7 +86,7 @@ impl BlurPipeline {
             },
         ];
         if !use_immediates {
-            bgl_entries.push(wgpu::BindGroupLayoutEntry {
+            bind_group_layout_entries.push(wgpu::BindGroupLayoutEntry {
                 binding: 2,
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
@@ -99,9 +99,9 @@ impl BlurPipeline {
                 count: None,
             });
         }
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-blur-bgl"),
-            entries: &bgl_entries,
+            entries: &bind_group_layout_entries,
         });
 
         let immediate_size = if use_immediates {
@@ -111,7 +111,7 @@ impl BlurPipeline {
         };
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-blur-pipeline-layout"),
-            bind_group_layouts: &[Some(&bgl)],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size,
         });
 
@@ -192,7 +192,7 @@ impl BlurPipeline {
             downsample_pipeline,
             upsample_pipeline,
             sampler,
-            bgl,
+            bind_group_layout,
             format,
             use_immediates,
             intermediate_pool: Vec::new(),
@@ -228,7 +228,7 @@ impl BlurPipeline {
 
         // Extract field references before the closure so rustc counts them as reads.
         let pipeline = &self.pipeline;
-        let bgl = &self.bgl;
+        let bind_group_layout = &self.bind_group_layout;
         let sampler = &self.sampler;
         let use_immediates = self.use_immediates;
 
@@ -274,14 +274,13 @@ impl BlurPipeline {
         });
         let output_view = output.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let tex_size = [width as f32, height as f32];
+        let texture_size = [width as f32, height as f32];
 
         let make_bg_with_params = |view: &wgpu::TextureView, params: &BlurParams| {
             if use_immediates {
-                // Immediates path: bind group has only texture + sampler.
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("rsx-blur-bind-group"),
-                    layout: bgl,
+                    layout: bind_group_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
@@ -294,7 +293,6 @@ impl BlurPipeline {
                     ],
                 })
             } else {
-                // Uniform buffer path: bind group includes params buffer at binding 2.
                 use wgpu::util::DeviceExt;
                 let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("rsx-blur-params"),
@@ -303,7 +301,7 @@ impl BlurPipeline {
                 });
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("rsx-blur-bind-group"),
-                    layout: bgl,
+                    layout: bind_group_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
@@ -325,7 +323,7 @@ impl BlurPipeline {
         {
             let params = BlurParams {
                 direction: [1.0, 0.0],
-                tex_size,
+                texture_size,
                 sigma,
                 _pad: [0.0; 3],
             };
@@ -357,7 +355,7 @@ impl BlurPipeline {
         {
             let params = BlurParams {
                 direction: [0.0, 1.0],
-                tex_size,
+                texture_size,
                 sigma,
                 _pad: [0.0; 3],
             };
@@ -408,7 +406,7 @@ impl BlurPipeline {
         // Clone the Arc-backed GPU handles so the down/up-sample loops can keep using them while take_pooled_texture borrows &mut self.intermediate_pool.
         let downsample_pipeline = self.downsample_pipeline.clone();
         let upsample_pipeline = self.upsample_pipeline.clone();
-        let bgl = self.bgl.clone();
+        let bind_group_layout = self.bind_group_layout.clone();
         let sampler = self.sampler.clone();
         let use_immediates = self.use_immediates;
 
@@ -430,7 +428,7 @@ impl BlurPipeline {
                 };
                 let params = BlurParams {
                     direction: [i as f32, 0.0],
-                    tex_size: [src_w as f32, src_h as f32],
+                    texture_size: [src_w as f32, src_h as f32],
                     sigma: 0.0,
                     _pad: [0.0; 3],
                 };
@@ -438,7 +436,7 @@ impl BlurPipeline {
                     device,
                     encoder,
                     &downsample_pipeline,
-                    &bgl,
+                    &bind_group_layout,
                     &sampler,
                     use_immediates,
                     source_view,
@@ -468,7 +466,7 @@ impl BlurPipeline {
                 let source_view = current_view.as_ref().expect("up-sample source view");
                 let params = BlurParams {
                     direction: [0.0, 0.0],
-                    tex_size: [current_w as f32, current_h as f32],
+                    texture_size: [current_w as f32, current_h as f32],
                     sigma: 0.0,
                     _pad: [0.0; 3],
                 };
@@ -476,7 +474,7 @@ impl BlurPipeline {
                     device,
                     encoder,
                     &upsample_pipeline,
-                    &bgl,
+                    &bind_group_layout,
                     &sampler,
                     use_immediates,
                     source_view,
@@ -549,7 +547,7 @@ impl BlurPipeline {
         device: &Device,
         encoder: &mut wgpu::CommandEncoder,
         pipeline: &wgpu::RenderPipeline,
-        bgl: &wgpu::BindGroupLayout,
+        bind_group_layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         use_immediates: bool,
         src_view: &wgpu::TextureView,
@@ -560,7 +558,7 @@ impl BlurPipeline {
         let bg = if use_immediates {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("rsx-blur-dual-bind-group"),
-                layout: bgl,
+                layout: bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -581,7 +579,7 @@ impl BlurPipeline {
             });
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("rsx-blur-dual-bind-group"),
-                layout: bgl,
+                layout: bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,

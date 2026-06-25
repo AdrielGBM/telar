@@ -11,10 +11,9 @@ pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
     }
 }
 
-// Applies the full affine inverse of `m` to all pointer-coordinate events. Returns None for
-// non-pointer events or when `m` is degenerate (det ≈ 0), so callers fall back to the original.
-pub(crate) fn transform_pointer(event: &Event, m: [f32; 6]) -> Option<Event> {
-    let [a, b, c, d, e, f] = m;
+// Applies the full affine inverse of `matrix` to all pointer-coordinate events. Returns None for non-pointer events or when `matrix` is degenerate (det ≈ 0), so callers fall back to the original.
+pub(crate) fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
+    let [a, b, c, d, e, f] = matrix;
     let det = a * d - b * c;
     if det.abs() < 1e-6 {
         return None;
@@ -25,17 +24,17 @@ pub(crate) fn transform_pointer(event: &Event, m: [f32; 6]) -> Option<Event> {
     let inv_d = a / det;
     let inv_e = (c * f - d * e) / det;
     let inv_f = (b * e - a * f) / det;
-    let apply = |wx: f64, wy: f64| -> (f64, f64) {
-        let lx = inv_a as f64 * wx + inv_c as f64 * wy + inv_e as f64;
-        let ly = inv_b as f64 * wx + inv_d as f64 * wy + inv_f as f64;
-        (lx, ly)
+    let apply = |world_x: f64, world_y: f64| -> (f64, f64) {
+        let local_x = inv_a as f64 * world_x + inv_c as f64 * world_y + inv_e as f64;
+        let local_y = inv_b as f64 * world_x + inv_d as f64 * world_y + inv_f as f64;
+        (local_x, local_y)
     };
     match event {
         Event::PointerMoved { x, y, source } => {
-            let (lx, ly) = apply(*x, *y);
+            let (local_x, local_y) = apply(*x, *y);
             Some(Event::PointerMoved {
-                x: lx,
-                y: ly,
+                x: local_x,
+                y: local_y,
                 source: source.clone(),
             })
         }
@@ -45,10 +44,10 @@ pub(crate) fn transform_pointer(event: &Event, m: [f32; 6]) -> Option<Event> {
             button,
             source,
         } => {
-            let (lx, ly) = apply(*x, *y);
+            let (local_x, local_y) = apply(*x, *y);
             Some(Event::PointerPressed {
-                x: lx,
-                y: ly,
+                x: local_x,
+                y: local_y,
                 button: button.clone(),
                 source: source.clone(),
             })
@@ -59,10 +58,10 @@ pub(crate) fn transform_pointer(event: &Event, m: [f32; 6]) -> Option<Event> {
             button,
             source,
         } => {
-            let (lx, ly) = apply(*x, *y);
+            let (local_x, local_y) = apply(*x, *y);
             Some(Event::PointerReleased {
-                x: lx,
-                y: ly,
+                x: local_x,
+                y: local_y,
                 button: button.clone(),
                 source: source.clone(),
             })
@@ -75,8 +74,7 @@ pub(crate) fn offset_pointer(event: &Event, dx: f64, dy: f64) -> Option<Event> {
     transform_pointer(event, [1.0, 0.0, 0.0, 1.0, dx as f32, dy as f32])
 }
 
-// Returns a reference to `event` when the pointer is inside `rect`, or None when it is outside.
-// Non-pointer events always pass through (returns Some). Callers use None to short-circuit to Ignored.
+// Returns a reference to `event` when the pointer is inside `rect`, or None when it is outside. Non-pointer events always pass through (returns Some). Callers use None to short-circuit to Ignored.
 pub(crate) fn clip_pointer_event<'a>(event: &'a Event, rect: Rect) -> Option<&'a Event> {
     match pointer_coords(event) {
         Some((x, y)) if !rect.contains(x as f32, y as f32) => None,
@@ -84,9 +82,7 @@ pub(crate) fn clip_pointer_event<'a>(event: &'a Event, rect: Rect) -> Option<&'a
     }
 }
 
-// Like dispatch_to_children but skips entries for which the predicate returns false.
-// For each entry, `should_dispatch` is called first — if it returns false the entry is skipped;
-// then `get_result` is called to obtain the EventResult for that entry.
+// Like dispatch_to_children but skips entries for which the predicate returns false. For each entry, `should_dispatch` is called first — if it returns false the entry is skipped; then `get_result` is called to obtain the EventResult for that entry.
 pub(crate) fn dispatch_to_children_filtered<T, P, D>(
     children: &mut [T],
     mut should_dispatch: P,
@@ -128,10 +124,10 @@ pub(crate) fn dispatch_container_event(
     dispatch_to_children_filtered(
         children,
         |child| match pointer_pos {
-            Some((px, py)) => child
+            Some((pointer_x, pointer_y)) => child
                 .rect
                 .as_ref()
-                .map_or(true, |sig| sig.get().contains(px, py)),
+                .map_or(true, |sig| sig.get().contains(pointer_x, pointer_y)),
             None => true,
         },
         |child| child.item.borrow_mut().on_event(event),

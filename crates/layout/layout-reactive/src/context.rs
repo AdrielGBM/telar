@@ -50,22 +50,11 @@ pub struct WidgetCtx {
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
     parents: FxHashMap<NodeId, NodeId>,
     boundary_nodes: FxHashMap<NodeId, (f32, f32)>,
-    // Available space each root was last computed against, so compute_layout can
-    // re-run when only the space changed (e.g. a window resize) even though the
-    // node itself is clean. Without this, resizing an independently-computed root
-    // is silently a no-op and its layout freezes at the first size.
+    // Available space each root was last computed against, so compute_layout can re-run when only the space changed (e.g. a window resize) even though the node itself is clean. Without this, resizing an independently-computed root is silently a no-op and its layout freezes at the first size.
     last_space: FxHashMap<NodeId, (AvailableSpace, AvailableSpace)>,
-    // Nodes with a definite `max-width`, their original style, and the width pinned on
-    // the previous compute (`None` = unpinned). taffy sizes a max-width box's intrinsic
-    // height at its uncapped width, so a wrapping child reports a 1-line height and the
-    // box ends up too short. compute_layout pins each resolved width as a definite width
-    // and re-runs so heights are correct. The stored pin lets the undo pass stay
-    // idempotent: an unpinned box whose space did not change is left untouched.
+    // Nodes with a definite `max-width`, their original style, and the width pinned on the previous compute (`None` = unpinned). taffy sizes a max-width box's intrinsic height at its uncapped width, so a wrapping child reports a 1-line height and the box ends up too short. compute_layout pins each resolved width as a definite width and re-runs so heights are correct. The stored pin lets the undo pass stay idempotent: an unpinned box whose space did not change is left untouched.
     constrained: Vec<(NodeId, LayoutStyle, Option<f32>)>,
-    // Whether each compute-root's width/height were originally `auto`, captured the
-    // first time it is computed. An auto-sized root fills the definite space it is
-    // computed in, so a top-level page need not declare width:100% to avoid
-    // collapsing to its content width.
+    // Whether each compute-root's width/height were originally `auto`, captured the first time it is computed. An auto-sized root fills the definite space it is computed in, so a top-level page need not declare width:100% to avoid collapsing to its content width.
     root_auto: FxHashMap<NodeId, (bool, bool)>,
     // Guards against recursive compute(): an effect that reads a layout signal and calls compute_layout() again creates a re-layout cycle caught immediately in debug builds.
     #[cfg(debug_assertions)]
@@ -100,8 +89,8 @@ impl WidgetCtx {
         let node = self.engine.new_leaf(style.clone())?;
         let signal = create_rw_signal(Rect::default());
         self.registry.insert(node, signal.clone());
-        if let Some(dims) = self.engine.is_fixed_size_node(node) {
-            self.boundary_nodes.insert(node, dims);
+        if let Some(dimensions) = self.engine.is_fixed_size(node) {
+            self.boundary_nodes.insert(node, dimensions);
         }
         self.track_constrained(node, &style);
         Ok((node, signal))
@@ -130,8 +119,8 @@ impl WidgetCtx {
         for &child in children {
             self.parents.insert(child, node);
         }
-        if let Some(dims) = self.engine.is_fixed_size_node(node) {
-            self.boundary_nodes.insert(node, dims);
+        if let Some(dimensions) = self.engine.is_fixed_size(node) {
+            self.boundary_nodes.insert(node, dimensions);
         }
         self.track_constrained(node, &style);
         Ok(node)
@@ -143,57 +132,48 @@ impl WidgetCtx {
         width: AvailableSpace,
         height: AvailableSpace,
     ) -> Result<(), LayoutError> {
-        // A changed available space (window resize) must re-run layout even when the
-        // node is clean: dirty the root so the cached size from the previous space is
-        // discarded. Skip only when both the node is clean and the space is unchanged.
-        let space_changed = self.last_space.get(&root) != Some(&(width, height));
-        if space_changed {
+        // A changed available space (window resize) must re-run layout even when the node is clean: dirty the root so the cached size from the previous space is discarded. Skip only when both the node is clean and the space is unchanged.
+        let is_space_changed = self.last_space.get(&root) != Some(&(width, height));
+        if is_space_changed {
             self.engine.mark_dirty(root).ok();
             self.last_space.insert(root, (width, height));
         } else if !self.engine.is_dirty(root) {
             return Ok(());
         }
-        // A layout root fills the definite space it is computed in: an auto width or
-        // height becomes the available size, so a top-level page need not declare
-        // width:100% to avoid collapsing to its content. Only this root is affected.
-        let (w_auto, h_auto) = match self.root_auto.get(&root).copied() {
+        // A layout root fills the definite space it is computed in: an auto width or height becomes the available size, so a top-level page need not declare width:100% to avoid collapsing to its content. Only this root is affected.
+        let (width_auto, height_auto) = match self.root_auto.get(&root).copied() {
             Some(v) => v,
             None => {
-                let v = self.engine.size_is_auto(root);
+                let v = self.engine.is_size_auto(root);
                 self.root_auto.insert(root, v);
                 v
             }
         };
-        let mut filled_root = false;
-        if w_auto {
+        let mut did_fill_root = false;
+        if width_auto {
             let w = match width {
                 AvailableSpace::Definite(w) => Some(w),
                 _ => None,
             };
             self.engine.set_width(root, w);
-            filled_root = true;
+            did_fill_root = true;
         }
-        if h_auto {
+        if height_auto {
             let h = match height {
                 AvailableSpace::Definite(h) => Some(h),
                 _ => None,
             };
             self.engine.set_height(root, h);
-            filled_root = true;
+            did_fill_root = true;
         }
-        if filled_root {
+        if did_fill_root {
             self.engine.mark_dirty(root).ok();
         }
-        // Undo any width pins from a previous layout so each max-width box resolves
-        // against the new available space before we re-pin it after the first pass.
-        // Idempotent: only touch a box when the space changed (everything must
-        // re-resolve) or it actually carried a pin to lift. Leaving unpinned boxes alone
-        // when the space is unchanged avoids dirtying their ancestors, which would
-        // otherwise force find_boundary_root to fall back to global_root every frame.
+        // Undo any width pins from a previous layout so each max-width box resolves against the new available space before we re-pin it after the first pass. Idempotent: only touch a box when the space changed (everything must re-resolve) or it actually carried a pin to lift. Leaving unpinned boxes alone when the space is unchanged avoids dirtying their ancestors, which would otherwise force find_boundary_root to fall back to global_root every frame.
         for i in 0..self.constrained.len() {
             let node = self.constrained[i].0;
             let had_pin = self.constrained[i].2.is_some();
-            if !space_changed && !had_pin {
+            if !is_space_changed && !had_pin {
                 continue;
             }
             let style = self.constrained[i].1.clone();
@@ -221,10 +201,8 @@ impl WidgetCtx {
             self.find_boundary_root(&dirty_nodes, root, width, height);
         self.engine
             .compute_layout(layout_root, layout_width, layout_height)?;
-        // Second pass: pin each max-width box to the width it just resolved to, so a
-        // re-layout sizes its wrapping children at the capped width (correct line
-        // count / height) instead of taffy's uncapped 1-line intrinsic estimate.
-        let mut pinned_any = false;
+        // Second pass: pin each max-width box to the width it just resolved to, so a re-layout sizes its wrapping children at the capped width (correct line count / height) instead of taffy's uncapped 1-line intrinsic estimate.
+        let mut did_pin_any = false;
         for i in 0..self.constrained.len() {
             let node = self.constrained[i].0;
             let style = self.constrained[i].1.clone();
@@ -234,16 +212,16 @@ impl WidgetCtx {
             if !self.is_in_subtree(node, layout_root) {
                 continue;
             }
-            if let Ok(laid) = self.engine.get_layout(node) {
-                if laid.width > 0.0 && laid.width <= max_w + 0.5 {
-                    self.engine.set_style(node, style.width(laid.width)).ok();
+            if let Ok(layout) = self.engine.layout(node) {
+                if layout.width > 0.0 && layout.width <= max_w + 0.5 {
+                    self.engine.set_style(node, style.width(layout.width)).ok();
                     self.engine.mark_dirty(node).ok();
-                    self.constrained[i].2 = Some(laid.width);
-                    pinned_any = true;
+                    self.constrained[i].2 = Some(layout.width);
+                    did_pin_any = true;
                 }
             }
         }
-        if pinned_any {
+        if did_pin_any {
             self.engine
                 .compute_layout(layout_root, layout_width, layout_height)?;
         }
@@ -277,13 +255,13 @@ impl WidgetCtx {
             .iter()
             .find_map(|&node| self.find_nearest_boundary(node));
         match candidate {
-            Some((boundary, bw, bh))
+            Some((boundary, boundary_width, boundary_height))
                 if dirty_nodes.iter().all(|&n| self.is_in_subtree(n, boundary)) =>
             {
                 (
                     boundary,
-                    AvailableSpace::Definite(bw),
-                    AvailableSpace::Definite(bh),
+                    AvailableSpace::Definite(boundary_width),
+                    AvailableSpace::Definite(boundary_height),
                 )
             }
             _ => (global_root, global_width, global_height),
@@ -333,9 +311,7 @@ mod tests {
 
     use super::*;
 
-    // A flex-wrap row nested in a max-width box (the full-bleed-band + centered-
-    // content pattern) must reserve height for the lines it actually wraps into,
-    // even though taffy would otherwise size the box at its uncapped 1-line width.
+    // A flex-wrap row nested in a max-width box (the full-bleed-band + centered- content pattern) must reserve height for the lines it actually wraps into, even though taffy would otherwise size the box at its uncapped 1-line width.
     #[test]
     fn maxwidth_box_reserves_height_for_wrapped_content() {
         let mut ctx = WidgetCtx::new();
@@ -399,9 +375,7 @@ mod tests {
         );
     }
 
-    // Re-running compute_layout against the SAME available space (root re-dirtied by an
-    // unrelated change) must keep the max-width box correctly sized: the idempotent undo
-    // must still lift and re-pin a previously pinned box so its wrapped height holds.
+    // Re-running compute_layout against the SAME available space (root re-dirtied by an unrelated change) must keep the max-width box correctly sized: the idempotent undo must still lift and re-pin a previously pinned box so its wrapped height holds.
     #[test]
     fn maxwidth_box_stable_across_recompute() {
         let mut ctx = WidgetCtx::new();
@@ -461,14 +435,12 @@ mod tests {
         );
     }
 
-    // An auto-sized layout root fills the definite space it is computed in, so a
-    // page need not declare width:100% to avoid collapsing to its content width.
+    // An auto-sized layout root fills the definite space it is computed in, so a page need not declare width:100% to avoid collapsing to its content width.
     #[test]
     fn auto_root_fills_definite_width() {
         let mut ctx = WidgetCtx::new();
         let (child, _) = new_leaf(&mut ctx, LayoutStyle::new().height(40.0)).unwrap();
-        // A column with auto width whose child is content-sized would otherwise
-        // shrink to the child; the root-fill rule stretches it to the given width.
+        // A column with auto width whose child is content-sized would otherwise shrink to the child; the root-fill rule stretches it to the given width.
         let page = new_container(&mut ctx, LayoutStyle::new().flex_column(), &[child]).unwrap();
         compute_layout(
             &mut ctx,

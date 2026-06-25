@@ -72,7 +72,11 @@ impl ImagePipeline {
             device,
             "image",
             &shader_source,
-            &[viewport_bgl, &instances.instances_bgl, &texture_bgl],
+            &[
+                viewport_bgl,
+                &instances.instances_bind_group_layout,
+                &texture_bgl,
+            ],
             &[],
             surface_format,
             msaa_samples,

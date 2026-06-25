@@ -7,7 +7,7 @@ use crate::{
     draw_state::{DrawState, IDENTITY_MATRIX},
 };
 
-// Advances a DrawState's cumulative matrix by a single command, mirroring for_each_with_matrix: PushMatrix/PopMatrix update the matrix first and every command then reads state.cum_matrix.
+// Advances a DrawState's cumulative matrix by a single command, mirroring for_each_with_matrix: PushMatrix/PopMatrix update the matrix first and every command then reads state.cumulative_matrix.
 fn advance_matrix(state: &mut DrawState, cmd: &DrawCommand) {
     match cmd {
         DrawCommand::PushMatrix { matrix } => state.push_matrix(*matrix),
@@ -70,9 +70,9 @@ pub struct ScrollBlit {
     /// The clipping rect that encloses the scrollable content.
     pub scroll_clip: Rect,
     /// Horizontal pixel shift (negative = content moved left = scroll right). Zero for Y-only scrolls.
-    pub delta_tx: i32,
+    pub delta_x: i32,
     /// Vertical pixel shift (negative = content moved up = scroll down). Zero for X-only scrolls.
-    pub delta_ty: i32,
+    pub delta_y: i32,
     /// The strip of newly exposed pixels that must be re-rendered (horizontal band for Y scrolls, vertical band for X scrolls).
     pub exposed_band: Rect,
     /// Bounds of any other changed elements outside the scroll clip (e.g. scrollbar).
@@ -98,15 +98,15 @@ pub fn compute_dirty_rect(
     }
 
     let mut dirty: DirtyRects = SmallVec::new();
-    // Advance one cumulative matrix per slice inline instead of materializing two full Vecs: cum_matrix at command i is identical to the old matrices[i] by construction.
+    // Advance one cumulative matrix per slice inline instead of materializing two full Vecs: cumulative_matrix at command i is identical to the old matrices[i] by construction.
     let mut new_state = DrawState::new();
     let mut old_state = DrawState::new();
 
     for (new_cmd, old_cmd) in new_cmds.iter().zip(old_cmds.iter()) {
         advance_matrix(&mut new_state, new_cmd);
         advance_matrix(&mut old_state, old_cmd);
-        let new_matrix = new_state.cum_matrix;
-        let old_matrix = old_state.cum_matrix;
+        let new_matrix = new_state.cumulative_matrix;
+        let old_matrix = old_state.cumulative_matrix;
 
         if new_cmd != old_cmd {
             // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible due to the new clip require a full re-render.
@@ -155,7 +155,7 @@ pub fn detect_scroll_blit(
         .zip(old_cmds.iter())
         .position(|(nc, oc)| nc != oc)?;
 
-    let (delta_tx_f, delta_ty_f) = match (&new_cmds[scroll_idx], &old_cmds[scroll_idx]) {
+    let (delta_x_f, delta_y_f) = match (&new_cmds[scroll_idx], &old_cmds[scroll_idx]) {
         (DrawCommand::PushMatrix { matrix: nm }, DrawCommand::PushMatrix { matrix: om }) => {
             match (matrix_as_translation(nm), matrix_as_translation(om)) {
                 (Some((ntx, nty)), Some((otx, oty))) if ntx == otx => (0.0f32, nty - oty),
@@ -193,14 +193,14 @@ pub fn detect_scroll_blit(
         return None;
     }
 
-    let delta_tx = delta_tx_f as i32;
-    let delta_ty = delta_ty_f as i32;
+    let delta_x = delta_x_f as i32;
+    let delta_y = delta_y_f as i32;
 
     // No savings from blitting if the entire clip would need repaint.
-    if delta_tx != 0 && (delta_tx.abs() as f32) >= scroll_clip.width {
+    if delta_x != 0 && (delta_x.abs() as f32) >= scroll_clip.width {
         return None;
     }
-    if delta_ty != 0 && (delta_ty.abs() as f32) >= scroll_clip.height {
+    if delta_y != 0 && (delta_y.abs() as f32) >= scroll_clip.height {
         return None;
     }
 
@@ -232,10 +232,10 @@ pub fn detect_scroll_blit(
         }
     }
 
-    let exposed_band = if delta_tx != 0 {
-        if delta_tx < 0 {
+    let exposed_band = if delta_x != 0 {
+        if delta_x < 0 {
             // Content moved left (scrolled right): the right strip is newly exposed.
-            let band_w = (-delta_tx) as f32;
+            let band_w = (-delta_x) as f32;
             Rect::new(
                 scroll_clip.x + scroll_clip.width - band_w,
                 scroll_clip.y,
@@ -244,12 +244,12 @@ pub fn detect_scroll_blit(
             )
         } else {
             // Content moved right (scrolled left): the left strip is newly exposed.
-            let band_w = delta_tx as f32;
+            let band_w = delta_x as f32;
             Rect::new(scroll_clip.x, scroll_clip.y, band_w, scroll_clip.height)
         }
-    } else if delta_ty < 0 {
+    } else if delta_y < 0 {
         // Content moved up (scrolled down): the bottom band is newly exposed.
-        let band_h = (-delta_ty) as f32;
+        let band_h = (-delta_y) as f32;
         Rect::new(
             scroll_clip.x,
             scroll_clip.y + scroll_clip.height - band_h,
@@ -258,12 +258,11 @@ pub fn detect_scroll_blit(
         )
     } else {
         // Content moved down (scrolled up): the top band is newly exposed.
-        let band_h = delta_ty as f32;
+        let band_h = delta_y as f32;
         Rect::new(scroll_clip.x, scroll_clip.y, scroll_clip.width, band_h)
     };
 
-    // Walk a single DrawState through the scroll block (0..=pop_idx) to inherit the outer matrix
-    // context, then keep advancing it inline over the suffix — no Vec of matrices for the whole slice.
+    // Walk a single DrawState through the scroll block (0..=pop_idx) to inherit the outer matrix context, then keep advancing it inline over the suffix — no Vec of matrices for the whole slice.
     let mut state = DrawState::new();
     for cmd in &new_cmds[..=pop_idx] {
         advance_matrix(&mut state, cmd);
@@ -273,7 +272,7 @@ pub fn detect_scroll_blit(
     let mut extra_dirty: Option<Rect> = None;
     for j in (pop_idx + 1)..n {
         advance_matrix(&mut state, &new_cmds[j]);
-        let cmd_matrix = state.cum_matrix;
+        let cmd_matrix = state.cumulative_matrix;
         if new_cmds[j] != old_cmds[j] {
             if let Some(r) =
                 culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default())
@@ -290,8 +289,8 @@ pub fn detect_scroll_blit(
 
     Some(ScrollBlit {
         scroll_clip,
-        delta_tx,
-        delta_ty,
+        delta_x,
+        delta_y,
         exposed_band,
         extra_dirty,
     })
@@ -567,7 +566,7 @@ mod tests {
             DrawCommand::PopClip,
         ];
         let blit = detect_scroll_blit(&new, &old).unwrap();
-        assert_eq!(blit.delta_ty, -10);
+        assert_eq!(blit.delta_y, -10);
         // bottom band exposed when scrolling down
         assert_eq!(blit.exposed_band.y, 190.0);
         assert_eq!(blit.exposed_band.height, 10.0);

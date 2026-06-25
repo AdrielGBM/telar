@@ -60,12 +60,12 @@ pub fn to_pascal_case(name: &str) -> String {
 }
 
 /// Generated `LayoutStyle` constructor name for a style class: `card` -> `style_card`.
-pub fn style_fn_name(class: &str) -> String {
+pub fn style_function_name(class: &str) -> String {
     format!("style_{}", to_snake_case(class))
 }
 
 /// Generated color/number constant name: `card-border` -> `COLOR_CARD_BORDER`.
-pub fn const_name(prefix: &str, name: &str) -> String {
+pub fn constant_name(prefix: &str, name: &str) -> String {
     format!("{prefix}{}", to_snake_case(name).to_ascii_uppercase())
 }
 
@@ -92,7 +92,7 @@ pub(crate) fn is_ident(s: &str) -> bool {
     chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
 
-pub(crate) fn mentions_ident(code: &str, ident: &str) -> bool {
+pub(crate) fn contains_ident(code: &str, ident: &str) -> bool {
     let bytes = code.as_bytes();
     let mut start = 0;
     while let Some(pos) = code[start..].find(ident) {
@@ -111,8 +111,6 @@ pub(crate) fn mentions_ident(code: &str, ident: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // --- to_snake_case ---
 
     #[test]
     fn snake_basic_already_snake() {
@@ -154,8 +152,6 @@ mod tests {
         // chars that are not alphanumeric and not separators are silently dropped
         assert_eq!(to_snake_case("btn@primary"), "btnprimary");
     }
-
-    // --- to_pascal_case ---
 
     #[test]
     fn pascal_basic_already_pascal() {

@@ -41,7 +41,7 @@ impl ScrollPage {
         })
     }
 
-    fn relayout(&mut self, width: f32, height: f32) {
+    fn recompute_layout(&mut self, width: f32, height: f32) {
         mark_dirty(&mut self.ctx, self.root).ok();
         compute_layout(
             &mut self.ctx,
@@ -68,7 +68,7 @@ impl Component for ScrollPage {
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         if let Event::WindowResized { width, height } = event {
-            self.relayout(*width as f32, *height as f32);
+            self.recompute_layout(*width as f32, *height as f32);
             return EventResult::Handled;
         }
         self.scroll_area.on_event(event)

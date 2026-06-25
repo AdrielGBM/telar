@@ -56,7 +56,7 @@ impl LayoutEngine {
     }
 
     /// Whether the node's `width`/`height` are `auto` (i.e. content-sized).
-    pub fn size_is_auto(&self, node: NodeId) -> (bool, bool) {
+    pub fn is_size_auto(&self, node: NodeId) -> (bool, bool) {
         match self.tree.style(node) {
             Ok(s) => (s.size.width.is_auto(), s.size.height.is_auto()),
             Err(_) => (false, false),
@@ -98,8 +98,7 @@ impl LayoutEngine {
                     let Some(measure) = context else {
                         return taffy::geometry::Size::ZERO;
                     };
-                    // Width to wrap against: a resolved width wins, else the definite
-                    // available width, else a large bound so MaxContent stays single-line.
+                    // Width to wrap against: a resolved width wins, else the definite available width, else a large bound so MaxContent stays single-line.
                     let width = known.width.unwrap_or(match available.width {
                         taffy::AvailableSpace::Definite(w) => w,
                         taffy::AvailableSpace::MaxContent => 1.0e6,
@@ -119,7 +118,7 @@ impl LayoutEngine {
         self.tree.dirty(node).unwrap_or(true)
     }
 
-    pub fn get_layout(&self, node: NodeId) -> Result<geometry_core::Rect, LayoutError> {
+    pub fn layout(&self, node: NodeId) -> Result<geometry_core::Rect, LayoutError> {
         let layout = self.tree.layout(node).map_err(LayoutError::from)?;
         Ok(geometry_core::Rect::new(
             layout.location.x,
@@ -129,7 +128,7 @@ impl LayoutEngine {
         ))
     }
 
-    pub fn is_fixed_size_node(&self, node: NodeId) -> Option<(f32, f32)> {
+    pub fn is_fixed_size(&self, node: NodeId) -> Option<(f32, f32)> {
         let style = self.tree.style(node).ok()?;
         let w = style.size.width.into_option()?;
         let h = style.size.height.into_option()?;
@@ -217,7 +216,7 @@ mod tests {
                 AvailableSpace::Definite(200.0),
             )
             .unwrap();
-        let rect = engine.get_layout(leaf).unwrap();
+        let rect = engine.layout(leaf).unwrap();
         assert_eq!(rect.width, 50.0_f32);
         assert_eq!(rect.height, 40.0_f32);
     }
@@ -245,8 +244,8 @@ mod tests {
             )
             .unwrap();
 
-        let r1 = engine.get_layout(child1).unwrap();
-        let r2 = engine.get_layout(child2).unwrap();
+        let r1 = engine.layout(child1).unwrap();
+        let r2 = engine.layout(child2).unwrap();
         assert_eq!(r1.x, 0.0_f32);
         assert_eq!(r1.y, 0.0_f32);
         assert_eq!(r2.x, 100.0_f32);
@@ -276,8 +275,8 @@ mod tests {
             )
             .unwrap();
 
-        let r1 = engine.get_layout(child1).unwrap();
-        let r2 = engine.get_layout(child2).unwrap();
+        let r1 = engine.layout(child1).unwrap();
+        let r2 = engine.layout(child2).unwrap();
         assert_eq!(r1.x, 0.0_f32);
         assert_eq!(r1.y, 0.0_f32);
         assert_eq!(r2.x, 0.0_f32);
@@ -348,7 +347,7 @@ mod tests {
                 AvailableSpace::Definite(200.0),
             )
             .unwrap();
-        let rect = engine.get_layout(leaf).unwrap();
+        let rect = engine.layout(leaf).unwrap();
         assert_eq!(rect.width, 80.0_f32);
         assert_eq!(rect.height, 60.0_f32);
     }

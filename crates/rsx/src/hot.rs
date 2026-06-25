@@ -22,11 +22,7 @@ impl crate::app::App for HotApp {
 
 #[cfg(feature = "dev")]
 pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error::Error>> {
-    // Copy to a unique path before dlopen. On Linux, dlopen caches loaded libraries by
-    // (device, inode). If the linker writes the new .so in-place (same inode), dlopen
-    // returns the already-loaded old handle instead of the fresh build. Copying creates a
-    // new inode, guaranteeing a fresh load. Unlinking after dlopen is safe: the kernel
-    // keeps the inode alive via the mapping until the Library is dropped.
+    // Copy to a unique path before dlopen. On Linux, dlopen caches loaded libraries by (device, inode). If the linker writes the new .so in-place (same inode), dlopen returns the already-loaded old handle instead of the fresh build. Copying creates a new inode, guaranteeing a fresh load. Unlinking after dlopen is safe: the kernel keeps the inode alive via the mapping until the Library is dropped.
     let unique = path.with_file_name(format!(
         ".hot-{}.so",
         std::time::SystemTime::now()
@@ -35,8 +31,7 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
             .as_nanos()
     ));
     std::fs::copy(path, &unique)?;
-    // RUNTIME and THEME use trivially-destructible TLS types (no Drop impl), so no TLS
-    // destructors are registered in the dylib. dlclose without RTLD_NODELETE is safe.
+    // RUNTIME and THEME use trivially-destructible TLS types (no Drop impl), so no TLS destructors are registered in the dylib. dlclose without RTLD_NODELETE is safe.
     #[cfg(unix)]
     let lib_result = unsafe {
         libloading::os::unix::Library::open(

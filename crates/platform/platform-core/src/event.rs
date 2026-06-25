@@ -38,10 +38,10 @@ pub enum Key {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ModifiersState {
-    pub shift: bool,
-    pub ctrl: bool,
-    pub alt: bool,
-    pub meta: bool,
+    pub is_shift: bool,
+    pub is_ctrl: bool,
+    pub is_alt: bool,
+    pub is_meta: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,7 +58,7 @@ pub enum Event {
     },
     WindowCloseRequested,
     FocusChanged {
-        gained: bool,
+        is_focused: bool,
     },
     CursorEntered,
     CursorLeft,

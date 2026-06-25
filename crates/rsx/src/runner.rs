@@ -26,14 +26,14 @@ use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use services_core::AppPathsProvider;
 use ui_core::{ComponentList, EventResult};
 
-struct HwFrameMsg {
-    w: u32,
-    h: u32,
-    sf: f32,
+struct HardwareFrameMsg {
+    width: u32,
+    height: u32,
+    scale_factor: f32,
     generation: u64,
     commands: Vec<renderer_core::DrawCommand>,
     clear: Option<renderer_core::Color>,
-    at: std::time::Instant,
+    timestamp: std::time::Instant,
 }
 
 use rsx_devtools::{DevAction, DevPlugin};
@@ -74,7 +74,7 @@ where
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     _window: std::marker::PhantomData<W>,
-    render_tx: Option<std::sync::mpsc::SyncSender<HwFrameMsg>>,
+    render_tx: Option<std::sync::mpsc::SyncSender<HardwareFrameMsg>>,
     render_join: Option<std::thread::JoinHandle<HardwareRenderer<W>>>,
     hw_renderer: Option<HardwareRenderer<W>>,
     #[cfg(all(feature = "dev", not(target_os = "android")))]
@@ -94,9 +94,7 @@ where
 {
     fn on_resume(&mut self, window: &W) -> bool {
         let android = cfg!(target_os = "android");
-        // Point the layout-time text measurer at the same fonts as the renderer,
-        // on this (the layout) thread, before any layout runs. Otherwise it falls
-        // back to system defaults and aborts on Android ("no default font found").
+        // Point the layout-time text measurer at the same fonts as the renderer, on this (the layout) thread, before any layout runs. Otherwise it falls back to system defaults and aborts on Android ("no default font found").
         renderer_text::set_measure_font_config(build_font_config(
             self.font_paths.clone(),
             self.font_data.clone(),
@@ -105,8 +103,11 @@ where
         let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
         match self.backend {
             RendererBackend::Software => {
-                let budget =
-                    build_sw_budget(self.font_paths.clone(), self.font_data.clone(), android);
+                let budget = build_software_renderer_config(
+                    self.font_paths.clone(),
+                    self.font_data.clone(),
+                    android,
+                );
                 match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                     Ok(r) => {
                         self.renderer = Some(Box::new(r));
@@ -118,8 +119,11 @@ where
                 }
             }
             RendererBackend::Hardware | RendererBackend::Auto => {
-                let font_config =
-                    build_hw_font_config(self.font_paths.clone(), self.font_data.clone(), android);
+                let font_config = build_hardware_font_config(
+                    self.font_paths.clone(),
+                    self.font_data.clone(),
+                    android,
+                );
                 // Reuse the renderer saved on suspend (keeps device/pipelines/caches warm); only the surface is rebound. Otherwise build a fresh one.
                 let hw_result = if let Some(mut existing) = self.hw_renderer.take() {
                     existing
@@ -136,14 +140,14 @@ where
                 };
                 match hw_result {
                     Ok(hw) => {
-                        let (tx, join) = spawn_hw_render_thread(hw);
+                        let (tx, join) = spawn_hardware_render_thread(hw);
                         self.render_tx = Some(tx);
                         self.render_join = Some(join);
                         self.renderer_is_hardware = true;
                     }
                     Err(e) if matches!(self.backend, RendererBackend::Auto) => {
                         tracing::warn!("HW renderer unavailable ({e}), falling back to SW");
-                        let budget = build_sw_budget(
+                        let budget = build_software_renderer_config(
                             self.font_paths.clone(),
                             self.font_data.clone(),
                             android,
@@ -189,8 +193,7 @@ where
                 .ok();
             self.hot_reload_rx = Some(relay_rx);
         }
-        // Synthesize an initial WindowResized so apps that initialize layout from that event
-        // start with the correct logical dimensions instead of their hardcoded defaults.
+        // Synthesize an initial WindowResized so apps that initialize layout from that event start with the correct logical dimensions instead of their hardcoded defaults.
         let initial_resize = platform_core::Event::WindowResized {
             width: (window.width() as f32 / sf) as u32,
             height: (window.height() as f32 / sf) as u32,
@@ -201,9 +204,7 @@ where
 
         let w = window.clone();
         self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
-        // Only the SW/fallback path reports ADPF from this (the UI/layout) thread, so only it needs a
-        // session keyed to this TID. The HW path renders on a dedicated thread and creates its own
-        // session there (correct TID); creating one here too would register the wrong thread.
+        // Only the SW/fallback path reports ADPF from this (the UI/layout) thread, so only it needs a session keyed to this TID. The HW path renders on a dedicated thread and creates its own session there (correct TID); creating one here too would register the wrong thread.
         #[cfg(target_os = "android")]
         if !self.renderer_is_hardware {
             let session = unsafe {
@@ -258,7 +259,7 @@ where
                             let android = cfg!(target_os = "android");
                             let handle = std::thread::spawn(move || {
                                 let font_config =
-                                    build_hw_font_config(font_paths, font_data, android);
+                                    build_hardware_font_config(font_paths, font_data, android);
                                 HardwareRenderer::new(
                                     window_clone,
                                     cache_path.as_deref(),
@@ -284,8 +285,7 @@ where
             if tree.on_event(&event) == EventResult::Handled {
                 #[cfg(feature = "dev")]
                 tree.bump_force_ticks();
-                // Flush reactive effects immediately so on_redraw() in the same
-                // cycle finds tree_dirty=true rather than deferring to the next cycle.
+                // Flush reactive effects immediately so on_redraw() in the same cycle finds tree_dirty=true rather than deferring to the next cycle.
                 end_batch();
                 begin_batch();
                 window.request_redraw();
@@ -301,9 +301,7 @@ where
                     crate::hot::HotEvent::Reload(new_path) => {
                         match crate::hot::load_hot_app(&new_path) {
                             Ok(new_app) => {
-                                // Drop the old tree first so effect closures (which contain code from
-                                // the old dylib) are destroyed while the old lib is still mapped.
-                                // Only then replace self.app, which dlcloses the old dylib.
+                                // Drop the old tree first so effect closures (which contain code from the old dylib) are destroyed while the old lib is still mapped. Only then replace self.app, which dlcloses the old dylib.
                                 self.tree = None;
                                 self.app = Box::new(new_app);
                                 self.tree = Some(ComponentList::new(self.app.root()));
@@ -366,7 +364,7 @@ where
                         unsafe {
                             libc::malloc_trim(0);
                         }
-                        let (tx, join) = spawn_hw_render_thread(new_renderer);
+                        let (tx, join) = spawn_hardware_render_thread(new_renderer);
                         self.render_tx = Some(tx);
                         self.render_join = Some(join);
                         self.renderer_is_hardware = true;
@@ -399,8 +397,11 @@ where
             }
             match self.backend {
                 RendererBackend::Software => {
-                    let budget =
-                        build_sw_budget(self.font_paths.clone(), self.font_data.clone(), android);
+                    let budget = build_software_renderer_config(
+                        self.font_paths.clone(),
+                        self.font_data.clone(),
+                        android,
+                    );
                     match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                         Ok(r) => {
                             self.renderer = Some(Box::new(r));
@@ -410,7 +411,7 @@ where
                     }
                 }
                 RendererBackend::Hardware | RendererBackend::Auto => {
-                    let font_config = build_hw_font_config(
+                    let font_config = build_hardware_font_config(
                         self.font_paths.clone(),
                         self.font_data.clone(),
                         android,
@@ -423,7 +424,7 @@ where
                         HardwareRendererConfig::default(),
                     ) {
                         Ok(hw) => {
-                            let (tx, join) = spawn_hw_render_thread(hw);
+                            let (tx, join) = spawn_hardware_render_thread(hw);
                             self.render_tx = Some(tx);
                             self.render_join = Some(join);
                             self.renderer_is_hardware = true;
@@ -478,14 +479,14 @@ where
                 .dev
                 .on_frame(base_slice, logical_w, logical_h, tree_dirty);
             let commands = frame_commands.to_vec();
-            let msg = HwFrameMsg {
-                w,
-                h,
-                sf: self.scale_factor,
+            let msg = HardwareFrameMsg {
+                width: w,
+                height: h,
+                scale_factor: self.scale_factor,
                 generation: self.tree.as_ref().map(|t| t.generation()).unwrap_or(0),
                 commands,
                 clear,
-                at: std::time::Instant::now(),
+                timestamp: std::time::Instant::now(),
             };
             // Drop frame if render thread is busy; keeps the main thread responsive.
             let _ = tx.try_send(msg);
@@ -601,7 +602,7 @@ fn android_sans_serif_candidates() -> Vec<String> {
     ]
 }
 
-fn build_hw_font_config(
+fn build_hardware_font_config(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     android: bool,
@@ -629,7 +630,7 @@ fn build_font_config(
     }
 }
 
-fn build_sw_budget(
+fn build_software_renderer_config(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     android: bool,
@@ -640,26 +641,23 @@ fn build_sw_budget(
     }
 }
 
-fn spawn_hw_render_thread<W>(
+fn spawn_hardware_render_thread<W>(
     renderer: HardwareRenderer<W>,
 ) -> (
-    std::sync::mpsc::SyncSender<HwFrameMsg>,
+    std::sync::mpsc::SyncSender<HardwareFrameMsg>,
     std::thread::JoinHandle<HardwareRenderer<W>>,
 )
 where
     W: Window + Clone + Send + Sync + 'static,
 {
-    let (tx, rx) = std::sync::mpsc::sync_channel::<HwFrameMsg>(1);
+    let (tx, rx) = std::sync::mpsc::sync_channel::<HardwareFrameMsg>(1);
     let join = std::thread::Builder::new()
         .name("rsx-render".to_string())
         .spawn(move || {
             let mut renderer = renderer;
-            let mut cur_w = 0u32;
-            let mut cur_h = 0u32;
-            // ADPF lives on THIS thread: create the hint session with the render thread's own TID so
-            // reportActualWorkDuration drives the scheduler for the thread that actually submits GPU
-            // work. The session handle is not Send, so it is created, used, and closed here and never
-            // crosses a thread boundary. (The SW/fallback path keeps its own session on the UI thread.)
+            let mut current_width = 0u32;
+            let mut current_height = 0u32;
+            // ADPF lives on THIS thread: create the hint session with the render thread's own TID so reportActualWorkDuration drives the scheduler for the thread that actually submits GPU work. The session handle is not Send, so it is created, used, and closed here and never crosses a thread boundary. (The SW/fallback path keeps its own session on the UI thread.)
             #[cfg(target_os = "android")]
             let hint_session = unsafe {
                 let manager = adpf::APerformanceHint_getManager();
@@ -672,30 +670,27 @@ where
                 }
             };
             while let Ok(msg) = rx.recv() {
-                // Drop stale frames to stay responsive, but never skip one that resizes
-                // the surface: the wgpu surface is reconfigured inside begin_frame, so a
-                // dropped resize frame leaves it at the old size and the window shows
-                // clipped content or empty margins until the next accepted frame.
-                let size_changed = msg.w != cur_w || msg.h != cur_h;
-                if !size_changed && msg.at.elapsed() > FRAME_BUDGET {
+                // Drop stale frames to stay responsive, but never skip one that resizes the surface: the wgpu surface is reconfigured inside begin_frame, so a dropped resize frame leaves it at the old size and the window shows clipped content or empty margins until the next accepted frame.
+                let size_changed = msg.width != current_width || msg.height != current_height;
+                if !size_changed && msg.timestamp.elapsed() > FRAME_BUDGET {
                     continue;
                 }
                 #[cfg(target_os = "android")]
                 let frame_start = std::time::Instant::now();
                 if renderer
-                    .begin_frame(msg.w, msg.h, msg.sf, msg.generation)
+                    .begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation)
                     .is_err()
                 {
                     continue;
                 }
-                cur_w = msg.w;
-                cur_h = msg.h;
+                current_width = msg.width;
+                current_height = msg.height;
                 let _ = renderer.render_frame(&msg.commands, msg.clear);
                 #[cfg(target_os = "android")]
                 if let Some(session) = hint_session {
-                    let dur = frame_start.elapsed().as_nanos() as std::ffi::c_long;
+                    let duration_ns = frame_start.elapsed().as_nanos() as std::ffi::c_long;
                     unsafe {
-                        adpf::APerformanceHint_reportActualWorkDuration(session, dur);
+                        adpf::APerformanceHint_reportActualWorkDuration(session, duration_ns);
                     }
                 }
             }
@@ -728,18 +723,18 @@ fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
         }
     }
     if let Ok(v) = std::env::var("RSX_DEV_WINDOW_DECORATIONS") {
-        config.decorations = v == "1";
+        config.has_decorations = v == "1";
     }
     if let Ok(v) = std::env::var("RSX_DEV_WINDOW_RESIZABLE") {
-        config.resizable = v == "1";
+        config.is_resizable = v == "1";
     }
     if let Ok(v) = std::env::var("RSX_DEV_WINDOW_TRANSPARENT") {
-        config.transparent = v == "1";
+        config.is_transparent = v == "1";
     }
 }
 
 #[cfg(not(target_os = "android"))]
-fn run_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
+fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
     let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
@@ -800,13 +795,13 @@ pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     {
         // RSX_DEVTOOLS=0 disables the overlay even in a dev build.
         if std::env::var("RSX_DEVTOOLS").as_deref() == Ok("0") {
-            run_with_plugin::<A, ()>(config, app, app_name);
+            run_desktop_with_plugin::<A, ()>(config, app, app_name);
         } else {
-            run_with_plugin::<A, rsx_devtools::DevTools>(config, app, app_name);
+            run_desktop_with_plugin::<A, rsx_devtools::DevTools>(config, app, app_name);
         }
     }
     #[cfg(not(feature = "dev"))]
-    run_with_plugin::<A, ()>(config, app, app_name);
+    run_desktop_with_plugin::<A, ()>(config, app, app_name);
 }
 
 #[cfg(all(feature = "runtime", target_os = "android"))]

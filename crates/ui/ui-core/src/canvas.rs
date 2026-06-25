@@ -7,7 +7,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 
 pub struct Canvas {
     leaf: LayoutLeaf,
-    draw_fn: Box<dyn Fn(Rect) -> RenderNode>,
+    draw: Box<dyn Fn(Rect) -> RenderNode>,
 }
 
 impl Canvas {
@@ -19,7 +19,7 @@ impl Canvas {
         let leaf = LayoutLeaf::register(ctx, layout_style)?;
         Ok(Self {
             leaf,
-            draw_fn: Box::new(draw_fn),
+            draw: Box::new(draw_fn),
         })
     }
 }
@@ -39,7 +39,7 @@ impl_leaf_widget!(Canvas);
 impl Component for Canvas {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
-        let inner = (self.draw_fn)(r);
+        let inner = (self.draw)(r);
         self.leaf.at_layout_position(inner)
     }
 

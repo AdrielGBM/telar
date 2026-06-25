@@ -100,7 +100,11 @@ impl TextPipeline {
             device,
             "text",
             &shader_source,
-            &[viewport_bgl, &instances.instances_bgl, &atlas_bgl],
+            &[
+                viewport_bgl,
+                &instances.instances_bind_group_layout,
+                &atlas_bgl,
+            ],
             &[],
             surface_format,
             msaa_samples,

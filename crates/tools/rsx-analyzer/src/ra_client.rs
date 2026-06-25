@@ -257,8 +257,8 @@ where
     let mut content_length = 0usize;
     loop {
         let mut line = String::new();
-        let n = reader.read_line(&mut line).await?;
-        if n == 0 {
+        let bytes_read = reader.read_line(&mut line).await?;
+        if bytes_read == 0 {
             return Err(tokio::io::Error::new(
                 tokio::io::ErrorKind::UnexpectedEof,
                 "rust-analyzer closed",
@@ -288,7 +288,6 @@ fn find_rust_analyzer() -> Option<PathBuf> {
             return Some(p);
         }
     }
-    // Fall back to ~/.cargo/bin
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .ok()?;
@@ -333,14 +332,12 @@ fn parse_definition_response(response: Value) -> Option<GotoDefinitionResponse> 
     if result.is_null() {
         return None;
     }
-    // Try as array of locations first
     if let Ok(locs) = serde_json::from_value::<Vec<Location>>(result.clone()) {
         if locs.is_empty() {
             return None;
         }
         return Some(GotoDefinitionResponse::Array(locs));
     }
-    // Try as single location
     if let Ok(loc) = serde_json::from_value::<Location>(result.clone()) {
         return Some(GotoDefinitionResponse::Scalar(loc));
     }

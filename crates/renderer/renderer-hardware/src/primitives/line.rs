@@ -35,7 +35,7 @@ impl LinePipeline {
             device,
             "line",
             &shader_source,
-            &[viewport_bgl, &instances.instances_bgl],
+            &[viewport_bgl, &instances.instances_bind_group_layout],
             &[],
             surface_format,
             msaa_samples,

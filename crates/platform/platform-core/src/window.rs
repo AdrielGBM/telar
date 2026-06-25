@@ -4,7 +4,7 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 #[derive(Debug, Clone, Default, PartialEq)]
 pub enum FullscreenMode {
     #[default]
-    None,
+    Disabled,
     Borderless,
     Exclusive,
 }
@@ -23,12 +23,12 @@ pub struct WindowConfig {
     pub height: u32,
     pub min_size: Option<(u32, u32)>,
     pub max_size: Option<(u32, u32)>,
-    pub resizable: bool,
-    pub decorations: bool,
-    pub transparent: bool,
+    pub is_resizable: bool,
+    pub has_decorations: bool,
+    pub is_transparent: bool,
     pub fullscreen: FullscreenMode,
     pub position: WindowPosition,
-    pub always_on_top: bool,
+    pub is_always_on_top: bool,
 }
 
 impl Default for WindowConfig {
@@ -39,12 +39,12 @@ impl Default for WindowConfig {
             height: 600,
             min_size: None,
             max_size: None,
-            resizable: true,
-            decorations: true,
-            transparent: false,
-            fullscreen: FullscreenMode::None,
+            is_resizable: true,
+            has_decorations: true,
+            is_transparent: false,
+            fullscreen: FullscreenMode::Disabled,
             position: WindowPosition::Centered,
-            always_on_top: false,
+            is_always_on_top: false,
         }
     }
 }

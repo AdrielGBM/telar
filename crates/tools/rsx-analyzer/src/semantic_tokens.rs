@@ -22,9 +22,13 @@ pub fn encode_tokens(tokens: &[(u32, u32, u32, u32, u32)]) -> Vec<SemanticToken>
     let mut result = Vec::with_capacity(tokens.len());
     let mut prev_line = 0u32;
     let mut prev_char = 0u32;
-    for &(line, ch, length, token_type, token_mods) in tokens {
+    for &(line, character, length, token_type, token_mods) in tokens {
         let delta_line = line - prev_line;
-        let delta_start = if delta_line == 0 { ch - prev_char } else { ch };
+        let delta_start = if delta_line == 0 {
+            character - prev_char
+        } else {
+            character
+        };
         result.push(SemanticToken {
             delta_line,
             delta_start,
@@ -33,7 +37,7 @@ pub fn encode_tokens(tokens: &[(u32, u32, u32, u32, u32)]) -> Vec<SemanticToken>
             token_modifiers_bitset: token_mods,
         });
         prev_line = line;
-        prev_char = ch;
+        prev_char = character;
     }
     result
 }

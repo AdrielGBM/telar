@@ -1,6 +1,3 @@
-// Cache age and pool-size budgets for the hardware renderer.
-// Edit this file to tune all GPU cache ages and pool sizes from one place.
-
 /// Frames an unused GPU image texture survives before eviction. ~1 s at 60 fps; GPU textures are expensive so evict aggressively.
 pub const IMAGE_GPU_MAX_AGE_FRAMES: u64 = 60;
 

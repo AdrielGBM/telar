@@ -6,8 +6,7 @@ pub fn lsp_dir(project_root: &Path) -> PathBuf {
 
 pub fn logic_file_path(project_root: &Path, rsx_path: &Path) -> Option<PathBuf> {
     let src_dir = project_root.join("src");
-    // Mirror the source tree under .rsx/lsp/, matching the transpiler's .rsx/build/ layout.
-    // None for out-of-src files: they are never transpiled, so they get no mirror.
+    // Mirror the source tree under .rsx/lsp/, matching the transpiler's .rsx/build/ layout. None for out-of-src files: they are never transpiled, so they get no mirror.
     let rel = rsx_transpiler::relative_output_path(rsx_path, &src_dir)?;
     Some(lsp_dir(project_root).join(rel))
 }

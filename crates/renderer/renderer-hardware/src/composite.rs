@@ -12,7 +12,7 @@ struct CompositeParamsRaw {
 pub(crate) struct CompositePipeline {
     pub(crate) pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
-    pub(crate) bgl: wgpu::BindGroupLayout,
+    pub(crate) bind_group_layout: wgpu::BindGroupLayout,
     // Free uniform buffers available for reuse; create_bind_group pops from here (or creates a fresh one on miss) and pushes the used buffer into params_buffer_in_use. recycle_params_buffers moves them all back at frame start.
     params_buffer_pool: Vec<wgpu::Buffer>,
     // Uniform buffers handed to bind groups during the current frame; kept alive until the frame's GPU work is submitted, then recycled into params_buffer_pool at the next begin_frame.
@@ -42,7 +42,7 @@ impl CompositePipeline {
             ..Default::default()
         });
 
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rsx-composite-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
@@ -78,7 +78,7 @@ impl CompositePipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rsx-composite-pipeline-layout"),
-            bind_group_layouts: &[Some(viewport_bgl), Some(&bgl)],
+            bind_group_layouts: &[Some(viewport_bgl), Some(&bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -118,7 +118,7 @@ impl CompositePipeline {
         Self {
             pipeline,
             sampler,
-            bgl,
+            bind_group_layout,
             params_buffer_pool: Vec::new(),
             params_buffer_in_use: Vec::new(),
         }
@@ -160,7 +160,7 @@ impl CompositePipeline {
         };
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rsx-composite-bind-group"),
-            layout: &self.bgl,
+            layout: &self.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,

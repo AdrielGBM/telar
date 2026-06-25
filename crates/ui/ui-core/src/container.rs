@@ -48,8 +48,7 @@ impl LayoutItem for Container {
 
 impl Component for Container {
     fn view(&self) -> RenderNode {
-        // Each child is its own segment: referencing it is a cheap Rc clone, so this view() does not
-        // re-run children and is not subscribed to their signals.
+        // Each child is its own segment: referencing it is a cheap Rc clone, so this view() does not re-run children and is not subscribed to their signals.
         RenderNode::group(self.children.iter().map(|c| c.segment.boundary()))
     }
 

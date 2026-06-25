@@ -103,8 +103,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             }
         };
 
-        // Mirror the source tree under .rsx/build/ so files in different directories never collide.
-        // find_rsx_files only yields paths under src_dir, so None is unreachable here.
+        // Mirror the source tree under .rsx/build/ so files in different directories never collide. find_rsx_files only yields paths under src_dir, so None is unreachable here.
         let Some(rel_out) = rsx_transpiler::relative_output_path(rsx_file, &src_dir) else {
             continue;
         };
@@ -150,7 +149,6 @@ pub fn app(input: TokenStream) -> TokenStream {
     let is_hot_reload = std::env::var("RSX_HOT_RELOAD_BUILD").is_ok();
     let is_preview = std::env::var("RSX_PREVIEW_BUILD").is_ok();
 
-    // Shared tail: setup → optional preview branch → run_app_with_name.
     let run_tail = quote! {
         #setup
         if ::std::env::var("RSX_PREVIEW").is_ok() {

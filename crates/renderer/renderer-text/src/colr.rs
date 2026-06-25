@@ -64,11 +64,10 @@ impl OutlinePen for PathBuilderPen {
     }
 }
 
-fn skrifa_to_ts_transform(t: SkrifaTransform) -> Transform {
+fn skrifa_to_tiny_skia_transform(t: SkrifaTransform) -> Transform {
     Transform::from_row(t.xx, t.yx, t.xy, t.yy, t.dx, t.dy)
 }
 
-/// Maps a point through a transform, returning the transformed coordinates.
 fn map_point(transform: &Transform, x: f32, y: f32) -> (f32, f32) {
     let mut p = TsPoint::from_xy(x, y);
     transform.map_point(&mut p);
@@ -188,7 +187,7 @@ impl<'font> TinySkiaPainter<'font> {
         [base[0], base[1], base[2], a]
     }
 
-    fn ts_color(rgba: [u8; 4]) -> Color {
+    fn to_tiny_skia_color(rgba: [u8; 4]) -> Color {
         Color::from_rgba8(rgba[0], rgba[1], rgba[2], rgba[3])
     }
 
@@ -198,7 +197,7 @@ impl<'font> TinySkiaPainter<'font> {
             .iter()
             .map(|s| {
                 let rgba = self.resolve_color(s.palette_index, s.alpha);
-                GradientStop::new(s.offset, Self::ts_color(rgba))
+                GradientStop::new(s.offset, Self::to_tiny_skia_color(rgba))
             })
             .collect()
     }
@@ -230,7 +229,7 @@ impl ColorPainter for TinySkiaPainter<'_> {
     fn push_transform(&mut self, transform: SkrifaTransform) {
         let current = self.current_transform();
         // skrifa transforms are relative to the current cumulative transform, so pre-concatenate.
-        let next = current.pre_concat(skrifa_to_ts_transform(transform));
+        let next = current.pre_concat(skrifa_to_tiny_skia_transform(transform));
         self.transform_stack.push(next);
     }
 
@@ -310,7 +309,7 @@ impl ColorPainter for TinySkiaPainter<'_> {
                 alpha,
             } => {
                 let rgba = self.resolve_color(palette_index, alpha);
-                paint.shader = Shader::SolidColor(Self::ts_color(rgba));
+                paint.shader = Shader::SolidColor(Self::to_tiny_skia_color(rgba));
             }
             SkrifaBrush::LinearGradient {
                 p0,
@@ -331,7 +330,7 @@ impl ColorPainter for TinySkiaPainter<'_> {
                     paint.shader = shader;
                 } else if let Some(first) = color_stops.first() {
                     let rgba = self.resolve_color(first.palette_index, first.alpha);
-                    paint.shader = Shader::SolidColor(Self::ts_color(rgba));
+                    paint.shader = Shader::SolidColor(Self::to_tiny_skia_color(rgba));
                 } else {
                     return;
                 }
@@ -367,7 +366,7 @@ impl ColorPainter for TinySkiaPainter<'_> {
                     paint.shader = shader;
                 } else if let Some(first) = color_stops.first() {
                     let rgba = self.resolve_color(first.palette_index, first.alpha);
-                    paint.shader = Shader::SolidColor(Self::ts_color(rgba));
+                    paint.shader = Shader::SolidColor(Self::to_tiny_skia_color(rgba));
                 } else {
                     return;
                 }
@@ -376,7 +375,7 @@ impl ColorPainter for TinySkiaPainter<'_> {
                 // tiny-skia has no sweep gradient; approximate with the first stop's solid color.
                 if let Some(first) = color_stops.first() {
                     let rgba = self.resolve_color(first.palette_index, first.alpha);
-                    paint.shader = Shader::SolidColor(Self::ts_color(rgba));
+                    paint.shader = Shader::SolidColor(Self::to_tiny_skia_color(rgba));
                 } else {
                     return;
                 }
@@ -460,8 +459,7 @@ pub fn rasterize_colr_glyph(
 
     let scale = physical_font_size / upem;
 
-    // Use font-level glyph bounds (in pixels at the physical size) to size the pixmap so that
-    // glyphs with large descenders or horizontal overhangs are never clipped.
+    // Use font-level glyph bounds (in pixels at the physical size) to size the pixmap so that glyphs with large descenders or horizontal overhangs are never clipped.
     let font_metrics = SkrifaMetrics::new(
         &font_ref,
         SkrifaSize::new(physical_font_size),

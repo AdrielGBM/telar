@@ -41,10 +41,6 @@ impl Parser {
         })
     }
 
-    // ------------------------------------------------------------------
-    // Logic zone
-    // ------------------------------------------------------------------
-
     /// Captures consecutive logic lines verbatim (blanks and comments preserved).
     fn parse_logic(&mut self) -> LogicZone {
         let mut raws = Vec::new();
@@ -72,10 +68,6 @@ impl Parser {
         LogicZone { source }
     }
 
-    // ------------------------------------------------------------------
-    // Props section
-    // ------------------------------------------------------------------
-
     fn parse_props(&mut self) -> Result<PropsSection, ParseError> {
         let mut section = PropsSection::default();
 
@@ -91,7 +83,7 @@ impl Parser {
                 message: format!("expected `name: Type` in [props], got `{}`", line.content),
                 line: line.number,
             })?;
-            section.params.push(PropParam {
+            section.parameters.push(PropParameter {
                 name: name.trim().to_string(),
                 ty: ty.trim().to_string(),
             });
@@ -100,10 +92,6 @@ impl Parser {
 
         Ok(section)
     }
-
-    // ------------------------------------------------------------------
-    // Style section
-    // ------------------------------------------------------------------
 
     fn parse_style(&mut self) -> Result<StyleSection, ParseError> {
         let mut section = StyleSection::default();
@@ -130,8 +118,7 @@ impl Parser {
         Ok(section)
     }
 
-    /// Parses a single `name: value` constant line.
-    fn parse_style_const(&self) -> Result<StyleConst, ParseError> {
+    fn parse_style_const(&self) -> Result<StyleConstant, ParseError> {
         let line = &self.lines[self.pos];
         let (name, value) = split_once_colon(&line.content).ok_or_else(|| ParseError {
             message: format!(
@@ -144,7 +131,7 @@ impl Parser {
         let name = name.trim().to_string();
         let value = parse_style_value(value.trim());
 
-        Ok(StyleConst {
+        Ok(StyleConstant {
             name,
             value,
             line: line.number,
@@ -217,10 +204,6 @@ impl Parser {
             line: header_line,
         })
     }
-
-    // ------------------------------------------------------------------
-    // View section
-    // ------------------------------------------------------------------
 
     fn parse_view(&mut self) -> Result<ViewSection, ParseError> {
         // Root nodes live at the smallest indentation present in the view.
@@ -347,7 +330,7 @@ impl Parser {
                 && next.content.starts_with('|')
                 && let Some(params) = parse_canvas_params(&next.content)
             {
-                element.canvas_params = Some(params);
+                element.canvas_parameters = Some(params);
                 self.pos += 1;
             }
         }
@@ -380,10 +363,6 @@ impl Parser {
         }
     }
 }
-
-// ----------------------------------------------------------------------
-// Free helpers
-// ----------------------------------------------------------------------
 
 /// Splits a string on its first `:` that is not part of a closure/`::` path.
 fn split_once_colon(s: &str) -> Option<(&str, &str)> {
@@ -458,9 +437,9 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
     let mut element = Element {
         tag: String::new(),
         classes: Vec::new(),
-        attrs: Vec::new(),
+        attributes: Vec::new(),
         content: None,
-        canvas_params: None,
+        canvas_parameters: None,
         children: Vec::new(),
         line,
     };
@@ -471,7 +450,6 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
     let mut first = true;
 
     while i < len {
-        // Skip spaces between tokens.
         while i < len && chars[i].is_whitespace() {
             i += 1;
         }
@@ -479,7 +457,6 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
             break;
         }
 
-        // Quoted string → element content.
         if chars[i] == '"' {
             let (text, next) = read_quoted(&chars, i).ok_or_else(|| ParseError {
                 message: "unterminated string literal".to_string(),
@@ -492,9 +469,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
 
         // Read one whitespace-delimited token, but be aware it may contain a closure value.
         let token_start = i;
-        // First find where the `key:` part ends (if any) to detect closure values.
-        // We scan the token up to the first whitespace, while watching for a `:` that
-        // introduces a closure value spanning the rest of the line.
+        // First find where the `key:` part ends (if any) to detect closure values. We scan the token up to the first whitespace, while watching for a `:` that introduces a closure value spanning the rest of the line.
         let mut j = i;
         let mut colon_at: Option<usize> = None;
         while j < len && !chars[j].is_whitespace() {
@@ -512,14 +487,13 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
 
         if let Some(colon) = colon_at {
             let key: String = chars[token_start..colon].iter().collect();
-            // Examine the value start right after the colon.
             let val_start = colon + 1;
-            let value_is_closure = chars.get(val_start) == Some(&'|');
+            let is_closure_value = chars.get(val_start) == Some(&'|');
 
-            if value_is_closure {
+            if is_closure_value {
                 // The closure value runs to the end of the line, verbatim.
                 let value: String = chars[val_start..].iter().collect();
-                element.attrs.push(Attr {
+                element.attributes.push(Attr {
                     key: key.trim().to_string(),
                     value: value.trim().to_string(),
                     is_quoted: false,
@@ -527,7 +501,6 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                 break;
             }
 
-            // Plain attribute value: up to the next whitespace.
             let mut k = val_start;
             // Allow quoted attribute values.
             if chars.get(k) == Some(&'"') {
@@ -535,7 +508,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                     message: "unterminated string literal in attribute value".to_string(),
                     line,
                 })?;
-                element.attrs.push(Attr {
+                element.attributes.push(Attr {
                     key: key.trim().to_string(),
                     value: text,
                     is_quoted: true,
@@ -547,7 +520,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                 k += 1;
             }
             let value: String = chars[val_start..k].iter().collect();
-            element.attrs.push(Attr {
+            element.attributes.push(Attr {
                 key: key.trim().to_string(),
                 value,
                 is_quoted: false,
@@ -570,7 +543,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
             element.classes.push(class.to_string());
         } else {
             // A bare token after the tag is a flag-style attribute (e.g. `ghost`).
-            element.attrs.push(Attr {
+            element.attributes.push(Attr {
                 key: token,
                 value: String::new(),
                 is_quoted: false,

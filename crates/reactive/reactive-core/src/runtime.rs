@@ -9,8 +9,8 @@ pub(crate) type EffectId = usize;
 pub(crate) type SignalId = usize;
 
 pub(crate) struct EffectEntry {
-    pub(crate) f: Box<dyn Fn()>,
-    pub(crate) pure: bool,
+    pub(crate) callback: Box<dyn Fn()>,
+    pub(crate) is_pure: bool,
     pub(crate) last_run_epoch: u64,
     pub(crate) sources: Vec<SignalId>,
     pub(crate) source_slots: Vec<usize>,
@@ -38,9 +38,9 @@ pub(crate) struct Runtime {
     pub(crate) memo_pending: BinaryHeap<(Reverse<u32>, EffectId)>,
     pub(crate) pending_set: FxHashSet<EffectId>,
     // Reused by notify_signal to copy a signal's subscribers out before scheduling, instead of allocating a fresh Vec per write.
-    notify_scratch: Vec<EffectId>,
-    on_flush: Vec<(u64, Rc<dyn Fn()>)>,
-    next_flush_notify_id: u64,
+    subscriber_scratch: Vec<EffectId>,
+    flush_callbacks: Vec<(u64, Rc<dyn Fn()>)>,
+    next_flush_callback_id: u64,
     pub(crate) flushing: bool,
     flush_epoch: u64,
 }
@@ -55,19 +55,16 @@ impl Runtime {
             pending: Vec::new(),
             memo_pending: BinaryHeap::new(),
             pending_set: FxHashSet::default(),
-            notify_scratch: Vec::new(),
-            on_flush: Vec::new(),
-            next_flush_notify_id: 0,
+            subscriber_scratch: Vec::new(),
+            flush_callbacks: Vec::new(),
+            next_flush_callback_id: 0,
             flushing: false,
             flush_epoch: 0,
         }
     }
 }
 
-// RuntimeCell stores the runtime as a heap-allocated Box behind a raw pointer.
-// Because *mut T has no Drop, Cell<*mut T> has no Drop, and this struct has no Drop either.
-// That means thread_local! won't register a TLS destructor for RUNTIME — so dlclosing the
-// dylib during hot reload no longer causes "double free or corruption" when the thread exits.
+// RuntimeCell stores the runtime as a heap-allocated Box behind a raw pointer. Because *mut T has no Drop, Cell<*mut T> has no Drop, and this struct has no Drop either. That means thread_local! won't register a TLS destructor for RUNTIME — so dlclosing the dylib during hot reload no longer causes "double free or corruption" when the thread exits.
 struct RuntimeCell(Cell<*mut RefCell<Runtime>>);
 
 impl RuntimeCell {
@@ -98,7 +95,7 @@ impl Drop for FlushNotifyHandle {
 fn deregister_flush_notify(id: u64) {
     RUNTIME.with(|rt| {
         rt.borrow_mut()
-            .on_flush
+            .flush_callbacks
             .retain(|(entry_id, _)| *entry_id != id);
     });
 }
@@ -106,9 +103,9 @@ fn deregister_flush_notify(id: u64) {
 pub fn set_flush_notify(f: impl Fn() + 'static) -> FlushNotifyHandle {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let id = rt.next_flush_notify_id;
-        rt.next_flush_notify_id += 1;
-        rt.on_flush.push((id, Rc::new(f)));
+        let id = rt.next_flush_callback_id;
+        rt.next_flush_callback_id += 1;
+        rt.flush_callbacks.push((id, Rc::new(f)));
         FlushNotifyHandle { id }
     })
 }
@@ -121,8 +118,8 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         let id = rt.effects.insert(EffectEntry {
-            f,
-            pure: false,
+            callback: f,
+            is_pure: false,
             last_run_epoch: 0,
             sources: Vec::new(),
             source_slots: Vec::new(),
@@ -137,8 +134,8 @@ pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         let id = rt.effects.insert(EffectEntry {
-            f,
-            pure: true,
+            callback: f,
+            is_pure: true,
             last_run_epoch: 0,
             sources: Vec::new(),
             source_slots: Vec::new(),
@@ -174,7 +171,7 @@ pub(crate) fn schedule(id: EffectId) {
         let mut rt = rt.borrow_mut();
         let alive = rt.effects.contains(id);
         if alive && rt.pending_set.insert(id) {
-            if rt.effects[id].pure {
+            if rt.effects[id].is_pure {
                 let h = rt.effects[id].height;
                 rt.memo_pending.push((Reverse(h), id));
             } else {
@@ -294,11 +291,11 @@ pub(crate) fn notify_signal(id: SignalId) {
         }
         rt.signals[id].version += 1;
         // Copy subscriber ids into a reused scratch buffer rather than cloning a fresh Vec per write. We deliberately copy out (not mem::take) so the dead-subscriber cleanup below can still swap_remove from `subscribers` in place; taking it would make that cleanup operate on an empty Vec and the swap-back would clobber the removals.
-        let mut subs = std::mem::take(&mut rt.notify_scratch);
+        let mut subs = std::mem::take(&mut rt.subscriber_scratch);
         subs.clear();
         subs.extend_from_slice(&rt.signals[id].subscribers);
         if subs.is_empty() {
-            rt.notify_scratch = subs;
+            rt.subscriber_scratch = subs;
             return false;
         }
 
@@ -307,7 +304,7 @@ pub(crate) fn notify_signal(id: SignalId) {
         for &sub_id in &subs {
             if rt.effects.contains(sub_id) {
                 if rt.pending_set.insert(sub_id) {
-                    if rt.effects[sub_id].pure {
+                    if rt.effects[sub_id].is_pure {
                         let h = rt.effects[sub_id].height;
                         rt.memo_pending.push((Reverse(h), sub_id));
                     } else {
@@ -336,7 +333,7 @@ pub(crate) fn notify_signal(id: SignalId) {
 
         let should_flush = any_scheduled && rt.batch_depth == 0 && !rt.flushing;
         // Return the buffer (with its grown capacity) for the next write to reuse.
-        rt.notify_scratch = subs;
+        rt.subscriber_scratch = subs;
         should_flush
     });
     if should_flush {
@@ -388,7 +385,6 @@ pub(crate) fn clean_effect(id: EffectId) {
 }
 
 pub(crate) fn run_effect(id: EffectId) {
-    // --- Step 1: epoch dedup + version check ---
     let ptr = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         if !rt.effects.contains(id) {
@@ -428,15 +424,12 @@ pub(crate) fn run_effect(id: EffectId) {
         }
 
         // SAFETY: The slab owns this Box. No effect closure in this codebase captures its own Effect handle, so deregistration cannot happen during execution.
-        let ptr: *const dyn Fn() = &*rt.effects[id].f;
+        let ptr: *const dyn Fn() = &*rt.effects[id].callback;
         Some(ptr) // Don't push observer_stack yet; clean_effect must run first
     });
     if let Some(ptr) = ptr {
-        // --- Step 2: clean stale subscriptions ---
-        // Clean stale subscriptions before re-running so fresh subscriptions are tracked (Finding 1.7).
-        // clean_effect acquires the runtime borrow internally (safe: we released it above).
+        // Clean stale subscriptions before re-running so fresh subscriptions are tracked (Finding 1.7). clean_effect acquires the runtime borrow internally (safe: we released it above).
         clean_effect(id);
-        // --- Step 3: run closure with observer tracking ---
         // Push observer_stack only after cleanup so clean_effect doesn't accidentally re-register.
         RUNTIME.with(|rt| rt.borrow_mut().observer_stack.push(id));
         struct PopGuard;
@@ -448,7 +441,6 @@ pub(crate) fn run_effect(id: EffectId) {
         let _guard = PopGuard;
         unsafe { (*ptr)() };
         drop(_guard);
-        // --- Step 4: record new source versions and height ---
         RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();
             // Collect source IDs first to avoid borrowing `effects` and `signals` simultaneously.
@@ -489,8 +481,7 @@ fn flush() {
     let should_panic = {
         let mut did_work = false;
         for _ in 0..MAX_FLUSH_ITERATIONS {
-            // Drain memo_pending first (pure computations), then user effects.
-            // Pop minimum height first so producers run before consumers (topological order).
+            // Drain memo_pending first (pure computations), then user effects. Pop minimum height first so producers run before consumers (topological order).
             let memo_batch: Vec<EffectId> = RUNTIME.with(|rt| {
                 let mut rt = rt.borrow_mut();
                 let mut batch = Vec::new();
@@ -514,7 +505,7 @@ fn flush() {
                 if did_work {
                     let cbs: smallvec::SmallVec<[Rc<dyn Fn()>; 2]> = RUNTIME.with(|rt| {
                         rt.borrow()
-                            .on_flush
+                            .flush_callbacks
                             .iter()
                             .map(|(_, cb)| Rc::clone(cb))
                             .collect()
@@ -578,9 +569,7 @@ pub fn end_batch() {
 pub fn reset_runtime() {
     RUNTIME.with(|cell| {
         let old_ptr = cell.0.get();
-        // Install a fresh runtime BEFORE dropping the old one. Any re-entrant RUNTIME
-        // access during the old runtime's drop glue (drop_signal, etc.) will see the new
-        // empty runtime and return early — no borrow conflict, no double-free.
+        // Install a fresh runtime BEFORE dropping the old one. Any re-entrant RUNTIME access during the old runtime's drop glue (drop_signal, etc.) will see the new empty runtime and return early — no borrow conflict, no double-free.
         cell.0
             .set(Box::into_raw(Box::new(RefCell::new(Runtime::new()))));
         if !old_ptr.is_null() {

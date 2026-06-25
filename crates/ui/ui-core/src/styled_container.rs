@@ -49,7 +49,7 @@ impl LayoutItem for StyledContainer {
 impl Component for StyledContainer {
     fn view(&self) -> RenderNode {
         let r = self.rect.get();
-        let bg = RenderNode::rect(
+        let background = RenderNode::rect(
             Rect {
                 x: r.x,
                 y: r.y,
@@ -59,7 +59,7 @@ impl Component for StyledContainer {
             (self.style)(r),
         );
         let content = RenderNode::group(
-            std::iter::once(bg).chain(self.children.iter().map(|c| c.segment.boundary())),
+            std::iter::once(background).chain(self.children.iter().map(|c| c.segment.boundary())),
         );
         if self.opacity < 1.0 {
             RenderNode::layer(self.opacity, 0.0, [content])
@@ -101,8 +101,7 @@ mod tests {
         }
     }
 
-    // Clicking a theme button (which sets the global THEME) while a themed StyledContainer ancestor is
-    // on the dispatch stack must not re-enter that ancestor's render segment mid borrow_mut.
+    // Clicking a theme button (which sets the global THEME) while a themed StyledContainer ancestor is on the dispatch stack must not re-enter that ancestor's render segment mid borrow_mut.
     #[test]
     fn theme_button_click_force_tick_no_panic() {
         set_theme_with_widgets(TestTheme(Color::RED));

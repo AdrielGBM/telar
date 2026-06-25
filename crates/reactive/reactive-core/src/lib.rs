@@ -159,7 +159,6 @@ mod tests {
         count.set(1);
         assert_eq!((*a.borrow(), *b.borrow(), *c.borrow()), (1, 1, 1));
 
-        // Drop the middle subscriber, then keep writing to the same signal.
         drop(eb);
         count.set(2);
         count.set(3);

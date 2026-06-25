@@ -1,4 +1,4 @@
-use crate::analysis::util::{attr_key_before_colon, word_at_cursor};
+use crate::analysis::util::{attribute_key_before_colon, word_at_cursor};
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
 use rsx_parser::{RsxDocument, StyleValue};
@@ -23,7 +23,7 @@ pub fn hover_info(
     let char_before = line_text[..word_start].chars().last();
 
     if char_before == Some(':') {
-        if let Some(key) = attr_key_before_colon(line_text, word_start) {
+        if let Some(key) = attribute_key_before_colon(line_text, word_start) {
             if matches!(key, "color" | "fill" | "stroke" | "outline") {
                 return hover_color(doc, word, project);
             }

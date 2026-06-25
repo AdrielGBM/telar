@@ -1,4 +1,4 @@
-use crate::analysis::util::{attr_key_before_colon, word_at_cursor};
+use crate::analysis::util::{attribute_key_before_colon, word_at_cursor};
 use crate::position::{Section, find_section_at, parser_line_to_lsp_range};
 use crate::project::ProjectInfo;
 use rsx_parser::RsxDocument;
@@ -34,7 +34,7 @@ pub fn goto_definition(
     }
 
     if char_before == Some(':') {
-        if let Some(key) = attr_key_before_colon(line_text, word_start) {
+        if let Some(key) = attribute_key_before_colon(line_text, word_start) {
             if matches!(key, "color" | "fill" | "stroke" | "outline") {
                 return find_color(doc, word, uri, project);
             }

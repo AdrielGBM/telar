@@ -9,8 +9,7 @@ use crate::component::{Component, EventResult};
 use crate::segment::{self, Segment, SegmentRoot};
 
 pub struct ComponentList {
-    // Shared with the root segment: the segment borrows it immutably to render; on_event borrows it
-    // mutably. They never overlap because event dispatch is batched (flush happens after on_event).
+    // Shared with the root segment: the segment borrows it immutably to render; on_event borrows it mutably. They never overlap because event dispatch is batched (flush happens after on_event).
     root: Rc<RefCell<dyn Component>>,
     segment_root: SegmentRoot,
 }
@@ -39,8 +38,7 @@ impl ComponentList {
     }
 
     pub fn on_event(&mut self, event: &Event) -> EventResult {
-        // Batch so any signals mutated by handlers flush their effects AFTER on_event returns (and
-        // releases the borrow_mut), never re-entering a segment effect mid-borrow.
+        // Batch so any signals mutated by handlers flush their effects AFTER on_event returns (and releases the borrow_mut), never re-entering a segment effect mid-borrow.
         batch(|| self.root.borrow_mut().on_event(event))
     }
 

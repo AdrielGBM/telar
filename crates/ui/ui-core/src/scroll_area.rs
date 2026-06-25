@@ -37,35 +37,45 @@ impl Default for ScrollbarStyle {
 }
 
 fn draw_scrollbars(
-    vp: Rect,
+    viewport: Rect,
     scroll_x: f32,
     scroll_y: f32,
     content_rect: Rect,
-    sb: &ScrollbarStyle,
+    scrollbar_style: &ScrollbarStyle,
 ) -> (RenderNode, RenderNode) {
-    let vbar = if content_rect.height > vp.height {
-        let bar_h = (vp.height / content_rect.height * vp.height).max(24.0);
-        let max_scroll = (content_rect.height - vp.height).max(1.0);
-        let bar_y = vp.y + (scroll_y / max_scroll) * (vp.height - bar_h);
+    let vbar = if content_rect.height > viewport.height {
+        let bar_h = (viewport.height / content_rect.height * viewport.height).max(24.0);
+        let max_scroll = (content_rect.height - viewport.height).max(1.0);
+        let bar_y = viewport.y + (scroll_y / max_scroll) * (viewport.height - bar_h);
         RenderNode::rect(
-            Rect::new(vp.x + vp.width - sb.width, bar_y, sb.width - 2.0, bar_h),
+            Rect::new(
+                viewport.x + viewport.width - scrollbar_style.width,
+                bar_y,
+                scrollbar_style.width - 2.0,
+                bar_h,
+            ),
             RectStyle::default()
-                .with_fill(sb.color)
-                .with_radius(BorderRadius::all(sb.corner_radius)),
+                .with_fill(scrollbar_style.color)
+                .with_radius(BorderRadius::all(scrollbar_style.corner_radius)),
         )
     } else {
         RenderNode::Empty
     };
 
-    let hbar = if content_rect.width > vp.width {
-        let bar_w = (vp.width / content_rect.width * vp.width).max(24.0);
-        let max_scroll_x = (content_rect.width - vp.width).max(1.0);
-        let bar_x = vp.x + (scroll_x / max_scroll_x) * (vp.width - bar_w);
+    let hbar = if content_rect.width > viewport.width {
+        let bar_w = (viewport.width / content_rect.width * viewport.width).max(24.0);
+        let max_scroll_x = (content_rect.width - viewport.width).max(1.0);
+        let bar_x = viewport.x + (scroll_x / max_scroll_x) * (viewport.width - bar_w);
         RenderNode::rect(
-            Rect::new(bar_x, vp.y + vp.height - sb.width, bar_w, sb.width - 2.0),
+            Rect::new(
+                bar_x,
+                viewport.y + viewport.height - scrollbar_style.width,
+                bar_w,
+                scrollbar_style.width - 2.0,
+            ),
             RectStyle::default()
-                .with_fill(sb.color)
-                .with_radius(BorderRadius::all(sb.corner_radius)),
+                .with_fill(scrollbar_style.color)
+                .with_radius(BorderRadius::all(scrollbar_style.corner_radius)),
         )
     } else {
         RenderNode::Empty
@@ -76,54 +86,56 @@ fn draw_scrollbars(
 
 fn handle_scroll_event(
     event: &Event,
-    vp: Rect,
+    viewport: Rect,
     scroll_x: RwSignal<f32>,
     scroll_y: RwSignal<f32>,
-    content_size: RwSignal<Rect>,
+    content_rect_signal: RwSignal<Rect>,
     content: &Rc<RefCell<Box<dyn LayoutItem>>>,
 ) -> EventResult {
     if let Event::Scrolled { delta } = event {
-        let (dx, dy) = match delta {
+        let (delta_x, delta_y) = match delta {
             ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
             ScrollDelta::Pixels { x, y } => (*x, *y),
         };
-        let content_rect = content_size.get();
-        let max_scroll_x = (content_rect.width - vp.width).max(0.0);
-        let max_scroll_y = (content_rect.height - vp.height).max(0.0);
-        scroll_x.set((scroll_x.get() - dx).clamp(0.0, max_scroll_x));
-        scroll_y.set((scroll_y.get() - dy).clamp(0.0, max_scroll_y));
+        let content_rect = content_rect_signal.get();
+        let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
+        let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
+        scroll_x.set((scroll_x.get() - delta_x).clamp(0.0, max_scroll_x));
+        scroll_y.set((scroll_y.get() - delta_y).clamp(0.0, max_scroll_y));
         return EventResult::Handled;
     }
 
-    let Some(event) = clip_pointer_event(event, vp) else {
+    let Some(event) = clip_pointer_event(event, viewport) else {
         return EventResult::Ignored;
     };
 
-    let sx = scroll_x.get() as f64;
-    let sy = scroll_y.get() as f64;
-    let adjusted = offset_pointer(event, vp.x as f64 - sx, vp.y as f64 - sy);
+    let scroll_offset_x = scroll_x.get() as f64;
+    let scroll_offset_y = scroll_y.get() as f64;
+    let adjusted = offset_pointer(
+        event,
+        viewport.x as f64 - scroll_offset_x,
+        viewport.y as f64 - scroll_offset_y,
+    );
     let effective = adjusted.as_ref().unwrap_or(event);
     content.borrow_mut().on_event(effective)
 }
 
 pub(crate) struct ScrollCore {
-    content_size: RwSignal<Rect>,
+    content_rect_signal: RwSignal<Rect>,
     scroll_x: RwSignal<f32>,
     scroll_y: RwSignal<f32>,
-    // Shared between event dispatch (borrow_mut) and the content segment (borrow). The content is its
-    // own segment so a scroll tick only re-runs this core's view() to rewrite the Transform matrix —
-    // the content is referenced as a cheap boundary and is NOT re-flattened on scroll.
+    // Shared between event dispatch (borrow_mut) and the content segment (borrow). The content is its own segment so a scroll tick only re-runs this core's view() to rewrite the Transform matrix — the content is referenced as a cheap boundary and is NOT re-flattened on scroll.
     content: Rc<RefCell<Box<dyn LayoutItem>>>,
     content_segment: Rc<Segment>,
     scrollbar_style: ScrollbarStyle,
 }
 
 impl ScrollCore {
-    fn new(content_size: RwSignal<Rect>, content: Box<dyn LayoutItem>) -> Self {
+    fn new(content_rect_signal: RwSignal<Rect>, content: Box<dyn LayoutItem>) -> Self {
         let content = Rc::new(RefCell::new(content));
         let content_segment = mount_item_segment(Rc::clone(&content));
         Self {
-            content_size,
+            content_rect_signal,
             scroll_x: create_rw_signal(0.0),
             scroll_y: create_rw_signal(0.0),
             content,
@@ -132,44 +144,56 @@ impl ScrollCore {
         }
     }
 
-    fn clamp_scroll(&mut self, vp: Rect) {
-        let content_rect = self.content_size.get();
-        let max_x = (content_rect.width - vp.width).max(0.0);
-        let max_y = (content_rect.height - vp.height).max(0.0);
-        let cx = self.scroll_x.get().clamp(0.0, max_x);
-        let cy = self.scroll_y.get().clamp(0.0, max_y);
-        if self.scroll_x.get() != cx {
-            self.scroll_x.set(cx);
+    fn clamp_scroll(&mut self, viewport: Rect) {
+        let content_rect = self.content_rect_signal.get();
+        let max_x = (content_rect.width - viewport.width).max(0.0);
+        let max_y = (content_rect.height - viewport.height).max(0.0);
+        let clamped_x = self.scroll_x.get().clamp(0.0, max_x);
+        let clamped_y = self.scroll_y.get().clamp(0.0, max_y);
+        if self.scroll_x.get() != clamped_x {
+            self.scroll_x.set(clamped_x);
         }
-        if self.scroll_y.get() != cy {
-            self.scroll_y.set(cy);
+        if self.scroll_y.get() != clamped_y {
+            self.scroll_y.set(clamped_y);
         }
     }
 
-    fn view(&self, vp: Rect) -> RenderNode {
+    fn view(&self, viewport: Rect) -> RenderNode {
         let scroll_x = self.scroll_x.get();
         let scroll_y = self.scroll_y.get();
-        let content_rect = self.content_size.get();
+        let content_rect = self.content_rect_signal.get();
         let scrollable = RenderNode::Clip {
-            rect: vp,
+            rect: viewport,
             radius: BorderRadius::zero(),
             children: NodeVec::collect([RenderNode::Transform {
-                matrix: [1.0, 0.0, 0.0, 1.0, vp.x - scroll_x, vp.y - scroll_y],
+                matrix: [
+                    1.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    viewport.x - scroll_x,
+                    viewport.y - scroll_y,
+                ],
                 children: NodeVec::collect([self.content_segment.boundary()]),
             }]),
         };
-        let (vbar, hbar) =
-            draw_scrollbars(vp, scroll_x, scroll_y, content_rect, &self.scrollbar_style);
+        let (vbar, hbar) = draw_scrollbars(
+            viewport,
+            scroll_x,
+            scroll_y,
+            content_rect,
+            &self.scrollbar_style,
+        );
         RenderNode::group([scrollable, vbar, hbar])
     }
 
-    fn on_event(&mut self, event: &Event, vp: Rect) -> EventResult {
+    fn on_event(&mut self, event: &Event, viewport: Rect) -> EventResult {
         handle_scroll_event(
             event,
-            vp,
+            viewport,
             self.scroll_x.clone(),
             self.scroll_y.clone(),
-            self.content_size.clone(),
+            self.content_rect_signal.clone(),
             &self.content,
         )
     }
@@ -189,11 +213,11 @@ impl ScrollArea {
         viewport: impl Fn() -> Rect + 'static,
         content: Box<dyn LayoutItem>,
     ) -> Self {
-        let content_size =
+        let content_rect_signal =
             track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
         Self {
             viewport: Box::new(viewport),
-            core: ScrollCore::new(content_size, content),
+            core: ScrollCore::new(content_rect_signal, content),
         }
     }
 }
@@ -221,12 +245,12 @@ impl LayoutScrollArea {
         layout_style: LayoutStyle,
         content: Box<dyn LayoutItem>,
     ) -> Result<Self, LayoutError> {
-        let content_size =
+        let content_rect_signal =
             track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
         let leaf = LayoutLeaf::register(ctx, layout_style)?;
         Ok(Self {
             leaf,
-            core: ScrollCore::new(content_size, content),
+            core: ScrollCore::new(content_rect_signal, content),
         })
     }
 
@@ -337,7 +361,11 @@ mod tests {
         )
         .unwrap();
         let content_node = content.layout_node();
-        let sa = ScrollArea::new(&ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+        let sa = ScrollArea::new(
+            &ctx,
+            || Rect::new(0.0, 0.0, 400.0, 300.0),
+            Box::new(content),
+        );
         compute_layout(
             &mut ctx,
             content_node,
@@ -364,7 +392,11 @@ mod tests {
         }
         let _ = tree.commands();
         end_batch();
-        assert_eq!(s.get(), 1, "scroll-content click should increment the signal");
+        assert_eq!(
+            s.get(),
+            1,
+            "scroll-content click should increment the signal"
+        );
     }
 
     #[test]
@@ -581,7 +613,6 @@ mod tests {
         )
         .unwrap();
 
-        // Set scroll_y to 100 via a scroll event
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Pixels { x: 0.0, y: -100.0 },
         });

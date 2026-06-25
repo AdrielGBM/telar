@@ -7,7 +7,7 @@ use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind};
 
 pub enum CompletionKind {
     ElementName,
-    AttrKey(String),
+    AttributeKey(String),
     ColorValue,
     StyleClass,
 }
@@ -43,7 +43,7 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
         return None;
     }
 
-    Some(CompletionKind::AttrKey(tag))
+    Some(CompletionKind::AttributeKey(tag))
 }
 
 pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
@@ -78,7 +78,7 @@ pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
     items
 }
 
-fn attr_items(keys: &[&str]) -> Vec<CompletionItem> {
+fn attribute_items(keys: &[&str]) -> Vec<CompletionItem> {
     keys.iter()
         .map(|k| CompletionItem {
             label: k.to_string(),
@@ -89,21 +89,21 @@ fn attr_items(keys: &[&str]) -> Vec<CompletionItem> {
         .collect()
 }
 
-pub fn attr_key_items(tag: &str) -> Vec<CompletionItem> {
+pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
     let layout = rsx_transpiler::layout_attr_keys();
 
     match tag {
-        "text" => attr_items(&["size", "color"]),
+        "text" => attribute_items(&["size", "color"]),
         "widget" => vec![],
         "btn" | "button" => {
             let mut keys: Vec<&str> = layout.to_vec();
             keys.extend_from_slice(&["on_press", "fill", "outline"]);
-            attr_items(&keys)
+            attribute_items(&keys)
         }
         "grid" => {
             let mut keys: Vec<&str> = layout.to_vec();
             keys.extend_from_slice(&["cols", "span", "row-span"]);
-            attr_items(&keys)
+            attribute_items(&keys)
         }
         "box" => {
             let mut keys: Vec<&str> = layout.to_vec();
@@ -116,14 +116,14 @@ pub fn attr_key_items(tag: &str) -> Vec<CompletionItem> {
                 "shadow-blur",
                 "shadow-color",
             ]);
-            attr_items(&keys)
+            attribute_items(&keys)
         }
         "img" => {
             let mut keys: Vec<&str> = layout.to_vec();
             keys.push("src");
-            attr_items(&keys)
+            attribute_items(&keys)
         }
-        _ => attr_items(layout),
+        _ => attribute_items(layout),
     }
 }
 

@@ -27,7 +27,7 @@ pub(crate) fn draw_colr_glyphs(
 
     for (font_id, font_glyphs) in by_font {
         // Cached per font id: reuses bytes already in memory instead of re-reading and copying the (often multi-MB) emoji font on every emoji draw.
-        let Some(font) = shaper.colr_font_bytes_cached(font_id) else {
+        let Some(font) = shaper.colr_font_bytes(font_id) else {
             continue;
         };
         let (bytes, face_index) = (&font.0, font.1);

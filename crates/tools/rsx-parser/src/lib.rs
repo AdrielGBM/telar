@@ -133,7 +133,6 @@ col .card
         };
         assert_eq!(col.tag, "col");
         assert_eq!(col.classes, vec!["card".to_string()]);
-        // two text nodes + one row
         assert_eq!(col.children.len(), 3);
 
         let ViewNode::Element(text0) = &col.children[0] else {
@@ -141,9 +140,9 @@ col .card
         };
         assert_eq!(text0.tag, "text");
         assert_eq!(text0.content.as_deref(), Some("Count: {count}"));
-        assert_eq!(text0.attrs.len(), 2);
+        assert_eq!(text0.attributes.len(), 2);
         assert_eq!(
-            text0.attrs[0],
+            text0.attributes[0],
             Attr {
                 key: "size".into(),
                 value: "14".into(),
@@ -151,7 +150,7 @@ col .card
             }
         );
         assert_eq!(
-            text0.attrs[1],
+            text0.attributes[1],
             Attr {
                 key: "color".into(),
                 value: "dark".into(),
@@ -164,7 +163,7 @@ col .card
         };
         assert_eq!(row.tag, "row");
         assert_eq!(
-            row.attrs[0],
+            row.attributes[0],
             Attr {
                 key: "gap".into(),
                 value: "8".into(),
@@ -190,14 +189,14 @@ col .card
         assert_eq!(inc.tag, "btn");
         assert_eq!(inc.content.as_deref(), Some("Increment"));
         assert_eq!(
-            inc.attrs[0],
+            inc.attributes[0],
             Attr {
                 key: "fill".into(),
                 value: "primary".into(),
                 is_quoted: false
             }
         );
-        let on_press = inc.attrs.iter().find(|a| a.key == "on_press").unwrap();
+        let on_press = inc.attributes.iter().find(|a| a.key == "on_press").unwrap();
         assert_eq!(on_press.value, "|| count.update(|n| *n += 1)");
     }
 
@@ -216,11 +215,15 @@ col .card
         // `ghost` is a bare flag attribute with an empty value.
         assert!(
             reset
-                .attrs
+                .attributes
                 .iter()
                 .any(|a| a.key == "ghost" && a.value.is_empty())
         );
-        let on_press = reset.attrs.iter().find(|a| a.key == "on_press").unwrap();
+        let on_press = reset
+            .attributes
+            .iter()
+            .find(|a| a.key == "on_press")
+            .unwrap();
         assert_eq!(on_press.value, "|| reset()");
     }
 
@@ -277,7 +280,7 @@ col .card
         };
         assert_eq!(canvas.tag, "canvas");
         assert_eq!(canvas.classes, vec!["chart".to_string()]);
-        assert_eq!(canvas.canvas_params.as_deref(), Some("w, h"));
+        assert_eq!(canvas.canvas_parameters.as_deref(), Some("w, h"));
         // The `|w, h|` line is consumed, leaving the rect as the only child.
         assert_eq!(canvas.children.len(), 1);
         let ViewNode::Element(rect) = &canvas.children[0] else {
@@ -293,7 +296,7 @@ col .card
         let ViewNode::Element(btn) = &doc.view.nodes[0] else {
             panic!();
         };
-        let on_press = btn.attrs.iter().find(|a| a.key == "on_press").unwrap();
+        let on_press = btn.attributes.iter().find(|a| a.key == "on_press").unwrap();
         assert_eq!(on_press.value, "|ev| handle(ev)");
     }
 

@@ -43,7 +43,7 @@ mod choreographer {
         unsafe extern "C" fn(frame_time_ns: i64, data: *mut core::ffi::c_void);
 
     // Resolve AChoreographer_getInstance at runtime; returns null on pre-API-24 devices.
-    unsafe fn get_instance_fn() -> Option<unsafe extern "C" fn() -> *mut AChoreographer> {
+    unsafe fn instance_fn() -> Option<unsafe extern "C" fn() -> *mut AChoreographer> {
         unsafe extern "C" {
             fn dlsym(
                 handle: *mut core::ffi::c_void,
@@ -63,7 +63,6 @@ mod choreographer {
         }
     }
 
-    // Resolve AChoreographer_postFrameCallback at runtime.
     unsafe fn post_callback_fn()
     -> Option<unsafe extern "C" fn(*mut AChoreographer, FrameCallbackFn, *mut core::ffi::c_void)>
     {
@@ -90,14 +89,14 @@ mod choreographer {
     pub unsafe extern "C" fn frame_callback(_frame_time_ns: i64, data: *mut core::ffi::c_void) {
         let cb_data = unsafe { &*(data as *const VsyncCallbackData) };
         // Clear pending first so about_to_wait sees the frame was delivered.
-        cb_data.pending.store(false, Ordering::Release);
+        cb_data.is_pending.store(false, Ordering::Release);
         // Wake the winit event loop. Ignore errors — the loop may have already exited.
         let _ = cb_data.proxy.send_event(());
     }
 
     // Heap-allocated state shared between the runner and the vsync callback. The pointer lives for the full duration of the AndroidRunner.
     pub struct VsyncCallbackData {
-        pub pending: Arc<AtomicBool>,
+        pub is_pending: Arc<AtomicBool>,
         pub proxy: winit::event_loop::EventLoopProxy<()>,
     }
 
@@ -117,14 +116,17 @@ mod choreographer {
             proxy: winit::event_loop::EventLoopProxy<()>,
             pending: Arc<AtomicBool>,
         ) -> Option<Self> {
-            let get_instance = unsafe { get_instance_fn()? };
+            let get_instance = unsafe { instance_fn()? };
             let instance = unsafe { get_instance() };
             if instance.is_null() {
                 return None;
             }
             Some(Self {
                 instance,
-                callback_data: Box::new(VsyncCallbackData { pending, proxy }),
+                callback_data: Box::new(VsyncCallbackData {
+                    is_pending: pending,
+                    proxy,
+                }),
             })
         }
 
@@ -183,7 +185,7 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     #[cfg(target_os = "android")]
     choreographer: Option<choreographer::Choreographer>,
     #[cfg(target_os = "android")]
-    animation_pending: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    is_animation_pending: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H> {
@@ -197,7 +199,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
             {
                 // On Android, use Choreographer vsync callbacks instead of WaitUntil wall-clock timers. This aligns frame wakeups to vsync edges, eliminating jank at any refresh rate (60/90/120 Hz).
                 let already_pending = self
-                    .animation_pending
+                    .is_animation_pending
                     .swap(true, std::sync::atomic::Ordering::AcqRel);
                 if !already_pending {
                     if let Some(chore) = &self.choreographer {
@@ -346,9 +348,9 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                     }
                 }
             }
-            WindowEvent::Focused(gained) => {
+            WindowEvent::Focused(is_focused) => {
                 self.handler
-                    .on_event(Event::FocusChanged { gained }, window);
+                    .on_event(Event::FocusChanged { is_focused }, window);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.scale_factor = scale_factor;
@@ -357,10 +359,10 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
             }
             WindowEvent::ModifiersChanged(mods) => {
                 self.modifiers = platform_core::ModifiersState {
-                    shift: mods.state().shift_key(),
-                    ctrl: mods.state().control_key(),
-                    alt: mods.state().alt_key(),
-                    meta: mods.state().super_key(),
+                    is_shift: mods.state().shift_key(),
+                    is_ctrl: mods.state().control_key(),
+                    is_alt: mods.state().alt_key(),
+                    is_meta: mods.state().super_key(),
                 };
             }
             WindowEvent::KeyboardInput { event, .. } => {
@@ -506,7 +508,7 @@ impl Platform for AndroidPlatform {
             #[cfg(target_os = "android")]
             choreographer,
             #[cfg(target_os = "android")]
-            animation_pending,
+            is_animation_pending: animation_pending,
         };
         self.event_loop
             .run_app(&mut runner)

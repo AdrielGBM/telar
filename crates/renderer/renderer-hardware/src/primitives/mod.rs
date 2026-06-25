@@ -164,16 +164,16 @@ const _: () = {
 pub(crate) fn create_viewport_buffer(
     device: &wgpu::Device,
     label: &str,
-    vp: &Viewport,
+    viewport: &Viewport,
 ) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some(label),
-        contents: bytemuck::bytes_of(vp),
+        contents: bytemuck::bytes_of(viewport),
         usage: wgpu::BufferUsages::UNIFORM,
     })
 }
 
-pub(crate) fn create_viewport_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+pub(crate) fn create_viewport_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("rsx-viewport-bgl"),
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -192,7 +192,7 @@ pub(crate) fn create_viewport_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayou
 pub(crate) struct InstancePipeline<I: bytemuck::Pod> {
     pub(crate) instances_buffer: wgpu::Buffer,
     pub(crate) instances_bind_group: wgpu::BindGroup,
-    pub(crate) instances_bgl: wgpu::BindGroupLayout,
+    pub(crate) instances_bind_group_layout: wgpu::BindGroupLayout,
     instances_capacity: usize,
     _marker: std::marker::PhantomData<I>,
 }
@@ -205,25 +205,29 @@ impl<I: bytemuck::Pod> InstancePipeline<I> {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let instances_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some(&format!("rsx-{label}-instances-bgl")),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<I>() as u64),
-                },
-                count: None,
-            }],
-        });
-        let instances_bind_group =
-            Self::make_instances_bind_group(device, &instances_bgl, &instances_buffer);
+        let instances_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some(&format!("rsx-{label}-instances-bgl")),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<I>() as u64),
+                    },
+                    count: None,
+                }],
+            });
+        let instances_bind_group = Self::make_instances_bind_group(
+            device,
+            &instances_bind_group_layout,
+            &instances_buffer,
+        );
         Self {
             instances_buffer,
             instances_bind_group,
-            instances_bgl,
+            instances_bind_group_layout,
             instances_capacity: initial_capacity,
             _marker: std::marker::PhantomData,
         }
@@ -240,8 +244,11 @@ impl<I: bytemuck::Pod> InstancePipeline<I> {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        self.instances_bind_group =
-            Self::make_instances_bind_group(device, &self.instances_bgl, &self.instances_buffer);
+        self.instances_bind_group = Self::make_instances_bind_group(
+            device,
+            &self.instances_bind_group_layout,
+            &self.instances_buffer,
+        );
         self.instances_capacity = new_capacity;
     }
 

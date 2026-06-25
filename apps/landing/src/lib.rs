@@ -15,8 +15,7 @@ rsx::app!(
 mod layout_tests {
     use rsx::{AvailableSpace, LayoutItem, WidgetCtx, compute_layout, track_layout};
 
-    // The root page must fill the available window width at any size so its
-    // full-bleed bands stretch instead of collapsing into a centered column.
+    // The root page must fill the available window width at any size so its full-bleed bands stretch instead of collapsing into a centered column.
     fn page_rect_at(window_width: f32) -> (f32, f32) {
         rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
         let mut ctx = WidgetCtx::new();
@@ -43,8 +42,7 @@ mod layout_tests {
         assert!((page_rect_at(480.0).0 - 480.0).abs() < 1.0);
     }
 
-    // Narrowing the window past the split breakpoints should wrap the side-by-side
-    // sections into stacked columns, making the page taller — i.e. it reflows.
+    // Narrowing the window past the split breakpoints should wrap the side-by-side sections into stacked columns, making the page taller — i.e. it reflows.
     #[test]
     fn narrow_window_reflows_taller() {
         let wide = page_rect_at(1400.0).1;
@@ -55,9 +53,7 @@ mod layout_tests {
         );
     }
 
-    // Walks the flattened draw commands applying the PushMatrix/PopMatrix stack and
-    // returns the rightmost edge of actually-drawn content (Rect/Text/Image). This is
-    // what the user sees, unlike the page node rect.
+    // Walks the flattened draw commands applying the PushMatrix/PopMatrix stack and returns the rightmost edge of actually-drawn content (Rect/Text/Image). This is what the user sees, unlike the page node rect.
     fn content_right_edge(cmds: &[rsx::DrawCommand]) -> f32 {
         use rsx::DrawCommand::*;
         fn mul(a: [f32; 6], b: [f32; 6]) -> [f32; 6] {
@@ -97,8 +93,7 @@ mod layout_tests {
         max_x
     }
 
-    // Auto-height text must reserve more vertical space when it is narrower (more
-    // wrapped lines), so following content is pushed down instead of overlapped.
+    // Auto-height text must reserve more vertical space when it is narrower (more wrapped lines), so following content is pushed down instead of overlapped.
     #[test]
     fn auto_text_height_grows_when_narrower() {
         use rsx::{
@@ -134,8 +129,7 @@ mod layout_tests {
         );
     }
 
-    // The real feature cards (different body lengths → different heights) in a wrap
-    // row must not overflow the row's reserved height when one wraps to line 2.
+    // The real feature cards (different body lengths → different heights) in a wrap row must not overflow the row's reserved height when one wraps to line 2.
     #[test]
     fn real_feature_cards_do_not_overflow_row() {
         use rsx::{
@@ -213,9 +207,7 @@ mod layout_tests {
         );
     }
 
-    // A wrapping flex row must reserve height for ALL its lines so a following
-    // sibling sits below it instead of overlapping. Reproduces the "next section
-    // positions as if the wrapped card didn't exist" report.
+    // A wrapping flex row must reserve height for ALL its lines so a following sibling sits below it instead of overlapping. Reproduces the "next section positions as if the wrapped card didn't exist" report.
     #[test]
     fn wrapped_flex_row_reserves_height_for_all_lines() {
         use rsx::{
@@ -272,8 +264,7 @@ mod layout_tests {
         );
     }
 
-    // Same as above but the cards are content-sized containers (a column whose
-    // height comes from its children) with grow:1 — the real feature-card shape.
+    // Same as above but the cards are content-sized containers (a column whose height comes from its children) with grow:1 — the real feature-card shape.
     #[test]
     fn wrapped_content_sized_cards_reserve_height() {
         use rsx::{
@@ -358,9 +349,7 @@ mod layout_tests {
         max_y
     }
 
-    // Diagnostic: at a wrap-inducing width, the drawn content must not extend below
-    // the page's own computed height — otherwise text/cards overflow onto whatever
-    // sits below them (the "next section positions as if it didn't exist" report).
+    // Diagnostic: at a wrap-inducing width, the drawn content must not extend below the page's own computed height — otherwise text/cards overflow onto whatever sits below them (the "next section positions as if it didn't exist" report).
     #[test]
     fn drawn_content_stays_within_page_height() {
         use rsx::{App, AvailableSpace, Event, LayoutItem, compute_layout, track_layout};
@@ -375,7 +364,6 @@ mod layout_tests {
             content_bottom_edge(&cmds)
         };
 
-        // Re-measure the page node height directly at the same width.
         rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
         let mut ctx = rsx::WidgetCtx::new();
         let page = crate::home(&mut ctx).unwrap();
@@ -400,7 +388,7 @@ mod layout_tests {
     }
 
     // Collects (top, bottom) of full-width band background rects in absolute coords.
-    fn band_bands(cmds: &[rsx::DrawCommand], min_w: f32) -> Vec<(f32, f32)> {
+    fn collect_bands(cmds: &[rsx::DrawCommand], min_width: f32) -> Vec<(f32, f32)> {
         use rsx::DrawCommand::*;
         let mut ty = 0.0f32;
         let mut stack = vec![0.0f32];
@@ -415,7 +403,7 @@ mod layout_tests {
                     stack.pop();
                     ty = *stack.last().unwrap();
                 }
-                Rect { rect, .. } if rect.width >= min_w => {
+                Rect { rect, .. } if rect.width >= min_width => {
                     out.push((ty + rect.y, ty + rect.y + rect.height));
                 }
                 _ => {}
@@ -424,9 +412,7 @@ mod layout_tests {
         out
     }
 
-    // Detects the real symptom: content drawn BEFORE a later full-width band that
-    // falls inside that band's vertical range — the band, painted afterwards, covers
-    // it ("cross-platform card stays behind Built-in rendering").
+    // Detects the real symptom: content drawn BEFORE a later full-width band that falls inside that band's vertical range — the band, painted afterwards, covers it ("cross-platform card stays behind Built-in rendering").
     #[test]
     fn no_content_hidden_behind_a_later_band() {
         use rsx::{App, DrawCommand::*, Event};
@@ -479,8 +465,7 @@ mod layout_tests {
         }
     }
 
-    // Full-width section bands must not overlap vertically at any width, including
-    // the ones where the feature cards wrap to a second line.
+    // Full-width section bands must not overlap vertically at any width, including the ones where the feature cards wrap to a second line.
     #[test]
     fn section_bands_do_not_overlap() {
         use rsx::{App, Event};
@@ -493,7 +478,7 @@ mod layout_tests {
             });
             let mut bands = {
                 let cmds = tree.commands();
-                band_bands(&cmds, w as f32 - 4.0)
+                collect_bands(&cmds, w as f32 - 4.0)
             };
             bands.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
             for pair in bands.windows(2) {
@@ -532,9 +517,7 @@ mod layout_tests {
         );
     }
 
-    // Reproduces the live-app flow: feed the SAME root tree several WindowResized
-    // events and confirm every resize re-flattens to different draw commands. A
-    // dropped subscription would show up as an unchanged generation after the first.
+    // Reproduces the live-app flow: feed the SAME root tree several WindowResized events and confirm every resize re-flattens to different draw commands. A dropped subscription would show up as an unchanged generation after the first.
     #[test]
     fn live_tree_relayouts_on_every_resize() {
         use rsx::{App, Event};

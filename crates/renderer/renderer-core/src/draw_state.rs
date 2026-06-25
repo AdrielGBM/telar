@@ -22,7 +22,7 @@ pub fn compose_matrix(parent: [f32; 6], child: [f32; 6]) -> [f32; 6] {
 pub struct DrawState {
     clip_stack: Vec<Rect>,
     transform_stack: Vec<[f32; 6]>,
-    pub cum_matrix: [f32; 6],
+    pub cumulative_matrix: [f32; 6],
 }
 
 impl DrawState {
@@ -30,7 +30,7 @@ impl DrawState {
         Self {
             clip_stack: Vec::with_capacity(16),
             transform_stack: Vec::with_capacity(16),
-            cum_matrix: IDENTITY_MATRIX,
+            cumulative_matrix: IDENTITY_MATRIX,
         }
     }
 
@@ -58,26 +58,26 @@ impl DrawState {
 
     #[inline]
     pub fn push_matrix(&mut self, matrix: [f32; 6]) {
-        self.transform_stack.push(self.cum_matrix);
-        self.cum_matrix = compose_matrix(self.cum_matrix, matrix);
+        self.transform_stack.push(self.cumulative_matrix);
+        self.cumulative_matrix = compose_matrix(self.cumulative_matrix, matrix);
     }
 
     #[inline]
     pub fn pop_matrix(&mut self) {
         if let Some(prev) = self.transform_stack.pop() {
-            self.cum_matrix = prev;
+            self.cumulative_matrix = prev;
         }
     }
 
     #[inline]
     pub fn apply_point(&self, x: f32, y: f32) -> (f32, f32) {
-        crate::culling::apply_matrix(self.cum_matrix, x, y)
+        crate::culling::apply_matrix(self.cumulative_matrix, x, y)
     }
 
     pub fn reset(&mut self) {
         self.clip_stack.clear();
         self.transform_stack.clear();
-        self.cum_matrix = IDENTITY_MATRIX;
+        self.cumulative_matrix = IDENTITY_MATRIX;
     }
 }
 
@@ -99,6 +99,6 @@ where
             DrawCommand::PopMatrix => state.pop_matrix(),
             _ => {}
         }
-        f(cmd, state.cum_matrix);
+        f(cmd, state.cumulative_matrix);
     }
 }

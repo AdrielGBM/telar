@@ -12,7 +12,7 @@ use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
 pub struct Text {
-    content_fn: Rc<dyn Fn() -> String>,
+    content: Rc<dyn Fn() -> String>,
     cached_content: RefCell<(String, Arc<str>)>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
@@ -25,11 +25,10 @@ impl Text {
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        // Stretch overrides any parent align-items (e.g. center) so text always
-        // fills the parent's cross-axis width instead of collapsing to 0.
+        // Stretch overrides any parent align-items (e.g. center) so text always fills the parent's cross-axis width instead of collapsing to 0.
         let leaf = LayoutLeaf::register(ctx, layout_style.align_self_stretch())?;
         Ok(Self {
-            content_fn: Rc::new(content_fn),
+            content: Rc::new(content_fn),
             cached_content: RefCell::new((String::new(), Arc::from(""))),
             style: Rc::new(style_fn),
             leaf,
@@ -58,7 +57,7 @@ impl Text {
         let (node, rect) =
             crate::context::new_measured_leaf(ctx, layout_style.align_self_stretch(), measure)?;
         Ok(Self {
-            content_fn,
+            content: content_fn,
             cached_content: RefCell::new((String::new(), Arc::from(""))),
             style,
             leaf: LayoutLeaf { node, rect },
@@ -79,7 +78,7 @@ impl Component for Text {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         let text: Arc<str> = {
-            let new_str = (self.content_fn)();
+            let new_str = (self.content)();
             let mut cache = self.cached_content.borrow_mut();
             if cache.0 != new_str {
                 let rc = Arc::from(new_str.as_str());

@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
 use crate::analysis::completions::{
-    CompletionKind, attr_key_items, color_items, completion_context, element_name_items,
+    CompletionKind, attribute_key_items, color_items, completion_context, element_name_items,
     style_class_items,
 };
 use crate::analysis::definition::goto_definition;
@@ -40,31 +40,31 @@ impl Backend {
     async fn reparse_and_diagnose(&self, uri: Url, text: String, is_open: bool) -> Vec<Diagnostic> {
         let file_path = uri.to_file_path().ok();
         let mut store = self.store.write().await;
-        let parse_diags = store.reparse(uri.clone(), text);
-        if !parse_diags.is_empty() {
-            return parse_diags;
+        let parse_diagnostics = store.reparse(uri.clone(), text);
+        if !parse_diagnostics.is_empty() {
+            return parse_diagnostics;
         }
         let (semantic, logic_source, project) = store
             .get(&uri)
             .map(|parsed| {
-                let proj = file_path.as_deref().and_then(ProjectInfo::discover);
-                let diags = semantic_diagnostics(&parsed.document, proj.as_ref());
+                let discovered_project = file_path.as_deref().and_then(ProjectInfo::discover);
+                let diagnostics =
+                    semantic_diagnostics(&parsed.document, discovered_project.as_ref());
                 let logic = parsed.document.logic.source.clone();
-                (diags, Some(logic), proj)
+                (diagnostics, Some(logic), discovered_project)
             })
             .unwrap_or_default();
         drop(store);
 
-        // Sync logic zone and lazy-init ra_client
-        if let (Some(logic_src), Some(proj), Some(rsx_path)) =
+        if let (Some(logic_src), Some(project), Some(rsx_path)) =
             (&logic_source, &project, file_path.as_deref())
         {
-            sync_logic_zone_str(logic_src, rsx_path, &proj.root);
+            sync_logic_zone_from_str(logic_src, rsx_path, &project.root);
             let mut ra = self.ra_client.lock().await;
             let mut root_guard = self.current_root.lock().await;
-            if ra.is_none() || root_guard.as_deref() != Some(&proj.root) {
-                *ra = RaClient::spawn(&lsp_dir(&proj.root)).await;
-                *root_guard = Some(proj.root.clone());
+            if ra.is_none() || root_guard.as_deref() != Some(&project.root) {
+                *ra = RaClient::spawn(&lsp_dir(&project.root)).await;
+                *root_guard = Some(project.root.clone());
 
                 if !self.semantic_tokens_registered.load(Ordering::SeqCst) {
                     if let Some(ra_ref) = ra.as_ref() {
@@ -91,14 +91,14 @@ impl Backend {
                 }
             }
             drop(root_guard);
-            if let (Some(ra_ref), Some(lf_path)) =
-                (ra.as_ref(), logic_file_path(&proj.root, rsx_path))
+            if let (Some(ra_ref), Some(logic_file_path_buf)) =
+                (ra.as_ref(), logic_file_path(&project.root, rsx_path))
             {
-                if let Ok(lf_uri) = Url::from_file_path(&lf_path) {
+                if let Ok(logic_file_uri) = Url::from_file_path(&logic_file_path_buf) {
                     if is_open {
-                        ra_ref.did_open(&lf_uri, logic_src).await;
+                        ra_ref.did_open(&logic_file_uri, logic_src).await;
                     } else {
-                        ra_ref.did_change(&lf_uri, logic_src, 1).await;
+                        ra_ref.did_change(&logic_file_uri, logic_src, 1).await;
                     }
                 }
             }
@@ -108,7 +108,7 @@ impl Backend {
     }
 }
 
-fn sync_logic_zone_str(
+fn sync_logic_zone_from_str(
     logic_source: &str,
     rsx_path: &std::path::Path,
     project_root: &std::path::Path,
@@ -116,11 +116,11 @@ fn sync_logic_zone_str(
     let dir = lsp_dir(project_root);
     let _ = std::fs::create_dir_all(&dir);
     ensure_cargo_toml(&dir, project_root);
-    if let Some(lf) = logic_file_path(project_root, rsx_path) {
-        if let Some(parent) = lf.parent() {
+    if let Some(logic_path) = logic_file_path(project_root, rsx_path) {
+        if let Some(parent) = logic_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let _ = std::fs::write(lf, logic_source);
+        let _ = std::fs::write(logic_path, logic_source);
     }
 }
 
@@ -185,15 +185,15 @@ impl LanguageServer for Backend {
         let file_path = uri.to_file_path().ok();
         let project = file_path.as_deref().and_then(ProjectInfo::discover);
 
-        if let (Some(proj), Some(rsx_path)) = (project.as_ref(), file_path.as_deref()) {
-            if let Some(lf_path) = logic_file_path(&proj.root, rsx_path) {
-                if let Ok(lf_uri) = Url::from_file_path(&lf_path) {
+        if let (Some(project), Some(rsx_path)) = (project.as_ref(), file_path.as_deref()) {
+            if let Some(logic_file_path_buf) = logic_file_path(&project.root, rsx_path) {
+                if let Ok(logic_file_uri) = Url::from_file_path(&logic_file_path_buf) {
                     if let Some(ra) = self.ra_client.lock().await.as_ref() {
-                        ra.did_close(&lf_uri).await;
+                        ra.did_close(&logic_file_uri).await;
                     }
                 }
             }
-            remove_logic_file(rsx_path, &proj.root);
+            remove_logic_file(rsx_path, &project.root);
         }
 
         self.store.write().await.close(&uri);
@@ -220,13 +220,15 @@ impl LanguageServer for Backend {
         if let Some(rs_line) = logic_rs_line {
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let ra = self.ra_client.lock().await;
-            if let (Some(ra_ref), Some(proj), Some(rsx_path)) =
+            if let (Some(ra_ref), Some(project), Some(rsx_path)) =
                 (ra.as_ref(), project.as_ref(), file_path.as_deref())
             {
-                if let Some(lf_uri) =
-                    logic_file_path(&proj.root, rsx_path).and_then(|p| Url::from_file_path(&p).ok())
+                if let Some(logic_file_uri) = logic_file_path(&project.root, rsx_path)
+                    .and_then(|p| Url::from_file_path(&p).ok())
                 {
-                    let items = ra_ref.completion(&lf_uri, rs_line, pos.character).await;
+                    let items = ra_ref
+                        .completion(&logic_file_uri, rs_line, pos.character)
+                        .await;
                     return Ok(Some(CompletionResponse::Array(items)));
                 }
             }
@@ -245,7 +247,7 @@ impl LanguageServer for Backend {
             CompletionKind::ElementName => {
                 element_name_items(file_path.as_deref().and_then(|p| p.parent()))
             }
-            CompletionKind::AttrKey(tag) => attr_key_items(&tag),
+            CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
             CompletionKind::ColorValue => color_items(&parsed.document, project.as_ref()),
             CompletionKind::StyleClass => style_class_items(&parsed.document),
         };
@@ -276,13 +278,16 @@ impl LanguageServer for Backend {
         if let (Some(rs_line), Some(src)) = (logic_rs_line, source_clone) {
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let ra = self.ra_client.lock().await;
-            if let (Some(ra_ref), Some(proj), Some(rsx_path)) =
+            if let (Some(ra_ref), Some(project), Some(rsx_path)) =
                 (ra.as_ref(), project.as_ref(), file_path.as_deref())
             {
-                if let Some(lf_uri) =
-                    logic_file_path(&proj.root, rsx_path).and_then(|p| Url::from_file_path(&p).ok())
+                if let Some(logic_file_uri) = logic_file_path(&project.root, rsx_path)
+                    .and_then(|p| Url::from_file_path(&p).ok())
                 {
-                    if let Some(resp) = ra_ref.definition(&lf_uri, rs_line, pos.character).await {
+                    if let Some(resp) = ra_ref
+                        .definition(&logic_file_uri, rs_line, pos.character)
+                        .await
+                    {
                         return Ok(Some(remap_definition_to_rsx(resp, uri, &src)));
                     }
                 }
@@ -325,13 +330,13 @@ impl LanguageServer for Backend {
         if let Some(rs_line) = logic_rs_line {
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let ra = self.ra_client.lock().await;
-            if let (Some(ra_ref), Some(proj), Some(rsx_path)) =
+            if let (Some(ra_ref), Some(project), Some(rsx_path)) =
                 (ra.as_ref(), project.as_ref(), file_path.as_deref())
             {
-                if let Some(lf_uri) =
-                    logic_file_path(&proj.root, rsx_path).and_then(|p| Url::from_file_path(&p).ok())
+                if let Some(logic_file_uri) = logic_file_path(&project.root, rsx_path)
+                    .and_then(|p| Url::from_file_path(&p).ok())
                 {
-                    return Ok(ra_ref.hover(&lf_uri, rs_line, pos.character).await);
+                    return Ok(ra_ref.hover(&logic_file_uri, rs_line, pos.character).await);
                 }
             }
             return Ok(None);
@@ -369,19 +374,19 @@ impl LanguageServer for Backend {
         let project = file_path.as_deref().and_then(ProjectInfo::discover);
         let ra = self.ra_client.lock().await;
 
-        if let (Some(ra_ref), Some(proj), Some(rsx_path)) =
+        if let (Some(ra_ref), Some(project), Some(rsx_path)) =
             (ra.as_ref(), project.as_ref(), file_path.as_deref())
         {
-            if let Some(lf_uri) =
-                logic_file_path(&proj.root, rsx_path).and_then(|p| Url::from_file_path(&p).ok())
+            if let Some(logic_file_uri) =
+                logic_file_path(&project.root, rsx_path).and_then(|p| Url::from_file_path(&p).ok())
             {
-                if let Some(raw_data) = ra_ref.semantic_tokens_full(&lf_uri).await {
+                if let Some(raw_data) = ra_ref.semantic_tokens_full(&logic_file_uri).await {
                     let decoded = crate::semantic_tokens::decode_tokens(&raw_data);
                     let remapped: Vec<(u32, u32, u32, u32, u32)> = decoded
                         .into_iter()
-                        .map(|(rs_line, ch, len, ty, mods)| {
+                        .map(|(rs_line, character, len, token_type, token_modifiers)| {
                             let rsx_line = crate::position::rs_to_rsx_line(&source, rs_line);
-                            (rsx_line, ch, len, ty, mods)
+                            (rsx_line, character, len, token_type, token_modifiers)
                         })
                         .collect();
                     let data = crate::semantic_tokens::encode_tokens(&remapped);

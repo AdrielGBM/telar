@@ -181,41 +181,31 @@ fn bench_scroll_tick(c: &mut Criterion) {
         });
         let n = tree.commands().len();
         group.throughput(Throughput::Elements(n as u64));
-        group.bench_with_input(
-            BenchmarkId::new("full_reflatten", items),
-            &items,
-            |b, _| {
-                let mut o = 0.0f32;
-                b.iter(|| {
-                    o += 1.0;
-                    offset.set(o); // re-runs the whole content view() + flatten
-                    black_box(tree.commands().len());
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("full_reflatten", items), &items, |b, _| {
+            let mut o = 0.0f32;
+            b.iter(|| {
+                o += 1.0;
+                offset.set(o); // re-runs the whole content view() + flatten
+                black_box(tree.commands().len());
+            });
+        });
 
-        // (b) T-2.1 Part 1 target: only the PushMatrix changes, so a scroll tick just rewrites that
-        // one command in place — O(1) regardless of item count. Proxy on a plain command vec since
-        // ComponentList owns its cache internally.
+        // (b) T-2.1 Part 1 target: only the PushMatrix changes, so a scroll tick just rewrites that one command in place — O(1) regardless of item count. Proxy on a plain command vec since ComponentList owns its cache internally.
         let mut cached: Vec<renderer_core::DrawCommand> = tree.commands().iter().cloned().collect();
         let mtx_idx = cached
             .iter()
             .position(|c| matches!(c, renderer_core::DrawCommand::PushMatrix { .. }))
             .unwrap();
-        group.bench_with_input(
-            BenchmarkId::new("matrix_only", items),
-            &items,
-            |b, _| {
-                let mut o = 0.0f32;
-                b.iter(|| {
-                    o += 1.0;
-                    cached[mtx_idx] = renderer_core::DrawCommand::PushMatrix {
-                        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -o],
-                    };
-                    black_box(cached.len());
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("matrix_only", items), &items, |b, _| {
+            let mut o = 0.0f32;
+            b.iter(|| {
+                o += 1.0;
+                cached[mtx_idx] = renderer_core::DrawCommand::PushMatrix {
+                    matrix: [1.0, 0.0, 0.0, 1.0, 0.0, -o],
+                };
+                black_box(cached.len());
+            });
+        });
     }
     group.finish();
 }

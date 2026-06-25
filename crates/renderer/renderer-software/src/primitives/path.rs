@@ -51,8 +51,7 @@ fn hash_path_data(data: &renderer_core::PathData) -> u64 {
 
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub(crate) struct PathShadowCacheKey {
-    // Content hash of path vertices instead of Rc pointer: stable even when the Rc is
-    // recreated each frame with the same geometry (e.g. transform-animated paths).
+    // Content hash of path vertices instead of Rc pointer: stable even when the Rc is recreated each frame with the same geometry (e.g. transform-animated paths).
     path_hash: u64,
     blur_radius_bits: u32,
     spread_bits: u32,

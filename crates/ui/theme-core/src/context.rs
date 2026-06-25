@@ -4,17 +4,12 @@ use std::rc::Rc;
 use reactive_core::{RwSignal, create_rw_signal};
 use renderer_core::Color;
 
-// Flexible theme contract: users define their own tokens with whatever names
-// they want. `as_any` is the only requirement so `use_theme` can downcast back
-// to the concrete type.
+// Flexible theme contract: users define their own tokens with whatever names they want. `as_any` is the only requirement so `use_theme` can downcast back to the concrete type.
 pub trait Theme: 'static {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-// Opt-in contract that built-in widgets read through. A theme implements this so
-// widgets can resolve semantic colors without knowing the concrete theme type.
-// Only the two primary tokens are mandatory; muted/scrollbar carry defaults so a
-// theme can omit them.
+// Opt-in contract that built-in widgets read through. A theme implements this so widgets can resolve semantic colors without knowing the concrete theme type. Only the two primary tokens are mandatory; muted/scrollbar carry defaults so a theme can omit them.
 pub trait WidgetTheme: 'static {
     fn widget_primary(&self) -> Color;
     fn widget_on_primary(&self) -> Color;
@@ -28,16 +23,14 @@ pub trait WidgetTheme: 'static {
 }
 
 thread_local! {
-    // ManuallyDrop suppresses RwSignal's Drop impl so no TLS destructor is registered.
-    // Cleanup happens via reset_runtime() which drops the entire Runtime (and its signals slab).
+    // ManuallyDrop suppresses RwSignal's Drop impl so no TLS destructor is registered. Cleanup happens via reset_runtime() which drops the entire Runtime (and its signals slab).
     static THEME: ManuallyDrop<RwSignal<Option<Rc<dyn Theme>>>> =
         ManuallyDrop::new(create_rw_signal(None));
     static WIDGET_THEME: ManuallyDrop<RwSignal<Option<Rc<dyn WidgetTheme>>>> =
         ManuallyDrop::new(create_rw_signal(None));
 }
 
-// Installs a theme that also drives built-in widgets. The same value is stored
-// behind both trait objects so `use_theme` and `use_widget_theme` stay in sync.
+// Installs a theme that also drives built-in widgets. The same value is stored behind both trait objects so `use_theme` and `use_widget_theme` stay in sync.
 pub fn set_theme_with_widgets<T: Theme + WidgetTheme + Clone + 'static>(theme: T) {
     let theme = Rc::new(theme);
     let as_theme: Rc<dyn Theme> = theme.clone();
@@ -67,8 +60,7 @@ pub fn use_theme<T: Theme + Clone + 'static>() -> T {
     })
 }
 
-// Returns the widget theme so type-agnostic built-in widgets can read semantic
-// colors. `None` when the installed theme does not implement `WidgetTheme`.
+// Returns the widget theme so type-agnostic built-in widgets can read semantic colors. `None` when the installed theme does not implement `WidgetTheme`.
 pub fn use_widget_theme() -> Option<Rc<dyn WidgetTheme>> {
     WIDGET_THEME.with(|s| s.get())
 }

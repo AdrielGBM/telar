@@ -259,10 +259,7 @@ pub(crate) fn gaussian_blur(
     let h = height as usize;
     for _ in 0..3 {
         box_blur_h(data, width, height, r, scratch);
-        // Vertical pass via transpose to keep both passes cache-sequential.
-        // Transpose data(w×h) into scratch(h×w), blur scratch's rows (which are original columns),
-        // then transpose back. data is safe to use as the inner scratch because we've already
-        // copied data into scratch before calling box_blur_h on scratch.
+        // Vertical pass via transpose to keep both passes cache-sequential. Transpose data(w×h) into scratch(h×w), blur scratch's rows (which are original columns), then transpose back. data is safe to use as the inner scratch because we've already copied data into scratch before calling box_blur_h on scratch.
         transpose_to_scratch(data, scratch, w, h);
         box_blur_h(scratch, height, width, r, data);
         transpose_to_scratch(scratch, data, h, w);

@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use rsx_parser::RsxDocument;
 
 use crate::naming::{
-    mentions_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
+    contains_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
 };
 use crate::preview_scan::scan_previews;
 use crate::signal_scan::scan_signals;
@@ -93,7 +93,6 @@ pub fn collect_files_by_ext(
     result
 }
 
-/// Finds all `.rsx` files recursively in a directory.
 pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
     collect_files_by_ext(dir, "rsx", &|_| true)
 }
@@ -127,7 +126,6 @@ pub fn relative_output_path(path: &Path, src_dir: &Path) -> Option<PathBuf> {
     Some(rel.with_extension("rs"))
 }
 
-/// Transpiles a parsed document into Rust source.
 fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
     let doc = input.document;
     let fn_name = to_snake_case(input.component_name);
@@ -168,7 +166,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
 
     let extra_params: Vec<String> = doc
         .props
-        .params
+        .parameters
         .iter()
         .map(|p| format!("{}: {}", p.name, p.ty))
         .collect();
@@ -194,8 +192,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     out.push_str("#[allow(unused_imports)] use rsx::*;\n");
     out.push('\n');
 
-    // Emit Props struct at file scope (not inside the fn body) so the type is
-    // reachable from the function signature and from other crate files.
+    // Emit Props struct at file scope (not inside the fn body) so the type is reachable from the function signature and from other crate files.
     if let Some(struct_code) = &props_struct {
         out.push_str(struct_code);
         out.push_str("\n\n");
@@ -218,7 +215,6 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     }
 
     if !logic.is_empty() {
-        // Track which signals have been declared so far in the logic zone.
         let mut declared: Vec<&str> = Vec::new();
         for line in logic.lines() {
             if line.is_empty() {
@@ -230,17 +226,13 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             if trimmed_line.starts_with("#[preview(") || trimmed_line == "#[preview]" {
                 continue;
             }
-            // If this line has a `move` closure that captures a previously declared
-            // signal, emit a dedicated clone with a mangled name for the closure,
-            // then rewrite the line so the closure captures that clone instead of
-            // the original. This leaves the original binding intact for the view code.
+            // If this line has a `move` closure that captures a previously declared signal, emit a dedicated clone with a mangled name for the closure, then rewrite the line so the closure captures that clone instead of the original. This leaves the original binding intact for the view code.
             let mut emitted_line = line.to_string();
             if line.contains("move") {
                 for sig_name in &declared {
-                    if mentions_ident(line, sig_name) {
+                    if contains_ident(line, sig_name) {
                         let mv_name = format!("{sig_name}_rsx_mv");
                         out.push_str(&format!("    let {mv_name} = {sig_name}.clone();\n"));
-                        // Replace the signal name inside the closure with the mangled name.
                         emitted_line = replace_whole_word(&emitted_line, sig_name, &mv_name);
                     }
                 }
@@ -248,7 +240,6 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             out.push_str("    ");
             out.push_str(&emitted_line);
             out.push('\n');
-            // After emitting, record any signal declared on this line.
             for sig in &signals {
                 let decl_prefix = format!("let {} =", sig.name);
                 let decl_prefix_mut = format!("let mut {} =", sig.name);
@@ -369,8 +360,7 @@ col .card
     btn "Increment" fill:primary on_press:|| count.update(|n| *n += 1)
 "#;
 
-    // COUNTER_THEMED has no [style] color declarations — colors flow through the
-    // live theme so they react to `set_theme_with_widgets(...)` calls at runtime.
+    // COUNTER_THEMED has no [style] color declarations — colors flow through the live theme so they react to `set_theme_with_widgets(...)` calls at runtime.
     const COUNTER_THEMED: &str = r#"[logic]
 let count = create_rw_signal(0i32);
 

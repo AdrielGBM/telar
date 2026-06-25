@@ -71,7 +71,7 @@ impl GradientStop {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GradientStops {
     stops: [GradientStop; 8],
-    stop_count: u8,
+    count: u8,
 }
 
 impl GradientStops {
@@ -81,19 +81,16 @@ impl GradientStops {
             "gradient has {} stops, max is 8",
             stops.len()
         );
-        let stop_count = stops.len().min(8) as u8;
+        let count = stops.len().min(8) as u8;
         let mut arr = [GradientStop::new(0.0, Color::TRANSPARENT); 8];
         for (i, &(position, color)) in stops.iter().take(8).enumerate() {
             arr[i] = GradientStop::new(position, color);
         }
-        Self {
-            stops: arr,
-            stop_count,
-        }
+        Self { stops: arr, count }
     }
 
     pub fn active(&self) -> &[GradientStop] {
-        &self.stops[..self.stop_count as usize]
+        &self.stops[..self.count as usize]
     }
 }
 

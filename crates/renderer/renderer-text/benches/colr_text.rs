@@ -1,7 +1,7 @@
 //! H2 + H6 from performance-research §8.
 //!
 //! H2 — the software COLR fallback's font-byte access. `font_data_for` re-reads/copies the (often
-//! multi-MB) font on every call; `colr_font_bytes_cached` returns an `Arc` clone after the first.
+//! multi-MB) font on every call; `colr_font_bytes` returns an `Arc` clone after the first.
 //! Requires a resolvable font; the bench skips cleanly when the host has none.
 //!
 //! H6 — the `collect_colr_glyphs` gating. Plain UI text is re-shaped (make_buffer + per-glyph swash
@@ -39,9 +39,9 @@ fn bench_font_bytes_h2(c: &mut Criterion) {
         b.iter(|| black_box(shaper.font_data_for(black_box(font_id))));
     });
     // After: warm the per-font cache once, then every access is an Arc clone.
-    let _ = shaper.colr_font_bytes_cached(font_id);
+    let _ = shaper.colr_font_bytes(font_id);
     group.bench_function("cached_arc_clone", |b| {
-        b.iter(|| black_box(shaper.colr_font_bytes_cached(black_box(font_id))));
+        b.iter(|| black_box(shaper.colr_font_bytes(black_box(font_id))));
     });
     group.finish();
 }
@@ -52,8 +52,7 @@ fn bench_collect_colr_h6(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("collect_colr_glyphs");
 
-    // Ungated: a unique text per iteration. More distinct texts than the flag cache cap, so each
-    // lands as a miss and pays the full make_buffer + per-glyph probe — the work the gate skips.
+    // Ungated: a unique text per iteration. More distinct texts than the flag cache cap, so each lands as a miss and pays the full make_buffer + per-glyph probe — the work the gate skips.
     let texts: Vec<String> = (0..2048).map(|i| format!("ui label number {i}")).collect();
     let mut shaper_cold = TextShaper::new();
     let idx = Cell::new(0usize);
@@ -67,8 +66,7 @@ fn bench_collect_colr_h6(c: &mut Criterion) {
         });
     });
 
-    // Gated: the same plain text every iteration. After the first call records the flag, later calls
-    // short-circuit (on a host whose fonts render the text) to a single hashmap probe.
+    // Gated: the same plain text every iteration. After the first call records the flag, later calls short-circuit (on a host whose fonts render the text) to a single hashmap probe.
     let mut shaper_warm = TextShaper::new();
     let warm_text = "ui label";
     {

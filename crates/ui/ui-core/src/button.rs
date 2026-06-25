@@ -21,8 +21,8 @@ pub struct Button {
     label: Arc<str>,
     leaf: LayoutLeaf,
     on_click: Option<Box<dyn Fn()>>,
-    style_fn: Box<dyn Fn() -> ButtonStyle>,
-    hovered: RwSignal<bool>,
+    style: Box<dyn Fn() -> ButtonStyle>,
+    is_hovered: RwSignal<bool>,
 }
 
 impl Button {
@@ -35,7 +35,7 @@ impl Button {
             label: Arc::from(label.into()),
             leaf,
             on_click: None,
-            style_fn: Box::new(|| {
+            style: Box::new(|| {
                 let primary = use_widget_theme()
                     .map(|t| t.widget_primary())
                     .unwrap_or(Color::rgba(0.24, 0.47, 0.98, 1.0));
@@ -53,7 +53,7 @@ impl Button {
                     text_hover: TextStyle::new(14.0, on_primary),
                 }
             }),
-            hovered: create_rw_signal(false),
+            is_hovered: create_rw_signal(false),
         })
     }
 
@@ -63,22 +63,22 @@ impl Button {
     }
 
     pub fn style(mut self, f: impl Fn() -> ButtonStyle + 'static) -> Self {
-        self.style_fn = Box::new(f);
+        self.style = Box::new(f);
         self
     }
 }
 
 impl Component for Button {
     fn view(&self) -> RenderNode {
-        let style = (self.style_fn)();
+        let style = (self.style)();
         let r = self.leaf.rect.get();
-        let hovered = self.hovered.get();
-        let rect_style = if hovered {
+        let is_hovered = self.is_hovered.get();
+        let rect_style = if is_hovered {
             style.rect_hover
         } else {
             style.rect
         };
-        let text_style = if hovered {
+        let text_style = if is_hovered {
             style.text_hover
         } else {
             style.text
@@ -101,9 +101,9 @@ impl Component for Button {
         let rect = self.leaf.rect.get();
         match event {
             Event::PointerMoved { x, y, .. } => {
-                let now = rect.contains(*x as f32, *y as f32);
-                if now != self.hovered.get() {
-                    self.hovered.set(now);
+                let is_inside = rect.contains(*x as f32, *y as f32);
+                if is_inside != self.is_hovered.get() {
+                    self.is_hovered.set(is_inside);
                     EventResult::Handled
                 } else {
                     EventResult::Ignored
@@ -197,11 +197,9 @@ mod tests {
     fn button_on_event_hover_changes_color() {
         let mut button = make_button_with_rect();
 
-        // No hover initially
         let view_normal = button.view();
         let color_normal = rect_fill_color(&view_normal);
 
-        // Move inside rect
         button.on_event(&Event::PointerMoved {
             x: 1.0,
             y: 1.0,
@@ -212,7 +210,6 @@ mod tests {
 
         assert_ne!(color_normal, color_hovered);
 
-        // Move outside rect
         button.on_event(&Event::PointerMoved {
             x: 9999.0,
             y: 9999.0,

@@ -152,7 +152,7 @@ impl GlyphAtlas {
         Some(entry)
     }
 
-    pub fn get_and_touch(&mut self, key: &CacheKey) -> Option<AtlasEntry> {
+    pub fn fetch(&mut self, key: &CacheKey) -> Option<AtlasEntry> {
         // lru_cache.get promotes to MRU; returned value is discarded — only the side effect matters.
         self.lru_cache.get(key)?;
         self.entries.get(key).copied()
@@ -358,11 +358,7 @@ impl TextShaper {
             let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
             for run in buffer.layout_runs() {
                 for glyph in run.glyphs.iter() {
-                    // cosmic-text's `physical` adds the offset WITHOUT scaling it
-                    // (`y = glyph_y * scale + offset.1`), and `screen_y` below divides
-                    // the whole thing by `scale_factor`. So `line_y` must be pre-scaled
-                    // here or it collapses to `line_y / scale_factor`, packing every
-                    // line onto the first one at high-DPI (e.g. Android).
+                    // cosmic-text's `physical` adds the offset WITHOUT scaling it (`y = glyph_y * scale + offset.1`), and `screen_y` below divides the whole thing by `scale_factor`. So `line_y` must be pre-scaled here or it collapses to `line_y / scale_factor`, packing every line onto the first one at high-DPI (e.g. Android).
                     let physical = glyph.physical((0., run.line_y * scale_factor), scale_factor);
                     pos.push((physical.cache_key, physical.x, physical.y));
                 }
@@ -376,9 +372,8 @@ impl TextShaper {
         out.reserve(positions.len());
 
         for &(cache_key, px, py) in positions.iter() {
-            if let Some(entry) = self.atlas.get_and_touch(&cache_key) {
-                // px/py and placement offsets are in physical pixels; divide by scale_factor
-                // to get logical pixel screen coordinates expected by the viewport shader.
+            if let Some(entry) = self.atlas.fetch(&cache_key) {
+                // px/py and placement offsets are in physical pixels; divide by scale_factor to get logical pixel screen coordinates expected by the viewport shader.
                 let screen_x = rect.x + (px as f32 + entry.placement_left as f32) / scale_factor;
                 let screen_y = rect.y + (py as f32 - entry.placement_top as f32) / scale_factor;
                 let glyph_color = if entry.is_color_glyph {
@@ -400,13 +395,11 @@ impl TextShaper {
                 continue;
             }
 
-            // Skip glyphs already known to be non-rasterizable (whitespace, etc.) to avoid retrying COLR every frame.
             if self.blank_glyphs.contains(&cache_key) {
                 continue;
             }
 
-            // swash returns a usable bitmap for normal and color (e.g. CBDT) glyphs; for COLR v1
-            // glyphs it returns None or an empty placement, in which case we rasterize with skrifa.
+            // swash returns a usable bitmap for normal and color (e.g. CBDT) glyphs; for COLR v1 glyphs it returns None or an empty placement, in which case we rasterize with skrifa.
             let raster: Option<(u32, u32, i32, i32, Vec<u8>, bool)> = {
                 let img_opt = self.swash_cache.get_image(&mut self.font_system, cache_key);
                 match img_opt {
@@ -660,9 +653,7 @@ impl TextShaper {
 
         for run in buffer.layout_runs() {
             height = (run.line_y + line_height) as f32;
-            // Use the line's advance width, not the glyph ink boxes: the last glyph's
-            // advance extends past its ink, so an ink-based width leaves the box a hair
-            // too narrow and the renderer wraps the final glyph onto a new line.
+            // Use the line's advance width, not the glyph ink boxes: the last glyph's advance extends past its ink, so an ink-based width leaves the box a hair too narrow and the renderer wraps the final glyph onto a new line.
             width = width.max(run.line_w);
         }
 
@@ -699,9 +690,7 @@ impl TextShaper {
                     .swash_cache
                     .get_image(&mut self.font_system, physical.cache_key)
                 {
-                    // swash returns None for COLR v1 glyphs it cannot rasterize, OR Some with
-                    // zero-size placement for fonts (like NotoColorEmoji on Android) that store
-                    // empty outlines in the glyf table while actual rendering lives in COLR.
+                    // swash returns None for COLR v1 glyphs it cannot rasterize, OR Some with zero-size placement for fonts (like NotoColorEmoji on Android) that store empty outlines in the glyf table while actual rendering lives in COLR.
                     None => true,
                     Some(img) => img.placement.width == 0 && img.placement.height == 0,
                 };
@@ -729,7 +718,7 @@ impl TextShaper {
         physical_font_size: f32,
         foreground: [u8; 4],
     ) -> Option<(u32, u32, i32, i32, Vec<u8>, bool)> {
-        let font = self.colr_font_bytes(cache_key.font_id)?;
+        let font = self.colr_font_bytes_impl(cache_key.font_id)?;
         let (bytes, face_index) = font.as_ref();
         let bmp = crate::colr::rasterize_colr_glyph(
             bytes,
@@ -751,11 +740,11 @@ impl TextShaper {
     /// Cached raw font bytes + face index for `font_id`, for the software COLR fallback. Routes the
     /// software path through the same per-font cache the GPU atlas path uses, so emoji bytes (often
     /// several MB, e.g. NotoColorEmoji) are read once instead of re-read and copied on every frame.
-    pub fn colr_font_bytes_cached(
+    pub fn colr_font_bytes(
         &mut self,
         font_id: cosmic_text::fontdb::ID,
     ) -> Option<Arc<(Vec<u8>, u32)>> {
-        self.colr_font_bytes(font_id)
+        self.colr_font_bytes_impl(font_id)
     }
 
     /// Bench/test helper: id of the default sans-serif face, or `None` if the font system resolved none.
@@ -765,7 +754,10 @@ impl TextShaper {
     }
 
     /// Returns cached raw font bytes + face index for `font_id`, reading them from the font db on first use.
-    fn colr_font_bytes(&mut self, font_id: cosmic_text::fontdb::ID) -> Option<Arc<(Vec<u8>, u32)>> {
+    fn colr_font_bytes_impl(
+        &mut self,
+        font_id: cosmic_text::fontdb::ID,
+    ) -> Option<Arc<(Vec<u8>, u32)>> {
         if let Some(b) = self.colr_font_cache.get(&font_id) {
             return Some(b.clone());
         }
@@ -813,9 +805,7 @@ impl TextShaper {
         let m = SkrifaMetrics::new(&font_ref, SkrifaSize::new(1.0), LocationRef::default());
         // descent is negative (below baseline); ascent + |descent| + leading is the full line box.
         let line_height_factor = (m.ascent - m.descent + m.leading).max(0.0);
-        // ascender_ratio is the overshoot ABOVE the rect's top edge, not the full ascent. The em
-        // box top sits at 1.0 em above the baseline; any ascent beyond that is real overshoot.
-        // glyph bbox (when present) can reach higher than the hhea ascent, so prefer it.
+        // ascender_ratio is the overshoot ABOVE the rect's top edge, not the full ascent. The em box top sits at 1.0 em above the baseline; any ascent beyond that is real overshoot. glyph bbox (when present) can reach higher than the hhea ascent, so prefer it.
         let glyph_top = m.bounds.map(|b| b.y_max).filter(|v| v.is_finite());
         let top = glyph_top.unwrap_or(m.ascent).max(m.ascent);
         let ascender_ratio = (top - 1.0).max(0.0);
@@ -863,10 +853,7 @@ pub struct ColrGlyph {
 mod tests {
     use super::*;
 
-    // Text positions are logical, so a multi-line block must occupy the same
-    // vertical extent regardless of the device scale factor. cosmic-text's
-    // `physical` adds the y-offset unscaled, so passing the line baseline there
-    // unscaled collapsed every line onto the first one at high-DPI (e.g. Android).
+    // Text positions are logical, so a multi-line block must occupy the same vertical extent regardless of the device scale factor. cosmic-text's `physical` adds the y-offset unscaled, so passing the line baseline there unscaled collapsed every line onto the first one at high-DPI (e.g. Android).
     #[test]
     fn line_layout_is_scale_independent() {
         let mut sh = TextShaper::new();

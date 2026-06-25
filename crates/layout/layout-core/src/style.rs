@@ -279,17 +279,17 @@ impl LayoutStyle {
         self
     }
 
-    pub fn grid_column_span(mut self, n: u16) -> Self {
+    pub fn grid_column_span(mut self, count: u16) -> Self {
         self.inner.grid_column = taffy::geometry::Line {
-            start: GridPlacement::Span(n),
+            start: GridPlacement::Span(count),
             end: GridPlacement::Auto,
         };
         self
     }
 
-    pub fn grid_row_span(mut self, n: u16) -> Self {
+    pub fn grid_row_span(mut self, count: u16) -> Self {
         self.inner.grid_row = taffy::geometry::Line {
-            start: GridPlacement::Span(n),
+            start: GridPlacement::Span(count),
             end: GridPlacement::Auto,
         };
         self

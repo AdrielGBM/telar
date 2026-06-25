@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity};
 
 pub fn semantic_diagnostics(doc: &RsxDocument, project: Option<&ProjectInfo>) -> Vec<Diagnostic> {
-    let mut diags = Vec::new();
+    let mut diagnostics = Vec::new();
 
     let defined_classes: HashSet<&str> =
         doc.style.classes.iter().map(|c| c.name.as_str()).collect();
@@ -24,10 +24,10 @@ pub fn semantic_diagnostics(doc: &RsxDocument, project: Option<&ProjectInfo>) ->
         &local_constants,
         project,
         theme_configured,
-        &mut diags,
+        &mut diagnostics,
     );
 
-    diags
+    diagnostics
 }
 
 fn check_nodes(
@@ -36,7 +36,7 @@ fn check_nodes(
     local_constants: &HashSet<&str>,
     project: Option<&ProjectInfo>,
     theme_configured: bool,
-    diags: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<Diagnostic>,
 ) {
     for node in nodes {
         match node {
@@ -46,7 +46,7 @@ fn check_nodes(
                 local_constants,
                 project,
                 theme_configured,
-                diags,
+                diagnostics,
             ),
             ViewNode::IfBlock(b) => {
                 check_nodes(
@@ -55,7 +55,7 @@ fn check_nodes(
                     local_constants,
                     project,
                     theme_configured,
-                    diags,
+                    diagnostics,
                 );
                 if let Some(else_b) = &b.else_branch {
                     check_nodes(
@@ -64,7 +64,7 @@ fn check_nodes(
                         local_constants,
                         project,
                         theme_configured,
-                        diags,
+                        diagnostics,
                     );
                 }
             }
@@ -75,7 +75,7 @@ fn check_nodes(
                     local_constants,
                     project,
                     theme_configured,
-                    diags,
+                    diagnostics,
                 );
             }
             ViewNode::LetStmt { .. } => {}
@@ -89,13 +89,13 @@ fn check_element(
     local_constants: &HashSet<&str>,
     project: Option<&ProjectInfo>,
     theme_configured: bool,
-    diags: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<Diagnostic>,
 ) {
     let range = parser_line_to_lsp_range(el.line);
 
     for class in &el.classes {
         if !defined_classes.contains(class.as_str()) {
-            diags.push(Diagnostic {
+            diagnostics.push(Diagnostic {
                 range,
                 severity: Some(DiagnosticSeverity::WARNING),
                 message: format!("Style class `.{class}` is not defined in [style]"),
@@ -106,7 +106,7 @@ fn check_element(
 
     if theme_configured {
         let theme_fields = project.map(|p| &p.theme_fields);
-        for attr in &el.attrs {
+        for attr in &el.attributes {
             if matches!(attr.key.as_str(), "color" | "fill" | "stroke" | "outline") {
                 let val = &attr.value;
                 if val.starts_with('{') || val.starts_with('#') {
@@ -117,7 +117,7 @@ fn check_element(
                         .map(|f| f.contains(val.as_str()))
                         .unwrap_or(false);
                 if !known {
-                    diags.push(Diagnostic {
+                    diagnostics.push(Diagnostic {
                         range,
                         severity: Some(DiagnosticSeverity::ERROR),
                         message: format!(
@@ -136,6 +136,6 @@ fn check_element(
         local_constants,
         project,
         theme_configured,
-        diags,
+        diagnostics,
     );
 }

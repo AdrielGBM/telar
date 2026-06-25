@@ -29,23 +29,23 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     handler: H,
     window: Option<WinitWindow>,
     config: WindowConfig,
-    cursor_pos: (f64, f64),
+    cursor_position: (f64, f64),
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
     // True only on WaitUntil timer expiry; gates keepalive request_redraw() so it doesn't fire on every event queue drain.
-    timer_fired: bool,
+    timer_has_fired: bool,
 }
 
 impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
-        self.timer_fired = matches!(cause, StartCause::ResumeTimeReached { .. });
+        self.timer_has_fired = matches!(cause, StartCause::ResumeTimeReached { .. });
         self.handler.new_events();
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(d) = self.handler.about_to_wait() {
             // Only request_redraw() on timer expiry, not every drain; reactive changes call it themselves via flush_notify.
-            if self.timer_fired {
+            if self.timer_has_fired {
                 if let Some(window) = &self.window {
                     window.request_redraw();
                 }
@@ -57,38 +57,38 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let mut attrs = WindowAttributes::default()
+        let mut attributes = WindowAttributes::default()
             .with_title(self.config.title.as_str())
             .with_inner_size(winit::dpi::LogicalSize::new(
                 self.config.width,
                 self.config.height,
             ))
-            .with_resizable(self.config.resizable)
-            .with_decorations(self.config.decorations)
-            .with_transparent(self.config.transparent);
+            .with_resizable(self.config.is_resizable)
+            .with_decorations(self.config.has_decorations)
+            .with_transparent(self.config.is_transparent);
 
         if let Some((w, h)) = self.config.min_size {
-            attrs = attrs.with_min_inner_size(winit::dpi::LogicalSize::new(w, h));
+            attributes = attributes.with_min_inner_size(winit::dpi::LogicalSize::new(w, h));
         }
         if let Some((w, h)) = self.config.max_size {
-            attrs = attrs.with_max_inner_size(winit::dpi::LogicalSize::new(w, h));
+            attributes = attributes.with_max_inner_size(winit::dpi::LogicalSize::new(w, h));
         }
         match self.config.fullscreen {
-            FullscreenMode::None => {}
+            FullscreenMode::Disabled => {}
             // Exclusive requires a concrete video mode; fall back to borderless for now.
             FullscreenMode::Borderless | FullscreenMode::Exclusive => {
-                attrs = attrs.with_fullscreen(Some(Fullscreen::Borderless(None)));
+                attributes = attributes.with_fullscreen(Some(Fullscreen::Borderless(None)));
             }
         }
         if let WindowPosition::At(x, y) = self.config.position {
-            attrs = attrs.with_position(winit::dpi::PhysicalPosition::new(x, y));
+            attributes = attributes.with_position(winit::dpi::PhysicalPosition::new(x, y));
         }
-        if self.config.always_on_top {
-            attrs = attrs.with_window_level(WindowLevel::AlwaysOnTop);
+        if self.config.is_always_on_top {
+            attributes = attributes.with_window_level(WindowLevel::AlwaysOnTop);
         }
 
         use std::sync::Arc;
-        match event_loop.create_window(attrs) {
+        match event_loop.create_window(attributes) {
             Ok(w) => {
                 let window = WinitWindow(Arc::new(w));
                 if !self.handler.on_resume(&window) {
@@ -125,7 +125,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
             WindowEvent::CursorMoved { position, .. } => {
                 let lx = position.x / self.scale_factor;
                 let ly = position.y / self.scale_factor;
-                self.cursor_pos = (lx, ly);
+                self.cursor_position = (lx, ly);
                 self.handler.on_event(
                     Event::PointerMoved {
                         x: lx,
@@ -142,7 +142,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                     WinitMouseButton::Middle => PointerButton::Auxiliary,
                     _ => return,
                 };
-                let (x, y) = self.cursor_pos;
+                let (x, y) = self.cursor_position;
                 let ev = match state {
                     ElementState::Pressed => Event::PointerPressed {
                         x,
@@ -185,9 +185,9 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 };
                 self.handler.on_event(ev, window);
             }
-            WindowEvent::Focused(gained) => {
+            WindowEvent::Focused(is_focused) => {
                 self.handler
-                    .on_event(Event::FocusChanged { gained }, window);
+                    .on_event(Event::FocusChanged { is_focused }, window);
             }
             WindowEvent::CursorEntered { .. } => {
                 self.handler.on_event(Event::CursorEntered, window);
@@ -217,10 +217,10 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
             }
             WindowEvent::ModifiersChanged(mods) => {
                 self.modifiers = platform_core::ModifiersState {
-                    shift: mods.state().shift_key(),
-                    ctrl: mods.state().control_key(),
-                    alt: mods.state().alt_key(),
-                    meta: mods.state().super_key(),
+                    is_shift: mods.state().shift_key(),
+                    is_ctrl: mods.state().control_key(),
+                    is_alt: mods.state().alt_key(),
+                    is_meta: mods.state().super_key(),
                 };
             }
             WindowEvent::KeyboardInput { event, .. } => {
@@ -292,10 +292,10 @@ impl Platform for WinitPlatform {
             handler,
             window: None,
             config,
-            cursor_pos: (0.0, 0.0),
+            cursor_position: (0.0, 0.0),
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
-            timer_fired: false,
+            timer_has_fired: false,
         };
         self.event_loop
             .run_app(&mut runner)

@@ -7,8 +7,7 @@ use crate::{
     TextStyle,
 };
 
-// Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`;
-// each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
+// Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`; each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
 pub fn hash_rect_style(s: &RectStyle) -> u64 {
     let mut h = FxHasher::default();
     hash_opt_paint(s.fill.as_ref(), &mut h);

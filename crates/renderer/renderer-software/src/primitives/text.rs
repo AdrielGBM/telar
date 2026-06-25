@@ -93,8 +93,8 @@ fn hash_text(text: &str) -> u64 {
 pub(crate) struct TextShadowCacheKey {
     pub text_hash: u64,
     pub font_size_bits: u32,
-    pub tex_w: u32,
-    pub tex_h: u32,
+    pub texture_width: u32,
+    pub texture_height: u32,
     pub shadow_color: u32,
     pub blur_radius_bits: u32,
 }
@@ -133,22 +133,22 @@ pub(crate) fn draw_text(
     >,
 ) {
     if let Some(shadow) = style.shadow {
-        let (arc, tex_w, tex_h) = shaper.rasterize_alpha(text, rect, style);
-        if tex_w > 0 && tex_h > 0 {
+        let (arc, texture_width, texture_height) = shaper.rasterize_alpha(text, rect, style);
+        if texture_width > 0 && texture_height > 0 {
             let shadow_layout = renderer_core::ShadowLayout::compute(
                 shadow.blur_radius,
                 rect.x + shadow.offset_x,
-                rect.x + shadow.offset_x + tex_w as f32,
+                rect.x + shadow.offset_x + texture_width as f32,
                 rect.y + shadow.offset_y,
-                rect.y + shadow.offset_y + tex_h as f32,
+                rect.y + shadow.offset_y + texture_height as f32,
                 1.0,
             );
             let padding = shadow_layout.padding;
 
             let shadow_x = rect.x + shadow.offset_x - padding as f32;
             let shadow_y = rect.y + shadow.offset_y - padding as f32;
-            let shadow_w = tex_w as f32 + 2.0 * padding as f32 + 2.0;
-            let shadow_h = tex_h as f32 + 2.0 * padding as f32 + 2.0;
+            let shadow_w = texture_width as f32 + 2.0 * padding as f32 + 2.0;
+            let shadow_h = texture_height as f32 + 2.0 * padding as f32 + 2.0;
             if renderer_core::culling::overlaps(
                 shadow_x + transform.tx,
                 shadow_y + transform.ty,
@@ -161,21 +161,21 @@ pub(crate) fn draw_text(
                 let shadow_key = TextShadowCacheKey {
                     text_hash: hash_text(text),
                     font_size_bits: style.font_size.to_bits(),
-                    tex_w,
-                    tex_h,
+                    texture_width,
+                    texture_height,
                     shadow_color: u32::from_le_bytes([sr, sg, sb, sa]),
                     blur_radius_bits: q_blur.to_bits(),
                 };
 
-                let tmp_w = tex_w + 2 * padding as u32 + 2;
-                let tmp_h = tex_h + 2 * padding as u32 + 2;
+                let tmp_w = texture_width + 2 * padding as u32 + 2;
+                let tmp_h = texture_height + 2 * padding as u32 + 2;
                 let shadow_color = shadow.color;
 
                 // The shadow shape is the tinted alpha texture; it only needs the (Send) alpha buffer and Copy params, so large text shadows can be blurred on a background thread. The async closure owns a clone of the alpha Arc.
                 let draw_text_shadow = move |tmp_pmap: &mut tiny_skia::Pixmap, alpha: &[u8]| {
                     let mut shadow_pixels = alpha.to_vec();
                     tint_premultiplied(&mut shadow_pixels, shadow_color);
-                    if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
+                    if let Some(size) = tiny_skia::IntSize::from_wh(texture_width, texture_height) {
                         if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size) {
                             tmp_pmap.draw_pixmap(
                                 padding,
@@ -218,8 +218,8 @@ pub(crate) fn draw_text(
             let body_key = renderer_text::make_text_cache_key(
                 text,
                 style.font_size,
-                tex_w,
-                tex_h,
+                texture_width,
+                texture_height,
                 style.paint.solid_color(),
             );
             let paint = tiny_skia::PixmapPaint {
@@ -227,10 +227,9 @@ pub(crate) fn draw_text(
                 ..Default::default()
             };
             if text_pixmap_cache.get(&body_key).is_none() {
-                // Use rasterize (not rasterize_alpha+tint) so color emoji preserve their natural
-                // colors instead of being multiplied by the text color.
+                // Use rasterize (not rasterize_alpha+tint) so color emoji preserve their natural colors instead of being multiplied by the text color.
                 let (colored_arc, _, _) = shaper.rasterize(text, rect, style);
-                if let Some(size) = tiny_skia::IntSize::from_wh(tex_w, tex_h) {
+                if let Some(size) = tiny_skia::IntSize::from_wh(texture_width, texture_height) {
                     if let Some(src) = tiny_skia::Pixmap::from_vec(colored_arc.to_vec(), size) {
                         text_pixmap_cache.put(body_key.clone(), src);
                     }
@@ -301,8 +300,7 @@ pub(crate) fn draw_text(
         return;
     }
 
-    // Use rasterize (not rasterize_alpha+tint) so color emoji preserve their natural colors
-    // instead of being multiplied by the text color.
+    // Use rasterize (not rasterize_alpha+tint) so color emoji preserve their natural colors instead of being multiplied by the text color.
     let (pixels_arc, w, h) = shaper.rasterize(text, rect, style);
     if w == 0 || h == 0 {
         return;

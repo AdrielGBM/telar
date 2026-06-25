@@ -1,6 +1,5 @@
 //! Abstract syntax tree for `.rsx` documents.
 
-/// A fully parsed `.rsx` document with its top-level sections.
 #[derive(Debug, Clone)]
 pub struct RsxDocument {
     pub logic: LogicZone,
@@ -12,12 +11,12 @@ pub struct RsxDocument {
 /// The `[props]` section: named parameters appended to the generated function signature.
 #[derive(Debug, Clone, Default)]
 pub struct PropsSection {
-    pub params: Vec<PropParam>,
+    pub parameters: Vec<PropParameter>,
 }
 
 /// A single `name: Type` entry in `[props]`.
 #[derive(Debug, Clone)]
-pub struct PropParam {
+pub struct PropParameter {
     pub name: String,
     pub ty: String,
 }
@@ -31,19 +30,18 @@ pub struct LogicZone {
 /// The `[style]` section: a flat list of constants and style classes.
 #[derive(Debug, Clone, Default)]
 pub struct StyleSection {
-    pub constants: Vec<StyleConst>,
+    pub constants: Vec<StyleConstant>,
     pub classes: Vec<StyleClass>,
 }
 
 /// A top-level named constant, e.g. `primary: #3d78fa` or `radius: 6`.
 #[derive(Debug, Clone)]
-pub struct StyleConst {
+pub struct StyleConstant {
     pub name: String,
     pub value: StyleValue,
     pub line: usize,
 }
 
-/// The value attached to a style constant.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StyleValue {
     Hex(String),
@@ -72,7 +70,6 @@ pub struct ViewSection {
     pub nodes: Vec<ViewNode>,
 }
 
-/// A node within the view tree.
 #[derive(Debug, Clone)]
 pub enum ViewNode {
     Element(Element),
@@ -86,9 +83,9 @@ pub enum ViewNode {
 pub struct Element {
     pub tag: String,
     pub classes: Vec<String>,
-    pub attrs: Vec<Attr>,
+    pub attributes: Vec<Attr>,
     pub content: Option<String>,
-    pub canvas_params: Option<String>,
+    pub canvas_parameters: Option<String>,
     pub children: Vec<ViewNode>,
     pub line: usize,
 }
@@ -103,7 +100,6 @@ pub struct Attr {
     pub is_quoted: bool,
 }
 
-/// An `if` / `else` conditional block in the view.
 #[derive(Debug, Clone)]
 pub struct IfBlock {
     pub condition: String,

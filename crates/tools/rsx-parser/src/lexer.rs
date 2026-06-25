@@ -8,7 +8,6 @@
 //! - Style and View lines carry their original text plus the leading indentation
 //!   width, which the parser uses to reconstruct the view hierarchy.
 
-/// Which section a line belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
     Unknown,
@@ -18,7 +17,6 @@ pub enum Section {
     View,
 }
 
-/// A single classified physical line.
 #[derive(Debug, Clone)]
 pub struct Line {
     pub section: Section,
@@ -33,7 +31,6 @@ pub struct Line {
 }
 
 impl Line {
-    /// True when the trimmed content is empty.
     pub fn is_blank(&self) -> bool {
         self.content.is_empty()
     }

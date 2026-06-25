@@ -3,20 +3,18 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use rsx_parser::{Attr, Element, ForBlock, IfBlock, StyleClass, StyleConst, ViewNode};
+use rsx_parser::{Attr, Element, ForBlock, IfBlock, StyleClass, StyleConstant, ViewNode};
 
 use crate::naming::{
-    const_name, is_ident, mentions_ident, style_fn_name, to_pascal_case, to_snake_case,
+    constant_name, contains_ident, is_ident, style_function_name, to_pascal_case, to_snake_case,
 };
 use crate::signal_scan::SignalInfo;
 use crate::style::{format_f32, hex_to_color_expr, layout_prop_call};
 
-// `heading`/`section` styling reproduced inline (the library no longer ships
-// `Heading`/`Section`): a 12px caption colored from the theme's `widget_muted`
-// token, and an 8px-gap column wrapping the heading above its content.
+// `heading`/`section` styling reproduced inline (the library no longer ships `Heading`/`Section`): a 12px caption colored from the theme's `widget_muted` token, and an 8px-gap column wrapping the heading above its content.
 const HEADING_FONT_SIZE: &str = "12.0";
 const SECTION_GAP: &str = "8.0";
-const HEADING_STYLE_FN: &str = "move || { let color = use_widget_theme().map(|t| t.widget_muted()).unwrap_or(Color::rgba(0.5, 0.5, 0.6, 1.0)); TextStyle::new(12.0, color) }";
+const HEADING_STYLE_CLOSURE: &str = "move || { let color = use_widget_theme().map(|t| t.widget_muted()).unwrap_or(Color::rgba(0.5, 0.5, 0.6, 1.0)); TextStyle::new(12.0, color) }";
 
 /// A piece of generated child code together with how it contributes to a
 /// parent's child collection.
@@ -31,7 +29,7 @@ pub struct ViewGen<'a> {
     signals: &'a [SignalInfo],
     /// Declared style classes, used to validate class references in elements.
     classes: &'a [StyleClass],
-    constants: &'a [StyleConst],
+    constants: &'a [StyleConstant],
     /// Per-widget-type variable counters, keyed by the descriptive prefix.
     counters: HashMap<String, usize>,
     /// When set, `[style]` color references resolve to `use_theme::<Type>().field`
@@ -40,14 +38,14 @@ pub struct ViewGen<'a> {
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,
     /// Loop-variable identifiers currently in scope, cloned per closure like signals.
-    loop_vars: Vec<String>,
+    loop_variables: Vec<String>,
 }
 
 impl<'a> ViewGen<'a> {
     pub fn with_theme(
         signals: &'a [SignalInfo],
         classes: &'a [StyleClass],
-        constants: &'a [StyleConst],
+        constants: &'a [StyleConstant],
         theme_type: Option<&str>,
     ) -> Self {
         Self {
@@ -57,11 +55,11 @@ impl<'a> ViewGen<'a> {
             counters: HashMap::new(),
             theme_type: theme_type.map(str::to_string),
             indent: 1,
-            loop_vars: Vec::new(),
+            loop_variables: Vec::new(),
         }
     }
 
-    fn next_var(&mut self, tag: &str) -> String {
+    fn next_variable_name(&mut self, tag: &str) -> String {
         let prefix = match tag {
             "text" => "text",
             "btn" | "button" => "btn",
@@ -78,7 +76,7 @@ impl<'a> ViewGen<'a> {
         name
     }
 
-    fn pad(&self) -> String {
+    fn indent_str(&self) -> String {
         "    ".repeat(self.indent)
     }
 
@@ -97,15 +95,14 @@ impl<'a> ViewGen<'a> {
                     roots.push(name);
                 }
                 ChildEmit::Dynamic { code } => {
-                    // A bare control-flow node at the root has no container to
-                    // attach to; emit it verbatim for completeness.
+                    // A bare control-flow node at the root has no container to attach to; emit it verbatim for completeness.
                     out.push_str(&code);
                     out.push('\n');
                 }
             }
         }
 
-        let pad = self.pad();
+        let pad = self.indent_str();
         match roots.len() {
             0 => {
                 let _ = write!(
@@ -133,7 +130,7 @@ impl<'a> ViewGen<'a> {
         match node {
             ViewNode::Element(el) => self.emit_element(el),
             ViewNode::LetStmt { source, .. } => ChildEmit::Dynamic {
-                code: format!("{}{source};", self.pad()),
+                code: format!("{}{source};", self.indent_str()),
             },
             ViewNode::IfBlock(block) => self.emit_if(block),
             ViewNode::ForBlock(block) => self.emit_for(block),
@@ -156,18 +153,15 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    // ----- Leaf widgets -----------------------------------------------------
-
     fn emit_text(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var(&el.tag);
-        let pad = self.pad();
+        let var = self.next_variable_name(&el.tag);
+        let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
         let content_fn = self.interpolate_content(content);
-        let style = self.text_style(&el.attrs);
+        let style = self.text_style(&el.attributes);
 
-        // Forward responsive sizing attrs (width/min-width/max-width/grow/…) onto the leaf.
         let mut extra = String::new();
-        for a in &el.attrs {
+        for a in &el.attributes {
             if matches!(a.key.as_str(), "size" | "color" | "lines" | "height") {
                 continue;
             }
@@ -175,11 +169,9 @@ impl<'a> ViewGen<'a> {
                 extra.push_str(&call);
             }
         }
-        // An explicit `height:` pins the box; otherwise the leaf measures its own
-        // height from the wrapped content (`Text::auto`) so multi-line text reserves
-        // real space and pushes following siblings down instead of overflowing.
+        // An explicit `height:` pins the box; otherwise the leaf measures its own height from the wrapped content (`Text::auto`) so multi-line text reserves real space and pushes following siblings down instead of overflowing.
         let explicit_height = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "height")
             .and_then(|a| layout_prop_call("height", &a.value));
@@ -189,8 +181,7 @@ impl<'a> ViewGen<'a> {
             None => ("Text::auto", format!("LayoutStyle::new(){extra}")),
         };
 
-        // Each `move` closure consumes its captures; clone the signals they use
-        // into block locals so both closures can capture independently.
+        // Each `move` closure consumes its captures; clone the signals they use into block locals so both closures can capture independently.
         let clones = self.clone_bindings(&[&content_fn, &style], &pad, "    ");
 
         let code = format!(
@@ -207,15 +198,14 @@ impl<'a> ViewGen<'a> {
         ChildEmit::Simple { name: var, code }
     }
 
-    // A muted section caption: a single-line `Text` whose color reads `widget_muted`
-    // from the active theme (falling back to a neutral gray when none is set).
+    // A muted section caption: a single-line `Text` whose color reads `widget_muted` from the active theme (falling back to a neutral gray when none is set).
     fn emit_heading(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var("heading");
-        let pad = self.pad();
+        let var = self.next_variable_name("heading");
+        let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
         let content_fn = self.interpolate_content(content);
         let clones = self.clone_bindings(&[&content_fn], &pad, "    ");
-        let style_fn = HEADING_STYLE_FN;
+        let style_closure = HEADING_STYLE_CLOSURE;
         let code = format!(
             "{pad}let {var} = {{\n\
              {clones}\
@@ -223,23 +213,21 @@ impl<'a> ViewGen<'a> {
              {pad}        ctx,\n\
              {pad}        {content_fn},\n\
              {pad}        LayoutStyle::new().height({HEADING_FONT_SIZE}_f32 * 1.4),\n\
-             {pad}        {style_fn},\n\
+             {pad}        {style_closure},\n\
              {pad}    )?\n\
              {pad}}};"
         );
         ChildEmit::Simple { name: var, code }
     }
 
-    // A titled column: a muted `heading` Text prepended to the children inside a
-    // `flex_column` Container with a small gap. Child emission mirrors
-    // `emit_container`; the title comes from `content` rather than a child node.
+    // A titled column: a muted `heading` Text prepended to the children inside a `flex_column` Container with a small gap. Child emission mirrors `emit_container`; the title comes from `content` rather than a child node.
     fn emit_section(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var("section");
-        let heading_var = self.next_var("heading");
-        let pad = self.pad();
+        let var = self.next_variable_name("section");
+        let heading_var = self.next_variable_name("heading");
+        let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
         let title_fn = self.interpolate_content(content);
-        let style_fn = HEADING_STYLE_FN;
+        let style_closure = HEADING_STYLE_CLOSURE;
 
         let has_dynamic = el.children.iter().any(|n| {
             matches!(
@@ -249,7 +237,7 @@ impl<'a> ViewGen<'a> {
         });
 
         self.indent += 1;
-        let inner_pad = self.pad();
+        let inner_pad = self.indent_str();
         let mut child_emits = Vec::new();
         for child in &el.children {
             child_emits.push(self.emit_node(child));
@@ -264,7 +252,7 @@ impl<'a> ViewGen<'a> {
         let _ = write!(code, "{clones}");
         let _ = writeln!(
             code,
-            "{inner_pad}let {heading_var} = Text::new(ctx, {title_fn}, LayoutStyle::new().height({HEADING_FONT_SIZE}_f32 * 1.4), {style_fn})?;"
+            "{inner_pad}let {heading_var} = Text::new(ctx, {title_fn}, LayoutStyle::new().height({HEADING_FONT_SIZE}_f32 * 1.4), {style_closure})?;"
         );
 
         let children = self.emit_children_collection(
@@ -340,12 +328,12 @@ impl<'a> ViewGen<'a> {
     fn clone_bindings(&self, snippets: &[&str], pad: &str, extra: &str) -> String {
         let mut used: Vec<&str> = Vec::new();
         for sig in self.signals {
-            if snippets.iter().any(|s| mentions_ident(s, &sig.name)) {
+            if snippets.iter().any(|s| contains_ident(s, &sig.name)) {
                 used.push(&sig.name);
             }
         }
-        for var in &self.loop_vars {
-            if snippets.iter().any(|s| mentions_ident(s, var)) {
+        for var in &self.loop_variables {
+            if snippets.iter().any(|s| contains_ident(s, var)) {
                 used.push(var);
             }
         }
@@ -372,18 +360,18 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_image(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var("img");
-        let pad = self.pad();
+        let var = self.next_variable_name("img");
+        let pad = self.indent_str();
 
         let src = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "src")
             .map(|a| a.value.as_str())
             .unwrap_or("__img_data");
 
         let filter = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "filter")
             .map(|a| match a.value.trim() {
@@ -392,7 +380,7 @@ impl<'a> ViewGen<'a> {
             })
             .unwrap_or("ImageFilter::Linear");
 
-        let layout_style = self.make_layout_style("img", &el.classes, &el.attrs);
+        let layout_style = self.make_layout_style("img", &el.classes, &el.attributes);
 
         let code = format!(
             "{pad}let {var} = {{\n\
@@ -410,13 +398,13 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_button(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var(&el.tag);
-        let pad = self.pad();
+        let var = self.next_variable_name(&el.tag);
+        let pad = self.indent_str();
         let label = el.content.as_deref().unwrap_or("");
-        let style = self.button_style(&el.attrs, pad.as_str());
+        let style = self.button_style(&el.attributes, pad.as_str());
 
         let on_press = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "on_press")
             .map(|h| normalize_closure(&h.value));
@@ -501,14 +489,11 @@ impl<'a> ViewGen<'a> {
         ))
     }
 
-    // ----- Containers -------------------------------------------------------
-
     fn emit_container(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var(&el.tag);
-        let pad = self.pad();
-        let style = self.make_layout_style(&el.tag, &el.classes, &el.attrs);
+        let var = self.next_variable_name(&el.tag);
+        let pad = self.indent_str();
+        let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
 
-        // Partition children into simple widgets and dynamic control flow.
         let has_dynamic = el.children.iter().any(|n| {
             matches!(
                 n,
@@ -517,7 +502,7 @@ impl<'a> ViewGen<'a> {
         });
 
         self.indent += 1;
-        let inner_pad = self.pad();
+        let inner_pad = self.indent_str();
         let mut child_emits = Vec::new();
         for child in &el.children {
             child_emits.push(self.emit_node(child));
@@ -536,37 +521,37 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_box(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var("box");
-        let pad = self.pad();
-        let layout_style = self.make_layout_style("box", &el.classes, &el.attrs);
+        let var = self.next_variable_name("box");
+        let pad = self.indent_str();
+        let layout_style = self.make_layout_style("box", &el.classes, &el.attributes);
 
-        let shadow = self.canvas_shadow(&el.attrs);
-        let gradient = self.box_gradient_paint(&el.attrs);
+        let shadow = self.canvas_shadow(&el.attributes);
+        let gradient = self.box_gradient_paint(&el.attributes);
         let solid_fill = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "fill")
             .map(|a| self.color_expr(&a.value));
         let stroke = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "stroke")
             .map(|a| self.color_expr(&a.value));
         let stroke_w = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "stroke_w")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(1.0);
         let radius = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "radius")
             .and_then(|a| a.value.parse::<f32>().ok())
             .map(|r| format!("BorderRadius::all({})", format_f32(r)))
             .unwrap_or_else(|| "BorderRadius::zero()".to_string());
         let opacity = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "opacity")
             .and_then(|a| a.value.parse::<f32>().ok());
@@ -589,7 +574,7 @@ impl<'a> ViewGen<'a> {
         });
 
         self.indent += 1;
-        let inner_pad = self.pad();
+        let inner_pad = self.indent_str();
         let mut child_emits = Vec::new();
         for child in &el.children {
             child_emits.push(self.emit_node(child));
@@ -664,12 +649,12 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_scroll(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var(&el.tag);
-        let pad = self.pad();
-        let style = self.make_layout_style(&el.tag, &el.classes, &el.attrs);
+        let var = self.next_variable_name(&el.tag);
+        let pad = self.indent_str();
+        let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
 
         self.indent += 1;
-        let inner_pad = self.pad();
+        let inner_pad = self.indent_str();
         // LayoutScrollArea wraps a single content item; if multiple children exist, wrap them in a column first.
         let mut child_emits = Vec::new();
         for child in &el.children {
@@ -737,9 +722,9 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_canvas(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_var(&el.tag);
-        let pad = self.pad();
-        let style = self.make_layout_style(&el.tag, &el.classes, &el.attrs);
+        let var = self.next_variable_name(&el.tag);
+        let pad = self.indent_str();
+        let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
         let inner = format!("{pad}    ");
 
         let canvas_children: Vec<&Element> = el
@@ -762,7 +747,7 @@ impl<'a> ViewGen<'a> {
 
         if canvas_children.is_empty() {
             // Legacy behaviour: explicit (w, h) param bindings or empty stub.
-            let params = el.canvas_params.as_deref().unwrap_or("");
+            let params = el.canvas_parameters.as_deref().unwrap_or("");
             let bindings = canvas_param_bindings(params, &pad);
             code.push_str(&bindings);
             let _ = writeln!(code, "{inner}RenderNode::group([])");
@@ -808,34 +793,34 @@ impl<'a> ViewGen<'a> {
     /// `gradient` (linear/radial), `from`, `to`, `mid`, `mid-pos`,
     /// `x1`, `y1`, `x2`, `y2` (linear points), `cx`, `cy`, `r` (radial).
     fn emit_canvas_rect(&self, el: &Element) -> String {
-        let x = self.canvas_dim("x", &el.attrs);
-        let y = self.canvas_dim("y", &el.attrs);
-        let w = self.canvas_dim("w", &el.attrs);
-        let h = self.canvas_dim("h", &el.attrs);
+        let x = self.canvas_dim("x", &el.attributes);
+        let y = self.canvas_dim("y", &el.attributes);
+        let w = self.canvas_dim("w", &el.attributes);
+        let h = self.canvas_dim("h", &el.attributes);
 
         let radius = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "radius")
             .and_then(|a| a.value.parse::<f32>().ok())
             .map(|r| format!("BorderRadius::all({})", format_f32(r)))
             .unwrap_or_else(|| "BorderRadius::zero()".to_string());
 
-        let shadow = self.canvas_shadow(&el.attrs);
+        let shadow = self.canvas_shadow(&el.attributes);
         let stroke = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "stroke")
             .map(|a| self.color_expr(&a.value));
         let stroke_w = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "stroke_w")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(1.0);
-        let gradient = self.canvas_gradient_paint(&el.attrs);
+        let gradient = self.canvas_gradient_paint(&el.attributes);
         let solid_fill = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "fill")
             .map(|a| self.color_expr(&a.value));
@@ -938,7 +923,7 @@ impl<'a> ViewGen<'a> {
     /// Attrs: `x1`, `y1`, `x2`, `y2` (coordinates), `color`, `width`/`stroke_w`.
     fn emit_canvas_line(&self, el: &Element) -> String {
         let coord = |key: &str| -> String {
-            el.attrs
+            el.attributes
                 .iter()
                 .find(|a| a.key == key)
                 .and_then(|a| a.value.parse::<f32>().ok())
@@ -950,13 +935,13 @@ impl<'a> ViewGen<'a> {
         let x2 = coord("x2");
         let y2 = coord("y2");
         let color = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "color")
             .map(|a| self.color_expr(&a.value))
             .unwrap_or_else(|| "Color::BLACK".to_string());
         let width = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "width" || a.key == "stroke_w")
             .and_then(|a| a.value.parse::<f32>().ok())
@@ -973,14 +958,14 @@ impl<'a> ViewGen<'a> {
     /// Children are recursively emitted as canvas render-node expressions.
     fn emit_canvas_layer(&self, el: &Element) -> String {
         let opacity = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "opacity")
             .and_then(|a| a.value.parse::<f32>().ok())
             .map(format_f32)
             .unwrap_or_else(|| "1.0".to_string());
         let blur = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "blur")
             .and_then(|a| a.value.parse::<f32>().ok())
@@ -1017,13 +1002,13 @@ impl<'a> ViewGen<'a> {
     /// a canvas. Uses absolute coordinates unlike layout-mode `text`.
     fn emit_canvas_text(&self, el: &Element) -> String {
         let content = el.content.as_deref().unwrap_or("");
-        let x = self.canvas_dim("x", &el.attrs);
-        let y = self.canvas_dim("y", &el.attrs);
-        let w = self.canvas_dim("w", &el.attrs);
-        let h = self.canvas_dim("h", &el.attrs);
+        let x = self.canvas_dim("x", &el.attributes);
+        let y = self.canvas_dim("y", &el.attributes);
+        let w = self.canvas_dim("w", &el.attributes);
+        let h = self.canvas_dim("h", &el.attributes);
 
         let size = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "size")
             .and_then(|a| a.value.parse::<f32>().ok())
@@ -1031,7 +1016,7 @@ impl<'a> ViewGen<'a> {
             .unwrap_or_else(|| "14.0".to_string());
 
         let color = el
-            .attrs
+            .attributes
             .iter()
             .find(|a| a.key == "color")
             .map(|a| self.color_expr(&a.value))
@@ -1072,17 +1057,17 @@ impl<'a> ViewGen<'a> {
     /// `name(ctx)?`; tags with attrs generate a `NameProps { … }` struct literal.
     /// The component's `.rsx` file must declare a matching `pub struct NameProps`.
     fn emit_component_call(&mut self, el: &Element, tag: &str) -> ChildEmit {
-        let var = self.next_var("node");
-        let pad = self.pad();
+        let var = self.next_variable_name("node");
+        let pad = self.indent_str();
 
-        if el.attrs.is_empty() && el.children.is_empty() {
+        if el.attributes.is_empty() && el.children.is_empty() {
             let code = format!("{pad}let {var} = {tag}(ctx)?;");
             return ChildEmit::Simple { name: var, code };
         }
 
         let props_type = to_pascal_case(tag) + "Props";
         let fields: Vec<String> = el
-            .attrs
+            .attributes
             .iter()
             .map(|attr| format!("{}: {}", attr.key, self.component_attr_expr(attr)))
             .collect();
@@ -1138,12 +1123,10 @@ impl<'a> ViewGen<'a> {
     /// tag (or a class function), then inline attribute modifiers chained on.
     fn make_layout_style(&self, tag: &str, classes: &[String], attrs: &[Attr]) -> String {
         let mut expr = if let Some(first) = classes.first() {
-            // The first class provides the base style; further classes cannot
-            // currently compose, so only the first is applied.
-            let mut base = format!("{}()", style_fn_name(first));
-            // Apply the tag's flex direction only when no class declares one,
-            // so a styled `row .card` still lays out horizontally.
-            if !self.class_sets_direction(first) {
+            // The first class provides the base style; further classes cannot currently compose, so only the first is applied.
+            let mut base = format!("{}()", style_function_name(first));
+            // Apply the tag's flex direction only when no class declares one, so a styled `row .card` still lays out horizontally.
+            if !self.class_has_direction(first) {
                 match tag {
                     "row" | "grid" => base.push_str(".flex_row()"),
                     "col" => base.push_str(".flex_column()"),
@@ -1155,8 +1138,7 @@ impl<'a> ViewGen<'a> {
             match tag {
                 "row" => "LayoutStyle::new().flex_row()".to_string(),
                 "col" | "box" => "LayoutStyle::new().flex_column()".to_string(),
-                // `cols:` adds `.display_grid()`, so start neutral; fall back to flex_row
-                // when no cols are declared (legacy behaviour).
+                // `cols:` adds `.display_grid()`, so start neutral; fall back to flex_row when no cols are declared (legacy behaviour).
                 "grid" => {
                     if attrs.iter().any(|a| a.key == "cols") {
                         "LayoutStyle::new()".to_string()
@@ -1179,7 +1161,7 @@ impl<'a> ViewGen<'a> {
 
     /// Whether the named class declares a flex `direction`, so the tag should
     /// not override it.
-    fn class_sets_direction(&self, class_name: &str) -> bool {
+    fn class_has_direction(&self, class_name: &str) -> bool {
         self.classes
             .iter()
             .find(|c| c.name == class_name)
@@ -1187,10 +1169,8 @@ impl<'a> ViewGen<'a> {
             .unwrap_or(false)
     }
 
-    // ----- Control flow -----------------------------------------------------
-
     fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {
-        let pad = self.pad();
+        let pad = self.indent_str();
         let mut code = String::new();
         let _ = writeln!(code, "{pad}if {} {{", block.condition.trim());
         self.indent += 1;
@@ -1208,7 +1188,7 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_for(&mut self, block: &ForBlock) -> ChildEmit {
-        let pad = self.pad();
+        let pad = self.indent_str();
         let mut code = String::new();
         let _ = writeln!(
             code,
@@ -1217,17 +1197,17 @@ impl<'a> ViewGen<'a> {
             block.iterable.trim()
         );
         self.indent += 1;
-        // Loop variables are often borrowed (`items.iter()`), but widget closures
-        // require `'static` captures; bind owned copies so they can be moved in.
-        let body_pad = self.pad();
+        // Loop variables are often borrowed (`items.iter()`), but widget closures require `'static` captures; bind owned copies so they can be moved in.
+        let body_pad = self.indent_str();
         let idents = pattern_idents(&block.pattern);
         for ident in &idents {
             let _ = writeln!(code, "{body_pad}let {ident} = {ident}.to_owned();");
         }
         let added = idents.len();
-        self.loop_vars.extend(idents);
+        self.loop_variables.extend(idents);
         self.emit_branch_into_children(&block.body, &mut code);
-        self.loop_vars.truncate(self.loop_vars.len() - added);
+        self.loop_variables
+            .truncate(self.loop_variables.len() - added);
         self.indent -= 1;
         let _ = write!(code, "{pad}}}");
         ChildEmit::Dynamic { code }
@@ -1236,7 +1216,7 @@ impl<'a> ViewGen<'a> {
     /// Emits a control-flow branch's nodes, pushing every produced widget into
     /// the surrounding `__children` vector.
     fn emit_branch_into_children(&mut self, nodes: &[ViewNode], code: &mut String) {
-        let pad = self.pad();
+        let pad = self.indent_str();
         for node in nodes {
             match self.emit_node(node) {
                 ChildEmit::Simple { name, code: c } => {
@@ -1249,8 +1229,6 @@ impl<'a> ViewGen<'a> {
             }
         }
     }
-
-    // ----- Content / color helpers -----------------------------------------
 
     /// Builds the `content_fn` closure for a text node, handling `{...}` interpolation.
     pub fn interpolate_content(&self, content: &str) -> String {
@@ -1314,7 +1292,7 @@ impl<'a> ViewGen<'a> {
         if let Some(theme) = &self.theme_type {
             return format!("use_theme::<{theme}>().{}", to_snake_case(v));
         }
-        const_name("COLOR_", v)
+        constant_name("COLOR_", v)
     }
 
     /// Whether codegen resolves any color through `use_theme`, requiring the import.
@@ -1322,8 +1300,6 @@ impl<'a> ViewGen<'a> {
         self.theme_type.is_some()
     }
 }
-
-// ----- Free helpers ---------------------------------------------------------
 
 enum Segment {
     Literal(String),

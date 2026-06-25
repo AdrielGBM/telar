@@ -3,9 +3,9 @@
 
 use std::fmt::Write;
 
-use rsx_parser::{StyleClass, StyleConst, StyleSection, StyleValue};
+use rsx_parser::{StyleClass, StyleConstant, StyleSection, StyleValue};
 
-use crate::naming::{const_name, style_fn_name};
+use crate::naming::{constant_name, style_function_name};
 
 /// Renders all constants and style functions for the document's style section.
 /// When a theme is active (`theme_active`), `[style]` color constants are omitted: color references resolve through `use_theme` instead (see `color_expr`), so they react to theme switches. Number/raw constants are always emitted.
@@ -18,7 +18,7 @@ pub fn generate_style_section(section: &StyleSection, theme_active: bool) -> Str
         if theme_active && matches!(c.value, StyleValue::Hex(_)) {
             continue;
         }
-        out.push_str(&generate_const(c));
+        out.push_str(&generate_constant(c));
         out.push('\n');
         emitted_const = true;
     }
@@ -31,35 +31,38 @@ pub fn generate_style_section(section: &StyleSection, theme_active: bool) -> Str
         if i > 0 {
             out.push('\n');
         }
-        out.push_str(&generate_class_fn(class));
+        out.push_str(&generate_class_function(class));
         out.push('\n');
     }
 
     out
 }
 
-fn generate_const(c: &StyleConst) -> String {
+fn generate_constant(c: &StyleConstant) -> String {
     match &c.value {
         StyleValue::Hex(hex) => {
-            let name = const_name("COLOR_", &c.name);
+            let name = constant_name("COLOR_", &c.name);
             format!("const {name}: Color = {};", hex_to_color_expr(hex))
         }
         StyleValue::Number(n) => {
-            let name = const_name("SIZE_", &c.name);
+            let name = constant_name("SIZE_", &c.name);
             format!("const {name}: f32 = {};", format_f32(*n))
         }
-        // Raw constants have no obvious Rust target type, so we leave a note
-        // rather than emit something that fails to compile.
+        // Raw constants have no obvious Rust target type, so we leave a note rather than emit something that fails to compile.
         StyleValue::Raw(raw) => {
-            let name = const_name("RAW_", &c.name);
+            let name = constant_name("RAW_", &c.name);
             format!("// raw style constant `{}` = {raw:?} (unmapped)", name)
         }
     }
 }
 
-fn generate_class_fn(class: &StyleClass) -> String {
+fn generate_class_function(class: &StyleClass) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "fn {}() -> LayoutStyle {{", style_fn_name(&class.name));
+    let _ = writeln!(
+        out,
+        "fn {}() -> LayoutStyle {{",
+        style_function_name(&class.name)
+    );
     out.push_str("    LayoutStyle::new()");
     for prop in &class.props {
         if let Some(call) = layout_prop_call(&prop.key, &prop.value) {
@@ -92,14 +95,14 @@ pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
             "stretch" => ".align_self_stretch()".to_string(),
             _ => return None,
         },
-        "padding" | "pad" => format!(".padding_all({})", num(value)),
-        "padding-x" | "pad-x" => format!(".padding_horizontal({})", num(value)),
-        "padding-y" | "pad-y" => format!(".padding_vertical({})", num(value)),
-        "gap" => format!(".gap({})", num(value)),
-        "gap-x" => format!(".gap_x({})", num(value)),
-        "gap-y" => format!(".gap_y({})", num(value)),
-        "grow" => format!(".flex_grow({})", num(value)),
-        "shrink" => format!(".flex_shrink({})", num(value)),
+        "padding" | "pad" => format!(".padding_all({})", format_number(value)),
+        "padding-x" | "pad-x" => format!(".padding_horizontal({})", format_number(value)),
+        "padding-y" | "pad-y" => format!(".padding_vertical({})", format_number(value)),
+        "gap" => format!(".gap({})", format_number(value)),
+        "gap-x" => format!(".gap_x({})", format_number(value)),
+        "gap-y" => format!(".gap_y({})", format_number(value)),
+        "grow" => format!(".flex_grow({})", format_number(value)),
+        "shrink" => format!(".flex_shrink({})", format_number(value)),
         "span" => match value.trim().parse::<u16>() {
             Ok(n) => format!(".grid_column_span({n})"),
             Err(_) => return None,
@@ -194,7 +197,7 @@ fn parse_track_token(s: &str) -> Option<String> {
 
 /// Renders a numeric literal as a float suffix-free Rust expression. Non-numeric
 /// values are passed through verbatim (e.g. references to other constants).
-fn num(value: &str) -> String {
+fn format_number(value: &str) -> String {
     match value.parse::<f32>() {
         Ok(n) => format_f32(n),
         Err(_) => value.to_string(),
@@ -212,7 +215,7 @@ fn dimension(value: &str) -> String {
             return format!("SizeDimension::Percent({})", format_f32(n / 100.0));
         }
     }
-    num(v)
+    format_number(v)
 }
 
 /// Formats an f32 so it always carries a decimal point (`240` -> `240.0`).

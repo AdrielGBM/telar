@@ -42,9 +42,7 @@ impl<T: LeafWidget + Component> LayoutItem for T {
     }
 }
 
-// Lets an already-boxed child (e.g. the `Box<dyn LayoutItem>` returned by a
-// transpiled `.rsx` component) pass back through `box_item`/`children!` without
-// a second manual wrap, so components compose as `[view]` children.
+// Lets an already-boxed child (e.g. the `Box<dyn LayoutItem>` returned by a transpiled `.rsx` component) pass back through `box_item`/`children!` without a second manual wrap, so components compose as `[view]` children.
 impl Component for Box<dyn LayoutItem> {
     fn view(&self) -> RenderNode {
         (**self).view()
@@ -80,7 +78,11 @@ pub(crate) fn register_container(
             let rect = track_layout(ctx, c.layout_node());
             let item = Rc::new(RefCell::new(c));
             let segment = mount_item_segment(Rc::clone(&item));
-            Child { item, rect, segment }
+            Child {
+                item,
+                rect,
+                segment,
+            }
         })
         .collect();
     Ok((node, rect, children))
