@@ -162,9 +162,14 @@ pub struct AndroidPlatform {
 
 impl AndroidPlatform {
     pub fn try_new(app: AndroidApp) -> Result<Self, PlatformError> {
-        android_logger::init_once(
-            android_logger::Config::default().with_max_level(log::LevelFilter::Debug),
-        );
+        use tracing_subscriber::filter::LevelFilter;
+        use tracing_subscriber::prelude::*;
+
+        // Route tracing events (and `log` records bridged from winit/wgpu) to Android logcat under
+        // the `rsx` tag. `try_init` is a no-op if a subscriber is already installed.
+        let logcat = paranoid_android::layer("rsx").with_filter(LevelFilter::DEBUG);
+        tracing_subscriber::registry().with(logcat).try_init().ok();
+
         let event_loop = EventLoop::builder()
             .with_android_app(app)
             .build()
@@ -262,7 +267,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 window.request_redraw();
                 self.window = Some(window);
             }
-            Err(e) => eprintln!("[rsx] failed to create window: {e}"),
+            Err(e) => tracing::error!(error = %e, "failed to create window"),
         }
     }
 

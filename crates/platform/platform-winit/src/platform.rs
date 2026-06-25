@@ -98,7 +98,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 window.request_redraw();
                 self.window = Some(window);
             }
-            Err(e) => eprintln!("[rsx] failed to create window: {e}"),
+            Err(e) => tracing::error!(error = %e, "failed to create window"),
         }
     }
 

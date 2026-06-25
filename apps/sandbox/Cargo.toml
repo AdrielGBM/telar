@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 rsx = { workspace = true, features = ["runtime"] }
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [package.metadata.android]
 package = "com.example.rsx.sandbox"
