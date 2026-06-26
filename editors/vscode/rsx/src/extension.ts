@@ -44,6 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(client);
 
   activateLogicDiagnosticsBridge(context);
+  activateLogicIntellisenseBridge(context);
 }
 
 export function deactivate(): Thenable<void> | undefined {
@@ -145,6 +146,166 @@ function bridgeBuildFile(buildUri: vscode.Uri): void {
     mapped.push(bridged);
   }
   logicDiagnostics.set(sourceUri, mapped);
+}
+
+// === [logic] Rust IntelliSense bridge ======================================
+//
+// The reverse of the diagnostics bridge: rust-analyzer already provides completion / hover /
+// definition on the generated `.rsx/build/*.rs` (it is `include!`-ed into the real crate, so the
+// full type context exists there). We map the `.rsx` cursor *into* the generated file, delegate to
+// rust-analyzer via `vscode.execute*Provider`, then map results back. Scoped to the `[logic]` zone,
+// where a source line is emitted verbatim with a fixed indent so the mapping is near-exact; `[view]`
+// is structurally rewritten and stays with the rsx-analyzer LSP's own (.rsx-domain) providers.
+
+// `app!` emits each `[logic]` line verbatim under a 4-space function-body indent, so a `.rsx` column
+// maps to the generated column by adding this. Lines rewritten by the `move`-closure clone pass can
+// skew after the first rewritten signal — a known v1 limitation (slightly-off position, never wrong file).
+const LOGIC_INDENT = 4;
+
+function activateLogicIntellisenseBridge(context: vscode.ExtensionContext): void {
+  const selector: vscode.DocumentSelector = { scheme: "file", language: "rsx" };
+
+  // Hover and go-to-definition only: both query already-built symbols, so they tolerate the small lag
+  // between the LSP rewriting the generated `.rs` and rust-analyzer re-reading it. Completion is not
+  // bridged — it needs the in-flight text in rust-analyzer at the exact instant the `.` is typed, a
+  // cross-process race the client cannot win; reliable completion needs the LSP to drive its own
+  // rust-analyzer over the live document (future work).
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(selector, {
+      provideHover: provideLogicHover,
+    }),
+    vscode.languages.registerDefinitionProvider(selector, {
+      provideDefinition: provideLogicDefinition,
+    })
+  );
+}
+
+/// Which `.rsx` section a line falls in, mirroring `rsx-analyzer`'s `position::find_section_at`.
+function sectionAt(document: vscode.TextDocument, line: number): string {
+  let section = "unknown";
+  const last = Math.min(line, document.lineCount - 1);
+  for (let i = 0; i <= last; i++) {
+    switch (document.lineAt(i).text.trim()) {
+      case "[logic]":
+        section = "logic";
+        break;
+      case "[props]":
+        section = "props";
+        break;
+      case "[style]":
+        section = "style";
+        break;
+      case "[view]":
+        section = "view";
+        break;
+    }
+  }
+  return section;
+}
+
+/// Inverse of `app!`'s output mirroring: `<crate>/src/<rel>.rsx` -> `<crate>/.rsx/build/<rel>.rs`,
+/// where `<crate>` is the nearest ancestor holding a `Cargo.toml` (the macro's `CARGO_MANIFEST_DIR`).
+function buildFileFor(rsxPath: string): string | undefined {
+  let dir = path.dirname(rsxPath);
+  let crateRoot: string | undefined;
+  for (;;) {
+    if (fs.existsSync(path.join(dir, "Cargo.toml"))) {
+      crateRoot = dir;
+      break;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+  const rel = path.relative(path.join(crateRoot, "src"), rsxPath);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
+  return path.join(crateRoot, ".rsx", "build", rel.replace(/\.rsx$/, ".rs"));
+}
+
+interface GenTarget {
+  uri: vscode.Uri;
+  position: vscode.Position;
+}
+
+/// Translates an `.rsx` cursor in the `[logic]` zone to its position in the generated `.rs`, or
+/// `undefined` when out of zone, unbuilt, or unmapped (so the caller falls through to other providers).
+function toGenTarget(
+  document: vscode.TextDocument,
+  position: vscode.Position
+): GenTarget | undefined {
+  if (sectionAt(document, position.line) !== "logic") return undefined;
+  const buildPath = buildFileFor(document.uri.fsPath);
+  if (!buildPath || !fs.existsSync(buildPath)) return undefined;
+  const map = loadSourceMap(buildPath);
+  if (!map) return undefined;
+  // First generated line that originated from this `.rsx` line; for `[logic]` this is its verbatim Rust line.
+  const genLine = map.indexOf(position.line);
+  if (genLine < 0) return undefined;
+  return {
+    uri: vscode.Uri.file(buildPath),
+    position: new vscode.Position(genLine, position.character + LOGIC_INDENT),
+  };
+}
+
+async function provideLogicHover(
+  document: vscode.TextDocument,
+  position: vscode.Position
+): Promise<vscode.Hover | undefined> {
+  const target = toGenTarget(document, position);
+  if (!target) return undefined;
+  const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+    "vscode.executeHoverProvider",
+    target.uri,
+    target.position
+  );
+  const hover = hovers?.find((h) => h.contents.length > 0);
+  if (!hover) return undefined;
+  // Drop the generated-coordinate range; let VSCode highlight the hovered `.rsx` word itself.
+  return new vscode.Hover(hover.contents);
+}
+
+async function provideLogicDefinition(
+  document: vscode.TextDocument,
+  position: vscode.Position
+): Promise<vscode.Location[] | undefined> {
+  const target = toGenTarget(document, position);
+  if (!target) return undefined;
+  const results = await vscode.commands.executeCommand<
+    (vscode.Location | vscode.LocationLink)[]
+  >("vscode.executeDefinitionProvider", target.uri, target.position);
+  if (!results) return undefined;
+
+  const out: vscode.Location[] = [];
+  for (const result of results) {
+    const isLink = "targetUri" in result;
+    const uri = isLink ? result.targetUri : result.uri;
+    const range = isLink ? result.targetRange : result.range;
+    if (isBuildFile(uri)) {
+      // A definition that lands in a generated file (this or another component) → jump to its `.rsx`.
+      const mapped = mapBuildLineToRsx(uri, range.start.line);
+      if (mapped) out.push(mapped);
+    } else {
+      // Real library/app source → follow into the actual Rust unchanged.
+      out.push(new vscode.Location(uri, range));
+    }
+  }
+  return out;
+}
+
+/// Maps a location on a generated `.rs` line back to its `.rsx` source via that file's `<build>.rs.map`.
+function mapBuildLineToRsx(
+  buildUri: vscode.Uri,
+  genLine: number
+): vscode.Location | undefined {
+  const sourcePath = rsxSourceFor(buildUri.fsPath);
+  if (!sourcePath) return undefined;
+  const map = loadSourceMap(buildUri.fsPath);
+  const rsxLine = map?.[genLine];
+  if (rsxLine === null || rsxLine === undefined) return undefined;
+  return new vscode.Location(
+    vscode.Uri.file(sourcePath),
+    new vscode.Position(rsxLine, 0)
+  );
 }
 
 // === server discovery ======================================================
