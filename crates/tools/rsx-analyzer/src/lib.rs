@@ -6,6 +6,7 @@
 
 mod analysis;
 mod backend;
+mod build_sync;
 mod format;
 mod position;
 mod project;

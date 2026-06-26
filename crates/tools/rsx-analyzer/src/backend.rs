@@ -43,7 +43,15 @@ impl Backend {
             .map(|parsed| {
                 let project = file_path.as_deref().and_then(ProjectInfo::discover);
                 let theme_view = project.as_ref().map(ProjectInfo::theme_view);
-                semantic_diagnostics(&parsed.document, theme_view.as_ref())
+                let diagnostics = semantic_diagnostics(&parsed.document, theme_view.as_ref());
+                // Mirror the live buffer to its generated `.rs` so the workspace rust-analyzer analyzes
+                // the in-flight text — this is what makes completion/hover/definition live instead of one
+                // `cargo check` behind. Same output as the `app!` macro produces at compile time.
+                if let Some(rsx_path) = file_path.as_deref() {
+                    let theme = project.as_ref().and_then(|p| p.theme_type.as_deref());
+                    crate::build_sync::sync_build_file(rsx_path, &parsed.source, theme);
+                }
+                diagnostics
             })
             .unwrap_or_default();
         semantic.into_iter().map(Into::into).collect()
