@@ -137,8 +137,20 @@ pub fn app(input: TokenStream) -> TokenStream {
             let _ = std::fs::write(&map_path, &map_json);
         }
 
+        // Wire each generated file as a real `#[path] mod` (not `include!`) so rust-analyzer treats it
+        // as a first-class module and offers completion inside it; `pub use` keeps the component fns,
+        // preview consts and `Props` types reachable by bare name, exactly as `include!` did.
         let out_path_str = out_path.to_string_lossy().to_string();
-        include_stmts.extend(quote! { include!(#out_path_str); });
+        let mod_ident = Ident::new(
+            &format!("__rsx_mod_{}", rsx_transpiler::naming::to_snake_case(&stem)),
+            Span::call_site(),
+        );
+        include_stmts.extend(quote! {
+            #[path = #out_path_str]
+            mod #mod_ident;
+            #[allow(unused_imports)]
+            pub use #mod_ident::*;
+        });
 
         let rsx_path_str = rsx_file.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_path_str); });
