@@ -19,6 +19,13 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
 
     let line_text = source.lines().nth(line as usize).unwrap_or("");
     let prefix = &line_text[..character.min(line_text.len() as u32) as usize];
+
+    // Inside a quoted string (text content, including `{…}` interpolation): not an element/attr
+    // position. Returning None lets the embedded analyzer answer Rust completion in interpolations.
+    if in_quoted_string(prefix) {
+        return None;
+    }
+
     let trimmed = prefix.trim_start();
 
     if trimmed.is_empty() || !trimmed.contains(char::is_whitespace) {
@@ -29,7 +36,13 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
     let tag = tokens.next().unwrap_or("").to_string();
     let rest = tokens.next().unwrap_or("");
 
-    let current_token = rest.split(char::is_whitespace).last().unwrap_or("");
+    // Control-flow lines carry Rust expressions, and `:|` marks a closure attribute value that runs
+    // to end of line — neither is an element/attr position, so defer to the embedded analyzer.
+    if matches!(tag.as_str(), "if" | "for" | "let" | "else") || rest.contains(":|") {
+        return None;
+    }
+
+    let current_token = rest.split(char::is_whitespace).next_back().unwrap_or("");
 
     if current_token.starts_with('.') {
         return Some(CompletionKind::StyleClass);
@@ -44,6 +57,25 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
     }
 
     Some(CompletionKind::AttributeKey(tag))
+}
+
+/// Whether `prefix` ends inside an open double-quoted string, honoring `\"` escapes. Used to suppress
+/// element/attribute completion within `.rsx` string content.
+fn in_quoted_string(prefix: &str) -> bool {
+    let mut in_str = false;
+    let mut escaped = false;
+    for c in prefix.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match c {
+            '\\' if in_str => escaped = true,
+            '"' => in_str = !in_str,
+            _ => {}
+        }
+    }
+    in_str
 }
 
 pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {

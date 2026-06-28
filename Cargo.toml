@@ -101,6 +101,5 @@ rsx-devtools = { path = "crates/tools/rsx-devtools" }
 rsx-diagnostics = { path = "crates/tools/rsx-diagnostics" }
 rsx-parser = { path = "crates/tools/rsx-parser" }
 rsx-transpiler = { path = "crates/tools/rsx-transpiler" }
-rsx-analyzer = { path = "crates/tools/rsx-analyzer" }
 rsx-macros = { path = "crates/tools/rsx-macros" }
 rsx-workspace = { path = "crates/tools/rsx-workspace" }

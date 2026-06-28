@@ -27,8 +27,6 @@ enum RsxCommand {
     Preview(PreviewArgs),
     /// Build the app for distribution
     Build(BuildArgs),
-    /// Run the rsx language server (LSP) on stdio
-    Lsp,
     /// Run tests (not yet implemented)
     Test,
     /// Create a new RSX project (not yet implemented)
@@ -728,7 +726,6 @@ pub fn run(args: Vec<String>) {
         RsxCommand::Dev(args) => run_dev_cmd(args),
         RsxCommand::Preview(args) => run_preview_cmd(args),
         RsxCommand::Build(args) => run_build_cmd(args),
-        RsxCommand::Lsp => rsx_analyzer::run(),
         RsxCommand::Test => {
             eprintln!("[cargo-rsx] `cargo rsx test` is not yet implemented.");
             std::process::exit(1);

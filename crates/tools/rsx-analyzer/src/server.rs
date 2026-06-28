@@ -4,7 +4,7 @@
 //! requests and notifications to [`Backend`] methods, and writes replies through
 //! the [`OutgoingSender`] channel. State-mutating notifications (`didOpen` /
 //! `didChange` / `didClose`) are awaited in order; requests are spawned so a slow
-//! rust-analyzer round-trip or `rustfmt` run never stalls the read loop.
+//! `rustfmt` run never stalls the read loop.
 
 use std::sync::Arc;
 
@@ -73,6 +73,7 @@ async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Res
         "initialize" => ok(backend.initialize()),
         "shutdown" => Value::Null,
         "textDocument/completion" => ok(backend.completion(parse(params)?).await),
+        "textDocument/signatureHelp" => ok(backend.signature_help(parse(params)?).await),
         "textDocument/hover" => ok(backend.hover(parse(params)?).await),
         "textDocument/definition" => ok(backend.goto_definition(parse(params)?).await),
         "textDocument/formatting" => ok(backend.formatting(parse(params)?).await),

@@ -312,7 +312,7 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
                 emit_node(child, depth + 1, out);
             }
         }
-        ViewNode::LetStmt { source } => {
+        ViewNode::LetStmt { source, .. } => {
             out.push_str(&pad);
             out.push_str(source);
             out.push('\n');

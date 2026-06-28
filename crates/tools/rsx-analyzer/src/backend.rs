@@ -1,6 +1,9 @@
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use lsp_types::*;
+use ra_ap_ide::TextSize;
 use rsx_diagnostics::semantic_diagnostics;
 use tokio::sync::RwLock;
 
@@ -10,13 +13,32 @@ use crate::analysis::completions::{
 };
 use crate::analysis::definition::goto_definition;
 use crate::analysis::hover::hover_info;
+use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
+use crate::ra::{DefinitionTarget, EmbeddedAnalyzer};
 use crate::rpc::OutgoingSender;
 use crate::store::Store;
+
+/// Lifecycle of the embedded rust-analyzer: loaded lazily on the first `[logic]`
+/// query because `load()` is slow (cargo metadata + crate graph).
+// Always lives behind `Arc<Mutex<…>>` and is only ever written in place, so the large `Ready` variant
+// is never moved by value — the size disparity clippy flags is irrelevant here.
+#[allow(clippy::large_enum_variant)]
+enum AnalyzerState {
+    Idle,
+    Loading,
+    Ready(EmbeddedAnalyzer),
+    Failed,
+}
 
 pub struct Backend {
     outgoing: OutgoingSender,
     store: Arc<RwLock<Store>>,
+    analyzer: Arc<Mutex<AnalyzerState>>,
+    // Monotonic edit counter, bumped on every reparse. A spawned diagnostics task captures the value
+    // it was queued for and bails before the expensive rust-analyzer query if a newer edit superseded
+    // it, so keystroke-rate edits don't pile up redundant `full_diagnostics` runs behind the lock.
+    revision: Arc<AtomicU64>,
 }
 
 impl Backend {
@@ -24,6 +46,8 @@ impl Backend {
         Self {
             outgoing,
             store: Arc::new(RwLock::new(Store::new())),
+            analyzer: Arc::new(Mutex::new(AnalyzerState::Idle)),
+            revision: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -32,29 +56,135 @@ impl Backend {
     }
 
     async fn reparse_and_diagnose(&self, uri: Uri, text: String) -> Vec<Diagnostic> {
+        let revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
         let file_path = crate::uri::to_path(&uri);
-        let mut store = self.store.write().await;
-        let parse_diagnostics = store.reparse(uri.clone(), text);
-        if !parse_diagnostics.is_empty() {
-            return parse_diagnostics.into_iter().map(Into::into).collect();
+        // Hold the store lock only for the parse + native diagnostics + build-file sync, then release it
+        // before the (slower) rust-analyzer query so concurrent completion/hover reads aren't blocked.
+        let (semantic, source, theme) = {
+            let mut store = self.store.write().await;
+            let parse_diagnostics = store.reparse(uri.clone(), text);
+            if !parse_diagnostics.is_empty() {
+                return parse_diagnostics.into_iter().map(Into::into).collect();
+            }
+            let Some(parsed) = store.get(&uri) else {
+                return Vec::new();
+            };
+            let project = file_path.as_deref().and_then(ProjectInfo::discover);
+            let theme_view = project.as_ref().map(ProjectInfo::theme_view);
+            let semantic = semantic_diagnostics(&parsed.document, theme_view.as_ref());
+            // Mirror the live buffer to its generated `.rs` so the workspace rust-analyzer analyzes
+            // the in-flight text — this is what makes completion/hover/definition live instead of one
+            // `cargo check` behind. Same output as the `app!` macro produces at compile time.
+            let theme = project.as_ref().and_then(|p| p.theme_type.clone());
+            if let Some(rsx_path) = file_path.as_deref() {
+                crate::build_sync::sync_build_file(rsx_path, &parsed.source, theme.as_deref());
+            }
+            (semantic, parsed.source.clone(), theme)
+        };
+
+        let native: Vec<Diagnostic> = semantic.into_iter().map(Into::into).collect();
+        // Overlay the generated Rust into the embedded analyzer and re-publish native+rust merged from a
+        // detached task: `full_diagnostics` can be slow, and notifications are awaited in order on the read
+        // loop (see server.rs), so blocking here would stall completion. Native diagnostics are returned
+        // now for the immediate publish; the task republishes when the analyzer is ready, and skips
+        // (leaving native-only published) while it is still loading.
+        if let Some(rsx_path) = file_path {
+            self.spawn_rust_diagnostics(uri, rsx_path, source, theme, native.clone(), revision);
         }
-        let semantic = store
-            .get(&uri)
-            .map(|parsed| {
-                let project = file_path.as_deref().and_then(ProjectInfo::discover);
-                let theme_view = project.as_ref().map(ProjectInfo::theme_view);
-                let diagnostics = semantic_diagnostics(&parsed.document, theme_view.as_ref());
-                // Mirror the live buffer to its generated `.rs` so the workspace rust-analyzer analyzes
-                // the in-flight text — this is what makes completion/hover/definition live instead of one
-                // `cargo check` behind. Same output as the `app!` macro produces at compile time.
-                if let Some(rsx_path) = file_path.as_deref() {
-                    let theme = project.as_ref().and_then(|p| p.theme_type.as_deref());
-                    crate::build_sync::sync_build_file(rsx_path, &parsed.source, theme);
+        native
+    }
+
+    /// Off-loop overlay-and-merge of rust-analyzer diagnostics: maps each back onto the `.rsx` via the
+    /// line map (dropping generated lines with no `.rsx` origin) and republishes native+rust. A
+    /// staleness guard skips the publish if the buffer changed meanwhile, so out-of-order task
+    /// completions never resurrect diagnostics for an older revision.
+    fn spawn_rust_diagnostics(
+        &self,
+        uri: Uri,
+        rsx_path: PathBuf,
+        source: String,
+        theme: Option<String>,
+        native: Vec<Diagnostic>,
+        revision: u64,
+    ) {
+        let Some(crate::build_sync::GeneratedTarget {
+            path: gen_path,
+            code: gen_text,
+            map,
+            ..
+        }) = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())
+        else {
+            return;
+        };
+        let Some(root) = crate::build_sync::crate_root(&rsx_path) else {
+            return;
+        };
+        self.ensure_loading(root, Some(gen_path.clone()));
+
+        let analyzer = self.analyzer.clone();
+        let outgoing = self.outgoing.clone();
+        let log = self.outgoing.clone();
+        let store = self.store.clone();
+        let revisions = self.revision.clone();
+        tokio::spawn(async move {
+            let raw = tokio::task::spawn_blocking(move || {
+                // A newer edit already superseded this one: skip the expensive query without even
+                // contending for the analyzer lock (its `full_diagnostics` would be wasted work).
+                if revisions.load(Ordering::Relaxed) != revision {
+                    return None;
                 }
-                diagnostics
+                let lock_at = std::time::Instant::now();
+                let mut state = analyzer.lock().ok()?;
+                let lock_ms = lock_at.elapsed().as_millis();
+                let AnalyzerState::Ready(a) = &mut *state else {
+                    return None;
+                };
+                if !a.knows_file(&gen_path) {
+                    *state = AnalyzerState::Idle;
+                    return None;
+                }
+                let ra_at = std::time::Instant::now();
+                let result = a.diagnostics(&gen_path, gen_text);
+                let ra_ms = ra_at.elapsed().as_millis();
+                if lock_ms > 1000 || ra_ms > 1000 {
+                    log.log_message(
+                        MessageType::INFO,
+                        format!("rsx-analyzer: slow diagnostics — lock {lock_ms}ms, ra {ra_ms}ms"),
+                    );
+                }
+                Some(result)
             })
-            .unwrap_or_default();
-        semantic.into_iter().map(Into::into).collect()
+            .await
+            .ok()
+            .flatten();
+            // Analyzer not ready (or graph stale) → leave the native-only diagnostics already published.
+            let Some(raw) = raw else {
+                return;
+            };
+            // The buffer moved on while the query ran → a newer revision's task will publish; don't
+            // overwrite it with stale diagnostics.
+            if store.read().await.latest_source(&uri) != Some(&source) {
+                return;
+            }
+
+            let mut merged = native;
+            merged.extend(raw.into_iter().filter_map(|mut diag| {
+                let rsx_line = (*map.get(diag.range.start.line as usize)?)?;
+                // The line map is line-granular, so highlight the whole `.rsx` line.
+                diag.range = Range {
+                    start: Position {
+                        line: rsx_line,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: rsx_line,
+                        character: u32::MAX,
+                    },
+                };
+                Some(diag)
+            }));
+            outgoing.publish_diagnostics(uri, merged);
+        });
     }
 
     pub fn initialize(&self) -> InitializeResult {
@@ -71,6 +201,11 @@ impl Backend {
                         "\"".to_string(),
                     ]),
                     ..Default::default()
+                }),
+                signature_help_provider: Some(SignatureHelpOptions {
+                    trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+                    retrigger_characters: None,
+                    work_done_progress_options: Default::default(),
                 }),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
@@ -90,7 +225,14 @@ impl Backend {
         let uri = params.text_document.uri.clone();
         let text = params.text_document.text.clone();
         let diagnostics = self.reparse_and_diagnose(uri.clone(), text).await;
-        self.outgoing.publish_diagnostics(uri, diagnostics);
+        self.outgoing.publish_diagnostics(uri.clone(), diagnostics);
+        // Warm the embedded analyzer as soon as a `.rsx` opens, so the slow workspace
+        // load overlaps with reading the file instead of stalling the first completion.
+        if let Some(rsx_path) = crate::uri::to_path(&uri)
+            && let Some(root) = crate::build_sync::crate_root(&rsx_path)
+        {
+            self.ensure_loading(root, crate::build_sync::generated_path(&rsx_path));
+        }
     }
 
     pub async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -111,19 +253,262 @@ impl Backend {
         let pos = params.text_document_position.position;
         let file_path = crate::uri::to_path(uri);
 
-        let store = self.store.read().await;
-        let parsed = store.get(uri)?;
-        let kind = completion_context(&parsed.source, pos.line, pos.character)?;
-        let project = file_path.as_deref().and_then(ProjectInfo::discover);
-        let items = match kind {
-            CompletionKind::ElementName => {
-                element_name_items(file_path.as_deref().and_then(|p| p.parent()))
+        let (source, native, theme) = {
+            let store = self.store.read().await;
+            let parsed = store.get(uri)?;
+            let project = file_path.as_deref().and_then(ProjectInfo::discover);
+            let native =
+                completion_context(&parsed.source, pos.line, pos.character).map(
+                    |kind| match kind {
+                        CompletionKind::ElementName => {
+                            element_name_items(file_path.as_deref().and_then(|p| p.parent()))
+                        }
+                        CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
+                        CompletionKind::ColorValue => {
+                            color_items(&parsed.document, project.as_ref())
+                        }
+                        CompletionKind::StyleClass => style_class_items(&parsed.document),
+                    },
+                );
+            let theme = project.as_ref().and_then(|p| p.theme_type.clone());
+            (parsed.source.clone(), native, theme)
+        };
+
+        if let Some(items) = native {
+            return Some(CompletionResponse::Array(items));
+        }
+        // Outside a native `.rsx` zone: delegate Rust completion to the embedded rust-analyzer over
+        // the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
+        let rsx_path = file_path?;
+        let items = match find_section_at(&source, pos.line) {
+            Section::Logic => {
+                self.logic_query(rsx_path, source, theme, pos, |a, path, text, line, col| {
+                    Some(a.completions_at(&path, text, line, col))
+                })
+                .await?
             }
-            CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
-            CompletionKind::ColorValue => color_items(&parsed.document, project.as_ref()),
-            CompletionKind::StyleClass => style_class_items(&parsed.document),
+            Section::View => {
+                self.view_query(rsx_path, source, theme, pos, |a, path, text, offset| {
+                    Some(a.completions_at_offset(&path, text, offset))
+                })
+                .await?
+            }
+            _ => return None,
         };
         Some(CompletionResponse::Array(items))
+    }
+
+    pub async fn signature_help(&self, params: SignatureHelpParams) -> Option<SignatureHelp> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        let file_path = crate::uri::to_path(uri);
+
+        let (source, theme) = {
+            let store = self.store.read().await;
+            let parsed = store.get(uri)?;
+            let project = file_path.as_deref().and_then(ProjectInfo::discover);
+            let theme = project.as_ref().and_then(|p| p.theme_type.clone());
+            (parsed.source.clone(), theme)
+        };
+
+        let rsx_path = file_path?;
+        match find_section_at(&source, pos.line) {
+            Section::Logic => {
+                self.logic_query(rsx_path, source, theme, pos, |a, path, text, line, col| {
+                    a.signature_help_at(&path, text, line, col)
+                })
+                .await
+            }
+            Section::View => {
+                self.view_query(rsx_path, source, theme, pos, |a, path, text, offset| {
+                    a.signature_help_at_offset(&path, text, offset)
+                })
+                .await
+            }
+            _ => None,
+        }
+    }
+
+    /// Starts the (slow) workspace load on a blocking thread if it hasn't started yet.
+    /// Returns immediately; queries that arrive while loading simply yield nothing.
+    fn ensure_loading(&self, root: PathBuf, warm: Option<PathBuf>) {
+        // `try_lock`, never `lock`: this runs on the single-threaded runtime, and a blocking RA query
+        // can hold the mutex for the length of its `analysis` call. Blocking here would stall the whole
+        // LSP read loop. Contention means the analyzer is already `Ready`/`Loading` (no query runs while
+        // `Idle`), so there is nothing to start — and any state that just reset to `Idle` is picked up by
+        // the next edit's call.
+        let Ok(mut state) = self.analyzer.try_lock() else {
+            return;
+        };
+        if matches!(*state, AnalyzerState::Idle) {
+            *state = AnalyzerState::Loading;
+            let analyzer = self.analyzer.clone();
+            let outgoing = self.outgoing.clone();
+            tokio::task::spawn_blocking(move || {
+                outgoing.log_message(
+                    MessageType::INFO,
+                    format!("rsx-analyzer: loading workspace at {}…", root.display()),
+                );
+                let started = std::time::Instant::now();
+                let loaded = EmbeddedAnalyzer::load(&root);
+                let load_ms = started.elapsed().as_millis();
+                // Compute the next state (including the slow `warm`) OUTSIDE the state lock, so queries
+                // arriving mid-warm just see `Loading` instead of blocking on the mutex for ~15s.
+                let new_state = match loaded {
+                    Ok(a) => {
+                        let warm_ms = if let Some(p) = &warm {
+                            let w = std::time::Instant::now();
+                            a.warm(p);
+                            w.elapsed().as_millis()
+                        } else {
+                            0
+                        };
+                        outgoing.log_message(
+                            MessageType::INFO,
+                            format!(
+                                "rsx-analyzer: workspace ready in {load_ms}ms (+{warm_ms}ms warm)"
+                            ),
+                        );
+                        AnalyzerState::Ready(a)
+                    }
+                    Err(e) => {
+                        outgoing.log_message(
+                            MessageType::ERROR,
+                            format!("rsx-analyzer: workspace load failed: {e:#}"),
+                        );
+                        AnalyzerState::Failed
+                    }
+                };
+                if let Ok(mut state) = analyzer.lock() {
+                    *state = new_state;
+                }
+            });
+        }
+    }
+
+    /// Maps a `[logic]` cursor into the generated module and runs `run` against the
+    /// embedded analyzer on a blocking thread (the query is synchronous; the load may
+    /// still be in flight, in which case this yields `None`).
+    async fn logic_query<T, F>(
+        &self,
+        rsx_path: PathBuf,
+        source: String,
+        theme: Option<String>,
+        pos: Position,
+        run: F,
+    ) -> Option<T>
+    where
+        F: FnOnce(&mut EmbeddedAnalyzer, PathBuf, String, u32, u32) -> Option<T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let crate::build_sync::GeneratedTarget {
+            path: gen_path,
+            code: gen_text,
+            map,
+            ..
+        } = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())?;
+        // First generated line that originated from this `.rsx` line.
+        let gen_line = map.iter().position(|m| *m == Some(pos.line))? as u32;
+        let gen_col = pos.character + crate::ra::logic_indent();
+
+        let root = crate::build_sync::crate_root(&rsx_path)?;
+        self.ensure_loading(root, Some(gen_path.clone()));
+
+        let analyzer = self.analyzer.clone();
+        let outgoing = self.outgoing.clone();
+        tokio::task::spawn_blocking(move || {
+            let lock_at = std::time::Instant::now();
+            let mut state = analyzer.lock().ok()?;
+            let lock_ms = lock_at.elapsed().as_millis();
+            let AnalyzerState::Ready(a) = &mut *state else {
+                return None;
+            };
+            // A generated module the graph doesn't know yet (e.g. a `.rsx` added since
+            // load): drop to Idle so the next query reloads the workspace.
+            if !a.knows_file(&gen_path) {
+                *state = AnalyzerState::Idle;
+                return None;
+            }
+            let ra_at = std::time::Instant::now();
+            let result = run(a, gen_path, gen_text, gen_line, gen_col);
+            // Only surface slow queries — a healthy query is sub-100ms, so anything past 1s flags a
+            // regression (e.g. a cold cache) without spamming the output on every keystroke.
+            let ra_ms = ra_at.elapsed().as_millis();
+            if lock_ms > 1000 || ra_ms > 1000 {
+                outgoing.log_message(
+                    MessageType::INFO,
+                    format!("rsx-analyzer: slow [logic] query — lock {lock_ms}ms, ra {ra_ms}ms"),
+                );
+            }
+            result
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
+    /// Maps a `[view]` cursor into the generated module via the transpiler's expression-span map and
+    /// runs `run` at the resulting byte offset. Returns `None` (so native element/attr completion is
+    /// preserved) when the cursor sits outside every verbatim `[view]` expression. The generated
+    /// offset is a UTF-8 char boundary by construction: the fragment is byte-identical in source and
+    /// output, and the `.rsx` cursor is resolved on a char boundary.
+    async fn view_query<T, F>(
+        &self,
+        rsx_path: PathBuf,
+        source: String,
+        theme: Option<String>,
+        pos: Position,
+        run: F,
+    ) -> Option<T>
+    where
+        F: FnOnce(&mut EmbeddedAnalyzer, PathBuf, String, TextSize) -> Option<T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let crate::build_sync::GeneratedTarget {
+            path: gen_path,
+            code: gen_text,
+            expr_spans,
+            ..
+        } = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())?;
+        let rsx_byte = rsx_byte_offset(&source, pos.line, pos.character)?;
+        // The containing expression span; the inclusive upper bound lets the cursor sit right after
+        // the last character (the common completion position, e.g. `count.|`).
+        let span = expr_spans.iter().find(|s| {
+            rsx_byte >= s.rsx_start as usize && rsx_byte <= (s.rsx_start + s.len) as usize
+        })?;
+        let gen_offset = span.gen_start as usize + (rsx_byte - span.rsx_start as usize);
+        let offset = TextSize::from(gen_offset as u32);
+
+        let root = crate::build_sync::crate_root(&rsx_path)?;
+        self.ensure_loading(root, Some(gen_path.clone()));
+
+        let analyzer = self.analyzer.clone();
+        let outgoing = self.outgoing.clone();
+        tokio::task::spawn_blocking(move || {
+            let lock_at = std::time::Instant::now();
+            let mut state = analyzer.lock().ok()?;
+            let lock_ms = lock_at.elapsed().as_millis();
+            let AnalyzerState::Ready(a) = &mut *state else {
+                return None;
+            };
+            if !a.knows_file(&gen_path) {
+                *state = AnalyzerState::Idle;
+                return None;
+            }
+            let ra_at = std::time::Instant::now();
+            let result = run(a, gen_path, gen_text, offset);
+            let ra_ms = ra_at.elapsed().as_millis();
+            if lock_ms > 1000 || ra_ms > 1000 {
+                outgoing.log_message(
+                    MessageType::INFO,
+                    format!("rsx-analyzer: slow [view] query — lock {lock_ms}ms, ra {ra_ms}ms"),
+                );
+            }
+            result
+        })
+        .await
+        .ok()
+        .flatten()
     }
 
     pub async fn goto_definition(
@@ -134,17 +519,57 @@ impl Backend {
         let pos = params.text_document_position_params.position;
         let file_path = crate::uri::to_path(uri);
 
-        let store = self.store.read().await;
-        let parsed = store.get(uri)?;
-        let project = file_path.as_deref().and_then(ProjectInfo::discover);
-        goto_definition(
-            &parsed.document,
-            &parsed.source,
-            uri,
-            pos.line,
-            pos.character,
-            project.as_ref(),
-        )
+        let (source, native, theme) = {
+            let store = self.store.read().await;
+            let parsed = store.get(uri)?;
+            let project = file_path.as_deref().and_then(ProjectInfo::discover);
+            // Native `.rsx` definitions (classes / colors / component files) win when present.
+            let native = goto_definition(
+                &parsed.document,
+                &parsed.source,
+                uri,
+                pos.line,
+                pos.character,
+                project.as_ref(),
+            );
+            let theme = project.as_ref().and_then(|p| p.theme_type.clone());
+            (parsed.source.clone(), native, theme)
+        };
+
+        if let Some(response) = native {
+            return Some(response);
+        }
+        // Outside a native `.rsx` zone: resolve Rust definitions via the embedded rust-analyzer, then
+        // reverse-map any generated-`.rs` targets back onto their `.rsx` (see `map_definition_targets`).
+        let rsx_path = file_path?;
+        let targets = match find_section_at(&source, pos.line) {
+            Section::Logic => {
+                self.logic_query(
+                    rsx_path.clone(),
+                    source,
+                    theme,
+                    pos,
+                    |a, path, text, line, col| a.definition_at(&path, text, line, col),
+                )
+                .await?
+            }
+            Section::View => {
+                self.view_query(
+                    rsx_path.clone(),
+                    source,
+                    theme,
+                    pos,
+                    |a, path, text, offset| a.definition_at_offset(&path, text, offset),
+                )
+                .await?
+            }
+            _ => return None,
+        };
+        let locations = map_definition_targets(targets);
+        if locations.is_empty() {
+            return None;
+        }
+        Some(GotoDefinitionResponse::Array(locations))
     }
 
     pub async fn hover(&self, params: HoverParams) -> Option<Hover> {
@@ -152,16 +577,42 @@ impl Backend {
         let pos = params.text_document_position_params.position;
         let file_path = crate::uri::to_path(uri);
 
-        let store = self.store.read().await;
-        let parsed = store.get(uri)?;
-        let project = file_path.as_deref().and_then(ProjectInfo::discover);
-        hover_info(
-            &parsed.document,
-            &parsed.source,
-            pos.line,
-            pos.character,
-            project.as_ref(),
-        )
+        let (source, native, theme) = {
+            let store = self.store.read().await;
+            let parsed = store.get(uri)?;
+            let project = file_path.as_deref().and_then(ProjectInfo::discover);
+            let native = hover_info(
+                &parsed.document,
+                &parsed.source,
+                pos.line,
+                pos.character,
+                project.as_ref(),
+            );
+            let theme = project.as_ref().and_then(|p| p.theme_type.clone());
+            (parsed.source.clone(), native, theme)
+        };
+
+        if let Some(hover) = native {
+            return Some(hover);
+        }
+        // Native `.rsx` hover (tags / colors) didn't match: delegate to the embedded rust-analyzer over
+        // the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
+        let rsx_path = file_path?;
+        match find_section_at(&source, pos.line) {
+            Section::Logic => {
+                self.logic_query(rsx_path, source, theme, pos, |a, path, text, line, col| {
+                    a.hover_at(&path, text, line, col)
+                })
+                .await
+            }
+            Section::View => {
+                self.view_query(rsx_path, source, theme, pos, |a, path, text, offset| {
+                    a.hover_at_offset(&path, text, offset)
+                })
+                .await
+            }
+            _ => None,
+        }
     }
 
     pub async fn formatting(&self, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
@@ -190,6 +641,74 @@ impl Backend {
             new_text: formatted,
         }])
     }
+}
+
+/// Maps rust-analyzer definition targets to `.rsx` `Location`s, handling three cases per target:
+/// (1) the generated `.rs` for *this* `.rsx` and (2) *another* component's `.rsx/build/*.rs` are both
+/// reverse-mapped through that build file's line map (`generated line → .rsx line`) onto its `.rsx`
+/// source — a generated line with no originating `.rsx` line is dropped; (3) any other path (a
+/// dependency, std, or a hand-written `.rs`) is returned verbatim in its own coordinates.
+fn map_definition_targets(targets: Vec<DefinitionTarget>) -> Vec<Location> {
+    let mut locations = Vec::new();
+    for target in targets {
+        if crate::build_sync::is_generated_build_file(&target.path) {
+            // Cases 1 & 2: a generated build file → walk back to its `.rsx` via the sibling `.rs.map`.
+            let Some((rsx_path, map)) = crate::build_sync::rsx_source_and_map(&target.path) else {
+                continue;
+            };
+            let Some(Some(rsx_line)) = map.get(target.range.start.line as usize) else {
+                continue;
+            };
+            if let Some(uri) = crate::uri::from_path(&rsx_path) {
+                locations.push(Location {
+                    uri,
+                    range: Range {
+                        start: Position {
+                            line: *rsx_line,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: *rsx_line,
+                            character: 0,
+                        },
+                    },
+                });
+            }
+        } else if let Some(uri) = crate::uri::from_path(&target.path) {
+            // Case 3: a real source file → jump straight to its own range.
+            locations.push(Location {
+                uri,
+                range: target.range,
+            });
+        }
+    }
+    locations
+}
+
+/// Byte offset of the `.rsx` cursor `(line, utf16_char)` within `source`, always on a UTF-8 char
+/// boundary. Mirrors `ra::byte_offset` but over the `.rsx` source: the column is UTF-16 (LSP), so
+/// converting it byte-wise would point mid-character on multi-byte text and yield a misaligned —
+/// possibly panicking — generated offset.
+fn rsx_byte_offset(source: &str, line: u32, utf16_col: u32) -> Option<usize> {
+    let mut line_start = 0usize;
+    for (i, current) in source.split_inclusive('\n').enumerate() {
+        if i as u32 == line {
+            let content = current.strip_suffix('\n').unwrap_or(current);
+            let mut remaining = utf16_col;
+            let mut byte = 0usize;
+            for ch in content.chars() {
+                let width = ch.len_utf16() as u32;
+                if remaining < width {
+                    break;
+                }
+                remaining -= width;
+                byte += ch.len_utf8();
+            }
+            return Some(line_start + byte);
+        }
+        line_start += current.len();
+    }
+    None
 }
 
 /// Builds the range covering all of `source`, used to replace the whole document

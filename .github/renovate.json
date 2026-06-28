@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^ra_ap_/"],
+      "groupName": "rust-analyzer (ra_ap_*)",
+      "rangeStrategy": "pin",
+      "schedule": ["before 6am on monday"],
+      "description": "The ra_ap_* crates share one 0.0.NNNN version with no semver guarantees and must bump together; group every rust-analyzer release into a single PR. Expect ~1-4h of API-adaptation work per bump."
+    }
+  ]
+}

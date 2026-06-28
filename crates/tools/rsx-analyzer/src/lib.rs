@@ -1,8 +1,4 @@
 //! Language server for `.rsx` files.
-//!
-//! Exposed as a library so the `cargo-rsx` package can ship the analyzer as both
-//! the `rsx-analyzer` binary and the `cargo rsx lsp` subcommand, instead of
-//! requiring a separate install.
 
 mod analysis;
 mod backend;
@@ -10,6 +6,7 @@ mod build_sync;
 mod format;
 mod position;
 mod project;
+mod ra;
 mod rpc;
 mod server;
 mod store;
