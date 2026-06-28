@@ -457,6 +457,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for Har
     }
 }
 
+// Hardware scroll-blit-with-clear: seed the offscreen with the previous frame shifted by the scroll delta so a cleared scrolling frame only redraws the exposed band. On by default for the MSAA (desktop) path; set RSX_HW_SCROLL_BLIT=0 to fall back to a full re-render.
+fn hw_scroll_blit_enabled() -> bool {
+    use std::sync::OnceLock;
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| std::env::var("RSX_HW_SCROLL_BLIT").as_deref() != Ok("0"))
+}
+
 fn cull_bounds(
     bounds: geometry_core::Rect,
     scissor: Option<geometry_core::Rect>,
@@ -1292,12 +1299,23 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         self.draw_state.reset();
-        // scroll_blit requires LoadOp::Load to work; when clear_color is set the frame is cleared (LoadOp::Clear), so skipping commands would leave cleared pixels instead of correct content.
-        let scroll_blit = if clear_color.is_none() {
+        // scroll_blit normally requires LoadOp::Load (clear_color forces LoadOp::Clear). The experimental scroll-blit-with-clear path keeps the optimization for a cleared frame by priming the offscreen with the previous frame shifted by the scroll delta (so only the exposed band needs redrawing); restricted to the MSAA (desktop, explicit-init-pass) path with a retained previous frame and no backdrop blur.
+        let allow_scroll_with_clear = hw_scroll_blit_enabled()
+            && clear_color.is_some()
+            && self.retained_view.is_some()
+            && !frame_has_backdrop_blur
+            && self.msaa_samples > 1;
+        let scroll_blit = if clear_color.is_none() || allow_scroll_with_clear {
             renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands)
         } else {
             None
         };
+        // When priming, the offscreen is seeded with the shifted previous frame instead of a plain clear, and only the exposed band is redrawn.
+        let scroll_prime = allow_scroll_with_clear && scroll_blit.is_some();
+        let prime_delta = scroll_blit
+            .as_ref()
+            .map(|sb| (sb.delta_x as f32, sb.delta_y as f32))
+            .unwrap_or((0.0, 0.0));
         // Multiple dirty rects are collapsed to their bounding union because GPUs support only a single scissor rect per pass (hardware limitation asymmetry vs. software backend which can clip per-rect).
         let dirty_scissor: Option<Rect> =
             if clear_color.is_none() && scroll_blit.is_none() && !self.prev_commands.is_empty() {
@@ -2734,10 +2752,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         // The top-level target needs `load_op` (usually a full-screen Clear) applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store+load every frame on tiled mobile GPUs; when the first segment is itself a top-level Draw, fold the clear into that pass instead. Gated to the single-sample (mobile tiler) path: immediate-mode desktop GPUs gain little and keep the simpler explicit-init pass. Falls back to the standalone init pass when the frame opens with a layer (nothing draws to the top-level target first).
+        // EXPERIMENTAL scroll-blit-with-clear: seed the offscreen with the previous frame translated by the scroll delta. The clear (load_op) paints the exposed band with clear_color; the shifted retained quad fills everything else; the main draw passes (which Load) then redraw only the band (everything else is culled by scroll_blit).
+        let prime_bind_group = if scroll_prime {
+            let logical_w = self.width as f32 / self.scale_factor;
+            let logical_h = self.height as f32 / self.scale_factor;
+            Some(self.composite_pipeline.create_bind_group(
+                &self.device,
+                &self.queue,
+                retained_view,
+                [prime_delta.0, prime_delta.1, logical_w, logical_h],
+                1.0,
+                0.0,
+                [1.0, 1.0],
+            ))
+        } else {
+            None
+        };
+
         let fold_init_clear =
             self.msaa_samples == 1 && matches!(segments.first(), Some(Segment::Draw { .. }));
         if !fold_init_clear {
-            let _init = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut init = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rsx-main-init"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &msaa_view,
@@ -2753,6 +2788,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 timestamp_writes: None,
                 multiview_mask: None,
             });
+            if let Some(ref bg) = prime_bind_group {
+                init.set_pipeline(&self.composite_pipeline.pipeline);
+                init.set_bind_group(0, &self.viewport_bind_group, &[]);
+                init.set_bind_group(1, bg, &[]);
+                init.draw(0..6, 0..1);
+            }
         }
 
         let mut layer_stack: Vec<(

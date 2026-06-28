@@ -240,30 +240,130 @@ fn hash_commands_with_dimensions(commands: &[DrawCommand], width: u32, height: u
     h.finish()
 }
 
-// Converts a chunk of tiny_skia RGBA bytes into softbuffer's little-endian 0x00RRGGBB u32s. `dst.len()` pixels are written; `src` must hold `dst.len() * 4` bytes. Bit trick per pixel: out = (in>>16 & 0xFF) | (in & 0xFF00) | ((in & 0xFF)<<16).
+// Per-pixel swizzle: tiny_skia RGBA byte order (read as LE u32 = 0xAABBGGRR) → softbuffer's 0x00RRGGBB.
 #[cfg(target_endian = "little")]
-fn convert_rgba_to_xrgb(src: &[u8], dst: &mut [u32]) {
+#[inline(always)]
+fn xrgb_from_rgba_word(s: u32) -> u32 {
+    ((s >> 16) & 0xFF) | (s & 0xFF00) | ((s & 0xFF) << 16)
+}
+
+// SIMD swizzle of a packed-RGBA u32 slice into XRGB u32s. Both slices hold the same pixel count.
+#[cfg(target_endian = "little")]
+fn swizzle_words(src: &[u32], dst: &mut [u32]) {
     use wide::u32x8;
     let mask_lo = u32x8::splat(0xFF);
     let mask_g = u32x8::splat(0x0000_FF00);
     let shift16 = u32x8::splat(16);
-    let pixels = dst.len();
-    let n_simd = pixels / 8;
+    let n_simd = dst.len() / 8;
     for i in 0..n_simd {
         let b = i * 8;
-        let v = u32x8::from(std::array::from_fn::<u32, 8, _>(|j| {
-            let p = (b + j) * 4;
-            u32::from_le_bytes(src[p..p + 4].try_into().unwrap())
-        }));
+        let v = u32x8::from(<[u32; 8]>::try_from(&src[b..b + 8]).unwrap());
         let out = ((v >> shift16) & mask_lo) | (v & mask_g) | ((v & mask_lo) << shift16);
         let out_arr: [u32; 8] = out.into();
         dst[b..b + 8].copy_from_slice(&out_arr);
     }
-    for i in (n_simd * 8)..pixels {
+    for i in (n_simd * 8)..dst.len() {
+        dst[i] = xrgb_from_rgba_word(src[i]);
+    }
+}
+
+// Converts a chunk of tiny_skia RGBA bytes into softbuffer's little-endian 0x00RRGGBB u32s. `dst.len()` pixels are written; `src` must hold `dst.len() * 4` bytes. Reads the RGBA bytes as packed u32 words (the pixmap allocation is 4-aligned in practice) to avoid a per-pixel byte gather; falls back to a scalar gather if the slice happens to be unaligned.
+#[cfg(target_endian = "little")]
+fn convert_rgba_to_xrgb(src: &[u8], dst: &mut [u32]) {
+    let pixels = dst.len();
+    let bytes = &src[..pixels * 4];
+    // SAFETY: any byte pattern is a valid u32; we only read the aligned middle.
+    let (pre, words, _post) = unsafe { bytes.align_to::<u32>() };
+    if pre.is_empty() && words.len() >= pixels {
+        swizzle_words(words, dst);
+        return;
+    }
+    // Unaligned fallback (rare): per-pixel byte gather.
+    for i in 0..pixels {
         let p = i * 4;
         let s = u32::from_le_bytes(src[p..p + 4].try_into().unwrap());
-        dst[i] = ((s >> 16) & 0xFF) | (s & 0xFF00) | ((s & 0xFF) << 16);
+        dst[i] = xrgb_from_rgba_word(s);
     }
+}
+
+// Clamps a float rect to integer pixel bounds inside `width`×`height`. Returns None when the rect has no on-screen area.
+fn clamp_rect_px(r: Rect, width: usize, height: usize) -> Option<(usize, usize, usize, usize)> {
+    let x0 = r.x.floor().max(0.0) as usize;
+    let y0 = r.y.floor().max(0.0) as usize;
+    let x1 = ((r.x + r.width).ceil().max(0.0) as usize).min(width);
+    let y1 = ((r.y + r.height).ceil().max(0.0) as usize).min(height);
+    let x0 = x0.min(width);
+    let y0 = y0.min(height);
+    if x1 > x0 && y1 > y0 {
+        Some((x0, y0, x1, y1))
+    } else {
+        None
+    }
+}
+
+// Swizzles only `rect` from the RGBA pixmap into the XRGB output buffer, reusing the SIMD converter. A full-width rect is swizzled as one contiguous block (the common case for a horizontal scroll band); narrower rects go row by row.
+#[cfg(target_endian = "little")]
+fn convert_rgba_to_xrgb_region(
+    src: &[u8],
+    dst: &mut [u32],
+    width: usize,
+    height: usize,
+    rect: Rect,
+) {
+    let Some((x0, y0, x1, y1)) = clamp_rect_px(rect, width, height) else {
+        return;
+    };
+    if x0 == 0 && x1 == width {
+        // Rows are contiguous in memory — one SIMD pass over the whole span.
+        let a = y0 * width;
+        let b = y1 * width;
+        convert_rgba_to_xrgb(&src[a * 4..b * 4], &mut dst[a..b]);
+        return;
+    }
+    for y in y0..y1 {
+        let row = y * width;
+        convert_rgba_to_xrgb(
+            &src[(row + x0) * 4..(row + x1) * 4],
+            &mut dst[row + x0..row + x1],
+        );
+    }
+}
+
+// What changed on screen in a presented frame relative to the previous one, recorded per frame so the damage-aware present path can refresh an aged softbuffer buffer (age N = the buffer we presented N frames ago) by re-swizzling only the union of the last N frames' changed regions. A scroll is recorded as Regions covering the whole scrolled clip (every pixel in it moved) plus the displaced overlays — re-swizzling from the already-shifted pixmap is cheaper than shifting the slow shared-memory present buffer in place.
+#[derive(Clone)]
+enum FrameOp {
+    // Nothing changed (skip frame): contributes no damage.
+    NoChange,
+    // The whole framebuffer was rewritten (first frame, resize, clear-color change, or a non-incremental redraw).
+    Full,
+    // Only these window-space regions changed.
+    Regions(SmallVec<[Rect; 8]>),
+}
+
+// How to refresh a softbuffer buffer of the given age from the current pixmap.
+enum PresentPlan {
+    // Re-swizzle the whole pixmap (safe fallback).
+    Full,
+    // Re-swizzle just these regions; the rest of the aged buffer is already current.
+    Regions(SmallVec<[Rect; 8]>),
+}
+
+// Decides how to refresh a buffer of the given `age` from history, which must already include the current frame's op as its last entry. Any ambiguity (age 0 → undefined contents, too little history, or a Full anywhere in the window) falls back to a full re-swizzle, which is always correct.
+fn plan_present(history: &std::collections::VecDeque<FrameOp>, age: u8) -> PresentPlan {
+    let k = age as usize;
+    if k == 0 || k > history.len() {
+        return PresentPlan::Full;
+    }
+    // The last k ops are exactly the frames missing from this aged buffer; the union of their changed regions is everything that differs from it.
+    let mut regions: SmallVec<[Rect; 8]> = SmallVec::new();
+    for op in history.iter().rev().take(k) {
+        match op {
+            FrameOp::Full => return PresentPlan::Full,
+            FrameOp::NoChange => {}
+            FrameOp::Regions(rs) => regions.extend(rs.iter().copied()),
+        }
+    }
+    PresentPlan::Regions(regions)
 }
 
 // Clones the ANativeWindow out of a window handle so the renderer can present straight to it, bypassing softbuffer's intermediate buffer. Returns None off-Android or for any non-AndroidNdk handle.
@@ -359,6 +459,8 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     expanded_commands_cache: Option<(u64, Vec<DrawCommand>)>,
     // Cache for compute_layer_bounds: avoids re-traversing commands when input and dimensions are unchanged.
     layer_bounds_cache: Option<(u64, Vec<Option<(i32, i32, u32, u32)>>)>,
+    // Per-frame change log for the damage-aware present path; an aged softbuffer buffer is brought current by replaying the last `age` entries instead of re-swizzling the whole framebuffer. Bounded to the last few frames.
+    present_history: std::collections::VecDeque<FrameOp>,
     // Android only: a direct handle to the surface's ANativeWindow, used to present without softbuffer's swizzle+copy. softbuffer still owns surface creation and buffer-geometry; this is a second acquired reference used only at present time.
     #[cfg(target_os = "android")]
     native_window: Option<ndk::native_window::NativeWindow>,
@@ -422,6 +524,7 @@ where
             prev_clear_color: None,
             expanded_commands_cache: None,
             layer_bounds_cache: None,
+            present_history: std::collections::VecDeque::with_capacity(8),
             #[cfg(target_os = "android")]
             native_window,
         })
@@ -464,22 +567,44 @@ where
         arrived
     }
 
-    fn present_pixmap(&mut self) -> Result<(), RendererError> {
+    // `op` describes how this frame's pixmap differs from the previous one, used to refresh only the changed part of an aged softbuffer buffer (see plan_present). Pass FrameOp::Full when unsure.
+    fn present_pixmap(&mut self, op: FrameOp) -> Result<(), RendererError> {
         let Some(pixmap) = &self.pixmap else {
             return Ok(());
         };
         if self.width == 0 || self.height == 0 {
             return Ok(());
         }
-        // Android: copy straight into the ANativeWindow back-buffer. tiny_skia's RGBA byte order matches the native RGBX8888, so presenting is a per-row memcpy with no swizzle. softbuffer's path instead round-trips through a 0x00RRGGBB u32 (one SIMD swizzle in, then a scalar per-pixel swizzle back out in present()) and allocates+zeroes a full-screen buffer every frame — together ≈40% of the per-frame CPU on hi-DPI.
+        // Android: copy straight into the ANativeWindow back-buffer. tiny_skia's RGBA byte order matches the native RGBX8888, so presenting is a per-row memcpy with no swizzle.
         #[cfg(target_os = "android")]
         if let Some(nw) = &self.native_window {
             return present_to_native_window(nw, pixmap);
         }
+
+        // Append this frame's change set; an aged buffer is reconstructed by replaying the last `age` entries.
+        self.present_history.push_back(op);
+        while self.present_history.len() > 6 {
+            self.present_history.pop_front();
+        }
+
+        let width = self.width as usize;
+        let height = self.height as usize;
         if let Ok(mut buffer) = self.surface.buffer_mut() {
-            // Pixel format: tiny_skia RGBA bytes → softbuffer LE u32 0x00RRGGBB.
+            let age = buffer.age();
+            let plan = plan_present(&self.present_history, age);
+            // Pixel format: tiny_skia RGBA bytes → softbuffer LE u32 0x00RRGGBB. The damage-aware plan re-swizzles only what changed; a full swizzle of the whole framebuffer is the fallback.
             #[cfg(target_endian = "little")]
-            convert_rgba_to_xrgb(pixmap.data(), &mut buffer);
+            {
+                let buf: &mut [u32] = &mut buffer;
+                match plan {
+                    PresentPlan::Full => convert_rgba_to_xrgb(pixmap.data(), buf),
+                    PresentPlan::Regions(regions) => {
+                        for r in &regions {
+                            convert_rgba_to_xrgb_region(pixmap.data(), buf, width, height, *r);
+                        }
+                    }
+                }
+            }
             #[cfg(target_endian = "big")]
             {
                 compile_error!(
@@ -521,6 +646,8 @@ where
             self.prev_clear_color = None;
             self.expanded_commands_cache = None;
             self.layer_bounds_cache = None;
+            // Surface buffers are recreated on resize, so their age resets; drop the change log to avoid replaying onto a fresh buffer.
+            self.present_history.clear();
             if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
                 self.surface
                     .resize(w, h)
@@ -543,7 +670,7 @@ where
             && commands == self.prev_commands.as_slice()
             && clear_color == self.prev_clear_color
         {
-            return self.present_pixmap();
+            return self.present_pixmap(FrameOp::NoChange);
         }
 
         // Optimization 2: scroll blit. When the only change is a single PushTransform ty-shift (a scroll event), shift the existing pixel rows in place and only re-render the exposed band plus any out-of-clip overlays that changed (e.g. the scrollbar).
@@ -574,6 +701,22 @@ where
         };
 
         let clear_color_changed = clear_color != self.prev_clear_color;
+
+        // Classify this frame's damage for the present buffer: a bounded set of changed regions can refresh an aged buffer incrementally; a clear-color change or unbounded change re-swizzles fully. A scroll's whole clip moved, so it counts as damage covering the clip plus the displaced overlays. Built from the raw (un-expanded) dirty regions, which are exactly the visually-changed pixels.
+        let frame_op = if clear_color_changed {
+            FrameOp::Full
+        } else if let Some(ref sb) = maybe_scroll {
+            let mut regions: SmallVec<[Rect; 8]> = SmallVec::new();
+            regions.push(sb.scroll_clip);
+            regions.extend(sb.extra_dirty.iter().copied());
+            FrameOp::Regions(regions)
+        } else {
+            match &dirty_rect {
+                Some(drs) if !drs.is_empty() => FrameOp::Regions(drs.clone()),
+                _ => FrameOp::Full,
+            }
+        };
+
         let current_hash = renderer_core::hash_draw_commands(commands);
         if current_hash != self.prev_commands_hash {
             self.prev_commands.clear();
@@ -650,7 +793,7 @@ where
                 }
                 if out.is_empty() {
                     // Every dirty region was off-screen — nothing visible changed.
-                    return self.present_pixmap();
+                    return self.present_pixmap(FrameOp::NoChange);
                 }
                 Some(out)
             }
@@ -1087,6 +1230,6 @@ where
             }
         }
 
-        self.present_pixmap()
+        self.present_pixmap(frame_op)
     }
 }
