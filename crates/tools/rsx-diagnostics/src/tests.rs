@@ -15,6 +15,7 @@ fn element(classes: &[&str], attributes: Vec<Attr>, line: usize) -> Element {
         canvas_parameters: None,
         children: Vec::new(),
         line,
+        content_start: 0,
     }
 }
 
@@ -80,6 +81,7 @@ fn unknown_color_errors_only_when_theme_configured() {
         key: "color".into(),
         value: "nope".into(),
         is_quoted: false,
+        value_start: 0,
     };
     let doc = document(
         StyleSection::default(),

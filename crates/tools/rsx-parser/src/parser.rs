@@ -292,18 +292,24 @@ impl Parser {
             "if" => self.parse_if_block(indent),
             "for" => self.parse_for_block(indent),
             "let" => {
+                let source_start = self.lines[self.pos].content_start;
                 self.pos += 1;
-                Ok(ViewNode::LetStmt { source: content })
+                Ok(ViewNode::LetStmt {
+                    source: content,
+                    source_start,
+                })
             }
             _ => self.parse_element(indent),
         }
     }
 
     fn parse_if_block(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
-        let number = self.lines[self.pos].number;
-        let condition = self.lines[self.pos].content["if".len()..]
-            .trim()
-            .to_string();
+        let line = &self.lines[self.pos];
+        let number = line.number;
+        let after = &line.content["if".len()..];
+        let condition_start =
+            line.content_start + "if".len() + (after.len() - after.trim_start().len());
+        let condition = after.trim().to_string();
         self.pos += 1;
 
         let then_branch = self.parse_children(indent)?;
@@ -325,13 +331,19 @@ impl Parser {
             then_branch,
             else_branch,
             line: number,
+            condition_start,
         }))
     }
 
     fn parse_for_block(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
         let line = &self.lines[self.pos];
         let number = line.number;
-        let rest = line.content["for".len()..].trim().to_string();
+        let after = &line.content["for".len()..];
+        // Start of the `<pattern> in <expr>` body in source; `split_for_in` re-tokenizes it, so the
+        // resulting pattern/iterable are not verbatim substrings and no expression span is emitted.
+        let rest_start =
+            line.content_start + "for".len() + (after.len() - after.trim_start().len());
+        let rest = after.trim().to_string();
         self.pos += 1;
 
         // Split on the first standalone ` in ` keyword.
@@ -347,6 +359,8 @@ impl Parser {
             iterable,
             body,
             line: number,
+            pattern_start: rest_start,
+            iterable_start: rest_start,
         }))
     }
 
@@ -355,9 +369,10 @@ impl Parser {
         let line = &self.lines[self.pos];
         let number = line.number;
         let content = line.content.clone();
+        let content_start = line.content_start;
         self.pos += 1;
 
-        let mut element = parse_element_header(&content, number)?;
+        let mut element = parse_element_header(&content, number, content_start)?;
 
         // `canvas` may declare drawing-area closure params (`|w, h|`) before its children.
         if element.tag == "canvas" {
@@ -505,7 +520,11 @@ fn parse_canvas_params(content: &str) -> Option<String> {
 /// Tokens are consumed left to right. A bare `.name` is a class; a quoted string
 /// is the content; `key:value` is an attribute. When an attribute value begins
 /// with `||` or `|args|`, the entire remainder of the line becomes that value.
-fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseError> {
+fn parse_element_header(
+    content: &str,
+    line: usize,
+    content_start: usize,
+) -> Result<Element, ParseError> {
     let mut element = Element {
         tag: String::new(),
         classes: Vec::new(),
@@ -514,6 +533,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
         canvas_parameters: None,
         children: Vec::new(),
         line,
+        content_start,
     };
 
     let chars: Vec<char> = content.chars().collect();
@@ -535,6 +555,8 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                 line,
             })?;
             element.content = Some(text);
+            // Content starts one char past the opening quote.
+            element.content_start = content_start + byte_at(&chars, i + 1);
             i = next;
             continue;
         }
@@ -563,12 +585,13 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
             let is_closure_value = chars.get(val_start) == Some(&'|');
 
             if is_closure_value {
-                // The closure value runs to the end of the line, verbatim.
+                // The closure value runs to the end of the line, verbatim, starting at `val_start`.
                 let value: String = chars[val_start..].iter().collect();
                 element.attributes.push(Attr {
                     key: key.trim().to_string(),
                     value: value.trim().to_string(),
                     is_quoted: false,
+                    value_start: content_start + byte_at(&chars, val_start),
                 });
                 break;
             }
@@ -584,6 +607,8 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                     key: key.trim().to_string(),
                     value: text,
                     is_quoted: true,
+                    // Value starts one char past the opening quote.
+                    value_start: content_start + byte_at(&chars, k + 1),
                 });
                 i = next;
                 continue;
@@ -597,6 +622,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                 key: key.trim().to_string(),
                 value,
                 is_quoted: false,
+                value_start: content_start + byte_at(&chars, val_start),
             });
             i = k;
             continue;
@@ -620,6 +646,7 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
                 key: token,
                 value: String::new(),
                 is_quoted: false,
+                value_start: content_start + byte_at(&chars, token_start),
             });
         }
     }
@@ -632,6 +659,12 @@ fn parse_element_header(content: &str, line: usize) -> Result<Element, ParseErro
     }
 
     Ok(element)
+}
+
+/// Byte offset within the original `content` string of the char at index `idx` (sum of the UTF-8
+/// widths of the preceding chars). Converts a `Vec<char>` index into a source byte offset.
+fn byte_at(chars: &[char], idx: usize) -> usize {
+    chars[..idx].iter().map(|c| c.len_utf8()).sum()
 }
 
 /// Reads a double-quoted string starting at `start`; returns the inner text with escape sequences preserved verbatim, plus the index past the closing quote.

@@ -78,7 +78,11 @@ pub enum ViewNode {
     Element(Element),
     IfBlock(IfBlock),
     ForBlock(ForBlock),
-    LetStmt { source: String },
+    LetStmt {
+        source: String,
+        /// Byte offset in the source where `source` begins (verbatim Rust `let` statement).
+        source_start: usize,
+    },
 }
 
 /// A view element: a layout container or a leaf widget.
@@ -91,16 +95,30 @@ pub struct Element {
     pub canvas_parameters: Option<String>,
     pub children: Vec<ViewNode>,
     pub line: usize,
+    /// Byte offset in the source where the (de-quoted) `content` begins, or the line start when the
+    /// element has no quoted content. Used to map `{…}` interpolation expressions back to source.
+    pub content_start: usize,
 }
 
 /// A `key: value` attribute on an element. The value is kept raw (closures included).
 /// `is_quoted` is `true` when the value was written with double-quotes (`label:"text"`),
 /// allowing callers to distinguish string literals from identifier references.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Attr {
     pub key: String,
     pub value: String,
     pub is_quoted: bool,
+    /// Byte offset in the source where `value` begins. Lets the transpiler map a closure / pass-through
+    /// attribute value back to source; excluded from `PartialEq` so it stays positional metadata.
+    pub value_start: usize,
+}
+
+// Equality compares semantic content only; `value_start` is positional metadata, so tests can build
+// `Attr` literals with `value_start: 0` and still match a parsed attribute.
+impl PartialEq for Attr {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key && self.value == other.value && self.is_quoted == other.is_quoted
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +128,8 @@ pub struct IfBlock {
     pub else_branch: Option<Vec<ViewNode>>,
     /// 1-based `.rsx` line of the `if` header, used to map generated code back to source.
     pub line: usize,
+    /// Byte offset in the source where the (trimmed) `condition` begins.
+    pub condition_start: usize,
 }
 
 /// A `for ... in ...` loop block in the view.
@@ -120,4 +140,9 @@ pub struct ForBlock {
     pub body: Vec<ViewNode>,
     /// 1-based `.rsx` line of the `for` header, used to map generated code back to source.
     pub line: usize,
+    /// Byte offsets where `pattern` / `iterable` begin in the source. Best-effort only: the parser
+    /// re-tokenizes the `for` header (collapsing whitespace), so these are not guaranteed to be
+    /// verbatim substrings — the view-completion path emits no expression span for `for`.
+    pub pattern_start: usize,
+    pub iterable_start: usize,
 }

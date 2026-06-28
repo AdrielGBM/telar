@@ -23,6 +23,20 @@ const HEADING_STYLE_CLOSURE: &str = "move || { let color = use_widget_theme().ma
 const SRC_PUSH: &str = "//@RSX@PUSH:";
 const SRC_POP: &str = "//@RSX@POP";
 
+/// Inline marker emitted immediately before a verbatim `[view]` Rust expression (interpolation
+/// `{expr}`, `if`/`let` expressions, closure attr values). Stripped by [`resolve_source_map`], which
+/// records the byte position where the expression begins in the generated body, so the analyzer can
+/// map a `.rsx` cursor inside the expression onto the generated Rust. Payload: `<rsx_start>:<len>`,
+/// the source byte offset and length of the fragment, which is byte-identical in source and output.
+const SRC_EXPR_OPEN: &str = "/*@RSX@EXPR:";
+const SRC_EXPR_CLOSE: &str = "@*/";
+
+/// Builds an [`SRC_EXPR_OPEN`] marker for a verbatim expression at source byte offset `rsx_start`
+/// spanning `len` bytes.
+fn expr_marker(rsx_start: usize, len: usize) -> String {
+    format!("{SRC_EXPR_OPEN}{rsx_start}:{len}{SRC_EXPR_CLOSE}")
+}
+
 /// Wraps `emit`'s code in `SRC_PUSH`/`SRC_POP` markers carrying the 0-based `.rsx` `line`.
 fn wrap_source_markers(emit: ChildEmit, line: usize) -> ChildEmit {
     let src0 = line.saturating_sub(1);
@@ -36,13 +50,26 @@ fn wrap_source_markers(emit: ChildEmit, line: usize) -> ChildEmit {
     }
 }
 
+/// The resolved view body: real lines (each with its origin `.rsx` line) plus the byte spans of the
+/// verbatim Rust expressions it contains.
+pub(crate) struct ResolvedView {
+    pub lines: Vec<(String, Option<u32>)>,
+    /// Per expression: `(byte offset within the streamed body, rsx_start, len)`. The streamed body is
+    /// the lines joined with `\n` (each line followed by a newline), matching how `transpile` appends
+    /// them, so a caller adds the body's start offset in the final file to get the generated offset.
+    pub expr_spans: Vec<(usize, u32, u32)>,
+}
+
 /// Strips the source markers from a generated view body, returning each real line paired with the
 /// `.rsx` line it originated from (a stack tracks nesting, so a node's own lines map to itself and
-/// its children's lines map to the children). Lines outside any marker (root boilerplate) map to
-/// `None`.
-pub(crate) fn resolve_source_map(marked: &str) -> Vec<(String, Option<u32>)> {
+/// its children's lines map to the children) plus the verbatim-expression byte spans. Lines outside
+/// any marker (root boilerplate) map to `None`.
+pub(crate) fn resolve_source_map(marked: &str) -> ResolvedView {
     let mut stack: Vec<u32> = Vec::new();
-    let mut out = Vec::new();
+    let mut lines = Vec::new();
+    let mut expr_spans = Vec::new();
+    // Running byte length of the streamed body (each emitted line plus its trailing `\n`).
+    let mut body_len = 0usize;
     for line in marked.split('\n') {
         if let Some(rest) = line.strip_prefix(SRC_PUSH) {
             if let Ok(n) = rest.parse::<u32>() {
@@ -51,10 +78,41 @@ pub(crate) fn resolve_source_map(marked: &str) -> Vec<(String, Option<u32>)> {
         } else if line == SRC_POP {
             stack.pop();
         } else {
-            out.push((line.to_string(), stack.last().copied()));
+            let (clean, spans) = strip_expr_markers(line, body_len);
+            expr_spans.extend(spans);
+            body_len += clean.len() + 1;
+            lines.push((clean, stack.last().copied()));
         }
     }
-    out
+    ResolvedView { lines, expr_spans }
+}
+
+/// Removes inline [`SRC_EXPR_OPEN`] markers from a single output `line`, returning the cleaned line
+/// and, for each marker, `(body offset of the following expression, rsx_start, len)`. `base` is the
+/// body byte offset of this line's start; the expression begins exactly where the marker was, so its
+/// offset is `base + <cleaned bytes emitted so far>`.
+fn strip_expr_markers(line: &str, base: usize) -> (String, Vec<(usize, u32, u32)>) {
+    let mut out = String::with_capacity(line.len());
+    let mut spans = Vec::new();
+    let mut rest = line;
+    while let Some(open) = rest.find(SRC_EXPR_OPEN) {
+        out.push_str(&rest[..open]);
+        let after_open = &rest[open + SRC_EXPR_OPEN.len()..];
+        let Some(close) = after_open.find(SRC_EXPR_CLOSE) else {
+            // Malformed marker (no close): keep the remainder verbatim and stop.
+            out.push_str(rest);
+            return (out, spans);
+        };
+        let payload = &after_open[..close];
+        if let Some((rsx_start, len)) = payload.split_once(':')
+            && let (Ok(rsx_start), Ok(len)) = (rsx_start.parse::<u32>(), len.parse::<u32>())
+        {
+            spans.push((base + out.len(), rsx_start, len));
+        }
+        rest = &after_open[close + SRC_EXPR_CLOSE.len()..];
+    }
+    out.push_str(rest);
+    (out, spans)
 }
 
 /// A piece of generated child code together with how it contributes to a
@@ -170,8 +228,15 @@ impl<'a> ViewGen<'a> {
     fn emit_node(&mut self, node: &ViewNode) -> ChildEmit {
         let emit = match node {
             ViewNode::Element(el) => self.emit_element(el),
-            ViewNode::LetStmt { source, .. } => ChildEmit::Dynamic {
-                code: format!("{}{source};", self.indent_str()),
+            ViewNode::LetStmt {
+                source,
+                source_start,
+            } => ChildEmit::Dynamic {
+                code: format!(
+                    "{}{}{source};",
+                    self.indent_str(),
+                    expr_marker(*source_start, source.len())
+                ),
             },
             ViewNode::IfBlock(block) => self.emit_if(block),
             ViewNode::ForBlock(block) => self.emit_for(block),
@@ -207,7 +272,7 @@ impl<'a> ViewGen<'a> {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
-        let content_fn = self.interpolate_content(content);
+        let content_fn = self.interpolate_content(content, el.content_start);
         let style = self.text_style(&el.attributes);
 
         let mut extra = String::new();
@@ -253,7 +318,7 @@ impl<'a> ViewGen<'a> {
         let var = self.next_variable_name("heading");
         let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
-        let content_fn = self.interpolate_content(content);
+        let content_fn = self.interpolate_content(content, el.content_start);
         let clones = self.clone_bindings(&[&content_fn], &pad, "    ");
         let style_closure = HEADING_STYLE_CLOSURE;
         let code = format!(
@@ -276,7 +341,7 @@ impl<'a> ViewGen<'a> {
         let heading_var = self.next_variable_name("heading");
         let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
-        let title_fn = self.interpolate_content(content);
+        let title_fn = self.interpolate_content(content, el.content_start);
         let style_closure = HEADING_STYLE_CLOSURE;
 
         let has_dynamic = el.children.iter().any(|n| {
@@ -453,11 +518,8 @@ impl<'a> ViewGen<'a> {
         let label = el.content.as_deref().unwrap_or("");
         let style = self.button_style(&el.attributes, pad.as_str());
 
-        let on_press = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "on_press")
-            .map(|h| normalize_closure(&h.value));
+        let on_press_attr = el.attributes.iter().find(|a| a.key == "on_press");
+        let on_press = on_press_attr.map(|h| normalize_closure(&h.value));
 
         let mut snippets: Vec<&str> = Vec::new();
         if let Some(s) = &style {
@@ -480,7 +542,13 @@ impl<'a> ViewGen<'a> {
             let _ = writeln!(code, "{pad}    __btn = __btn.style({style});");
         }
         if let Some(closure) = on_press {
-            let _ = writeln!(code, "{pad}    __btn = __btn.on_click(move {closure});");
+            // A span is emitted only for verbatim closures (`|…|`); `normalize_closure` rewrites
+            // bare expressions, breaking the byte-for-byte mapping, so those get no marker.
+            let marker = closure_marker(on_press_attr);
+            let _ = writeln!(
+                code,
+                "{pad}    __btn = __btn.on_click(move {marker}{closure});"
+            );
         }
         let _ = writeln!(code, "{pad}    __btn");
         let _ = write!(code, "{pad}}};");
@@ -1158,7 +1226,9 @@ impl<'a> ViewGen<'a> {
         if in_style || (self.theme_type.is_some() && looks_like_color_name) {
             return self.color_expr(v);
         }
-        v.to_string()
+        // Verbatim pass-through: tag the value with its source span so the analyzer can complete in it.
+        let lead = attr.value.len() - attr.value.trim_start().len();
+        format!("{}{v}", expr_marker(attr.value_start + lead, v.len()))
     }
 
     fn emit_widget_ref(&mut self, el: &Element) -> ChildEmit {
@@ -1222,7 +1292,10 @@ impl<'a> ViewGen<'a> {
     fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {
         let pad = self.indent_str();
         let mut code = String::new();
-        let _ = writeln!(code, "{pad}if {} {{", block.condition.trim());
+        // The condition is already trimmed by the parser and emitted verbatim, so its span maps directly.
+        let cond = block.condition.trim();
+        let marker = expr_marker(block.condition_start, cond.len());
+        let _ = writeln!(code, "{pad}if {marker}{cond} {{");
         self.indent += 1;
         self.emit_branch_into_children(&block.then_branch, &mut code);
         self.indent -= 1;
@@ -1281,7 +1354,9 @@ impl<'a> ViewGen<'a> {
     }
 
     /// Builds the `content_fn` closure for a text node, handling `{...}` interpolation.
-    pub fn interpolate_content(&self, content: &str) -> String {
+    /// `content_start` is the source byte offset of `content`, used to tag each interpolated
+    /// expression with its source span.
+    pub fn interpolate_content(&self, content: &str, content_start: usize) -> String {
         let segments = parse_interpolation(content);
         if segments.iter().all(|s| matches!(s, Segment::Literal(_))) {
             return format!("|| {}.to_string()", rust_str(content));
@@ -1294,9 +1369,9 @@ impl<'a> ViewGen<'a> {
                 Segment::Literal(text) => {
                     fmt.push_str(&text.replace('{', "{{").replace('}', "}}"));
                 }
-                Segment::Expr(expr) => {
+                Segment::Expr { text, byte_offset } => {
                     fmt.push_str("{}");
-                    args.push(self.render_interp_expr(expr));
+                    args.push(self.render_interp_expr(text, content_start + byte_offset));
                 }
             }
         }
@@ -1306,15 +1381,24 @@ impl<'a> ViewGen<'a> {
     }
 
     /// Renders an interpolation expression: a bare signal name becomes `name.get()`,
-    /// anything else is emitted as a braced Rust expression.
-    fn render_interp_expr(&self, expr: &str) -> String {
+    /// anything else is emitted as a braced Rust expression. `raw_start` is the source byte offset of
+    /// the raw (untrimmed) expression text; an [`expr_marker`] is emitted right before the verbatim
+    /// trimmed expression so the analyzer can complete inside it.
+    fn render_interp_expr(&self, expr: &str, raw_start: usize) -> String {
         let trimmed = expr.trim();
+        if trimmed.is_empty() {
+            return format!("{{ {expr} }}");
+        }
+        // The trimmed expression is copied verbatim into the output; its source offset skips the raw
+        // expression's leading whitespace so the span maps byte-for-byte.
+        let lead = expr.len() - expr.trim_start().len();
+        let marker = expr_marker(raw_start + lead, trimmed.len());
         if self.signals.iter().any(|s| s.name == trimmed) {
-            format!("{trimmed}.get()")
+            format!("{marker}{trimmed}.get()")
         } else if is_ident(trimmed) {
-            trimmed.to_string()
+            format!("{marker}{trimmed}")
         } else {
-            format!("{{ {trimmed} }}")
+            format!("{{ {marker}{trimmed} }}")
         }
     }
 
@@ -1353,7 +1437,12 @@ impl<'a> ViewGen<'a> {
 
 enum Segment {
     Literal(String),
-    Expr(String),
+    /// An interpolated `{expr}`: the raw inner text plus the byte offset (within `content`) where it
+    /// begins, used to map the verbatim expression back to the `.rsx` source.
+    Expr {
+        text: String,
+        byte_offset: usize,
+    },
 }
 
 /// Splits a string into literal and `{expr}` segments. Escaped braces `{{`/`}}`
@@ -1361,15 +1450,15 @@ enum Segment {
 fn parse_interpolation(content: &str) -> Vec<Segment> {
     let mut segments = Vec::new();
     let mut literal = String::new();
-    let mut chars = content.chars().peekable();
+    let mut chars = content.char_indices().peekable();
 
-    while let Some(c) = chars.next() {
+    while let Some((idx, c)) = chars.next() {
         match c {
-            '{' if chars.peek() == Some(&'{') => {
+            '{' if chars.peek().map(|&(_, c)| c) == Some('{') => {
                 chars.next();
                 literal.push('{');
             }
-            '}' if chars.peek() == Some(&'}') => {
+            '}' if chars.peek().map(|&(_, c)| c) == Some('}') => {
                 chars.next();
                 literal.push('}');
             }
@@ -1378,13 +1467,18 @@ fn parse_interpolation(content: &str) -> Vec<Segment> {
                     segments.push(Segment::Literal(std::mem::take(&mut literal)));
                 }
                 let mut expr = String::new();
-                for ec in chars.by_ref() {
+                // The expression text begins one byte past this `{`.
+                let byte_offset = idx + c.len_utf8();
+                for (_, ec) in chars.by_ref() {
                     if ec == '}' {
                         break;
                     }
                     expr.push(ec);
                 }
-                segments.push(Segment::Expr(expr));
+                segments.push(Segment::Expr {
+                    text: expr,
+                    byte_offset,
+                });
             }
             _ => literal.push(c),
         }
@@ -1425,6 +1519,20 @@ fn pattern_idents(pattern: &str) -> Vec<String> {
 fn rust_str(s: &str) -> String {
     let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
     format!("\"{escaped}\"")
+}
+
+/// An [`expr_marker`] for a verbatim closure attribute value (one beginning with `|`), or an empty
+/// string otherwise. The value is emitted byte-for-byte after `move `, so the span maps directly.
+fn closure_marker(attr: Option<&Attr>) -> String {
+    let Some(attr) = attr else {
+        return String::new();
+    };
+    let trimmed = attr.value.trim_start();
+    if !trimmed.starts_with('|') {
+        return String::new();
+    }
+    let lead = attr.value.len() - trimmed.len();
+    expr_marker(attr.value_start + lead, attr.value.trim().len())
 }
 
 /// The parser strips `on_press:` leaving `|| expr` or `|ev| expr`. Ensure the
@@ -1512,7 +1620,10 @@ mod tests {
     #[test]
     fn literal_content() {
         let g = make_gen(&[]);
-        assert_eq!(g.interpolate_content("hello"), "|| \"hello\".to_string()");
+        assert_eq!(
+            g.interpolate_content("hello", 0),
+            "|| \"hello\".to_string()"
+        );
     }
 
     #[test]
@@ -1522,9 +1633,10 @@ mod tests {
             kind: SignalKind::RwSignal,
         }];
         let g = make_gen(&signals);
+        // `{count}` starts at byte 8; the expr is tagged with a span marker (stripped downstream).
         assert_eq!(
-            g.interpolate_content("Count: {count}"),
-            "move || format!(\"Count: {}\", count.get())"
+            g.interpolate_content("Count: {count}", 0),
+            "move || format!(\"Count: {}\", /*@RSX@EXPR:8:5@*/count.get())"
         );
     }
 

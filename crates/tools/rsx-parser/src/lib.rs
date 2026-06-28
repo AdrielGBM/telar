@@ -146,7 +146,8 @@ col .card
             Attr {
                 key: "size".into(),
                 value: "14".into(),
-                is_quoted: false
+                is_quoted: false,
+                value_start: 0
             }
         );
         assert_eq!(
@@ -154,7 +155,8 @@ col .card
             Attr {
                 key: "color".into(),
                 value: "dark".into(),
-                is_quoted: false
+                is_quoted: false,
+                value_start: 0
             }
         );
 
@@ -167,7 +169,8 @@ col .card
             Attr {
                 key: "gap".into(),
                 value: "8".into(),
-                is_quoted: false
+                is_quoted: false,
+                value_start: 0
             }
         );
         assert_eq!(row.children.len(), 3);
@@ -193,7 +196,8 @@ col .card
             Attr {
                 key: "fill".into(),
                 value: "primary".into(),
-                is_quoted: false
+                is_quoted: false,
+                value_start: 0
             }
         );
         let on_press = inc.attributes.iter().find(|a| a.key == "on_press").unwrap();

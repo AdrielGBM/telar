@@ -42,6 +42,24 @@ pub struct TranspiledSource {
     /// boilerplate and transpiler-injected lines. Lets the analyzer map rust-analyzer's diagnostics
     /// on the generated code back onto the `.rsx` source.
     pub source_map: Vec<Option<u32>>,
+    /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the
+    /// generated Rust. In-memory only (not serialized, not part of the `.rs.map`): the analyzer uses
+    /// them to offer Rust completion inside `[view]` expressions. See [`ExprSpan`].
+    pub expr_spans: Vec<ExprSpan>,
+}
+
+/// A `[view]` Rust expression that is copied byte-for-byte from the `.rsx` source into the generated
+/// Rust, so `gen_start + (cursor_byte - rsx_start)` maps a `.rsx` cursor onto the generated file on a
+/// UTF-8 char boundary. Only emitted for verbatim fragments (interpolation `{expr}`, `if`/`let`
+/// expressions, verbatim closure / pass-through attr values); non-verbatim ones (`for` re-tokenized
+/// patterns, transformed numeric/color attrs) produce no span.
+pub struct ExprSpan {
+    /// Byte offset of the fragment's start in the `.rsx` source.
+    pub rsx_start: u32,
+    /// Byte length of the fragment (identical in source and generated).
+    pub len: u32,
+    /// Byte offset of the fragment's start in the generated Rust.
+    pub gen_start: u32,
 }
 
 /// Serializes a [`TranspiledSource::source_map`] as a JSON array (`[null,3,3,...]`), the format the
@@ -319,12 +337,24 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         code.push("\n", None);
     }
 
-    // The view body carries source markers from generation; resolve them into per-line origins so
-    // diagnostics on the generated view map back to the `.rsx` element they came from.
-    for (line, src) in crate::view::resolve_source_map(&view_body) {
-        code.push(&line, src);
-        code.push("\n", src);
+    // The view body carries source markers from generation; resolve them into per-line origins (for
+    // diagnostics) plus the byte spans of verbatim expressions. `view_prefix_len` is the body's start
+    // offset in the final file, so each span's relative offset rebases onto the generated file.
+    let view_prefix_len = code.out.len();
+    let resolved = crate::view::resolve_source_map(&view_body);
+    for (line, src) in &resolved.lines {
+        code.push(line, *src);
+        code.push("\n", *src);
     }
+    let expr_spans: Vec<ExprSpan> = resolved
+        .expr_spans
+        .iter()
+        .map(|&(rel, rsx_start, len)| ExprSpan {
+            rsx_start,
+            len,
+            gen_start: (view_prefix_len + rel) as u32,
+        })
+        .collect();
     if !code.out.ends_with('\n') {
         code.push("\n", None);
     }
@@ -353,6 +383,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         rust_code: code.out,
         preview_names: previews.iter().map(|p| p.name.clone()).collect(),
         source_map: code.map,
+        expr_spans,
     })
 }
 
@@ -643,6 +674,78 @@ col .card
         assert!(
             code.contains("#[derive(Props)]"),
             "derive attribute must be preserved"
+        );
+    }
+
+    #[test]
+    fn expr_spans_map_interpolation_verbatim() {
+        // `[logic]` line 2 declares `count`; `[view]` line 4 interpolates it.
+        let src = "[logic]\nlet count = create_rw_signal(0i32);\n[view]\ntext \"Count: {count}\"\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+
+        // No marker leaks into the generated Rust.
+        assert!(!out.rust_code.contains("@RSX@"), "markers must be stripped");
+
+        // One span, for the `{count}` interpolation.
+        assert_eq!(out.expr_spans.len(), 1, "expected one expression span");
+        let span = &out.expr_spans[0];
+
+        // The span's source range is exactly `count` in the original `.rsx`.
+        let rsx_frag = &src[span.rsx_start as usize..(span.rsx_start + span.len) as usize];
+        assert_eq!(rsx_frag, "count");
+
+        // It maps byte-for-byte onto `count` in the generated Rust (char-boundary safe).
+        let gen_frag =
+            &out.rust_code[span.gen_start as usize..(span.gen_start + span.len) as usize];
+        assert_eq!(gen_frag, "count");
+        assert!(out.rust_code.is_char_boundary(span.gen_start as usize));
+    }
+
+    #[test]
+    fn expr_spans_are_char_boundary_safe_with_multibyte() {
+        // A multi-byte literal precedes the interpolation; the span must still land on char boundaries
+        // in both source and generated (the byte-wise affine map would otherwise mis-slice / panic).
+        let src =
+            "[logic]\nlet count = create_rw_signal(0i32);\n[view]\ntext \"caf\u{e9} {count}\"\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        assert_eq!(out.expr_spans.len(), 1);
+        let span = &out.expr_spans[0];
+        let (rs, re) = (
+            span.rsx_start as usize,
+            (span.rsx_start + span.len) as usize,
+        );
+        let (gs, ge) = (
+            span.gen_start as usize,
+            (span.gen_start + span.len) as usize,
+        );
+        assert!(src.is_char_boundary(rs) && src.is_char_boundary(re));
+        assert!(out.rust_code.is_char_boundary(gs) && out.rust_code.is_char_boundary(ge));
+        assert_eq!(&src[rs..re], "count");
+        assert_eq!(&out.rust_code[gs..ge], "count");
+    }
+
+    #[test]
+    fn expr_spans_cover_if_and_let() {
+        let src = "[logic]\n[view]\ncol\n    let n = 1\n    if n > 0\n        text \"hi\"\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        assert!(!out.rust_code.contains("@RSX@"));
+
+        // Each span must point at the identical fragment in both source and generated output.
+        for span in &out.expr_spans {
+            let rsx_frag = &src[span.rsx_start as usize..(span.rsx_start + span.len) as usize];
+            let gen_frag =
+                &out.rust_code[span.gen_start as usize..(span.gen_start + span.len) as usize];
+            assert_eq!(rsx_frag, gen_frag, "span fragment must be verbatim");
+        }
+        let frags: Vec<&str> = out
+            .expr_spans
+            .iter()
+            .map(|s| &src[s.rsx_start as usize..(s.rsx_start + s.len) as usize])
+            .collect();
+        assert!(frags.contains(&"let n = 1"), "let span missing: {frags:?}");
+        assert!(
+            frags.contains(&"n > 0"),
+            "if-condition span missing: {frags:?}"
         );
     }
 
