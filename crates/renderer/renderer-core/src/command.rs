@@ -105,7 +105,8 @@ impl PartialEq for DrawCommand {
                     data: d2,
                     style: s2,
                 },
-            ) => Arc::ptr_eq(d1, d2) && s1 == s2,
+                // Pointer-equal is the cheap common case (same Arc reused); fall back to comparing geometry so a structurally-identical path rebuilt across frames still counts as unchanged (keeps scroll-blit / dirty-rect alive past path rebuilds).
+            ) => (Arc::ptr_eq(d1, d2) || d1 == d2) && s1 == s2,
             (
                 DrawCommand::PushClip {
                     rect: r1,

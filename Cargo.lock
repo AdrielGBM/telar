@@ -3734,6 +3734,7 @@ dependencies = [
  "clru",
  "geometry-core",
  "lru",
+ "ndk",
  "raw-window-handle",
  "rayon",
  "renderer-core",

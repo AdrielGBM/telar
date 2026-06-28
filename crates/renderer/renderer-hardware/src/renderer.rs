@@ -485,13 +485,13 @@ fn cull_bounds(
             bounds.height,
             Some(sb.exposed_band),
         );
-        let in_extra = sb.extra_dirty.map_or(false, |ed| {
+        let in_extra = sb.extra_dirty.iter().any(|ed| {
             renderer_core::culling::overlaps(
                 bounds.x,
                 bounds.y,
                 bounds.width,
                 bounds.height,
-                Some(ed),
+                Some(*ed),
             )
         });
         if !in_exp && !in_extra {
@@ -1189,8 +1189,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             commands.len(),
             clear_color.is_some()
         );
-        // Idle-frame fast path: skip full pipeline and blit retained texture when content generation and viewport are unchanged.
-        if self.incoming_generation == self.prev_generation
+        // Direct-to-swapchain fast path: when the frame clears (so there is no cross-frame scroll-blit that needs LoadOp::Load) and nothing samples the top-level target (no backdrop blur), render straight into the swapchain texture on the single-sample (Android) path. This drops the offscreen render target and its per-frame full-screen copy to the surface. MSAA (desktop, samples>1) still needs the offscreen to resolve, and a backdrop-blur layer needs a sampleable parent, so both fall back to the offscreen path.
+        let frame_has_backdrop_blur = commands.iter().any(
+            |c| matches!(c, DrawCommand::PushLayer { backdrop_blur, .. } if *backdrop_blur > 0.0),
+        );
+        let direct_to_surface =
+            self.msaa_samples == 1 && clear_color.is_some() && !frame_has_backdrop_blur;
+        // Idle-frame fast path: skip full pipeline and blit retained texture when content generation and viewport are unchanged. Disabled under direct-to-surface (nothing retains the last frame to blit from); idle frames simply re-render at the keepalive cadence instead.
+        if !direct_to_surface
+            && self.incoming_generation == self.prev_generation
             && self.retained_view.is_some()
             && !self.viewport_dirty
             && self.config.is_some()
@@ -2600,38 +2607,25 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let msaa_view = self
-            .msaa_texture
-            .as_ref()
-            .ok_or_else(|| {
-                RendererError::Backend(
-                    "msaa_texture not initialized; call reconfigure first".into(),
-                )
-            })?
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        // Under direct-to-surface the main target IS the swapchain texture, so every existing `msaa_view` reference (top-level draw passes and layer composites) renders straight to the surface; the trailing copy-to-surface is then skipped.
+        let msaa_view = if direct_to_surface {
+            output
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default())
+        } else {
+            self.msaa_texture
+                .as_ref()
+                .ok_or_else(|| {
+                    RendererError::Backend(
+                        "msaa_texture not initialized; call reconfigure first".into(),
+                    )
+                })?
+                .create_view(&wgpu::TextureViewDescriptor::default())
+        };
 
         let retained_view = self.retained_view.as_ref().ok_or_else(|| {
             RendererError::Backend("retained_view not initialized; call begin_frame first".into())
         })?;
-
-        {
-            let _init = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rsx-main-init"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &msaa_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: load_op,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
-        }
 
         enum Segment {
             Draw {
@@ -2739,6 +2733,28 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             });
         }
 
+        // The top-level target needs `load_op` (usually a full-screen Clear) applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store+load every frame on tiled mobile GPUs; when the first segment is itself a top-level Draw, fold the clear into that pass instead. Gated to the single-sample (mobile tiler) path: immediate-mode desktop GPUs gain little and keep the simpler explicit-init pass. Falls back to the standalone init pass when the frame opens with a layer (nothing draws to the top-level target first).
+        let fold_init_clear =
+            self.msaa_samples == 1 && matches!(segments.first(), Some(Segment::Draw { .. }));
+        if !fold_init_clear {
+            let _init = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("rsx-main-init"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &msaa_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: load_op,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+        }
+
         let mut layer_stack: Vec<(
             wgpu::Texture,
             wgpu::TextureView, // msaa view (render target)
@@ -2796,6 +2812,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             None
                         };
 
+                    // When the init pass was folded away (first segment is this top-level Draw), apply the frame's clear here instead of Loading an uninitialised target.
+                    let pass_load = if seg_idx == 0 && fold_init_clear {
+                        load_op
+                    } else {
+                        wgpu::LoadOp::Load
+                    };
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("rsx-render-pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2803,7 +2825,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             resolve_target: resolve_view_opt,
                             depth_slice: None,
                             ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
+                                load: pass_load,
                                 store: if resolve_view_opt.is_some() {
                                     wgpu::StoreOp::Discard // MSAA samples not needed after inline resolve
                                 } else {
@@ -3302,7 +3324,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             }
         }
 
-        if self.msaa_samples > 1 {
+        if direct_to_surface {
+            // Already rendered straight into the swapchain texture; no copy/resolve to the surface needed.
+        } else if self.msaa_samples > 1 {
             // Resolve MSAA into retained_view so the idle-blit path has valid content next frame.
             {
                 let _final = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

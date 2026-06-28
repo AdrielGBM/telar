@@ -75,15 +75,29 @@ pub struct ScrollBlit {
     pub delta_y: i32,
     /// The strip of newly exposed pixels that must be re-rendered (horizontal band for Y scrolls, vertical band for X scrolls).
     pub exposed_band: Rect,
-    /// Bounds of any other changed elements outside the scroll clip (e.g. scrollbar).
-    pub extra_dirty: Option<Rect>,
+    /// Regions outside the scrolled content that the blit displaced and must be repainted in place: changed overlays (e.g. the scrollbar) and any static element drawn before/after the scroll block (fixed headers/footers, dev overlays). Each entry already unions the element with the "ghost" position the blit shifted its pixels to.
+    pub extra_dirty: SmallVec<[Rect; 8]>,
 }
+
+/// Beyond this many displaced regions the fixed UI is complex enough that a full re-render is simpler (and likely cheaper) than tracking them all; `detect_scroll_blit` bails to `None`.
+const MAX_SCROLL_EXTRA_DIRTY: usize = 8;
 
 fn matrix_as_translation(m: &[f32; 6]) -> Option<(f32, f32)> {
     if m[0] == 1.0 && m[1] == 0.0 && m[2] == 0.0 && m[3] == 1.0 {
         Some((m[4], m[5]))
     } else {
         None
+    }
+}
+
+// The region to repaint for an element the scroll blit displaced: its current position (`new_r`) unioned with the "ghost" — its previous pixels shifted by the blit delta (`old_r` translated by (dx, dy)). Repainting it redraws the element at rest and the scrolled content the ghost overlaps. Returns None when the element has no visual footprint in either frame.
+fn displaced_region(new_r: Option<Rect>, old_r: Option<Rect>, dx: f32, dy: f32) -> Option<Rect> {
+    let ghost = old_r.map(|r| Rect::new(r.x + dx, r.y + dy, r.width, r.height));
+    match (new_r, ghost) {
+        (Some(a), Some(b)) => Some(a.union(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
     }
 }
 
@@ -186,13 +200,6 @@ pub fn detect_scroll_blit(
 
     let scroll_clip = *clip_stack.last()?;
 
-    // apply_scroll_blit shifts every pixel row inside scroll_clip. Visual commands that sit before the scroll PushTransform (headers, separators, etc.) are always identical to their prev-frame counterparts (scroll_idx is the first diff), so they will never land in extra_dirty and will never be redrawn — their pixels drift with each scroll step until they disappear. Bail out to compute_dirty_rect when any such element exists.
-    if new_cmds[..scroll_idx].iter().any(|c| {
-        culling::command_visual_rect(c, IDENTITY_MATRIX, &FontMetrics::default()).is_some()
-    }) {
-        return None;
-    }
-
     let delta_x = delta_x_f as i32;
     let delta_y = delta_y_f as i32;
 
@@ -202,6 +209,21 @@ pub fn detect_scroll_blit(
     }
     if delta_y != 0 && (delta_y.abs() as f32) >= scroll_clip.height {
         return None;
+    }
+
+    let (dx_f, dy_f) = (delta_x as f32, delta_y as f32);
+    // Regions the blit displaced that must be repainted in place (see ScrollBlit::extra_dirty).
+    let mut extra_dirty: SmallVec<[Rect; 8]> = SmallVec::new();
+
+    // Static visuals drawn BEFORE the scroll PushTransform (fixed headers, separators) sit inside scroll_clip, so the blit shifts their pixels. They are unchanged (scroll_idx is the first diff), so repaint each in place (plus its ghost) instead of bailing.
+    for c in &new_cmds[..scroll_idx] {
+        let r = culling::command_visual_rect(c, IDENTITY_MATRIX, &FontMetrics::default());
+        if let Some(region) = displaced_region(r, r, dx_f, dy_f) {
+            extra_dirty.push(region);
+            if extra_dirty.len() > MAX_SCROLL_EXTRA_DIRTY {
+                return None;
+            }
+        }
     }
 
     // Find the PopMatrix that closes the scroll PushTransform; PushMatrix nesting also counts.
@@ -268,22 +290,17 @@ pub fn detect_scroll_blit(
         advance_matrix(&mut state, cmd);
     }
 
-    // Collect dirty rects for any overlay changes after the scroll block (e.g. scrollbar).
-    let mut extra_dirty: Option<Rect> = None;
+    // Repaint overlays and static elements after the scroll block (scrollbar, fixed footers, dev overlays): redraw each at its current position and repaint the scrolled content under the ghost the blit shifted its previous pixels to. Unchanged elements here used to force a full re-render.
     for j in (pop_idx + 1)..n {
         advance_matrix(&mut state, &new_cmds[j]);
         let cmd_matrix = state.cumulative_matrix;
-        if new_cmds[j] != old_cmds[j] {
-            if let Some(r) =
-                culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default())
-            {
-                extra_dirty = Some(extra_dirty.map_or(r, |d| d.union(r)));
+        let new_r = culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default());
+        let old_r = culling::command_visual_rect(&old_cmds[j], cmd_matrix, &FontMetrics::default());
+        if let Some(region) = displaced_region(new_r, old_r, dx_f, dy_f) {
+            extra_dirty.push(region);
+            if extra_dirty.len() > MAX_SCROLL_EXTRA_DIRTY {
+                return None;
             }
-        } else if culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default())
-            .is_some()
-        {
-            // Unchanged visual after the scroll block: blit shifted its pixels but it won't land in extra_dirty, so it will never be redrawn at the correct position.
-            return None;
         }
     }
 
@@ -448,8 +465,8 @@ mod tests {
     }
 
     #[test]
-    fn detect_scroll_blit_rejects_visual_before_scroll() {
-        // A visual element before the scroll PushTransform (e.g. a header) lives inside scroll_clip; apply_scroll_blit would shift its pixels without ever redrawing it.
+    fn detect_scroll_blit_repaints_static_visual_before_scroll() {
+        // A static element before the scroll PushTransform (e.g. a header) lives inside scroll_clip, so the blit shifts its pixels. detect_scroll_blit keeps the blit and repaints the header (plus its ghost) via extra_dirty instead of bailing to a full re-render.
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
@@ -476,12 +493,18 @@ mod tests {
             DrawCommand::PopMatrix,
             DrawCommand::PopClip,
         ];
-        assert!(detect_scroll_blit(&new, &old).is_none());
+        let sb = detect_scroll_blit(&new, &old).expect("blit should apply with a static header");
+        // The header at (0,0,100,30) must fall inside an extra-dirty region so it is repainted in place.
+        let covers_header = sb
+            .extra_dirty
+            .iter()
+            .any(|r| r.x <= 50.0 && r.x + r.width >= 50.0 && r.y <= 15.0 && r.y + r.height >= 15.0);
+        assert!(covers_header, "header not repainted: {:?}", sb.extra_dirty);
     }
 
     #[test]
-    fn detect_scroll_blit_rejects_unchanged_visual_after_scroll() {
-        // An unchanged visual element after the scroll PopMatrix (e.g. a footer) would have its pixels shifted by apply_scroll_blit and never redrawn.
+    fn detect_scroll_blit_repaints_static_visual_after_scroll() {
+        // A static element after the scroll PopMatrix (e.g. a footer or dev overlay) is inside scroll_clip and gets shifted by the blit. detect_scroll_blit repaints it (plus its ghost) via extra_dirty instead of bailing.
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
@@ -508,7 +531,12 @@ mod tests {
             rect_cmd(0.0, 170.0, 100.0, 30.0), // footer unchanged
             DrawCommand::PopClip,
         ];
-        assert!(detect_scroll_blit(&new, &old).is_none());
+        let sb = detect_scroll_blit(&new, &old).expect("blit should apply with a static footer");
+        // The footer at (0,170,100,30) must fall inside an extra-dirty region so it is repainted in place.
+        let covers_footer = sb.extra_dirty.iter().any(|r| {
+            r.x <= 50.0 && r.x + r.width >= 50.0 && r.y <= 185.0 && r.y + r.height >= 185.0
+        });
+        assert!(covers_footer, "footer not repainted: {:?}", sb.extra_dirty);
     }
 
     #[test]

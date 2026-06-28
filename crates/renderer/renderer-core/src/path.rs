@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_PATH_ID: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PathVerb {
     MoveTo(Point),
     LineTo(Point),
@@ -25,6 +25,13 @@ pub struct PathData {
     pub(crate) verbs: Vec<PathVerb>,
     // OnceLock is both Send and Sync, required for Arc<PathData>: Send when crossing thread boundaries.
     bounds_cache: std::sync::OnceLock<Option<Rect>>,
+}
+
+// Equal when the geometry (verbs) matches, ignoring the per-instance `id` and the lazily-filled bounds cache. Two structurally-identical paths rebuilt across frames must compare equal so dirty-tracking (scroll-blit, dirty-rect) treats them as unchanged — otherwise every rebuild's fresh `id` would force a full-screen repaint.
+impl PartialEq for PathData {
+    fn eq(&self, other: &Self) -> bool {
+        self.verbs == other.verbs
+    }
 }
 
 impl Default for PathData {
