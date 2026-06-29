@@ -80,7 +80,16 @@ impl App for PreviewApp {
         let mut ctx = WidgetCtx::new();
         let mut sections: Vec<Box<dyn LayoutItem>> = Vec::new();
 
-        for entry in &self.entries {
+        // `cargo rsx preview --component <name>` sets this to scope the window to one component.
+        let wanted = std::env::var("RSX_PREVIEW_COMPONENT")
+            .ok()
+            .filter(|s| !s.is_empty());
+
+        for entry in self
+            .entries
+            .iter()
+            .filter(|e| wanted.as_deref().is_none_or(|w| e.component_name == w))
+        {
             let header_text = format!("[{}]  {}", entry.component_name, entry.preview_name);
             let header = Text::new(
                 &mut ctx,

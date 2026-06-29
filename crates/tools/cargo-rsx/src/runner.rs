@@ -772,6 +772,11 @@ fn run_preview_cmd(args: PreviewArgs) {
         eprintln!("[cargo-rsx] --list is not yet implemented (requires project scan).");
         std::process::exit(1);
     }
+    // The preview host process inherits our env; it filters PreviewEntries by this when set.
+    if let Some(component) = &args.component {
+        // SAFETY: single-threaded at this point (set before any threads/spawns are created).
+        unsafe { std::env::set_var("RSX_PREVIEW_COMPONENT", component) };
+    }
     let mut cargo_args =
         build_cargo_args(&args.common.package, args.release, &args.common.features);
     cargo_args.extend(args.common.cargo_args);
