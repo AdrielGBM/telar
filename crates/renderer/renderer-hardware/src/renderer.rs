@@ -1871,6 +1871,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     self.flush_all();
                     current_scissor = scissor_layer_stack.pop().flatten();
                     if let Some(accum) = layer_accum_stack.pop() {
+                        // Fully-culled opacity layer: all of its content was culled (e.g. it scrolled outside the dirty band, or is off-screen), so it composites nothing — emit no layer passes at all instead of an empty full-screen layer texture + render/resolve/composite passes. Mirrors the software renderer's skip_layer_depth. Authoritative emptiness check is "produced no draw steps" (the flush_all above already flushed this layer's instances into steps); a drawn primitive always emits a step even when its bounds are absent. Backdrop-blur layers are kept (they sample the framebuffer even without their own content).
+                        if self.pending_steps.len() == accum.begin_step_index
+                            && accum.backdrop_blur == 0.0
+                        {
+                            self.pending_instances
+                                .truncate(accum.instance_start as usize);
+                            self.pending_text_instances
+                                .truncate(accum.text_instance_start as usize);
+                            self.pending_line_instances
+                                .truncate(accum.line_instance_start as usize);
+                            self.pending_image_instances
+                                .truncate(accum.image_instance_start as usize);
+                            continue;
+                        }
                         let (
                             offset_x,
                             offset_y,
