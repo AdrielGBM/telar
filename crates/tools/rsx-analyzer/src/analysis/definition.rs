@@ -27,11 +27,13 @@ pub fn goto_definition(
         return None;
     }
 
-    let char_before = line_text[..word_start].chars().last();
-
-    if char_before == Some('.') {
-        return find_class(doc, word, uri);
+    // A `@`-prefixed token is a style-class reference. `word_at_cursor` keeps the sigil in the word
+    // (it breaks on whitespace/`:`/`"`, not `@`), so match on the prefix rather than the char before.
+    if let Some(class) = word.strip_prefix('@') {
+        return find_class(doc, class, uri);
     }
+
+    let char_before = line_text[..word_start].chars().last();
 
     if char_before == Some(':') {
         if let Some(key) = attribute_key_before_colon(line_text, word_start) {

@@ -38,6 +38,12 @@ impl Store {
         self.latest_source.get(uri)
     }
 
+    /// Any currently-open document URI, used to locate the workspace root for `workspace/symbol`
+    /// (which carries no document of its own).
+    pub fn any_uri(&self) -> Option<&Uri> {
+        self.latest_source.keys().next()
+    }
+
     pub fn reparse(&mut self, uri: Uri, source: String) -> Vec<Diagnostic> {
         self.latest_source.insert(uri.clone(), source.clone());
         match parse(&source) {

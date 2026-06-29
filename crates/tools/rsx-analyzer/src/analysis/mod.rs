@@ -1,4 +1,12 @@
+pub mod code_action;
+pub mod color;
 pub mod completions;
 pub mod definition;
+pub mod folding;
 pub mod hover;
+pub mod lens;
+pub mod occurrences;
+pub mod semantic_tokens;
+pub mod symbols;
 pub mod util;
+pub mod workspace_symbols;

@@ -44,7 +44,7 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
 
     let current_token = rest.split(char::is_whitespace).next_back().unwrap_or("");
 
-    if current_token.starts_with('.') {
+    if current_token.starts_with('@') {
         return Some(CompletionKind::StyleClass);
     }
 

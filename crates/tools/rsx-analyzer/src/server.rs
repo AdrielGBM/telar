@@ -77,6 +77,20 @@ async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Res
         "textDocument/hover" => ok(backend.hover(parse(params)?).await),
         "textDocument/definition" => ok(backend.goto_definition(parse(params)?).await),
         "textDocument/formatting" => ok(backend.formatting(parse(params)?).await),
+        "textDocument/documentColor" => ok(backend.document_color(parse(params)?).await),
+        "textDocument/colorPresentation" => ok(backend.color_presentation(parse(params)?)),
+        "textDocument/documentSymbol" => ok(backend.document_symbol(parse(params)?).await),
+        "textDocument/foldingRange" => ok(backend.folding_range(parse(params)?).await),
+        "textDocument/codeAction" => ok(backend.code_action(parse(params)?).await),
+        "textDocument/codeLens" => ok(backend.code_lens(parse(params)?).await),
+        "textDocument/documentHighlight" => ok(backend.document_highlight(parse(params)?).await),
+        "textDocument/references" => ok(backend.references(parse(params)?).await),
+        "textDocument/prepareRename" => ok(backend.prepare_rename(parse(params)?).await),
+        "textDocument/rename" => ok(backend.rename(parse(params)?).await),
+        "workspace/symbol" => ok(backend.workspace_symbol(parse(params)?).await),
+        "textDocument/semanticTokens/full" => {
+            ok(backend.semantic_tokens_full(parse(params)?).await)
+        }
         _ => return Err(method_not_found(method)),
     };
     Ok(result)

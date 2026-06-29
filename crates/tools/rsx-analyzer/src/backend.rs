@@ -195,6 +195,7 @@ impl Backend {
                 )),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![
+                        "@".to_string(),
                         ".".to_string(),
                         ":".to_string(),
                         " ".to_string(),
@@ -210,6 +211,33 @@ impl Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
+                color_provider: Some(ColorProviderCapability::Simple(true)),
+                document_symbol_provider: Some(OneOf::Left(true)),
+                folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+                code_lens_provider: Some(CodeLensOptions {
+                    resolve_provider: Some(false),
+                }),
+                document_highlight_provider: Some(OneOf::Left(true)),
+                references_provider: Some(OneOf::Left(true)),
+                rename_provider: Some(OneOf::Right(RenameOptions {
+                    prepare_provider: Some(true),
+                    work_done_progress_options: Default::default(),
+                })),
+                workspace_symbol_provider: Some(OneOf::Left(true)),
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            legend: SemanticTokensLegend {
+                                token_types: crate::analysis::semantic_tokens::token_types(),
+                                token_modifiers: vec![],
+                            },
+                            full: Some(SemanticTokensFullOptions::Bool(true)),
+                            range: Some(false),
+                            work_done_progress_options: Default::default(),
+                        },
+                    ),
+                ),
                 ..Default::default()
             },
             ..Default::default()
@@ -640,6 +668,239 @@ impl Backend {
             range: full_document_range(&source),
             new_text: formatted,
         }])
+    }
+
+    /// `textDocument/documentColor`: inline swatches for color literals in `[style]`/`[view]`.
+    pub async fn document_color(&self, params: DocumentColorParams) -> Vec<ColorInformation> {
+        let uri = &params.text_document.uri;
+        let store = self.store.read().await;
+        let Some(parsed) = store.get(uri) else {
+            return Vec::new();
+        };
+        crate::analysis::color::document_colors(&parsed.document, &parsed.source)
+    }
+
+    /// `textDocument/colorPresentation`: the picker write-back — the chosen color as a hex string.
+    pub fn color_presentation(&self, params: ColorPresentationParams) -> Vec<ColorPresentation> {
+        crate::analysis::color::color_presentations(params.color)
+    }
+
+    /// `textDocument/documentSymbol`: the outline of `[style]` constants/classes and `[preview]`s.
+    pub async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Option<DocumentSymbolResponse> {
+        let uri = &params.text_document.uri;
+        let store = self.store.read().await;
+        let parsed = store.get(uri)?;
+        let symbols = crate::analysis::symbols::document_symbols(&parsed.document, &parsed.source);
+        Some(DocumentSymbolResponse::Nested(symbols))
+    }
+
+    /// `textDocument/foldingRange`: section + indentation folds, over the live buffer (parse-free).
+    pub async fn folding_range(&self, params: FoldingRangeParams) -> Option<Vec<FoldingRange>> {
+        let uri = &params.text_document.uri;
+        let source = {
+            let store = self.store.read().await;
+            store.latest_source(uri).cloned()
+        }?;
+        Some(crate::analysis::folding::folding_ranges(&source))
+    }
+
+    /// `textDocument/codeAction`: quick fixes synthesized from the request's context diagnostics.
+    pub async fn code_action(&self, params: CodeActionParams) -> Option<Vec<CodeActionOrCommand>> {
+        let uri = &params.text_document.uri;
+        let source = {
+            let store = self.store.read().await;
+            store.latest_source(uri).cloned()
+        }?;
+        let actions =
+            crate::analysis::code_action::code_actions(&source, uri, &params.context.diagnostics);
+        (!actions.is_empty()).then_some(actions)
+    }
+
+    /// `textDocument/codeLens`: a "▶ Preview" lens over each `[preview …]` section.
+    pub async fn code_lens(&self, params: CodeLensParams) -> Option<Vec<CodeLens>> {
+        let uri = &params.text_document.uri;
+        let store = self.store.read().await;
+        let parsed = store.get(uri)?;
+        Some(crate::analysis::lens::code_lenses(&parsed.document, uri))
+    }
+
+    /// `textDocument/documentHighlight`: every occurrence of the `@class` under the cursor.
+    pub async fn document_highlight(
+        &self,
+        params: DocumentHighlightParams,
+    ) -> Option<Vec<DocumentHighlight>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        let source = {
+            let store = self.store.read().await;
+            store.latest_source(uri).cloned()
+        }?;
+        let name = crate::analysis::occurrences::class_at(&source, pos.line, pos.character)?;
+        let highlights = crate::analysis::occurrences::class_occurrences(&source, &name)
+            .into_iter()
+            .map(|range| DocumentHighlight {
+                range,
+                kind: Some(DocumentHighlightKind::TEXT),
+            })
+            .collect();
+        Some(highlights)
+    }
+
+    /// `textDocument/references`: every use of the `@class` under the cursor (file-scoped symbol).
+    pub async fn references(&self, params: ReferenceParams) -> Option<Vec<Location>> {
+        let uri = &params.text_document_position.text_document.uri;
+        let pos = params.text_document_position.position;
+        let source = {
+            let store = self.store.read().await;
+            store.latest_source(uri).cloned()
+        }?;
+        // File-scoped style class → single-file occurrences.
+        if let Some(name) = crate::analysis::occurrences::class_at(&source, pos.line, pos.character)
+        {
+            let locations = crate::analysis::occurrences::class_occurrences(&source, &name)
+                .into_iter()
+                .map(|range| Location {
+                    uri: uri.clone(),
+                    range,
+                })
+                .collect();
+            return Some(locations);
+        }
+        // File-scoped signal → single-file occurrences ([logic] decl/uses + `$name` in [view]).
+        if let Some(name) =
+            crate::analysis::occurrences::signal_at(&source, pos.line, pos.character)
+        {
+            let locations = crate::analysis::occurrences::signal_occurrences(&source, &name)
+                .into_iter()
+                .map(|range| Location {
+                    uri: uri.clone(),
+                    range,
+                })
+                .collect();
+            return Some(locations);
+        }
+        // Component tag → cross-file references (its `.rsx` plus every `<tag>` usage).
+        if let Some(name) =
+            crate::analysis::occurrences::component_at(&source, pos.line, pos.character)
+        {
+            let path = crate::uri::to_path(uri)?;
+            let root = rsx_workspace::find_rsx_root(&path)
+                .or_else(|| rsx_workspace::find_workspace_root(&path))?;
+            let locations = tokio::task::spawn_blocking(move || {
+                crate::analysis::occurrences::component_references(&root, &name)
+            })
+            .await
+            .ok()?;
+            return (!locations.is_empty()).then_some(locations);
+        }
+        None
+    }
+
+    /// `textDocument/prepareRename`: confirm the cursor is on a renameable `@class` or signal.
+    pub async fn prepare_rename(
+        &self,
+        params: TextDocumentPositionParams,
+    ) -> Option<PrepareRenameResponse> {
+        let uri = &params.text_document.uri;
+        let pos = params.position;
+        let source = {
+            let store = self.store.read().await;
+            store.latest_source(uri).cloned()
+        }?;
+        let range = if crate::analysis::occurrences::class_at(&source, pos.line, pos.character)
+            .is_some()
+        {
+            crate::analysis::occurrences::occurrence_at(&source, pos.line, pos.character)?
+        } else if crate::analysis::occurrences::signal_at(&source, pos.line, pos.character)
+            .is_some()
+        {
+            crate::analysis::occurrences::signal_occurrence_at(&source, pos.line, pos.character)?
+        } else {
+            return None;
+        };
+        Some(PrepareRenameResponse::Range(range))
+    }
+
+    /// `textDocument/rename`: rewrite every occurrence of the `@class` or signal under the cursor.
+    pub async fn rename(&self, params: RenameParams) -> Option<WorkspaceEdit> {
+        let uri = &params.text_document_position.text_document.uri;
+        let pos = params.text_document_position.position;
+        let new_name = params.new_name;
+        let source = {
+            let store = self.store.read().await;
+            store.latest_source(uri).cloned()
+        }?;
+        let occurrences = if let Some(name) =
+            crate::analysis::occurrences::class_at(&source, pos.line, pos.character)
+        {
+            crate::analysis::occurrences::class_occurrences(&source, &name)
+        } else if let Some(name) =
+            crate::analysis::occurrences::signal_at(&source, pos.line, pos.character)
+        {
+            crate::analysis::occurrences::signal_occurrences(&source, &name)
+        } else {
+            return None;
+        };
+        let edits: Vec<TextEdit> = occurrences
+            .into_iter()
+            .map(|range| TextEdit {
+                range,
+                new_text: new_name.clone(),
+            })
+            .collect();
+        if edits.is_empty() {
+            return None;
+        }
+        let mut changes = std::collections::HashMap::new();
+        changes.insert(uri.clone(), edits);
+        Some(WorkspaceEdit {
+            changes: Some(changes),
+            document_changes: None,
+            change_annotations: None,
+        })
+    }
+
+    /// `workspace/symbol`: components and `@classes` across the project, filtered by the query.
+    pub async fn workspace_symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> Option<Vec<SymbolInformation>> {
+        let query = params.query;
+        let root = {
+            let store = self.store.read().await;
+            let uri = store.any_uri()?;
+            let path = crate::uri::to_path(uri)?;
+            // Prefer an `rsx.toml` root, but fall back to the Cargo workspace root so apps without an
+            // `rsx.toml` (e.g. a themed app configured in code) still get workspace symbols.
+            rsx_workspace::find_rsx_root(&path)
+                .or_else(|| rsx_workspace::find_workspace_root(&path))?
+        };
+        // Reads + parses every `.rsx`, so run it off the async runtime thread.
+        tokio::task::spawn_blocking(move || {
+            crate::analysis::workspace_symbols::workspace_symbols(&root, &query)
+        })
+        .await
+        .ok()
+    }
+
+    /// `textDocument/semanticTokens/full`: parse-aware highlighting over the live buffer.
+    pub async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Option<SemanticTokensResult> {
+        let uri = &params.text_document.uri;
+        let source = {
+            let store = self.store.read().await;
+            store.latest_source(uri).cloned()
+        }?;
+        let data = crate::analysis::semantic_tokens::semantic_tokens(&source);
+        Some(SemanticTokensResult::Tokens(SemanticTokens {
+            result_id: None,
+            data,
+        }))
     }
 }
 
