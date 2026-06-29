@@ -3,7 +3,6 @@
 
 mod error;
 pub mod naming;
-mod preview_scan;
 mod registry;
 mod signal_scan;
 mod style;
@@ -19,7 +18,6 @@ use rsx_parser::RsxDocument;
 use crate::naming::{
     contains_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
 };
-use crate::preview_scan::scan_previews;
 use crate::signal_scan::scan_signals;
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
@@ -209,41 +207,22 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     };
 
     let signals = scan_signals(logic_source);
-    let previews = scan_previews(logic_source);
 
     let style_section = generate_style_section(&doc.style, input.theme_type.is_some());
 
-    let mut view_gen = ViewGen::with_theme(
-        &signals,
-        &doc.style.classes,
-        &doc.style.constants,
-        input.theme_type,
-    );
+    let mut view_gen =
+        ViewGen::with_theme(&doc.style.classes, &doc.style.constants, input.theme_type);
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
 
     let logic = logic_source.trim_end();
 
-    let extra_params: Vec<String> = doc
-        .props
-        .parameters
-        .iter()
-        .map(|p| format!("{}: {}", p.name, p.ty))
-        .collect();
-    let extra_params_str = if extra_params.is_empty() {
-        String::new()
-    } else {
-        format!(", {}", extra_params.join(", "))
-    };
-
     let signature = if has_props {
         format!(
-            "pub fn {fn_name}(ctx: &mut WidgetCtx, props: {props_type}{extra_params_str}) -> Result<Box<dyn LayoutItem>, LayoutError>"
+            "pub fn {fn_name}(ctx: &mut WidgetCtx, props: {props_type}) -> Result<Box<dyn LayoutItem>, LayoutError>"
         )
     } else {
-        format!(
-            "pub fn {fn_name}(ctx: &mut WidgetCtx{extra_params_str}) -> Result<Box<dyn LayoutItem>, LayoutError>"
-        )
+        format!("pub fn {fn_name}(ctx: &mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>")
     };
 
     // 0-based `.rsx` line of `logic_source` line 0, used to map generated lines back to the source.
@@ -306,11 +285,6 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
                 code.push("\n", src);
                 continue;
             }
-            // Preview attributes are metadata for the bundler, not Rust code; strip them.
-            let trimmed_line = line.trim();
-            if trimmed_line.starts_with("#[preview(") || trimmed_line == "#[preview]" {
-                continue;
-            }
             // If this line has a `move` closure that captures a previously declared signal, emit a dedicated clone with a mangled name for the closure, then rewrite the line so the closure captures that clone instead of the original. This leaves the original binding intact for the view code.
             let mut emitted_line = line.to_string();
             if line.contains("move") {
@@ -346,7 +320,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         code.push(line, *src);
         code.push("\n", *src);
     }
-    let expr_spans: Vec<ExprSpan> = resolved
+    let mut expr_spans: Vec<ExprSpan> = resolved
         .expr_spans
         .iter()
         .map(|&(rel, rsx_start, len)| ExprSpan {
@@ -360,17 +334,56 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     }
     code.push("}\n", None);
 
-    if !previews.is_empty() {
+    if !doc.previews.is_empty() {
+        // Each preview is its own build fn — so a prop-taking component can be previewed via its
+        // markup body — plus a PreviewEntry the bundler collects. The body reuses the view codegen
+        // with no signals in scope (a preview has no `[logic]`).
+        for (i, preview) in doc.previews.iter().enumerate() {
+            let pfn = format!("{fn_name}_preview_{i}");
+            let mut pgen =
+                ViewGen::with_theme(&doc.style.classes, &doc.style.constants, input.theme_type);
+            let pbody = pgen.generate_root(&preview.body);
+            code.push("\n", None);
+            code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
+            code.push(
+                &format!(
+                    "pub fn {pfn}(ctx: &mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {{\n"
+                ),
+                None,
+            );
+            if pgen.uses_theme() {
+                code.push("    #[allow(unused_imports)] use rsx::use_theme;\n", None);
+            }
+            let prefix = code.out.len();
+            let resolved = crate::view::resolve_source_map(&pbody);
+            for (line, src) in &resolved.lines {
+                code.push(line, *src);
+                code.push("\n", *src);
+            }
+            for &(rel, rsx_start, len) in &resolved.expr_spans {
+                expr_spans.push(ExprSpan {
+                    rsx_start,
+                    len,
+                    gen_start: (prefix + rel) as u32,
+                });
+            }
+            if !code.out.ends_with('\n') {
+                code.push("\n", None);
+            }
+            code.push("}\n", None);
+        }
+
         code.push("\n", None);
         let const_name = preview_entries_const_name(&fn_name);
         code.push(
             &format!("pub const {const_name}: &[::rsx::PreviewEntry] = &[\n"),
             None,
         );
-        for preview in &previews {
+        for (i, preview) in doc.previews.iter().enumerate() {
+            let pfn = format!("{fn_name}_preview_{i}");
             code.push(
                 &format!(
-                    "    ::rsx::PreviewEntry {{ component_name: \"{fn_name}\", preview_name: \"{}\", build: {fn_name} }},\n",
+                    "    ::rsx::PreviewEntry {{ component_name: \"{fn_name}\", preview_name: \"{}\", build: {pfn} }},\n",
                     preview.name.replace('"', "\\\"")
                 ),
                 None,
@@ -381,7 +394,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
 
     Ok(TranspiledSource {
         rust_code: code.out,
-        preview_names: previews.iter().map(|p| p.name.clone()).collect(),
+        preview_names: doc.previews.iter().map(|p| p.name.clone()).collect(),
         source_map: code.map,
         expr_spans,
     })
@@ -458,7 +471,7 @@ mod tests {
     #[test]
     fn source_map_points_generated_logic_back_to_rsx() {
         // rsx lines (1-based): 1 [logic], 2 derive, 3 struct, 4 body field, 5 close, 6 let, 8 [view], 9 col.
-        let src = "[logic]\n#[derive(Props)]\npub struct Props {\n    pub body: &'static st,\n}\nlet count = create_rw_signal(0i32);\n\n[view]\ncol\n";
+        let src = "[logic]\n#[derive(Props)]\npub struct Props {\n    pub body: &'static st,\n}\nlet count = signal(0i32);\n\n[view]\ncol\n";
         let result = transpile_source_with_theme(src, "demo", None).unwrap();
         let lines: Vec<&str> = result.rust_code.lines().collect();
         assert_eq!(lines.len(), result.source_map.len());
@@ -473,7 +486,7 @@ mod tests {
         // The logic binding maps back to its `.rsx` line (6 -> 0-based 5).
         let let_idx = lines
             .iter()
-            .position(|l| l.contains("create_rw_signal"))
+            .position(|l| l.contains("signal"))
             .expect("generated logic line");
         assert_eq!(result.source_map[let_idx], Some(5));
 
@@ -519,13 +532,13 @@ mod tests {
 
     // COUNTER declares [style] colors: with no theme they become local COLOR_* consts; with a theme_type they resolve through use_theme instead (see the theme tests below).
     const COUNTER: &str = r#"[logic]
-let count = create_rw_signal(0i32);
+let count = signal(0i32);
 
 [style]
 primary: #3d78fa
 dark: #141424
 
-.card
+@card
     width: 240
     padding: 20
     gap: 12
@@ -533,17 +546,17 @@ dark: #141424
     align: center
 
 [view]
-col .card
-    text "Count: {count}" size:14 color:dark
-    btn "Increment" fill:primary on_press:|| count.update(|n| *n += 1)
+col @card
+    text "Count: {$count}" size:14 color:dark
+    btn "Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
 "#;
 
     // COUNTER_THEMED has no [style] color declarations — colors flow through the live theme so they react to `set_theme_with_widgets(...)` calls at runtime.
     const COUNTER_THEMED: &str = r#"[logic]
-let count = create_rw_signal(0i32);
+let count = signal(0i32);
 
 [style]
-.card
+@card
     width: 240
     padding: 20
     gap: 12
@@ -551,9 +564,9 @@ let count = create_rw_signal(0i32);
     align: center
 
 [view]
-col .card
-    text "Count: {count}" size:14 color:dark
-    btn "Increment" fill:primary on_press:|| count.update(|n| *n += 1)
+col @card
+    text "Count: {$count}" size:14 color:dark
+    btn "Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
 "#;
 
     #[test]
@@ -586,7 +599,7 @@ col .card
         // [style]-declared colors become local constants.
         assert!(code.contains("const COLOR_PRIMARY: Color = Color::rgba(61.0 / 255.0"));
         assert!(code.contains("fn style_card() -> LayoutStyle"));
-        assert!(code.contains("move || format!(\"Count: {}\", count.get())"));
+        assert!(code.contains("move || format!(\"Count: {}\", { count.get() })"));
         assert!(code.contains("Button::new(ctx, \"Increment\")?"));
         assert!(code.contains(".on_click(move || count.update(|n| *n += 1))"));
         assert!(code.contains("Container::new(ctx, style_card(), children!["));
@@ -680,7 +693,7 @@ col .card
     #[test]
     fn expr_spans_map_interpolation_verbatim() {
         // `[logic]` line 2 declares `count`; `[view]` line 4 interpolates it.
-        let src = "[logic]\nlet count = create_rw_signal(0i32);\n[view]\ntext \"Count: {count}\"\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ntext \"Count: {count}\"\n";
         let out = transpile_source_with_theme(src, "demo", None).unwrap();
 
         // No marker leaks into the generated Rust.
@@ -705,8 +718,7 @@ col .card
     fn expr_spans_are_char_boundary_safe_with_multibyte() {
         // A multi-byte literal precedes the interpolation; the span must still land on char boundaries
         // in both source and generated (the byte-wise affine map would otherwise mis-slice / panic).
-        let src =
-            "[logic]\nlet count = create_rw_signal(0i32);\n[view]\ntext \"caf\u{e9} {count}\"\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ntext \"caf\u{e9} {count}\"\n";
         let out = transpile_source_with_theme(src, "demo", None).unwrap();
         assert_eq!(out.expr_spans.len(), 1);
         let span = &out.expr_spans[0];
@@ -763,5 +775,59 @@ col .card
             "quoted attr must become string literal"
         );
         assert!(code.contains("size: 16.0"), "numeric attr must become f32");
+    }
+
+    #[test]
+    fn preview_section_generates_build_fn_and_entry() {
+        let src = "[logic]\n[view]\ncol\n    text \"x\"\n\n[preview \"Default\"]\ncounter\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let code = &out.rust_code;
+        // A dedicated build fn per preview (so prop-taking components can be previewed)...
+        assert!(
+            code.contains(
+                "pub fn demo_preview_0(ctx: &mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>"
+            ),
+            "missing preview build fn:\n{code}"
+        );
+        // ...whose body builds the preview's markup (here a bare component call)...
+        assert!(
+            code.contains("counter(ctx)?"),
+            "preview body should call the component:\n{code}"
+        );
+        // ...and a PreviewEntry pointing at that fn, not the component fn.
+        assert!(
+            code.contains("build: demo_preview_0"),
+            "entry should point at the preview fn:\n{code}"
+        );
+        assert!(code.contains("preview_name: \"Default\""));
+        assert_eq!(out.preview_names, vec!["Default".to_string()]);
+    }
+
+    #[test]
+    fn dollar_marks_reactive_reads_and_clones_closure_captures() {
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    btn \"+\" on_press:|| $count.update(|n| *n += 1)\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let code = &out.rust_code;
+        // `$count` in interpolation is a read.
+        assert!(
+            code.contains("count.get()"),
+            "interpolation read missing:\n{code}"
+        );
+        // `$count` in a closure is the handle (the `$` is stripped).
+        assert!(
+            code.contains("count.update(|n| *n += 1)"),
+            "closure handle missing:\n{code}"
+        );
+        // The text and the button each clone `count`, so the two `move` closures own it independently.
+        assert_eq!(
+            code.matches("let count = count.clone();").count(),
+            2,
+            "expected one clone per capturing closure:\n{code}"
+        );
+        // No `$` sigil leaks into the generated Rust.
+        assert!(
+            !code.contains('$'),
+            "the `$` marker must not reach output:\n{code}"
+        );
     }
 }

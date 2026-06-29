@@ -24,5 +24,5 @@ section "Gradients"
                 box gradient:radial from:danger to:warning radius:8 width:168 height:80
                 text "tight radius" size:11 color:muted
             col gap:4 align:center
-                box gradient:radial gr:80 from:white mid:purple mid-pos:0.45 to:dark radius:8 width:168 height:80
+                box gradient:radial gr:80 from:white mid:purple mid_pos:0.45 to:dark radius:8 width:168 height:80
                 text "3 stops" size:11 color:muted

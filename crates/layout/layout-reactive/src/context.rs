@@ -1,6 +1,6 @@
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, MeasureFn, NodeId};
-use reactive_core::{RwSignal, batch, create_rw_signal};
+use reactive_core::{RwSignal, batch, signal};
 use rustc_hash::FxHashMap;
 
 pub fn new_leaf(
@@ -87,7 +87,7 @@ impl WidgetCtx {
         style: LayoutStyle,
     ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
         let node = self.engine.new_leaf(style.clone())?;
-        let signal = create_rw_signal(Rect::default());
+        let signal = signal(Rect::default());
         self.registry.insert(node, signal.clone());
         if let Some(dimensions) = self.engine.is_fixed_size(node) {
             self.boundary_nodes.insert(node, dimensions);
@@ -102,7 +102,7 @@ impl WidgetCtx {
         measure: MeasureFn,
     ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
         let node = self.engine.new_measured_leaf(style.clone(), measure)?;
-        let signal = create_rw_signal(Rect::default());
+        let signal = signal(Rect::default());
         self.registry.insert(node, signal.clone());
         self.track_constrained(node, &style);
         Ok((node, signal))
@@ -114,7 +114,7 @@ impl WidgetCtx {
         children: &[NodeId],
     ) -> Result<NodeId, LayoutError> {
         let node = self.engine.new_container(style.clone(), children)?;
-        let signal = create_rw_signal(Rect::default());
+        let signal = signal(Rect::default());
         self.registry.insert(node, signal);
         for &child in children {
             self.parents.insert(child, node);

@@ -1,8 +1,7 @@
 //! Hand-written parser for `.rsx` source files (Proposal 4 syntax).
 //!
-//! A `.rsx` file has four sections:
-//! - a leading **logic** zone of verbatim Rust,
-//! - a `[props]` section of named function-parameter declarations,
+//! A `.rsx` file has three sections:
+//! - a leading **logic** zone of verbatim Rust (a `pub struct Props` here declares the component's props),
 //! - a `[style]` section of constants and style classes,
 //! - a `[view]` section describing an indentation-based node tree.
 //!
@@ -28,7 +27,7 @@ mod tests {
 
     const SAMPLE: &str = r#"[logic]
 use rsx::prelude::*;
-let count = create_rw_signal(0i32);
+let count = signal(0i32);
 #[derive(Props)]
 pub struct Props {
     pub title: &'static str,
@@ -42,18 +41,18 @@ danger:   #eb4444
 dark:     #141424
 muted:    #808098
 
-.card
+@card
     width:    240
     padding:  20
     gap:      12
     direction: col
     align:    center
 
-.badge: padding-x:6  padding-y:2  radius:6
+@badge: padding_x:6  padding_y:2  radius:6
 
 [view]
 
-col .card
+col @card
     text "Count: {count}"   size:14  color:dark
     text "Double: {double}" size:12  color:muted
     row  gap:8
@@ -117,7 +116,7 @@ col .card
             .find(|c| c.name == "badge")
             .expect("badge class");
         assert_eq!(badge.props.len(), 3);
-        assert_eq!(badge.props[0].key, "padding-x");
+        assert_eq!(badge.props[0].key, "padding_x");
         assert_eq!(badge.props[0].value, "6");
         assert_eq!(badge.props[2].key, "radius");
         assert_eq!(badge.props[2].value, "6");
@@ -277,7 +276,7 @@ col .card
 
     #[test]
     fn parses_canvas_with_params() {
-        let src = "[logic]\n[view]\ncanvas .chart\n    |w, h|\n    rect\n";
+        let src = "[logic]\n[view]\ncanvas @chart\n    |w, h|\n    rect\n";
         let doc = parse(src).unwrap();
         let ViewNode::Element(canvas) = &doc.view.nodes[0] else {
             panic!();
@@ -353,15 +352,6 @@ col .card
     }
 
     #[test]
-    fn prop_without_type_errors() {
-        let err = parse("[props]\ntitle:\n[view]\ncol\n").unwrap_err();
-        assert_eq!(err.line, 2);
-        assert!(err.message.contains("missing a type"));
-        // A real type still parses.
-        assert!(parse("[props]\ntitle: &'static str\n[view]\ncol\n").is_ok());
-    }
-
-    #[test]
     fn style_constant_without_value_errors() {
         let err = parse("[style]\nprimary:\n[view]\ncol\n").unwrap_err();
         assert_eq!(err.line, 2);
@@ -373,8 +363,8 @@ col .card
         let err = parse("[view]\nbox fill:#zz\n").unwrap_err();
         assert_eq!(err.line, 2);
         assert!(err.message.contains("invalid hex"));
-        // An 8-digit hex (as real files use for shadow-color) is accepted.
-        assert!(parse("[view]\nbox shadow-color:#00000040\n").is_ok());
+        // An 8-digit hex (as real files use for shadow_color) is accepted.
+        assert!(parse("[view]\nbox shadow_color:#00000040\n").is_ok());
         // A quoted value that happens to start with `#` is a string, not a color — not validated.
         assert!(parse("[view]\ntext label:\"#hashtag\"\n").is_ok());
     }
@@ -382,11 +372,11 @@ col .card
     #[test]
     fn style_class_prop_empty_or_bad_hex_errors() {
         // Empty value in a multi-line class prop.
-        let err = parse("[style]\n.card\n    width:\n[view]\ncol\n").unwrap_err();
+        let err = parse("[style]\n@card\n    width:\n[view]\ncol\n").unwrap_err();
         assert_eq!(err.line, 3);
         assert!(err.message.contains("missing a value"));
         // Bad hex in an inline class prop.
-        let err = parse("[style]\n.card: bg:#zz\n[view]\ncol\n").unwrap_err();
+        let err = parse("[style]\n@card: bg:#zz\n[view]\ncol\n").unwrap_err();
         assert_eq!(err.line, 2);
         assert!(err.message.contains("invalid hex"));
     }
@@ -423,5 +413,37 @@ col .card
             panic!();
         };
         assert_eq!(for_block.line, 5);
+    }
+
+    #[test]
+    fn parses_preview_sections() {
+        let src = "[logic]\n[view]\ncol\n    text \"x\"\n\n[preview \"Default\"]\ncounter\n\n[preview \"Tall\" width:360 dark]\nbox\n    text \"hi\"\n";
+        let doc = parse(src).unwrap();
+        // The `[view]` section is unaffected by the trailing previews.
+        assert_eq!(doc.view.nodes.len(), 1);
+        assert_eq!(doc.previews.len(), 2);
+
+        // A preview body is ordinary view markup (here, a bare component call).
+        assert_eq!(doc.previews[0].name, "Default");
+        assert!(doc.previews[0].options.is_empty());
+        let ViewNode::Element(comp) = &doc.previews[0].body[0] else {
+            panic!("preview body should be a view element");
+        };
+        assert_eq!(comp.tag, "counter");
+
+        // Options parse as `key:value` pairs and bare flags (empty value).
+        assert_eq!(doc.previews[1].name, "Tall");
+        assert_eq!(
+            doc.previews[1].options,
+            vec![
+                ("width".to_string(), "360".to_string()),
+                ("dark".to_string(), String::new()),
+            ]
+        );
+        let ViewNode::Element(b) = &doc.previews[1].body[0] else {
+            panic!();
+        };
+        assert_eq!(b.tag, "box");
+        assert_eq!(b.children.len(), 1);
     }
 }

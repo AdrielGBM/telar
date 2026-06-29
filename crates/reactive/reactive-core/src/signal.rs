@@ -103,7 +103,7 @@ impl<T: Clone + 'static> RwSignal<T> {
     }
 }
 
-pub fn create_rw_signal<T: 'static>(value: T) -> RwSignal<T> {
+pub fn signal<T: 'static>(value: T) -> RwSignal<T> {
     let id = runtime::create_signal_storage(value, 1);
     RwSignal {
         id,

@@ -12,9 +12,11 @@
 pub enum Section {
     Unknown,
     Logic,
-    Props,
     Style,
     View,
+    /// A `[preview "Name" …]` header line. Its body is lexed as [`Section::View`] (the preview body
+    /// is view markup), so the parser reuses the whole view machinery for it.
+    Preview,
 }
 
 #[derive(Debug, Clone)]
@@ -45,14 +47,13 @@ impl Line {
 pub fn header_section(trimmed: &str) -> Option<Section> {
     match trimmed {
         "[logic]" => Some(Section::Logic),
-        "[props]" => Some(Section::Props),
         "[style]" => Some(Section::Style),
         "[view]" => Some(Section::View),
         _ => None,
     }
 }
 
-/// Splits `source` into classified lines, switching sections on `[logic]` / `[props]` / `[style]` / `[view]` headers.
+/// Splits `source` into classified lines, switching sections on `[logic]` / `[style]` / `[view]` headers.
 pub fn lex(source: &str) -> Vec<Line> {
     let mut lines = Vec::new();
     let mut section = Section::Unknown;
@@ -78,17 +79,44 @@ pub fn lex(source: &str) -> Vec<Line> {
         let content_start = line_byte_start + (raw.len() - raw.trim_start().len());
         let content = trimmed.to_string();
 
+        // `[preview "Name" …]` is a repeatable, parameterized header that `header_section`'s exact
+        // table can't match: emit it as a `Section::Preview` line (so the parser reads its
+        // name/options) and lex the lines that follow as `Section::View` markup.
+        let line_section = if is_preview_header(trimmed) {
+            Section::Preview
+        } else {
+            section
+        };
+
         lines.push(Line {
-            section,
+            section: line_section,
             number,
             indent,
             content,
             content_start,
             raw: raw.to_string(),
         });
+
+        if line_section == Section::Preview {
+            section = Section::View;
+        }
     }
 
     lines
+}
+
+/// Whether `trimmed` is a `[preview …]` header. Parameterized (carries a name/options), so it is
+/// matched here rather than in [`header_section`]'s exact table.
+fn is_preview_header(trimmed: &str) -> bool {
+    let Some(inner) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) else {
+        return false;
+    };
+    let inner = inner.trim_start();
+    // `preview` must be a whole word, so `[previewish]` is not a preview header.
+    inner == "preview"
+        || inner
+            .strip_prefix("preview")
+            .is_some_and(|rest| rest.starts_with(char::is_whitespace))
 }
 
 /// Counts leading whitespace columns; a tab is treated as a single column.

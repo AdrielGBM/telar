@@ -70,7 +70,7 @@ impl<T: 'static> Memo<T> {
     }
 }
 
-pub fn create_memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
+pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
     use std::rc::Weak;
 
     let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {

@@ -10,7 +10,7 @@
 use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
 
-use reactive_core::{Effect, RwSignal, create_effect, create_rw_signal};
+use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::DrawCommand;
 
 use crate::component::Component;
@@ -18,7 +18,7 @@ use crate::render_node::RenderNode;
 
 thread_local! {
     // Subscribed by every segment. Bumped after each event so segments re-run even when their view reads signals the effect cannot auto-track — notably the binary-side root segment under hot reload, whose view reads signals created in the app dylib (cross-boundary tracking is unreliable, so the force-tick makes it re-read the current values, e.g. the real viewport).
-    static FORCE_TICK: RwSignal<u64> = create_rw_signal(0);
+    static FORCE_TICK: RwSignal<u64> = signal(0);
 }
 
 /// Forces every segment subscribed to `FORCE_TICK` to re-run on the next flush.
@@ -67,7 +67,7 @@ impl Segment {
         let own_c = Rc::clone(&own_commands);
         let slots_c = Rc::clone(&child_slots);
         let dirty_c = Rc::clone(&is_dirty);
-        let _effect = create_effect(move || {
+        let _effect = effect(move || {
             FORCE_TICK.with(|s| s.get()); // re-run on force-tick (cross-boundary inputs / hot reload)
             let Some(node) = render() else {
                 return; // widget is mutably borrowed (event dispatch); keep last render
@@ -273,7 +273,7 @@ impl SegmentRoot {
 #[cfg(test)]
 mod tests {
     use geometry_core::Rect;
-    use reactive_core::{RwSignal, create_rw_signal};
+    use reactive_core::{RwSignal, signal};
     use renderer_core::{Color, RectStyle, ShapeStyle};
 
     use super::*;
@@ -323,8 +323,8 @@ mod tests {
 
     #[test]
     fn composes_children_in_order() {
-        let a = create_rw_signal(0.0f32);
-        let b = create_rw_signal(100.0f32);
+        let a = signal(0.0f32);
+        let b = signal(100.0f32);
         let (sa, sb) = (a.clone(), b.clone());
         let children = vec![
             Segment::mount(Leaf { x: sa }),
@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn child_change_updates_output_without_parent_rerun() {
-        let a = create_rw_signal(0.0f32);
+        let a = signal(0.0f32);
         let sa = a.clone();
         let children = vec![Segment::mount(Leaf { x: sa })];
         let root = SegmentRoot::mount(Parent { children });

@@ -10,7 +10,7 @@
       "include": "#section-logic"
     },
     {
-      "include": "#section-props"
+      "include": "#section-preview"
     },
     {
       "include": "#section-style"
@@ -31,12 +31,12 @@
       "name": "comment.line.double-slash.rsx"
     },
     "section-header": {
-      "match": "^\\[(logic|props|style|view)\\]$",
+      "match": "^\\[(logic|style|view)\\]$",
       "name": "keyword.control.section.rsx"
     },
     "section-logic": {
       "begin": "^\\[logic\\]$",
-      "end": "^(?=\\[(props|style|view)\\])",
+      "end": "^(?=\\[(?:style|view)\\]|\\[preview\\b)",
       "beginCaptures": {
         "0": {
           "name": "keyword.control.section.rsx"
@@ -49,11 +49,11 @@
         }
       ]
     },
-    "section-props": {
-      "begin": "^\\[props\\]$",
-      "end": "^(?=\\[(logic|style|view)\\])",
+    "section-preview": {
+      "begin": "^(\\[preview)\\b",
+      "end": "^(?=\\[(?:logic|style|view)\\]|\\[preview\\b)",
       "beginCaptures": {
-        "0": {
+        "1": {
           "name": "keyword.control.section.rsx"
         }
       },
@@ -62,21 +62,13 @@
           "include": "#comment"
         },
         {
-          "match": "^(\\w+):\\s*(.+)$",
-          "captures": {
-            "1": {
-              "name": "variable.other.constant.rsx"
-            },
-            "2": {
-              "name": "entity.name.type.rsx"
-            }
-          }
+          "include": "#view-line"
         }
       ]
     },
     "section-style": {
       "begin": "^\\[style\\]$",
-      "end": "^(?=\\[(logic|props|view)\\])",
+      "end": "^(?=\\[(?:logic|view)\\]|\\[preview\\b)",
       "beginCaptures": {
         "0": {
           "name": "keyword.control.section.rsx"
@@ -106,7 +98,7 @@
       }
     },
     "style-class-block": {
-      "begin": "^(\\.[-\\w]+)\\s*\\{",
+      "begin": "^(@[-\\w]+)\\s*\\{",
       "end": "^\\}",
       "beginCaptures": {
         "1": {
@@ -129,7 +121,7 @@
     },
     "section-view": {
       "begin": "^\\[view\\]$",
-      "end": "^(?=\\[(logic|props|style)\\])",
+      "end": "^(?=\\[(?:logic|style)\\]|\\[preview\\b)",
       "beginCaptures": {
         "0": {
           "name": "keyword.control.section.rsx"
@@ -172,7 +164,7 @@
       }
     },
     "view-class": {
-      "match": "(\\.[-\\w]+)",
+      "match": "(@[-\\w]+)",
       "captures": {
         "1": {
           "name": "entity.other.attribute-name.class.rsx"

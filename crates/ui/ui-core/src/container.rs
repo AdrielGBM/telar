@@ -156,10 +156,10 @@ mod tests {
         use crate::button::Button;
         use crate::context::track_layout;
         use platform_core::PointerButton;
-        use reactive_core::{begin_batch, create_rw_signal, end_batch};
+        use reactive_core::{begin_batch, end_batch, signal};
 
         let mut ctx = WidgetCtx::new();
-        let s = create_rw_signal(0i32);
+        let s = signal(0i32);
         let s_cb = s.clone();
         let btn = Button::new(&mut ctx, "x").unwrap();
         let btn_node = btn.layout_node();

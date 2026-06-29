@@ -30,14 +30,14 @@ impl Parser {
             });
         }
         let logic = self.parse_logic();
-        let props = self.parse_props()?;
         let style = self.parse_style()?;
         let view = self.parse_view()?;
+        let previews = self.parse_previews()?;
         Ok(RsxDocument {
             logic,
-            props,
             style,
             view,
+            previews,
         })
     }
 
@@ -70,38 +70,6 @@ impl Parser {
         LogicZone { source, start_line }
     }
 
-    fn parse_props(&mut self) -> Result<PropsSection, ParseError> {
-        let mut section = PropsSection::default();
-
-        while let Some(line) = self.lines.get(self.pos) {
-            if line.section != Section::Props {
-                break;
-            }
-            if line.is_blank() {
-                self.pos += 1;
-                continue;
-            }
-            let (name, ty) = split_once_colon(&line.content).ok_or_else(|| ParseError {
-                message: format!("expected `name: Type` in [props], got `{}`", line.content),
-                line: line.number,
-            })?;
-            let (name, ty) = (name.trim(), ty.trim());
-            if ty.is_empty() {
-                return Err(ParseError {
-                    message: format!("prop `{name}` is missing a type after `:`"),
-                    line: line.number,
-                });
-            }
-            section.parameters.push(PropParameter {
-                name: name.to_string(),
-                ty: ty.to_string(),
-            });
-            self.pos += 1;
-        }
-
-        Ok(section)
-    }
-
     fn parse_style(&mut self) -> Result<StyleSection, ParseError> {
         let mut section = StyleSection::default();
 
@@ -114,7 +82,7 @@ impl Parser {
                 continue;
             }
 
-            if line.content.starts_with('.') {
+            if line.content.starts_with('@') {
                 let class = self.parse_style_class()?;
                 section.classes.push(class);
             } else {
@@ -154,16 +122,17 @@ impl Parser {
         })
     }
 
-    /// Parses either an inline `.class: k:v k:v` or a multi-line `.class` with indented props.
+    /// Parses either an inline `@class: k:v k:v` or a multi-line `@class` with indented props.
     fn parse_style_class(&mut self) -> Result<StyleClass, ParseError> {
         let header = &self.lines[self.pos];
         let header_line = header.number;
         let header_indent = header.indent;
-        let after_dot = header.content[1..].to_string();
+        // Strip the leading `@` sigil; the rest is the class name (and any inline props).
+        let after_sigil = header.content[1..].to_string();
         self.pos += 1;
 
-        // Inline form: `.badge: padding-x:6 padding-y:2 radius:6`
-        if let Some((name, rest)) = split_once_colon(&after_dot) {
+        // Inline form: `@badge: padding_x:6 padding_y:2 radius:6`
+        if let Some((name, rest)) = split_once_colon(&after_sigil) {
             let name = name.trim().to_string();
             let props = parse_inline_props(rest.trim(), header_line)?;
             return Ok(StyleClass {
@@ -174,10 +143,10 @@ impl Parser {
         }
 
         // Multi-line form: name is the rest of the header, props are indented lines.
-        let name = after_dot.trim().to_string();
+        let name = after_sigil.trim().to_string();
         if name.is_empty() {
             return Err(ParseError {
-                message: "style class is missing a name after `.`".to_string(),
+                message: "style class is missing a name after `@`".to_string(),
                 line: header_line,
             });
         }
@@ -196,7 +165,7 @@ impl Parser {
                 break;
             }
             // A nested class would start a new definition.
-            if line.content.starts_with('.') {
+            if line.content.starts_with('@') {
                 break;
             }
 
@@ -415,6 +384,89 @@ impl Parser {
             }
         }
     }
+
+    /// Parses the trailing `[preview "Name" …]` sections. Each header is a `Section::Preview` line;
+    /// its body is the following `Section::View` markup, parsed with the same view machinery, up to
+    /// the next preview header or EOF.
+    fn parse_previews(&mut self) -> Result<Vec<Preview>, ParseError> {
+        let mut previews = Vec::new();
+        loop {
+            self.skip_blank_view_lines();
+            let Some(line) = self.lines.get(self.pos) else {
+                break;
+            };
+            if line.section != Section::Preview {
+                break;
+            }
+            let header_line = line.number;
+            let (name, options) = parse_preview_header(&line.content, header_line)?;
+            self.pos += 1;
+            let body = self.parse_preview_body()?;
+            previews.push(Preview {
+                name,
+                options,
+                body,
+                line: header_line,
+            });
+        }
+        Ok(previews)
+    }
+
+    /// Collects one preview's body: the `Section::View` markup at its own base indentation, stopping
+    /// at the next preview header (a `Section::Preview` line) or EOF.
+    fn parse_preview_body(&mut self) -> Result<Vec<ViewNode>, ParseError> {
+        self.skip_blank_view_lines();
+        let base = match self.lines.get(self.pos) {
+            Some(l) if l.section == Section::View && !l.is_blank() => l.indent,
+            _ => return Ok(Vec::new()),
+        };
+        self.parse_view_nodes(base)
+    }
+}
+
+/// Parses a `[preview "Name" key:value flag …]` header into its name and options. The name is a
+/// required quoted string; options are `key:value` pairs (or bare flags with an empty value).
+fn parse_preview_header(
+    content: &str,
+    line: usize,
+) -> Result<(String, Vec<(String, String)>), ParseError> {
+    let inner = content
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .ok_or_else(|| ParseError {
+            message: "malformed preview header: expected `[preview \"name\" …]`".to_string(),
+            line,
+        })?;
+    let rest = inner
+        .trim()
+        .strip_prefix("preview")
+        .ok_or_else(|| ParseError {
+            message: "preview header must start with `preview`".to_string(),
+            line,
+        })?
+        .trim_start();
+
+    let chars: Vec<char> = rest.chars().collect();
+    if chars.first() != Some(&'"') {
+        return Err(ParseError {
+            message: "preview needs a quoted name, e.g. `[preview \"My preview\"]`".to_string(),
+            line,
+        });
+    }
+    let (name, next) = read_quoted(&chars, 0).ok_or_else(|| ParseError {
+        message: "unterminated preview name string".to_string(),
+        line,
+    })?;
+
+    let opts: String = chars[next..].iter().collect();
+    let mut options = Vec::new();
+    for token in opts.split_whitespace() {
+        match split_once_colon(token) {
+            Some((k, v)) => options.push((k.trim().to_string(), v.trim().to_string())),
+            None => options.push((token.to_string(), String::new())),
+        }
+    }
+    Ok((name, options))
 }
 
 /// Splits a string on its first `:` that is not part of a closure/`::` path.
@@ -478,7 +530,7 @@ fn parse_style_value(raw: &str) -> StyleValue {
     StyleValue::Raw(raw.to_string())
 }
 
-/// Parses inline class props: `padding-x:6  padding-y:2  radius:6`.
+/// Parses inline class props: `padding_x:6  padding_y:2  radius:6`.
 fn parse_inline_props(s: &str, line: usize) -> Result<Vec<StyleProp>, ParseError> {
     let mut props = Vec::new();
     for token in s.split_whitespace() {
@@ -517,7 +569,7 @@ fn parse_canvas_params(content: &str) -> Option<String> {
 
 /// Parses an element header line into tag, classes, attrs, and quoted content.
 ///
-/// Tokens are consumed left to right. A bare `.name` is a class; a quoted string
+/// Tokens are consumed left to right. A bare `@name` is a class; a quoted string
 /// is the content; `key:value` is an attribute. When an attribute value begins
 /// with `||` or `|args|`, the entire remainder of the line becomes that value.
 fn parse_element_header(
@@ -638,7 +690,7 @@ fn parse_element_header(
             continue;
         }
 
-        if let Some(class) = token.strip_prefix('.') {
+        if let Some(class) = token.strip_prefix('@') {
             element.classes.push(class.to_string());
         } else {
             // A bare token after the tag is a flag-style attribute (e.g. `ghost`).

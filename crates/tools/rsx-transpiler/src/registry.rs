@@ -40,26 +40,26 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
 ///
 /// Mirrors the recognized `match` arms in `style::layout_prop_call` that map to
 /// `LayoutStyle` builder calls, excluding the grid-only keys (`cols`, `span`,
-/// `row-span`) which downstream tooling offers solely on the `grid` tag.
+/// `row_span`) which downstream tooling offers solely on the `grid` tag.
 /// Aliases (`pad`/`padding`) are listed individually so completion offers both.
 pub fn layout_attr_keys() -> &'static [&'static str] {
     &[
         "width",
         "height",
-        "min-width",
-        "min-height",
-        "max-width",
-        "max-height",
+        "min_width",
+        "min_height",
+        "max_width",
+        "max_height",
         "basis",
         "padding",
         "pad",
-        "padding-x",
-        "pad-x",
-        "padding-y",
-        "pad-y",
+        "padding_x",
+        "pad_x",
+        "padding_y",
+        "pad_y",
         "gap",
-        "gap-x",
-        "gap-y",
+        "gap_x",
+        "gap_y",
         "grow",
         "shrink",
         "wrap",

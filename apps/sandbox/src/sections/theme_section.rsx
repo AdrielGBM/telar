@@ -1,7 +1,7 @@
 [logic]
 use crate::theme::{SandboxTheme, theme};
 
-let theme_name = create_memo(move || theme().name.to_string());
+let theme_name = memo(move || theme().name.to_string());
 
 [view]
 col gap:8
@@ -9,4 +9,4 @@ col gap:8
     row gap:8
         btn "Modern" fill:primary on_press:|| set_theme_with_widgets(SandboxTheme::modern())
         btn "Pastel" fill:primary on_press:|| set_theme_with_widgets(SandboxTheme::pastel())
-    text "Active: {theme_name}" size:13 color:muted
+    text "Active: {$theme_name}" size:13 color:muted

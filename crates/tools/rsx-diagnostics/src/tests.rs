@@ -22,9 +22,9 @@ fn element(classes: &[&str], attributes: Vec<Attr>, line: usize) -> Element {
 fn document(style: StyleSection, nodes: Vec<ViewNode>) -> RsxDocument {
     RsxDocument {
         logic: Default::default(),
-        props: Default::default(),
         style,
         view: ViewSection { nodes },
+        previews: Vec::new(),
     }
 }
 
@@ -42,12 +42,12 @@ fn parse_error_becomes_error_diagnostic_on_its_line() {
 
 #[test]
 fn render_points_at_the_offending_line() {
-    let source = "[view]\ncolumn .card\n";
+    let source = "[view]\ncolumn @card\n";
     let diag = Diagnostic::warning("nope", crate::Span::line(2));
     let rendered = diag.render(source);
     assert!(rendered.starts_with("warning: nope\n"));
     assert!(rendered.contains("--> line 2"));
-    assert!(rendered.contains("2 | column .card"));
+    assert!(rendered.contains("2 | column @card"));
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn undefined_style_class_warns() {
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].severity, Severity::Warning);
     assert_eq!(diags[0].span.line, 5);
-    assert!(diags[0].message.contains(".missing"));
+    assert!(diags[0].message.contains("@missing"));
 }
 
 #[test]

@@ -20,8 +20,8 @@ pub enum SignalKind {
 /// Scans the logic source for signal declarations and returns their names.
 ///
 /// Recognised forms:
-/// - `let NAME = create_rw_signal(...)`
-/// - `let NAME = create_memo(...)`
+/// - `let NAME = signal(...)`
+/// - `let NAME = memo(...)`
 pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
     let mut signals = Vec::new();
 
@@ -37,9 +37,9 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
         let binding = binding.trim();
         let expr = expr.trim_start();
 
-        let kind = if expr.starts_with("create_rw_signal") {
+        let kind = if expr.starts_with("signal(") {
             SignalKind::RwSignal
-        } else if expr.starts_with("create_memo") {
+        } else if expr.starts_with("memo(") {
             SignalKind::Memo
         } else {
             continue;
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn detects_rw_signal() {
-        let s = scan_signals("let count = create_rw_signal(0i32);");
+        let s = scan_signals("let count = signal(0i32);");
         assert_eq!(s.len(), 1);
         assert_eq!(s[0].name, "count");
         assert_eq!(s[0].kind, SignalKind::RwSignal);
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn detects_memo() {
-        let s = scan_signals("let double = create_memo(move |_| count.get() * 2);");
+        let s = scan_signals("let double = memo(move |_| count.get() * 2);");
         assert_eq!(s[0].name, "double");
         assert_eq!(s[0].kind, SignalKind::Memo);
     }

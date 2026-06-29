@@ -3,22 +3,23 @@
 #[derive(Debug, Clone)]
 pub struct RsxDocument {
     pub logic: LogicZone,
-    pub props: PropsSection,
     pub style: StyleSection,
     pub view: ViewSection,
+    pub previews: Vec<Preview>,
 }
 
-/// The `[props]` section: named parameters appended to the generated function signature.
-#[derive(Debug, Clone, Default)]
-pub struct PropsSection {
-    pub parameters: Vec<PropParameter>,
-}
-
-/// A single `name: Type` entry in `[props]`.
+/// A `[preview "Name" …]` section: a named, standalone view rendered by `cargo rsx preview`.
+/// Its `body` is ordinary `[view]` markup (typically a single component call with literal
+/// props), so any component — including prop-taking ones — can be previewed.
 #[derive(Debug, Clone)]
-pub struct PropParameter {
+pub struct Preview {
     pub name: String,
-    pub ty: String,
+    /// Header options (`width:360`, `bg:surface`, `group:"…"`, `dark`); parsed for forward
+    /// compatibility but not yet consumed by the runtime. A bare flag carries an empty value.
+    pub options: Vec<(String, String)>,
+    pub body: Vec<ViewNode>,
+    /// 1-based `.rsx` line of the `[preview …]` header.
+    pub line: usize,
 }
 
 /// The leading Rust verbatim zone, captured untouched up to the first section header.
@@ -52,7 +53,7 @@ pub enum StyleValue {
     Raw(String),
 }
 
-/// A style class, e.g. `.card` followed by indented property pairs, or an inline `.badge: ...`.
+/// A style class, e.g. `@card` followed by indented property pairs, or an inline `@badge: ...`.
 #[derive(Debug, Clone)]
 pub struct StyleClass {
     pub name: String,

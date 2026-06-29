@@ -4,7 +4,7 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, ScrollDelta};
-use reactive_core::{RwSignal, create_rw_signal};
+use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_widget_theme;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
@@ -136,8 +136,8 @@ impl ScrollCore {
         let content_segment = mount_item_segment(Rc::clone(&content));
         Self {
             content_rect_signal,
-            scroll_x: create_rw_signal(0.0),
-            scroll_y: create_rw_signal(0.0),
+            scroll_x: signal(0.0),
+            scroll_y: signal(0.0),
             content,
             content_segment,
             scrollbar_style: ScrollbarStyle::default(),
@@ -338,10 +338,10 @@ mod tests {
         use crate::container::Container;
         use crate::context::track_layout;
         use platform_core::PointerButton;
-        use reactive_core::{begin_batch, create_rw_signal, end_batch};
+        use reactive_core::{begin_batch, end_batch, signal};
 
         let mut ctx = WidgetCtx::new();
-        let s = create_rw_signal(0i32);
+        let s = signal(0i32);
         let s_cb = s.clone();
         let btn = Button::new(&mut ctx, "x").unwrap();
         let btn_node = btn.layout_node();

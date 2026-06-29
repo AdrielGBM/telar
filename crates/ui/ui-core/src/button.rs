@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, PointerButton};
-use reactive_core::{RwSignal, create_rw_signal};
+use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use theme_core::use_widget_theme;
 use ui_tree::{Component, EventResult, RenderNode};
@@ -53,7 +53,7 @@ impl Button {
                     text_hover: TextStyle::new(14.0, on_primary),
                 }
             }),
-            is_hovered: create_rw_signal(false),
+            is_hovered: signal(false),
         })
     }
 

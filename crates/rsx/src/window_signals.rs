@@ -1,4 +1,4 @@
-use reactive_core::{ReadSignal, RwSignal, create_rw_signal};
+use reactive_core::{ReadSignal, RwSignal, signal};
 
 pub struct WindowSignals {
     pub width: ReadSignal<f32>,
@@ -9,8 +9,8 @@ pub struct WindowSignals {
 
 impl WindowSignals {
     pub(crate) fn new(width: f32, height: f32) -> Self {
-        let width_rw = create_rw_signal(width);
-        let height_rw = create_rw_signal(height);
+        let width_rw = signal(width);
+        let height_rw = signal(height);
         Self {
             width: width_rw.read_only(),
             height: height_rw.read_only(),

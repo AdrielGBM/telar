@@ -134,7 +134,7 @@ pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
         }
         "grid" => {
             let mut keys: Vec<&str> = layout.to_vec();
-            keys.extend_from_slice(&["cols", "span", "row-span"]);
+            keys.extend_from_slice(&["cols", "span", "row_span"]);
             attribute_items(&keys)
         }
         "box" => {
@@ -143,10 +143,10 @@ pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
                 "fill",
                 "stroke",
                 "radius",
-                "shadow-x",
-                "shadow-y",
-                "shadow-blur",
-                "shadow-color",
+                "shadow_x",
+                "shadow_y",
+                "shadow_blur",
+                "shadow_color",
             ]);
             attribute_items(&keys)
         }

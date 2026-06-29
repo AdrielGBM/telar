@@ -8,7 +8,6 @@ use rsx_parser::{Attr, Element, ForBlock, IfBlock, StyleClass, StyleConstant, Vi
 use crate::naming::{
     constant_name, contains_ident, is_ident, style_function_name, to_pascal_case, to_snake_case,
 };
-use crate::signal_scan::SignalInfo;
 use crate::style::{format_f32, hex_to_color_expr, layout_prop_call};
 
 // `heading`/`section` styling reproduced inline (the library no longer ships `Heading`/`Section`): a 12px caption colored from the theme's `widget_muted` token, and an 8px-gap column wrapping the heading above its content.
@@ -125,7 +124,6 @@ enum ChildEmit {
 }
 
 pub struct ViewGen<'a> {
-    signals: &'a [SignalInfo],
     /// Declared style classes, used to validate class references in elements.
     classes: &'a [StyleClass],
     constants: &'a [StyleConstant],
@@ -142,13 +140,11 @@ pub struct ViewGen<'a> {
 
 impl<'a> ViewGen<'a> {
     pub fn with_theme(
-        signals: &'a [SignalInfo],
         classes: &'a [StyleClass],
         constants: &'a [StyleConstant],
         theme_type: Option<&str>,
     ) -> Self {
         Self {
-            signals,
             classes,
             constants,
             counters: HashMap::new(),
@@ -296,8 +292,8 @@ impl<'a> ViewGen<'a> {
             None => ("Text::auto", format!("LayoutStyle::new(){extra}")),
         };
 
-        // Each `move` closure consumes its captures; clone the signals they use into block locals so both closures can capture independently.
-        let clones = self.clone_bindings(&[&content_fn, &style], &pad, "    ");
+        // Each `move` closure consumes its captures; clone the signals they use into block locals so both closures can capture independently. Scan the raw `content` (still carrying `$`), not the substituted `content_fn`.
+        let clones = self.clone_bindings(&[content, style.as_str()], &pad, "    ");
 
         let code = format!(
             "{pad}let {var} = {{\n\
@@ -319,7 +315,7 @@ impl<'a> ViewGen<'a> {
         let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
         let content_fn = self.interpolate_content(content, el.content_start);
-        let clones = self.clone_bindings(&[&content_fn], &pad, "    ");
+        let clones = self.clone_bindings(&[content], &pad, "    ");
         let style_closure = HEADING_STYLE_CLOSURE;
         let code = format!(
             "{pad}let {var} = {{\n\
@@ -359,8 +355,8 @@ impl<'a> ViewGen<'a> {
         }
         self.indent -= 1;
 
-        // Clone signals captured by the title closure so children can still use them.
-        let clones = self.clone_bindings(&[&title_fn], &inner_pad, "");
+        // Clone signals captured by the title closure so children can still use them (scan raw `content`).
+        let clones = self.clone_bindings(&[content], &inner_pad, "");
 
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
@@ -438,22 +434,25 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Emits `let sig = sig.clone();` bindings for every signal that appears in
-    /// any of `snippets`, indented under `pad + extra`.
+    /// Emits `let name = name.clone();` for every signal (`$name`) referenced in the *raw* `snippets`
+    /// — still carrying the `$` sigil, so captures are detected before substitution — plus any loop
+    /// variable in scope they use. Indented under `pad + extra`.
     fn clone_bindings(&self, snippets: &[&str], pad: &str, extra: &str) -> String {
-        let mut used: Vec<&str> = Vec::new();
-        for sig in self.signals {
-            if snippets.iter().any(|s| contains_ident(s, &sig.name)) {
-                used.push(&sig.name);
+        let mut used: Vec<String> = Vec::new();
+        for s in snippets {
+            for ident in signal_idents(s) {
+                if !used.contains(&ident) {
+                    used.push(ident);
+                }
             }
         }
         for var in &self.loop_variables {
-            if snippets.iter().any(|s| contains_ident(s, var)) {
-                used.push(var);
+            if snippets.iter().any(|s| contains_ident(s, var)) && !used.contains(var) {
+                used.push(var.clone());
             }
         }
         let mut out = String::new();
-        for name in used {
+        for name in &used {
             let _ = writeln!(out, "{pad}{extra}let {name} = {name}.clone();");
         }
         out
@@ -541,10 +540,15 @@ impl<'a> ViewGen<'a> {
         if let Some(style) = style {
             let _ = writeln!(code, "{pad}    __btn = __btn.style({style});");
         }
-        if let Some(closure) = on_press {
-            // A span is emitted only for verbatim closures (`|…|`); `normalize_closure` rewrites
-            // bare expressions, breaking the byte-for-byte mapping, so those get no marker.
-            let marker = closure_marker(on_press_attr);
+        if let Some(raw_closure) = on_press {
+            let closure = substitute_handles(&raw_closure);
+            // A verbatim span maps only when the closure is copied byte-for-byte; a `$` substitution
+            // (like `normalize_closure` rewriting a bare expression) breaks that, so it gets no marker.
+            let marker = if raw_closure.contains('$') {
+                String::new()
+            } else {
+                closure_marker(on_press_attr)
+            };
             let _ = writeln!(
                 code,
                 "{pad}    __btn = __btn.on_click(move {marker}{closure});"
@@ -612,6 +616,11 @@ impl<'a> ViewGen<'a> {
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
 
+        // A `col`/`row` with paint (inline or from its class) upgrades to a StyledContainer so it can
+        // carry a background like `box`; otherwise it stays a plain Container.
+        let pattrs = self.paint_attrs(el);
+        let pieces = has_paint(&pattrs).then(|| self.rect_style_pieces(&pattrs));
+
         let has_dynamic = el.children.iter().any(|n| {
             matches!(
                 n,
@@ -632,7 +641,17 @@ impl<'a> ViewGen<'a> {
 
         let children =
             self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
-        let _ = writeln!(code, "{inner_pad}Container::new(ctx, {style}, {children})?");
+        match pieces {
+            Some((param, rect_style, opacity_call)) => {
+                let _ = writeln!(
+                    code,
+                    "{inner_pad}StyledContainer::new(ctx, {style}, move |{param}| {rect_style}, {children})?{opacity_call}"
+                );
+            }
+            None => {
+                let _ = writeln!(code, "{inner_pad}Container::new(ctx, {style}, {children})?");
+            }
+        }
 
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
@@ -643,46 +662,10 @@ impl<'a> ViewGen<'a> {
         let pad = self.indent_str();
         let layout_style = self.make_layout_style("box", &el.classes, &el.attributes);
 
-        let shadow = self.canvas_shadow(&el.attributes);
-        let gradient = self.box_gradient_paint(&el.attributes);
-        let solid_fill = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "fill")
-            .map(|a| self.color_expr(&a.value));
-        let stroke = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "stroke")
-            .map(|a| self.color_expr(&a.value));
-        let stroke_w = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "stroke_w")
-            .and_then(|a| a.value.parse::<f32>().ok())
-            .unwrap_or(1.0);
-        let radius = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "radius")
-            .and_then(|a| a.value.parse::<f32>().ok())
-            .map(|r| format!("BorderRadius::all({})", format_f32(r)))
-            .unwrap_or_else(|| "BorderRadius::zero()".to_string());
-        let opacity = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "opacity")
-            .and_then(|a| a.value.parse::<f32>().ok());
-
-        // Gradient needs the rendered rect via closure param; others don't.
-        let uses_r = gradient.is_some();
-        let param = if uses_r { "r" } else { "_" };
-
-        let rect_style = build_rect_style(gradient, solid_fill, stroke, stroke_w, shadow, &radius);
-
-        let opacity_call = opacity
-            .map(|o| format!(".with_opacity({})", format_f32(o)))
-            .unwrap_or_default();
+        // Paint merges inline attrs with the element's class (inline wins), so a `@card` class can
+        // carry fill/stroke/radius/etc. — not only inline `box` attributes. `box` is always styled.
+        let pattrs = self.paint_attrs(el);
+        let (param, rect_style, opacity_call) = self.rect_style_pieces(&pattrs);
 
         let has_dynamic = el.children.iter().any(|n| {
             matches!(
@@ -717,7 +700,7 @@ impl<'a> ViewGen<'a> {
     /// closure parameter `r` (the rendered `Bounds`) for absolute gradient points.
     ///
     /// `gradient:horizontal/vertical/diagonal/radial` with `from:` / `to:` (required),
-    /// optional `mid:` / `mid-pos:`.
+    /// optional `mid:` / `mid_pos:`.
     fn box_gradient_paint(&self, attrs: &[Attr]) -> Option<String> {
         let direction = attrs.iter().find(|a| a.key == "gradient")?.value.clone();
         let from = attrs
@@ -734,7 +717,7 @@ impl<'a> ViewGen<'a> {
             .map(|a| self.color_expr(&a.value));
         let mid_pos = attrs
             .iter()
-            .find(|a| a.key == "mid-pos")
+            .find(|a| a.key == "mid_pos")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(0.5);
 
@@ -907,8 +890,8 @@ impl<'a> ViewGen<'a> {
     /// Generates a `RenderNode::rect(...)` expression.
     ///
     /// Attrs: `x`, `y`, `w`, `h` (numbers or `full`), `fill`, `stroke`,
-    /// `stroke_w`, `radius`, `shadow-x`, `shadow-y`, `shadow-blur`, `shadow-color`,
-    /// `gradient` (linear/radial), `from`, `to`, `mid`, `mid-pos`,
+    /// `stroke_w`, `radius`, `shadow_x`, `shadow_y`, `shadow_blur`, `shadow_color`,
+    /// `gradient` (linear/radial), `from`, `to`, `mid`, `mid_pos`,
     /// `x1`, `y1`, `x2`, `y2` (linear points), `cx`, `cy`, `r` (radial).
     fn emit_canvas_rect(&self, el: &Element) -> String {
         let x = self.canvas_dim("x", &el.attributes);
@@ -952,7 +935,7 @@ impl<'a> ViewGen<'a> {
 
     /// Builds a `Paint::Gradient(...)` expression when `gradient:linear` or
     /// `gradient:radial` is present. Color stops: `from:` / `to:` (required),
-    /// optional `mid:` with `mid-pos:` (default 0.5).
+    /// optional `mid:` with `mid_pos:` (default 0.5).
     fn canvas_gradient_paint(&self, attrs: &[Attr]) -> Option<String> {
         let gradient_type = attrs.iter().find(|a| a.key == "gradient")?.value.clone();
         let from = attrs
@@ -969,7 +952,7 @@ impl<'a> ViewGen<'a> {
             .map(|a| self.color_expr(&a.value));
         let mid_pos = attrs
             .iter()
-            .find(|a| a.key == "mid-pos")
+            .find(|a| a.key == "mid_pos")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(0.5);
 
@@ -1009,22 +992,22 @@ impl<'a> ViewGen<'a> {
         }
         let sx = attrs
             .iter()
-            .find(|a| a.key == "shadow-x")
+            .find(|a| a.key == "shadow_x")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(0.0);
         let sy = attrs
             .iter()
-            .find(|a| a.key == "shadow-y")
+            .find(|a| a.key == "shadow_y")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(4.0);
         let blur = attrs
             .iter()
-            .find(|a| a.key == "shadow-blur")
+            .find(|a| a.key == "shadow_blur")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(8.0);
         let color = attrs
             .iter()
-            .find(|a| a.key == "shadow-color")
+            .find(|a| a.key == "shadow_color")
             .map(|a| self.color_expr(&a.value))
             .unwrap_or_else(|| "Color::rgba(0.0, 0.0, 0.0, 0.25)".to_string());
         Some(format!(
@@ -1239,6 +1222,63 @@ impl<'a> ViewGen<'a> {
         }
     }
 
+    /// The effective paint attributes for an element: its inline attrs followed by the paint props of
+    /// its first class. Inline wins because the paint helpers take the first `.find()` match.
+    fn paint_attrs(&self, el: &Element) -> Vec<Attr> {
+        let mut attrs = el.attributes.clone();
+        if let Some(name) = el.classes.first()
+            && let Some(class) = self.classes.iter().find(|c| &c.name == name)
+        {
+            for prop in &class.props {
+                if is_paint_key(&prop.key) {
+                    attrs.push(Attr {
+                        key: prop.key.clone(),
+                        value: prop.value.clone(),
+                        is_quoted: false,
+                        value_start: 0,
+                    });
+                }
+            }
+        }
+        attrs
+    }
+
+    /// Builds the `(closure-param, RectStyle expr, .with_opacity(..) suffix)` for a styled container
+    /// from paint attributes. The param is `r` only when a gradient needs the rendered bounds.
+    fn rect_style_pieces(&self, pattrs: &[Attr]) -> (&'static str, String, String) {
+        let shadow = self.canvas_shadow(pattrs);
+        let gradient = self.box_gradient_paint(pattrs);
+        let solid_fill = pattrs
+            .iter()
+            .find(|a| a.key == "fill")
+            .map(|a| self.color_expr(&a.value));
+        let stroke = pattrs
+            .iter()
+            .find(|a| a.key == "stroke")
+            .map(|a| self.color_expr(&a.value));
+        let stroke_w = pattrs
+            .iter()
+            .find(|a| a.key == "stroke_w")
+            .and_then(|a| a.value.parse::<f32>().ok())
+            .unwrap_or(1.0);
+        let radius = pattrs
+            .iter()
+            .find(|a| a.key == "radius")
+            .and_then(|a| a.value.parse::<f32>().ok())
+            .map(|r| format!("BorderRadius::all({})", format_f32(r)))
+            .unwrap_or_else(|| "BorderRadius::zero()".to_string());
+        let opacity = pattrs
+            .iter()
+            .find(|a| a.key == "opacity")
+            .and_then(|a| a.value.parse::<f32>().ok());
+        let param = if gradient.is_some() { "r" } else { "_" };
+        let rect_style = build_rect_style(gradient, solid_fill, stroke, stroke_w, shadow, &radius);
+        let opacity_call = opacity
+            .map(|o| format!(".with_opacity({})", format_f32(o)))
+            .unwrap_or_default();
+        (param, rect_style, opacity_call)
+    }
+
     /// Builds the `LayoutStyle` expression for a container: base style from the
     /// tag (or a class function), then inline attribute modifiers chained on.
     fn make_layout_style(&self, tag: &str, classes: &[String], attrs: &[Attr]) -> String {
@@ -1380,22 +1420,24 @@ impl<'a> ViewGen<'a> {
         format!("move || format!({}, {args_joined})", rust_str(&fmt))
     }
 
-    /// Renders an interpolation expression: a bare signal name becomes `name.get()`,
-    /// anything else is emitted as a braced Rust expression. `raw_start` is the source byte offset of
-    /// the raw (untrimmed) expression text; an [`expr_marker`] is emitted right before the verbatim
-    /// trimmed expression so the analyzer can complete inside it.
+    /// Renders an interpolation expression: a `$ident` reactive read becomes `ident.get()`; a
+    /// `$`-free expression is emitted verbatim (a plain value). `raw_start` is the source byte offset
+    /// of the raw (untrimmed) expression text; an [`expr_marker`] is emitted right before a verbatim
+    /// (`$`-free) expression so the analyzer can complete inside it.
     fn render_interp_expr(&self, expr: &str, raw_start: usize) -> String {
         let trimmed = expr.trim();
         if trimmed.is_empty() {
             return format!("{{ {expr} }}");
         }
-        // The trimmed expression is copied verbatim into the output; its source offset skips the raw
-        // expression's leading whitespace so the span maps byte-for-byte.
+        // A `$ident` is a reactive read (`ident.get()`). Substitution rewrites the text, so a `$`
+        // expression gets no verbatim span; a `$`-free expression is copied byte-for-byte (a plain,
+        // non-reactive value) and keeps its source span for LSP mapping.
+        if trimmed.contains('$') {
+            return format!("{{ {} }}", substitute_reads(trimmed));
+        }
         let lead = expr.len() - expr.trim_start().len();
         let marker = expr_marker(raw_start + lead, trimmed.len());
-        if self.signals.iter().any(|s| s.name == trimmed) {
-            format!("{marker}{trimmed}.get()")
-        } else if is_ident(trimmed) {
+        if is_ident(trimmed) {
             format!("{marker}{trimmed}")
         } else {
             format!("{{ {marker}{trimmed} }}")
@@ -1546,6 +1588,75 @@ fn normalize_closure(value: &str) -> String {
     }
 }
 
+/// Replaces every `$ident` in `s` with `ident.get()` — a reactive read, for `[view]` interpolation
+/// where a signal reference is a value read.
+fn substitute_reads(s: &str) -> String {
+    substitute_dollar(s, true)
+}
+
+/// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies
+/// where `$count.update(…)` means the handle and `$` only marks it for cloning.
+fn substitute_handles(s: &str) -> String {
+    substitute_dollar(s, false)
+}
+
+/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`). Only an ASCII `$` followed by an
+/// identifier start counts as a marker; everything else is copied through unchanged.
+fn substitute_dollar(s: &str, read: bool) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$'
+            && bytes
+                .get(i + 1)
+                .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
+        {
+            let start = i + 1;
+            let mut j = start;
+            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+                j += 1;
+            }
+            out.push_str(&s[start..j]);
+            if read {
+                out.push_str(".get()");
+            }
+            i = j;
+        } else {
+            let ch = s[i..].chars().next().unwrap();
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+    }
+    out
+}
+
+/// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured
+/// by a closure.
+fn signal_idents(s: &str) -> Vec<String> {
+    let bytes = s.as_bytes();
+    let mut idents = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$'
+            && bytes
+                .get(i + 1)
+                .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
+        {
+            let start = i + 1;
+            let mut j = start;
+            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+                j += 1;
+            }
+            idents.push(s[start..j].to_string());
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    idents
+}
+
 /// Assembles a `&[(pos, color)]` gradient stops expression from the resolved
 /// `from`, `to`, and optional `mid`/`mid_pos` values.
 fn build_gradient_stops(from: &str, to: &str, mid: Option<&str>, mid_pos: f32) -> String {
@@ -1557,6 +1668,35 @@ fn build_gradient_stops(from: &str, to: &str, mid: Option<&str>, mid_pos: f32) -
     } else {
         format!("&[(0.0, {from}), (1.0, {to})]")
     }
+}
+
+/// Keys that contribute to a container's paint (`RectStyle`) rather than its layout. Used to pick
+/// which class props to merge into an element's paint attributes.
+fn is_paint_key(key: &str) -> bool {
+    matches!(
+        key,
+        "fill"
+            | "stroke"
+            | "stroke_w"
+            | "radius"
+            | "opacity"
+            | "gradient"
+            | "from"
+            | "to"
+            | "mid"
+            | "mid_pos"
+            | "gr"
+    ) || key.starts_with("shadow")
+}
+
+/// Whether any paint attribute is present, so a plain `col`/`row` must upgrade to a `StyledContainer`.
+fn has_paint(pattrs: &[Attr]) -> bool {
+    pattrs.iter().any(|a| {
+        matches!(
+            a.key.as_str(),
+            "fill" | "stroke" | "radius" | "opacity" | "gradient"
+        ) || a.key.starts_with("shadow")
+    })
 }
 
 /// Builds a `RectStyle { … }` or shorthand expression from the resolved fill,
@@ -1611,15 +1751,14 @@ fn canvas_param_bindings(params: &str, pad: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::signal_scan::{SignalInfo, SignalKind};
 
-    fn make_gen<'a>(signals: &'a [SignalInfo]) -> ViewGen<'a> {
-        ViewGen::with_theme(signals, &[], &[], None)
+    fn make_gen<'a>() -> ViewGen<'a> {
+        ViewGen::with_theme(&[], &[], None)
     }
 
     #[test]
     fn literal_content() {
-        let g = make_gen(&[]);
+        let g = make_gen();
         assert_eq!(
             g.interpolate_content("hello", 0),
             "|| \"hello\".to_string()"
@@ -1628,15 +1767,11 @@ mod tests {
 
     #[test]
     fn signal_interpolation() {
-        let signals = vec![SignalInfo {
-            name: "count".into(),
-            kind: SignalKind::RwSignal,
-        }];
-        let g = make_gen(&signals);
-        // `{count}` starts at byte 8; the expr is tagged with a span marker (stripped downstream).
+        let g = make_gen();
+        // `$count` is a reactive read; the rewritten expression carries no verbatim span.
         assert_eq!(
-            g.interpolate_content("Count: {count}", 0),
-            "move || format!(\"Count: {}\", /*@RSX@EXPR:8:5@*/count.get())"
+            g.interpolate_content("Count: {$count}", 0),
+            "move || format!(\"Count: {}\", { count.get() })"
         );
     }
 
@@ -1695,6 +1830,23 @@ mod tests {
         assert!(
             out.rust_code.contains("my_card(ctx)?"),
             "no-attr tag should call fn directly"
+        );
+    }
+
+    #[test]
+    fn class_paint_promotes_container_and_is_consumed() {
+        let src = "[style]\n@card\n    fill: #ffffff\n    radius: 12\n    padding: 8\n[view]\ncol @card\n    text \"hi\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None).unwrap();
+        let code = &out.rust_code;
+        // A `col` carrying paint from its class becomes a StyledContainer, not a plain Container.
+        assert!(
+            code.contains("StyledContainer::new(ctx, style_card()"),
+            "painted col should be a StyledContainer:\n{code}"
+        );
+        // The class's fill reaches the RectStyle.
+        assert!(
+            code.contains("with_fill"),
+            "class fill should reach the RectStyle:\n{code}"
         );
     }
 }

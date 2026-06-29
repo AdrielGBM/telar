@@ -106,7 +106,7 @@ fn check_element(
     for class in &el.classes {
         if !defined_classes.contains(class.as_str()) {
             diagnostics.push(Diagnostic::warning(
-                format!("Style class `.{class}` is not defined in [style]"),
+                format!("Style class `@{class}` is not defined in [style]"),
                 span.clone(),
             ));
         }

@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use geometry_core::Rect;
-use reactive_core::{RwSignal, create_rw_signal};
+use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_tree::{Component, ComponentList, NodeVec, RenderNode, Segment, SegmentRoot};
 
@@ -89,7 +89,7 @@ impl Component for CardParent {
 fn bench_single_signal_segmented(c: &mut Criterion) {
     let mut group = c.benchmark_group("tree_single_signal_segmented");
     for &rows in &[20usize, 100, 400] {
-        let ticks: Vec<RwSignal<i32>> = (0..rows).map(|_| create_rw_signal(0i32)).collect();
+        let ticks: Vec<RwSignal<i32>> = (0..rows).map(|_| signal(0i32)).collect();
         let children: Vec<Rc<Segment>> = (0..rows)
             .map(|r| {
                 Segment::mount(CardSegment {
@@ -120,7 +120,7 @@ fn bench_single_signal_segmented(c: &mut Criterion) {
 fn bench_single_signal_reflatten(c: &mut Criterion) {
     let mut group = c.benchmark_group("tree_single_signal");
     for &rows in &[20usize, 100, 400] {
-        let tick = create_rw_signal(0i32);
+        let tick = signal(0i32);
         let tree = ComponentList::new(CardList {
             tick: tick.clone(),
             rows,
@@ -174,7 +174,7 @@ fn bench_scroll_tick(c: &mut Criterion) {
     let mut group = c.benchmark_group("scroll_tick");
     for &items in &[100usize, 1000] {
         // (a) Current behaviour: a scroll-offset signal change re-runs content.view() + flatten.
-        let offset = create_rw_signal(0.0f32);
+        let offset = signal(0.0f32);
         let tree = ComponentList::new(ScrollContent {
             offset: offset.clone(),
             items,

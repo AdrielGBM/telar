@@ -80,11 +80,11 @@ pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
     Some(match key {
         "width" => format!(".width({})", dimension(value)),
         "height" => format!(".height({})", dimension(value)),
-        "min-width" => format!(".min_width({})", dimension(value)),
-        "min-height" => format!(".min_height({})", dimension(value)),
-        "max-width" => format!(".max_width({})", dimension(value)),
-        "max-height" => format!(".max_height({})", dimension(value)),
-        "basis" | "flex-basis" => format!(".flex_basis({})", dimension(value)),
+        "min_width" => format!(".min_width({})", dimension(value)),
+        "min_height" => format!(".min_height({})", dimension(value)),
+        "max_width" => format!(".max_width({})", dimension(value)),
+        "max_height" => format!(".max_height({})", dimension(value)),
+        "basis" | "flex_basis" => format!(".flex_basis({})", dimension(value)),
         // `wrap` is a flag (no value) or `wrap`/`true`; anything else is ignored.
         "wrap" => match value {
             "" | "wrap" | "true" => ".flex_wrap()".to_string(),
@@ -96,18 +96,18 @@ pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
             _ => return None,
         },
         "padding" | "pad" => format!(".padding_all({})", format_number(value)),
-        "padding-x" | "pad-x" => format!(".padding_horizontal({})", format_number(value)),
-        "padding-y" | "pad-y" => format!(".padding_vertical({})", format_number(value)),
+        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value)),
+        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value)),
         "gap" => format!(".gap({})", format_number(value)),
-        "gap-x" => format!(".gap_x({})", format_number(value)),
-        "gap-y" => format!(".gap_y({})", format_number(value)),
+        "gap_x" => format!(".gap_x({})", format_number(value)),
+        "gap_y" => format!(".gap_y({})", format_number(value)),
         "grow" => format!(".flex_grow({})", format_number(value)),
         "shrink" => format!(".flex_shrink({})", format_number(value)),
         "span" => match value.trim().parse::<u16>() {
             Ok(n) => format!(".grid_column_span({n})"),
             Err(_) => return None,
         },
-        "row-span" => match value.trim().parse::<u16>() {
+        "row_span" => match value.trim().parse::<u16>() {
             Ok(n) => format!(".grid_row_span({n})"),
             Err(_) => return None,
         },

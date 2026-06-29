@@ -6,7 +6,7 @@
 //!   (`let` bindings live at its top level), which is not a valid item on its
 //!   own, so it is wrapped in a synthetic `fn { ... }` before formatting and
 //!   unwrapped afterwards.
-//! - `[props]`, `[style]` and `[view]` are re-emitted from the parsed AST in a
+//! - `[style]` and `[view]` are re-emitted from the parsed AST in a
 //!   canonical shape: 4-space indentation, single-space token separators, and
 //!   one blank line between style classes.
 //!
@@ -19,15 +19,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use rsx_parser::{
-    Attr, Element, PropParameter, RsxDocument, Section, StyleClass, StyleConstant, StyleValue,
-    ViewNode, header_section, parse,
+    Attr, Element, Preview, RsxDocument, Section, StyleClass, StyleConstant, StyleValue, ViewNode,
+    header_section, parse,
 };
 
 const INDENT: &str = "    ";
 /// Synthetic wrapper used to make the statement-level `[logic]` zone a valid Rust item for `rustfmt`.
 const WRAPPER_FN: &str = "__rsx_fmt_logic_wrapper";
-/// `#[preview(...)]` is a dangling attribute (nothing follows it), which `rustfmt` rejects; each preview line is masked as a comment with this prefix before formatting and restored afterwards.
-const PREVIEW_SENTINEL: &str = "//__RSX_FMT_PREVIEW__ ";
 
 /// Formats a whole `.rsx` document. Returns `None` when the source does not parse
 /// (an invalid document is left untouched, as every formatter does).
@@ -40,9 +38,6 @@ pub fn format_document(source: &str) -> Option<String> {
     if present.contains(&Section::Logic) || !doc.logic.source.trim().is_empty() {
         sections.push(format_logic_section(&doc.logic.source));
     }
-    if present.contains(&Section::Props) || !doc.props.parameters.is_empty() {
-        sections.push(format_props_section(&doc.props.parameters));
-    }
     if present.contains(&Section::Style)
         || !doc.style.constants.is_empty()
         || !doc.style.classes.is_empty()
@@ -51,6 +46,9 @@ pub fn format_document(source: &str) -> Option<String> {
     }
     if present.contains(&Section::View) || !doc.view.nodes.is_empty() {
         sections.push(format_view_section(&doc.view.nodes));
+    }
+    for preview in &doc.previews {
+        sections.push(format_preview_section(preview));
     }
 
     if sections.is_empty() {
@@ -96,27 +94,9 @@ fn run_rustfmt_on_logic(logic: &str) -> Option<String> {
         return None;
     }
 
-    let masked = mask_preview_attrs(logic);
-    let wrapped = format!("fn {WRAPPER_FN}() {{\n{masked}\n}}\n");
+    let wrapped = format!("fn {WRAPPER_FN}() {{\n{logic}\n}}\n");
     let formatted = run_rustfmt(&wrapped)?;
     unwrap_logic(&formatted)
-}
-
-/// Replaces each `#[preview(...)]` / `#[preview]` line with a sentinel comment so
-/// the dangling attribute does not make `rustfmt` reject the wrapped function.
-fn mask_preview_attrs(logic: &str) -> String {
-    logic
-        .lines()
-        .map(|line| {
-            let trimmed = line.trim_start();
-            if trimmed.starts_with("#[preview(") || trimmed == "#[preview]" {
-                format!("{PREVIEW_SENTINEL}{trimmed}")
-            } else {
-                line.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// Strips the synthetic wrapper function and one level of indentation that
@@ -135,10 +115,7 @@ fn unwrap_logic(formatted: &str) -> Option<String> {
 
     let body: Vec<String> = lines[1..close]
         .iter()
-        .map(|line| {
-            let dedented = line.strip_prefix(INDENT).unwrap_or(line);
-            dedented.replace(PREVIEW_SENTINEL, "")
-        })
+        .map(|line| line.strip_prefix(INDENT).unwrap_or(line).to_string())
         .collect();
 
     Some(body.join("\n").trim_end().to_string())
@@ -189,17 +166,6 @@ fn find_rustfmt() -> Option<PathBuf> {
     cargo_bin.exists().then_some(cargo_bin)
 }
 
-// === [props] ===============================================================
-
-fn format_props_section(params: &[PropParameter]) -> String {
-    let mut out = String::from("[props]");
-    for param in params {
-        out.push('\n');
-        out.push_str(&format!("{}: {}", param.name, param.ty));
-    }
-    out
-}
-
 // === [style] ===============================================================
 
 enum StyleEntry<'a> {
@@ -237,7 +203,7 @@ fn format_style_section(doc: &RsxDocument) -> String {
                 ));
             }
             StyleEntry::Class(class) => {
-                out.push_str(&format!(".{}", class.name));
+                out.push_str(&format!("@{}", class.name));
                 for prop in &class.props {
                     out.push('\n');
                     out.push_str(INDENT);
@@ -326,7 +292,7 @@ fn format_element_header(element: &Element) -> String {
     let mut parts: Vec<String> = Vec::with_capacity(1 + element.classes.len());
     parts.push(element.tag.clone());
     for class in &element.classes {
-        parts.push(format!(".{class}"));
+        parts.push(format!("@{class}"));
     }
     if let Some(content) = &element.content {
         parts.push(format!("\"{content}\""));
@@ -348,41 +314,68 @@ fn format_attr(attr: &Attr) -> String {
     }
 }
 
+// === [preview] =============================================================
+
+/// Re-emits a `[preview "Name" key:value flag …]` section: the header (name plus options) followed
+/// by its body, formatted like a `[view]` tree.
+fn format_preview_section(preview: &Preview) -> String {
+    let mut header = format!("[preview \"{}\"", preview.name);
+    for (key, value) in &preview.options {
+        if value.is_empty() {
+            header.push_str(&format!(" {key}"));
+        } else {
+            header.push_str(&format!(" {key}:{value}"));
+        }
+    }
+    header.push(']');
+
+    let mut body = String::new();
+    for node in &preview.body {
+        emit_node(node, 0, &mut body);
+    }
+    let body = body.trim_end();
+    if body.is_empty() {
+        header
+    } else {
+        format!("{header}\n{body}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn normalizes_view_indentation_and_token_order() {
-        let src = "[view]\ncol .card\n        text \"Hi\" size:14 color:dark\n        row gap:8\n                btn \"+\" fill:primary on_press:|| count.update(|n| *n += 1)\n";
+        let src = "[view]\ncol @card\n        text \"Hi\" size:14 color:dark\n        row gap:8\n                btn \"+\" fill:primary on_press:|| count.update(|n| *n += 1)\n";
         let out = format_document(src).unwrap();
-        let expected = "[view]\ncol .card\n    text \"Hi\" size:14 color:dark\n    row gap:8\n        btn \"+\" fill:primary on_press:|| count.update(|n| *n += 1)\n";
+        let expected = "[view]\ncol @card\n    text \"Hi\" size:14 color:dark\n    row gap:8\n        btn \"+\" fill:primary on_press:|| count.update(|n| *n += 1)\n";
         assert_eq!(out, expected);
     }
 
     #[test]
     fn restores_interleaved_constants_and_classes_in_source_order() {
         let src =
-            "[style]\nprimary: #3d78fa\nradius: 6\n.card\n    width: 240\n    direction: col\n";
+            "[style]\nprimary: #3d78fa\nradius: 6\n@card\n    width: 240\n    direction: col\n";
         let out = format_document(src).unwrap();
         let expected =
-            "[style]\nprimary: #3d78fa\nradius: 6\n\n.card\n    width: 240\n    direction: col\n";
+            "[style]\nprimary: #3d78fa\nradius: 6\n\n@card\n    width: 240\n    direction: col\n";
         assert_eq!(out, expected);
     }
 
     #[test]
     fn inline_style_class_becomes_multiline() {
-        let src = "[style]\n.badge: padding-x:6  padding-y:2  radius:6\n";
+        let src = "[style]\n@badge: padding_x:6  padding_y:2  radius:6\n";
         let out = format_document(src).unwrap();
-        let expected = "[style]\n.badge\n    padding-x: 6\n    padding-y: 2\n    radius: 6\n";
+        let expected = "[style]\n@badge\n    padding_x: 6\n    padding_y: 2\n    radius: 6\n";
         assert_eq!(out, expected);
     }
 
     #[test]
-    fn preserves_props_and_quoted_and_flag_attrs() {
-        let src = "[props]\ntitle:   &'static str\n[view]\nbtn \"Reset\" ghost label:\"x\" on_press:|| reset()\n";
+    fn preserves_quoted_and_flag_attrs() {
+        let src = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press:|| reset()\n";
         let out = format_document(src).unwrap();
-        let expected = "[props]\ntitle: &'static str\n\n[view]\nbtn \"Reset\" ghost label:\"x\" on_press:|| reset()\n";
+        let expected = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press:|| reset()\n";
         assert_eq!(out, expected);
     }
 
@@ -396,7 +389,7 @@ mod tests {
 
     #[test]
     fn is_idempotent_for_ast_sections() {
-        let src = "[style]\nprimary: #3d78fa\n\n.card\n    width: 240\n\n[view]\ncol .card\n    text \"Hi\" size:14 color:dark\n";
+        let src = "[style]\nprimary: #3d78fa\n\n@card\n    width: 240\n\n[view]\ncol @card\n    text \"Hi\" size:14 color:dark\n";
         let once = format_document(src).unwrap();
         let twice = format_document(&once).unwrap();
         assert_eq!(once, twice);
@@ -418,16 +411,19 @@ mod tests {
         if find_rustfmt().is_none() {
             return;
         }
-        let src = "[logic]\nuse rsx::widgets::Button;\nuse rsx::prelude::*;\nlet count = create_rw_signal(0i32);\n#[preview(name = \"Default\")]\n[view]\ncol\n";
+        let src = "[logic]\nuse rsx::widgets::Button;\nuse rsx::prelude::*;\nlet count = signal(0i32);\n[view]\ncol\n\n[preview \"Default\"]\ncounter\n";
         let out = format_document(src).unwrap();
         // Imports are sorted...
         let prelude = out.find("use rsx::prelude::*;").unwrap();
         let button = out.find("use rsx::widgets::Button;").unwrap();
         assert!(prelude < button, "imports should be reordered:\n{out}");
         // ...the let binding survives...
-        assert!(out.contains("let count = create_rw_signal(0i32);"));
-        // ...and the preview attribute is restored, not left as a sentinel comment.
-        assert!(out.contains("#[preview(name = \"Default\")]"));
-        assert!(!out.contains(PREVIEW_SENTINEL));
+        assert!(out.contains("let count = signal(0i32);"));
+        // ...and the trailing `[preview …]` section is re-emitted with its body.
+        assert!(
+            out.contains("[preview \"Default\"]"),
+            "preview section should survive:\n{out}"
+        );
+        assert!(out.contains("counter"));
     }
 }

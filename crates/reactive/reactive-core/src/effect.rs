@@ -10,7 +10,7 @@ impl Drop for Effect {
     }
 }
 
-pub fn create_effect(f: impl Fn() + 'static) -> Effect {
+pub fn effect(f: impl Fn() + 'static) -> Effect {
     let id = runtime::register_effect(Box::new(f));
     runtime::run_effect(id);
     Effect { id }

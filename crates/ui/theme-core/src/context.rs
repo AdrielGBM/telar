@@ -1,7 +1,7 @@
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
-use reactive_core::{RwSignal, create_rw_signal};
+use reactive_core::{RwSignal, signal};
 use renderer_core::Color;
 
 // Flexible theme contract: users define their own tokens with whatever names they want. `as_any` is the only requirement so `use_theme` can downcast back to the concrete type.
@@ -25,9 +25,9 @@ pub trait WidgetTheme: 'static {
 thread_local! {
     // ManuallyDrop suppresses RwSignal's Drop impl so no TLS destructor is registered. Cleanup happens via reset_runtime() which drops the entire Runtime (and its signals slab).
     static THEME: ManuallyDrop<RwSignal<Option<Rc<dyn Theme>>>> =
-        ManuallyDrop::new(create_rw_signal(None));
+        ManuallyDrop::new(signal(None));
     static WIDGET_THEME: ManuallyDrop<RwSignal<Option<Rc<dyn WidgetTheme>>>> =
-        ManuallyDrop::new(create_rw_signal(None));
+        ManuallyDrop::new(signal(None));
 }
 
 // Installs a theme that also drives built-in widgets. The same value is stored behind both trait objects so `use_theme` and `use_widget_theme` stay in sync.

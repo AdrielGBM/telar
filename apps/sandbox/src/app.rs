@@ -18,7 +18,14 @@ fn build_content(
     let s_colors = crate::sections_colors_section(ctx)?;
     let s_typography = crate::sections_typography_section(ctx)?;
     let s_cards = crate::sections_cards_section(ctx)?;
-    let s_images = crate::sections_images_section(ctx, gradient, checker, alpha)?;
+    let s_images = crate::sections_images_section(
+        ctx,
+        crate::SectionsImagesSectionProps {
+            gradient,
+            checker,
+            alpha,
+        },
+    )?;
     let s_lines = crate::sections_lines_section(ctx)?;
     let s_paths = crate::sections_paths_section(ctx)?;
     let s_gradients = crate::sections_gradients_section(ctx)?;

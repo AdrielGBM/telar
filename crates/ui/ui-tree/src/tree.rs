@@ -51,7 +51,7 @@ impl ComponentList {
 #[cfg(test)]
 mod tests {
     use geometry_core::Rect;
-    use reactive_core::create_rw_signal;
+    use reactive_core::signal;
     use renderer_core::{Color, RectStyle, ShapeStyle};
     use std::sync::Arc;
 
@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn tree_reactive_update() {
-        let signal = create_rw_signal(2i32);
+        let signal = signal(2i32);
         let tree = ComponentList::new(Counter {
             value: signal.clone(),
         });
