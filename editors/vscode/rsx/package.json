@@ -36,6 +36,19 @@
         }
       }
     ],
+    "snippets": [
+      {
+        "language": "rsx",
+        "path": "./snippets/rsx.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "rsx.preview",
+        "title": "Preview component",
+        "category": "rsx"
+      }
+    ],
     "configuration": {
       "title": "RSX",
       "properties": {

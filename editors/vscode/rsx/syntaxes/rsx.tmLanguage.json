@@ -79,45 +79,31 @@
           "include": "#comment"
         },
         {
-          "include": "#style-color-const"
+          "include": "#style-class-header"
         },
         {
-          "include": "#style-class-block"
+          "include": "#style-key-value"
         }
       ]
     },
-    "style-color-const": {
-      "match": "^(\\w[\\w-]*):\\s*(#[0-9a-fA-F]{3,8}|\\w+)$",
+    "style-class-header": {
+      "match": "^\\s*(@[-\\w]+)",
       "captures": {
         "1": {
-          "name": "variable.other.constant.rsx"
+          "name": "entity.other.attribute-name.class.rsx"
+        }
+      }
+    },
+    "style-key-value": {
+      "match": "^\\s*([\\w-]+)\\s*:\\s*(#[0-9a-fA-F]{3,8})?",
+      "captures": {
+        "1": {
+          "name": "support.type.property-name.rsx"
         },
         "2": {
           "name": "constant.other.color.rgb-value.rsx"
         }
       }
-    },
-    "style-class-block": {
-      "begin": "^(@[-\\w]+)\\s*\\{",
-      "end": "^\\}",
-      "beginCaptures": {
-        "1": {
-          "name": "entity.other.attribute-name.class.rsx"
-        }
-      },
-      "patterns": [
-        {
-          "include": "#comment"
-        },
-        {
-          "match": "^\\s+([-\\w]+):",
-          "captures": {
-            "1": {
-              "name": "support.type.property-name.rsx"
-            }
-          }
-        }
-      ]
     },
     "section-view": {
       "begin": "^\\[view\\]$",
@@ -180,8 +166,14 @@
       }
     },
     "view-string": {
-      "match": "\"[^\"]*\"",
-      "name": "string.quoted.double.rsx"
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.rsx",
+      "patterns": [
+        {
+          "include": "#view-interpolation"
+        }
+      ]
     },
     "view-interpolation": {
       "begin": "\\{",

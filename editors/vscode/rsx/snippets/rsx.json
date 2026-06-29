@@ -1,0 +1,92 @@
+{
+  "Component scaffold": {
+    "prefix": "component",
+    "body": [
+      "[logic]",
+      "",
+      "[style]",
+      "",
+      "[view]",
+      "col",
+      "    ${0}",
+      "",
+      "[preview \"${1:Default}\"]",
+      "${TM_FILENAME_BASE}"
+    ],
+    "description": "Scaffold a full .rsx component (logic / style / view / preview)"
+  },
+  "Props struct": {
+    "prefix": "props",
+    "body": [
+      "pub struct Props {",
+      "    pub ${1:field}: ${2:&'static str},",
+      "}"
+    ],
+    "description": "Component props struct (in [logic])"
+  },
+  "Signal": {
+    "prefix": "signal",
+    "body": "let ${1:name} = signal(${2:0});",
+    "description": "Reactive signal"
+  },
+  "Memo": {
+    "prefix": "memo",
+    "body": "let ${1:name} = memo(move || ${0});",
+    "description": "Derived reactive memo"
+  },
+  "Effect": {
+    "prefix": "effect",
+    "body": "effect(move || ${0});",
+    "description": "Reactive effect"
+  },
+  "Preview section": {
+    "prefix": "preview",
+    "body": [
+      "[preview \"${1:Name}\"]",
+      "${0:${TM_FILENAME_BASE}}"
+    ],
+    "description": "A [preview] section"
+  },
+  "Style class": {
+    "prefix": "class",
+    "body": [
+      "@${1:name}",
+      "    ${0}"
+    ],
+    "description": "A @style class"
+  },
+  "Text": {
+    "prefix": "text",
+    "body": "text \"${1:label}\" size:${2:14} color:${3:dark}",
+    "description": "Text leaf"
+  },
+  "Button": {
+    "prefix": "btn",
+    "body": "btn \"${1:label}\" fill:${2:primary} on_press:|| ${0}",
+    "description": "Button"
+  },
+  "Column": {
+    "prefix": "col",
+    "body": [
+      "col gap:${1:8}",
+      "    ${0}"
+    ],
+    "description": "Flex column container"
+  },
+  "Row": {
+    "prefix": "row",
+    "body": [
+      "row gap:${1:8}",
+      "    ${0}"
+    ],
+    "description": "Flex row container"
+  },
+  "Box": {
+    "prefix": "box",
+    "body": [
+      "box fill:${1:surface} radius:${2:8} pad:${3:12}",
+      "    ${0}"
+    ],
+    "description": "Styled box container"
+  }
+}

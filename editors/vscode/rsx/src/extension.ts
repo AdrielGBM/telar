@@ -6,6 +6,7 @@ import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
+  State,
   TransportKind,
 } from "vscode-languageclient/node";
 
@@ -44,6 +45,49 @@ export function activate(context: vscode.ExtensionContext): void {
   // the LSP is the single source of truth, with no duplicate providers or cross-process diagnostics race.
   client.start();
   context.subscriptions.push(client);
+
+  // Status bar item reflecting the LSP connection state (the embedded-analyzer "workspace ready"
+  // state is logged to the output channel; surfacing it here is a future refinement).
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  status.text = "$(loading~spin) rsx";
+  status.tooltip = "rsx-analyzer";
+  status.show();
+  context.subscriptions.push(status);
+  context.subscriptions.push(
+    client.onDidChangeState((e) => {
+      if (e.newState === State.Running) status.text = "$(check) rsx";
+      else if (e.newState === State.Starting) status.text = "$(loading~spin) rsx";
+      else status.text = "$(error) rsx";
+    })
+  );
+
+  // The "▶ Preview" code lens runs `cargo rsx preview --component <name>` in the file's crate.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("rsx.preview", (uri?: vscode.Uri | string) => {
+      const target =
+        typeof uri === "string"
+          ? vscode.Uri.parse(uri)
+          : (uri ?? vscode.window.activeTextEditor?.document.uri);
+      if (!target) return;
+      const filePath = target.fsPath;
+      const component = path.basename(filePath, ".rsx");
+      const cwd = findCrateDir(filePath) ?? path.dirname(filePath);
+      const terminal = vscode.window.createTerminal({ name: "rsx preview", cwd });
+      terminal.show();
+      terminal.sendText(`cargo rsx preview --component ${component}`);
+    })
+  );
+}
+
+/// Nearest ancestor directory containing a `Cargo.toml` (the file's crate), for the preview terminal cwd.
+function findCrateDir(file: string): string | undefined {
+  let dir = path.dirname(file);
+  for (;;) {
+    if (fs.existsSync(path.join(dir, "Cargo.toml"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
 }
 
 export function deactivate(): Thenable<void> | undefined {
