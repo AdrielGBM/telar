@@ -477,12 +477,17 @@ impl<'a> ViewGen<'a> {
         let var = self.next_variable_name("img");
         let pad = self.indent_str();
 
-        let src = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "src")
-            .map(|a| a.value.as_str())
-            .unwrap_or("__img_data");
+        // `src` is a verbatim Rust expression (e.g. `gradient_img`). Tag it with its source span so the
+        // analyzer can resolve / rename the symbol inside it; quoted values keep the legacy passthrough.
+        let src = match el.attributes.iter().find(|a| a.key == "src") {
+            Some(a) if !a.is_quoted && !a.value.trim().is_empty() => {
+                let v = a.value.trim();
+                let lead = a.value.len() - a.value.trim_start().len();
+                format!("{}{v}", expr_marker(a.value_start + lead, v.len()))
+            }
+            Some(a) => a.value.clone(),
+            None => "__img_data".to_string(),
+        };
 
         let filter = el
             .attributes

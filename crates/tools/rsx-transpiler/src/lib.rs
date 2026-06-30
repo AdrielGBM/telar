@@ -830,4 +830,29 @@ col @card
             "the `$` marker must not reach output:\n{code}"
         );
     }
+
+    #[test]
+    fn img_src_value_carries_an_expr_span() {
+        // The `src` attr is a verbatim Rust expression, so the analyzer must get an expr-span that maps
+        // back onto the `hero` identifier in source (this is what makes refs/rename precise in `[view]`).
+        let src = "[logic]\nlet hero = 1i32;\n[view]\ncol\n    img src:hero width:100\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let spans: Vec<&str> = out
+            .expr_spans
+            .iter()
+            .map(|s| &src[s.rsx_start as usize..(s.rsx_start + s.len) as usize])
+            .collect();
+        assert!(
+            spans.contains(&"hero"),
+            "img src value should map back to `hero`; got spans {spans:?}"
+        );
+        // And the matching span must point at byte-identical text in the generated code.
+        let span = out
+            .expr_spans
+            .iter()
+            .find(|s| &src[s.rsx_start as usize..(s.rsx_start + s.len) as usize] == "hero")
+            .unwrap();
+        let gs = span.gen_start as usize;
+        assert_eq!(&out.rust_code[gs..gs + span.len as usize], "hero");
+    }
 }
