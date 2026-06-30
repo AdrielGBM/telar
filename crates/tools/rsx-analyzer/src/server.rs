@@ -73,10 +73,13 @@ async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Res
         "initialize" => ok(backend.initialize()),
         "shutdown" => Value::Null,
         "textDocument/completion" => ok(backend.completion(parse(params)?).await),
+        "completionItem/resolve" => ok(backend.completion_resolve(parse(params)?)),
         "textDocument/signatureHelp" => ok(backend.signature_help(parse(params)?).await),
         "textDocument/hover" => ok(backend.hover(parse(params)?).await),
         "textDocument/definition" => ok(backend.goto_definition(parse(params)?).await),
         "textDocument/formatting" => ok(backend.formatting(parse(params)?).await),
+        "textDocument/rangeFormatting" => ok(backend.range_formatting(parse(params)?).await),
+        "textDocument/selectionRange" => ok(backend.selection_range(parse(params)?).await),
         "textDocument/documentColor" => ok(backend.document_color(parse(params)?).await),
         "textDocument/colorPresentation" => ok(backend.color_presentation(parse(params)?)),
         "textDocument/documentSymbol" => ok(backend.document_symbol(parse(params)?).await),
@@ -112,6 +115,11 @@ async fn dispatch_notification(backend: &Backend, method: &str, params: Value) {
         "textDocument/didClose" => {
             if let Ok(params) = serde_json::from_value(params) {
                 backend.did_close(params).await;
+            }
+        }
+        "workspace/didChangeWatchedFiles" => {
+            if let Ok(params) = serde_json::from_value(params) {
+                backend.did_change_watched_files(params).await;
             }
         }
         _ => {}

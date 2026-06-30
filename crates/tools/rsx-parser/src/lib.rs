@@ -14,7 +14,7 @@ mod parser;
 
 pub use ast::*;
 pub use error::ParseError;
-pub use lexer::{Section, header_section};
+pub use lexer::{Section, header_section, is_preview_header};
 
 /// Parses `.rsx` source text into an [`RsxDocument`].
 pub fn parse(source: &str) -> Result<RsxDocument, ParseError> {

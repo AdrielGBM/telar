@@ -4,6 +4,7 @@ mod analysis;
 mod backend;
 mod build_sync;
 mod format;
+mod index;
 mod position;
 mod project;
 mod ra;

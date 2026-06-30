@@ -9,15 +9,15 @@
 use std::path::{Path, PathBuf};
 
 use lsp_types::{
-    CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, Hover, HoverContents,
-    MarkupContent, MarkupKind, NumberOrString, ParameterInformation, ParameterLabel, Position,
-    Range, SignatureHelp, SignatureInformation,
+    CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, Documentation, Hover,
+    HoverContents, MarkupContent, MarkupKind, NumberOrString, ParameterInformation, ParameterLabel,
+    Position, Range, SignatureHelp, SignatureInformation,
 };
 use ra_ap_ide::{
-    AnalysisHost, AssistResolveStrategy, CompletionConfig, CompletionFieldsToResolve,
-    CompletionItemKind as RaKind, DiagnosticsConfig, FilePosition, FileRange, GotoDefinitionConfig,
-    HoverConfig, HoverDocFormat, LineIndex, RaFixtureConfig, Severity, SubstTyLen, SymbolKind,
-    TextRange, TextSize,
+    Analysis, AnalysisHost, AssistResolveStrategy, CompletionConfig, CompletionFieldsToResolve,
+    CompletionItemKind as RaKind, DiagnosticsConfig, FilePosition, FileRange, FindAllRefsConfig,
+    GotoDefinitionConfig, HoverConfig, HoverDocFormat, LineIndex, RaFixtureConfig, Severity,
+    SubstTyLen, SymbolKind, TextRange, TextSize,
 };
 use ra_ap_ide_db::ChangeWithProcMacros;
 use ra_ap_ide_db::imports::insert_use::{ImportGranularity, InsertUseConfig, PrefixKind};
@@ -38,6 +38,17 @@ const LOGIC_INDENT: u32 = 4;
 /// is a generated `.rsx/build/*.rs` (reverse-mapped to the `.rsx`) or a real file (used verbatim).
 pub struct DefinitionTarget {
     pub path: PathBuf,
+    pub range: Range,
+}
+
+/// One reference to the symbol under the cursor, found by the embedded analyzer (declaration site
+/// included). Carries both the byte span (so the backend can reverse-map `[view]` verbatim expressions
+/// through the byte-span source map) and the same span in LSP coordinates (used verbatim for real
+/// source files). The backend reverse-maps generated `.rsx/build/*.rs` paths back onto their `.rsx`.
+pub struct RefTarget {
+    pub path: PathBuf,
+    pub byte_start: u32,
+    pub byte_end: u32,
     pub range: Range,
 }
 
@@ -137,6 +148,10 @@ impl EmbeddedAnalyzer {
                 label: item.lookup().to_string(),
                 kind: map_completion_kind(item.kind),
                 detail: item.detail.clone(),
+                // Eager from rust-analyzer (the completion config resolves nothing lazily). The backend
+                // moves this into its resolve cache and re-attaches it on `completionItem/resolve`, so
+                // the completion list itself stays lean on the wire.
+                documentation: map_documentation(&item),
                 ..Default::default()
             })
             .collect()
@@ -280,6 +295,77 @@ impl EmbeddedAnalyzer {
         Some(targets)
     }
 
+    /// `[logic]` find-all-references. Same overlay→query path as completion; the cursor is mapped
+    /// through the line map by the caller (`line`/`col` are generated-file coordinates).
+    pub fn references_at(
+        &mut self,
+        gen_path: &Path,
+        generated: String,
+        line: u32,
+        col: u32,
+    ) -> Option<Vec<RefTarget>> {
+        let offset = byte_offset(&generated, line, col)?;
+        self.references_at_offset(gen_path, generated, offset)
+    }
+
+    /// Find-all-references at an exact byte `offset` in the generated file (used by the `[view]` path and
+    /// by component rename, which queries the generated `fn`/`Props` definition directly). Returns the
+    /// declaration plus every use across the workspace; `None` when rust-analyzer resolves no symbol.
+    pub fn references_at_offset(
+        &mut self,
+        gen_path: &Path,
+        generated: String,
+        offset: TextSize,
+    ) -> Option<Vec<RefTarget>> {
+        let file_id = self.file_id(gen_path)?;
+        self.overlay(file_id, generated);
+        let analysis = self.host.analysis();
+        let pos = FilePosition { file_id, offset };
+        let results = analysis
+            .find_all_refs(pos, &find_all_refs_config())
+            .ok()
+            .flatten()?;
+        let mut out = Vec::new();
+        for result in &results {
+            if let Some(decl) = &result.declaration {
+                let nav = &decl.nav;
+                let span = nav.focus_range.unwrap_or(nav.full_range);
+                if let Some(target) = self.ref_target(&analysis, nav.file_id, span) {
+                    out.push(target);
+                }
+            }
+            for (file_id, ranges) in &result.references {
+                for (range, _category) in ranges {
+                    if let Some(target) = self.ref_target(&analysis, *file_id, *range) {
+                        out.push(target);
+                    }
+                }
+            }
+        }
+        Some(out)
+    }
+
+    /// Builds a [`RefTarget`] for `span` in `file_id`: its filesystem path (via the `Vfs`) plus the span
+    /// in both byte and LSP coordinates. `None` if the file has no path or no line index.
+    fn ref_target(
+        &self,
+        analysis: &Analysis,
+        file_id: FileId,
+        span: TextRange,
+    ) -> Option<RefTarget> {
+        let path = self.file_path(file_id)?;
+        let line_index = analysis.file_line_index(file_id).ok()?;
+        Some(RefTarget {
+            path,
+            byte_start: span.start().into(),
+            byte_end: span.end().into(),
+            range: Range {
+                start: lsp_position(&line_index, span.start()),
+                end: lsp_position(&line_index, span.end()),
+            },
+        })
+    }
+
     /// rust-analyzer diagnostics for the overlaid generated file, in generated-file coordinates. The
     /// backend reverse-maps each line back onto the `.rsx` via the source map. Only diagnostics whose
     /// range is in the generated file are kept (a cross-file diagnostic has no `.rsx` line to map to).
@@ -318,6 +404,22 @@ impl EmbeddedAnalyzer {
     /// generated module added after load (a new `.rsx`), which signals a stale graph.
     pub fn knows_file(&self, path: &Path) -> bool {
         self.file_id(path).is_some()
+    }
+
+    /// Re-reads `path` from disk and overlays it into the analyzer. The LSP only serves `.rsx`, so it
+    /// never receives `didChange` for hand-written `.rs` files — without this they stay frozen at load
+    /// time, so go-to-def / diagnostics / find-refs that cross into real Rust go stale after any edit
+    /// (e.g. renaming a fn whose definition lives in a `.rs`). Returns `false` if `path` is not in the
+    /// loaded graph or can't be read, signalling the caller to reload the whole workspace.
+    pub fn refresh_from_disk(&mut self, path: &Path) -> bool {
+        let Some(file_id) = self.file_id(path) else {
+            return false;
+        };
+        let Ok(text) = std::fs::read_to_string(path) else {
+            return false;
+        };
+        self.overlay(file_id, text);
+        true
     }
 
     /// Resolves a filesystem path to its `FileId`, if the file is part of the loaded
@@ -443,12 +545,26 @@ fn goto_definition_config() -> GotoDefinitionConfig<'static> {
     }
 }
 
+/// Workspace-wide find-all-references: no scope limit (so cross-file Rust refs to a component's
+/// generated `fn`/`Props` are found), imports + tests included (the generated modules are neither, and
+/// the backend filters generated build files itself).
+fn find_all_refs_config() -> FindAllRefsConfig<'static> {
+    FindAllRefsConfig {
+        search_scope: None,
+        ra_fixture: RaFixtureConfig::default(),
+        exclude_imports: false,
+        exclude_tests: false,
+    }
+}
+
 /// Diagnostics config: proc macros on (the `app!`-generated modules are only visible through
-/// expansion). Experimental diagnostics stay OFF: the type-inference ones (unresolved-name,
-/// type-mismatch) cascade — a single typo poisons inference for the whole tightly-coupled view and
-/// floods the `.rsx` with derived "type annotations needed" errors. Syntax + stable name-resolution
-/// diagnostics still surface; authoritative semantic errors belong to a future `cargo check` flycheck.
-/// Style lints off, no term search. No `Default` impl exists, so every field is set explicitly.
+/// expansion). Experimental diagnostics stay OFF: enabling them to catch unresolved names was tried and
+/// reverted — in the tightly-coupled generated `[view]` a single broken reference (a typo'd helper, or a
+/// `tex` tag → missing `tex(ctx)`) makes the whole builder expression error-typed and rust-analyzer
+/// emits `E0425` ("no such value") for dozens of sibling identifiers, flooding the `.rsx` (the stock
+/// rust-analyzer reports the same few *real* errors on the generated `.rs`; ours cascaded). Filtering by
+/// code didn't help — the flood is `E0425`-shaped. Syntax + stable name-resolution still surface; richer
+/// semantic errors are left to the stock analyzer / a future `cargo check` flycheck. No `Default` impl.
 fn diagnostics_config() -> DiagnosticsConfig {
     DiagnosticsConfig {
         enabled: true,
@@ -499,6 +615,15 @@ fn lsp_position(line_index: &LineIndex, offset: TextSize) -> Position {
             character: line_col.col,
         },
     }
+}
+
+/// rust-analyzer's rendered doc comment for a completion item → an LSP markdown `Documentation`.
+fn map_documentation(item: &ra_ap_ide::CompletionItem) -> Option<Documentation> {
+    let docs = item.documentation.as_ref()?;
+    Some(Documentation::MarkupContent(MarkupContent {
+        kind: MarkupKind::Markdown,
+        value: docs.as_str().to_string(),
+    }))
 }
 
 fn map_completion_kind(kind: RaKind) -> Option<CompletionItemKind> {

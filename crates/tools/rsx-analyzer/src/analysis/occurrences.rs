@@ -5,9 +5,7 @@
 //! is Rust, not a class. Returned ranges cover the *name* (after the `@`), so a rename replaces the
 //! name and leaves the sigil.
 
-use std::path::Path;
-
-use lsp_types::{Location, Position, Range};
+use lsp_types::{Position, Range};
 
 use crate::position::{Section, find_section_at};
 
@@ -66,11 +64,14 @@ pub fn occurrence_at(source: &str, line: u32, character: u32) -> Option<Range> {
     None
 }
 
-/// The component name under the cursor: the first token (element tag) of a `[view]` line, when it is
-/// a plain identifier that is not a built-in tag or control-flow keyword (i.e. a reference to another
-/// `.rsx`). Returns `None` for built-ins (`col`, `text`, …) and `@class`/attribute positions.
+/// The component name under the cursor: the first token (element tag) of a `[view]`/`[preview]` line,
+/// when it is a plain identifier that is not a built-in tag or control-flow keyword (i.e. a reference
+/// to another `.rsx`). Returns `None` for built-ins (`col`, `text`, …) and `@class`/attribute positions.
 pub fn component_at(source: &str, line: u32, character: u32) -> Option<String> {
-    if find_section_at(source, line) != Section::View {
+    if !matches!(
+        find_section_at(source, line),
+        Section::View | Section::Preview
+    ) {
         return None;
     }
     let line_text = source.lines().nth(line as usize)?;
@@ -96,42 +97,29 @@ pub fn component_at(source: &str, line: u32, character: u32) -> Option<String> {
     Some(token.to_string())
 }
 
-/// Every cross-file reference to component `name`: its defining file (`name.rsx`) plus every `[view]`
-/// element whose tag is `name`, across all `.rsx` under `root`.
-pub fn component_references(root: &Path, name: &str) -> Vec<Location> {
-    let mut out = Vec::new();
-    for path in rsx_transpiler::find_rsx_files(root) {
-        let Some(uri) = crate::uri::from_path(&path) else {
-            continue;
-        };
-        // The component's own file is its definition.
-        if path.file_stem().and_then(|s| s.to_str()) == Some(name) {
-            let at = Position {
-                line: 0,
-                character: 0,
-            };
-            out.push(Location {
-                uri: uri.clone(),
-                range: Range { start: at, end: at },
-            });
-        }
-        let Ok(source) = std::fs::read_to_string(&path) else {
-            continue;
-        };
-        for (line_idx, line_text) in source.lines().enumerate() {
-            if find_section_at(&source, line_idx as u32) != Section::View {
-                continue;
-            }
-            let lead = line_text.len() - line_text.trim_start().len();
-            if line_text[lead..].split(|c: char| c.is_whitespace()).next() == Some(name) {
-                out.push(Location {
-                    uri: uri.clone(),
-                    range: name_range(line_idx as u32, line_text, lead, name.len()),
-                });
-            }
-        }
+/// The name-range of the component tag under the cursor, for `prepareRename`. Assumes the caller has
+/// already gated on [`component_at`] (it does not re-check that the tag is a real, non-builtin tag);
+/// it only recomputes the leading tag token's range.
+pub fn component_at_range(source: &str, line: u32, character: u32) -> Option<Range> {
+    if !matches!(
+        find_section_at(source, line),
+        Section::View | Section::Preview
+    ) {
+        return None;
     }
-    out
+    let line_text = source.lines().nth(line as usize)?;
+    let lead = line_text.len() - line_text.trim_start().len();
+    let token = line_text[lead..]
+        .split(|c: char| c.is_whitespace())
+        .next()?;
+    if token.is_empty() {
+        return None;
+    }
+    let cursor = utf16_to_byte(line_text, character);
+    if cursor < lead || cursor > lead + token.len() {
+        return None;
+    }
+    Some(name_range(line, line_text, lead, token.len()))
 }
 
 /// The signal name under the cursor: a `$name` in `[view]`, or a `name` identifier in `[logic]` that

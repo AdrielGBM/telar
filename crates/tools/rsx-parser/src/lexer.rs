@@ -106,8 +106,9 @@ pub fn lex(source: &str) -> Vec<Line> {
 }
 
 /// Whether `trimmed` is a `[preview …]` header. Parameterized (carries a name/options), so it is
-/// matched here rather than in [`header_section`]'s exact table.
-fn is_preview_header(trimmed: &str) -> bool {
+/// matched here rather than in [`header_section`]'s exact table. Public so tooling that walks sections
+/// (e.g. selection ranges) can treat a preview header as a section boundary like the fixed headers.
+pub fn is_preview_header(trimmed: &str) -> bool {
     let Some(inner) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) else {
         return false;
     };

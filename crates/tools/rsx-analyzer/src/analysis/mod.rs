@@ -6,7 +6,7 @@ pub mod folding;
 pub mod hover;
 pub mod lens;
 pub mod occurrences;
+pub mod selection_range;
 pub mod semantic_tokens;
 pub mod symbols;
 pub mod util;
-pub mod workspace_symbols;
