@@ -28,16 +28,47 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: "file", language: "rsx" }],
+    // Watch `.rs` + `Cargo.toml`/`Cargo.lock` too: the embedded rust-analyzer loads hand-written Rust
+    // once, so the server needs didChangeWatchedFiles to refresh them (the LSP never gets didChange for
+    // non-`.rsx`). A lockfile change (e.g. `cargo add`) shifts the dependency graph, so it forces a
+    // full reload just like `Cargo.toml`. Watched `.rsx` events keep the workspace symbol index fresh.
     synchronize: {
-      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.rsx"),
+      fileEvents: [
+        vscode.workspace.createFileSystemWatcher("**/*.rsx"),
+        vscode.workspace.createFileSystemWatcher("**/*.rs"),
+        vscode.workspace.createFileSystemWatcher("**/Cargo.toml"),
+        vscode.workspace.createFileSystemWatcher("**/Cargo.lock"),
+      ],
     },
   };
 
   client = new LanguageClient(
     "rsx-analyzer",
-    "RSX Analyzer",
+    "rsx-analyzer",
     serverOptions,
     clientOptions
+  );
+
+  // Status bar item reflecting the LSP connection state. The listener MUST be attached before
+  // `client.start()`: for a local stdio server the Starting→Running transition can complete before a
+  // post-start listener exists, which left the item stuck on the spinner (never reaching the check).
+  // Clicking it reveals the server log. (The embedded-analyzer "workspace ready" state — logged there
+  // ~15s after connect — is a future refinement to surface here.)
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  status.text = "$(loading~spin) rsx";
+  status.tooltip = "rsx-analyzer language server — click to show its log";
+  status.command = "rsx.showServerLog";
+  status.show();
+  context.subscriptions.push(status);
+  context.subscriptions.push(
+    client.onDidChangeState((e) => {
+      if (e.newState === State.Running) status.text = "$(check) rsx";
+      else if (e.newState === State.Starting) status.text = "$(loading~spin) rsx";
+      else status.text = "$(error) rsx";
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("rsx.showServerLog", () => client?.outputChannel.show())
   );
 
   // Hover, go-to-definition and Rust diagnostics for `[logic]`/`[view]` are now served in-process by
@@ -46,18 +77,31 @@ export function activate(context: vscode.ExtensionContext): void {
   client.start();
   context.subscriptions.push(client);
 
-  // Status bar item reflecting the LSP connection state (the embedded-analyzer "workspace ready"
-  // state is logged to the output channel; surfacing it here is a future refinement).
-  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  status.text = "$(loading~spin) rsx";
-  status.tooltip = "rsx-analyzer";
-  status.show();
-  context.subscriptions.push(status);
+  // Project the stock rust-analyzer's `cargo check` errors (which land on the generated
+  // `.rsx/build/*.rs`) back onto the `.rsx`. This reuses the check the user's rust-analyzer already runs
+  // on save — no duplicate cargo check — and gives clean, cascade-free semantic errors (wrong fn names,
+  // unknown tags, type mismatches) on the source line. Our LSP keeps providing instant syntax errors.
+  const cargoDiagnostics = vscode.languages.createDiagnosticCollection("rsx-cargo-check");
+  context.subscriptions.push(cargoDiagnostics);
   context.subscriptions.push(
-    client.onDidChangeState((e) => {
-      if (e.newState === State.Running) status.text = "$(check) rsx";
-      else if (e.newState === State.Starting) status.text = "$(loading~spin) rsx";
-      else status.text = "$(error) rsx";
+    vscode.languages.onDidChangeDiagnostics((e) => {
+      for (const uri of e.uris) {
+        if (isGeneratedBuildFile(uri.fsPath)) projectGeneratedDiagnostics(uri, cargoDiagnostics);
+      }
+    })
+  );
+  // `cargo check` reads the `.rsx` from disk (the macro re-expands it), and the stock rust-analyzer only
+  // re-checks on saves of files *it* owns — never the `.rsx`. So on every `.rsx` save we nudge its
+  // flycheck; when it finishes, the projection above re-maps the fresh errors onto the `.rsx`. This
+  // reuses the user's existing check (no duplicate `cargo check`). On-save only: on-change would just
+  // re-surface the last *saved* state, since the macro never sees the unsaved buffer.
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      if (doc.languageId === "rsx" || doc.fileName.endsWith(".rsx")) {
+        void vscode.commands.executeCommand("rust-analyzer.runFlycheck").then(undefined, () => {
+          // rust-analyzer not installed / no flycheck — projection simply stays at its last state.
+        });
+      }
     })
   );
 
@@ -77,6 +121,69 @@ export function activate(context: vscode.ExtensionContext): void {
       terminal.sendText(`cargo rsx preview --component ${component}`);
     })
   );
+}
+
+const BUILD_MARKER = `${path.sep}.rsx${path.sep}build${path.sep}`;
+
+/// Whether `fsPath` is one of the transpiler's generated build files (`<crate>/.rsx/build/<rel>.rs`).
+function isGeneratedBuildFile(fsPath: string): boolean {
+  return fsPath.endsWith(".rs") && fsPath.includes(BUILD_MARKER);
+}
+
+/// Maps a generated `<crate>/.rsx/build/<rel>.rs` back to its source `<crate>/src/<rel>.rsx`.
+function generatedToSource(genFsPath: string): string | undefined {
+  const idx = genFsPath.indexOf(BUILD_MARKER);
+  if (idx < 0) return undefined;
+  const root = genFsPath.slice(0, idx);
+  const rel = genFsPath.slice(idx + BUILD_MARKER.length).replace(/\.rs$/, ".rsx");
+  return path.join(root, "src", rel);
+}
+
+/// Reads the sibling `.rs.map` (`generated line → Some(.rsx line)`, 0-based). `undefined` if missing.
+function readLineMap(genFsPath: string): (number | null)[] | undefined {
+  try {
+    return JSON.parse(fs.readFileSync(genFsPath + ".map", "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/// Re-publishes the `cargo check` (rustc) errors on a generated build file onto its `.rsx` source line.
+/// Only `rustc`-sourced errors are taken: rust-analyzer's *in-memory* diagnostics cascade on the
+/// tightly-coupled generated view (one bad name → dozens of `E0425`s), whereas `cargo check` reports
+/// the root causes cleanly. Mapping is line-granular (the source map is per-line), so the whole `.rsx`
+/// line is flagged.
+function projectGeneratedDiagnostics(
+  genUri: vscode.Uri,
+  collection: vscode.DiagnosticCollection
+): void {
+  const source = generatedToSource(genUri.fsPath);
+  if (!source) return;
+
+  // While the `.rsx` has unsaved edits, the `cargo check` errors are still pinned to the last *saved*
+  // generated code, but `build_sync` already rewrote the `.rs.map` for the live buffer — re-projecting
+  // the stale errors through the now-mismatched map jumps the markers to the wrong line. Freeze instead:
+  // keep the existing markers (VS Code shifts them as the user types) and let the next save's flycheck
+  // refresh them against a matching map.
+  const rsxUri = vscode.Uri.file(source);
+  const openDoc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === rsxUri.fsPath);
+  if (openDoc?.isDirty) return;
+
+  const lineMap = readLineMap(genUri.fsPath);
+  if (!lineMap) return;
+
+  const mapped: vscode.Diagnostic[] = [];
+  for (const d of vscode.languages.getDiagnostics(genUri)) {
+    if (d.source !== "rustc" || d.severity !== vscode.DiagnosticSeverity.Error) continue;
+    const rsxLine = lineMap[d.range.start.line];
+    if (rsxLine === null || rsxLine === undefined) continue;
+    const range = new vscode.Range(rsxLine, 0, rsxLine, Number.MAX_SAFE_INTEGER);
+    const diag = new vscode.Diagnostic(range, d.message, vscode.DiagnosticSeverity.Error);
+    diag.source = "rsx (cargo check)";
+    diag.code = d.code;
+    mapped.push(diag);
+  }
+  collection.set(rsxUri, mapped);
 }
 
 /// Nearest ancestor directory containing a `Cargo.toml` (the file's crate), for the preview terminal cwd.
