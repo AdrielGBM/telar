@@ -258,6 +258,14 @@ pub struct RectStyle {
 }
 
 impl RectStyle {
+    pub fn filled(color: Color, radius: f32) -> Self {
+        Self {
+            fill: Some(Paint::Solid(color)),
+            radius: BorderRadius::all(radius),
+            ..Self::default()
+        }
+    }
+
     pub fn with_radius(mut self, radius: BorderRadius) -> Self {
         self.radius = radius;
         self
