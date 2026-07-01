@@ -47,6 +47,11 @@
         "command": "rsx.preview",
         "title": "Preview component",
         "category": "rsx"
+      },
+      {
+        "command": "rsx.showServerLog",
+        "title": "Show server log",
+        "category": "rsx"
       }
     ],
     "configuration": {
