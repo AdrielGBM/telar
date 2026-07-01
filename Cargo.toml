@@ -20,6 +20,7 @@ members = [
     "crates/tools/cargo-rsx",
     "crates/tools/rsx-parser",
     "crates/tools/rsx-transpiler",
+    "crates/tools/devtools-core",
     "crates/tools/rsx-devtools",
     "crates/tools/rsx-analyzer",
     "crates/tools/rsx-diagnostics",
@@ -48,6 +49,7 @@ default-members = [
     "crates/tools/cargo-rsx",
     "crates/tools/rsx-parser",
     "crates/tools/rsx-transpiler",
+    "crates/tools/devtools-core",
     "crates/tools/rsx-devtools",
     "crates/tools/rsx-analyzer",
     "crates/tools/rsx-diagnostics",
@@ -97,6 +99,7 @@ theme-core = { path = "crates/ui/theme-core" }
 ui-core = { path = "crates/ui/ui-core" }
 ui-tree = { path = "crates/ui/ui-tree" }
 rsx = { path = "crates/rsx", default-features = false }
+devtools-core = { path = "crates/tools/devtools-core" }
 rsx-devtools = { path = "crates/tools/rsx-devtools" }
 rsx-diagnostics = { path = "crates/tools/rsx-diagnostics" }
 rsx-parser = { path = "crates/tools/rsx-parser" }

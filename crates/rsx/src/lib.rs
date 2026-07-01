@@ -40,6 +40,8 @@ pub use window_signals::WindowSignals;
 #[cfg(feature = "runtime")]
 pub use app::App;
 #[cfg(feature = "runtime")]
+pub use devtools_core::{DevAction, DevPlugin};
+#[cfg(feature = "runtime")]
 pub use geometry_core::{Point, Rect, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
@@ -60,8 +62,6 @@ pub use renderer_core::{
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint, PathData, PathStyle, PathVerb,
     RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
-#[cfg(feature = "runtime")]
-pub use rsx_devtools::{DevAction, DevPlugin};
 pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]
 pub use services_core::{Scope, provide, try_inject, with_service};

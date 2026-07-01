@@ -5,7 +5,7 @@ edition = "2024"
 
 [features]
 default = ["runtime"]
-dev = ["runtime", "rsx-devtools/devtools", "dep:libloading"]
+dev = ["runtime", "dep:rsx-devtools", "dep:libloading"]
 runtime = [
     "dep:platform-core",
     "dep:renderer-core",
@@ -18,7 +18,7 @@ runtime = [
     "dep:ui-core",
     "dep:ui-tree",
     "dep:geometry-core",
-    "dep:rsx-devtools",
+    "dep:devtools-core",
     "dep:toml",
     "dep:tracing",
     "dep:dirs",
@@ -47,6 +47,7 @@ theme-core = { workspace = true, optional = true }
 ui-core = { workspace = true, optional = true }
 ui-tree = { workspace = true, optional = true }
 geometry-core = { workspace = true, optional = true }
+devtools-core = { workspace = true, optional = true }
 rsx-devtools = { workspace = true, optional = true }
 rsx-macros = { workspace = true }
 libloading = { version = "0.9.0", optional = true }

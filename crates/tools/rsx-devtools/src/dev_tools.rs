@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use crate::dev_plugin::{DevAction, DevPlugin};
+use devtools_core::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::{
@@ -431,7 +431,7 @@ impl DevPlugin for DevTools {
         self.build_error = error;
     }
 
-    fn on_tree(&mut self, tree: &dyn crate::DevTreeView) {
+    fn on_tree(&mut self, tree: &dyn devtools_core::DevTreeView) {
         self.node_count = tree.node_count();
         self.nodes.clear();
         tree.for_each_node(&mut |info| {

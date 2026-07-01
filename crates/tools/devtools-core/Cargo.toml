@@ -1,10 +1,10 @@
 [package]
-name = "rsx-devtools"
+name = "devtools-core"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-devtools-core = { workspace = true }
 platform-core = { workspace = true }
 renderer-core = { workspace = true }
 geometry-core = { workspace = true }
+ui-tree = { workspace = true }

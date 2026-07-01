@@ -36,7 +36,7 @@ struct HardwareFrameMsg {
     timestamp: std::time::Instant,
 }
 
-use rsx_devtools::{DevAction, DevPlugin};
+use devtools_core::{DevAction, DevPlugin};
 
 use crate::app::App;
 use crate::app_config::AppConfig;
