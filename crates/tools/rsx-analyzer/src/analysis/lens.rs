@@ -1,5 +1,4 @@
-//! `textDocument/codeLens`: a "▶ Preview" action over each `[preview "Name"]` header, wired to the
-//! `rsx.preview` command the extension registers (→ `cargo rsx preview`).
+//! `textDocument/codeLens`: a "▶ Preview" action over each `[preview "Name"]` header, wired to the `rsx.preview` command the extension registers (→ `cargo rsx preview`).
 
 use lsp_types::{CodeLens, Command, Position, Range, Uri};
 use rsx_parser::RsxDocument;

@@ -1,9 +1,6 @@
 //! Conversions between filesystem paths and [`lsp_types::Uri`].
 //!
-//! lsp-types 0.97 dropped `url::Url` (and its `from_file_path` / `to_file_path`
-//! helpers) for a minimal `fluent_uri`-based [`Uri`], so we bridge through the
-//! `url` crate, which already handles `file://` percent-encoding and platform
-//! path quirks (spaces, Unicode, Windows drive letters).
+//! lsp-types 0.97 dropped `url::Url` (and its `from_file_path` / `to_file_path` helpers) for a minimal `fluent_uri`-based [`Uri`], so we bridge through the `url` crate, which already handles `file://` percent-encoding and platform path quirks (spaces, Unicode, Windows drive letters).
 
 use std::path::{Path, PathBuf};
 use std::str::FromStr;

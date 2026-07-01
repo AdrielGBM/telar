@@ -10,9 +10,7 @@ pub struct ParsedDocument {
 
 pub struct Store {
     docs: HashMap<Uri, ParsedDocument>,
-    // The current buffer text, updated on every edit even when it fails to parse. `docs` only holds
-    // the last good parse (so completion/hover keep working mid-edit), but formatting must operate on
-    // the live text — otherwise it could reformat a stale version and clobber the user's edits.
+    // The current buffer text, updated on every edit even when it fails to parse. `docs` only holds the last good parse (so completion/hover keep working mid-edit), but formatting must operate on the live text — otherwise it could reformat a stale version and clobber the user's edits.
     latest_source: HashMap<Uri, String>,
 }
 
@@ -38,8 +36,7 @@ impl Store {
         self.latest_source.get(uri)
     }
 
-    /// Any currently-open document URI, used to locate the workspace root for `workspace/symbol`
-    /// (which carries no document of its own).
+    /// Any currently-open document URI, used to locate the workspace root for `workspace/symbol` (which carries no document of its own).
     pub fn any_uri(&self) -> Option<&Uri> {
         self.latest_source.keys().next()
     }

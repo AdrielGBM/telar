@@ -1,5 +1,4 @@
-//! Detects reactive signals declared in the logic zone so the view generator
-//! knows which identifiers must be read with `.get()` inside closures.
+//! Detects reactive signals declared in the logic zone so the view generator knows which identifiers must be read with `.get()` inside closures.
 
 use crate::naming::is_ident;
 

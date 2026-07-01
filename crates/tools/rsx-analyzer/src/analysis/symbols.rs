@@ -1,8 +1,6 @@
 //! `textDocument/documentSymbol`: the `.rsx` outline / breadcrumbs.
 //!
-//! Surfaces the file's named, navigable symbols — `[style]` constants and classes, and `[preview]`
-//! sections — ordered by source line. The deep `[view]` element tree is intentionally omitted: it is
-//! mostly anonymous containers and would bury the useful entries.
+//! Surfaces the file's named, navigable symbols — `[style]` constants and classes, and `[preview]` sections — ordered by source line. The deep `[view]` element tree is intentionally omitted: it is mostly anonymous containers and would bury the useful entries.
 
 use lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
 use rsx_parser::RsxDocument;

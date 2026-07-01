@@ -5,9 +5,7 @@ fn is_separator(c: char) -> bool {
     matches!(c, '.' | '-' | '_' | ' ' | '\t')
 }
 
-/// Converts an RSX name (`card-title`, `btn.primary`) into a snake_case identifier.
-/// Separators (`.`, `-`, `_`, whitespace) become `_`. Leading digits are prefixed with `_`
-/// to produce a valid Rust identifier.
+/// Converts an RSX name (`card-title`, `btn.primary`) into a snake_case identifier. Separators (`.`, `-`, `_`, whitespace) become `_`. Leading digits are prefixed with `_` to produce a valid Rust identifier.
 pub fn to_snake_case(name: &str) -> String {
     let mut out = String::with_capacity(name.len() + 1);
     let mut prev_was_sep = false;
@@ -32,9 +30,7 @@ pub fn to_snake_case(name: &str) -> String {
     out
 }
 
-/// Converts an RSX name (`shape_card`, `info.card`) into PascalCase (`ShapeCard`, `InfoCard`).
-/// Separators (`.`, `-`, `_`, whitespace) trigger capitalization of the next word.
-/// Non-alphanumeric, non-separator chars are stripped. A leading digit is prefixed with `_`.
+/// Converts an RSX name (`shape_card`, `info.card`) into PascalCase (`ShapeCard`, `InfoCard`). Separators (`.`, `-`, `_`, whitespace) trigger capitalization of the next word. Non-alphanumeric, non-separator chars are stripped. A leading digit is prefixed with `_`.
 pub fn to_pascal_case(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
     let mut next_upper = true;
@@ -69,8 +65,7 @@ pub fn constant_name(prefix: &str, name: &str) -> String {
     format!("{prefix}{}", to_snake_case(name).to_ascii_uppercase())
 }
 
-/// Generated preview entries const name for a file stem: `card` -> `CARD_PREVIEW_ENTRIES`.
-/// This must match the name emitted by the transpiler in the generated `.rs` file.
+/// Generated preview entries const name for a file stem: `card` -> `CARD_PREVIEW_ENTRIES`. This must match the name emitted by the transpiler in the generated `.rs` file.
 pub fn preview_entries_const_name(stem: &str) -> String {
     format!(
         "{}_PREVIEW_ENTRIES",

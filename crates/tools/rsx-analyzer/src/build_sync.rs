@@ -1,21 +1,16 @@
-//! Live mirror of the `app!` macro's compile-time output. On every successful parse of a `.rsx`, the
-//! transpiled Rust is written to `<crate>/.rsx/build/<rel>.rs` (and its `.rs.map`) so the workspace
-//! rust-analyzer analyzes the in-flight buffer — making completion / hover / definition live instead
-//! of one `cargo check` behind, since rust-analyzer re-reads the changed file from disk.
+//! Live mirror of the `app!` macro's compile-time output. On every successful parse of a `.rsx`, the transpiled Rust is written to `<crate>/.rsx/build/<rel>.rs` (and its `.rs.map`) so the workspace rust-analyzer analyzes the in-flight buffer — making completion / hover / definition live instead of one `cargo check` behind, since rust-analyzer re-reads the changed file from disk.
 
 use std::path::{Path, PathBuf};
 
 use rsx_transpiler::ExprSpan;
 use rsx_workspace::find_ancestor_dir;
 
-/// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`.
-/// Anchored on `Cargo.toml` (not `rsx.toml`) so this works in crates without an rsx config too.
+/// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`. Anchored on `Cargo.toml` (not `rsx.toml`) so this works in crates without an rsx config too.
 pub fn crate_root(rsx_path: &Path) -> Option<PathBuf> {
     find_ancestor_dir(rsx_path, |dir| dir.join("Cargo.toml").exists())
 }
 
-/// The generated `.rs` path for an `.rsx`, without transpiling (the content is written separately by
-/// [`sync_build_file`]). Used to warm the analyzer for a file the moment it opens.
+/// The generated `.rs` path for an `.rsx`, without transpiling (the content is written separately by [`sync_build_file`]). Used to warm the analyzer for a file the moment it opens.
 pub fn generated_path(rsx_path: &Path) -> Option<PathBuf> {
     let root = crate_root(rsx_path)?;
     let src_dir = root.join("src");
@@ -23,8 +18,7 @@ pub fn generated_path(rsx_path: &Path) -> Option<PathBuf> {
     Some(root.join(".rsx").join("build").join(rel))
 }
 
-/// The transpiler output for one `.rsx`, computed in-memory (no disk). Shared by [`sync_build_file`]
-/// and the embedded-analyzer query paths so both see byte-identical generated text.
+/// The transpiler output for one `.rsx`, computed in-memory (no disk). Shared by [`sync_build_file`] and the embedded-analyzer query paths so both see byte-identical generated text.
 pub struct GeneratedTarget {
     /// Path of the generated `<crate>/.rsx/build/<rel>.rs`.
     pub path: PathBuf,
@@ -36,8 +30,7 @@ pub struct GeneratedTarget {
     pub expr_spans: Vec<ExprSpan>,
 }
 
-/// Transpiles `source` into a [`GeneratedTarget`] without touching disk. Shared by [`sync_build_file`]
-/// and the embedded-analyzer completion path so both see byte-identical generated text.
+/// Transpiles `source` into a [`GeneratedTarget`] without touching disk. Shared by [`sync_build_file`] and the embedded-analyzer completion path so both see byte-identical generated text.
 pub fn generated_target(
     rsx_path: &Path,
     source: &str,
@@ -57,10 +50,7 @@ pub fn generated_target(
     })
 }
 
-/// Transpiles `source` and writes `<crate>/.rsx/build/<rel>.rs` + `.rs.map`, mirroring the macro's
-/// output so rust-analyzer sees the live buffer. `theme_type` matches the analyzer's project discovery.
-/// A no-op when the file is outside a crate's `src/` or transpilation fails — the last good build stays,
-/// so IntelliSense keeps working against the last parseable state.
+/// Transpiles `source` and writes `<crate>/.rsx/build/<rel>.rs` + `.rs.map`, mirroring the macro's output so rust-analyzer sees the live buffer. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/` or transpilation fails — the last good build stays, so IntelliSense keeps working against the last parseable state.
 pub fn sync_build_file(rsx_path: &Path, source: &str, theme_type: Option<&str>) {
     let Some(GeneratedTarget {
         path, code, map, ..
@@ -81,8 +71,7 @@ fn build_marker() -> String {
     format!("{sep}.rsx{sep}build{sep}")
 }
 
-/// Whether `path` is one of the transpiler's generated build files (`<crate>/.rsx/build/<rel>.rs`).
-/// Used to classify a rust-analyzer definition target before reverse-mapping it onto a `.rsx`.
+/// Whether `path` is one of the transpiler's generated build files (`<crate>/.rsx/build/<rel>.rs`). Used to classify a rust-analyzer definition target before reverse-mapping it onto a `.rsx`.
 pub fn is_generated_build_file(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()) == Some("rs")
         && path
@@ -91,9 +80,7 @@ pub fn is_generated_build_file(path: &Path) -> bool {
             .unwrap_or(false)
 }
 
-/// Inverse of [`generated_target`]'s path mapping: a generated `<crate>/.rsx/build/<rel>.rs` → its
-/// source `<crate>/src/<rel>.rsx` plus the line-based source map read from the sibling `.rs.map`
-/// (`generated line → Some(.rsx line)`). `None` for paths outside a build dir or without a readable map.
+/// Inverse of [`generated_target`]'s path mapping: a generated `<crate>/.rsx/build/<rel>.rs` → its source `<crate>/src/<rel>.rsx` plus the line-based source map read from the sibling `.rs.map` (`generated line → Some(.rsx line)`). `None` for paths outside a build dir or without a readable map.
 pub fn rsx_source_and_map(build_path: &Path) -> Option<(PathBuf, Vec<Option<u32>>)> {
     let source = rsx_source_for(build_path)?;
     let map_json = std::fs::read_to_string(build_path.with_extension("rs.map")).ok()?;

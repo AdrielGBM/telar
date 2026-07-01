@@ -49,9 +49,7 @@ where
         .map_err(|e| tokio::io::Error::new(tokio::io::ErrorKind::InvalidData, e))
 }
 
-/// Sends server→client messages (responses, notifications, requests) onto a
-/// channel that the stdout writer task drains, so handlers never touch stdout
-/// directly and writes never interleave.
+/// Sends server→client messages (responses, notifications, requests) onto a channel that the stdout writer task drains, so handlers never touch stdout directly and writes never interleave.
 #[derive(Clone)]
 pub struct OutgoingSender {
     tx: UnboundedSender<Value>,

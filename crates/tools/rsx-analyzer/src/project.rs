@@ -80,8 +80,7 @@ fn collect_rs_files(dir: &Path) -> Vec<PathBuf> {
     rsx_transpiler::collect_files_by_ext(dir, "rs", &|name| name != "target" && name != ".rsx")
 }
 
-/// Scans `source` for `Color` fields inside the `type_name` theme struct, invoking
-/// `on_field` with each field name and its 0-based line number in `source`.
+/// Scans `source` for `Color` fields inside the `type_name` theme struct, invoking `on_field` with each field name and its 0-based line number in `source`.
 fn scan_theme_fields(source: &str, type_name: &str, mut on_field: impl FnMut(&str, usize)) {
     let struct_marker = format!("struct {type_name}");
     let mut in_struct = false;

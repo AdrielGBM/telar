@@ -10,9 +10,7 @@
 //!   canonical shape: 4-space indentation, single-space token separators, and
 //!   one blank line between style classes.
 //!
-//! Formatting is whole-document: the parsed AST is re-serialized and the backend
-//! returns it as a single replacement edit, so it never has to map edits back
-//! through the section line offsets.
+//! Formatting is whole-document: the parsed AST is re-serialized and the backend returns it as a single replacement edit, so it never has to map edits back through the section line offsets.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -27,8 +25,7 @@ const INDENT: &str = "    ";
 /// Synthetic wrapper used to make the statement-level `[logic]` zone a valid Rust item for `rustfmt`.
 const WRAPPER_FN: &str = "__rsx_fmt_logic_wrapper";
 
-/// Formats a whole `.rsx` document. Returns `None` when the source does not parse
-/// (an invalid document is left untouched, as every formatter does).
+/// Formats a whole `.rsx` document. Returns `None` when the source does not parse (an invalid document is left untouched, as every formatter does).
 pub fn format_document(source: &str) -> Option<String> {
     let doc = parse(source).ok()?;
     let present = present_sections(source);
@@ -60,8 +57,7 @@ pub fn format_document(source: &str) -> Option<String> {
     Some(out)
 }
 
-/// Returns the section headers present in `source`, in order of first appearance,
-/// so empty-but-declared sections are preserved by the formatter.
+/// Returns the section headers present in `source`, in order of first appearance, so empty-but-declared sections are preserved by the formatter.
 fn present_sections(source: &str) -> Vec<Section> {
     let mut present = Vec::new();
     for line in source.lines() {
@@ -86,8 +82,7 @@ fn format_logic_section(logic: &str) -> String {
     }
 }
 
-/// Reformats the logic zone with `rustfmt`. Returns `None` (so the caller keeps
-/// the source verbatim) when `rustfmt` is missing or rejects the input.
+/// Reformats the logic zone with `rustfmt`. Returns `None` (so the caller keeps the source verbatim) when `rustfmt` is missing or rejects the input.
 fn run_rustfmt_on_logic(logic: &str) -> Option<String> {
     let logic = logic.trim_end();
     if logic.trim().is_empty() {
@@ -99,8 +94,7 @@ fn run_rustfmt_on_logic(logic: &str) -> Option<String> {
     unwrap_logic(&formatted)
 }
 
-/// Strips the synthetic wrapper function and one level of indentation that
-/// `rustfmt` added, and turns preview sentinel comments back into attributes.
+/// Strips the synthetic wrapper function and one level of indentation that `rustfmt` added, and turns preview sentinel comments back into attributes.
 fn unwrap_logic(formatted: &str) -> Option<String> {
     let lines: Vec<&str> = formatted.lines().collect();
     let first = lines.first()?;
@@ -174,8 +168,7 @@ enum StyleEntry<'a> {
 }
 
 fn format_style_section(doc: &RsxDocument) -> String {
-    // Constants and classes live in two AST vecs but interleave in the source;
-    // their `line` fields let us restore the original ordering.
+    // Constants and classes live in two AST vecs but interleave in the source; their `line` fields let us restore the original ordering.
     let mut entries: Vec<(usize, StyleEntry)> = Vec::new();
     for constant in &doc.style.constants {
         entries.push((constant.line, StyleEntry::Const(constant)));
@@ -286,8 +279,7 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
     }
 }
 
-/// Re-emits an element header as `tag .class "content" key:value`, the canonical
-/// token order (the parser accepts these in any order but splits them apart).
+/// Re-emits an element header as `tag .class "content" key:value`, the canonical token order (the parser accepts these in any order but splits them apart).
 fn format_element_header(element: &Element) -> String {
     let mut parts: Vec<String> = Vec::with_capacity(1 + element.classes.len());
     parts.push(element.tag.clone());
@@ -316,8 +308,7 @@ fn format_attr(attr: &Attr) -> String {
 
 // === [preview] =============================================================
 
-/// Re-emits a `[preview "Name" key:value flag …]` section: the header (name plus options) followed
-/// by its body, formatted like a `[view]` tree.
+/// Re-emits a `[preview "Name" key:value flag …]` section: the header (name plus options) followed by its body, formatted like a `[view]` tree.
 fn format_preview_section(preview: &Preview) -> String {
     let mut header = format!("[preview \"{}\"", preview.name);
     for (key, value) in &preview.options {
@@ -343,10 +334,7 @@ fn format_preview_section(preview: &Preview) -> String {
 
 // === range formatting ======================================================
 
-/// Whole-line edits that turn `source` into its formatted form, restricted to the hunks overlapping
-/// `range`. The formatter is whole-document, so "Format Selection" / format-on-paste reuse it: we diff
-/// the formatted output against the source line-by-line and emit only the changed hunks that touch the
-/// requested range, leaving the rest of the file untouched.
+/// Whole-line edits that turn `source` into its formatted form, restricted to the hunks overlapping `range`. The formatter is whole-document, so "Format Selection" / format-on-paste reuse it: we diff the formatted output against the source line-by-line and emit only the changed hunks that touch the requested range, leaving the rest of the file untouched.
 pub fn range_edits(
     source: &str,
     formatted: &str,
@@ -364,8 +352,7 @@ pub fn range_edits(
                 start: position_at(source, starts[hunk.src_start]),
                 end: position_at(source, starts[hunk.src_end]),
             },
-            // Each replaced source line carried its trailing newline (the range ends at the start of the
-            // following line), so each replacement line keeps one too.
+            // Each replaced source line carried its trailing newline (the range ends at the start of the following line), so each replacement line keeps one too.
             new_text: fmt_lines[hunk.fmt_start..hunk.fmt_end]
                 .iter()
                 .map(|line| format!("{line}\n"))
@@ -374,8 +361,7 @@ pub fn range_edits(
         .collect()
 }
 
-/// A contiguous run of changed lines: source lines `[src_start, src_end)` become formatted lines
-/// `[fmt_start, fmt_end)`. A pure insertion has `src_start == src_end`; a pure deletion `fmt_start == fmt_end`.
+/// A contiguous run of changed lines: source lines `[src_start, src_end)` become formatted lines `[fmt_start, fmt_end)`. A pure insertion has `src_start == src_end`; a pure deletion `fmt_start == fmt_end`.
 struct Hunk {
     src_start: usize,
     src_end: usize,
@@ -394,8 +380,7 @@ fn hunk_overlaps(hunk: &Hunk, range: &lsp_types::Range) -> bool {
     }
 }
 
-/// A standard LCS line diff, grouping the non-matching edits into hunks. Inputs are small (one file),
-/// so the O(n·m) table is fine.
+/// A standard LCS line diff, grouping the non-matching edits into hunks. Inputs are small (one file), so the O(n·m) table is fine.
 fn diff_hunks(a: &[&str], b: &[&str]) -> Vec<Hunk> {
     let (n, m) = (a.len(), b.len());
     let mut lcs = vec![vec![0u32; m + 1]; n + 1];
@@ -459,8 +444,7 @@ fn flush(current: &mut Option<Hunk>, hunks: &mut Vec<Hunk>) {
     }
 }
 
-/// Byte offset where each line starts; `offsets[i]` is line `i`'s start and the final entry is the
-/// end of the document, so a half-open line span `[s, e)` maps to bytes `offsets[s]..offsets[e]`.
+/// Byte offset where each line starts; `offsets[i]` is line `i`'s start and the final entry is the end of the document, so a half-open line span `[s, e)` maps to bytes `offsets[s]..offsets[e]`.
 fn line_start_offsets(source: &str) -> Vec<usize> {
     let mut offsets = vec![0usize];
     let mut running = 0usize;

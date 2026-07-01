@@ -15,23 +15,15 @@ const HEADING_FONT_SIZE: &str = "12.0";
 const SECTION_GAP: &str = "8.0";
 const HEADING_STYLE_CLOSURE: &str = "move || { let color = use_widget_theme().map(|t| t.widget_muted()).unwrap_or(Color::rgba(0.5, 0.5, 0.6, 1.0)); TextStyle::new(12.0, color) }";
 
-/// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came
-/// from. They are emitted into the view body during generation and stripped by [`resolve_source_map`]
-/// in the transpiler, which turns them into the per-line origin map. The prefix is deliberately
-/// un-generatable by normal codegen so it can never collide with real output.
+/// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
 const SRC_PUSH: &str = "//@RSX@PUSH:";
 const SRC_POP: &str = "//@RSX@POP";
 
-/// Inline marker emitted immediately before a verbatim `[view]` Rust expression (interpolation
-/// `{expr}`, `if`/`let` expressions, closure attr values). Stripped by [`resolve_source_map`], which
-/// records the byte position where the expression begins in the generated body, so the analyzer can
-/// map a `.rsx` cursor inside the expression onto the generated Rust. Payload: `<rsx_start>:<len>`,
-/// the source byte offset and length of the fragment, which is byte-identical in source and output.
+/// Inline marker emitted immediately before a verbatim `[view]` Rust expression (interpolation `{expr}`, `if`/`let` expressions, closure attr values). Stripped by [`resolve_source_map`], which records the byte position where the expression begins in the generated body, so the analyzer can map a `.rsx` cursor inside the expression onto the generated Rust. Payload: `<rsx_start>:<len>`, the source byte offset and length of the fragment, which is byte-identical in source and output.
 const SRC_EXPR_OPEN: &str = "/*@RSX@EXPR:";
 const SRC_EXPR_CLOSE: &str = "@*/";
 
-/// Builds an [`SRC_EXPR_OPEN`] marker for a verbatim expression at source byte offset `rsx_start`
-/// spanning `len` bytes.
+/// Builds an [`SRC_EXPR_OPEN`] marker for a verbatim expression at source byte offset `rsx_start` spanning `len` bytes.
 fn expr_marker(rsx_start: usize, len: usize) -> String {
     format!("{SRC_EXPR_OPEN}{rsx_start}:{len}{SRC_EXPR_CLOSE}")
 }
@@ -49,20 +41,14 @@ fn wrap_source_markers(emit: ChildEmit, line: usize) -> ChildEmit {
     }
 }
 
-/// The resolved view body: real lines (each with its origin `.rsx` line) plus the byte spans of the
-/// verbatim Rust expressions it contains.
+/// The resolved view body: real lines (each with its origin `.rsx` line) plus the byte spans of the verbatim Rust expressions it contains.
 pub(crate) struct ResolvedView {
     pub lines: Vec<(String, Option<u32>)>,
-    /// Per expression: `(byte offset within the streamed body, rsx_start, len)`. The streamed body is
-    /// the lines joined with `\n` (each line followed by a newline), matching how `transpile` appends
-    /// them, so a caller adds the body's start offset in the final file to get the generated offset.
+    /// Per expression: `(byte offset within the streamed body, rsx_start, len)`. The streamed body is the lines joined with `\n` (each line followed by a newline), matching how `transpile` appends them, so a caller adds the body's start offset in the final file to get the generated offset.
     pub expr_spans: Vec<(usize, u32, u32)>,
 }
 
-/// Strips the source markers from a generated view body, returning each real line paired with the
-/// `.rsx` line it originated from (a stack tracks nesting, so a node's own lines map to itself and
-/// its children's lines map to the children) plus the verbatim-expression byte spans. Lines outside
-/// any marker (root boilerplate) map to `None`.
+/// Strips the source markers from a generated view body, returning each real line paired with the `.rsx` line it originated from (a stack tracks nesting, so a node's own lines map to itself and its children's lines map to the children) plus the verbatim-expression byte spans. Lines outside any marker (root boilerplate) map to `None`.
 pub(crate) fn resolve_source_map(marked: &str) -> ResolvedView {
     let mut stack: Vec<u32> = Vec::new();
     let mut lines = Vec::new();
@@ -86,10 +72,7 @@ pub(crate) fn resolve_source_map(marked: &str) -> ResolvedView {
     ResolvedView { lines, expr_spans }
 }
 
-/// Removes inline [`SRC_EXPR_OPEN`] markers from a single output `line`, returning the cleaned line
-/// and, for each marker, `(body offset of the following expression, rsx_start, len)`. `base` is the
-/// body byte offset of this line's start; the expression begins exactly where the marker was, so its
-/// offset is `base + <cleaned bytes emitted so far>`.
+/// Removes inline [`SRC_EXPR_OPEN`] markers from a single output `line`, returning the cleaned line and, for each marker, `(body offset of the following expression, rsx_start, len)`. `base` is the body byte offset of this line's start; the expression begins exactly where the marker was, so its offset is `base + <cleaned bytes emitted so far>`.
 fn strip_expr_markers(line: &str, base: usize) -> (String, Vec<(usize, u32, u32)>) {
     let mut out = String::with_capacity(line.len());
     let mut spans = Vec::new();
@@ -114,8 +97,7 @@ fn strip_expr_markers(line: &str, base: usize) -> (String, Vec<(usize, u32, u32)
     (out, spans)
 }
 
-/// A piece of generated child code together with how it contributes to a
-/// parent's child collection.
+/// A piece of generated child code together with how it contributes to a parent's child collection.
 enum ChildEmit {
     /// A simple widget bound to `name`, pushable directly.
     Simple { name: String, code: String },
@@ -129,8 +111,7 @@ pub struct ViewGen<'a> {
     constants: &'a [StyleConstant],
     /// Per-widget-type variable counters, keyed by the descriptive prefix.
     counters: HashMap<String, usize>,
-    /// When set, `[style]` color references resolve to `use_theme::<Type>().field`
-    /// instead of generated `COLOR_*` consts, so theme switching takes effect.
+    /// When set, `[style]` color references resolve to `use_theme::<Type>().field` instead of generated `COLOR_*` consts, so theme switching takes effect.
     theme_type: Option<String>,
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,
@@ -237,9 +218,7 @@ impl<'a> ViewGen<'a> {
             ViewNode::IfBlock(block) => self.emit_if(block),
             ViewNode::ForBlock(block) => self.emit_for(block),
         };
-        // Bracket this node's generated lines with source markers so the transpiler can map them
-        // back to the `.rsx` line. Nested nodes nest their own markers; `let` statements have no
-        // line of their own and inherit the enclosing node's mapping.
+        // Bracket this node's generated lines with source markers so the transpiler can map them back to the `.rsx` line. Nested nodes nest their own markers; `let` statements have no line of their own and inherit the enclosing node's mapping.
         match node {
             ViewNode::Element(el) => wrap_source_markers(emit, el.line),
             ViewNode::IfBlock(block) => wrap_source_markers(emit, block.line),
@@ -382,13 +361,7 @@ impl<'a> ViewGen<'a> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits the children of a container-like element into `code` and returns the
-    /// expression to pass as the constructor's children argument. `seed` names are
-    /// prepended before the emitted children (e.g. a `section`'s heading). When any
-    /// child is dynamic control flow, this builds a mutable `__children` vec and
-    /// returns `__children`; otherwise it returns a `children![...]` literal. Used
-    /// by `emit_section`/`emit_container`/`emit_box`; `emit_scroll` differs and is
-    /// intentionally excluded.
+    /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended before the emitted children (e.g. a `section`'s heading). When any child is dynamic control flow, this builds a mutable `__children` vec and returns `__children`; otherwise it returns a `children![...]` literal. Used by `emit_section`/`emit_container`/`emit_box`; `emit_scroll` differs and is intentionally excluded.
     fn emit_children_collection(
         &self,
         code: &mut String,
@@ -434,9 +407,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Emits `let name = name.clone();` for every signal (`$name`) referenced in the *raw* `snippets`
-    /// — still carrying the `$` sigil, so captures are detected before substitution — plus any loop
-    /// variable in scope they use. Indented under `pad + extra`.
+    /// Emits `let name = name.clone();` for every signal (`$name`) referenced in the *raw* `snippets` — still carrying the `$` sigil, so captures are detected before substitution — plus any loop variable in scope they use. Indented under `pad + extra`.
     fn clone_bindings(&self, snippets: &[&str], pad: &str, extra: &str) -> String {
         let mut used: Vec<String> = Vec::new();
         for s in snippets {
@@ -477,8 +448,7 @@ impl<'a> ViewGen<'a> {
         let var = self.next_variable_name("img");
         let pad = self.indent_str();
 
-        // `src` is a verbatim Rust expression (e.g. `gradient_img`). Tag it with its source span so the
-        // analyzer can resolve / rename the symbol inside it; quoted values keep the legacy passthrough.
+        // `src` is a verbatim Rust expression (e.g. `gradient_img`). Tag it with its source span so the analyzer can resolve / rename the symbol inside it; quoted values keep the legacy passthrough.
         let src = match el.attributes.iter().find(|a| a.key == "src") {
             Some(a) if !a.is_quoted && !a.value.trim().is_empty() => {
                 let v = a.value.trim();
@@ -547,8 +517,7 @@ impl<'a> ViewGen<'a> {
         }
         if let Some(raw_closure) = on_press {
             let closure = substitute_handles(&raw_closure);
-            // A verbatim span maps only when the closure is copied byte-for-byte; a `$` substitution
-            // (like `normalize_closure` rewriting a bare expression) breaks that, so it gets no marker.
+            // A verbatim span maps only when the closure is copied byte-for-byte; a `$` substitution (like `normalize_closure` rewriting a bare expression) breaks that, so it gets no marker.
             let marker = if raw_closure.contains('$') {
                 String::new()
             } else {
@@ -621,8 +590,7 @@ impl<'a> ViewGen<'a> {
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
 
-        // A `col`/`row` with paint (inline or from its class) upgrades to a StyledContainer so it can
-        // carry a background like `box`; otherwise it stays a plain Container.
+        // A `col`/`row` with paint (inline or from its class) upgrades to a StyledContainer so it can carry a background like `box`; otherwise it stays a plain Container.
         let pattrs = self.paint_attrs(el);
         let pieces = has_paint(&pattrs).then(|| self.rect_style_pieces(&pattrs));
 
@@ -667,8 +635,7 @@ impl<'a> ViewGen<'a> {
         let pad = self.indent_str();
         let layout_style = self.make_layout_style("box", &el.classes, &el.attributes);
 
-        // Paint merges inline attrs with the element's class (inline wins), so a `@card` class can
-        // carry fill/stroke/radius/etc. — not only inline `box` attributes. `box` is always styled.
+        // Paint merges inline attrs with the element's class (inline wins), so a `@card` class can carry fill/stroke/radius/etc. — not only inline `box` attributes. `box` is always styled.
         let pattrs = self.paint_attrs(el);
         let (param, rect_style, opacity_call) = self.rect_style_pieces(&pattrs);
 
@@ -701,11 +668,9 @@ impl<'a> ViewGen<'a> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Builds a `Paint::Gradient(...)` expression for a `box` element, using the
-    /// closure parameter `r` (the rendered `Bounds`) for absolute gradient points.
+    /// Builds a `Paint::Gradient(...)` expression for a `box` element, using the closure parameter `r` (the rendered `Bounds`) for absolute gradient points.
     ///
-    /// `gradient:horizontal/vertical/diagonal/radial` with `from:` / `to:` (required),
-    /// optional `mid:` / `mid_pos:`.
+    /// `gradient:horizontal/vertical/diagonal/radial` with `from:` / `to:` (required), optional `mid:` / `mid_pos:`.
     fn box_gradient_paint(&self, attrs: &[Attr]) -> Option<String> {
         let direction = attrs.iter().find(|a| a.key == "gradient")?.value.clone();
         let from = attrs
@@ -880,8 +845,7 @@ impl<'a> ViewGen<'a> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits a `RenderNode` expression for an element that is a direct child of
-    /// a `canvas` element. The result is an expression string, not a statement.
+    /// Emits a `RenderNode` expression for an element that is a direct child of a `canvas` element. The result is an expression string, not a statement.
     fn emit_render_node_expr(&self, el: &Element) -> String {
         match el.tag.as_str() {
             "rect" => self.emit_canvas_rect(el),
@@ -894,10 +858,7 @@ impl<'a> ViewGen<'a> {
 
     /// Generates a `RenderNode::rect(...)` expression.
     ///
-    /// Attrs: `x`, `y`, `w`, `h` (numbers or `full`), `fill`, `stroke`,
-    /// `stroke_w`, `radius`, `shadow_x`, `shadow_y`, `shadow_blur`, `shadow_color`,
-    /// `gradient` (linear/radial), `from`, `to`, `mid`, `mid_pos`,
-    /// `x1`, `y1`, `x2`, `y2` (linear points), `cx`, `cy`, `r` (radial).
+    /// Attrs: `x`, `y`, `w`, `h` (numbers or `full`), `fill`, `stroke`, `stroke_w`, `radius`, `shadow_x`, `shadow_y`, `shadow_blur`, `shadow_color`, `gradient` (linear/radial), `from`, `to`, `mid`, `mid_pos`, `x1`, `y1`, `x2`, `y2` (linear points), `cx`, `cy`, `r` (radial).
     fn emit_canvas_rect(&self, el: &Element) -> String {
         let x = self.canvas_dim("x", &el.attributes);
         let y = self.canvas_dim("y", &el.attributes);
@@ -938,9 +899,7 @@ impl<'a> ViewGen<'a> {
         )
     }
 
-    /// Builds a `Paint::Gradient(...)` expression when `gradient:linear` or
-    /// `gradient:radial` is present. Color stops: `from:` / `to:` (required),
-    /// optional `mid:` with `mid_pos:` (default 0.5).
+    /// Builds a `Paint::Gradient(...)` expression when `gradient:linear` or `gradient:radial` is present. Color stops: `from:` / `to:` (required), optional `mid:` with `mid_pos:` (default 0.5).
     fn canvas_gradient_paint(&self, attrs: &[Attr]) -> Option<String> {
         let gradient_type = attrs.iter().find(|a| a.key == "gradient")?.value.clone();
         let from = attrs
@@ -989,8 +948,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Extracts `shadow-*` attrs and produces a `Some(Shadow::new(...))` expression,
-    /// or `None` when no shadow attrs are present.
+    /// Extracts `shadow-*` attrs and produces a `Some(Shadow::new(...))` expression, or `None` when no shadow attrs are present.
     fn canvas_shadow(&self, attrs: &[Attr]) -> Option<String> {
         if !attrs.iter().any(|a| a.key.starts_with("shadow")) {
             return None;
@@ -1060,8 +1018,7 @@ impl<'a> ViewGen<'a> {
 
     /// Generates a `RenderNode::layer(opacity, blur, [...])` expression.
     ///
-    /// Attrs: `opacity` (default 1.0), `blur` (default 0.0).
-    /// Children are recursively emitted as canvas render-node expressions.
+    /// Attrs: `opacity` (default 1.0), `blur` (default 0.0). Children are recursively emitted as canvas render-node expressions.
     fn emit_canvas_layer(&self, el: &Element) -> String {
         let opacity = el
             .attributes
@@ -1104,8 +1061,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Generates a `RenderNode::text(...)` expression for a `text` element inside
-    /// a canvas. Uses absolute coordinates unlike layout-mode `text`.
+    /// Generates a `RenderNode::text(...)` expression for a `text` element inside a canvas. Uses absolute coordinates unlike layout-mode `text`.
     fn emit_canvas_text(&self, el: &Element) -> String {
         let content = el.content.as_deref().unwrap_or("");
         let x = self.canvas_dim("x", &el.attributes);
@@ -1134,9 +1090,7 @@ impl<'a> ViewGen<'a> {
         )
     }
 
-    /// Resolves a canvas dimension attribute (`x`, `y`, `w`, `h`).
-    /// `"full"` maps to `__w` (width axis) or `__h` (height axis).
-    /// Omitted `w`/`h` default to `__w`/`__h`; omitted `x`/`y` default to `0.0`.
+    /// Resolves a canvas dimension attribute (`x`, `y`, `w`, `h`). `"full"` maps to `__w` (width axis) or `__h` (height axis). Omitted `w`/`h` default to `__w`/`__h`; omitted `x`/`y` default to `0.0`.
     fn canvas_dim(&self, key: &str, attrs: &[Attr]) -> String {
         let default = if key == "w" {
             "__w"
@@ -1159,9 +1113,7 @@ impl<'a> ViewGen<'a> {
             .unwrap_or_else(|| default.to_string())
     }
 
-    /// Emits an unknown tag as a component function call. No-attr tags generate
-    /// `name(ctx)?`; tags with attrs generate a `NameProps { … }` struct literal.
-    /// The component's `.rsx` file must declare a matching `pub struct NameProps`.
+    /// Emits an unknown tag as a component function call. No-attr tags generate `name(ctx)?`; tags with attrs generate a `NameProps { … }` struct literal. The component's `.rsx` file must declare a matching `pub struct NameProps`.
     fn emit_component_call(&mut self, el: &Element, tag: &str) -> ChildEmit {
         let var = self.next_variable_name("node");
         let pad = self.indent_str();
@@ -1184,13 +1136,9 @@ impl<'a> ViewGen<'a> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Converts a component attribute to a Rust expression. Quoted attrs (`label:"text"`)
-    /// become string literals; numbers become `f32` literals; hex/named colors resolve
-    /// via `color_expr`; everything else is forwarded verbatim.
+    /// Converts a component attribute to a Rust expression. Quoted attrs (`label:"text"`) become string literals; numbers become `f32` literals; hex/named colors resolve via `color_expr`; everything else is forwarded verbatim.
     ///
-    /// Simple lowercase identifiers (e.g. `fill:primary`) are routed through
-    /// `color_expr` so they follow the same [style]-vs-theme precedence as built-in
-    /// elements. PascalCase or complex expressions are passed through verbatim.
+    /// Simple lowercase identifiers (e.g. `fill:primary`) are routed through `color_expr` so they follow the same [style]-vs-theme precedence as built-in elements. PascalCase or complex expressions are passed through verbatim.
     fn component_attr_expr(&self, attr: &Attr) -> String {
         if attr.is_quoted {
             return rust_str(&attr.value);
@@ -1227,8 +1175,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// The effective paint attributes for an element: its inline attrs followed by the paint props of
-    /// its first class. Inline wins because the paint helpers take the first `.find()` match.
+    /// The effective paint attributes for an element: its inline attrs followed by the paint props of its first class. Inline wins because the paint helpers take the first `.find()` match.
     fn paint_attrs(&self, el: &Element) -> Vec<Attr> {
         let mut attrs = el.attributes.clone();
         if let Some(name) = el.classes.first()
@@ -1248,8 +1195,7 @@ impl<'a> ViewGen<'a> {
         attrs
     }
 
-    /// Builds the `(closure-param, RectStyle expr, .with_opacity(..) suffix)` for a styled container
-    /// from paint attributes. The param is `r` only when a gradient needs the rendered bounds.
+    /// Builds the `(closure-param, RectStyle expr, .with_opacity(..) suffix)` for a styled container from paint attributes. The param is `r` only when a gradient needs the rendered bounds.
     fn rect_style_pieces(&self, pattrs: &[Attr]) -> (&'static str, String, String) {
         let shadow = self.canvas_shadow(pattrs);
         let gradient = self.box_gradient_paint(pattrs);
@@ -1284,8 +1230,7 @@ impl<'a> ViewGen<'a> {
         (param, rect_style, opacity_call)
     }
 
-    /// Builds the `LayoutStyle` expression for a container: base style from the
-    /// tag (or a class function), then inline attribute modifiers chained on.
+    /// Builds the `LayoutStyle` expression for a container: base style from the tag (or a class function), then inline attribute modifiers chained on.
     fn make_layout_style(&self, tag: &str, classes: &[String], attrs: &[Attr]) -> String {
         let mut expr = if let Some(first) = classes.first() {
             // The first class provides the base style; further classes cannot currently compose, so only the first is applied.
@@ -1324,8 +1269,7 @@ impl<'a> ViewGen<'a> {
         expr
     }
 
-    /// Whether the named class declares a flex `direction`, so the tag should
-    /// not override it.
+    /// Whether the named class declares a flex `direction`, so the tag should not override it.
     fn class_has_direction(&self, class_name: &str) -> bool {
         self.classes
             .iter()
@@ -1381,8 +1325,7 @@ impl<'a> ViewGen<'a> {
         ChildEmit::Dynamic { code }
     }
 
-    /// Emits a control-flow branch's nodes, pushing every produced widget into
-    /// the surrounding `__children` vector.
+    /// Emits a control-flow branch's nodes, pushing every produced widget into the surrounding `__children` vector.
     fn emit_branch_into_children(&mut self, nodes: &[ViewNode], code: &mut String) {
         let pad = self.indent_str();
         for node in nodes {
@@ -1398,9 +1341,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Builds the `content_fn` closure for a text node, handling `{...}` interpolation.
-    /// `content_start` is the source byte offset of `content`, used to tag each interpolated
-    /// expression with its source span.
+    /// Builds the `content_fn` closure for a text node, handling `{...}` interpolation. `content_start` is the source byte offset of `content`, used to tag each interpolated expression with its source span.
     pub fn interpolate_content(&self, content: &str, content_start: usize) -> String {
         let segments = parse_interpolation(content);
         if segments.iter().all(|s| matches!(s, Segment::Literal(_))) {
@@ -1425,18 +1366,13 @@ impl<'a> ViewGen<'a> {
         format!("move || format!({}, {args_joined})", rust_str(&fmt))
     }
 
-    /// Renders an interpolation expression: a `$ident` reactive read becomes `ident.get()`; a
-    /// `$`-free expression is emitted verbatim (a plain value). `raw_start` is the source byte offset
-    /// of the raw (untrimmed) expression text; an [`expr_marker`] is emitted right before a verbatim
-    /// (`$`-free) expression so the analyzer can complete inside it.
+    /// Renders an interpolation expression: a `$ident` reactive read becomes `ident.get()`; a `$`-free expression is emitted verbatim (a plain value). `raw_start` is the source byte offset of the raw (untrimmed) expression text; an [`expr_marker`] is emitted right before a verbatim (`$`-free) expression so the analyzer can complete inside it.
     fn render_interp_expr(&self, expr: &str, raw_start: usize) -> String {
         let trimmed = expr.trim();
         if trimmed.is_empty() {
             return format!("{{ {expr} }}");
         }
-        // A `$ident` is a reactive read (`ident.get()`). Substitution rewrites the text, so a `$`
-        // expression gets no verbatim span; a `$`-free expression is copied byte-for-byte (a plain,
-        // non-reactive value) and keeps its source span for LSP mapping.
+        // A `$ident` is a reactive read (`ident.get()`). Substitution rewrites the text, so a `$` expression gets no verbatim span; a `$`-free expression is copied byte-for-byte (a plain, non-reactive value) and keeps its source span for LSP mapping.
         if trimmed.contains('$') {
             return format!("{{ {} }}", substitute_reads(trimmed));
         }
@@ -1449,8 +1385,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Resolves a color reference: an inline hex value, a CSS keyword, a
-    /// `Color::*` literal, a `[style]`-declared local constant, or a theme field.
+    /// Resolves a color reference: an inline hex value, a CSS keyword, a `Color::*` literal, a `[style]`-declared local constant, or a theme field.
     ///
     /// Lookup order:
     /// 1. Inline hex / `Color::*` / CSS keyword → static expression.
@@ -1484,16 +1419,14 @@ impl<'a> ViewGen<'a> {
 
 enum Segment {
     Literal(String),
-    /// An interpolated `{expr}`: the raw inner text plus the byte offset (within `content`) where it
-    /// begins, used to map the verbatim expression back to the `.rsx` source.
+    /// An interpolated `{expr}`: the raw inner text plus the byte offset (within `content`) where it begins, used to map the verbatim expression back to the `.rsx` source.
     Expr {
         text: String,
         byte_offset: usize,
     },
 }
 
-/// Splits a string into literal and `{expr}` segments. Escaped braces `{{`/`}}`
-/// are treated as literal single braces.
+/// Splits a string into literal and `{expr}` segments. Escaped braces `{{`/`}}` are treated as literal single braces.
 fn parse_interpolation(content: &str) -> Vec<Segment> {
     let mut segments = Vec::new();
     let mut literal = String::new();
@@ -1536,8 +1469,7 @@ fn parse_interpolation(content: &str) -> Vec<Segment> {
     segments
 }
 
-/// Extracts the binding identifiers from a `for` pattern, ignoring tuple
-/// punctuation and the `_` wildcard. `(i, item)` -> `["i", "item"]`.
+/// Extracts the binding identifiers from a `for` pattern, ignoring tuple punctuation and the `_` wildcard. `(i, item)` -> `["i", "item"]`.
 fn pattern_idents(pattern: &str) -> Vec<String> {
     let mut idents = Vec::new();
     let mut current = String::new();
@@ -1568,8 +1500,7 @@ fn rust_str(s: &str) -> String {
     format!("\"{escaped}\"")
 }
 
-/// An [`expr_marker`] for a verbatim closure attribute value (one beginning with `|`), or an empty
-/// string otherwise. The value is emitted byte-for-byte after `move `, so the span maps directly.
+/// An [`expr_marker`] for a verbatim closure attribute value (one beginning with `|`), or an empty string otherwise. The value is emitted byte-for-byte after `move `, so the span maps directly.
 fn closure_marker(attr: Option<&Attr>) -> String {
     let Some(attr) = attr else {
         return String::new();
@@ -1582,8 +1513,7 @@ fn closure_marker(attr: Option<&Attr>) -> String {
     expr_marker(attr.value_start + lead, attr.value.trim().len())
 }
 
-/// The parser strips `on_press:` leaving `|| expr` or `|ev| expr`. Ensure the
-/// value is a closure; wrap bare expressions in a zero-arg closure.
+/// The parser strips `on_press:` leaving `|| expr` or `|ev| expr`. Ensure the value is a closure; wrap bare expressions in a zero-arg closure.
 fn normalize_closure(value: &str) -> String {
     let v = value.trim();
     if v.starts_with('|') {
@@ -1593,20 +1523,17 @@ fn normalize_closure(value: &str) -> String {
     }
 }
 
-/// Replaces every `$ident` in `s` with `ident.get()` — a reactive read, for `[view]` interpolation
-/// where a signal reference is a value read.
+/// Replaces every `$ident` in `s` with `ident.get()` — a reactive read, for `[view]` interpolation where a signal reference is a value read.
 fn substitute_reads(s: &str) -> String {
     substitute_dollar(s, true)
 }
 
-/// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies
-/// where `$count.update(…)` means the handle and `$` only marks it for cloning.
+/// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies where `$count.update(…)` means the handle and `$` only marks it for cloning.
 fn substitute_handles(s: &str) -> String {
     substitute_dollar(s, false)
 }
 
-/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`). Only an ASCII `$` followed by an
-/// identifier start counts as a marker; everything else is copied through unchanged.
+/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`). Only an ASCII `$` followed by an identifier start counts as a marker; everything else is copied through unchanged.
 fn substitute_dollar(s: &str, read: bool) -> String {
     let bytes = s.as_bytes();
     let mut out = String::with_capacity(s.len());
@@ -1636,8 +1563,7 @@ fn substitute_dollar(s: &str, read: bool) -> String {
     out
 }
 
-/// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured
-/// by a closure.
+/// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured by a closure.
 fn signal_idents(s: &str) -> Vec<String> {
     let bytes = s.as_bytes();
     let mut idents = Vec::new();
@@ -1662,8 +1588,7 @@ fn signal_idents(s: &str) -> Vec<String> {
     idents
 }
 
-/// Assembles a `&[(pos, color)]` gradient stops expression from the resolved
-/// `from`, `to`, and optional `mid`/`mid_pos` values.
+/// Assembles a `&[(pos, color)]` gradient stops expression from the resolved `from`, `to`, and optional `mid`/`mid_pos` values.
 fn build_gradient_stops(from: &str, to: &str, mid: Option<&str>, mid_pos: f32) -> String {
     if let Some(m) = mid {
         format!(
@@ -1675,8 +1600,7 @@ fn build_gradient_stops(from: &str, to: &str, mid: Option<&str>, mid_pos: f32) -
     }
 }
 
-/// Keys that contribute to a container's paint (`RectStyle`) rather than its layout. Used to pick
-/// which class props to merge into an element's paint attributes.
+/// Keys that contribute to a container's paint (`RectStyle`) rather than its layout. Used to pick which class props to merge into an element's paint attributes.
 fn is_paint_key(key: &str) -> bool {
     matches!(
         key,
@@ -1704,9 +1628,7 @@ fn has_paint(pattrs: &[Attr]) -> bool {
     })
 }
 
-/// Builds a `RectStyle { … }` or shorthand expression from the resolved fill,
-/// stroke, shadow, and radius values. Mirrors the branching logic shared by
-/// `emit_box` and `emit_canvas_rect`.
+/// Builds a `RectStyle { … }` or shorthand expression from the resolved fill, stroke, shadow, and radius values. Mirrors the branching logic shared by `emit_box` and `emit_canvas_rect`.
 fn build_rect_style(
     gradient: Option<String>,
     solid_fill: Option<String>,
