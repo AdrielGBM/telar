@@ -53,6 +53,7 @@ const KEEPALIVE_INTERVAL: Duration = Duration::from_millis(1000);
 
 struct CachedNode {
     id: u64,
+    name: &'static str,
     rect: Rect,
     depth: usize,
 }
@@ -180,10 +181,7 @@ impl DevPlugin for DevTools {
 
                 let indent = node.depth as f32 * 8.0;
                 let r = node.rect;
-                let label = format!(
-                    "#{} draw  {:.0}\u{00d7}{:.0} @ ({:.0},{:.0})",
-                    node.id, r.width, r.height, r.x, r.y
-                );
+                let label = format!("{}  {:.0}\u{00d7}{:.0}", node.name, r.width, r.height);
                 cmds.push(text_command(
                     label.into(),
                     Rect::new(
@@ -437,6 +435,7 @@ impl DevPlugin for DevTools {
         tree.for_each_node(&mut |info| {
             self.nodes.push(CachedNode {
                 id: info.id,
+                name: info.name,
                 rect: info.rect,
                 depth: info.depth,
             });

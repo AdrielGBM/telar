@@ -25,7 +25,11 @@ pub(crate) type TrackedChildren = Vec<Child>;
 /// so a re-entrant render while the item is mid event-dispatch (mutably borrowed) keeps the previous
 /// frame instead of panicking; a later flush re-runs it.
 pub(crate) fn mount_item_segment(item: Rc<RefCell<Box<dyn LayoutItem>>>) -> Rc<Segment> {
-    Segment::mount_fn(move || item.try_borrow().ok().map(|i| i.view()))
+    let name = item
+        .try_borrow()
+        .map(|i| i.debug_name())
+        .unwrap_or("Component");
+    Segment::mount_fn_named(name, move || item.try_borrow().ok().map(|i| i.view()))
 }
 
 pub(crate) trait LeafWidget {
@@ -50,6 +54,10 @@ impl Component for Box<dyn LayoutItem> {
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         (**self).on_event(event)
+    }
+
+    fn debug_name(&self) -> &'static str {
+        (**self).debug_name()
     }
 }
 

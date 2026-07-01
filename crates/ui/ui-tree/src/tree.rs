@@ -37,6 +37,11 @@ impl ComponentList {
         self.segment_root.commands()
     }
 
+    /// Emits the component tree in pre-order for the devtools inspector. See [`SegmentRoot::walk`].
+    pub fn walk_tree(&self, out: &mut Vec<segment::SegmentNodeInfo>) {
+        self.segment_root.walk(out);
+    }
+
     pub fn on_event(&mut self, event: &Event) -> EventResult {
         // Batch so any signals mutated by handlers flush their effects AFTER on_event returns (and releases the borrow_mut), never re-entering a segment effect mid-borrow.
         batch(|| self.root.borrow_mut().on_event(event))

@@ -46,4 +46,8 @@ impl Component for Canvas {
     fn on_event(&mut self, _event: &Event) -> EventResult {
         EventResult::Ignored
     }
+
+    fn debug_name(&self) -> &'static str {
+        "Canvas"
+    }
 }

@@ -15,6 +15,11 @@ pub trait Component: 'static {
     fn on_event(&mut self, _event: &Event) -> EventResult {
         EventResult::Ignored
     }
+
+    /// Human-readable widget type name for the devtools tree inspector.
+    fn debug_name(&self) -> &'static str {
+        "Component"
+    }
 }
 
 impl Component for Box<dyn Component> {
@@ -24,5 +29,9 @@ impl Component for Box<dyn Component> {
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         (**self).on_event(event)
+    }
+
+    fn debug_name(&self) -> &'static str {
+        (**self).debug_name()
     }
 }

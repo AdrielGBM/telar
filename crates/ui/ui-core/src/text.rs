@@ -103,6 +103,10 @@ impl Component for Text {
     fn on_event(&mut self, _event: &Event) -> EventResult {
         EventResult::Ignored
     }
+
+    fn debug_name(&self) -> &'static str {
+        "Text"
+    }
 }
 
 impl_leaf_widget!(Text);

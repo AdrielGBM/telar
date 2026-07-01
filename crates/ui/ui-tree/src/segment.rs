@@ -10,6 +10,7 @@
 use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
 
+use geometry_core::Rect;
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::DrawCommand;
 
@@ -27,6 +28,8 @@ pub fn bump_force_ticks() {
 }
 
 pub struct Segment {
+    // Human-readable widget type name, captured at mount for the devtools tree inspector.
+    name: &'static str,
     // This component's own flattened commands, excluding children (spliced in at compose time).
     own_commands: Rc<RefCell<Vec<DrawCommand>>>,
     // (index into `own` where the child's commands splice, child segment), in emission order.
@@ -36,13 +39,36 @@ pub struct Segment {
     _effect: Effect,
 }
 
+/// A node emitted by [`Segment::walk`]: one mounted component, with its pre-order id, widget name,
+/// nesting depth, and the bounding rect of its own draw commands unioned with all descendants'.
+#[derive(Clone, Debug)]
+pub struct SegmentNodeInfo {
+    pub id: u64,
+    pub name: &'static str,
+    pub depth: usize,
+    pub rect: Rect,
+}
+
+/// Unions two rects, treating any zero/negative-area rect as empty so `empty ∪ r == r` — a leaf with
+/// no draw commands must not drag its parent's box to the origin.
+fn union_nonempty(a: Rect, b: Rect) -> Rect {
+    let a_empty = a.width <= 0.0 || a.height <= 0.0;
+    let b_empty = b.width <= 0.0 || b.height <= 0.0;
+    match (a_empty, b_empty) {
+        (true, _) => b,
+        (_, true) => a,
+        _ => a.union(b),
+    }
+}
+
 impl Segment {
     /// Mounts `component` as a reactive segment with its own effect: the effect re-runs (and bumps
     /// the thread-local render generation) only when a signal read by this component's `view()`
     /// changes — so a leaf's signal change costs O(this component), not O(tree).
     pub fn mount<C: Component + 'static>(component: C) -> Rc<Segment> {
+        let name = component.debug_name();
         let component = Rc::new(RefCell::new(component));
-        Self::mount_fn(move || component.try_borrow().ok().map(|c| c.view()))
+        Self::mount_fn_named(name, move || component.try_borrow().ok().map(|c| c.view()))
     }
 
     /// As `mount`, but takes an already-shared component so a parent can also hold it for event
@@ -50,7 +76,11 @@ impl Segment {
     /// overlap (dispatch is batched, so flushes happen after it), but a re-entrant flush during
     /// dispatch would otherwise panic, so the render is skipped when the component is borrowed.
     pub fn mount_dyn(component: Rc<RefCell<dyn Component>>) -> Rc<Segment> {
-        Self::mount_fn(move || component.try_borrow().ok().map(|c| c.view()))
+        let name = component
+            .try_borrow()
+            .map(|c| c.debug_name())
+            .unwrap_or("Component");
+        Self::mount_fn_named(name, move || component.try_borrow().ok().map(|c| c.view()))
     }
 
     /// Core mount: `render` produces this segment's `RenderNode`, or `None` to keep the previous
@@ -58,6 +88,14 @@ impl Segment {
     /// borrowed — borrowing it then would panic, so we leave the last frame's commands in place and
     /// a later flush re-runs us).
     pub fn mount_fn(render: impl Fn() -> Option<RenderNode> + 'static) -> Rc<Segment> {
+        Self::mount_fn_named("Component", render)
+    }
+
+    /// As `mount_fn`, but records a human-readable widget `name` for the devtools tree inspector.
+    pub fn mount_fn_named(
+        name: &'static str,
+        render: impl Fn() -> Option<RenderNode> + 'static,
+    ) -> Rc<Segment> {
         let own_commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
         let child_slots: Rc<RefCell<Vec<(usize, Rc<Segment>)>>> = Default::default();
         let stack: Rc<RefCell<Vec<RenderNode>>> = Default::default();
@@ -92,6 +130,7 @@ impl Segment {
         });
 
         Rc::new(Segment {
+            name,
             own_commands,
             child_slots,
             is_dirty,
@@ -104,6 +143,51 @@ impl Segment {
         RenderNode::Boundary {
             child: Rc::clone(self),
         }
+    }
+
+    /// Human-readable widget type name captured at mount.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// Emits this segment's subtree in pre-order (parent before children) into `out`. See
+    /// [`Segment::collect`] for how ids, depth, and bounding rects are computed.
+    pub fn walk(&self, out: &mut Vec<SegmentNodeInfo>) {
+        self.collect(0, out);
+    }
+
+    /// Recursively appends one [`SegmentNodeInfo`] per segment in pre-order. `id` is the pre-order
+    /// index, so a consumer can select by both row index and canvas hit-test. Returns this subtree's
+    /// bounding rect (own draw commands unioned with all descendants') so a container highlights its
+    /// whole subtree, not just its own commands.
+    fn collect(&self, depth: usize, out: &mut Vec<SegmentNodeInfo>) -> Rect {
+        let idx = out.len();
+        // Push before recursing so the parent precedes its children and keeps the pre-order id.
+        out.push(SegmentNodeInfo {
+            id: idx as u64,
+            name: self.name,
+            depth,
+            rect: Rect::default(),
+        });
+
+        let mut bounds = Rect::default();
+        for cmd in self.own_commands.borrow().iter() {
+            let rect = match cmd {
+                DrawCommand::Rect { rect, .. } => *rect,
+                DrawCommand::Text { rect, .. } => *rect,
+                DrawCommand::Image { rect, .. } => *rect,
+                DrawCommand::PushClip { rect, .. } => *rect,
+                _ => continue,
+            };
+            bounds = union_nonempty(bounds, rect);
+        }
+
+        for (_, child) in self.child_slots.borrow().iter() {
+            bounds = union_nonempty(bounds, child.collect(depth + 1, out));
+        }
+
+        out[idx].rect = bounds;
+        bounds
     }
 }
 
@@ -249,6 +333,11 @@ impl SegmentRoot {
 
     pub fn generation(&self) -> u64 {
         self.compose_generation.get()
+    }
+
+    /// Emits the whole segment tree in pre-order for the devtools inspector. See [`Segment::walk`].
+    pub fn walk(&self, out: &mut Vec<SegmentNodeInfo>) {
+        self.root.walk(out);
     }
 
     /// Whether any segment changed since the last `commands()` (which clears the dirty flags).

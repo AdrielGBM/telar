@@ -44,6 +44,10 @@ impl Component for Rectangle {
     fn on_event(&mut self, _event: &Event) -> EventResult {
         EventResult::Ignored
     }
+
+    fn debug_name(&self) -> &'static str {
+        "Rectangle"
+    }
 }
 
 impl_leaf_widget!(Rectangle);

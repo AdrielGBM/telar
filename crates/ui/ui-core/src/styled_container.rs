@@ -71,6 +71,10 @@ impl Component for StyledContainer {
     fn on_event(&mut self, event: &Event) -> EventResult {
         dispatch_container_event(&mut self.children, event)
     }
+
+    fn debug_name(&self) -> &'static str {
+        "StyledContainer"
+    }
 }
 
 #[cfg(test)]

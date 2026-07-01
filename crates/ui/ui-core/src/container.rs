@@ -55,6 +55,10 @@ impl Component for Container {
     fn on_event(&mut self, event: &Event) -> EventResult {
         dispatch_container_event(&mut self.children, event)
     }
+
+    fn debug_name(&self) -> &'static str {
+        "Container"
+    }
 }
 
 #[cfg(test)]

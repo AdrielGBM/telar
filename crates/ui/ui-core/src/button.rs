@@ -127,6 +127,10 @@ impl Component for Button {
             _ => EventResult::Ignored,
         }
     }
+
+    fn debug_name(&self) -> &'static str {
+        "Button"
+    }
 }
 
 impl_leaf_widget!(Button);

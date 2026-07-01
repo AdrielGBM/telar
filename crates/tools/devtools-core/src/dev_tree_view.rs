@@ -1,9 +1,9 @@
 use geometry_core::Rect;
-use renderer_core::DrawCommand;
-use ui_tree::ComponentList;
+use ui_tree::{ComponentList, SegmentNodeInfo};
 
 pub struct DevNodeInfo {
     pub id: u64,
+    pub name: &'static str,
     pub rect: Rect,
     pub depth: usize,
 }
@@ -15,23 +15,20 @@ pub trait DevTreeView {
 
 impl DevTreeView for ComponentList {
     fn node_count(&self) -> usize {
-        self.commands().len()
+        let mut nodes = Vec::new();
+        self.walk_tree(&mut nodes);
+        nodes.len()
     }
 
     fn for_each_node(&self, f: &mut dyn FnMut(&DevNodeInfo)) {
-        let cmds = self.commands();
-        for (idx, cmd) in cmds.iter().enumerate() {
-            let rect = match cmd {
-                DrawCommand::Rect { rect, .. } => *rect,
-                DrawCommand::Text { rect, .. } => *rect,
-                DrawCommand::Image { rect, .. } => *rect,
-                DrawCommand::PushClip { rect, .. } => *rect,
-                _ => Rect::default(),
-            };
+        let mut nodes: Vec<SegmentNodeInfo> = Vec::new();
+        self.walk_tree(&mut nodes);
+        for node in &nodes {
             f(&DevNodeInfo {
-                id: idx as u64,
-                rect,
-                depth: 0,
+                id: node.id,
+                name: node.name,
+                rect: node.rect,
+                depth: node.depth,
             });
         }
     }

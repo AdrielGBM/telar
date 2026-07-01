@@ -278,6 +278,10 @@ impl Component for LayoutScrollArea {
     fn on_event(&mut self, event: &Event) -> EventResult {
         self.core.on_event(event, self.leaf.rect.get())
     }
+
+    fn debug_name(&self) -> &'static str {
+        "ScrollArea"
+    }
 }
 
 #[cfg(test)]
