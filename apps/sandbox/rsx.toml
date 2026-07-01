@@ -1,1 +1,15 @@
+[rsx]
+backend = "auto"
 
+[rsx.dev]
+devtools = true
+
+[rsx.dev.window]
+title = "sandbox"
+width = 1200
+height = 1200
+decorations = true
+resizable = true
+transparent = false
+fullscreen = "disabled"
+position = "centered"

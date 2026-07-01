@@ -9,6 +9,8 @@ pub enum RendererBackend {
     Software,
 }
 
+// Only the runtime runner reads this; gated so `rsx` compiled without `runtime` (e.g. as a cargo-rsx dependency) doesn't warn it as dead code.
+#[cfg(feature = "runtime")]
 pub(crate) fn compile_time_backend() -> RendererBackend {
     match option_env!("RSX_RENDERER_BACKEND") {
         Some("hardware") => RendererBackend::Hardware,

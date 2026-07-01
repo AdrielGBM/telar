@@ -174,6 +174,9 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     let run_tail = quote! {
         #setup
+        if ::std::env::var("RSX_TEST").is_ok() {
+            ::rsx::try_run_test(rsx_all_preview_entries(), ::rsx::AppConfig::from(#config));
+        }
         if ::std::env::var("RSX_PREVIEW").is_ok() {
             if ::rsx::try_run_preview(rsx_all_preview_entries(), ::rsx::AppConfig::from(#config)) {
                 return;

@@ -27,14 +27,14 @@ enum RsxCommand {
     Preview(PreviewArgs),
     /// Build the app for distribution
     Build(BuildArgs),
-    /// Run tests (not yet implemented)
-    Test,
+    /// Render every preview component headlessly and report failures
+    Test(TestArgs),
     /// Create a new RSX project (not yet implemented)
     New {
         /// Project name
         name: String,
     },
-    /// Check the development environment (not yet implemented)
+    /// Check the development environment
     Doctor,
 }
 
@@ -57,8 +57,9 @@ struct CommonArgs {
     cargo_args: Vec<String>,
 }
 
+/// Flags shared by the hot-reload commands (`dev` and `preview`).
 #[derive(clap::Args)]
-struct DevArgs {
+struct HotArgs {
     #[command(flatten)]
     common: CommonArgs,
     /// Build in release mode
@@ -67,6 +68,12 @@ struct DevArgs {
     /// Disable hot reload, restart process on changes instead
     #[arg(long)]
     no_hot_reload: bool,
+}
+
+#[derive(clap::Args)]
+struct DevArgs {
+    #[command(flatten)]
+    hot: HotArgs,
     /// Devtools overlay
     #[arg(long, value_enum)]
     devtools: Option<DevtoolsArg>,
@@ -75,19 +82,22 @@ struct DevArgs {
 #[derive(clap::Args)]
 struct PreviewArgs {
     #[command(flatten)]
-    common: CommonArgs,
-    /// Build in release mode
-    #[arg(long)]
-    release: bool,
-    /// Disable hot reload
-    #[arg(long)]
-    no_hot_reload: bool,
+    hot: HotArgs,
     /// Preview a specific component by name
-    #[arg(long)]
+    #[arg(long, conflicts_with = "list")]
     component: Option<String>,
     /// List all available previews and exit
     #[arg(long)]
     list: bool,
+}
+
+#[derive(clap::Args)]
+struct TestArgs {
+    #[command(flatten)]
+    common: CommonArgs,
+    /// Build in release mode
+    #[arg(long)]
+    release: bool,
 }
 
 #[derive(clap::Args)]
@@ -135,6 +145,10 @@ struct WindowConfig {
     pub decorations: Option<bool>,
     pub resizable: Option<bool>,
     pub transparent: Option<bool>,
+    // "disabled" | "borderless" | "exclusive"
+    pub fullscreen: Option<String>,
+    // "centered" | "<x>,<y>"
+    pub position: Option<String>,
 }
 
 #[derive(Deserialize, Default, Clone)]
@@ -176,6 +190,8 @@ struct CargoPackage {
 #[derive(Deserialize, Default)]
 struct CargoPackageMetadata {
     android: Option<AndroidMetadata>,
+    // `[package.metadata.rsx]` — same schema as rsx.toml's `[rsx]`, but overridden by rsx.toml.
+    rsx: Option<RsxConfig>,
 }
 #[derive(Deserialize, Default)]
 struct AndroidMetadata {
@@ -299,8 +315,22 @@ fn apk_path(args: &[String]) -> PathBuf {
         .join(format!("{crate_name}.apk"))
 }
 
-fn load_config(args: &[String]) -> RsxConfig {
-    let path = find_package_dir(args).join("rsx.toml");
+// Reads `[package.metadata.rsx]` from the package's Cargo.toml (the lowest-precedence file source).
+fn read_manifest_config(dir: &Path) -> RsxConfig {
+    let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
+        return RsxConfig::default();
+    };
+    toml::from_str::<CargoManifest>(&content)
+        .ok()
+        .and_then(|m| m.package)
+        .and_then(|p| p.metadata)
+        .and_then(|m| m.rsx)
+        .unwrap_or_default()
+}
+
+// Reads `[rsx]` from rsx.toml, which overrides the manifest metadata.
+fn read_toml_config(dir: &Path) -> RsxConfig {
+    let path = dir.join("rsx.toml");
     match std::fs::read_to_string(&path) {
         Ok(content) => {
             toml::from_str::<RsxToml>(&content)
@@ -314,6 +344,46 @@ fn load_config(args: &[String]) -> RsxConfig {
                 .rsx
         }
         Err(_) => RsxConfig::default(),
+    }
+}
+
+// Config precedence, lowest to highest: built-in defaults < `[package.metadata.rsx]` (Cargo.toml) < `rsx.toml` < CLI flags. CLI flags are layered on by each command after this returns.
+fn load_config(args: &[String]) -> RsxConfig {
+    let dir = find_package_dir(args);
+    merge_config(read_manifest_config(&dir), read_toml_config(&dir))
+}
+
+fn merge_opt<T>(base: Option<T>, over: Option<T>, merge: impl FnOnce(T, T) -> T) -> Option<T> {
+    match (base, over) {
+        (Some(b), Some(o)) => Some(merge(b, o)),
+        (b, o) => o.or(b),
+    }
+}
+
+fn merge_window(base: WindowConfig, over: WindowConfig) -> WindowConfig {
+    WindowConfig {
+        title: over.title.or(base.title),
+        width: over.width.or(base.width),
+        height: over.height.or(base.height),
+        decorations: over.decorations.or(base.decorations),
+        resizable: over.resizable.or(base.resizable),
+        transparent: over.transparent.or(base.transparent),
+        fullscreen: over.fullscreen.or(base.fullscreen),
+        position: over.position.or(base.position),
+    }
+}
+
+fn merge_dev(base: DevConfig, over: DevConfig) -> DevConfig {
+    DevConfig {
+        window: merge_opt(base.window, over.window, merge_window),
+        devtools: over.devtools.or(base.devtools),
+    }
+}
+
+fn merge_config(base: RsxConfig, over: RsxConfig) -> RsxConfig {
+    RsxConfig {
+        backend: over.backend.or(base.backend),
+        dev: merge_opt(base.dev, over.dev, merge_dev),
     }
 }
 
@@ -378,6 +448,12 @@ fn apply_dev_window_env(envs: &mut Vec<(String, String)>, window: &WindowConfig)
             "RSX_DEV_WINDOW_TRANSPARENT".to_string(),
             if transparent { "1" } else { "0" }.to_string(),
         ));
+    }
+    if let Some(fullscreen) = &window.fullscreen {
+        envs.push(("RSX_DEV_WINDOW_FULLSCREEN".to_string(), fullscreen.clone()));
+    }
+    if let Some(position) = &window.position {
+        envs.push(("RSX_DEV_WINDOW_POSITION".to_string(), position.clone()));
     }
 }
 
@@ -711,31 +787,35 @@ fn watch_and_run(
 
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-rsx".to_string()).chain(args));
-    match cli.command.unwrap_or(RsxCommand::Dev(DevArgs {
-        common: CommonArgs {
-            package: None,
-            features: None,
-            target: Target::Desktop,
-            backend: None,
-            cargo_args: vec![],
-        },
-        release: false,
-        no_hot_reload: false,
-        devtools: None,
-    })) {
+    match cli.command.unwrap_or_else(default_dev_command) {
         RsxCommand::Dev(args) => run_dev_cmd(args),
         RsxCommand::Preview(args) => run_preview_cmd(args),
         RsxCommand::Build(args) => run_build_cmd(args),
-        RsxCommand::Test => {
-            eprintln!("[cargo-rsx] `cargo rsx test` is not yet implemented.");
-            std::process::exit(1);
-        }
+        RsxCommand::Test(args) => run_test_cmd(args),
         RsxCommand::New { name } => {
             eprintln!("[cargo-rsx] `cargo rsx new {name}` is not yet implemented.");
             std::process::exit(1);
         }
         RsxCommand::Doctor => run_doctor_cmd(),
     }
+}
+
+// No subcommand behaves like `cargo rsx dev` with default flags.
+fn default_dev_command() -> RsxCommand {
+    RsxCommand::Dev(DevArgs {
+        hot: HotArgs {
+            common: CommonArgs {
+                package: None,
+                features: None,
+                target: Target::Desktop,
+                backend: None,
+                cargo_args: vec![],
+            },
+            release: false,
+            no_hot_reload: false,
+        },
+        devtools: None,
+    })
 }
 
 struct Doctor {
@@ -846,12 +926,32 @@ fn run_doctor_cmd() -> ! {
         None => doc.info("workspace root", "none (standalone package)"),
     }
     let config = load_config(&[]);
-    let rsx_toml = find_package_dir(&[]).join("rsx.toml");
+    let package_dir = find_package_dir(&[]);
+    let rsx_toml = package_dir.join("rsx.toml");
     if rsx_toml.exists() {
         doc.ok("rsx.toml", &rsx_toml.display().to_string());
     } else {
         doc.info("rsx.toml", "not found (using defaults)");
     }
+    let has_manifest_rsx = std::fs::read_to_string(package_dir.join("Cargo.toml"))
+        .ok()
+        .and_then(|c| toml::from_str::<CargoManifest>(&c).ok())
+        .and_then(|m| m.package)
+        .and_then(|p| p.metadata)
+        .and_then(|m| m.rsx)
+        .is_some();
+    doc.info(
+        "[package.metadata.rsx]",
+        if has_manifest_rsx {
+            "present"
+        } else {
+            "not set"
+        },
+    );
+    doc.info(
+        "config precedence",
+        "CLI flags > rsx.toml > [package.metadata.rsx] > defaults",
+    );
 
     doc.section("Desktop");
     let backend = config
@@ -933,18 +1033,30 @@ fn run_doctor_cmd() -> ! {
 }
 
 fn run_dev_cmd(args: DevArgs) {
-    let mut cargo_args =
-        build_cargo_args(&args.common.package, args.release, &args.common.features);
-    cargo_args.extend(args.common.cargo_args);
-    if matches!(args.common.target, Target::Android) {
+    let DevArgs { hot, devtools } = args;
+    let HotArgs {
+        common,
+        release,
+        no_hot_reload,
+    } = hot;
+    let CommonArgs {
+        package,
+        features,
+        target,
+        backend,
+        cargo_args: extra,
+    } = common;
+    let mut cargo_args = build_cargo_args(&package, release, &features);
+    cargo_args.extend(extra);
+    if matches!(target, Target::Android) {
         cargo_args.push("--android".to_string());
     }
     let mut config = load_config(&cargo_args);
-    if let Some(backend) = args.common.backend {
+    if let Some(backend) = backend {
         config.backend = Some(backend_from_arg(backend));
     }
-    // CLI `--devtools off` overrides any rsx.toml setting.
-    if let Some(devtools) = args.devtools {
+    // CLI `--devtools off` overrides any config-file setting.
+    if let Some(devtools) = devtools {
         config.dev.get_or_insert_with(Default::default).devtools =
             Some(matches!(devtools, DevtoolsArg::On));
     }
@@ -953,29 +1065,45 @@ fn run_dev_cmd(args: DevArgs) {
         HotLoopOpts {
             args: cargo_args,
             config,
-            no_hot_reload: args.no_hot_reload,
+            no_hot_reload,
         },
     );
 }
 
 fn run_preview_cmd(args: PreviewArgs) {
-    if args.list {
+    let PreviewArgs {
+        hot,
+        component,
+        list,
+    } = args;
+    if list {
         eprintln!("[cargo-rsx] --list is not yet implemented (requires project scan).");
         std::process::exit(1);
     }
     // The preview host process inherits our env; it filters PreviewEntries by this when set.
-    if let Some(component) = &args.component {
+    if let Some(component) = &component {
         // SAFETY: single-threaded at this point (set before any threads/spawns are created).
         unsafe { std::env::set_var("RSX_PREVIEW_COMPONENT", component) };
     }
-    let mut cargo_args =
-        build_cargo_args(&args.common.package, args.release, &args.common.features);
-    cargo_args.extend(args.common.cargo_args);
-    if matches!(args.common.target, Target::Android) {
+    let HotArgs {
+        common,
+        release,
+        no_hot_reload,
+    } = hot;
+    let CommonArgs {
+        package,
+        features,
+        target,
+        backend,
+        cargo_args: extra,
+    } = common;
+    let mut cargo_args = build_cargo_args(&package, release, &features);
+    cargo_args.extend(extra);
+    if matches!(target, Target::Android) {
         cargo_args.push("--android".to_string());
     }
     let mut config = load_config(&cargo_args);
-    if let Some(backend) = args.common.backend {
+    if let Some(backend) = backend {
         config.backend = Some(backend_from_arg(backend));
     }
     run_hot_loop(
@@ -983,35 +1111,188 @@ fn run_preview_cmd(args: PreviewArgs) {
         HotLoopOpts {
             args: cargo_args,
             config,
-            no_hot_reload: args.no_hot_reload,
+            no_hot_reload,
         },
     );
 }
 
-fn run_build_cmd(args: BuildArgs) {
-    if let Some(ref format) = args.format {
-        let format_name = match format {
-            BuildFormat::Appimage => "appimage",
-            BuildFormat::Deb => "deb",
-            BuildFormat::Dmg => "dmg",
-            BuildFormat::Apk => "apk",
-            BuildFormat::Dir => "dir",
-        };
-        eprintln!("[cargo-rsx] Packaging format `{format_name}` is not yet implemented.");
-        std::process::exit(1);
+fn run_test_cmd(args: TestArgs) -> ! {
+    let TestArgs { common, release } = args;
+    let CommonArgs {
+        package,
+        features,
+        target,
+        backend,
+        cargo_args: extra,
+    } = common;
+    if matches!(target, Target::Android) {
+        eprintln!(
+            "[cargo-rsx] `cargo rsx test` renders on the host; --target android is not supported."
+        );
+        std::process::exit(2);
     }
-    eprintln!(
-        "[cargo-rsx] Building release binary. Use --format <FORMAT> to package for distribution."
-    );
+    // Run the app binary in test mode: RSX_TEST makes the generated entrypoint render every preview headlessly and exit non-zero on any failure, instead of opening a window.
+    let mut cargo_args = vec!["run".to_string()];
+    cargo_args.extend(build_cargo_args(&package, release, &features));
+    cargo_args.extend(extra);
+    // No RSX_RENDERER_BACKEND: the test host never instantiates a renderer, and that value is read via option_env!, so setting it would change the build fingerprint and force a needless recompile.
+    let _ = backend;
+    eprintln!("[cargo-rsx] Running component render tests...");
+    let status = Command::new("cargo")
+        .args(&cargo_args)
+        .env("RSX_TEST", "1")
+        .status()
+        .expect("[cargo-rsx] failed to invoke cargo");
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+fn build_format_name(format: &BuildFormat) -> &'static str {
+    match format {
+        BuildFormat::Appimage => "appimage",
+        BuildFormat::Deb => "deb",
+        BuildFormat::Dmg => "dmg",
+        BuildFormat::Apk => "apk",
+        BuildFormat::Dir => "dir",
+    }
+}
+
+fn run_build_cmd(args: BuildArgs) -> ! {
+    let BuildArgs { common, format } = args;
+    let CommonArgs {
+        package,
+        features,
+        target,
+        backend,
+        cargo_args: extra,
+    } = common;
+    let mut android = matches!(target, Target::Android);
+
+    // Today only `dir` (desktop) and `apk` (android) are wired; the native installer formats stay explicit stubs. `--format apk` implies Android; `--format dir` is desktop-only.
+    match &format {
+        Some(fmt @ (BuildFormat::Deb | BuildFormat::Dmg | BuildFormat::Appimage)) => {
+            eprintln!(
+                "[cargo-rsx] Packaging format `{}` is not yet implemented. Supported today: `dir` (desktop) and `apk` (android).",
+                build_format_name(fmt)
+            );
+            std::process::exit(1);
+        }
+        Some(BuildFormat::Apk) => android = true,
+        Some(BuildFormat::Dir) if android => {
+            eprintln!(
+                "[cargo-rsx] `--format dir` is desktop-only; use `--target android` (or `--format apk`) for Android."
+            );
+            std::process::exit(2);
+        }
+        Some(BuildFormat::Dir) | None => {}
+    }
+
     // Build always implies --release.
-    let mut cargo_args = build_cargo_args(&args.common.package, true, &args.common.features);
-    cargo_args.extend(args.common.cargo_args);
-    let android = matches!(args.common.target, Target::Android);
+    let mut cargo_args = build_cargo_args(&package, true, &features);
+    cargo_args.extend(extra);
+    if android {
+        cargo_args.push("--android".to_string());
+    }
     let mut config = load_config(&cargo_args);
-    if let Some(backend) = args.common.backend {
+    if let Some(backend) = backend {
         config.backend = Some(backend_from_arg(backend));
     }
-    run_build_inner(android, cargo_args, config);
+
+    if android {
+        build_android_package(cargo_args, config)
+    } else {
+        build_desktop_dir(cargo_args, config)
+    }
+}
+
+fn build_desktop_dir(cargo_args: Vec<String>, config: RsxConfig) -> ! {
+    let (_android, rest) = split_android_flag(cargo_args);
+    let backend_value = backend_as_str(config.backend.unwrap_or_default());
+
+    let mut build_args = vec!["build".to_string()];
+    build_args.extend(rest.clone());
+    if !build_args.contains(&"--release".to_string()) {
+        build_args.push("--release".to_string());
+    }
+    eprintln!("[cargo-rsx] Building release binary...");
+    let status = Command::new("cargo")
+        .args(&build_args)
+        .env("RSX_RENDERER_BACKEND", backend_value)
+        .status()
+        .expect("[cargo-rsx] failed to invoke cargo");
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    let package_dir = find_package_dir(&rest);
+    let workspace_root =
+        rsx_workspace::find_workspace_root(&package_dir).unwrap_or(package_dir.clone());
+    let package_name = read_package_manifest(&rest)
+        .map(|p| p.name)
+        .unwrap_or_else(|| "app".to_string());
+    let bin_path = package_bin_path(&workspace_root, &package_name, "release");
+    if !bin_path.exists() {
+        eprintln!(
+            "[cargo-rsx] Build succeeded but no binary was found at {}. Does this package produce a `[[bin]]`?",
+            bin_path.display()
+        );
+        std::process::exit(1);
+    }
+
+    // Distribution bundle lives under target/ (a build artifact, next to the binary it packages), so it inherits target's gitignore and is not confused with .rsx/ (which is generated source).
+    let dist_dir = workspace_root
+        .join("target")
+        .join("rsx-dist")
+        .join(&package_name);
+    if let Err(e) = std::fs::create_dir_all(&dist_dir) {
+        eprintln!("[cargo-rsx] Failed to create {}: {e}", dist_dir.display());
+        std::process::exit(1);
+    }
+    if let Err(e) = std::fs::copy(&bin_path, dist_dir.join(&package_name)) {
+        eprintln!("[cargo-rsx] Failed to copy binary into dist: {e}");
+        std::process::exit(1);
+    }
+    // Assets are embedded in the binary today (rsx has no exe-relative asset lookup), so the bundle is just the self-contained executable. See the "disk assets" TODO for the disk-asset story that would add an assets/ copy here.
+
+    eprintln!(
+        "[cargo-rsx] Packaged desktop build at {}",
+        dist_dir.display()
+    );
+    std::process::exit(0);
+}
+
+fn build_android_package(cargo_args: Vec<String>, config: RsxConfig) -> ! {
+    let (_android, rest) = split_android_flag(cargo_args);
+    let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
+    build_args.extend(rest.clone());
+    if !build_args.contains(&"--release".to_string()) {
+        build_args.push("--release".to_string());
+    }
+    let status = make_android_cmd(build_args, config)
+        .status()
+        .expect("[cargo-rsx] failed to invoke cargo");
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    let apk = apk_path(&rest);
+    let package_dir = find_package_dir(&rest);
+    let workspace_root = rsx_workspace::find_workspace_root(&package_dir).unwrap_or(package_dir);
+    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let _ = std::fs::create_dir_all(&dist_dir);
+    if !apk.exists() {
+        eprintln!(
+            "[cargo-rsx] APK build finished but {} was not found.",
+            apk.display()
+        );
+        std::process::exit(1);
+    }
+    let dest = dist_dir.join(apk.file_name().unwrap_or_default());
+    if let Err(e) = std::fs::copy(&apk, &dest) {
+        eprintln!("[cargo-rsx] Built APK but failed to copy into dist: {e}");
+        std::process::exit(1);
+    }
+    eprintln!("[cargo-rsx] Packaged APK at {}", dest.display());
+    std::process::exit(0);
 }
 
 fn build_cargo_args(
@@ -1192,39 +1473,64 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     watch_and_run(cargo_args, launch_envs, workspace_root);
 }
 
-fn run_build_inner(android: bool, mut rest: Vec<String>, config: RsxConfig) -> ! {
-    if !rest.contains(&"--release".to_string()) {
-        rest.push("--release".to_string());
-    }
-
-    if android {
-        let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
-        build_args.extend(rest);
-
-        let status = make_android_cmd(build_args, config)
-            .status()
-            .expect("[cargo-rsx] failed to invoke cargo");
-        std::process::exit(status.code().unwrap_or(1));
-    } else {
-        let backend_value = backend_as_str(config.backend.unwrap_or_default());
-
-        let mut cargo_args = vec!["build".to_string()];
-        cargo_args.extend(rest);
-
-        let status = Command::new("cargo")
-            .args(&cargo_args)
-            .env("RSX_RENDERER_BACKEND", backend_value)
-            .status()
-            .expect("[cargo-rsx] failed to invoke cargo");
-
-        std::process::exit(status.code().unwrap_or(1));
-    }
-}
-
 fn backend_as_str(backend: RendererBackend) -> &'static str {
     match backend {
         RendererBackend::Auto => "auto",
         RendererBackend::Hardware => "hardware",
         RendererBackend::Software => "software",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rsx_toml_overrides_manifest_field_by_field() {
+        let manifest = RsxConfig {
+            backend: Some(RendererBackend::Software),
+            dev: Some(DevConfig {
+                window: Some(WindowConfig {
+                    width: Some(800),
+                    height: Some(600),
+                    fullscreen: Some("disabled".to_string()),
+                    ..Default::default()
+                }),
+                devtools: Some(true),
+            }),
+        };
+        let file = RsxConfig {
+            backend: Some(RendererBackend::Hardware),
+            dev: Some(DevConfig {
+                // rsx.toml sets width + position but omits height/fullscreen/devtools.
+                window: Some(WindowConfig {
+                    width: Some(1024),
+                    position: Some("10,20".to_string()),
+                    ..Default::default()
+                }),
+                devtools: None,
+            }),
+        };
+
+        let merged = merge_config(manifest, file);
+        assert!(matches!(merged.backend, Some(RendererBackend::Hardware)));
+        let dev = merged.dev.unwrap();
+        assert_eq!(dev.devtools, Some(true)); // omitted in rsx.toml → manifest value survives
+        let window = dev.window.unwrap();
+        assert_eq!(window.width, Some(1024)); // rsx.toml wins
+        assert_eq!(window.height, Some(600)); // falls back to manifest
+        assert_eq!(window.position.as_deref(), Some("10,20")); // only in rsx.toml
+        assert_eq!(window.fullscreen.as_deref(), Some("disabled")); // only in manifest
+    }
+
+    #[test]
+    fn manifest_used_when_rsx_toml_absent() {
+        let manifest = RsxConfig {
+            backend: Some(RendererBackend::Software),
+            dev: None,
+        };
+        let merged = merge_config(manifest, RsxConfig::default());
+        assert!(matches!(merged.backend, Some(RendererBackend::Software)));
+        assert!(merged.dev.is_none());
     }
 }
