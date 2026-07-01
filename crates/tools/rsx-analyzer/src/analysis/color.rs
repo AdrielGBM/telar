@@ -1,37 +1,19 @@
-//! `textDocument/documentColor` + `colorPresentation`: inline swatches and a color picker for the
-//! `.rsx` styling DSL.
+//! `textDocument/documentColor` + `colorPresentation`: inline swatches and a color picker for the `.rsx` styling DSL.
 //!
-//! v1 scope is **color literals** — hex (`#rgb`/`#rrggbb`/`#rrggbbaa`) and the three keyword colors
-//! (`white`/`black`/`transparent`) — at the two places they appear with position info: `[style]`
-//! constant values and `[view]` attribute values. These are unambiguously editable, so the picker can
-//! write a hex back without clobbering a theme binding. Theme-token references (`color:primary` where
-//! `primary` is a theme field) are intentionally skipped: resolving them to RGBA would require
-//! evaluating the theme's Rust, and rewriting them to a hex would drop the reactive binding.
+//! v1 scope is **color literals** — hex (`#rgb`/`#rrggbb`/`#rrggbbaa`) and the three keyword colors (`white`/`black`/`transparent`) — at the two places they appear with position info: `[style]` constant values and `[view]` attribute values. These are unambiguously editable, so the picker can write a hex back without clobbering a theme binding. Theme-token references (`color:primary` where `primary` is a theme field) are intentionally skipped: resolving them to RGBA would require evaluating the theme's Rust, and rewriting them to a hex would drop the reactive binding.
 
-use lsp_types::{Color, ColorInformation, ColorPresentation, Position, Range};
+use lsp_types::{Color, ColorInformation, ColorPresentation, Range};
 use rsx_parser::{RsxDocument, ViewNode};
+use rsx_transpiler::color_attr_keys;
 
 use crate::position::{Section, find_section_at};
-
-/// Attribute/property keys whose value is a color, so a bare keyword (`white`) is treated as one.
-/// Hex values are colors under any key, so this only gates the keyword forms.
-const COLOR_KEYS: &[&str] = &[
-    "color",
-    "fill",
-    "stroke",
-    "outline",
-    "from",
-    "to",
-    "mid",
-    "shadow_color",
-];
+use crate::text::offset_to_position;
 
 /// Collects every editable color literal in the document, with its source range and resolved RGBA.
 pub fn document_colors(doc: &RsxDocument, source: &str) -> Vec<ColorInformation> {
     let mut out = Vec::new();
 
-    // `[style]`: both constants (`primary: #hex`) and class paint props (`fill: #hex`). Scanned from
-    // the source line-by-line because the AST carries no per-prop position.
+    // `[style]`: both constants (`primary: #hex`) and class paint props (`fill: #hex`). Scanned from the source line-by-line because the AST carries no per-prop position.
     collect_style_colors(source, &mut out);
 
     // `[view]` (and `[preview]`) attribute literals.
@@ -43,8 +25,7 @@ pub fn document_colors(doc: &RsxDocument, source: &str) -> Vec<ColorInformation>
     out
 }
 
-/// Scans the `[style]` section for `key: <color>` lines (constant *or* class prop) and emits a swatch
-/// on the value when it is a color literal.
+/// Scans the `[style]` section for `key: <color>` lines (constant *or* class prop) and emits a swatch on the value when it is a color literal.
 fn collect_style_colors(source: &str, out: &mut Vec<ColorInformation>) {
     for (line_idx, line_text) in source.lines().enumerate() {
         if find_section_at(source, line_idx as u32) != Section::Style {
@@ -120,7 +101,7 @@ fn literal_color(key: &str, value: &str) -> Option<Color> {
     if v.starts_with('#') {
         return parse_hex(v);
     }
-    if COLOR_KEYS.contains(&key) {
+    if color_attr_keys().contains(&key) {
         return keyword_color(v);
     }
     None
@@ -194,28 +175,6 @@ fn byte_range(source: &str, start: usize, len: usize) -> Option<Range> {
         start: offset_to_position(source, start),
         end: offset_to_position(source, start + len),
     })
-}
-
-/// LSP position (0-based line, UTF-16 column) of a byte offset in `source`.
-fn offset_to_position(source: &str, byte_offset: usize) -> Position {
-    let mut line = 0u32;
-    let mut line_start = 0usize;
-    for (i, ch) in source.char_indices() {
-        if i >= byte_offset {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            line_start = i + ch.len_utf8();
-        }
-    }
-    let col = source[line_start..byte_offset.min(source.len())]
-        .encode_utf16()
-        .count() as u32;
-    Position {
-        line,
-        character: col,
-    }
 }
 
 /// Byte offset where 0-based `line0` begins.

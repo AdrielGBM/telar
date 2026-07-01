@@ -5,6 +5,7 @@ pub mod definition;
 pub mod folding;
 pub mod hover;
 pub mod lens;
+pub mod links;
 pub mod occurrences;
 pub mod selection_range;
 pub mod semantic_tokens;

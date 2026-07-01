@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 
 use crate::analysis::completions::{
     CompletionKind, attribute_key_items, color_items, completion_context, element_name_items,
-    style_class_items,
+    signal_items, style_class_items,
 };
 use crate::analysis::definition::goto_definition;
 use crate::analysis::hover::hover_info;
@@ -20,13 +20,12 @@ use crate::project::ProjectInfo;
 use crate::ra::{DefinitionTarget, EmbeddedAnalyzer, RefTarget};
 use crate::rpc::OutgoingSender;
 use crate::store::Store;
+use crate::text::{byte_offset, ident_at, name_range, offset_to_position};
 use rsx_transpiler::ExprSpan;
 use rsx_transpiler::naming::{to_pascal_case, to_snake_case};
 
-/// Lifecycle of the embedded rust-analyzer: loaded lazily on the first `[logic]`
-/// query because `load()` is slow (cargo metadata + crate graph).
-// Always lives behind `Arc<Mutex<…>>` and is only ever written in place, so the large `Ready` variant
-// is never moved by value — the size disparity clippy flags is irrelevant here.
+/// Lifecycle of the embedded rust-analyzer: loaded lazily on the first `[logic]` query because `load()` is slow (cargo metadata + crate graph).
+// Always lives behind `Arc<Mutex<…>>` and is only ever written in place, so the large `Ready` variant is never moved by value — the size disparity clippy flags is irrelevant here.
 #[allow(clippy::large_enum_variant)]
 enum AnalyzerState {
     Idle,
@@ -35,9 +34,7 @@ enum AnalyzerState {
     Failed,
 }
 
-/// Server-side docs for one batch of rust-analyzer completion items, keyed by generation. The wire
-/// items are sent without documentation (lean list); `completionItem/resolve` re-attaches it from here.
-/// A new completion batch bumps `generation`, invalidating the previous batch's `data` references.
+/// Server-side docs for one batch of rust-analyzer completion items, keyed by generation. The wire items are sent without documentation (lean list); `completionItem/resolve` re-attaches it from here. A new completion batch bumps `generation`, invalidating the previous batch's `data` references.
 #[derive(Default)]
 struct CompletionCache {
     generation: u64,
@@ -48,15 +45,11 @@ pub struct Backend {
     outgoing: OutgoingSender,
     store: Arc<RwLock<Store>>,
     analyzer: Arc<Mutex<AnalyzerState>>,
-    // Persistent `.rsx` symbol index (components, `@classes`, component tag usages) backing
-    // `workspace/symbol` and cross-file component references/rename. Built lazily on the first query,
-    // refreshed per-file on edits and watched-file events. `None` until the first query builds it.
+    // Persistent `.rsx` symbol index (components, `@classes`, component tag usages) backing `workspace/symbol` and cross-file component references/rename. Built lazily on the first query, refreshed per-file on edits and watched-file events. `None` until the first query builds it.
     index: Arc<Mutex<Option<WorkspaceIndex>>>,
     // Deferred documentation for the last rust-analyzer completion batch (see [`CompletionCache`]).
     completion_cache: Arc<Mutex<CompletionCache>>,
-    // Monotonic edit counter, bumped on every reparse. A spawned diagnostics task captures the value
-    // it was queued for and bails before the expensive rust-analyzer query if a newer edit superseded
-    // it, so keystroke-rate edits don't pile up redundant `full_diagnostics` runs behind the lock.
+    // Monotonic edit counter, bumped on every reparse. A spawned diagnostics task captures the value it was queued for and bails before the expensive rust-analyzer query if a newer edit superseded it, so keystroke-rate edits don't pile up redundant `full_diagnostics` runs behind the lock.
     revision: Arc<AtomicU64>,
 }
 
@@ -79,8 +72,7 @@ impl Backend {
     async fn reparse_and_diagnose(&self, uri: Uri, text: String) -> Vec<Diagnostic> {
         let revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
         let file_path = crate::uri::to_path(&uri);
-        // Hold the store lock only for the parse + native diagnostics + build-file sync, then release it
-        // before the (slower) rust-analyzer query so concurrent completion/hover reads aren't blocked.
+        // Hold the store lock only for the parse + native diagnostics + build-file sync, then release it before the (slower) rust-analyzer query so concurrent completion/hover reads aren't blocked.
         let (semantic, source, theme) = {
             let mut store = self.store.write().await;
             let parse_diagnostics = store.reparse(uri.clone(), text);
@@ -93,9 +85,7 @@ impl Backend {
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let theme_view = project.as_ref().map(ProjectInfo::theme_view);
             let semantic = semantic_diagnostics(&parsed.document, theme_view.as_ref());
-            // Mirror the live buffer to its generated `.rs` so the workspace rust-analyzer analyzes
-            // the in-flight text — this is what makes completion/hover/definition live instead of one
-            // `cargo check` behind. Same output as the `app!` macro produces at compile time.
+            // Mirror the live buffer to its generated `.rs` so the workspace rust-analyzer analyzes the in-flight text — this is what makes completion/hover/definition live instead of one `cargo check` behind. Same output as the `app!` macro produces at compile time.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             if let Some(rsx_path) = file_path.as_deref() {
                 crate::build_sync::sync_build_file(rsx_path, &parsed.source, theme.as_deref());
@@ -103,28 +93,20 @@ impl Backend {
             (semantic, parsed.source.clone(), theme)
         };
 
-        // Keep the workspace `.rsx` index current with the live buffer so `workspace/symbol` and
-        // component references see in-flight edits (no-op until the index is first built).
+        // Keep the workspace `.rsx` index current with the live buffer so `workspace/symbol` and component references see in-flight edits (no-op until the index is first built).
         if let Some(rsx_path) = file_path.as_deref() {
             self.update_index_file(rsx_path.to_path_buf(), source.clone());
         }
 
         let native: Vec<Diagnostic> = semantic.into_iter().map(Into::into).collect();
-        // Overlay the generated Rust into the embedded analyzer and re-publish native+rust merged from a
-        // detached task: `full_diagnostics` can be slow, and notifications are awaited in order on the read
-        // loop (see server.rs), so blocking here would stall completion. Native diagnostics are returned
-        // now for the immediate publish; the task republishes when the analyzer is ready, and skips
-        // (leaving native-only published) while it is still loading.
+        // Overlay the generated Rust into the embedded analyzer and re-publish native+rust merged from a detached task: `full_diagnostics` can be slow, and notifications are awaited in order on the read loop (see server.rs), so blocking here would stall completion. Native diagnostics are returned now for the immediate publish; the task republishes when the analyzer is ready, and skips (leaving native-only published) while it is still loading.
         if let Some(rsx_path) = file_path {
             self.spawn_rust_diagnostics(uri, rsx_path, source, theme, native.clone(), revision);
         }
         native
     }
 
-    /// Off-loop overlay-and-merge of rust-analyzer diagnostics: maps each back onto the `.rsx` via the
-    /// line map (dropping generated lines with no `.rsx` origin) and republishes native+rust. A
-    /// staleness guard skips the publish if the buffer changed meanwhile, so out-of-order task
-    /// completions never resurrect diagnostics for an older revision.
+    /// Off-loop overlay-and-merge of rust-analyzer diagnostics: maps each back onto the `.rsx` via the line map (dropping generated lines with no `.rsx` origin) and republishes native+rust. A staleness guard skips the publish if the buffer changed meanwhile, so out-of-order task completions never resurrect diagnostics for an older revision.
     fn spawn_rust_diagnostics(
         &self,
         uri: Uri,
@@ -155,8 +137,7 @@ impl Backend {
         let revisions = self.revision.clone();
         tokio::spawn(async move {
             let raw = tokio::task::spawn_blocking(move || {
-                // A newer edit already superseded this one: skip the expensive query without even
-                // contending for the analyzer lock (its `full_diagnostics` would be wasted work).
+                // A newer edit already superseded this one: skip the expensive query without even contending for the analyzer lock (its `full_diagnostics` would be wasted work).
                 if revisions.load(Ordering::Relaxed) != revision {
                     return None;
                 }
@@ -188,8 +169,7 @@ impl Backend {
             let Some(raw) = raw else {
                 return;
             };
-            // The buffer moved on while the query ran → a newer revision's task will publish; don't
-            // overwrite it with stale diagnostics.
+            // The buffer moved on while the query ran → a newer revision's task will publish; don't overwrite it with stale diagnostics.
             if store.read().await.latest_source(&uri) != Some(&source) {
                 return;
             }
@@ -223,6 +203,7 @@ impl Backend {
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![
                         "@".to_string(),
+                        "$".to_string(),
                         ".".to_string(),
                         ":".to_string(),
                         " ".to_string(),
@@ -249,6 +230,11 @@ impl Backend {
                 code_lens_provider: Some(CodeLensOptions {
                     resolve_provider: Some(false),
                 }),
+                document_link_provider: Some(DocumentLinkOptions {
+                    resolve_provider: Some(false),
+                    work_done_progress_options: Default::default(),
+                }),
+                inlay_hint_provider: Some(OneOf::Left(true)),
                 document_highlight_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
                 rename_provider: Some(OneOf::Right(RenameOptions {
@@ -285,8 +271,7 @@ impl Backend {
         let text = params.text_document.text.clone();
         let diagnostics = self.reparse_and_diagnose(uri.clone(), text).await;
         self.outgoing.publish_diagnostics(uri.clone(), diagnostics);
-        // Warm the embedded analyzer as soon as a `.rsx` opens, so the slow workspace
-        // load overlaps with reading the file instead of stalling the first completion.
+        // Warm the embedded analyzer as soon as a `.rsx` opens, so the slow workspace load overlaps with reading the file instead of stalling the first completion.
         if let Some(rsx_path) = crate::uri::to_path(&uri)
             && let Some(root) = crate::build_sync::crate_root(&rsx_path)
         {
@@ -307,13 +292,7 @@ impl Backend {
         self.store.write().await.close(&uri);
     }
 
-    /// `workspace/didChangeWatchedFiles`: the LSP only receives `didChange` for `.rsx`, so edits to
-    /// hand-written `.rs` files (and `Cargo.toml`/`Cargo.lock`) would otherwise leave the embedded
-    /// analyzer frozen at load time — breaking go-to-def / diagnostics / repeated renames that cross
-    /// into real Rust. Refresh each changed `.rs` from disk; a manifest/lockfile change or a
-    /// created/deleted file invalidates the crate graph, so drop to Idle for a full reload on the next
-    /// query. A watched `.rsx` event (a sibling file edited/created/deleted outside the editor) also
-    /// refreshes the workspace symbol index.
+    /// `workspace/didChangeWatchedFiles`: the LSP only receives `didChange` for `.rsx`, so edits to hand-written `.rs` files (and `Cargo.toml`/`Cargo.lock`) would otherwise leave the embedded analyzer frozen at load time — breaking go-to-def / diagnostics / repeated renames that cross into real Rust. Refresh each changed `.rs` from disk; a manifest/lockfile change or a created/deleted file invalidates the crate graph, so drop to Idle for a full reload on the next query. A watched `.rsx` event (a sibling file edited/created/deleted outside the editor) also refreshes the workspace symbol index.
     pub async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
         let mut to_refresh: Vec<PathBuf> = Vec::new();
         let mut rsx_changes: Vec<(PathBuf, bool)> = Vec::new();
@@ -329,8 +308,7 @@ impl Backend {
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             let ext = path.extension().and_then(|e| e.to_str());
             if ext == Some("rsx") {
-                // Index maintenance only — `.rsx` modules are overlaid live, never read by the crate
-                // graph, so they don't force an analyzer reload.
+                // Index maintenance only — `.rsx` modules are overlaid live, never read by the crate graph, so they don't force an analyzer reload.
                 rsx_changes.push((path, change.typ == FileChangeType::DELETED));
                 continue;
             }
@@ -371,8 +349,7 @@ impl Backend {
                 return;
             };
             if needs_reload {
-                // Only disturb a settled analyzer; a load already in flight is re-validated by the next
-                // query's `knows_file` check.
+                // Only disturb a settled analyzer; a load already in flight is re-validated by the next query's `knows_file` check.
                 if matches!(*state, AnalyzerState::Ready(_) | AnalyzerState::Failed) {
                     *state = AnalyzerState::Idle;
                     outgoing.log_message(
@@ -395,8 +372,7 @@ impl Backend {
         });
     }
 
-    /// Runs `f` against the workspace `.rsx` index, building it (a one-time disk scan) if it is absent
-    /// or rooted elsewhere. The scan + query run on a blocking thread so the read loop isn't stalled.
+    /// Runs `f` against the workspace `.rsx` index, building it (a one-time disk scan) if it is absent or rooted elsewhere. The scan + query run on a blocking thread so the read loop isn't stalled.
     async fn with_index<T, F>(&self, root: PathBuf, f: F) -> Option<T>
     where
         F: FnOnce(&WorkspaceIndex) -> T + Send + 'static,
@@ -415,8 +391,7 @@ impl Backend {
         .flatten()
     }
 
-    /// Refreshes a single file in the index from the live buffer after an edit. A no-op until the index
-    /// has been built (the first query scans disk, picking up everything saved by then).
+    /// Refreshes a single file in the index from the live buffer after an edit. A no-op until the index has been built (the first query scans disk, picking up everything saved by then).
     fn update_index_file(&self, path: PathBuf, source: String) {
         let index = self.index.clone();
         tokio::task::spawn_blocking(move || {
@@ -448,6 +423,7 @@ impl Backend {
                             color_items(&parsed.document, project.as_ref())
                         }
                         CompletionKind::StyleClass => style_class_items(&parsed.document),
+                        CompletionKind::SignalRef => signal_items(&parsed.source),
                     },
                 );
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
@@ -457,8 +433,7 @@ impl Backend {
         if let Some(items) = native {
             return Some(CompletionResponse::Array(items));
         }
-        // Outside a native `.rsx` zone: delegate Rust completion to the embedded rust-analyzer over
-        // the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
+        // Outside a native `.rsx` zone: delegate Rust completion to the embedded rust-analyzer over the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
         let rsx_path = file_path?;
         let items = match find_section_at(&source, pos.line) {
             Section::Logic => {
@@ -478,9 +453,7 @@ impl Backend {
         Some(CompletionResponse::Array(self.defer_completion_docs(items)))
     }
 
-    /// Strips each rust-analyzer completion item's documentation into the resolve cache (keyed by a
-    /// fresh generation + index) and tags the item with that key in `data`. The list goes out lean;
-    /// `completion_resolve` puts the docs back when the client asks for a specific item.
+    /// Strips each rust-analyzer completion item's documentation into the resolve cache (keyed by a fresh generation + index) and tags the item with that key in `data`. The list goes out lean; `completion_resolve` puts the docs back when the client asks for a specific item.
     fn defer_completion_docs(&self, items: Vec<CompletionItem>) -> Vec<CompletionItem> {
         let mut cache = self.completion_cache.lock().unwrap();
         cache.generation = cache.generation.wrapping_add(1);
@@ -497,8 +470,7 @@ impl Backend {
             .collect()
     }
 
-    /// `completionItem/resolve`: re-attach the documentation deferred by [`defer_completion_docs`].
-    /// A stale `data` (its batch superseded by a newer completion) simply resolves to no docs.
+    /// `completionItem/resolve`: re-attach the documentation deferred by [`defer_completion_docs`]. A stale `data` (its batch superseded by a newer completion) simply resolves to no docs.
     pub fn completion_resolve(&self, mut item: CompletionItem) -> CompletionItem {
         let key = item
             .data
@@ -514,8 +486,7 @@ impl Backend {
                 item.documentation = Some(docs.clone());
             }
         }
-        // The client echoes `data` back on resolve; it has served its purpose, so drop it from the
-        // committed item.
+        // The client echoes `data` back on resolve; it has served its purpose, so drop it from the committed item.
         item.data = None;
         item
     }
@@ -593,14 +564,9 @@ impl Backend {
         }
     }
 
-    /// Starts the (slow) workspace load on a blocking thread if it hasn't started yet.
-    /// Returns immediately; queries that arrive while loading simply yield nothing.
+    /// Starts the (slow) workspace load on a blocking thread if it hasn't started yet. Returns immediately; queries that arrive while loading simply yield nothing.
     fn ensure_loading(&self, root: PathBuf, warm: Option<PathBuf>) {
-        // `try_lock`, never `lock`: this runs on the single-threaded runtime, and a blocking RA query
-        // can hold the mutex for the length of its `analysis` call. Blocking here would stall the whole
-        // LSP read loop. Contention means the analyzer is already `Ready`/`Loading` (no query runs while
-        // `Idle`), so there is nothing to start — and any state that just reset to `Idle` is picked up by
-        // the next edit's call.
+        // `try_lock`, never `lock`: this runs on the single-threaded runtime, and a blocking RA query can hold the mutex for the length of its `analysis` call. Blocking here would stall the whole LSP read loop. Contention means the analyzer is already `Ready`/`Loading` (no query runs while `Idle`), so there is nothing to start — and any state that just reset to `Idle` is picked up by the next edit's call.
         let Ok(mut state) = self.analyzer.try_lock() else {
             return;
         };
@@ -616,8 +582,7 @@ impl Backend {
                 let started = std::time::Instant::now();
                 let loaded = EmbeddedAnalyzer::load(&root);
                 let load_ms = started.elapsed().as_millis();
-                // Compute the next state (including the slow `warm`) OUTSIDE the state lock, so queries
-                // arriving mid-warm just see `Loading` instead of blocking on the mutex for ~15s.
+                // Compute the next state (including the slow `warm`) OUTSIDE the state lock, so queries arriving mid-warm just see `Loading` instead of blocking on the mutex for ~15s.
                 let new_state = match loaded {
                     Ok(a) => {
                         let warm_ms = if let Some(p) = &warm {
@@ -650,9 +615,7 @@ impl Backend {
         }
     }
 
-    /// Maps a `[logic]` cursor into the generated module and runs `run` against the
-    /// embedded analyzer on a blocking thread (the query is synchronous; the load may
-    /// still be in flight, in which case this yields `None`).
+    /// Maps a `[logic]` cursor into the generated module and runs `run` against the embedded analyzer on a blocking thread (the query is synchronous; the load may still be in flight, in which case this yields `None`).
     async fn logic_query<T, F>(
         &self,
         rsx_path: PathBuf,
@@ -687,16 +650,14 @@ impl Backend {
             let AnalyzerState::Ready(a) = &mut *state else {
                 return None;
             };
-            // A generated module the graph doesn't know yet (e.g. a `.rsx` added since
-            // load): drop to Idle so the next query reloads the workspace.
+            // A generated module the graph doesn't know yet (e.g. a `.rsx` added since load): drop to Idle so the next query reloads the workspace.
             if !a.knows_file(&gen_path) {
                 *state = AnalyzerState::Idle;
                 return None;
             }
             let ra_at = std::time::Instant::now();
             let result = run(a, gen_path, gen_text, gen_line, gen_col);
-            // Only surface slow queries — a healthy query is sub-100ms, so anything past 1s flags a
-            // regression (e.g. a cold cache) without spamming the output on every keystroke.
+            // Only surface slow queries — a healthy query is sub-100ms, so anything past 1s flags a regression (e.g. a cold cache) without spamming the output on every keystroke.
             let ra_ms = ra_at.elapsed().as_millis();
             if lock_ms > 1000 || ra_ms > 1000 {
                 outgoing.log_message(
@@ -711,11 +672,7 @@ impl Backend {
         .flatten()
     }
 
-    /// Maps a `[view]` cursor into the generated module via the transpiler's expression-span map and
-    /// runs `run` at the resulting byte offset. Returns `None` (so native element/attr completion is
-    /// preserved) when the cursor sits outside every verbatim `[view]` expression. The generated
-    /// offset is a UTF-8 char boundary by construction: the fragment is byte-identical in source and
-    /// output, and the `.rsx` cursor is resolved on a char boundary.
+    /// Maps a `[view]` cursor into the generated module via the transpiler's expression-span map and runs `run` at the resulting byte offset. Returns `None` (so native element/attr completion is preserved) when the cursor sits outside every verbatim `[view]` expression. The generated offset is a UTF-8 char boundary by construction: the fragment is byte-identical in source and output, and the `.rsx` cursor is resolved on a char boundary.
     async fn view_query<T, F>(
         &self,
         rsx_path: PathBuf,
@@ -734,9 +691,8 @@ impl Backend {
             expr_spans,
             ..
         } = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())?;
-        let rsx_byte = rsx_byte_offset(&source, pos.line, pos.character)?;
-        // The containing expression span; the inclusive upper bound lets the cursor sit right after
-        // the last character (the common completion position, e.g. `count.|`).
+        let rsx_byte = byte_offset(&source, pos.line, pos.character)?;
+        // The containing expression span; the inclusive upper bound lets the cursor sit right after the last character (the common completion position, e.g. `count.|`).
         let span = expr_spans.iter().find(|s| {
             rsx_byte >= s.rsx_start as usize && rsx_byte <= (s.rsx_start + s.len) as usize
         })?;
@@ -775,10 +731,7 @@ impl Backend {
         .flatten()
     }
 
-    /// Runs `run` against the embedded analyzer on a blocking thread with no position mapping — for
-    /// queries that target an offset computed directly in the generated file (component rename probes
-    /// the generated `fn`/`Props` definitions). Yields `None` while the workspace load is still in
-    /// flight or the generated module is unknown (a `.rsx` added since load → drop to Idle to reload).
+    /// Runs `run` against the embedded analyzer on a blocking thread with no position mapping — for queries that target an offset computed directly in the generated file (component rename probes the generated `fn`/`Props` definitions). Yields `None` while the workspace load is still in flight or the generated module is unknown (a `.rsx` added since load → drop to Idle to reload).
     async fn run_analyzer<T, F>(&self, gen_path: PathBuf, root: PathBuf, run: F) -> Option<T>
     where
         F: FnOnce(&mut EmbeddedAnalyzer) -> Option<T> + Send + 'static,
@@ -802,8 +755,7 @@ impl Backend {
         .flatten()
     }
 
-    /// Find-all-references for the Rust symbol under a `[logic]`/`[view]` cursor, via the embedded
-    /// analyzer. Returns raw [`RefTarget`]s in generated-file coordinates; the caller reverse-maps them.
+    /// Find-all-references for the Rust symbol under a `[logic]`/`[view]` cursor, via the embedded analyzer. Returns raw [`RefTarget`]s in generated-file coordinates; the caller reverse-maps them.
     async fn rust_references(
         &self,
         rsx_path: PathBuf,
@@ -828,14 +780,7 @@ impl Backend {
         }
     }
 
-    /// Find-all-references for the Rust symbol under the cursor, reverse-mapped to `.rsx` `Location`s:
-    /// refs in this file's generated module map back through the line / expr-span maps; refs in real
-    /// source files pass through verbatim; refs in *other* generated modules are dropped (a file-scoped
-    /// `[logic]` symbol has none, and a component's cross-component Rust calls are renamed via the
-    /// dedicated component-rename path instead).
-    /// Returns `(locations, unmapped)`: the reverse-mapped reference `Location`s plus the count of
-    /// generated-file references that couldn't be placed (see [`reverse_map_rust_refs`]). Read-only
-    /// callers ignore `unmapped`; rename refuses when it is non-zero.
+    /// Find-all-references for the Rust symbol under the cursor, reverse-mapped to `.rsx` `Location`s: refs in this file's generated module map back through the line / expr-span maps; refs in real source files pass through verbatim; refs in *other* generated modules are dropped (a file-scoped `[logic]` symbol has none, and a component's cross-component Rust calls are renamed via the dedicated component-rename path instead). Returns `(locations, unmapped)`: the reverse-mapped reference `Location`s plus the count of generated-file references that couldn't be placed (see [`reverse_map_rust_refs`]). Read-only callers ignore `unmapped`; rename refuses when it is non-zero.
     async fn rust_reference_locations(
         &self,
         uri: &Uri,
@@ -859,12 +804,7 @@ impl Backend {
         ))
     }
 
-    /// Renames a component (`<feature_card>` → `<new_name>`): the defining `.rsx` file, every markup
-    /// usage (native cross-file scan), and every hand-written Rust reference to the generated `fn` /
-    /// `Props` (via the embedded analyzer). Returns a `document_changes` edit so the file rename rides
-    /// along with the text edits. `None` if the new name is not a valid identifier or no defining file
-    /// is found. Cross-component bare-Rust calls to a *subdirectory* component aren't renamed (the tag
-    /// model is file-stem-based; the generated fn name is the flattened path) — a documented limit.
+    /// Renames a component (`<feature_card>` → `<new_name>`): the defining `.rsx` file, every markup usage (native cross-file scan), and every hand-written Rust reference to the generated `fn` / `Props` (via the embedded analyzer). Returns a `document_changes` edit so the file rename rides along with the text edits. `None` if the new name is not a valid identifier or no defining file is found. Cross-component bare-Rust calls to a *subdirectory* component aren't renamed (the tag model is file-stem-based; the generated fn name is the flattened path) — a documented limit.
     async fn rename_component(
         &self,
         old_name: &str,
@@ -895,8 +835,7 @@ impl Backend {
             std::collections::HashMap::new();
         let mut def_uri: Option<Uri> = None;
         for loc in refs {
-            // The (0,0) marker `component_references` emits for the defining file is the file itself,
-            // not a text occurrence — capture it for the rename op, never as an edit.
+            // The (0,0) marker `component_references` emits for the defining file is the file itself, not a text occurrence — capture it for the rename op, never as an edit.
             if loc.range.start == loc.range.end {
                 def_uri = Some(loc.uri);
             } else {
@@ -950,10 +889,7 @@ impl Backend {
         })
     }
 
-    /// Text edits in real `.rs` files for hand-written references to a component's generated `fn`/`Props`
-    /// (e.g. `crate::feature_card(...)` / `crate::FeatureCardProps { .. }`). Queries the embedded
-    /// analyzer from the generated definitions; generated build files are skipped (rebuilt from the
-    /// `.rsx`). Returns empty if the analyzer isn't ready (logged) or the definitions aren't found.
+    /// Text edits in real `.rs` files for hand-written references to a component's generated `fn`/`Props` (e.g. `crate::feature_card(...)` / `crate::FeatureCardProps { .. }`). Queries the embedded analyzer from the generated definitions; generated build files are skipped (rebuilt from the `.rsx`). Returns empty if the analyzer isn't ready (logged) or the definitions aren't found.
     async fn component_rust_edits(
         &self,
         def_path: PathBuf,
@@ -1072,8 +1008,7 @@ impl Backend {
         if let Some(response) = native {
             return Some(response);
         }
-        // Outside a native `.rsx` zone: resolve Rust definitions via the embedded rust-analyzer, then
-        // reverse-map any generated-`.rs` targets back onto their `.rsx` (see `map_definition_targets`).
+        // Outside a native `.rsx` zone: resolve Rust definitions via the embedded rust-analyzer, then reverse-map any generated-`.rs` targets back onto their `.rsx` (see `map_definition_targets`).
         let rsx_path = file_path?;
         let targets = match find_section_at(&source, pos.line) {
             Section::Logic => {
@@ -1128,8 +1063,7 @@ impl Backend {
         if let Some(hover) = native {
             return Some(hover);
         }
-        // Native `.rsx` hover (tags / colors) didn't match: delegate to the embedded rust-analyzer over
-        // the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
+        // Native `.rsx` hover (tags / colors) didn't match: delegate to the embedded rust-analyzer over the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
         let rsx_path = file_path?;
         match find_section_at(&source, pos.line) {
             Section::Logic => {
@@ -1151,8 +1085,7 @@ impl Backend {
     pub async fn formatting(&self, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
         let uri = &params.text_document.uri;
 
-        // Format the live buffer, not the last good parse: if the current text does not parse,
-        // `format_document` returns `None` below and we emit no edit, leaving the file untouched.
+        // Format the live buffer, not the last good parse: if the current text does not parse, `format_document` returns `None` below and we emit no edit, leaving the file untouched.
         let source = {
             let store = self.store.read().await;
             store.latest_source(uri).cloned()
@@ -1232,9 +1165,70 @@ impl Backend {
         Some(crate::analysis::lens::code_lenses(&parsed.document, uri))
     }
 
-    /// `textDocument/documentHighlight`: every occurrence of the symbol under the cursor — `@class` and
-    /// `$signal` natively, or a Rust identifier in `[logic]`/`[view]` via the embedded analyzer (refs
-    /// landing in this file).
+    /// `textDocument/documentLink`: clickable links for `img src:"…"` asset paths that exist on disk.
+    pub async fn document_link(&self, params: DocumentLinkParams) -> Option<Vec<DocumentLink>> {
+        let uri = &params.text_document.uri;
+        let file_dir = crate::uri::to_path(uri)?.parent()?.to_path_buf();
+        let store = self.store.read().await;
+        let parsed = store.get(uri)?;
+        Some(crate::analysis::links::document_links(
+            &parsed.document,
+            &parsed.source,
+            &file_dir,
+        ))
+    }
+
+    /// `textDocument/inlayHint`: type/parameter hints from the embedded analyzer, mapped back onto the `[logic]` zone. `[view]`-origin hints are dropped (the generated builder has no line-stable column correspondence), so hints appear only where the mapping is exact.
+    pub async fn inlay_hint(&self, params: InlayHintParams) -> Option<Vec<InlayHint>> {
+        let uri = &params.text_document.uri;
+        let file_path = crate::uri::to_path(uri)?;
+        let (source, theme) = {
+            let store = self.store.read().await;
+            let source = store.get(uri)?.source.clone();
+            let theme = ProjectInfo::discover(&file_path).and_then(|p| p.theme_type.clone());
+            (source, theme)
+        };
+        let target = crate::build_sync::generated_target(&file_path, &source, theme.as_deref())?;
+        let root = crate::build_sync::crate_root(&file_path)?;
+        let gen_path = target.path.clone();
+        let gen_code = target.code.clone();
+        let raws = self
+            .run_analyzer(gen_path.clone(), root, move |a| {
+                Some(a.inlay_hints(&gen_path, gen_code))
+            })
+            .await?;
+
+        let mut out = Vec::new();
+        for raw in raws {
+            let Some(Some(rsx_line)) = target.map.get(raw.line as usize) else {
+                continue;
+            };
+            let rsx_line = *rsx_line;
+            if find_section_at(&source, rsx_line) != Section::Logic {
+                continue;
+            }
+            let gen_line_text = nth_line(&target.code, raw.line as usize).unwrap_or("");
+            let rsx_line_text = nth_line(&source, rsx_line as usize).unwrap_or("");
+            let delta =
+                leading_ws_utf16(gen_line_text).saturating_sub(leading_ws_utf16(rsx_line_text));
+            out.push(InlayHint {
+                position: Position {
+                    line: rsx_line,
+                    character: raw.col.saturating_sub(delta),
+                },
+                label: InlayHintLabel::String(raw.label),
+                kind: raw.kind,
+                text_edits: None,
+                tooltip: None,
+                padding_left: Some(raw.pad_left),
+                padding_right: Some(raw.pad_right),
+                data: None,
+            });
+        }
+        Some(out)
+    }
+
+    /// `textDocument/documentHighlight`: every occurrence of the symbol under the cursor — `@class` and `$signal` natively, or a Rust identifier in `[logic]`/`[view]` via the embedded analyzer (refs landing in this file).
     pub async fn document_highlight(
         &self,
         params: DocumentHighlightParams,
@@ -1282,9 +1276,7 @@ impl Backend {
         )
     }
 
-    /// `textDocument/references`: every use of the symbol under the cursor — `@class`/`$signal`
-    /// (file-scoped) and component tags (cross-file) natively, or a Rust identifier in `[logic]`/`[view]`
-    /// via the embedded analyzer.
+    /// `textDocument/references`: every use of the symbol under the cursor — `@class`/`$signal` (file-scoped) and component tags (cross-file) natively, or a Rust identifier in `[logic]`/`[view]` via the embedded analyzer.
     pub async fn references(&self, params: ReferenceParams) -> Option<Vec<Location>> {
         let uri = &params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
@@ -1343,8 +1335,7 @@ impl Backend {
         (!locations.is_empty()).then_some(locations)
     }
 
-    /// `textDocument/prepareRename`: confirm the cursor is on a renameable symbol — `@class`, `$signal`,
-    /// a component tag, or a Rust identifier in `[logic]`/`[view]` — and return the range to edit.
+    /// `textDocument/prepareRename`: confirm the cursor is on a renameable symbol — `@class`, `$signal`, a component tag, or a Rust identifier in `[logic]`/`[view]` — and return the range to edit.
     pub async fn prepare_rename(
         &self,
         params: TextDocumentPositionParams,
@@ -1372,17 +1363,16 @@ impl Backend {
             Section::Logic | Section::View
         ) {
             // Rust identifier under the cursor; rename verifies the analyzer resolves it (else no edit).
-            ident_range_at(&source, pos.line, pos.character)?
+            let line_text = source.lines().nth(pos.line as usize)?;
+            let (start, word) = ident_at(line_text, pos.character)?;
+            name_range(pos.line, line_text, start, word.len())
         } else {
             return None;
         };
         Some(PrepareRenameResponse::Range(range))
     }
 
-    /// `textDocument/rename`: rewrite every occurrence of the symbol under the cursor. `@class`/`$signal`
-    /// are single-file text rewrites; a component tag renames its `.rsx` file + markup usages + Rust
-    /// references (cross-file); a Rust identifier in `[logic]`/`[view]` is renamed via the analyzer's
-    /// find-all-references, reverse-mapped onto the `.rsx` (and any real `.rs` files).
+    /// `textDocument/rename`: rewrite every occurrence of the symbol under the cursor. `@class`/`$signal` are single-file text rewrites; a component tag renames its `.rsx` file + markup usages + Rust references (cross-file); a Rust identifier in `[logic]`/`[view]` is renamed via the analyzer's find-all-references, reverse-mapped onto the `.rsx` (and any real `.rs` files).
     pub async fn rename(&self, params: RenameParams) -> Option<WorkspaceEdit> {
         let uri = &params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
@@ -1448,9 +1438,7 @@ impl Backend {
             if locations.is_empty() {
                 return None;
             }
-            // A partial rename would leave the code uncompilable. If any reference couldn't be precisely
-            // located (a non-verbatim `[view]` use, or another component's generated module), refuse the
-            // whole rename rather than half-apply it.
+            // A partial rename would leave the code uncompilable. If any reference couldn't be precisely located (a non-verbatim `[view]` use, or another component's generated module), refuse the whole rename rather than half-apply it.
             if unmapped > 0 {
                 self.outgoing.log_message(
                     MessageType::INFO,
@@ -1488,8 +1476,7 @@ impl Backend {
             let store = self.store.read().await;
             let uri = store.any_uri()?;
             let path = crate::uri::to_path(uri)?;
-            // Prefer an `rsx.toml` root, but fall back to the Cargo workspace root so apps without an
-            // `rsx.toml` (e.g. a themed app configured in code) still get workspace symbols.
+            // Prefer an `rsx.toml` root, but fall back to the Cargo workspace root so apps without an `rsx.toml` (e.g. a themed app configured in code) still get workspace symbols.
             rsx_workspace::find_rsx_root(&path)
                 .or_else(|| rsx_workspace::find_workspace_root(&path))?
         };
@@ -1514,11 +1501,7 @@ impl Backend {
     }
 }
 
-/// Maps rust-analyzer definition targets to `.rsx` `Location`s, handling three cases per target:
-/// (1) the generated `.rs` for *this* `.rsx` and (2) *another* component's `.rsx/build/*.rs` are both
-/// reverse-mapped through that build file's line map (`generated line → .rsx line`) onto its `.rsx`
-/// source — a generated line with no originating `.rsx` line is dropped; (3) any other path (a
-/// dependency, std, or a hand-written `.rs`) is returned verbatim in its own coordinates.
+/// Maps rust-analyzer definition targets to `.rsx` `Location`s, handling three cases per target: (1) the generated `.rs` for *this* `.rsx` and (2) *another* component's `.rsx/build/*.rs` are both reverse-mapped through that build file's line map (`generated line → .rsx line`) onto its `.rsx` source — a generated line with no originating `.rsx` line is dropped; (3) any other path (a dependency, std, or a hand-written `.rs`) is returned verbatim in its own coordinates.
 fn map_definition_targets(targets: Vec<DefinitionTarget>) -> Vec<Location> {
     let mut locations = Vec::new();
     for target in targets {
@@ -1556,12 +1539,7 @@ fn map_definition_targets(targets: Vec<DefinitionTarget>) -> Vec<Location> {
     locations
 }
 
-/// Reverse-maps analyzer references onto `.rsx` `Location`s with precise ranges: a real source file
-/// passes through verbatim; a reference in *this* file's generated module maps back through the
-/// expr-span map (`[view]` verbatim expressions) or the line map (`[logic]` / Props struct); a
-/// reference in *another* generated module can't be precisely mapped here. Duplicates are coalesced.
-/// Returns `(locations, unmapped)` where `unmapped` counts generated-file references that produced no
-/// location — non-zero means the result is incomplete, so a rename must refuse rather than half-apply.
+/// Reverse-maps analyzer references onto `.rsx` `Location`s with precise ranges: a real source file passes through verbatim; a reference in *this* file's generated module maps back through the expr-span map (`[view]` verbatim expressions) or the line map (`[logic]` / Props struct); a reference in *another* generated module can't be precisely mapped here. Duplicates are coalesced. Returns `(locations, unmapped)` where `unmapped` counts generated-file references that produced no location — non-zero means the result is incomplete, so a rename must refuse rather than half-apply.
 fn reverse_map_rust_refs(
     targets: Vec<RefTarget>,
     current_gen_path: &std::path::Path,
@@ -1603,8 +1581,7 @@ fn reverse_map_rust_refs(
                     out.push(location);
                 }
             }
-            // A generated-file reference we couldn't place (non-verbatim `[view]` fragment, or another
-            // component's module) → the reverse-map is lossy here; flag it for the rename guard.
+            // A generated-file reference we couldn't place (non-verbatim `[view]` fragment, or another component's module) → the reverse-map is lossy here; flag it for the rename guard.
             None if is_generated => unmapped += 1,
             None => {}
         }
@@ -1612,11 +1589,7 @@ fn reverse_map_rust_refs(
     (out, unmapped)
 }
 
-/// Reverse-maps one generated-file reference span back onto the current `.rsx`. `[view]` verbatim
-/// expressions map byte-for-byte through their `ExprSpan`; everything else is line-mapped, with the
-/// column shifted by the leading-whitespace delta between the generated and `.rsx` lines (`+4` for
-/// `[logic]`, `0` for the verbatim Props struct). Returns `None` when the generated line has no `.rsx`
-/// origin (boilerplate / transpiler-injected).
+/// Reverse-maps one generated-file reference span back onto the current `.rsx`. `[view]` verbatim expressions map byte-for-byte through their `ExprSpan`; everything else is line-mapped, with the column shifted by the leading-whitespace delta between the generated and `.rsx` lines (`+4` for `[logic]`, `0` for the verbatim Props struct). Returns `None` when the generated line has no `.rsx` origin (boilerplate / transpiler-injected).
 fn reverse_map_current_file(
     target: &RefTarget,
     gen_code: &str,
@@ -1632,16 +1605,13 @@ fn reverse_map_current_file(
         let rsx_start = span.rsx_start + (target.byte_start - span.gen_start);
         let rsx_end = span.rsx_start + (target.byte_end.min(span_end) - span.gen_start);
         return Some(Range {
-            start: byte_to_lsp(rsx_source, rsx_start as usize)?,
-            end: byte_to_lsp(rsx_source, rsx_end as usize)?,
+            start: offset_to_position(rsx_source, rsx_start as usize),
+            end: offset_to_position(rsx_source, rsx_end as usize),
         });
     }
     let gen_line = target.range.start.line as usize;
     let rsx_line = (*map.get(gen_line)?)?;
-    // The line-map + indent-delta column math only holds for `[logic]` (lines emitted verbatim under a
-    // fixed indent, incl. the Props struct). A `[view]`/`[preview]` reference that fell through the
-    // expr-span check above (e.g. an `img src:foo` attr value) has no column correspondence — drop it
-    // rather than emit a bogus range that would mis-highlight and corrupt a rename.
+    // The line-map + indent-delta column math only holds for `[logic]` (lines emitted verbatim under a fixed indent, incl. the Props struct). A `[view]`/`[preview]` reference that fell through the expr-span check above (e.g. an `img src:foo` attr value) has no column correspondence — drop it rather than emit a bogus range that would mis-highlight and corrupt a rename.
     if find_section_at(rsx_source, rsx_line) != Section::Logic {
         return None;
     }
@@ -1675,92 +1645,7 @@ fn leading_ws_utf16(line: &str) -> u32 {
         .sum()
 }
 
-/// A byte offset within `source` → LSP `(line, UTF-16 col)`.
-fn byte_to_lsp(source: &str, byte: usize) -> Option<Position> {
-    let mut line_start = 0usize;
-    for (i, chunk) in source.split_inclusive('\n').enumerate() {
-        let next = line_start + chunk.len();
-        if byte < next || next >= source.len() {
-            let content = chunk.strip_suffix('\n').unwrap_or(chunk);
-            let in_line = byte.saturating_sub(line_start).min(content.len());
-            return Some(Position {
-                line: i as u32,
-                character: content[..in_line].encode_utf16().count() as u32,
-            });
-        }
-        line_start = next;
-    }
-    None
-}
-
-/// The range of the ASCII identifier (alphanumerics + `_`) surrounding the `.rsx` cursor, for
-/// `prepareRename` of a Rust symbol. `None` when the cursor is not on an identifier.
-fn ident_range_at(source: &str, line: u32, character: u32) -> Option<Range> {
-    let line_text = source.lines().nth(line as usize)?;
-    let bytes = line_text.as_bytes();
-    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
-    let mut cursor = 0usize;
-    let mut remaining = character;
-    for ch in line_text.chars() {
-        let w = ch.len_utf16() as u32;
-        if remaining < w {
-            break;
-        }
-        remaining -= w;
-        cursor += ch.len_utf8();
-    }
-    let cursor = cursor.min(line_text.len());
-    let mut start = cursor;
-    while start > 0 && is_ident(bytes[start - 1]) {
-        start -= 1;
-    }
-    let mut end = cursor;
-    while end < bytes.len() && is_ident(bytes[end]) {
-        end += 1;
-    }
-    if start == end {
-        return None;
-    }
-    Some(Range {
-        start: Position {
-            line,
-            character: line_text[..start].encode_utf16().count() as u32,
-        },
-        end: Position {
-            line,
-            character: line_text[..end].encode_utf16().count() as u32,
-        },
-    })
-}
-
-/// Byte offset of the `.rsx` cursor `(line, utf16_char)` within `source`, always on a UTF-8 char
-/// boundary. Mirrors `ra::byte_offset` but over the `.rsx` source: the column is UTF-16 (LSP), so
-/// converting it byte-wise would point mid-character on multi-byte text and yield a misaligned —
-/// possibly panicking — generated offset.
-fn rsx_byte_offset(source: &str, line: u32, utf16_col: u32) -> Option<usize> {
-    let mut line_start = 0usize;
-    for (i, current) in source.split_inclusive('\n').enumerate() {
-        if i as u32 == line {
-            let content = current.strip_suffix('\n').unwrap_or(current);
-            let mut remaining = utf16_col;
-            let mut byte = 0usize;
-            for ch in content.chars() {
-                let width = ch.len_utf16() as u32;
-                if remaining < width {
-                    break;
-                }
-                remaining -= width;
-                byte += ch.len_utf8();
-            }
-            return Some(line_start + byte);
-        }
-        line_start += current.len();
-    }
-    None
-}
-
-/// Builds the range covering all of `source`, used to replace the whole document
-/// with its formatted form. Character offsets are UTF-16 code units, per LSP.
+/// Builds the range covering all of `source`, used to replace the whole document with its formatted form. Character offsets are UTF-16 code units, per LSP.
 fn full_document_range(source: &str) -> Range {
     let mut line = 0u32;
     let mut last_line_len = 0u32;
@@ -1855,17 +1740,6 @@ mod tests {
     }
 
     #[test]
-    fn ident_range_finds_the_word_under_the_cursor() {
-        let src = "[logic]\nlet total_count = 1;\n";
-        // Cursor inside `total_count` on line 1.
-        let range = ident_range_at(src, 1, 7).unwrap();
-        assert_eq!(range.start.character, 4);
-        assert_eq!(range.end.character, 15);
-        // Cursor on the `=` (col 16) → no identifier.
-        assert!(ident_range_at(src, 1, 16).is_none());
-    }
-
-    #[test]
     fn real_files_pass_through_generated_files_reverse_map() {
         let uri: Uri = "file:///x/src/c.rsx".parse().unwrap();
         let real = RefTarget {
@@ -1900,8 +1774,7 @@ mod tests {
 
     #[test]
     fn view_ref_without_a_span_is_dropped_not_corrupted() {
-        // A `[view]` reference outside any verbatim expr-span (e.g. an `img src:foo` attr value) must be
-        // dropped and counted as unmapped — never mapped with a bogus column (which corrupted renames).
+        // A `[view]` reference outside any verbatim expr-span (e.g. an `img src:foo` attr value) must be dropped and counted as unmapped — never mapped with a bogus column (which corrupted renames).
         let uri: Uri = "file:///x/src/c.rsx".parse().unwrap();
         let gen_path = std::path::Path::new("/x/.rsx/build/c.rs");
         let rsx = "[view]\ncol\n    img src:foo\n";

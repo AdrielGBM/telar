@@ -1,7 +1,9 @@
+use crate::analysis::occurrences::declared_signals;
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
 use lsp_types::{CompletionItem, CompletionItemKind};
 use rsx_parser::RsxDocument;
+use rsx_transpiler::{color_attr_keys, is_control_flow_keyword, tag_attr_keys};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -10,6 +12,7 @@ pub enum CompletionKind {
     AttributeKey(String),
     ColorValue,
     StyleClass,
+    SignalRef,
 }
 
 pub fn completion_context(source: &str, line: u32, character: u32) -> Option<CompletionKind> {
@@ -20,14 +23,12 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
     let line_text = source.lines().nth(line as usize).unwrap_or("");
     let prefix = &line_text[..character.min(line_text.len() as u32) as usize];
 
-    // Inside a quoted string (text content, including `{…}` interpolation): not an element/attr
-    // position. Returning None lets the embedded analyzer answer Rust completion in interpolations.
+    // Inside a quoted string (text content / `{…}` interpolation): defer to the embedded analyzer for Rust completion.
     if in_quoted_string(prefix) {
         return None;
     }
 
     let trimmed = prefix.trim_start();
-
     if trimmed.is_empty() || !trimmed.contains(char::is_whitespace) {
         return Some(CompletionKind::ElementName);
     }
@@ -36,9 +37,8 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
     let tag = tokens.next().unwrap_or("").to_string();
     let rest = tokens.next().unwrap_or("");
 
-    // Control-flow lines carry Rust expressions, and `:|` marks a closure attribute value that runs
-    // to end of line — neither is an element/attr position, so defer to the embedded analyzer.
-    if matches!(tag.as_str(), "if" | "for" | "let" | "else") || rest.contains(":|") {
+    // Control-flow lines carry Rust expressions, and `:|` marks a closure attribute value that runs to end of line — neither is an element/attr position.
+    if is_control_flow_keyword(&tag) || rest.contains(":|") {
         return None;
     }
 
@@ -47,10 +47,13 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
     if current_token.starts_with('@') {
         return Some(CompletionKind::StyleClass);
     }
+    if current_token.starts_with('$') {
+        return Some(CompletionKind::SignalRef);
+    }
 
     if let Some(colon_pos) = current_token.find(':') {
         let key = &current_token[..colon_pos];
-        if matches!(key, "color" | "fill" | "stroke" | "outline") {
+        if color_attr_keys().contains(&key) {
             return Some(CompletionKind::ColorValue);
         }
         return None;
@@ -59,8 +62,7 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
     Some(CompletionKind::AttributeKey(tag))
 }
 
-/// Whether `prefix` ends inside an open double-quoted string, honoring `\"` escapes. Used to suppress
-/// element/attribute completion within `.rsx` string content.
+/// Whether `prefix` ends inside an open double-quoted string, honoring `\"` escapes.
 fn in_quoted_string(prefix: &str) -> bool {
     let mut in_str = false;
     let mut escaped = false;
@@ -84,9 +86,9 @@ pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
         .map(|(tag, _)| *tag)
         .collect();
 
-    let mut items: Vec<CompletionItem> = rsx_transpiler::builtin_tags()
+    let mut items: Vec<CompletionItem> = builtin_set
         .iter()
-        .map(|(name, _)| CompletionItem {
+        .map(|name| CompletionItem {
             label: name.to_string(),
             kind: Some(CompletionItemKind::KEYWORD),
             ..Default::default()
@@ -95,14 +97,14 @@ pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
 
     if let Some(dir) = dir {
         for path in rsx_transpiler::find_rsx_files(dir) {
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                if !builtin_set.contains(stem) {
-                    items.push(CompletionItem {
-                        label: stem.to_string(),
-                        kind: Some(CompletionItemKind::MODULE),
-                        ..Default::default()
-                    });
-                }
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                && !builtin_set.contains(stem)
+            {
+                items.push(CompletionItem {
+                    label: stem.to_string(),
+                    kind: Some(CompletionItemKind::MODULE),
+                    ..Default::default()
+                });
             }
         }
     }
@@ -122,67 +124,35 @@ fn attribute_items(keys: &[&str]) -> Vec<CompletionItem> {
 }
 
 pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
-    let layout = rsx_transpiler::layout_attr_keys();
-
-    match tag {
-        "text" => attribute_items(&["size", "color"]),
-        "widget" => vec![],
-        "btn" | "button" => {
-            let mut keys: Vec<&str> = layout.to_vec();
-            keys.extend_from_slice(&["on_press", "fill", "outline"]);
-            attribute_items(&keys)
-        }
-        "grid" => {
-            let mut keys: Vec<&str> = layout.to_vec();
-            keys.extend_from_slice(&["cols", "span", "row_span"]);
-            attribute_items(&keys)
-        }
-        "box" => {
-            let mut keys: Vec<&str> = layout.to_vec();
-            keys.extend_from_slice(&[
-                "fill",
-                "stroke",
-                "radius",
-                "shadow_x",
-                "shadow_y",
-                "shadow_blur",
-                "shadow_color",
-            ]);
-            attribute_items(&keys)
-        }
-        "img" => {
-            let mut keys: Vec<&str> = layout.to_vec();
-            keys.push("src");
-            attribute_items(&keys)
-        }
-        _ => attribute_items(layout),
-    }
+    attribute_items(&tag_attr_keys(tag))
 }
+
+/// The keyword colors the transpiler recognizes, offered alongside `[style]` constants and theme fields.
+const COLOR_KEYWORDS: &[&str] = &["white", "black", "transparent"];
 
 pub fn color_items(doc: &RsxDocument, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut items: Vec<CompletionItem> = Vec::new();
-
-    for constant in &doc.style.constants {
-        if seen.insert(constant.name.clone()) {
+    let push = |label: String, items: &mut Vec<CompletionItem>, seen: &mut HashSet<String>| {
+        if seen.insert(label.clone()) {
             items.push(CompletionItem {
-                label: constant.name.clone(),
+                label,
                 kind: Some(CompletionItemKind::COLOR),
                 ..Default::default()
             });
         }
-    }
+    };
 
+    for constant in &doc.style.constants {
+        push(constant.name.clone(), &mut items, &mut seen);
+    }
     if let Some(proj) = project {
         for field in &proj.theme_fields {
-            if seen.insert(field.clone()) {
-                items.push(CompletionItem {
-                    label: field.clone(),
-                    kind: Some(CompletionItemKind::COLOR),
-                    ..Default::default()
-                });
-            }
+            push(field.clone(), &mut items, &mut seen);
         }
+    }
+    for keyword in COLOR_KEYWORDS {
+        push(keyword.to_string(), &mut items, &mut seen);
     }
 
     items
@@ -196,6 +166,19 @@ pub fn style_class_items(doc: &RsxDocument) -> Vec<CompletionItem> {
             label: class.name.clone(),
             kind: Some(CompletionItemKind::CLASS),
             insert_text: Some(class.name.clone()),
+            ..Default::default()
+        })
+        .collect()
+}
+
+/// Signals/memos declared in `[logic]`, offered after a `$` in `[view]`. `insert_text` drops the `$` (the trigger char is already typed), so completing leaves a single `$name`.
+pub fn signal_items(source: &str) -> Vec<CompletionItem> {
+    declared_signals(source)
+        .into_iter()
+        .map(|name| CompletionItem {
+            label: format!("${name}"),
+            kind: Some(CompletionItemKind::VARIABLE),
+            insert_text: Some(name),
             ..Default::default()
         })
         .collect()

@@ -1,18 +1,16 @@
 //! Persistent, incremental `.rsx` symbol index for the workspace.
 //!
-//! `workspace/symbol` and cross-file component `references`/`rename` used to re-read and re-parse every
-//! `.rsx` on each query. This caches the per-file facts they need — the component (file stem), its
-//! `[style]` `@classes`, and every component `<tag>` usage — and refreshes only the file that changed
-//! (the live buffer on each edit, disk on a watched-file event). One scan on first query; O(1) updates
-//! after.
+//! `workspace/symbol` and cross-file component `references`/`rename` used to re-read and re-parse every `.rsx` on each query. This caches the per-file facts they need — the component (file stem), its `[style]` `@classes`, and every component `<tag>` usage — and refreshes only the file that changed (the live buffer on each edit, disk on a watched-file event). One scan on first query; O(1) updates after.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use lsp_types::{Location, Position, Range, SymbolInformation, SymbolKind, Uri};
 use rsx_parser::{header_section, parse};
+use rsx_transpiler::{is_builtin_tag, is_control_flow_keyword};
 
 use crate::position::Section;
+use crate::text::{leading_token, name_range};
 
 /// A component `<tag>` usage in `[view]`/`[preview]` markup: the referenced name and its name-range.
 pub struct TagUse {
@@ -109,8 +107,7 @@ impl WorkspaceIndex {
         out
     }
 
-    /// Cross-file references to component `name`: its defining file (a `(0,0)` marker, the file itself)
-    /// plus every `<name>` markup tag.
+    /// Cross-file references to component `name`: its defining file (a `(0,0)` marker, the file itself) plus every `<name>` markup tag.
     pub fn component_references(&self, name: &str) -> Vec<Location> {
         let mut out = Vec::new();
         for entry in self.files.values() {
@@ -161,9 +158,7 @@ fn index_source(path: &Path, source: &str) -> Option<IndexedFile> {
     })
 }
 
-/// Every component `<tag>` usage in `source`: the leading token of a `[view]`/`[preview]` line when it
-/// is a plain identifier that is not a built-in tag or control-flow keyword (mirrors
-/// `occurrences::component_at`). Section tracking is inline so the whole scan is a single pass.
+/// Every component `<tag>` usage in `source` (mirrors `occurrences::component_at`): the leading token of a `[view]`/`[preview]` line when it is a plain identifier that is neither a built-in tag nor a control-flow keyword. Section tracking is inline so the whole scan is a single pass.
 fn scan_tags(source: &str) -> Vec<TagUse> {
     let mut out = Vec::new();
     let mut section = Section::Unknown;
@@ -174,17 +169,12 @@ fn scan_tags(source: &str) -> Vec<TagUse> {
         if !matches!(section, Section::View | Section::Preview) {
             continue;
         }
-        let lead = line.len() - line.trim_start().len();
-        let token = line[lead..]
-            .split(|c: char| c.is_whitespace())
-            .next()
-            .unwrap_or("");
-        if token.is_empty()
-            || !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-            || matches!(token, "if" | "for" | "let" | "else")
-            || rsx_transpiler::builtin_tags()
-                .iter()
-                .any(|(t, _)| *t == token)
+        let Some((lead, token)) = leading_token(line) else {
+            continue;
+        };
+        if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            || is_control_flow_keyword(token)
+            || is_builtin_tag(token)
         {
             continue;
         }
@@ -216,23 +206,6 @@ fn symbol(
         },
         container_name,
     }
-}
-
-fn name_range(line: u32, line_text: &str, name_start: usize, len: usize) -> Range {
-    Range {
-        start: Position {
-            line,
-            character: byte_to_utf16(line_text, name_start),
-        },
-        end: Position {
-            line,
-            character: byte_to_utf16(line_text, name_start + len),
-        },
-    }
-}
-
-fn byte_to_utf16(line: &str, byte_col: usize) -> u32 {
-    line[..byte_col.min(line.len())].encode_utf16().count() as u32
 }
 
 #[cfg(test)]

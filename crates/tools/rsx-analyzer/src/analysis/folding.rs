@@ -1,10 +1,9 @@
 //! `textDocument/foldingRange`: collapsible regions for `.rsx`.
 //!
-//! Two kinds, derived straight from the source text (so it works even when the document does not
-//! parse): **section folds** collapse each `[logic]`/`[style]`/`[view]`/`[preview …]` block, and
-//! **indentation folds** collapse nested `[view]` elements and multi-line `[style]` classes.
+//! Two kinds, derived straight from the source text (so it works even when the document does not parse): **section folds** collapse each `[logic]`/`[style]`/`[view]`/`[preview …]` block, and **indentation folds** collapse nested `[view]` elements and multi-line `[style]` classes.
 
 use lsp_types::{FoldingRange, FoldingRangeKind};
+use rsx_parser::{header_section, is_preview_header};
 
 pub fn folding_ranges(source: &str) -> Vec<FoldingRange> {
     let lines: Vec<&str> = source.lines().collect();
@@ -17,7 +16,7 @@ pub fn folding_ranges(source: &str) -> Vec<FoldingRange> {
 /// Whether a line is a section header (`[logic]`/`[style]`/`[view]` or a `[preview …]`).
 fn is_header(line: &str) -> bool {
     let t = line.trim();
-    matches!(t, "[logic]" | "[style]" | "[view]") || (t.starts_with("[preview") && t.ends_with(']'))
+    header_section(t).is_some() || is_preview_header(t)
 }
 
 /// One fold per section: from its header line to the last non-blank line before the next header.

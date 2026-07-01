@@ -1,13 +1,10 @@
-//! Shared `@class` occurrence finder powering document-highlight, references and rename.
-//!
-//! Style classes are file-scoped (defined in `[style]`, used in `[view]`/`[preview]`), so every
-//! occurrence lives in one document and a source scan is complete. `[logic]` is skipped — a `@` there
-//! is Rust, not a class. Returned ranges cover the *name* (after the `@`), so a rename replaces the
-//! name and leaves the sigil.
+//! Shared `@class` / `$signal` / component-tag occurrence finders, powering document-highlight, references and rename. Style classes and signals are file-scoped, so a single source scan is complete. `[logic]` is skipped for `@class` (a `@` there is Rust, not a class). Returned ranges cover the name (after any sigil), so a rename replaces the name and leaves the sigil.
 
-use lsp_types::{Position, Range};
+use lsp_types::Range;
+use rsx_transpiler::{is_builtin_tag, is_control_flow_keyword};
 
 use crate::position::{Section, find_section_at};
+use crate::text::{ident_at, leading_token, name_range, utf16_to_byte};
 
 /// The class name under the cursor, if it sits on a `@name` token (on the `@` or anywhere in `name`).
 pub fn class_at(source: &str, line: u32, character: u32) -> Option<String> {
@@ -64,10 +61,8 @@ pub fn occurrence_at(source: &str, line: u32, character: u32) -> Option<Range> {
     None
 }
 
-/// The component name under the cursor: the first token (element tag) of a `[view]`/`[preview]` line,
-/// when it is a plain identifier that is not a built-in tag or control-flow keyword (i.e. a reference
-/// to another `.rsx`). Returns `None` for built-ins (`col`, `text`, …) and `@class`/attribute positions.
-pub fn component_at(source: &str, line: u32, character: u32) -> Option<String> {
+/// The component tag under the cursor and its byte start: the leading token of a `[view]`/`[preview]` line, when it is a plain identifier that is neither a built-in tag nor a control-flow keyword (i.e. a reference to another `.rsx`). `None` for built-ins, keywords and attribute positions.
+fn component_token(source: &str, line: u32, character: u32) -> Option<(usize, &str)> {
     if !matches!(
         find_section_at(source, line),
         Section::View | Section::Preview
@@ -75,59 +70,34 @@ pub fn component_at(source: &str, line: u32, character: u32) -> Option<String> {
         return None;
     }
     let line_text = source.lines().nth(line as usize)?;
-    let lead = line_text.len() - line_text.trim_start().len();
-    let token = line_text[lead..]
-        .split(|c: char| c.is_whitespace())
-        .next()?;
-    if token.is_empty() {
-        return None;
-    }
+    let (lead, token) = leading_token(line_text)?;
     let cursor = utf16_to_byte(line_text, character);
     if cursor < lead || cursor > lead + token.len() {
         return None;
     }
     if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        || matches!(token, "if" | "for" | "let" | "else")
-        || rsx_transpiler::builtin_tags()
-            .iter()
-            .any(|(t, _)| *t == token)
+        || is_control_flow_keyword(token)
+        || is_builtin_tag(token)
     {
         return None;
     }
-    Some(token.to_string())
+    Some((lead, token))
 }
 
-/// The name-range of the component tag under the cursor, for `prepareRename`. Assumes the caller has
-/// already gated on [`component_at`] (it does not re-check that the tag is a real, non-builtin tag);
-/// it only recomputes the leading tag token's range.
+pub fn component_at(source: &str, line: u32, character: u32) -> Option<String> {
+    component_token(source, line, character).map(|(_, token)| token.to_string())
+}
+
+/// The name-range of the component tag under the cursor, for `prepareRename`.
 pub fn component_at_range(source: &str, line: u32, character: u32) -> Option<Range> {
-    if !matches!(
-        find_section_at(source, line),
-        Section::View | Section::Preview
-    ) {
-        return None;
-    }
     let line_text = source.lines().nth(line as usize)?;
-    let lead = line_text.len() - line_text.trim_start().len();
-    let token = line_text[lead..]
-        .split(|c: char| c.is_whitespace())
-        .next()?;
-    if token.is_empty() {
-        return None;
-    }
-    let cursor = utf16_to_byte(line_text, character);
-    if cursor < lead || cursor > lead + token.len() {
-        return None;
-    }
+    let (lead, token) = component_token(source, line, character)?;
     Some(name_range(line, line_text, lead, token.len()))
 }
 
-/// The signal name under the cursor: a `$name` in `[view]`, or a `name` identifier in `[logic]` that
-/// is declared as a signal/memo. Returns `None` otherwise. A signal is file-scoped (declared in
-/// `[logic]`, used as `name` there and `$name` in `[view]`).
+/// The signal name under the cursor: a `$name` in `[view]`, or a `name` in `[logic]` declared as a signal/memo. A signal is file-scoped (`[logic]` declaration + uses, `$name` in `[view]`).
 ///
-/// NOTE: the `[logic]` side is a whole-word scan, not a rust-analyzer-precise resolve — robust for the
-/// usual distinct signal names, but it would also touch a same-named local in `[logic]`.
+/// NOTE: the `[logic]` side is a whole-word scan, not a rust-analyzer-precise resolve — robust for the usual distinct signal names, but it would also touch a same-named local in `[logic]`.
 pub fn signal_at(source: &str, line: u32, character: u32) -> Option<String> {
     let line_text = source.lines().nth(line as usize)?;
     let name = match find_section_at(source, line) {
@@ -138,14 +108,13 @@ pub fn signal_at(source: &str, line: u32, character: u32) -> Option<String> {
                 .find(|(pos, n)| cursor >= *pos && cursor <= *pos + 1 + n.len())
                 .map(|(_, n)| n)?
         }
-        Section::Logic => ident_at(line_text, character)?.1,
+        Section::Logic => ident_at(line_text, character)?.1.to_string(),
         _ => return None,
     };
     is_declared_signal(source, &name).then_some(name)
 }
 
-/// Every occurrence of signal `name`: whole-word in `[logic]` (declaration + uses) and `$name` (the
-/// name range, past the `$`) in `[view]`/`[preview]`.
+/// Every occurrence of signal `name`: whole-word in `[logic]` (declaration + uses) and `$name` (the name range, past the `$`) in `[view]`/`[preview]`.
 pub fn signal_occurrences(source: &str, name: &str) -> Vec<Range> {
     let mut out = Vec::new();
     for (i, line) in source.lines().enumerate() {
@@ -210,25 +179,6 @@ fn is_declared_signal(source: &str, name: &str) -> bool {
     false
 }
 
-/// The identifier (alphanumerics + `_`) surrounding the UTF-16 cursor, with its byte start.
-fn ident_at(line: &str, character: u32) -> Option<(usize, String)> {
-    let cursor = utf16_to_byte(line, character).min(line.len());
-    let bytes = line.as_bytes();
-    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
-    let mut start = cursor;
-    while start > 0 && is_ident(bytes[start - 1]) {
-        start -= 1;
-    }
-    let mut end = cursor;
-    while end < bytes.len() && is_ident(bytes[end]) {
-        end += 1;
-    }
-    if start == end {
-        return None;
-    }
-    Some((start, line[start..end].to_string()))
-}
-
 /// `(byte offset of `$`, ident)` for each `$ident` in `line`.
 fn dollar_idents(line: &str) -> Vec<(usize, String)> {
     let bytes = line.as_bytes();
@@ -275,8 +225,7 @@ fn whole_word_positions(line: &str, name: &str) -> Vec<(usize, usize)> {
     out
 }
 
-/// Finds each `@ident` token in a line, returning the byte offset of `ident` (past the `@`) and the
-/// `ident` text. Class names match the parser's permissive set: alphanumerics, `_`, and `-`.
+/// Each `@ident` token in a line: the byte offset of `ident` (past the `@`) and its text. Class names match the parser's permissive set: alphanumerics, `_` and `-`.
 fn scan_class_tokens(line: &str) -> Vec<(usize, &str)> {
     let bytes = line.as_bytes();
     let mut out = Vec::new();
@@ -301,35 +250,19 @@ fn scan_class_tokens(line: &str) -> Vec<(usize, &str)> {
     out
 }
 
-fn name_range(line: u32, line_text: &str, name_start: usize, len: usize) -> Range {
-    Range {
-        start: Position {
-            line,
-            character: byte_to_utf16(line_text, name_start),
-        },
-        end: Position {
-            line,
-            character: byte_to_utf16(line_text, name_start + len),
-        },
-    }
-}
-
-fn utf16_to_byte(line: &str, utf16_col: u32) -> usize {
-    let mut remaining = utf16_col;
-    let mut byte = 0;
-    for ch in line.chars() {
-        let w = ch.len_utf16() as u32;
-        if remaining < w {
-            break;
+/// Names of all signals/memos declared in the `[logic]` section, for completion.
+pub fn declared_signals(source: &str) -> Vec<String> {
+    let mut logic = String::new();
+    for (i, line) in source.lines().enumerate() {
+        if find_section_at(source, i as u32) == Section::Logic {
+            logic.push_str(line);
+            logic.push('\n');
         }
-        remaining -= w;
-        byte += ch.len_utf8();
     }
-    byte
-}
-
-fn byte_to_utf16(line: &str, byte_col: usize) -> u32 {
-    line[..byte_col.min(line.len())].encode_utf16().count() as u32
+    rsx_transpiler::scan_signals(&logic)
+        .into_iter()
+        .map(|s| s.name)
+        .collect()
 }
 
 #[cfg(test)]
@@ -340,21 +273,16 @@ mod tests {
 
     #[test]
     fn class_at_recognizes_def_and_ref() {
-        // Cursor on `card` in the `[style]` def (line 1, col 2).
         assert_eq!(class_at(SRC, 1, 2).as_deref(), Some("card"));
-        // Cursor on `card` in the `[view]` ref (line 4, `col @card`, col 6).
         assert_eq!(class_at(SRC, 4, 6).as_deref(), Some("card"));
-        // Cursor in `[style]` but not on a class.
         assert_eq!(class_at(SRC, 2, 5), None);
     }
 
     #[test]
     fn occurrences_cover_def_and_all_refs() {
         let ranges = class_occurrences(SRC, "card");
-        // def (line 1) + two refs (lines 4, 5).
         let lines: Vec<u32> = ranges.iter().map(|r| r.start.line).collect();
         assert_eq!(lines, vec![1, 4, 5]);
-        // Each range covers just the name (`card`, 4 cols).
         for r in &ranges {
             assert_eq!(r.end.character - r.start.character, 4);
         }
@@ -363,9 +291,7 @@ mod tests {
     #[test]
     fn component_at_recognizes_non_builtin_tags_only() {
         let src = "[view]\ncol\n    feature_card icon:\"x\"\n    text \"hi\"\n";
-        // Cursor on the component tag.
         assert_eq!(component_at(src, 2, 6).as_deref(), Some("feature_card"));
-        // Built-in tags are not components.
         assert_eq!(component_at(src, 1, 0), None);
         assert_eq!(component_at(src, 3, 4), None);
     }
@@ -374,11 +300,9 @@ mod tests {
     fn signals_resolve_across_logic_and_view() {
         let src =
             "[logic]\nlet count = signal(0i32);\nlet x = 5;\n[view]\ncol\n    text \"{$count}\"\n";
-        // `count` is a signal (recognized on its decl and on `$count`); `x` is a plain local.
         assert_eq!(signal_at(src, 1, 5).as_deref(), Some("count"));
         assert_eq!(signal_at(src, 5, 13).as_deref(), Some("count"));
         assert_eq!(signal_at(src, 2, 4), None);
-        // Occurrences span the [logic] decl and the [view] `$count`.
         let lines: Vec<u32> = signal_occurrences(src, "count")
             .iter()
             .map(|r| r.start.line)
@@ -387,9 +311,16 @@ mod tests {
     }
 
     #[test]
+    fn declared_signals_lists_logic_signals() {
+        let src = "[logic]\nlet count = signal(0i32);\nlet double = memo(|| 0);\nlet x = 5;\n[view]\ncol\n";
+        let mut names = declared_signals(src);
+        names.sort();
+        assert_eq!(names, vec!["count".to_string(), "double".to_string()]);
+    }
+
+    #[test]
     fn logic_at_signs_are_ignored() {
         let src = "[logic]\nlet x = foo(\"@card\");\n[view]\ncol @card\n";
-        // The `@card` inside the [logic] string must not be an occurrence.
         let ranges = class_occurrences(src, "card");
         assert_eq!(ranges.len(), 1);
         assert_eq!(ranges[0].start.line, 3);

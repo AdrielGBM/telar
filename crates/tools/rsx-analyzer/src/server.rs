@@ -1,10 +1,6 @@
 //! Hand-rolled LSP server loop over stdio.
 //!
-//! Replaces the tower-lsp runtime: it frames JSON-RPC over stdin/stdout, routes
-//! requests and notifications to [`Backend`] methods, and writes replies through
-//! the [`OutgoingSender`] channel. State-mutating notifications (`didOpen` /
-//! `didChange` / `didClose`) are awaited in order; requests are spawned so a slow
-//! `rustfmt` run never stalls the read loop.
+//! Replaces the tower-lsp runtime: it frames JSON-RPC over stdin/stdout, routes requests and notifications to [`Backend`] methods, and writes replies through the [`OutgoingSender`] channel. State-mutating notifications (`didOpen` / `didChange` / `didClose`) are awaited in order; requests are spawned so a slow `rustfmt` run never stalls the read loop.
 
 use std::sync::Arc;
 
@@ -86,6 +82,8 @@ async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Res
         "textDocument/foldingRange" => ok(backend.folding_range(parse(params)?).await),
         "textDocument/codeAction" => ok(backend.code_action(parse(params)?).await),
         "textDocument/codeLens" => ok(backend.code_lens(parse(params)?).await),
+        "textDocument/documentLink" => ok(backend.document_link(parse(params)?).await),
+        "textDocument/inlayHint" => ok(backend.inlay_hint(parse(params)?).await),
         "textDocument/documentHighlight" => ok(backend.document_highlight(parse(params)?).await),
         "textDocument/references" => ok(backend.references(parse(params)?).await),
         "textDocument/prepareRename" => ok(backend.prepare_rename(parse(params)?).await),

@@ -1,5 +1,4 @@
-//! RSX transpiler: converts a parsed [`RsxDocument`] AST into compilable Rust
-//! source code that depends on `rsx::*`.
+//! RSX transpiler: converts a parsed [`RsxDocument`] AST into compilable Rust source code that depends on `rsx::*`.
 
 mod error;
 pub mod naming;
@@ -9,7 +8,11 @@ mod style;
 mod view;
 
 pub use error::TranspileError;
-pub use registry::{TAG_REFERENCES_VARIABLE, builtin_tags, layout_attr_keys};
+pub use registry::{
+    TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, is_builtin_tag,
+    is_control_flow_keyword, layout_attr_keys, tag_attr_keys,
+};
+pub use signal_scan::{SignalInfo, scan_signals};
 
 use std::path::{Path, PathBuf};
 
@@ -18,17 +21,14 @@ use rsx_parser::RsxDocument;
 use crate::naming::{
     contains_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
 };
-use crate::signal_scan::scan_signals;
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
 
-/// Input to a single transpilation: the parsed document plus the desired
-/// component function name (typically derived from the source file stem).
+/// Input to a single transpilation: the parsed document plus the desired component function name (typically derived from the source file stem).
 pub(crate) struct TranspileInput<'a> {
     pub document: &'a RsxDocument,
     pub component_name: &'a str,
-    /// Concrete theme type path (e.g. `SandboxTheme`). When set, `[style]` color
-    /// references resolve through `use_theme::<Type>()` instead of `COLOR_*` consts.
+    /// Concrete theme type path (e.g. `SandboxTheme`). When set, `[style]` color references resolve through `use_theme::<Type>()` instead of `COLOR_*` consts.
     pub theme_type: Option<&'a str>,
 }
 
@@ -36,21 +36,13 @@ pub(crate) struct TranspileInput<'a> {
 pub struct TranspiledSource {
     pub rust_code: String,
     pub preview_names: Vec<String>,
-    /// Per generated line (0-based), the 0-based `.rsx` line it originated from, or `None` for
-    /// boilerplate and transpiler-injected lines. Lets the analyzer map rust-analyzer's diagnostics
-    /// on the generated code back onto the `.rsx` source.
+    /// Per generated line (0-based), the 0-based `.rsx` line it originated from, or `None` for boilerplate and transpiler-injected lines. Lets the analyzer map rust-analyzer's diagnostics on the generated code back onto the `.rsx` source.
     pub source_map: Vec<Option<u32>>,
-    /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the
-    /// generated Rust. In-memory only (not serialized, not part of the `.rs.map`): the analyzer uses
-    /// them to offer Rust completion inside `[view]` expressions. See [`ExprSpan`].
+    /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the generated Rust. In-memory only (not serialized, not part of the `.rs.map`): the analyzer uses them to offer Rust completion inside `[view]` expressions. See [`ExprSpan`].
     pub expr_spans: Vec<ExprSpan>,
 }
 
-/// A `[view]` Rust expression that is copied byte-for-byte from the `.rsx` source into the generated
-/// Rust, so `gen_start + (cursor_byte - rsx_start)` maps a `.rsx` cursor onto the generated file on a
-/// UTF-8 char boundary. Only emitted for verbatim fragments (interpolation `{expr}`, `if`/`let`
-/// expressions, verbatim closure / pass-through attr values); non-verbatim ones (`for` re-tokenized
-/// patterns, transformed numeric/color attrs) produce no span.
+/// A `[view]` Rust expression that is copied byte-for-byte from the `.rsx` source into the generated Rust, so `gen_start + (cursor_byte - rsx_start)` maps a `.rsx` cursor onto the generated file on a UTF-8 char boundary. Only emitted for verbatim fragments (interpolation `{expr}`, `if`/`let` expressions, verbatim closure / pass-through attr values); non-verbatim ones (`for` re-tokenized patterns, transformed numeric/color attrs) produce no span.
 pub struct ExprSpan {
     /// Byte offset of the fragment's start in the `.rsx` source.
     pub rsx_start: u32,
@@ -60,8 +52,7 @@ pub struct ExprSpan {
     pub gen_start: u32,
 }
 
-/// Serializes a [`TranspiledSource::source_map`] as a JSON array (`[null,3,3,...]`), the format the
-/// editor extension reads to map rust-analyzer's diagnostics on the generated Rust back to `.rsx`.
+/// Serializes a [`TranspiledSource::source_map`] as a JSON array (`[null,3,3,...]`), the format the editor extension reads to map rust-analyzer's diagnostics on the generated Rust back to `.rsx`.
 pub fn source_map_to_json(map: &[Option<u32>]) -> String {
     let mut out = String::with_capacity(map.len() * 3 + 2);
     out.push('[');
@@ -78,8 +69,7 @@ pub fn source_map_to_json(map: &[Option<u32>]) -> String {
     out
 }
 
-/// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors
-/// through `theme_type` when provided so theme switching at runtime takes effect.
+/// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect.
 pub fn transpile_source_with_theme(
     source: &str,
     component_name: &str,
@@ -93,8 +83,7 @@ pub fn transpile_source_with_theme(
     })
 }
 
-/// Recursively collects files with `extension` under `dir`, descending into a
-/// subdirectory only when `keep_dir` returns true for its name. The result is sorted.
+/// Recursively collects files with `extension` under `dir`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
 pub fn collect_files_by_ext(
     dir: &Path,
     extension: &str,
@@ -135,9 +124,7 @@ pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
     collect_files_by_ext(dir, "rsx", &|_| true)
 }
 
-/// Derives a unique stem for a `.rsx` file from its path relative to `src_dir`,
-/// flattening subdirectories with `_` so files in different directories don't
-/// collide (e.g. `src/components/button.rsx` -> `components_button`).
+/// Derives a unique stem for a `.rsx` file from its path relative to `src_dir`, flattening subdirectories with `_` so files in different directories don't collide (e.g. `src/components/button.rsx` -> `components_button`).
 pub fn relative_stem(path: &Path, src_dir: &Path) -> String {
     let rel = path.strip_prefix(src_dir).unwrap_or(path);
     let without_ext = rel.with_extension("");
@@ -148,13 +135,7 @@ pub fn relative_stem(path: &Path, src_dir: &Path) -> String {
         .join("_")
 }
 
-/// Derives the output `.rs` path (relative to the output root) for a `.rsx`
-/// file by mirroring its location under `src_dir`, so files in different
-/// directories never collide (e.g. `src/components/button.rsx` ->
-/// `components/button.rs`). Used for the transpiler's `.rsx/build/` output.
-/// Returns `None` for files outside `src_dir`: those are never transpiled, so
-/// they have no place in the build tree — and flattening their absolute path
-/// would escape the output root entirely.
+/// Derives the output `.rs` path (relative to the output root) for a `.rsx` file by mirroring its location under `src_dir`, so files in different directories never collide (e.g. `src/components/button.rsx` -> `components/button.rs`). Used for the transpiler's `.rsx/build/` output. Returns `None` for files outside `src_dir`: those are never transpiled, so they have no place in the build tree — and flattening their absolute path would escape the output root entirely.
 pub fn relative_output_path(path: &Path, src_dir: &Path) -> Option<PathBuf> {
     let rel = path.strip_prefix(src_dir).ok()?;
     if rel.as_os_str().is_empty() {
@@ -163,9 +144,7 @@ pub fn relative_output_path(path: &Path, src_dir: &Path) -> Option<PathBuf> {
     Some(rel.with_extension("rs"))
 }
 
-/// Accumulates generated code together with a per-line origin map. Each completed line (terminated by
-/// `\n`) records the `.rsx` source line passed when its newline was appended, so callers tag a line by
-/// emitting its content and the closing newline with the same `src`.
+/// Accumulates generated code together with a per-line origin map. Each completed line (terminated by `\n`) records the `.rsx` source line passed when its newline was appended, so callers tag a line by emitting its content and the closing newline with the same `src`.
 #[derive(Default)]
 struct Code {
     out: String,
@@ -245,9 +224,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         None,
     );
     code.push("#[allow(unused_imports)] use rsx::*;\n", None);
-    // Each `.rsx` is wired as its own `mod` (so rust-analyzer treats it as a real module and offers
-    // completion); `use super::*` re-imports the sibling components the host re-exports, so cross-component
-    // calls like `feature_card(ctx)` resolve by bare name just as they did under the old `include!`.
+    // Each `.rsx` is wired as its own `mod` (so rust-analyzer treats it as a real module and offers completion); `use super::*` re-imports the sibling components the host re-exports, so cross-component calls like `feature_card(ctx)` resolve by bare name just as they did under the old `include!`.
     code.push("#[allow(unused_imports)] use super::*;\n", None);
     code.push("\n", None);
 
@@ -311,9 +288,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         code.push("\n", None);
     }
 
-    // The view body carries source markers from generation; resolve them into per-line origins (for
-    // diagnostics) plus the byte spans of verbatim expressions. `view_prefix_len` is the body's start
-    // offset in the final file, so each span's relative offset rebases onto the generated file.
+    // The view body carries source markers from generation; resolve them into per-line origins (for diagnostics) plus the byte spans of verbatim expressions. `view_prefix_len` is the body's start offset in the final file, so each span's relative offset rebases onto the generated file.
     let view_prefix_len = code.out.len();
     let resolved = crate::view::resolve_source_map(&view_body);
     for (line, src) in &resolved.lines {
@@ -335,9 +310,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     code.push("}\n", None);
 
     if !doc.previews.is_empty() {
-        // Each preview is its own build fn — so a prop-taking component can be previewed via its
-        // markup body — plus a PreviewEntry the bundler collects. The body reuses the view codegen
-        // with no signals in scope (a preview has no `[logic]`).
+        // Each preview is its own build fn — so a prop-taking component can be previewed via its markup body — plus a PreviewEntry the bundler collects. The body reuses the view codegen with no signals in scope (a preview has no `[logic]`).
         for (i, preview) in doc.previews.iter().enumerate() {
             let pfn = format!("{fn_name}_preview_{i}");
             let mut pgen =
@@ -400,13 +373,9 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     })
 }
 
-/// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines)
-/// from the logic zone, renames it to `{PascalFnName}Props`, and returns the
-/// renamed struct code together with the logic zone with the struct removed.
+/// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone, renames it to `{PascalFnName}Props`, and returns the renamed struct code together with the logic zone with the struct removed.
 ///
-/// Returns `(None, original_logic, None)` when no `struct Props` is found; otherwise the third
-/// element is the `[start, end]` (inclusive) line span of the struct within `logic`'s lines, so the
-/// caller can map the emitted struct back to the original source.
+/// Returns `(None, original_logic, None)` when no `struct Props` is found; otherwise the third element is the `[start, end]` (inclusive) line span of the struct within `logic`'s lines, so the caller can map the emitted struct back to the original source.
 fn extract_props_struct(
     logic: &str,
     fn_name: &str,
@@ -521,8 +490,7 @@ mod tests {
             .expect("generated text leaf");
         assert_eq!(result.source_map[text_idx], Some(2));
 
-        // A container's own closing constructor maps back to the container, not its last child:
-        // the row's `Container::new` resolves to the `row` line (4 -> 3) even though the btn nested inside.
+        // A container's own closing constructor maps back to the container, not its last child: the row's `Container::new` resolves to the `row` line (4 -> 3) even though the btn nested inside.
         let row_ctor = lines
             .iter()
             .position(|l| l.contains("flex_row()"))
@@ -716,8 +684,7 @@ col @card
 
     #[test]
     fn expr_spans_are_char_boundary_safe_with_multibyte() {
-        // A multi-byte literal precedes the interpolation; the span must still land on char boundaries
-        // in both source and generated (the byte-wise affine map would otherwise mis-slice / panic).
+        // A multi-byte literal precedes the interpolation; the span must still land on char boundaries in both source and generated (the byte-wise affine map would otherwise mis-slice / panic).
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ntext \"caf\u{e9} {count}\"\n";
         let out = transpile_source_with_theme(src, "demo", None).unwrap();
         assert_eq!(out.expr_spans.len(), 1);
@@ -833,8 +800,7 @@ col @card
 
     #[test]
     fn img_src_value_carries_an_expr_span() {
-        // The `src` attr is a verbatim Rust expression, so the analyzer must get an expr-span that maps
-        // back onto the `hero` identifier in source (this is what makes refs/rename precise in `[view]`).
+        // The `src` attr is a verbatim Rust expression, so the analyzer must get an expr-span that maps back onto the `hero` identifier in source (this is what makes refs/rename precise in `[view]`).
         let src = "[logic]\nlet hero = 1i32;\n[view]\ncol\n    img src:hero width:100\n";
         let out = transpile_source_with_theme(src, "demo", None).unwrap();
         let spans: Vec<&str> = out

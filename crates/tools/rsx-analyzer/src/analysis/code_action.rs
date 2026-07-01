@@ -1,6 +1,4 @@
-//! `textDocument/codeAction`: quick fixes synthesized from the diagnostics the LSP already publishes
-//! (`rsx-diagnostics`). Each matches a diagnostic message and builds a `WorkspaceEdit` that inserts
-//! the missing symbol into `[style]`.
+//! `textDocument/codeAction`: quick fixes synthesized from the diagnostics the LSP already publishes (`rsx-diagnostics`). Each matches a diagnostic message and builds a `WorkspaceEdit` that inserts the missing symbol into `[style]`.
 
 use std::collections::HashMap;
 
@@ -8,6 +6,7 @@ use lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, Diagnostic, Position, Range, TextEdit, Uri,
     WorkspaceEdit,
 };
+use rsx_parser::{header_section, is_preview_header};
 
 pub fn code_actions(
     source: &str,
@@ -49,11 +48,10 @@ fn between(s: &str, start: &str, end: &str) -> Option<String> {
 
 fn is_header(line: &str) -> bool {
     let t = line.trim();
-    matches!(t, "[logic]" | "[style]" | "[view]") || (t.starts_with("[preview") && t.ends_with(']'))
+    header_section(t).is_some() || is_preview_header(t)
 }
 
-/// A single-edit `WorkspaceEdit` that drops `snippet` into `[style]`: at the end of an existing
-/// section, or by creating one before `[view]` (or at end of file) when there is none.
+/// A single-edit `WorkspaceEdit` that drops `snippet` into `[style]`: at the end of an existing section, or by creating one before `[view]` (or at end of file) when there is none.
 fn insert_into_style(source: &str, uri: &Uri, snippet: &str) -> Option<WorkspaceEdit> {
     let lines: Vec<&str> = source.lines().collect();
     let utf16_len = |l: &str| l.encode_utf16().count() as u32;

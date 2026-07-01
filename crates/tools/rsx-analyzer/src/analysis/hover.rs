@@ -3,6 +3,7 @@ use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 use rsx_parser::{RsxDocument, StyleValue};
+use rsx_transpiler::color_attr_keys;
 
 pub fn hover_info(
     doc: &RsxDocument,
@@ -23,10 +24,10 @@ pub fn hover_info(
     let char_before = line_text[..word_start].chars().last();
 
     if char_before == Some(':') {
-        if let Some(key) = attribute_key_before_colon(line_text, word_start) {
-            if matches!(key, "color" | "fill" | "stroke" | "outline") {
-                return hover_color(doc, word, project);
-            }
+        if let Some(key) = attribute_key_before_colon(line_text, word_start)
+            && color_attr_keys().contains(&key)
+        {
+            return hover_color(doc, word, project);
         }
         return None;
     }
@@ -48,11 +49,11 @@ fn hover_color(doc: &RsxDocument, value: &str, project: Option<&ProjectInfo>) ->
         };
         return Some(make_hover(text));
     }
-    if let Some(proj) = project {
-        if proj.theme_fields.contains(value) {
-            let type_name = proj.theme_type.as_deref().unwrap_or("Theme");
-            return Some(make_hover(format!("{type_name}.{value}")));
-        }
+    if let Some(proj) = project
+        && proj.theme_fields.contains(value)
+    {
+        let type_name = proj.theme_type.as_deref().unwrap_or("Theme");
+        return Some(make_hover(format!("{type_name}.{value}")));
     }
     None
 }

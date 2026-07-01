@@ -1,11 +1,10 @@
-//! `textDocument/semanticTokens/full`: parse-aware highlighting that TextMate (regex) can't do —
-//! it distinguishes **component** tags from **built-in** tags, marks `@class` references and
-//! `$signal` reads, so the semantics of the `.rsx` read at a glance. Coexists with the TextMate
-//! grammar (which stays the fallback for everything else).
+//! `textDocument/semanticTokens/full`: parse-aware highlighting that TextMate (regex) can't do — it distinguishes **component** tags from **built-in** tags, marks `@class` references and `$signal` reads, so the semantics of the `.rsx` read at a glance. Coexists with the TextMate grammar (which stays the fallback for everything else).
 
 use lsp_types::{SemanticToken, SemanticTokenType};
+use rsx_transpiler::{is_builtin_tag, is_control_flow_keyword};
 
 use crate::position::{Section, find_section_at};
+use crate::text::{byte_to_utf16, leading_token};
 
 /// The legend, in index order. The `token_type` field of each emitted token indexes into this.
 pub fn token_types() -> Vec<SemanticTokenType> {
@@ -64,14 +63,12 @@ fn raw_tokens(source: &str) -> Vec<(u32, u32, u32, u32)> {
 }
 
 fn view_tokens(line: &str, li: u32, raw: &mut Vec<(u32, u32, u32, u32)>) {
-    let lead = line.len() - line.trim_start().len();
     // The element tag is the first token; classify built-in vs component.
-    if let Some(tag) = line[lead..].split(|c: char| c.is_whitespace()).next()
-        && !tag.is_empty()
+    if let Some((lead, tag)) = leading_token(line)
         && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && !matches!(tag, "if" | "for" | "let" | "else")
+        && !is_control_flow_keyword(tag)
     {
-        let ty = if is_builtin(tag) {
+        let ty = if is_builtin_tag(tag) {
             TAG_BUILTIN
         } else {
             TAG_COMPONENT
@@ -90,12 +87,6 @@ fn style_tokens(line: &str, li: u32, raw: &mut Vec<(u32, u32, u32, u32)>) {
     for (start, len) in sigil_tokens(line, b'@') {
         push(raw, li, line, start, len, CLASS);
     }
-}
-
-fn is_builtin(tag: &str) -> bool {
-    rsx_transpiler::builtin_tags()
-        .iter()
-        .any(|(t, _)| *t == tag)
 }
 
 /// Byte spans of `<sigil><ident>` tokens in `line` (the span includes the sigil). `@` names allow `-`.
@@ -133,13 +124,9 @@ fn push(
     byte_len: usize,
     ty: u32,
 ) {
-    let start = utf16(line, byte_start);
-    let end = utf16(line, byte_start + byte_len);
+    let start = byte_to_utf16(line, byte_start);
+    let end = byte_to_utf16(line, byte_start + byte_len);
     raw.push((line_idx, start, end - start, ty));
-}
-
-fn utf16(line: &str, byte: usize) -> u32 {
-    line[..byte.min(line.len())].encode_utf16().count() as u32
 }
 
 #[cfg(test)]

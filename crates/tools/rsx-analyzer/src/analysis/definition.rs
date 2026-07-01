@@ -3,12 +3,7 @@ use crate::position::{Section, find_section_at, parser_line_to_lsp_range};
 use crate::project::ProjectInfo;
 use lsp_types::{GotoDefinitionResponse, Location, Uri};
 use rsx_parser::RsxDocument;
-
-fn is_builtin_tag(tag: &str) -> bool {
-    rsx_transpiler::builtin_tags()
-        .iter()
-        .any(|(name, _)| *name == tag)
-}
+use rsx_transpiler::{color_attr_keys, is_builtin_tag};
 
 pub fn goto_definition(
     doc: &RsxDocument,
@@ -27,8 +22,7 @@ pub fn goto_definition(
         return None;
     }
 
-    // A `@`-prefixed token is a style-class reference. `word_at_cursor` keeps the sigil in the word
-    // (it breaks on whitespace/`:`/`"`, not `@`), so match on the prefix rather than the char before.
+    // A `@`-prefixed token is a style-class reference. `word_at_cursor` keeps the sigil in the word (it breaks on whitespace/`:`/`"`, not `@`), so match on the prefix rather than the char before.
     if let Some(class) = word.strip_prefix('@') {
         return find_class(doc, class, uri);
     }
@@ -36,10 +30,10 @@ pub fn goto_definition(
     let char_before = line_text[..word_start].chars().last();
 
     if char_before == Some(':') {
-        if let Some(key) = attribute_key_before_colon(line_text, word_start) {
-            if matches!(key, "color" | "fill" | "stroke" | "outline") {
-                return find_color(doc, word, uri, project);
-            }
+        if let Some(key) = attribute_key_before_colon(line_text, word_start)
+            && color_attr_keys().contains(&key)
+        {
+            return find_color(doc, word, uri, project);
         }
         return None;
     }
@@ -72,14 +66,14 @@ fn find_color(
             range: parser_line_to_lsp_range(c.line),
         }));
     }
-    if let Some(project) = project {
-        if let Some((path, line)) = project.find_theme_field_location(value) {
-            let target_uri = crate::uri::from_path(&path)?;
-            return Some(GotoDefinitionResponse::Scalar(Location {
-                uri: target_uri,
-                range: parser_line_to_lsp_range(line),
-            }));
-        }
+    if let Some(project) = project
+        && let Some((path, line)) = project.find_theme_field_location(value)
+    {
+        let target_uri = crate::uri::from_path(&path)?;
+        return Some(GotoDefinitionResponse::Scalar(Location {
+            uri: target_uri,
+            range: parser_line_to_lsp_range(line),
+        }));
     }
     None
 }

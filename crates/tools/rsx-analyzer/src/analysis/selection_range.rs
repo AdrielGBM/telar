@@ -1,18 +1,14 @@
 //! `textDocument/selectionRange`: smart "expand selection" over a `.rsx` document.
 //!
-//! `.rsx` has no full AST with byte spans for every node, but its shape is regular enough to expand
-//! purely from structure: the identifier under the cursor → the line's content → each enclosing
-//! indentation block (so a `[view]` tree expands child → parent → grandparent) → the whole section →
-//! the document. Each step is strictly contained in the next, which is exactly the `SelectionRange`
-//! contract (`range` plus a `parent` pointing one level out).
+//! `.rsx` has no full AST with byte spans for every node, but its shape is regular enough to expand purely from structure: the identifier under the cursor → the line's content → each enclosing indentation block (so a `[view]` tree expands child → parent → grandparent) → the whole section → the document. Each step is strictly contained in the next, which is exactly the `SelectionRange` contract (`range` plus a `parent` pointing one level out).
 
 use lsp_types::{Position, Range, SelectionRange};
 
 use rsx_parser::{header_section, is_preview_header};
 
-/// Whether a trimmed line opens a section: the fixed `[logic]`/`[style]`/`[view]` headers plus the
-/// parameterized `[preview "Name" …]` header (so a preview is its own selectable section and never gets
-/// swept into the preceding `[view]` block).
+use crate::text::{byte_to_utf16, ident_at, name_range, utf16_len};
+
+/// Whether a trimmed line opens a section: the fixed `[logic]`/`[style]`/`[view]` headers plus the parameterized `[preview "Name" …]` header (so a preview is its own selectable section and never gets swept into the preceding `[view]` block).
 fn is_section_header(trimmed: &str) -> bool {
     header_section(trimmed).is_some() || is_preview_header(trimmed)
 }
@@ -49,9 +45,7 @@ fn selection_for(lines: &[&str], pos: Position) -> SelectionRange {
     build(ranges, pos)
 }
 
-/// Folds outer→inner ranges into a nested [`SelectionRange`], keeping only entries that are strictly
-/// inside the one before them (so a degenerate/empty step never breaks the monotonic chain). Always
-/// yields at least the cursor position itself.
+/// Folds outer→inner ranges into a nested [`SelectionRange`], keeping only entries that are strictly inside the one before them (so a degenerate/empty step never breaks the monotonic chain). Always yields at least the cursor position itself.
 fn build(ranges: Vec<Range>, pos: Position) -> SelectionRange {
     let mut node: Option<SelectionRange> = None;
     let mut last: Option<Range> = None;
@@ -100,8 +94,7 @@ fn document_range(lines: &[&str]) -> Range {
     }
 }
 
-/// The `[section]` block the cursor sits in: from its header line down to the line before the next
-/// header (or end of file). `None` before the first header.
+/// The `[section]` block the cursor sits in: from its header line down to the line before the next header (or end of file). `None` before the first header.
 fn section_range(lines: &[&str], line: u32) -> Option<Range> {
     let target = line as usize;
     let mut start = None;
@@ -117,9 +110,7 @@ fn section_range(lines: &[&str], line: u32) -> Option<Range> {
     start.map(|s| full_lines(lines, s, lines.len().saturating_sub(1)))
 }
 
-/// The chain of enclosing indentation blocks for `line`, innermost first: the line plus its
-/// more-indented descendants, then each shallower ancestor with its own descendants. Section headers
-/// are never crossed.
+/// The chain of enclosing indentation blocks for `line`, innermost first: the line plus its more-indented descendants, then each shallower ancestor with its own descendants. Section headers are never crossed.
 fn indentation_blocks(lines: &[&str], line: usize) -> Vec<Range> {
     if line >= lines.len() {
         return Vec::new();
@@ -153,8 +144,7 @@ fn indentation_blocks(lines: &[&str], line: usize) -> Vec<Range> {
     out
 }
 
-/// The block rooted at `line`: itself plus the following run of deeper-indented (or blank) lines,
-/// trimmed back to the last non-blank descendant.
+/// The block rooted at `line`: itself plus the following run of deeper-indented (or blank) lines, trimmed back to the last non-blank descendant.
 fn block_bounds(lines: &[&str], line: usize) -> (usize, usize) {
     let base = indent(lines[line]);
     let mut end = line;
@@ -208,56 +198,12 @@ fn line_content_range(line: u32, text: &str) -> Option<Range> {
 
 /// The identifier (alphanumerics + `_`) under the UTF-16 cursor. `None` when not on a word.
 fn word_range(line: u32, text: &str, character: u32) -> Option<Range> {
-    let cursor = utf16_to_byte(text, character).min(text.len());
-    let bytes = text.as_bytes();
-    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
-    let mut start = cursor;
-    while start > 0 && is_ident(bytes[start - 1]) {
-        start -= 1;
-    }
-    let mut end = cursor;
-    while end < bytes.len() && is_ident(bytes[end]) {
-        end += 1;
-    }
-    if start == end {
-        return None;
-    }
-    Some(Range {
-        start: Position {
-            line,
-            character: byte_to_utf16(text, start),
-        },
-        end: Position {
-            line,
-            character: byte_to_utf16(text, end),
-        },
-    })
+    let (start, word) = ident_at(text, character)?;
+    Some(name_range(line, text, start, word.len()))
 }
 
 fn indent(line: &str) -> usize {
     line.len() - line.trim_start().len()
-}
-
-fn utf16_len(line: &str) -> u32 {
-    line.encode_utf16().count() as u32
-}
-
-fn byte_to_utf16(line: &str, byte_col: usize) -> u32 {
-    line[..byte_col.min(line.len())].encode_utf16().count() as u32
-}
-
-fn utf16_to_byte(line: &str, utf16_col: u32) -> usize {
-    let mut remaining = utf16_col;
-    let mut byte = 0;
-    for ch in line.chars() {
-        let w = ch.len_utf16() as u32;
-        if remaining < w {
-            break;
-        }
-        remaining -= w;
-        byte += ch.len_utf8();
-    }
-    byte
 }
 
 #[cfg(test)]
@@ -330,8 +276,7 @@ mod tests {
             c.iter().any(|&(start, end)| start == (0, 0) && end.0 == 2),
             "expected a [view] section ending at line 2: {c:?}"
         );
-        // No level may span the `[view]` partially into the preview (only the whole-document level,
-        // ending at the last line, is allowed to start at line 0 and reach past line 2).
+        // No level may span the `[view]` partially into the preview (only the whole-document level, ending at the last line, is allowed to start at line 0 and reach past line 2).
         assert!(
             !c.iter()
                 .any(|&(start, end)| start.0 == 0 && (end.0 == 3 || end.0 == 4)),
@@ -350,8 +295,7 @@ mod tests {
                 character: 4,
             },
         ));
-        // Its enclosing section is the `[preview]` block (header on line 3 down to line 5), not the
-        // earlier `[view]`.
+        // Its enclosing section is the `[preview]` block (header on line 3 down to line 5), not the earlier `[view]`.
         assert!(
             c.iter().any(|&(start, end)| start == (3, 0) && end.0 == 5),
             "expected a [preview] section spanning lines 3..5: {c:?}"
