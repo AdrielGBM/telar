@@ -51,7 +51,7 @@ pub use layout_core::{
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use paths::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
-pub use platform_core::{Event, ScrollDelta, WindowConfig};
+pub use platform_core::{Event, FullscreenMode, ScrollDelta, WindowConfig, WindowPosition};
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
     Effect, Memo, ReadSignal, RwSignal, batch, effect, memo, reset_runtime, signal,

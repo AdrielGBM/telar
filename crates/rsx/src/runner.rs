@@ -731,6 +731,28 @@ fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
     if let Ok(v) = std::env::var("RSX_DEV_WINDOW_TRANSPARENT") {
         config.is_transparent = v == "1";
     }
+    if let Ok(v) = std::env::var("RSX_DEV_WINDOW_FULLSCREEN") {
+        config.fullscreen = match v.as_str() {
+            "borderless" => platform_core::FullscreenMode::Borderless,
+            "exclusive" => platform_core::FullscreenMode::Exclusive,
+            _ => platform_core::FullscreenMode::Disabled,
+        };
+    }
+    if let Ok(v) = std::env::var("RSX_DEV_WINDOW_POSITION") {
+        config.position = parse_dev_window_position(&v);
+    }
+}
+
+// Parses the RSX_DEV_WINDOW_POSITION value: "centered" (or empty/invalid) → Centered; "<x>,<y>" → absolute coordinates.
+#[cfg(rsx_hot_reload)]
+fn parse_dev_window_position(value: &str) -> platform_core::WindowPosition {
+    let value = value.trim();
+    if let Some((x, y)) = value.split_once(',')
+        && let (Ok(x), Ok(y)) = (x.trim().parse::<i32>(), y.trim().parse::<i32>())
+    {
+        return platform_core::WindowPosition::At(x, y);
+    }
+    platform_core::WindowPosition::Centered
 }
 
 #[cfg(not(target_os = "android"))]
