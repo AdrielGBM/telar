@@ -734,11 +734,202 @@ pub fn run(args: Vec<String>) {
             eprintln!("[cargo-rsx] `cargo rsx new {name}` is not yet implemented.");
             std::process::exit(1);
         }
-        RsxCommand::Doctor => {
-            eprintln!("[cargo-rsx] `cargo rsx doctor` is not yet implemented.");
-            std::process::exit(1);
+        RsxCommand::Doctor => run_doctor_cmd(),
+    }
+}
+
+struct Doctor {
+    warnings: usize,
+    errors: usize,
+}
+
+impl Doctor {
+    fn new() -> Self {
+        Self {
+            warnings: 0,
+            errors: 0,
         }
     }
+
+    fn section(&self, title: &str) {
+        println!("\n{title}");
+    }
+
+    fn info(&self, label: &str, detail: &str) {
+        println!("  \u{2022} {label}: {detail}");
+    }
+
+    fn ok(&self, label: &str, detail: &str) {
+        println!("  \u{2713} {label}: {detail}");
+    }
+
+    fn warn(&mut self, label: &str, detail: &str) {
+        self.warnings += 1;
+        println!("  \u{26a0} {label}: {detail}");
+    }
+
+    fn fail(&mut self, label: &str, detail: &str) {
+        self.errors += 1;
+        println!("  \u{2717} {label}: {detail}");
+    }
+}
+
+fn command_first_line(program: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new(program).args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stream = if output.stdout.is_empty() {
+        output.stderr
+    } else {
+        output.stdout
+    };
+    let text = String::from_utf8_lossy(&stream);
+    Some(text.lines().next().unwrap_or("").trim().to_string())
+}
+
+fn android_sdk_root() -> Option<PathBuf> {
+    for var in ["ANDROID_HOME", "ANDROID_SDK_ROOT"] {
+        if let Ok(value) = std::env::var(var)
+            && !value.is_empty()
+        {
+            return Some(PathBuf::from(value));
+        }
+    }
+    None
+}
+
+fn installed_android_platforms(sdk_root: &Path) -> Vec<u32> {
+    let mut versions: Vec<u32> = std::fs::read_dir(sdk_root.join("platforms"))
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            name.to_str()?.strip_prefix("android-")?.parse::<u32>().ok()
+        })
+        .collect();
+    versions.sort_unstable();
+    versions
+}
+
+fn rustup_has_target(target: &str) -> Option<bool> {
+    let output = Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    Some(text.lines().any(|line| line.trim() == target))
+}
+
+fn run_doctor_cmd() -> ! {
+    let mut doc = Doctor::new();
+    println!("cargo rsx doctor");
+
+    doc.section("Toolchain");
+    match command_first_line("cargo", &["--version"]) {
+        Some(v) => doc.ok("cargo", &v),
+        None => doc.fail("cargo", "not found on PATH"),
+    }
+    match command_first_line("rustc", &["--version"]) {
+        Some(v) => doc.ok("rustc", &v),
+        None => doc.fail("rustc", "not found on PATH"),
+    }
+
+    doc.section("Project");
+    let cwd = std::env::current_dir().unwrap_or_default();
+    match rsx_workspace::find_workspace_root(&cwd) {
+        Some(root) => doc.info("workspace root", &root.display().to_string()),
+        None => doc.info("workspace root", "none (standalone package)"),
+    }
+    let config = load_config(&[]);
+    let rsx_toml = find_package_dir(&[]).join("rsx.toml");
+    if rsx_toml.exists() {
+        doc.ok("rsx.toml", &rsx_toml.display().to_string());
+    } else {
+        doc.info("rsx.toml", "not found (using defaults)");
+    }
+
+    doc.section("Desktop");
+    let backend = config
+        .backend
+        .map(backend_as_str)
+        .unwrap_or("auto (default)");
+    doc.info("configured backend", backend);
+    doc.info("software renderer", "always available");
+    doc.info(
+        "hardware renderer",
+        "needs a working GPU/driver, verified at runtime",
+    );
+
+    doc.section("Android (only needed for --target android)");
+    match android_sdk_root() {
+        Some(sdk) if sdk.exists() => {
+            doc.ok("Android SDK", &sdk.display().to_string());
+            let platforms = installed_android_platforms(&sdk);
+            if platforms.is_empty() {
+                doc.warn(
+                    "installed SDK platforms",
+                    "none found — `sdkmanager \"platforms;android-36\"`",
+                );
+            } else {
+                let list = platforms
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                doc.info("installed SDK platforms", &list);
+            }
+        }
+        Some(sdk) => doc.warn(
+            "Android SDK",
+            &format!("{} (path does not exist)", sdk.display()),
+        ),
+        None => doc.warn("Android SDK", "not set (ANDROID_HOME / ANDROID_SDK_ROOT)"),
+    }
+    match resolve_ndk_root() {
+        Some(ndk) => doc.ok("Android NDK", &ndk),
+        None => doc.warn(
+            "Android NDK",
+            "not found (ANDROID_NDK_ROOT or $ANDROID_HOME/ndk/*)",
+        ),
+    }
+    match command_first_line("cargo", &["apk", "--version"]) {
+        Some(v) => doc.ok("cargo-apk", &v),
+        None => doc.warn("cargo-apk", "not found (`cargo install cargo-apk`)"),
+    }
+    match rustup_has_target("aarch64-linux-android") {
+        Some(true) => doc.ok("rust target aarch64-linux-android", "installed"),
+        Some(false) => doc.warn(
+            "rust target aarch64-linux-android",
+            "missing (`rustup target add aarch64-linux-android`)",
+        ),
+        None => doc.warn(
+            "rust target aarch64-linux-android",
+            "rustup not found, cannot verify",
+        ),
+    }
+    match command_first_line("adb", &["--version"]) {
+        Some(v) => doc.ok("adb", &v),
+        None => doc.warn("adb", "not found (Android platform-tools)"),
+    }
+
+    println!();
+    if doc.errors > 0 {
+        println!(
+            "\u{2717} {} error(s), {} warning(s)",
+            doc.errors, doc.warnings
+        );
+        std::process::exit(1);
+    } else if doc.warnings > 0 {
+        println!("\u{26a0} {} warning(s)", doc.warnings);
+        std::process::exit(0);
+    }
+    println!("\u{2713} everything looks good");
+    std::process::exit(0);
 }
 
 fn run_dev_cmd(args: DevArgs) {
