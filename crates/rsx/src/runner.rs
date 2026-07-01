@@ -765,7 +765,8 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
         Ok(p) => p,
         Err(e) => {
             tracing::error!("Failed to create event loop: {e}");
-            return;
+            // Exit non-zero so launchers and scripts see the failed startup instead of a clean exit.
+            std::process::exit(1);
         }
     };
     let AppConfig {
@@ -808,6 +809,7 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
         },
     ) {
         tracing::error!("Event loop exited with error: {e}");
+        std::process::exit(1);
     }
 }
 
@@ -915,7 +917,7 @@ pub fn run_hot_reload_host(
         Ok(app) => app,
         Err(e) => {
             tracing::error!("failed to load dylib: {e}");
-            return;
+            std::process::exit(1);
         }
     };
     let hot_rx = crate::hot::listen_hot_reload(socket_path);
@@ -926,7 +928,7 @@ pub fn run_hot_reload_host(
         Ok(p) => p,
         Err(e) => {
             tracing::error!("Failed to create event loop: {e}");
-            return;
+            std::process::exit(1);
         }
     };
     let crate::app_config::AppConfig {
@@ -968,5 +970,6 @@ pub fn run_hot_reload_host(
         },
     ) {
         tracing::error!("Event loop error: {e}");
+        std::process::exit(1);
     }
 }
