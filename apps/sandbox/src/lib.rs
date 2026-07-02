@@ -1,5 +1,6 @@
 pub mod app;
 pub mod demo_images;
+pub mod demo_svgs;
 pub mod theme;
 
 rsx::app!(

@@ -11,7 +11,7 @@ name = "sandbox"
 path = "src/main.rs"
 
 [dependencies]
-rsx = { workspace = true, features = ["runtime"] }
+rsx = { workspace = true, features = ["runtime", "svg"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [package.metadata.android]

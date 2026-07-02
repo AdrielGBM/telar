@@ -1,9 +1,10 @@
 use crate::demo_images::{make_checker, make_gradient, make_radial_alpha};
+use crate::demo_svgs::{make_blurred, make_icon, make_logo};
 use crate::theme::theme;
 use rsx::{
     App, AvailableSpace, Color, Component, Container, Event, EventResult, ImageData, LayoutError,
-    LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, RenderNode, SizeDimension, WidgetCtx,
-    compute_layout, mark_dirty, new_container,
+    LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, RenderNode, SizeDimension, SvgData,
+    WidgetCtx, compute_layout, mark_dirty, new_container,
 };
 use std::sync::{Arc, OnceLock};
 
@@ -12,6 +13,9 @@ fn build_content(
     gradient: Arc<ImageData>,
     checker: Arc<ImageData>,
     alpha: Arc<ImageData>,
+    icon: Arc<SvgData>,
+    logo: Arc<SvgData>,
+    blurred: Arc<SvgData>,
 ) -> Result<Container, LayoutError> {
     let s_theme = crate::sections_theme_section(ctx)?;
     let s_shapes = crate::sections_shapes_section(ctx)?;
@@ -24,6 +28,14 @@ fn build_content(
             gradient,
             checker,
             alpha,
+        },
+    )?;
+    let s_svg = crate::sections_svg_section(
+        ctx,
+        crate::SectionsSvgSectionProps {
+            icon,
+            logo,
+            blurred,
         },
     )?;
     let s_lines = crate::sections_lines_section(ctx)?;
@@ -40,6 +52,7 @@ fn build_content(
     sections.push(s_typography);
     sections.push(s_cards);
     sections.push(s_images);
+    sections.push(s_svg);
     sections.push(s_lines);
     sections.push(s_paths);
     sections.push(s_gradients);
@@ -135,12 +148,18 @@ impl App for SandboxRoot {
             )
         });
 
+        static SVGS: OnceLock<(Arc<SvgData>, Arc<SvgData>, Arc<SvgData>)> = OnceLock::new();
+        let svgs = SVGS.get_or_init(|| (make_icon(), make_logo(), make_blurred()));
+
         let mut ctx = WidgetCtx::new();
         let content = build_content(
             &mut ctx,
             images.0.clone(),
             images.1.clone(),
             images.2.clone(),
+            svgs.0.clone(),
+            svgs.1.clone(),
+            svgs.2.clone(),
         )
         .expect("layout failed");
 
