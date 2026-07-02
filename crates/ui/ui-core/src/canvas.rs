@@ -39,7 +39,14 @@ impl_leaf_widget!(Canvas);
 impl Component for Canvas {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
-        let inner = (self.draw)(r);
+        // The closure draws in local space (at_layout_position translates the output), so it gets a zero-origin rect — passing the absolute layout rect would double-offset anything derived from rect.x/y.
+        let local = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: r.width,
+            height: r.height,
+        };
+        let inner = (self.draw)(local);
         self.leaf.at_layout_position(inner)
     }
 
