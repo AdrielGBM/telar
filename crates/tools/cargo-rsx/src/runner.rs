@@ -133,6 +133,7 @@ enum BuildFormat {
     Appimage,
     Deb,
     Dmg,
+    Nsis,
     Apk,
     Dir,
 }
@@ -185,7 +186,20 @@ struct CargoManifest {
 #[derive(Deserialize, Default)]
 struct CargoPackage {
     name: String,
+    #[serde(default, deserialize_with = "deserialize_inheritable_version")]
+    version: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
     metadata: Option<CargoPackageMetadata>,
+}
+
+// `version` may be a plain string or a workspace-inherited table (`version.workspace = true`); accept either shape and keep only a concrete string so parsing never fails.
+fn deserialize_inheritable_version<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = toml::Value::deserialize(deserializer)?;
+    Ok(value.as_str().map(|s| s.to_owned()))
 }
 #[derive(Deserialize, Default)]
 struct CargoPackageMetadata {
@@ -983,6 +997,32 @@ fn run_doctor_cmd() -> ! {
         "needs a working GPU/driver, verified at runtime",
     );
 
+    doc.section("Packaging");
+    doc.info("dir/apk", "built-in");
+    // Only the current host's native-installer tools are relevant: rsx does not cross-compile.
+    if cfg!(target_os = "linux") {
+        match command_first_line("dpkg-deb", &["--version"]) {
+            Some(v) => doc.ok("dpkg-deb", &v),
+            None => doc.info("dpkg-deb", "not found (needed for --format deb)"),
+        }
+        match command_first_line("appimagetool", &["--version"]) {
+            Some(v) => doc.ok("appimagetool", &v),
+            None => doc.info("appimagetool", "not found (needed for --format appimage)"),
+        }
+    }
+    if cfg!(target_os = "macos") {
+        match command_first_line("hdiutil", &["info"]) {
+            Some(_) => doc.ok("hdiutil", "available"),
+            None => doc.info("hdiutil", "not found (needed for --format dmg)"),
+        }
+    }
+    if cfg!(target_os = "windows") {
+        match command_first_line("makensis", &["/VERSION"]) {
+            Some(v) => doc.ok("makensis", &v),
+            None => doc.info("makensis", "not found (needed for --format nsis)"),
+        }
+    }
+
     doc.section("Android (only needed for --target android)");
     match android_sdk_root() {
         Some(sdk) if sdk.exists() => {
@@ -1177,6 +1217,7 @@ fn build_format_name(format: &BuildFormat) -> &'static str {
         BuildFormat::Appimage => "appimage",
         BuildFormat::Deb => "deb",
         BuildFormat::Dmg => "dmg",
+        BuildFormat::Nsis => "nsis",
         BuildFormat::Apk => "apk",
         BuildFormat::Dir => "dir",
     }
@@ -1193,14 +1234,16 @@ fn run_build_cmd(args: BuildArgs) -> ! {
     } = common;
     let mut android = matches!(target, Target::Android);
 
-    // Today only `dir` (desktop) and `apk` (android) are wired; the native installer formats stay explicit stubs. `--format apk` implies Android; `--format dir` is desktop-only.
+    // All desktop formats reject `--target android`; `--format apk` implies Android. Host-OS gating (dmg → macOS, nsis → Windows) happens in each build fn since rsx does not cross-compile.
     match &format {
-        Some(fmt @ (BuildFormat::Deb | BuildFormat::Dmg | BuildFormat::Appimage)) => {
+        Some(
+            fmt @ (BuildFormat::Deb | BuildFormat::Appimage | BuildFormat::Dmg | BuildFormat::Nsis),
+        ) if android => {
             eprintln!(
-                "[cargo-rsx] Packaging format `{}` is not yet implemented. Supported today: `dir` (desktop) and `apk` (android).",
+                "[cargo-rsx] `--format {}` is desktop-only; drop `--target android` (use `--format apk` for Android).",
                 build_format_name(fmt)
             );
-            std::process::exit(1);
+            std::process::exit(2);
         }
         Some(BuildFormat::Apk) => android = true,
         Some(BuildFormat::Dir) if android => {
@@ -1209,7 +1252,7 @@ fn run_build_cmd(args: BuildArgs) -> ! {
             );
             std::process::exit(2);
         }
-        Some(BuildFormat::Dir) | None => {}
+        _ => {}
     }
 
     // Build always implies --release.
@@ -1226,11 +1269,18 @@ fn run_build_cmd(args: BuildArgs) -> ! {
     if android {
         build_android_package(cargo_args, config)
     } else {
-        build_desktop_dir(cargo_args, config)
+        match format {
+            Some(BuildFormat::Deb) => build_deb(cargo_args, config),
+            Some(BuildFormat::Appimage) => build_appimage(cargo_args, config),
+            Some(BuildFormat::Dmg) => build_dmg(cargo_args, config),
+            Some(BuildFormat::Nsis) => build_nsis(cargo_args, config),
+            _ => build_desktop_dir(cargo_args, config),
+        }
     }
 }
 
-fn build_desktop_dir(cargo_args: Vec<String>, config: RsxConfig) -> ! {
+// Runs the shared release build for the desktop packaging formats (dir/deb/appimage) and returns the built binary path, the workspace root that hosts the dist bundle, and the package name.
+fn run_release_build(cargo_args: Vec<String>, config: RsxConfig) -> (PathBuf, PathBuf, String) {
     let (_android, rest) = split_android_flag(cargo_args);
     let backend_value = backend_as_str(config.backend.unwrap_or_default());
 
@@ -1263,6 +1313,11 @@ fn build_desktop_dir(cargo_args: Vec<String>, config: RsxConfig) -> ! {
         );
         std::process::exit(1);
     }
+    (bin_path, workspace_root, package_name)
+}
+
+fn build_desktop_dir(cargo_args: Vec<String>, config: RsxConfig) -> ! {
+    let (bin_path, workspace_root, package_name) = run_release_build(cargo_args, config);
 
     // Distribution bundle lives under target/ (a build artifact, next to the binary it packages), so it inherits target's gitignore and is not confused with .rsx/ (which is generated source).
     let dist_dir = workspace_root
@@ -1284,6 +1339,345 @@ fn build_desktop_dir(cargo_args: Vec<String>, config: RsxConfig) -> ! {
         dist_dir.display()
     );
     std::process::exit(0);
+}
+
+// Minimal valid 1x1 transparent PNG; appimagetool requires an icon, and rsx apps carry their own assets so a real icon is unnecessary.
+const MINIMAL_PNG: &[u8] = &[
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0x64, 0xf8, 0xcf, 0x50,
+    0x0f, 0x00, 0x03, 0x86, 0x01, 0x80, 0x5a, 0x34, 0x7d, 0x6b, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+    0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+];
+
+// Maps Rust's target arch name to the Debian architecture label; unknown arches pass through unchanged.
+fn deb_architecture(arch: &str) -> &str {
+    match arch {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        other => other,
+    }
+}
+
+fn deb_control_file(name: &str, version: &str, arch: &str, description: &str) -> String {
+    format!(
+        "Package: {name}\nVersion: {version}\nArchitecture: {arch}\nMaintainer: {name} maintainers <maintainer@example.invalid>\nDescription: {description}\n"
+    )
+}
+
+fn desktop_entry_file(name: &str, icon: bool) -> String {
+    let mut entry = format!(
+        "[Desktop Entry]\nType=Application\nName={name}\nExec={name}\nCategories=Utility;\n"
+    );
+    if icon {
+        entry.push_str(&format!("Icon={name}\n"));
+    }
+    entry
+}
+
+fn apprun_script(name: &str) -> String {
+    format!(
+        "#!/bin/sh\nHERE=\"$(dirname \"$(readlink -f \"$0\")\")\"\nexec \"$HERE/usr/bin/{name}\" \"$@\"\n"
+    )
+}
+
+fn info_plist(name: &str, version: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>{name}</string>
+    <key>CFBundleDisplayName</key><string>{name}</string>
+    <key>CFBundleIdentifier</key><string>com.example.{name}</string>
+    <key>CFBundleExecutable</key><string>{name}</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleVersion</key><string>{version}</string>
+    <key>CFBundleShortVersionString</key><string>{version}</string>
+    <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
+"#
+    )
+}
+
+fn nsis_script(name: &str, bin_path: &Path, installer_path: &Path) -> String {
+    format!(
+        r#"Name "{name}"
+OutFile "{installer}"
+InstallDir "$PROGRAMFILES64\{name}"
+RequestExecutionLevel admin
+
+Page directory
+Page instfiles
+
+Section "Install"
+    SetOutPath $INSTDIR
+    File "/oname={name}.exe" "{bin}"
+    CreateShortcut "$SMPROGRAMS\{name}.lnk" "$INSTDIR\{name}.exe"
+    WriteUninstaller "$INSTDIR\uninstall.exe"
+SectionEnd
+
+Section "Uninstall"
+    Delete "$INSTDIR\{name}.exe"
+    Delete "$INSTDIR\uninstall.exe"
+    Delete "$SMPROGRAMS\{name}.lnk"
+    RMDir "$INSTDIR"
+SectionEnd
+"#,
+        installer = installer_path.display(),
+        bin = bin_path.display(),
+    )
+}
+
+#[cfg(unix)]
+fn set_executable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Err(e) = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)) {
+        eprintln!(
+            "[cargo-rsx] Warning: failed to set 0755 on {}: {e}",
+            path.display()
+        );
+    }
+}
+
+#[cfg(not(unix))]
+fn set_executable(_path: &Path) {}
+
+fn write_or_exit(path: &Path, contents: impl AsRef<[u8]>) {
+    if let Err(e) = std::fs::write(path, contents) {
+        eprintln!("[cargo-rsx] Failed to write {}: {e}", path.display());
+        std::process::exit(1);
+    }
+}
+
+fn create_dir_or_exit(path: &Path) {
+    if let Err(e) = std::fs::create_dir_all(path) {
+        eprintln!("[cargo-rsx] Failed to create {}: {e}", path.display());
+        std::process::exit(1);
+    }
+}
+
+fn stage_binary(bin_path: &Path, dest: &Path) {
+    if let Err(e) = std::fs::copy(bin_path, dest) {
+        eprintln!("[cargo-rsx] Failed to copy binary into staging: {e}");
+        std::process::exit(1);
+    }
+    set_executable(dest);
+}
+
+fn build_deb(cargo_args: Vec<String>, config: RsxConfig) -> ! {
+    let (_android, rest) = split_android_flag(cargo_args);
+    let manifest = read_package_manifest(&rest);
+    let version = manifest
+        .as_ref()
+        .and_then(|p| p.version.clone())
+        .unwrap_or_else(|| "0.1.0".to_string());
+    let description = manifest.and_then(|p| p.description);
+    let (bin_path, workspace_root, package_name) = run_release_build(rest, config);
+    let description = description.unwrap_or_else(|| format!("{package_name} (built with rsx)"));
+    let arch = deb_architecture(std::env::consts::ARCH);
+
+    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let staging = dist_dir.join("deb-staging").join(&package_name);
+    // Clear any previous staging so stale files never leak into the package.
+    let _ = std::fs::remove_dir_all(&staging);
+
+    let debian_dir = staging.join("DEBIAN");
+    let bin_dir = staging.join("usr").join("bin");
+    let apps_dir = staging.join("usr").join("share").join("applications");
+    create_dir_or_exit(&debian_dir);
+    create_dir_or_exit(&bin_dir);
+    create_dir_or_exit(&apps_dir);
+
+    write_or_exit(
+        &debian_dir.join("control"),
+        deb_control_file(&package_name, &version, arch, &description),
+    );
+    stage_binary(&bin_path, &bin_dir.join(&package_name));
+    write_or_exit(
+        &apps_dir.join(format!("{package_name}.desktop")),
+        desktop_entry_file(&package_name, false),
+    );
+
+    let deb_path = dist_dir.join(format!("{package_name}_{version}_{arch}.deb"));
+    let result = Command::new("dpkg-deb")
+        .arg("--build")
+        .arg("--root-owner-group")
+        .arg(&staging)
+        .arg(&deb_path)
+        .status();
+    match result {
+        Ok(status) if status.success() => {
+            eprintln!("[cargo-rsx] Packaged deb at {}", deb_path.display());
+            std::process::exit(0);
+        }
+        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!(
+                "[cargo-rsx] `dpkg-deb` is required for --format deb but was not found on PATH. On NixOS: `nix shell nixpkgs#dpkg`."
+            );
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("[cargo-rsx] Failed to invoke dpkg-deb: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn build_appimage(cargo_args: Vec<String>, config: RsxConfig) -> ! {
+    let (bin_path, workspace_root, package_name) = run_release_build(cargo_args, config);
+    // appimagetool wants the host arch label (x86_64/aarch64), which is exactly what Rust reports.
+    let arch = std::env::consts::ARCH;
+
+    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let appdir = dist_dir.join(format!("{package_name}.AppDir"));
+    // Clear any previous AppDir so stale files never leak into the image.
+    let _ = std::fs::remove_dir_all(&appdir);
+    let bin_dir = appdir.join("usr").join("bin");
+    create_dir_or_exit(&bin_dir);
+
+    let apprun = appdir.join("AppRun");
+    write_or_exit(&apprun, apprun_script(&package_name));
+    set_executable(&apprun);
+    write_or_exit(
+        &appdir.join(format!("{package_name}.desktop")),
+        desktop_entry_file(&package_name, true),
+    );
+    write_or_exit(&appdir.join(format!("{package_name}.png")), MINIMAL_PNG);
+    stage_binary(&bin_path, &bin_dir.join(&package_name));
+
+    let appimage_path = dist_dir.join(format!("{package_name}-{arch}.AppImage"));
+    // The AppImage bundles only the binary (rsx embeds its assets) and relies on the host's wayland/vulkan libraries at runtime.
+    let result = Command::new("appimagetool")
+        .arg(&appdir)
+        .arg(&appimage_path)
+        .env("ARCH", arch)
+        .status();
+    match result {
+        Ok(status) if status.success() => {
+            eprintln!(
+                "[cargo-rsx] Packaged AppImage at {}",
+                appimage_path.display()
+            );
+            std::process::exit(0);
+        }
+        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!(
+                "[cargo-rsx] `appimagetool` is required for --format appimage but was not found on PATH. Get it from https://github.com/AppImage/appimagetool/releases (on NixOS run it via `nix shell nixpkgs#appimage-run`)."
+            );
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("[cargo-rsx] Failed to invoke appimagetool: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn build_dmg(cargo_args: Vec<String>, config: RsxConfig) -> ! {
+    // hdiutil only exists on macOS and rsx does not cross-compile, so the bundle must be produced on a mac host.
+    if !cfg!(target_os = "macos") {
+        eprintln!(
+            "[cargo-rsx] `--format dmg` must run on macOS (it packages the host-built binary with hdiutil)."
+        );
+        std::process::exit(2);
+    }
+    let (_android, rest) = split_android_flag(cargo_args);
+    let manifest = read_package_manifest(&rest);
+    let version = manifest
+        .as_ref()
+        .and_then(|p| p.version.clone())
+        .unwrap_or_else(|| "0.1.0".to_string());
+    let (bin_path, workspace_root, package_name) = run_release_build(rest, config);
+
+    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let staging = dist_dir.join("dmg-staging");
+    let _ = std::fs::remove_dir_all(&staging);
+    let contents = staging.join(format!("{package_name}.app")).join("Contents");
+    let macos_dir = contents.join("MacOS");
+    create_dir_or_exit(&macos_dir);
+    write_or_exit(
+        &contents.join("Info.plist"),
+        info_plist(&package_name, &version),
+    );
+    stage_binary(&bin_path, &macos_dir.join(&package_name));
+
+    let dmg_path = dist_dir.join(format!("{package_name}_{version}.dmg"));
+    let result = Command::new("hdiutil")
+        .arg("create")
+        .arg("-volname")
+        .arg(&package_name)
+        .arg("-srcfolder")
+        .arg(&staging)
+        .arg("-ov")
+        .arg("-format")
+        .arg("UDZO")
+        .arg(&dmg_path)
+        .status();
+    match result {
+        Ok(status) if status.success() => {
+            eprintln!("[cargo-rsx] Packaged dmg at {}", dmg_path.display());
+            std::process::exit(0);
+        }
+        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+        Err(e) => {
+            eprintln!("[cargo-rsx] Failed to invoke hdiutil: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn build_nsis(cargo_args: Vec<String>, config: RsxConfig) -> ! {
+    // The installer wraps the host-built .exe, so it must be produced on a Windows host (no cross-compilation).
+    if !cfg!(target_os = "windows") {
+        eprintln!(
+            "[cargo-rsx] `--format nsis` must run on Windows (it packages the host-built .exe with makensis)."
+        );
+        std::process::exit(2);
+    }
+    let (_android, rest) = split_android_flag(cargo_args);
+    let manifest = read_package_manifest(&rest);
+    let version = manifest
+        .as_ref()
+        .and_then(|p| p.version.clone())
+        .unwrap_or_else(|| "0.1.0".to_string());
+    let (bin_path, workspace_root, package_name) = run_release_build(rest, config);
+
+    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let staging = dist_dir.join("nsis-staging");
+    let _ = std::fs::remove_dir_all(&staging);
+    create_dir_or_exit(&staging);
+    let installer_path = dist_dir.join(format!("{package_name}_{version}_setup.exe"));
+    let script_path = staging.join(format!("{package_name}.nsi"));
+    write_or_exit(
+        &script_path,
+        nsis_script(&package_name, &bin_path, &installer_path),
+    );
+
+    let result = Command::new("makensis").arg(&script_path).status();
+    match result {
+        Ok(status) if status.success() => {
+            eprintln!(
+                "[cargo-rsx] Packaged installer at {}",
+                installer_path.display()
+            );
+            std::process::exit(0);
+        }
+        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!(
+                "[cargo-rsx] `makensis` is required for --format nsis but was not found on PATH. Install NSIS (winget install NSIS.NSIS)."
+            );
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("[cargo-rsx] Failed to invoke makensis: {e}");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn build_android_package(cargo_args: Vec<String>, config: RsxConfig) -> ! {
@@ -1556,5 +1950,89 @@ mod tests {
         let merged = merge_config(manifest, RsxConfig::default());
         assert!(matches!(merged.backend, Some(RendererBackend::Software)));
         assert!(merged.dev.is_none());
+    }
+
+    #[test]
+    fn deb_architecture_maps_known_arches_and_passes_through_others() {
+        assert_eq!(deb_architecture("x86_64"), "amd64");
+        assert_eq!(deb_architecture("aarch64"), "arm64");
+        assert_eq!(deb_architecture("riscv64"), "riscv64");
+    }
+
+    #[test]
+    fn deb_control_file_has_required_fields_and_trailing_newline() {
+        let control = deb_control_file("myapp", "1.2.3", "amd64", "A neat app");
+        assert!(control.contains("Package: myapp\n"));
+        assert!(control.contains("Version: 1.2.3\n"));
+        assert!(control.contains("Architecture: amd64\n"));
+        assert!(control.contains("Maintainer: myapp maintainers <maintainer@example.invalid>\n"));
+        assert!(control.contains("Description: A neat app\n"));
+        assert!(control.ends_with('\n'));
+    }
+
+    #[test]
+    fn desktop_entry_includes_icon_only_when_requested() {
+        let plain = desktop_entry_file("myapp", false);
+        assert!(plain.contains("[Desktop Entry]"));
+        assert!(plain.contains("Type=Application"));
+        assert!(plain.contains("Name=myapp"));
+        assert!(plain.contains("Exec=myapp"));
+        assert!(plain.contains("Categories=Utility;"));
+        assert!(!plain.contains("Icon="));
+
+        let with_icon = desktop_entry_file("myapp", true);
+        assert!(with_icon.contains("Icon=myapp"));
+    }
+
+    #[test]
+    fn apprun_execs_the_bundled_binary() {
+        let script = apprun_script("myapp");
+        assert!(script.starts_with("#!/bin/sh\n"));
+        assert!(script.contains("exec \"$HERE/usr/bin/myapp\" \"$@\""));
+    }
+
+    #[test]
+    fn workspace_inherited_version_deserializes_to_none() {
+        // `version.workspace = true` must not fail parsing; it yields no concrete string.
+        let manifest: CargoManifest = toml::from_str(
+            "[package]\nname = \"demo\"\nversion.workspace = true\ndescription = \"hi\"\n",
+        )
+        .expect("workspace-inherited version should parse");
+        let pkg = manifest.package.expect("package section");
+        assert_eq!(pkg.name, "demo");
+        assert_eq!(pkg.version, None);
+        assert_eq!(pkg.description.as_deref(), Some("hi"));
+    }
+
+    #[test]
+    fn explicit_version_string_deserializes() {
+        let manifest: CargoManifest =
+            toml::from_str("[package]\nname = \"demo\"\nversion = \"2.0.1\"\n")
+                .expect("explicit version should parse");
+        let pkg = manifest.package.expect("package section");
+        assert_eq!(pkg.version.as_deref(), Some("2.0.1"));
+    }
+
+    #[test]
+    fn info_plist_carries_bundle_identity_and_version() {
+        let plist = info_plist("demo", "1.2.3");
+        assert!(plist.contains("<key>CFBundleExecutable</key><string>demo</string>"));
+        assert!(plist.contains("<key>CFBundleIdentifier</key><string>com.example.demo</string>"));
+        assert!(plist.contains("<key>CFBundleShortVersionString</key><string>1.2.3</string>"));
+    }
+
+    #[test]
+    fn nsis_script_installs_and_uninstalls_the_renamed_exe() {
+        let script = nsis_script(
+            "demo",
+            Path::new("C:\\repo\\target\\release\\demo.exe"),
+            Path::new("C:\\repo\\target\\rsx-dist\\demo_1.0_setup.exe"),
+        );
+        assert!(script.contains("OutFile \"C:\\repo\\target\\rsx-dist\\demo_1.0_setup.exe\""));
+        assert!(
+            script.contains("File \"/oname=demo.exe\" \"C:\\repo\\target\\release\\demo.exe\"")
+        );
+        assert!(script.contains("InstallDir \"$PROGRAMFILES64\\demo\""));
+        assert!(script.contains("Delete \"$INSTDIR\\demo.exe\""));
     }
 }
