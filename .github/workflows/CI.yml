@@ -32,9 +32,60 @@ jobs:
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
 
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --exclude platform-android
+
+  # Exercises `cargo rsx build` per host OS: the raw binary everywhere plus each platform's native installer formats.
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            formats: dir deb appimage
+          - os: macos-latest
+            formats: dir dmg
+          - os: windows-latest
+            formats: dir nsis
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install appimagetool
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL -o /usr/local/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /usr/local/bin/appimagetool
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: choco install nsis -y --no-progress
+      - name: Package sandbox
+        shell: bash
+        # APPIMAGE_EXTRACT_AND_RUN lets appimagetool run without FUSE on the runner.
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          for format in ${{ matrix.formats }}; do
+            echo "::group::cargo rsx build --format $format"
+            cargo run -p cargo-rsx -- build --format "$format" --package sandbox
+            echo "::endgroup::"
+          done
+          ls -R target/rsx-dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rsx-dist-${{ matrix.os }}
+          path: |
+            target/rsx-dist/*.deb
+            target/rsx-dist/*.AppImage
+            target/rsx-dist/*.dmg
+            target/rsx-dist/*_setup.exe
+          if-no-files-found: ignore
