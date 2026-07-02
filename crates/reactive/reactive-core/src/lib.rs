@@ -100,6 +100,57 @@ mod tests {
     }
 
     #[test]
+    fn effect_reruns_when_memo_changes() {
+        let count = signal(0i32);
+        let read = count.read_only();
+        let doubled = memo(move || read.get() * 2);
+        let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+        let log_clone = Rc::clone(&log);
+        let doubled_read = doubled.clone();
+        let _e = effect(move || {
+            log_clone.borrow_mut().push(doubled_read.get());
+        });
+        assert_eq!(*log.borrow(), vec![0]);
+        count.set(3);
+        assert_eq!(*log.borrow(), vec![0, 6]);
+    }
+
+    // Regression: an effect tracking BOTH a signal and a memo must re-run when only the memo's source changes — run_effect's signal-version shortcut used to skip it because memo deps are invisible to `sources` (the sandbox counter's frozen "Double:" text).
+    #[test]
+    fn effect_with_signal_and_memo_sources_reruns_on_memo_change() {
+        let unrelated = signal(0i32);
+        let count = signal(0i32);
+        let read = count.read_only();
+        let doubled = memo(move || read.get() * 2);
+        let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+        let log_clone = Rc::clone(&log);
+        let unrelated_read = unrelated.read_only();
+        let doubled_read = doubled.clone();
+        let _e = effect(move || {
+            unrelated_read.get();
+            log_clone.borrow_mut().push(doubled_read.get());
+        });
+        assert_eq!(*log.borrow(), vec![0]);
+        count.set(3);
+        assert_eq!(*log.borrow(), vec![0, 6]);
+    }
+
+    #[test]
+    fn effect_reruns_when_memo_changes_inside_batch() {
+        let count = signal(0i32);
+        let read = count.read_only();
+        let doubled = memo(move || read.get() * 2);
+        let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+        let log_clone = Rc::clone(&log);
+        let doubled_read = doubled.clone();
+        let _e = effect(move || {
+            log_clone.borrow_mut().push(doubled_read.get());
+        });
+        batch(|| count.set(3));
+        assert_eq!(*log.borrow(), vec![0, 6]);
+    }
+
+    #[test]
     fn memo_chains() {
         let n = signal(3i32);
         let read = n.read_only();

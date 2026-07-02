@@ -445,4 +445,64 @@ mod tests {
         };
         assert_eq!(new_x, 42.0, "composed output reflects the child update");
     }
+
+    struct MemoLeaf {
+        double: reactive_core::Memo<i32>,
+    }
+    impl Component for MemoLeaf {
+        fn view(&self) -> RenderNode {
+            rect(self.double.get() as f32)
+        }
+    }
+
+    #[test]
+    fn signal_dependent_segment_updates_with_runner_batching() {
+        use reactive_core::{begin_batch, end_batch};
+        let a = signal(0.0f32);
+        let sa = a.clone();
+        let root = SegmentRoot::mount(Leaf { x: sa });
+        assert_eq!(animated_rect_x(&root), 0.0);
+        begin_batch();
+        a.set(42.0);
+        end_batch();
+        begin_batch();
+        let mid = animated_rect_x(&root);
+        end_batch();
+        assert_eq!(
+            mid, 42.0,
+            "signal-reading segment must reflect the batched set"
+        );
+    }
+
+    // Regression probe for the sandbox counter's frozen "Double:" memo: replicates the runner's exact batch bracketing (new_events begin → on_event set → handled end/begin flush → commands → about_to_wait end) around a memo-reading segment.
+    #[test]
+    fn memo_dependent_segment_updates_with_runner_batching() {
+        use reactive_core::{begin_batch, end_batch, memo};
+        let count = signal(0i32);
+        let count_mv = count.clone();
+        let double = memo(move || count_mv.get() * 2);
+        let root = SegmentRoot::mount(MemoLeaf {
+            double: double.clone(),
+        });
+        assert_eq!(animated_rect_x(&root), 0.0);
+
+        begin_batch();
+        count.set(3);
+        end_batch();
+        begin_batch();
+        let mid = animated_rect_x(&root);
+        end_batch();
+        assert_eq!(
+            mid, 6.0,
+            "memo-reading segment must reflect the flushed memo"
+        );
+    }
+
+    fn animated_rect_x(root: &SegmentRoot) -> f32 {
+        match &root.commands()[0] {
+            DrawCommand::Rect { rect, .. } => rect.x,
+            _ => unreachable!(),
+        }
+    }
+
 }

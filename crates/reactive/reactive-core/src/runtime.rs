@@ -17,6 +17,8 @@ pub(crate) struct EffectEntry {
     pub(crate) source_versions: Vec<u64>,
     // Topological height; 0 = leaf (no tracked sources).
     pub(crate) height: u32,
+    // Set when a memo schedules this effect. Memo dependencies are invisible to `sources` (they live in MemoInner.subscribers, not in a SignalStorage), so run_effect's version check must be bypassed once or an effect that also tracks an unchanged signal would be skipped forever.
+    pub(crate) memo_dirty: bool,
 }
 
 pub(crate) struct SignalStorage {
@@ -125,6 +127,7 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
             source_slots: Vec::new(),
             source_versions: Vec::new(),
             height: 0,
+            memo_dirty: false,
         });
         id
     })
@@ -141,6 +144,7 @@ pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
             source_slots: Vec::new(),
             source_versions: Vec::new(),
             height: 0,
+            memo_dirty: false,
         });
         id
     })
@@ -170,6 +174,10 @@ pub(crate) fn schedule(id: EffectId) {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         let alive = rt.effects.contains(id);
+        if alive {
+            // schedule() is only ever called by memo change notification; flag the subscriber so run_effect's signal-version shortcut cannot skip a genuinely-dirty memo read.
+            rt.effects[id].memo_dirty = true;
+        }
         if alive && rt.pending_set.insert(id) {
             if rt.effects[id].is_pure {
                 let h = rt.effects[id].height;
@@ -395,8 +403,9 @@ pub(crate) fn run_effect(id: EffectId) {
             return None;
         }
         rt.effects[id].last_run_epoch = rt.flush_epoch;
+        let memo_dirty = std::mem::take(&mut rt.effects[id].memo_dirty);
 
-        // Version check: skip the closure if every tracked source still has the version it had last run.
+        // Version check: skip the closure if every tracked source still has the version it had last run. Bypassed when a memo scheduled this run — memo deps are not in `sources`, so unchanged signal versions say nothing about the memo's value.
         let sig_ids: Vec<SignalId> = rt
             .effects
             .get(id)
@@ -407,7 +416,7 @@ pub(crate) fn run_effect(id: EffectId) {
             .get(id)
             .map(|e| e.source_versions.clone())
             .unwrap_or_default();
-        if !sig_ids.is_empty() && sig_ids.len() == stored_versions.len() {
+        if !memo_dirty && !sig_ids.is_empty() && sig_ids.len() == stored_versions.len() {
             let all_same = sig_ids
                 .iter()
                 .zip(stored_versions.iter())
