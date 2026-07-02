@@ -246,6 +246,18 @@ mod tests {
     }
 
     #[test]
+    fn signal_color_reference_degrades_without_panic() {
+        // `fill:$accent` (transpiler T-3.x) is a reactive read, not a literal; it must be silently skipped (no swatch), same as a theme token, rather than panicking on the `$` sigil.
+        let src = "[view]\nbox fill:$accent stroke:$accent\n";
+        let doc = parse(src).unwrap();
+        let infos = document_colors(&doc, src);
+        assert!(
+            color_at(&infos, src, "$accent").is_none(),
+            "a signal reference must not get a swatch"
+        );
+    }
+
+    #[test]
     fn presentation_round_trips_to_hex() {
         let opaque = color_presentations(rgba(67, 97, 238, 255));
         assert_eq!(opaque[0].label, "#4361ee");

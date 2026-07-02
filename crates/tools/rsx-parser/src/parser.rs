@@ -648,6 +648,18 @@ fn parse_element_header(
                 break;
             }
 
+            // A `transition:` value is a space-separated spec (`opacity 200ms ease-out`), optionally comma-separated for several properties, so — like a closure value — it runs verbatim to the end of the line.
+            if key.trim() == "transition" {
+                let value: String = chars[val_start..].iter().collect();
+                element.attributes.push(Attr {
+                    key: key.trim().to_string(),
+                    value: value.trim().to_string(),
+                    is_quoted: false,
+                    value_start: content_start + byte_at(&chars, val_start),
+                });
+                break;
+            }
+
             let mut k = val_start;
             // Allow quoted attribute values.
             if chars.get(k) == Some(&'"') {

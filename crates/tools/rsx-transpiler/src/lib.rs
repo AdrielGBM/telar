@@ -5,6 +5,7 @@ pub mod naming;
 mod registry;
 mod signal_scan;
 mod style;
+mod transition;
 mod view;
 
 pub use error::TranspileError;
@@ -890,6 +891,303 @@ col @card
         assert!(
             spans.contains(&"icon"),
             "svg src value should map back to `icon`; got spans {spans:?}"
+        );
+    }
+
+    #[test]
+    fn transition_opacity_hoists_animated_and_wraps_reactive_read() {
+        // A `transition:opacity` over a reactive `opacity:$sig`: the Animated is hoisted into setup (built once), and the opacity closure re-targets it to the current value and reads it.
+        let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox opacity:$fade transition:opacity 200ms ease-out\n    text \"hi\"\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("let __transition_0 = motion::Animated::new(fade.get(), motion::tween(std::time::Duration::from_millis(200), motion::Easing::EaseOut));"),
+            "missing hoisted Animated:\n{code}"
+        );
+        assert!(
+            code.contains(".with_opacity({ let fade = fade.clone(); move || { __transition_0.retarget(fade.get()); __transition_0.get() } })"),
+            "missing opacity retarget+get:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_fill_with_theme_color_and_cubic_bezier() {
+        let src = "[view]\nbox fill:primary transition:fill 150ms cubic-bezier(0.4,0,0.2,1)\n    text \"x\"\n";
+        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"))
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("let __transition_0 = motion::Animated::new(use_theme::<SandboxTheme>().primary, motion::tween(std::time::Duration::from_millis(150), motion::Easing::CubicBezier(0.4, 0.0, 0.2, 1.0)));"),
+            "missing cubic-bezier Animated:\n{code}"
+        );
+        assert!(
+            code.contains(".with_fill({ __transition_0.retarget(use_theme::<SandboxTheme>().primary); __transition_0.get() })"),
+            "missing fill retarget+get:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_fill_spring() {
+        let src = "[view]\nbox fill:#3d78fa transition:fill spring(170,26)\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("motion::spring(170.0, 26.0)"),
+            "missing spring curve:\n{code}"
+        );
+        assert!(
+            code.contains("motion::Animated::new(Color::rgba(61.0 / 255.0, 120.0 / 255.0, 250.0 / 255.0, 255.0 / 255.0), motion::spring(170.0, 26.0))"),
+            "spring Animated should seed from the fill color:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_multiple_properties_comma_separated() {
+        let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox fill:#3d78fa opacity:$fade transition:opacity 200ms, fill 150ms linear\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        // The fill transition uses linear...
+        assert!(
+            code.contains(
+                "motion::tween(std::time::Duration::from_millis(150), motion::Easing::Linear)"
+            ),
+            "missing fill linear tween:\n{code}"
+        );
+        // ...and the opacity transition uses the default ease-out (no easing given).
+        assert!(
+            code.contains(
+                "motion::tween(std::time::Duration::from_millis(200), motion::Easing::EaseOut)"
+            ),
+            "missing opacity default-easing tween:\n{code}"
+        );
+        // Two distinct Animated handles are hoisted.
+        assert!(
+            code.contains("let __transition_0 =") && code.contains("let __transition_1 ="),
+            "expected two hoisted animations:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_unsupported_property_emits_compile_error() {
+        let src = "[view]\nbox fill:#3d78fa transition:radius 200ms\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!(\"transition: unsupported property `radius`"),
+            "unsupported prop should emit a compile_error:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_invalid_duration_emits_compile_error() {
+        let src = "[view]\nbox opacity:0.5 transition:opacity 200\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!(\"transition:opacity has an invalid duration `200`"),
+            "invalid duration should emit a compile_error:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_inside_for_loop_hoists_animated_per_iteration() {
+        // `for` is a construction loop (runs once per component instance, pushing one widget per item into `__children`), not a reactive list needing key-based identity; the `Animated` for a `transition:` inside its body must sit inside the loop's own per-iteration `let __sbox_N = { .. }` block, so a fresh, persistent handle is installed for every item.
+        let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition:fill 200ms\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("compile_error!"),
+            "transition inside a for must be accepted:\n{code}"
+        );
+        assert!(
+            code.contains("let __transition_0 = motion::Animated::new(Color::rgba(61.0 / 255.0, 120.0 / 255.0, 250.0 / 255.0, 255.0 / 255.0), motion::tween(std::time::Duration::from_millis(200), motion::Easing::EaseOut));"),
+            "missing hoisted Animated:\n{code}"
+        );
+        // The hoist must be textually nested inside the `for` body (between the loop header and its own widget's `StyledContainer::new`), so it re-installs once per iteration at runtime.
+        let for_pos = code
+            .find("for item in items.iter() {")
+            .expect("for loop emitted");
+        let hoist_pos = code
+            .find("let __transition_0 =")
+            .expect("hoisted Animated present");
+        let ctor_pos = code
+            .find("StyledContainer::new")
+            .expect("styled container emitted");
+        assert!(
+            for_pos < hoist_pos && hoist_pos < ctor_pos,
+            "Animated hoist must sit inside the loop body, before its widget's constructor:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_inside_for_loop_uses_distinct_counters_per_element() {
+        // Two elements with `transition:` in the same loop body are two distinct code sites, so the global `transition_count` must still hand out unique names for each — not one shared name reused per iteration.
+        let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition:fill 150ms\n        box stroke:#111111 transition:stroke 150ms\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("compile_error!"),
+            "both transitions inside the for must be accepted:\n{code}"
+        );
+        assert!(
+            code.contains("let __transition_0 =") && code.contains("let __transition_1 ="),
+            "expected two distinct hoisted animations, one per element in the loop body:\n{code}"
+        );
+    }
+
+    #[test]
+    fn reactive_opacity_without_transition_reads_signal_each_run() {
+        let src = "[logic]\nlet fade = signal(0.5f32);\n[view]\nbox opacity:$fade\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".with_opacity({ let fade = fade.clone(); move || fade.get() })"),
+            "reactive opacity should read the signal in a closure:\n{code}"
+        );
+        assert!(
+            !code.contains("motion::"),
+            "no transition means no motion usage:\n{code}"
+        );
+    }
+
+    #[test]
+    fn static_opacity_still_supported_as_closure() {
+        // T-3.1: opacity is now a closure; a static value becomes a capture-free `|| 0.5`.
+        let src = "[view]\nbox fill:#3d78fa opacity:0.5\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".with_opacity(|| 0.5)"),
+            "static opacity should emit a capture-free closure:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_fill_from_class_is_wired_without_false_error() {
+        // The fill comes from the `@card` class, not an inline attribute; it must still be animatable (no spurious "no matching value").
+        let src = "[style]\n@card\n    fill: #3d78fa\n    radius: 12\n[view]\ncol @card transition:fill 150ms\n    text \"x\"\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("compile_error!"),
+            "class-provided fill should be animatable:\n{code}"
+        );
+        assert!(
+            code.contains("motion::Animated::new"),
+            "class fill transition should be wired:\n{code}"
+        );
+    }
+
+    #[test]
+    fn transition_color_on_text_wraps_text_style() {
+        let src = "[view]\ntext \"hi\" color:primary transition:color 120ms\n";
+        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"))
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("let __transition_0 = motion::Animated::new(use_theme::<SandboxTheme>().primary, motion::tween(std::time::Duration::from_millis(120), motion::Easing::EaseOut));"),
+            "missing hoisted color Animated:\n{code}"
+        );
+        assert!(
+            code.contains("TextStyle::new(14.0, { __transition_0.retarget(use_theme::<SandboxTheme>().primary); __transition_0.get() })"),
+            "text color should be wrapped in the transition block:\n{code}"
+        );
+    }
+
+    #[test]
+    fn fill_signal_reads_reactively_and_clones_into_the_closure() {
+        // No `transition:`: `fill:$accent` must still re-evaluate every time the styling closure runs, and must clone `accent` into that closure so the outer binding (declared in `[logic]`) stays usable elsewhere.
+        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("compile_error!"),
+            "a signal fill must not error:\n{code}"
+        );
+        assert!(
+            code.contains("{ let accent = accent.clone(); move |_| RectStyle::default().with_fill(accent.get()).with_radius(BorderRadius::zero()) }"),
+            "fill should reactively read the cloned signal:\n{code}"
+        );
+    }
+
+    #[test]
+    fn fill_signal_with_spring_transition_seeds_and_retargets_from_the_same_read() {
+        // The `Animated`'s initial value and every `retarget` call must both read through the same `accent.get()` expression — the transition mechanism wraps a `$signal` fill exactly like it already does theme colors.
+        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent transition:fill spring(170, 26)\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(
+                "let __transition_0 = motion::Animated::new(accent.get(), motion::spring(170.0, 26.0));"
+            ),
+            "missing hoisted Animated seeded from accent.get():\n{code}"
+        );
+        assert!(
+            code.contains(
+                "{ let accent = accent.clone(); move |_| RectStyle::default().with_fill({ __transition_0.retarget(accent.get()); __transition_0.get() }).with_radius(BorderRadius::zero()) }"
+            ),
+            "fill retarget+get should read accent.get() through the cloned signal:\n{code}"
+        );
+    }
+
+    #[test]
+    fn stroke_signal_reads_reactively_and_clones_into_the_closure() {
+        // `stroke:` shares `color_expr`/`rect_style_pieces` with `fill:`, so `$ident` must work identically.
+        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox stroke:$accent\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(
+                "{ let accent = accent.clone(); move |_| RectStyle { fill: None, stroke: Some(Stroke::new(accent.get(), 1.0)), shadow: None, radius: BorderRadius::zero() } }"
+            ),
+            "stroke should reactively read the cloned signal:\n{code}"
+        );
+    }
+
+    #[test]
+    fn text_color_signal_reads_reactively_and_clones_into_the_closure() {
+        // `text`'s `color:` also shares `color_expr` (via `text_style`), confirming the `$ident` branch and its clone-wrapping generalize beyond fill/stroke.
+        let src =
+            "[logic]\nlet accent = signal(Color::WHITE);\n[view]\ntext \"hi\" color:$accent\n";
+        let code = transpile_source_with_theme(src, "demo", None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(
+                "{ let accent = accent.clone(); move || TextStyle::new(14.0, accent.get()) }"
+            ),
+            "text color should reactively read the cloned signal:\n{code}"
+        );
+    }
+
+    #[test]
+    fn hex_theme_and_keyword_colors_are_unaffected_by_signal_support() {
+        // Regression guard: adding the `$ident` branch to `color_expr` must not touch the pre-existing hex/theme/keyword paths.
+        let src = "[view]\nbox fill:#3d78fa stroke:white\n    text \"x\" color:primary\n";
+        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"))
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("Color::rgba(61.0 / 255.0, 120.0 / 255.0, 250.0 / 255.0, 255.0 / 255.0)")
+        );
+        assert!(code.contains("Color::WHITE"));
+        assert!(code.contains("use_theme::<SandboxTheme>().primary"));
+        assert!(
+            !code.contains(".clone()"),
+            "no signal clone should appear for static/theme colors:\n{code}"
         );
     }
 }

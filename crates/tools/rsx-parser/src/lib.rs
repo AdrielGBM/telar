@@ -204,6 +204,25 @@ col @card
     }
 
     #[test]
+    fn parses_transition_attribute_to_end_of_line() {
+        // Like closures, a `transition:` value runs verbatim to the end of the line so its spaces and comma-separated clauses survive tokenization.
+        let doc = parse(
+            "[view]\nbox fill:primary transition:opacity 200ms ease-out, fill 150ms linear\n",
+        )
+        .unwrap();
+        let ViewNode::Element(b) = &doc.view.nodes[0] else {
+            panic!("root should be an element");
+        };
+        let fill = b.attributes.iter().find(|a| a.key == "fill").unwrap();
+        assert_eq!(fill.value, "primary");
+        let transition = b.attributes.iter().find(|a| a.key == "transition").unwrap();
+        assert_eq!(
+            transition.value,
+            "opacity 200ms ease-out, fill 150ms linear"
+        );
+    }
+
+    #[test]
     fn parses_flag_attribute() {
         let doc = parse(SAMPLE).unwrap();
         let ViewNode::Element(col) = &doc.view.nodes[0] else {

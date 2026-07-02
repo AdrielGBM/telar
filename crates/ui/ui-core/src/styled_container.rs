@@ -13,7 +13,8 @@ pub struct StyledContainer {
     node: NodeId,
     rect: RwSignal<Rect>,
     style: Box<dyn Fn(Rect) -> RectStyle>,
-    opacity: f32,
+    // A closure (not a plain f32) so `view()` re-reads it every run: a reactive opacity or a `transition:opacity` animation resolves to its current value on each re-render.
+    opacity: Box<dyn Fn() -> f32>,
     children: TrackedChildren,
 }
 
@@ -29,13 +30,13 @@ impl StyledContainer {
             node,
             rect,
             style: Box::new(style),
-            opacity: 1.0,
+            opacity: Box::new(|| 1.0),
             children,
         })
     }
 
-    pub fn with_opacity(mut self, opacity: f32) -> Self {
-        self.opacity = opacity;
+    pub fn with_opacity(mut self, opacity: impl Fn() -> f32 + 'static) -> Self {
+        self.opacity = Box::new(opacity);
         self
     }
 }
@@ -61,8 +62,9 @@ impl Component for StyledContainer {
         let content = RenderNode::group(
             std::iter::once(background).chain(self.children.iter().map(|c| c.segment.boundary())),
         );
-        if self.opacity < 1.0 {
-            RenderNode::layer(self.opacity, 0.0, [content])
+        let opacity = (self.opacity)();
+        if opacity < 1.0 {
+            RenderNode::layer(opacity, 0.0, [content])
         } else {
             content
         }

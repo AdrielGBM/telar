@@ -93,10 +93,12 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         keys
     };
     match tag {
-        "text" | "heading" => vec!["size", "color", "lines"],
+        // `transition:` animates a paint/color property (see `transition::parse_transition_value`), so it is offered on the tags whose codegen wires it: `text` (color), `box`/containers (fill/stroke/opacity).
+        "text" | "heading" => vec!["size", "color", "lines", "transition"],
         "widget" => vec![],
         "btn" | "button" => with(&["on_press", "fill", "outline"]),
-        "grid" => with(&["cols", "span", "row_span"]),
+        "grid" => with(&["cols", "span", "row_span", "transition"]),
+        "col" | "row" | "column" => with(&["fill", "stroke", "radius", "opacity", "transition"]),
         "box" | "section" => with(&[
             "fill",
             "stroke",
@@ -108,6 +110,8 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "from",
             "to",
             "mid",
+            "opacity",
+            "transition",
         ]),
         "img" | "image" => with(&["src"]),
         "svg" => with(&["src", "tint"]),
@@ -140,6 +144,10 @@ mod tests {
         let svg = tag_attr_keys("svg");
         assert!(svg.contains(&"src") && svg.contains(&"tint") && svg.contains(&"gap"));
         assert!(tag_attr_keys("feature_card").is_empty());
+        // `transition:` is offered on the tags whose codegen wires it.
+        assert!(tag_attr_keys("box").contains(&"transition"));
+        assert!(tag_attr_keys("text").contains(&"transition"));
+        assert!(tag_attr_keys("col").contains(&"transition"));
     }
 
     #[test]

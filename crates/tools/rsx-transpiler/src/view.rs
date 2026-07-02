@@ -117,6 +117,8 @@ pub struct ViewGen<'a> {
     indent: usize,
     /// Loop-variable identifiers currently in scope, cloned per closure like signals.
     loop_variables: Vec<String>,
+    /// Monotonic counter for the hoisted `__transition_N` animation handles.
+    transition_count: usize,
 }
 
 impl<'a> ViewGen<'a> {
@@ -132,6 +134,7 @@ impl<'a> ViewGen<'a> {
             theme_type: theme_type.map(str::to_string),
             indent: 1,
             loop_variables: Vec::new(),
+            transition_count: 0,
         }
     }
 
@@ -250,7 +253,10 @@ impl<'a> ViewGen<'a> {
         let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
         let content_fn = self.interpolate_content(content, el.content_start);
-        let style = self.text_style(&el.attributes);
+        let (specs, errors) = self.parse_transitions(el);
+        let transitions: HashMap<String, String> = specs.into_iter().collect();
+        let mut hoists: Vec<String> = Vec::new();
+        let style = self.text_style(&el.attributes, &transitions, &mut hoists);
 
         let mut extra = String::new();
         for a in &el.attributes {
@@ -275,10 +281,17 @@ impl<'a> ViewGen<'a> {
 
         // Each `move` closure consumes its captures; clone the signals they use into block locals so both closures can capture independently. Scan the raw `content` (still carrying `$`), not the substituted `content_fn`.
         let clones = self.clone_bindings(&[content, style.as_str()], &pad, "    ");
+        let inner_pad = format!("{pad}    ");
+        let prelude = {
+            let mut p = String::new();
+            emit_transition_prelude(&mut p, &inner_pad, &errors, &hoists);
+            p
+        };
 
         let code = format!(
             "{pad}let {var} = {{\n\
              {clones}\
+             {prelude}\
              {pad}    {ctor}(\n\
              {pad}        ctx,\n\
              {pad}        {content_fn},\n\
@@ -431,19 +444,29 @@ impl<'a> ViewGen<'a> {
         out
     }
 
-    fn text_style(&self, attrs: &[Attr]) -> String {
+    fn text_style(
+        &mut self,
+        attrs: &[Attr],
+        transitions: &HashMap<String, String>,
+        hoists: &mut Vec<String>,
+    ) -> String {
         let size = attrs
             .iter()
             .find(|a| a.key == "size")
             .and_then(|a| a.value.parse::<f32>().ok())
             .map(format_f32)
             .unwrap_or_else(|| "14.0".to_string());
-        let color = attrs
-            .iter()
-            .find(|a| a.key == "color")
+        let color_attr = attrs.iter().find(|a| a.key == "color");
+        let mut color = color_attr
             .map(|a| self.color_expr(&a.value))
             .unwrap_or_else(|| "Color::BLACK".to_string());
-        format!("move || TextStyle::new({size}, {color})")
+        if let Some(curve) = transitions.get("color") {
+            color = self.wrap_transition(curve, &color, hoists);
+        }
+        let closure = format!("move || TextStyle::new({size}, {color})");
+        // `color_attr`'s raw value (not `color`, already substituted by `color_expr`) is scanned for `$ident` so a signal-backed color clones itself into this closure, leaving the outer binding usable by sibling widgets.
+        let raw_color = color_attr.map(|a| a.value.as_str()).unwrap_or("");
+        wrap_signal_clones(&[raw_color], closure)
     }
 
     fn emit_image(&mut self, el: &Element) -> ChildEmit {
@@ -641,7 +664,14 @@ impl<'a> ViewGen<'a> {
 
         // A `col`/`row` with paint (inline or from its class) upgrades to a StyledContainer so it can carry a background like `box`; otherwise it stays a plain Container.
         let pattrs = self.paint_attrs(el);
-        let pieces = has_paint(&pattrs).then(|| self.rect_style_pieces(&pattrs));
+        let (specs, errors) = self.parse_transitions(el);
+        let transitions: HashMap<String, String> = specs.into_iter().collect();
+        let mut hoists: Vec<String> = Vec::new();
+        let pieces = if has_paint(&pattrs) {
+            Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
+        } else {
+            None
+        };
 
         let has_dynamic = el.children.iter().any(|n| {
             matches!(
@@ -663,11 +693,12 @@ impl<'a> ViewGen<'a> {
 
         let children =
             self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
+        emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
         match pieces {
-            Some((param, rect_style, opacity_call)) => {
+            Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::new(ctx, {style}, move |{param}| {rect_style}, {children})?{opacity_call}"
+                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}"
                 );
             }
             None => {
@@ -686,7 +717,10 @@ impl<'a> ViewGen<'a> {
 
         // Paint merges inline attrs with the element's class (inline wins), so a `@card` class can carry fill/stroke/radius/etc. — not only inline `box` attributes. `box` is always styled.
         let pattrs = self.paint_attrs(el);
-        let (param, rect_style, opacity_call) = self.rect_style_pieces(&pattrs);
+        let (specs, errors) = self.parse_transitions(el);
+        let transitions: HashMap<String, String> = specs.into_iter().collect();
+        let mut hoists: Vec<String> = Vec::new();
+        let (closure, opacity_call) = self.rect_style_pieces(&pattrs, &transitions, &mut hoists);
 
         let has_dynamic = el.children.iter().any(|n| {
             matches!(
@@ -708,9 +742,10 @@ impl<'a> ViewGen<'a> {
 
         let children =
             self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
+        emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
         let _ = writeln!(
             code,
-            "{inner_pad}StyledContainer::new(ctx, {layout_style}, move |{param}| {rect_style}, {children})?{opacity_call}"
+            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}"
         );
 
         let _ = write!(code, "{pad}}};");
@@ -1244,18 +1279,33 @@ impl<'a> ViewGen<'a> {
         attrs
     }
 
-    /// Builds the `(closure-param, RectStyle expr, .with_opacity(..) suffix)` for a styled container from paint attributes. The param is `r` only when a gradient needs the rendered bounds.
-    fn rect_style_pieces(&self, pattrs: &[Attr]) -> (&'static str, String, String) {
+    /// Builds the `(styling closure, .with_opacity(..) suffix)` for a styled container from paint attributes. The closure's param is `r` only when a gradient needs the rendered bounds. `transitions` maps an animated property to its `motion::` curve; any `fill`/`stroke`/`opacity` it names is wrapped in the animation retarget+get block and its `Animated` handle appended to `hoists`. Any `$ident` among the paint attrs (see `color_attr_keys`) is cloned into the closure (`wrap_signal_clones`) so the outer signal binding stays usable elsewhere.
+    fn rect_style_pieces(
+        &mut self,
+        pattrs: &[Attr],
+        transitions: &HashMap<String, String>,
+        hoists: &mut Vec<String>,
+    ) -> (String, String) {
         let shadow = self.canvas_shadow(pattrs);
         let gradient = self.box_gradient_paint(pattrs);
-        let solid_fill = pattrs
+        let mut solid_fill = pattrs
             .iter()
             .find(|a| a.key == "fill")
             .map(|a| self.color_expr(&a.value));
-        let stroke = pattrs
+        let mut stroke = pattrs
             .iter()
             .find(|a| a.key == "stroke")
             .map(|a| self.color_expr(&a.value));
+        if let Some(curve) = transitions.get("fill")
+            && let Some(fill) = solid_fill.take()
+        {
+            solid_fill = Some(self.wrap_transition(curve, &fill, hoists));
+        }
+        if let Some(curve) = transitions.get("stroke")
+            && let Some(s) = stroke.take()
+        {
+            stroke = Some(self.wrap_transition(curve, &s, hoists));
+        }
         let stroke_w = pattrs
             .iter()
             .find(|a| a.key == "stroke_w")
@@ -1267,16 +1317,116 @@ impl<'a> ViewGen<'a> {
             .and_then(|a| a.value.parse::<f32>().ok())
             .map(|r| format!("BorderRadius::all({})", format_f32(r)))
             .unwrap_or_else(|| "BorderRadius::zero()".to_string());
-        let opacity = pattrs
-            .iter()
-            .find(|a| a.key == "opacity")
-            .and_then(|a| a.value.parse::<f32>().ok());
         let param = if gradient.is_some() { "r" } else { "_" };
         let rect_style = build_rect_style(gradient, solid_fill, stroke, stroke_w, shadow, &radius);
-        let opacity_call = opacity
-            .map(|o| format!(".with_opacity({})", format_f32(o)))
-            .unwrap_or_default();
-        (param, rect_style, opacity_call)
+        let opacity_call = match pattrs.iter().find(|a| a.key == "opacity") {
+            Some(a) => format!(
+                ".with_opacity({})",
+                self.opacity_closure(a, transitions, hoists)
+            ),
+            None => String::new(),
+        };
+        let raw_colors: Vec<&str> = pattrs
+            .iter()
+            .filter(|a| crate::registry::color_attr_keys().contains(&a.key.as_str()))
+            .map(|a| a.value.as_str())
+            .collect();
+        let closure = wrap_signal_clones(&raw_colors, format!("move |{param}| {rect_style}"));
+        (closure, opacity_call)
+    }
+
+    /// Resolves the `.with_opacity(..)` closure argument for a `StyledContainer`. Opacity is now a closure (T-3.1) so it re-reads reactively: a `$signal` becomes `move || sig.get()` (cloning captured signals), a bare number stays a static `|| 0.5`, and a `transition:opacity` wraps the value in the animation retarget+get block backed by a hoisted `Animated`.
+    fn opacity_closure(
+        &mut self,
+        attr: &Attr,
+        transitions: &HashMap<String, String>,
+        hoists: &mut Vec<String>,
+    ) -> String {
+        let value = attr.value.trim();
+        let is_reactive = value.contains('$');
+        let is_static = !is_reactive && value.parse::<f32>().is_ok();
+        let expr = if is_reactive {
+            substitute_reads(value)
+        } else if is_static {
+            format_f32(value.parse::<f32>().unwrap())
+        } else {
+            value.to_string()
+        };
+        // Signals read by the closure are cloned into it so it owns 'static handles, independent of any sibling closure on the same widget.
+        let clone_prefix: String = if is_reactive {
+            signal_idents(value)
+                .iter()
+                .map(|s| format!("let {s} = {s}.clone(); "))
+                .collect()
+        } else {
+            String::new()
+        };
+        if let Some(curve) = transitions.get("opacity") {
+            let name = self.next_transition_name();
+            hoists.push(format!(
+                "let {name} = motion::Animated::new({expr}, {curve});"
+            ));
+            if is_static {
+                format!("move || {{ {name}.retarget({expr}); {name}.get() }}")
+            } else {
+                format!("{{ {clone_prefix}move || {{ {name}.retarget({expr}); {name}.get() }} }}")
+            }
+        } else if is_static {
+            format!("|| {expr}")
+        } else {
+            format!("{{ {clone_prefix}move || {expr} }}")
+        }
+    }
+
+    /// Wraps a paint value expression in a `transition:` animation: hoists a persistent `Animated` seeded with the current value and returns the `{ h.retarget(value); h.get() }` block that re-targets it (a no-op when the target is unchanged) and reads the interpolated value. The `Animated` lives in the component's setup scope (built once per instance), so it persists across `view()` re-runs — the continuity requirement in F7 of the design doc.
+    fn wrap_transition(
+        &mut self,
+        curve: &str,
+        value_expr: &str,
+        hoists: &mut Vec<String>,
+    ) -> String {
+        let name = self.next_transition_name();
+        hoists.push(format!(
+            "let {name} = motion::Animated::new({value_expr}, {curve});"
+        ));
+        format!("{{ {name}.retarget({value_expr}); {name}.get() }}")
+    }
+
+    fn next_transition_name(&mut self) -> String {
+        let name = format!("__transition_{}", self.transition_count);
+        self.transition_count += 1;
+        name
+    }
+
+    /// Parses every `transition:` attribute on `el` into `(property, curve)` pairs plus error messages surfaced as `compile_error!`. Errors: an unsupported/unparseable clause, or a property with no matching value attribute to animate.
+    fn parse_transitions(&self, el: &Element) -> (Vec<(String, String)>, Vec<String>) {
+        let mut specs = Vec::new();
+        let mut errors = Vec::new();
+        let has_transition = el.attributes.iter().any(|a| a.key == "transition");
+        if !has_transition {
+            return (specs, errors);
+        }
+        // No loop-depth gate: a `for` here is a construction loop that runs once per component instance, so the `Animated` hoisted per iteration is already a distinct, persistent handle (see `emit_for`) — identity-by-key would only matter if loops ever gained reactive reconciliation.
+        // A `fill`/`stroke`/`opacity` value may come from the element's class, not only an inline attribute (see `paint_attrs`); a `color` is always inline.
+        let pattrs = self.paint_attrs(el);
+        let has_value = |prop: &str| {
+            el.attributes.iter().any(|a| a.key == prop) || pattrs.iter().any(|a| a.key == prop)
+        };
+        for attr in el.attributes.iter().filter(|a| a.key == "transition") {
+            let (parsed, errs) = crate::transition::parse_transition_value(&attr.value);
+            errors.extend(errs);
+            for spec in parsed {
+                if !has_value(&spec.prop) {
+                    errors.push(format!(
+                        "transition:{} has no matching `{}:` value on this element to animate",
+                        spec.prop, spec.prop
+                    ));
+                    continue;
+                }
+                specs.push((spec.prop, spec.curve));
+            }
+        }
+        (specs, errors)
     }
 
     /// Builds the `LayoutStyle` expression for a container: base style from the tag (or a class function), then inline attribute modifiers chained on.
@@ -1434,16 +1584,20 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Resolves a color reference: an inline hex value, a CSS keyword, a `Color::*` literal, a `[style]`-declared local constant, or a theme field.
+    /// Resolves a color reference: an inline hex value, a `$signal` read, a CSS keyword, a `Color::*` literal, a `[style]`-declared local constant, or a theme field.
     ///
     /// Lookup order:
     /// 1. Inline hex / `Color::*` / CSS keyword → static expression.
-    /// 2. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
-    /// 3. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
+    /// 2. `$ident` → `ident.get()`, a reactive read of a `RwSignal<Color>` (or compatible) in scope; the caller is responsible for cloning the signal into any `move` closure that embeds this expression (see `wrap_signal_clones`).
+    /// 3. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
+    /// 4. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
     fn color_expr(&self, value: &str) -> String {
         let v = value.trim();
         if v.starts_with('#') {
             return hex_to_color_expr(v);
+        }
+        if let Some(ident) = v.strip_prefix('$') {
+            return format!("{ident}.get()");
         }
         if v.starts_with("Color::") {
             return v.to_string();
@@ -1637,6 +1791,26 @@ fn signal_idents(s: &str) -> Vec<String> {
     idents
 }
 
+/// Wraps a `move` closure literal in a block that clones every `$name` signal referenced (raw, still carrying `$`) across `raw_values` first — mirrors the `clone_prefix` pattern in `opacity_closure`, generalized for `color_expr` callers, whose reads (e.g. `accent.get()`) are embedded inside an already-built closure string rather than assembled inline. A no-op when none of `raw_values` reference a signal, so a purely static/theme color emits the closure unchanged.
+fn wrap_signal_clones(raw_values: &[&str], closure_expr: String) -> String {
+    let mut idents: Vec<String> = Vec::new();
+    for v in raw_values {
+        for id in signal_idents(v) {
+            if !idents.contains(&id) {
+                idents.push(id);
+            }
+        }
+    }
+    if idents.is_empty() {
+        return closure_expr;
+    }
+    let prefix: String = idents
+        .iter()
+        .map(|s| format!("let {s} = {s}.clone(); "))
+        .collect();
+    format!("{{ {prefix}{closure_expr} }}")
+}
+
 /// Assembles a `&[(pos, color)]` gradient stops expression from the resolved `from`, `to`, and optional `mid`/`mid_pos` values.
 fn build_gradient_stops(from: &str, to: &str, mid: Option<&str>, mid_pos: f32) -> String {
     if let Some(m) = mid {
@@ -1665,6 +1839,21 @@ fn is_paint_key(key: &str) -> bool {
             | "mid_pos"
             | "gr"
     ) || key.starts_with("shadow")
+}
+
+/// Writes a styled widget's `transition:` prelude into its construction block: `compile_error!` lines for any diagnostics, then the hoisted `let __transition_N = motion::Animated::new(...)` handles. Both are emitted before the widget constructor so the animation handles are in scope for the closures that capture them, and the block runs once per instance (F7) so the animations persist across `view()` re-runs.
+fn emit_transition_prelude(
+    code: &mut String,
+    inner_pad: &str,
+    errors: &[String],
+    hoists: &[String],
+) {
+    for e in errors {
+        let _ = writeln!(code, "{inner_pad}compile_error!({});", rust_str(e));
+    }
+    for h in hoists {
+        let _ = writeln!(code, "{inner_pad}{h}");
+    }
 }
 
 /// Whether any paint attribute is present, so a plain `col`/`row` must upgrade to a `StyledContainer`.
