@@ -1673,6 +1673,15 @@ fn full_document_range(source: &str) -> Range {
 mod tests {
     use super::*;
 
+    // url::Url::from_file_path rejects unix-style absolute paths on Windows, so tests build platform-valid ones.
+    fn abs(unix: &str) -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from(format!("C:{}", unix.replace('/', "\\")))
+        } else {
+            PathBuf::from(unix)
+        }
+    }
+
     fn target(
         gen_line: u32,
         gen_char_start: u32,
@@ -1743,7 +1752,7 @@ mod tests {
     fn real_files_pass_through_generated_files_reverse_map() {
         let uri: Uri = "file:///x/src/c.rsx".parse().unwrap();
         let real = RefTarget {
-            path: PathBuf::from("/x/src/lib.rs"),
+            path: abs("/x/src/lib.rs"),
             byte_start: 0,
             byte_end: 4,
             range: Range {
@@ -1759,7 +1768,7 @@ mod tests {
         };
         let (locs, unmapped) = reverse_map_rust_refs(
             vec![real],
-            std::path::Path::new("/x/.rsx/build/c.rs"),
+            &abs("/x/.rsx/build/c.rs"),
             "",
             &[],
             &[],
@@ -1776,7 +1785,7 @@ mod tests {
     fn view_ref_without_a_span_is_dropped_not_corrupted() {
         // A `[view]` reference outside any verbatim expr-span (e.g. an `img src:foo` attr value) must be dropped and counted as unmapped — never mapped with a bogus column (which corrupted renames).
         let uri: Uri = "file:///x/src/c.rsx".parse().unwrap();
-        let gen_path = std::path::Path::new("/x/.rsx/build/c.rs");
+        let gen_path = abs("/x/.rsx/build/c.rs");
         let rsx = "[view]\ncol\n    img src:foo\n";
         let gen_src = "fn c() {\n    let __src = foo.clone();\n}\n";
         // gen line 1 → rsx line 2 (`    img src:foo`, a `[view]` line).
@@ -1797,7 +1806,7 @@ mod tests {
             },
         };
         let (locs, unmapped) =
-            reverse_map_rust_refs(vec![t], gen_path, gen_src, &map, &[], rsx, &uri);
+            reverse_map_rust_refs(vec![t], &gen_path, gen_src, &map, &[], rsx, &uri);
         assert!(locs.is_empty());
         assert_eq!(unmapped, 1);
     }

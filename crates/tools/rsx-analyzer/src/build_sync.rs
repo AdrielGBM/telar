@@ -66,18 +66,22 @@ pub fn sync_build_file(rsx_path: &Path, source: &str, theme_type: Option<&str>) 
 }
 
 /// The `<crate>/.rsx/build/` path segment that marks a generated file (platform separators).
-fn build_marker() -> String {
-    let sep = std::path::MAIN_SEPARATOR;
-    format!("{sep}.rsx{sep}build{sep}")
+/// Splits `<crate>/.rsx/build/<rel>.rs` into (`<crate>`, `<rel>.rs`). Component-based instead of string matching so Windows paths with mixed `/`/`\` separators still classify.
+fn split_at_build_dir(path: &Path) -> Option<(PathBuf, PathBuf)> {
+    let comps: Vec<std::path::Component> = path.components().collect();
+    let pos = comps
+        .windows(2)
+        .position(|w| w[0].as_os_str() == ".rsx" && w[1].as_os_str() == "build")?;
+    let rel: PathBuf = comps[pos + 2..].iter().collect();
+    if rel.as_os_str().is_empty() {
+        return None;
+    }
+    Some((comps[..pos].iter().collect(), rel))
 }
 
 /// Whether `path` is one of the transpiler's generated build files (`<crate>/.rsx/build/<rel>.rs`). Used to classify a rust-analyzer definition target before reverse-mapping it onto a `.rsx`.
 pub fn is_generated_build_file(path: &Path) -> bool {
-    path.extension().and_then(|e| e.to_str()) == Some("rs")
-        && path
-            .to_str()
-            .map(|s| s.contains(&build_marker()))
-            .unwrap_or(false)
+    path.extension().and_then(|e| e.to_str()) == Some("rs") && split_at_build_dir(path).is_some()
 }
 
 /// Inverse of [`generated_target`]'s path mapping: a generated `<crate>/.rsx/build/<rel>.rs` → its source `<crate>/src/<rel>.rsx` plus the line-based source map read from the sibling `.rs.map` (`generated line → Some(.rsx line)`). `None` for paths outside a build dir or without a readable map.
@@ -90,12 +94,9 @@ pub fn rsx_source_and_map(build_path: &Path) -> Option<(PathBuf, Vec<Option<u32>
 
 /// `<crate>/.rsx/build/<rel>.rs` → `<crate>/src/<rel>.rsx` (the macro's output mirroring, reversed).
 fn rsx_source_for(build_path: &Path) -> Option<PathBuf> {
-    let full = build_path.to_str()?;
-    let marker = build_marker();
-    let idx = full.find(&marker)?;
-    let root = &full[..idx];
-    let rel = full[idx + marker.len()..].strip_suffix(".rs")?;
-    Some(Path::new(root).join("src").join(format!("{rel}.rsx")))
+    let (root, rel) = split_at_build_dir(build_path)?;
+    let rel = rel.to_str()?.strip_suffix(".rs")?.to_string();
+    Some(root.join("src").join(format!("{rel}.rsx")))
 }
 
 /// Writes only when the content differs, so rust-analyzer's file watcher doesn't churn on no-op edits.

@@ -212,11 +212,20 @@ fn symbol(
 mod tests {
     use super::*;
 
+    // url::Url::from_file_path rejects unix-style absolute paths on Windows, so tests build platform-valid ones.
+    fn abs(unix: &str) -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from(format!("C:{}", unix.replace('/', "\\")))
+        } else {
+            PathBuf::from(unix)
+        }
+    }
+
     #[test]
     fn indexes_stem_classes_and_tags() {
         let src =
             "[style]\n@card\n    width: 240\n[view]\ncol @card\n    feature_card icon:\"x\"\n";
-        let entry = index_source(Path::new("/x/src/home.rsx"), src).unwrap();
+        let entry = index_source(&abs("/x/src/home.rsx"), src).unwrap();
         assert_eq!(entry.stem, "home");
         assert_eq!(entry.classes, vec![("card".to_string(), 1)]);
         // `col` is a builtin (not a tag use); `feature_card` is a component reference.
@@ -228,13 +237,13 @@ mod tests {
     #[test]
     fn symbols_and_references_query_the_cache() {
         let mut idx = WorkspaceIndex {
-            root: PathBuf::from("/x"),
+            root: abs("/x"),
             files: HashMap::new(),
         };
         let src = "[view]\ncol\n    feature_card\n";
-        idx.update(Path::new("/x/src/home.rsx"), src);
+        idx.update(&abs("/x/src/home.rsx"), src);
         idx.update(
-            Path::new("/x/src/feature_card.rsx"),
+            &abs("/x/src/feature_card.rsx"),
             "[view]\ncol\n    text \"hi\"\n",
         );
 
