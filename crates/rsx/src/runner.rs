@@ -301,6 +301,10 @@ where
                     crate::hot::HotEvent::Reload(new_path) => {
                         match crate::hot::load_hot_app(&new_path) {
                             Ok(new_app) => {
+                                // Carry serializable hot state into the incoming dylib while the old tree (and its signals) is still alive; hot_signal consumes it as components remount.
+                                if let Some(blob) = self.app.hot_snapshot() {
+                                    new_app.hot_restore(&blob);
+                                }
                                 // Drop the old tree first so effect closures (which contain code from the old dylib) are destroyed while the old lib is still mapped. Only then replace self.app, which dlcloses the old dylib.
                                 self.tree = None;
                                 self.app = Box::new(new_app);
@@ -909,10 +913,14 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 pub fn run_hot_reload_host(
     lib_path: &str,
-    socket_path: &str,
+    hot_port: &str,
     config: crate::app_config::AppConfig,
     app_name: &str,
 ) {
+    let Ok(port) = hot_port.parse::<u16>() else {
+        tracing::error!("invalid RSX_HOT_PORT value: {hot_port}");
+        std::process::exit(1);
+    };
     let initial_app = match crate::hot::load_hot_app(std::path::Path::new(lib_path)) {
         Ok(app) => app,
         Err(e) => {
@@ -920,7 +928,7 @@ pub fn run_hot_reload_host(
             std::process::exit(1);
         }
     };
-    let hot_rx = crate::hot::listen_hot_reload(socket_path);
+    let hot_rx = crate::hot::listen_hot_reload(port);
     let paths: Box<dyn services_core::AppPathsProvider> = Box::new(DesktopPathsProvider);
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);

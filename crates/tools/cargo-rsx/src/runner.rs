@@ -570,53 +570,72 @@ fn preview_rustflags() -> String {
 fn package_lib_path(workspace_root: &Path, package_name: &str, profile: &str) -> PathBuf {
     let lib_name = package_name.replace('-', "_");
     #[cfg(target_os = "macos")]
-    let ext = "dylib";
-    #[cfg(not(target_os = "macos"))]
-    let ext = "so";
-    workspace_root
-        .join("target")
-        .join(profile)
-        .join(format!("lib{lib_name}.{ext}"))
+    let file = format!("lib{lib_name}.dylib");
+    #[cfg(target_os = "windows")]
+    let file = format!("{lib_name}.dll");
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let file = format!("lib{lib_name}.so");
+    workspace_root.join("target").join(profile).join(file)
 }
 
 fn package_bin_path(workspace_root: &Path, package_name: &str, profile: &str) -> PathBuf {
+    // EXE_SUFFIX so `dir` packaging and the hot-reload spawn find `<name>.exe` on Windows.
     workspace_root
         .join("target")
         .join(profile)
-        .join(package_name)
+        .join(format!("{package_name}{}", std::env::consts::EXE_SUFFIX))
 }
 
-#[cfg(unix)]
-fn notify_hot_reload(socket_path: &str, lib_path: &str) {
-    send_socket_message(socket_path, &format!("hot:{lib_path}"));
+// TCP loopback channel to the running app (instead of a unix socket, so hot reload works on non-Unix hosts). cargo-rsx binds, the app connects once at startup (RSX_HOT_PORT) and reads line events.
+struct HotChannel {
+    listener: std::net::TcpListener,
+    stream: Option<std::net::TcpStream>,
+    port: u16,
 }
 
-#[cfg(unix)]
-fn notify_build_error(socket_path: &str, message: &str) {
-    // Flatten multi-line error to a single line for the simple line-based protocol
-    let single_line = message.replace('\n', " | ").replace('\r', "");
-    send_socket_message(socket_path, &format!("err:{single_line}"));
-}
+impl HotChannel {
+    fn bind() -> Self {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .expect("[cargo-rsx] failed to bind hot reload port");
+        let port = listener
+            .local_addr()
+            .expect("[cargo-rsx] failed to read hot reload port")
+            .port();
+        // Non-blocking so send() can drain pending connections without stalling the watch loop.
+        listener
+            .set_nonblocking(true)
+            .expect("[cargo-rsx] failed to configure hot reload listener");
+        HotChannel {
+            listener,
+            stream: None,
+            port,
+        }
+    }
 
-#[cfg(unix)]
-fn send_socket_message(socket_path: &str, message: &str) {
-    use std::io::Write;
-    use std::os::unix::net::UnixStream;
-    // Retry a few times — app may still be initializing the socket
-    for attempt in 0..10 {
-        match UnixStream::connect(socket_path) {
-            Ok(mut stream) => {
+    fn notify_hot_reload(&mut self, lib_path: &str) {
+        self.send(&format!("hot:{lib_path}"));
+    }
+
+    fn notify_build_error(&mut self, message: &str) {
+        // Flatten multi-line error to a single line for the simple line-based protocol
+        let single_line = message.replace('\n', " | ").replace('\r', "");
+        self.send(&format!("err:{single_line}"));
+    }
+
+    fn send(&mut self, message: &str) {
+        use std::io::Write;
+        // The app's connection sits in the accept backlog until the first send; a reconnect replaces the previous stream.
+        while let Ok((stream, _)) = self.listener.accept() {
+            self.stream = Some(stream);
+        }
+        match &mut self.stream {
+            Some(stream) => {
                 if let Err(e) = writeln!(stream, "{message}") {
-                    eprintln!("[cargo-rsx] Failed to write to socket: {e}");
+                    eprintln!("[cargo-rsx] Failed to write to hot reload channel: {e}");
+                    self.stream = None;
                 }
-                return;
             }
-            Err(_) if attempt < 9 => {
-                std::thread::sleep(std::time::Duration::from_millis(200));
-            }
-            Err(e) => {
-                eprintln!("[cargo-rsx] Could not reach app socket: {e}");
-            }
+            None => eprintln!("[cargo-rsx] App not connected to the hot reload channel."),
         }
     }
 }
@@ -640,12 +659,11 @@ fn make_watcher(
     watcher
 }
 
-#[cfg(unix)]
 fn watch_and_hot_reload(
     build_args: Vec<String>,
     bin_path: PathBuf,
     lib_path: PathBuf,
-    socket_path: String,
+    mut channel: HotChannel,
     envs: Vec<(String, String)>,
     rustflags: String,
     workspace_root: PathBuf,
@@ -656,7 +674,7 @@ fn watch_and_hot_reload(
     eprintln!("[cargo-rsx] Starting with hot reload...");
     let mut child = Command::new(&bin_path)
         .env("RSX_HOT_LIB", lib_path.to_str().unwrap_or_default())
-        .env("RSX_HOT_SOCKET", &socket_path)
+        .env("RSX_HOT_PORT", channel.port.to_string())
         .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
         .spawn()
         .expect("[cargo-rsx] failed to spawn app binary");
@@ -694,13 +712,13 @@ fn watch_and_hot_reload(
                 .output()
                 .expect("[cargo-rsx] failed to invoke cargo");
             if output.status.success() {
-                notify_hot_reload(&socket_path, lib_path.to_str().unwrap_or_default());
+                channel.notify_hot_reload(lib_path.to_str().unwrap_or_default());
                 eprintln!("[cargo-rsx] Hot reloaded.");
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 eprintln!("{stderr}");
                 eprintln!("[cargo-rsx] Build failed, waiting for changes...");
-                notify_build_error(&socket_path, &stderr);
+                channel.notify_build_error(&stderr);
             }
         }
 
@@ -1076,10 +1094,6 @@ fn run_preview_cmd(args: PreviewArgs) {
         component,
         list,
     } = args;
-    if list {
-        eprintln!("[cargo-rsx] --list is not yet implemented (requires project scan).");
-        std::process::exit(1);
-    }
     // The preview host process inherits our env; it filters PreviewEntries by this when set.
     if let Some(component) = &component {
         // SAFETY: single-threaded at this point (set before any threads/spawns are created).
@@ -1090,6 +1104,18 @@ fn run_preview_cmd(args: PreviewArgs) {
         release,
         no_hot_reload,
     } = hot;
+    if list {
+        // RSX_PREVIEW_LIST makes the generated entrypoint print "component\tpreview" lines and exit instead of opening a window.
+        let mut cargo_args = vec!["run".to_string()];
+        cargo_args.extend(build_cargo_args(&common.package, release, &common.features));
+        cargo_args.extend(common.cargo_args);
+        let status = Command::new("cargo")
+            .args(&cargo_args)
+            .env("RSX_PREVIEW_LIST", "1")
+            .status()
+            .expect("[cargo-rsx] failed to invoke cargo");
+        std::process::exit(status.code().unwrap_or(1));
+    }
     let CommonArgs {
         package,
         features,
@@ -1417,7 +1443,6 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         "debug"
     };
 
-    #[cfg(unix)]
     if !no_hot_reload {
         let rustflags = mode.rustflags();
         let package_name = read_package_manifest(&rest)
@@ -1456,12 +1481,11 @@ fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
                 build_envs.push(("RSX_PREVIEW_BUILD".to_string(), "1".to_string()));
             }
 
-            let socket_path = format!("/tmp/rsx-hot-{}.sock", std::process::id());
             watch_and_hot_reload(
                 lib_build_args,
                 bin_path,
                 lib_path,
-                socket_path,
+                HotChannel::bind(),
                 build_envs,
                 rustflags,
                 workspace_root,

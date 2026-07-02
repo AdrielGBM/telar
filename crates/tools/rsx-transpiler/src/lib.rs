@@ -255,6 +255,8 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     }
 
     if !logic.is_empty() {
+        // Set by cargo-rsx for hot-reload builds (the transpiler runs inside the app's proc macro); keyed signals let the dev host snapshot/restore state across dylib swaps.
+        let hot_build = std::env::var("RSX_HOT_RELOAD_BUILD").is_ok();
         let mut declared: Vec<&str> = Vec::new();
         for (j, line) in logic.lines().enumerate() {
             let src = Some(logic_line_src(j));
@@ -264,6 +266,12 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             }
             // If this line has a `move` closure that captures a previously declared signal, emit a dedicated clone with a mangled name for the closure, then rewrite the line so the closure captures that clone instead of the original. This leaves the original binding intact for the view code.
             let mut emitted_line = line.to_string();
+            if hot_build
+                && let Some(rewritten) =
+                    crate::signal_scan::hot_rewrite_signal_decl(&emitted_line, &fn_name)
+            {
+                emitted_line = rewritten;
+            }
             if line.contains("move") {
                 for sig_name in &declared {
                     if contains_ident(line, sig_name) {

@@ -3813,6 +3813,7 @@ dependencies = [
  "rsx-devtools",
  "rsx-macros",
  "serde",
+ "serde_json",
  "services-core",
  "theme-core",
  "toml",

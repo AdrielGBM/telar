@@ -174,6 +174,12 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     let run_tail = quote! {
         #setup
+        if ::std::env::var("RSX_PREVIEW_LIST").is_ok() {
+            for entry in rsx_all_preview_entries() {
+                ::std::println!("{}\t{}", entry.component_name, entry.preview_name);
+            }
+            ::std::process::exit(0);
+        }
         if ::std::env::var("RSX_TEST").is_ok() {
             ::rsx::try_run_test(rsx_all_preview_entries(), ::rsx::AppConfig::from(#config));
         }
@@ -191,14 +197,14 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     let hot_reload_prefix = if is_hot_reload {
         quote! {
-            if let (::std::result::Result::Ok(lib_path), ::std::result::Result::Ok(socket_path)) = (
+            if let (::std::result::Result::Ok(lib_path), ::std::result::Result::Ok(hot_port)) = (
                 ::std::env::var("RSX_HOT_LIB"),
-                ::std::env::var("RSX_HOT_SOCKET"),
+                ::std::env::var("RSX_HOT_PORT"),
             ) {
                 #setup
                 ::rsx::run_hot_reload_host(
                     &lib_path,
-                    &socket_path,
+                    &hot_port,
                     ::rsx::AppConfig::from(#config),
                     env!("CARGO_PKG_NAME"),
                 );
@@ -251,6 +257,22 @@ pub fn app(input: TokenStream) -> TokenStream {
         quote! {}
     };
 
+    // State-preservation symbols: the host snapshots the outgoing dylib's hot signals and restores them into the incoming one (see rsx::hot_state).
+    let hot_state_symbols = if is_hot_reload {
+        quote! {
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_snapshot() -> ::std::string::String {
+                ::rsx::hot_snapshot_json()
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_restore(blob: &str) {
+                ::rsx::hot_restore_json(blob);
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     let android_run = quote! {
         #[cfg(target_os = "android")]
         #[unsafe(no_mangle)]
@@ -273,6 +295,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         #android_run
         #hot_export
         #hot_cleanup
+        #hot_state_symbols
     }
     .into()
 }

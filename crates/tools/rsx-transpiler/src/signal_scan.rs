@@ -63,9 +63,62 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
     signals
 }
 
+/// Rewrites a `let NAME = signal(EXPR)` logic line into the keyed hot-reload form
+/// `let NAME = rsx::hot_signal_auto!("<fn_name>::<NAME>", EXPR)` so `cargo rsx dev` can snapshot
+/// and restore the value across dylib swaps. Returns `None` when the line is not a signal binding
+/// (memos are derived state and recompute from their sources, so they are left untouched).
+pub fn hot_rewrite_signal_decl(line: &str, fn_name: &str) -> Option<String> {
+    let indent_len = line.len() - line.trim_start().len();
+    let (indent, trimmed) = line.split_at(indent_len);
+    let rest = trimmed.strip_prefix("let ")?;
+    let (binding, expr) = rest.split_once('=')?;
+    let expr_trimmed = expr.trim_start();
+    let args = expr_trimmed.strip_prefix("signal(")?;
+    let name = binding
+        .trim()
+        .strip_prefix("mut ")
+        .unwrap_or(binding.trim())
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .trim();
+    if !is_ident(name) {
+        return None;
+    }
+    Some(format!(
+        "{indent}let {} = rsx::hot_signal_auto!(\"{fn_name}::{name}\", {args}",
+        binding.trim()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hot_rewrite_keys_signal_binding() {
+        let out = hot_rewrite_signal_decl("let count = signal(0i32);", "counter").unwrap();
+        assert_eq!(
+            out,
+            "let count = rsx::hot_signal_auto!(\"counter::count\", 0i32);"
+        );
+    }
+
+    #[test]
+    fn hot_rewrite_skips_memos_and_plain_lets() {
+        assert!(hot_rewrite_signal_decl("let d = memo(move || 1);", "c").is_none());
+        assert!(hot_rewrite_signal_decl("let x = 5;", "c").is_none());
+        assert!(hot_rewrite_signal_decl("count.set(signal_like);", "c").is_none());
+    }
+
+    #[test]
+    fn hot_rewrite_preserves_nested_parens_and_mut() {
+        let out = hot_rewrite_signal_decl("let mut v = signal(vec![(1, 2)]);", "grid").unwrap();
+        assert_eq!(
+            out,
+            "let mut v = rsx::hot_signal_auto!(\"grid::v\", vec![(1, 2)]);"
+        );
+    }
 
     #[test]
     fn detects_rw_signal() {

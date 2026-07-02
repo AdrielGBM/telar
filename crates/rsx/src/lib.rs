@@ -13,6 +13,8 @@ pub mod window_signals;
 pub mod app;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 pub mod hot;
+#[cfg(feature = "dev")]
+pub mod hot_state;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub mod paths;
 #[cfg(feature = "runtime")]
@@ -80,6 +82,8 @@ mod preview;
 #[cfg(all(feature = "preview", not(target_os = "android")))]
 pub use preview::run_preview_window;
 
+#[cfg(feature = "dev")]
+pub use hot_state::{hot_restore_json, hot_signal, hot_snapshot_json, probe};
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use platform_android::AndroidApp;
 #[cfg(all(feature = "runtime", target_os = "android"))]
