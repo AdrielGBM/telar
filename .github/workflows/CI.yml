@@ -10,7 +10,7 @@ jobs:
   check-desktop:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-features --exclude platform-android
@@ -18,7 +18,7 @@ jobs:
   check-android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
@@ -38,7 +38,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --exclude platform-android
@@ -57,7 +57,7 @@ jobs:
             formats: dir nsis
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install appimagetool
@@ -67,7 +67,11 @@ jobs:
           chmod +x /usr/local/bin/appimagetool
       - name: Install NSIS
         if: runner.os == 'Windows'
-        run: choco install nsis -y --no-progress
+        # The choco nsis package does not shim makensis, so its install dir must be appended to PATH by hand.
+        run: |
+          choco install nsis -y --no-progress
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files (x86)\NSIS"
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files (x86)\NSIS\Bin"
       - name: Package sandbox
         shell: bash
         # APPIMAGE_EXTRACT_AND_RUN lets appimagetool run without FUSE on the runner.
@@ -80,7 +84,7 @@ jobs:
             echo "::endgroup::"
           done
           ls -R target/rsx-dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rsx-dist-${{ matrix.os }}
           path: |
