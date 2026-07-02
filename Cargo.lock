@@ -2026,6 +2026,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "motion-core"
+version = "0.1.0"
+dependencies = [
+ "geometry-core",
+ "reactive-core",
+ "renderer-core",
+]
+
+[[package]]
 name = "naga"
 version = "29.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3928,6 +3937,7 @@ dependencies = [
  "layout-core",
  "libc",
  "libloading 0.9.0",
+ "motion-core",
  "platform-android",
  "platform-core",
  "platform-winit",
@@ -4182,6 +4192,7 @@ dependencies = [
 name = "sandbox"
 version = "0.1.0"
 dependencies = [
+ "platform-core",
  "rsx",
  "tracing-subscriber",
 ]
@@ -4997,6 +5008,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "geometry-core",
+ "motion-core",
  "platform-core",
  "reactive-core",
  "renderer-core",

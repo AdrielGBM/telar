@@ -80,6 +80,26 @@ impl Color {
         )
     }
 
+    /// Exact inverse of [`Color::from_oklcha`]: sRGB -> linear -> OKLab -> LCh. Returns `(l, c, h, a)` with `h` in degrees `[0, 360)`.
+    pub fn to_oklcha(self) -> (f32, f32, f32, f32) {
+        let r = Self::srgb_to_linear(self.r);
+        let g = Self::srgb_to_linear(self.g);
+        let b = Self::srgb_to_linear(self.b);
+        // Ottosson's linear sRGB -> OKLab constants; the exact inverse of the matrices in from_oklcha.
+        let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+        let m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+        let s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+        let l_ = l.cbrt();
+        let m_ = m.cbrt();
+        let s_ = s.cbrt();
+        let lightness = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
+        let lab_a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+        let lab_b = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+        let c = (lab_a * lab_a + lab_b * lab_b).sqrt();
+        let h = lab_b.atan2(lab_a).to_degrees().rem_euclid(360.0);
+        (lightness, c, h, self.a)
+    }
+
     pub fn from_hex(hex: &str) -> Option<Self> {
         let hex = hex.strip_prefix('#').unwrap_or(hex);
         // Byte-slice indexing below assumes single-byte chars.
@@ -157,6 +177,15 @@ impl Color {
             12.92 * c
         } else {
             1.055 * c.powf(1.0 / 2.4) - 0.055
+        }
+    }
+
+    fn srgb_to_linear(c: f32) -> f32 {
+        let c = c.clamp(0.0, 1.0);
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
         }
     }
 
@@ -457,5 +486,59 @@ mod tests {
     #[test]
     fn from_oklcha_sets_alpha() {
         assert_eq!(Color::from_oklcha(0.5, 0.1, 120.0, 0.25).a, 0.25);
+    }
+
+    #[test]
+    fn to_oklcha_round_trips_srgb() {
+        for &color in &[
+            Color::rgb(0.8, 0.2, 0.3),
+            Color::rgb(0.1, 0.6, 0.9),
+            Color::rgb(0.5, 0.5, 0.5),
+            Color::rgba(0.2, 0.7, 0.4, 0.6),
+        ] {
+            let (l, c, h, a) = color.to_oklcha();
+            let back = Color::from_oklcha(l, c, h, a);
+            assert!(
+                (back.r - color.r).abs() < 1e-4,
+                "r: {} != {}",
+                back.r,
+                color.r
+            );
+            assert!(
+                (back.g - color.g).abs() < 1e-4,
+                "g: {} != {}",
+                back.g,
+                color.g
+            );
+            assert!(
+                (back.b - color.b).abs() < 1e-4,
+                "b: {} != {}",
+                back.b,
+                color.b
+            );
+            assert!(
+                (back.a - color.a).abs() < 1e-6,
+                "a: {} != {}",
+                back.a,
+                color.a
+            );
+        }
+    }
+
+    #[test]
+    fn to_oklcha_gray_is_achromatic() {
+        let (_, c, _, _) = Color::rgb(0.5, 0.5, 0.5).to_oklcha();
+        assert!(c < 1e-4, "expected near-zero chroma, got {c}");
+    }
+
+    #[test]
+    fn oklch_round_trip_is_stable() {
+        // Round-tripping an in-gamut sRGB color through OKLCH and back must be idempotent (out-of-gamut OKLCH inputs are clamped, so we start from sRGB).
+        let start = Color::rgb(0.1, 0.6, 0.9);
+        let (l1, c1, h1, _) = start.to_oklcha();
+        let (l2, c2, h2, _) = Color::from_oklcha(l1, c1, h1, 1.0).to_oklcha();
+        assert!((l1 - l2).abs() < 1e-3, "l: {l1} != {l2}");
+        assert!((c1 - c2).abs() < 1e-3, "c: {c1} != {c2}");
+        assert!((h1 - h2).abs() < 1e-2, "h: {h1} != {h2}");
     }
 }

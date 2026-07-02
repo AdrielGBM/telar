@@ -1,0 +1,9 @@
+[package]
+name = "motion-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+reactive-core = { workspace = true }
+geometry-core = { workspace = true }
+renderer-core = { workspace = true }

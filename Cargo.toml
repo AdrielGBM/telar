@@ -11,6 +11,7 @@ members = [
     "crates/reactive/reactive-core",
     "crates/services/services-core",
     "crates/geometry/geometry-core",
+    "crates/motion/motion-core",
     "crates/layout/layout-core",
     "crates/layout/layout-reactive",
     "crates/ui/theme-core",
@@ -40,6 +41,7 @@ default-members = [
     "crates/reactive/reactive-core",
     "crates/services/services-core",
     "crates/geometry/geometry-core",
+    "crates/motion/motion-core",
     "crates/layout/layout-core",
     "crates/layout/layout-reactive",
     "crates/ui/theme-core",
@@ -93,6 +95,7 @@ renderer-text = { path = "crates/renderer/renderer-text" }
 reactive-core = { path = "crates/reactive/reactive-core" }
 services-core = { path = "crates/services/services-core" }
 geometry-core = { path = "crates/geometry/geometry-core" }
+motion-core = { path = "crates/motion/motion-core" }
 layout-core = { path = "crates/layout/layout-core" }
 layout-reactive = { path = "crates/layout/layout-reactive" }
 theme-core = { path = "crates/ui/theme-core" }
