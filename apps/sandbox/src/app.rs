@@ -45,6 +45,8 @@ fn build_content(
     let s_shadows = crate::sections_shadows_section(ctx)?;
     let s_grid = crate::sections_grid_section(ctx)?;
     let s_transforms = crate::sections_transforms_section(ctx)?;
+    let s_motion = crate::sections_motion_section(ctx)?;
+    let s_motion_lab = crate::sections_motion_lab_section(ctx)?;
     let mut sections: Vec<Box<dyn LayoutItem>> = Vec::new();
     sections.push(s_theme);
     sections.push(s_shapes);
@@ -60,6 +62,8 @@ fn build_content(
     sections.push(s_shadows);
     sections.push(s_grid);
     sections.push(s_transforms);
+    sections.push(s_motion);
+    sections.push(s_motion_lab);
     sections.push(crate::counter(ctx)?);
     Container::new(
         ctx,
