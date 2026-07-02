@@ -28,8 +28,9 @@ use present::{FrameOp, plan_present};
 use present::{extract_native_window, present_to_native_window};
 
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
-    _context: Context<D>,
-    surface: Surface<D, W>,
+    // None in headless mode: no window means no softbuffer context/surface; the frame lives only in `pixmap`.
+    _context: Option<Context<D>>,
+    surface: Option<Surface<D, W>>,
     width: u32,
     height: u32,
     pub(crate) pixmap: Option<Pixmap>,
@@ -95,8 +96,8 @@ where
         });
         let font_metrics = text_shaper.font_metrics();
         Ok(Self {
-            _context: context,
-            surface,
+            _context: Some(context),
+            surface: Some(surface),
             width: 0,
             height: 0,
             pixmap: None,
@@ -132,6 +133,66 @@ where
             native_window,
         })
     }
+
+    /// Builds an offscreen renderer with no window: rendering targets an in-memory `Pixmap` only, so no display server, softbuffer context, or surface is required (snapshot tests, server-side render, benchmarks). The `D`/`W` type parameters are never instantiated — the caller picks any concrete types. Read the result back with [`read_rgba`](Self::read_rgba) or [`pixmap`](Self::pixmap).
+    pub fn new_headless(width: u32, height: u32, config: crate::SoftwareRendererConfig) -> Self {
+        let mut text_shaper = TextShaper::with_config(TextShaperConfig {
+            pixel_cache_budget_bytes: config.text_pixel_cache_bytes,
+            alpha_cache_budget_bytes: config.text_alpha_cache_bytes,
+            shaping_cache_budget_bytes: config.text_shaping_cache_bytes,
+            font: config.font,
+        });
+        let font_metrics = text_shaper.font_metrics();
+        Self {
+            _context: None,
+            surface: None,
+            // Pre-sized so a `begin_frame` at the same dimensions reuses these buffers instead of reallocating.
+            width,
+            height,
+            pixmap: Pixmap::new(width, height),
+            text_shaper,
+            font_metrics,
+            image_cache: crate::primitives::image::new_image_cache(config.image_cache_bytes),
+            blur_scratch: Vec::new(),
+            pixmap_pool: Vec::new(),
+            clip_mask_buffer: tiny_skia::Mask::new(width, height),
+            clip_mask_dirty: None,
+            draw_state: renderer_core::DrawState::new(),
+            shadow_cache: CLruCache::with_config(
+                CLruCacheConfig::new(NonZeroUsize::new(config.shadow_cache_bytes).unwrap())
+                    .with_hasher(FxBuildHasher::default())
+                    .with_scale(PixmapByteScale),
+            ),
+            text_pixmap_cache: lru::LruCache::new(
+                std::num::NonZeroUsize::new(config.text_pixmap_cache_entries).unwrap(),
+            ),
+            text_shadow_cache: new_text_shadow_cache(config.text_shadow_cache_bytes),
+            path_shadow_cache: new_path_shadow_cache(config.path_shadow_cache_bytes),
+            pending_shadows: HashMap::new(),
+            pending_text_shadows: HashMap::new(),
+            pending_path_shadows: HashMap::new(),
+            layer_stack: Vec::new(),
+            prev_commands: Vec::with_capacity(256),
+            prev_commands_hash: 0,
+            prev_clear_color: None,
+            expanded_commands_cache: None,
+            layer_bounds_cache: None,
+            present_history: std::collections::VecDeque::with_capacity(8),
+            #[cfg(target_os = "android")]
+            native_window: None,
+        }
+    }
+
+    /// The current frame's pixels as premultiplied RGBA8888 (tiny-skia byte order: `[R, G, B, A]` per pixel, row-major, `width * height * 4` bytes). `None` before the first frame is rendered.
+    pub fn read_rgba(&self) -> Option<&[u8]> {
+        self.pixmap.as_ref().map(|p| p.data())
+    }
+
+    /// The current frame's backing pixmap (premultiplied RGBA8888). `None` before the first frame is rendered.
+    pub fn pixmap(&self) -> Option<&tiny_skia::Pixmap> {
+        self.pixmap.as_ref()
+    }
+
     // Drains finished background shadow computations into their respective caches. Returns true if at least one shadow became available this frame.
     fn poll_pending_shadows(&mut self) -> bool {
         let mut arrived = false;
@@ -184,6 +245,11 @@ where
             return present_to_native_window(nw, pixmap);
         }
 
+        // Headless: no surface to blit to; the frame already lives in `self.pixmap`, so presenting is a no-op.
+        let Some(surface) = &mut self.surface else {
+            return Ok(());
+        };
+
         // Append this frame's change set; an aged buffer is reconstructed by replaying the last `age` entries.
         self.present_history.push_back(op);
         while self.present_history.len() > 6 {
@@ -192,7 +258,7 @@ where
 
         let width = self.width as usize;
         let height = self.height as usize;
-        if let Ok(mut buffer) = self.surface.buffer_mut() {
+        if let Ok(mut buffer) = surface.buffer_mut() {
             let age = buffer.age();
             let plan = plan_present(&self.present_history, age);
             // Pixel format: tiny_skia RGBA bytes → softbuffer LE u32 0x00RRGGBB. The damage-aware plan re-swizzles only what changed; a full swizzle of the whole framebuffer is the fallback.

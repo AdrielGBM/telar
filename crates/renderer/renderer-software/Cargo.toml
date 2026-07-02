@@ -19,3 +19,10 @@ smallvec = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 ndk = { version = "0.9", features = ["nativewindow"] }
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "render_frame"
+harness = false

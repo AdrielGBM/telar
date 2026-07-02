@@ -13,48 +13,35 @@ use super::pixels::{
 };
 use super::present::FrameOp;
 
-impl<D, W> RenderBackend for SoftwareRenderer<D, W>
+// Outcome of the planning phase: either the frame can be presented immediately (nothing visible
+// changed) or it must be cleared and re-rendered with the computed plan.
+enum FrameAction {
+    Present(FrameOp),
+    Render(FramePlan),
+}
+
+// Everything the render phase needs from planning: how to classify the present, which on-screen
+// regions to clear/render (None = full frame), and the command hash used to key the expand cache.
+struct FramePlan {
+    frame_op: FrameOp,
+    skip_rect: Option<SmallVec<[Rect; 8]>>,
+    input_hash: u64,
+}
+
+impl<D, W> SoftwareRenderer<D, W>
 where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
-    fn begin_frame(
-        &mut self,
-        width: u32,
-        height: u32,
-        _scale_factor: f32,
-        _generation: u64,
-    ) -> Result<(), RendererError> {
-        // `scale_factor` and `generation` are ignored because draw commands arrive pre-scaled by the caller; software backend does not need to track them.
-
-        if width != self.width || height != self.height {
-            self.width = width;
-            self.height = height;
-            self.pixmap = Pixmap::new(width, height);
-            self.clip_mask_buffer = tiny_skia::Mask::new(width, height);
-            self.clip_mask_dirty = None;
-            self.pixmap_pool.clear();
-            self.prev_commands.clear();
-            self.prev_commands_hash = 0;
-            self.prev_clear_color = None;
-            self.expanded_commands_cache = None;
-            self.layer_bounds_cache = None;
-            // Surface buffers are recreated on resize, so their age resets; drop the change log to avoid replaying onto a fresh buffer.
-            self.present_history.clear();
-            if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
-                self.surface
-                    .resize(w, h)
-                    .map_err(|e| RendererError::Resize(e.to_string()))?;
-            }
-        }
-        Ok(())
-    }
-
-    fn render_frame(
+    // Planning phase: fast-path detection (skip-if-unchanged, scroll blit), dirty-rect computation,
+    // present classification, prev-frame bookkeeping, and the skip_rect expansion. Returns
+    // FrameAction::Present for the early-outs that only re-present the existing pixmap, or
+    // FrameAction::Render carrying the plan for a full clear + command replay.
+    fn plan_frame(
         &mut self,
         commands: &[DrawCommand],
         clear_color: Option<Color>,
-    ) -> Result<(), RendererError> {
+    ) -> Result<FrameAction, RendererError> {
         // Poll background shadow workers and move finished pixmaps into their caches. Returns true if any completed this frame, in which case we must re-render even if the command list is unchanged so the newly-available shadow gets drawn.
         let shadow_arrived = self.poll_pending_shadows();
 
@@ -63,7 +50,7 @@ where
             && commands == self.prev_commands.as_slice()
             && clear_color == self.prev_clear_color
         {
-            return self.present_pixmap(FrameOp::NoChange);
+            return Ok(FrameAction::Present(FrameOp::NoChange));
         }
 
         // Optimization 2: scroll blit. When the only change is a single PushTransform ty-shift (a scroll event), shift the existing pixel rows in place and only re-render the exposed band plus any out-of-clip overlays that changed (e.g. the scrollbar).
@@ -186,7 +173,7 @@ where
                 }
                 if out.is_empty() {
                     // Every dirty region was off-screen — nothing visible changed.
-                    return self.present_pixmap(FrameOp::NoChange);
+                    return Ok(FrameAction::Present(FrameOp::NoChange));
                 }
                 Some(out)
             }
@@ -196,8 +183,21 @@ where
         // If the clear color changed, the dirty-rect only covers command-changed regions, leaving background areas untouched with stale pixels from the previous frame. Force a full clear.
         let skip_rect = if clear_color_changed { None } else { skip_rect };
 
+        Ok(FrameAction::Render(FramePlan {
+            frame_op,
+            skip_rect,
+            input_hash: current_hash,
+        }))
+    }
+
+    // Clear phase: fill either the given on-screen regions or the whole pixmap with the clear color.
+    fn clear_pixmap(
+        &mut self,
+        clear_color: Option<Color>,
+        skip_rect: &Option<SmallVec<[Rect; 8]>>,
+    ) {
         if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
-            if let Some(ref rects) = skip_rect {
+            if let Some(rects) = skip_rect {
                 for sr in rects.iter() {
                     let skia_rect = tiny_skia::Rect::from_xywh(sr.x, sr.y, sr.width, sr.height);
                     if let Some(r) = skia_rect {
@@ -214,32 +214,16 @@ where
                 pixmap.fill(crate::primitives::to_skia_color(color));
             }
         }
+    }
 
-        self.draw_state.reset();
-        self.layer_stack.clear();
-
-        let input_hash = current_hash;
-        match &self.expanded_commands_cache {
-            Some((cached_hash, _)) if *cached_hash == input_hash => {}
-            _ => {
-                let stored = expand_fill_layers(commands).unwrap_or_else(|| commands.to_vec());
-                self.expanded_commands_cache = Some((input_hash, stored));
-            }
-        };
-        let commands: &[DrawCommand] = &self.expanded_commands_cache.as_ref().unwrap().1;
-
-        // Task 2.12: skip compute_layer_bounds when commands and dimensions haven't changed.
-        let bbox_hash = hash_commands_with_dimensions(commands, self.width, self.height);
-        let layer_bboxes = match &self.layer_bounds_cache {
-            Some((cached_hash, cached)) if *cached_hash == bbox_hash => cached.clone(),
-            _ => {
-                let result =
-                    compute_layer_bounds(commands, self.width, self.height, &self.font_metrics);
-                self.layer_bounds_cache = Some((bbox_hash, result.clone()));
-                result
-            }
-        };
-
+    // Render phase: replay the (fill-layer-expanded) command list into the pixmap, honoring the
+    // dirty-region skip, clip mask, matrix and layer stacks, and precomputed layer bounding boxes.
+    fn run_commands(
+        &mut self,
+        commands: &[DrawCommand],
+        skip_rect: &Option<SmallVec<[Rect; 8]>>,
+        layer_bboxes: &[Option<(i32, i32, u32, u32)>],
+    ) {
         // Nesting depth of PushLayer commands skipped because their bbox doesn't overlap skip_rect; their pixels are already correct from apply_scroll_blit.
         let mut skip_layer_depth: usize = 0;
 
@@ -275,7 +259,7 @@ where
             );
 
             // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region. Only applies at the top level (not inside layers): a layer is a fresh isolated pixmap rendered from scratch every frame, so all its commands must run regardless of which window-space region is dirty.
-            if let Some(ref dirty_rects) = skip_rect {
+            if let Some(dirty_rects) = skip_rect {
                 if !inside_layer {
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
                         cmd,
@@ -532,7 +516,7 @@ where
                     backdrop_blur,
                 } => {
                     // During scroll_blit, skip layers outside the dirty region: their pixels are already correct from apply_scroll_blit and re-compositing would double-apply the layer's opacity.
-                    if let Some(ref dirty_rects) = skip_rect {
+                    if let Some(dirty_rects) = skip_rect {
                         if !inside_layer {
                             if let Some((ox, oy, bw, bh)) = layer_bboxes[cmd_idx] {
                                 let layer_rect = Rect {
@@ -622,6 +606,97 @@ where
                 }
             }
         }
+    }
+}
+
+impl<D, W> RenderBackend for SoftwareRenderer<D, W>
+where
+    D: HasDisplayHandle,
+    W: HasWindowHandle,
+{
+    fn begin_frame(
+        &mut self,
+        width: u32,
+        height: u32,
+        _scale_factor: f32,
+        _generation: u64,
+    ) -> Result<(), RendererError> {
+        // `scale_factor` and `generation` are ignored because draw commands arrive pre-scaled by the caller; software backend does not need to track them.
+
+        if width != self.width || height != self.height {
+            self.width = width;
+            self.height = height;
+            self.pixmap = Pixmap::new(width, height);
+            self.clip_mask_buffer = tiny_skia::Mask::new(width, height);
+            self.clip_mask_dirty = None;
+            self.pixmap_pool.clear();
+            self.prev_commands.clear();
+            self.prev_commands_hash = 0;
+            self.prev_clear_color = None;
+            self.expanded_commands_cache = None;
+            self.layer_bounds_cache = None;
+            // Surface buffers are recreated on resize, so their age resets; drop the change log to avoid replaying onto a fresh buffer.
+            self.present_history.clear();
+            // Headless mode has no surface to resize; the pixmap above is the only target.
+            if let (Some(w), Some(h), Some(surface)) = (
+                NonZeroU32::new(width),
+                NonZeroU32::new(height),
+                self.surface.as_mut(),
+            ) {
+                surface
+                    .resize(w, h)
+                    .map_err(|e| RendererError::Resize(e.to_string()))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn render_frame(
+        &mut self,
+        commands: &[DrawCommand],
+        clear_color: Option<Color>,
+    ) -> Result<(), RendererError> {
+        let FramePlan {
+            frame_op,
+            skip_rect,
+            input_hash,
+        } = match self.plan_frame(commands, clear_color)? {
+            FrameAction::Present(op) => return self.present_pixmap(op),
+            FrameAction::Render(plan) => plan,
+        };
+
+        self.clear_pixmap(clear_color, &skip_rect);
+
+        self.draw_state.reset();
+        self.layer_stack.clear();
+
+        match &self.expanded_commands_cache {
+            Some((cached_hash, _)) if *cached_hash == input_hash => {}
+            _ => {
+                let stored = expand_fill_layers(commands).unwrap_or_else(|| commands.to_vec());
+                self.expanded_commands_cache = Some((input_hash, stored));
+            }
+        };
+
+        // Task 2.12: skip compute_layer_bounds when commands and dimensions haven't changed.
+        let layer_bboxes = {
+            let commands: &[DrawCommand] = &self.expanded_commands_cache.as_ref().unwrap().1;
+            let bbox_hash = hash_commands_with_dimensions(commands, self.width, self.height);
+            match &self.layer_bounds_cache {
+                Some((cached_hash, cached)) if *cached_hash == bbox_hash => cached.clone(),
+                _ => {
+                    let result =
+                        compute_layer_bounds(commands, self.width, self.height, &self.font_metrics);
+                    self.layer_bounds_cache = Some((bbox_hash, result.clone()));
+                    result
+                }
+            }
+        };
+
+        // Borrow split: the command loop needs `&mut self`, but the expanded list lives inside `self`. Move it out for the duration of the loop and restore it after, preserving the expand cache exactly.
+        let taken = std::mem::take(&mut self.expanded_commands_cache);
+        self.run_commands(&taken.as_ref().unwrap().1, &skip_rect, &layer_bboxes);
+        self.expanded_commands_cache = taken;
 
         self.present_pixmap(frame_op)
     }

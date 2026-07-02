@@ -37,7 +37,8 @@ use steps::{DrawStep, flush_batch, flush_image_batch};
 /// A hardware-accelerated renderer using wgpu. The `W: Send + Sync + 'static` bound is a wgpu requirement for surface creation, not an indication that this renderer is thread-safe. The renderer must only be used on the main thread alongside the reactive runtime; it is not safe to move between threads.
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
     instance: wgpu::Instance,
-    surface: Surface<'static>,
+    // None in headless mode: there is no window/swapchain, so frames render into `offscreen_output` instead of a presented surface.
+    surface: Option<Surface<'static>>,
     device: Device,
     queue: Queue,
     config: Option<SurfaceConfiguration>,
@@ -125,6 +126,8 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     // Non-MSAA presentation texture holding the last resolved frame. Used both as the idle-frame fast-path source (blit when commands are unchanged) and as the MSAA resolve target each active frame.
     retained_texture: Option<wgpu::Texture>,
     retained_view: Option<wgpu::TextureView>,
+    // Headless-only render target (Some iff `surface` is None). The final frame lands here (via direct draw, MSAA resolve-blit, or copy) so `read_rgba` can copy it back. Sized to the current width/height, recreated on resize in `reconfigure`.
+    offscreen_output: Option<wgpu::Texture>,
     prev_commands: Vec<DrawCommand>,
     // ComponentList generation of the last fully rendered frame. Initialized to u64::MAX so the first frame never matches and always renders. Set to the incoming generation after each successful render.
     prev_generation: u64,
@@ -135,7 +138,53 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     prev_text_hash: u64,
     prev_line_hash: u64,
     prev_image_hash: u64,
-    _window: std::sync::Arc<W>,
+    // None in headless mode (no backing window). Kept alive otherwise so wgpu's surface stays valid for its lifetime.
+    _window: Option<std::sync::Arc<W>>,
+}
+
+/// A zero-sized window marker used as the type parameter for headless renderers built with [`HardwareRenderer::new_headless`]. Its handles are never requested (headless never creates a surface), so both accessors report `Unavailable`.
+#[derive(Debug, Clone, Copy)]
+pub struct HeadlessWindow;
+
+impl HasWindowHandle for HeadlessWindow {
+    fn window_handle(
+        &self,
+    ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+        Err(raw_window_handle::HandleError::Unavailable)
+    }
+}
+
+impl HasDisplayHandle for HeadlessWindow {
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        Err(raw_window_handle::HandleError::Unavailable)
+    }
+}
+
+// Headless render target: RENDER_ATTACHMENT for the final draw/resolve-blit, COPY_SRC for read_rgba, COPY_DST for the msaa_samples==1 copy-to-target path.
+fn create_offscreen_texture(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("rsx-offscreen-output"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    })
 }
 
 // Safety: cross-thread transfer via JoinHandle happens before any DrawCommands are processed, so no Rc<> values exist at transfer time (prev_commands starts empty); after joining the renderer lives exclusively on the main thread.
@@ -267,6 +316,84 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .await
             .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
 
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_format = preferred_format(&surface_caps);
+        // Android Adreno TBDR GPUs silently drop MSAA samples across render-pass boundaries (StoreOp::Store + LoadOp::Load on multisampled textures yields zeros); force 1 sample on Android.
+        let msaa_samples = if cfg!(target_os = "android") {
+            1
+        } else if adapter
+            .get_texture_format_features(surface_format)
+            .flags
+            .contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4)
+        {
+            4
+        } else {
+            1
+        };
+        // On Android always use Fifo: Mailbox on some Adreno/MIUI devices silently drops frames producing a black screen.
+        let present_mode = if cfg!(target_os = "android") {
+            wgpu::PresentMode::Fifo
+        } else {
+            surface_caps
+                .present_modes
+                .iter()
+                .find(|&&m| m == wgpu::PresentMode::Mailbox)
+                .copied()
+                .unwrap_or(wgpu::PresentMode::Fifo)
+        };
+        // Prefer Opaque for a non-transparent app; Inherit as fallback so the window system decides.
+        let alpha_mode = surface_caps
+            .alpha_modes
+            .iter()
+            .find(|&&m| m == wgpu::CompositeAlphaMode::Opaque)
+            .copied()
+            .unwrap_or_else(|| {
+                surface_caps
+                    .alpha_modes
+                    .first()
+                    .copied()
+                    .unwrap_or(wgpu::CompositeAlphaMode::Auto)
+            });
+        tracing::info!(
+            "hw init: format={:?} msaa={} alpha={:?} present={:?} all_formats={:?} all_alpha={:?}",
+            surface_format,
+            msaa_samples,
+            alpha_mode,
+            present_mode,
+            surface_caps.formats,
+            surface_caps.alpha_modes,
+        );
+
+        Self::from_parts(
+            instance,
+            adapter,
+            Some(surface),
+            Some(window),
+            surface_format,
+            msaa_samples,
+            present_mode,
+            alpha_mode,
+            cache_path,
+            font_config,
+            config,
+        )
+        .await
+    }
+
+    // Surface-independent GPU/device/pipeline construction shared by `new_async` (windowed) and `new_headless` (offscreen). Format/msaa/present/alpha are decided by the caller since only the windowed path can query surface capabilities.
+    async fn from_parts(
+        instance: wgpu::Instance,
+        adapter: wgpu::Adapter,
+        surface: Option<Surface<'static>>,
+        window: Option<std::sync::Arc<W>>,
+        surface_format: wgpu::TextureFormat,
+        msaa_samples: u32,
+        present_mode: wgpu::PresentMode,
+        alpha_mode: wgpu::CompositeAlphaMode,
+        cache_path: Option<&std::path::Path>,
+        font_config: renderer_text::TextShaperConfig,
+        config: HardwareRendererConfig,
+    ) -> Result<Self, RendererError> {
         let pipeline_cache_feature = if adapter.features().contains(wgpu::Features::PIPELINE_CACHE)
         {
             wgpu::Features::PIPELINE_CACHE
@@ -316,54 +443,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 (None, None)
             }
         };
-
-        let surface_caps = surface.get_capabilities(&adapter);
-        let surface_format = preferred_format(&surface_caps);
-        // Android Adreno TBDR GPUs silently drop MSAA samples across render-pass boundaries (StoreOp::Store + LoadOp::Load on multisampled textures yields zeros); force 1 sample on Android.
-        let msaa_samples = if cfg!(target_os = "android") {
-            1
-        } else if adapter
-            .get_texture_format_features(surface_format)
-            .flags
-            .contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4)
-        {
-            4
-        } else {
-            1
-        };
-        // On Android always use Fifo: Mailbox on some Adreno/MIUI devices silently drops frames producing a black screen.
-        let present_mode = if cfg!(target_os = "android") {
-            wgpu::PresentMode::Fifo
-        } else {
-            surface_caps
-                .present_modes
-                .iter()
-                .find(|&&m| m == wgpu::PresentMode::Mailbox)
-                .copied()
-                .unwrap_or(wgpu::PresentMode::Fifo)
-        };
-        // Prefer Opaque for a non-transparent app; Inherit as fallback so the window system decides.
-        let alpha_mode = surface_caps
-            .alpha_modes
-            .iter()
-            .find(|&&m| m == wgpu::CompositeAlphaMode::Opaque)
-            .copied()
-            .unwrap_or_else(|| {
-                surface_caps
-                    .alpha_modes
-                    .first()
-                    .copied()
-                    .unwrap_or(wgpu::CompositeAlphaMode::Auto)
-            });
-        tracing::info!(
-            "hw init: format={:?} msaa={} alpha={:?} present={:?} all_formats={:?} all_alpha={:?}",
-            surface_format,
-            msaa_samples,
-            alpha_mode,
-            present_mode,
-            surface_caps.formats,
-            surface_caps.alpha_modes,
-        );
 
         let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rsx-viewport"),
@@ -560,6 +639,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             layer_cache_pixel_budget: 0,
             retained_texture: None,
             retained_view: None,
+            offscreen_output: None,
             prev_commands: Vec::new(),
             prev_generation: u64::MAX,
             incoming_generation: 0,
@@ -580,12 +660,82 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .instance
             .create_surface(window.clone())
             .map_err(|e| RendererError::Surface(e.to_string()))?;
-        self.surface = new_surface;
-        self._window = window;
+        self.surface = Some(new_surface);
+        self._window = Some(window);
         // Force reconfiguration on the next begin_frame (begin_frame handles config.is_none()).
         self.config = None;
         self.viewport_dirty = true;
         Ok(())
+    }
+
+    /// Reads the headless offscreen target back as tightly-packed RGBA8 bytes (row-major, `width * height * 4`, no row padding). Channel order matches the renderer's `surface_format` (Rgba8Unorm on the headless path, i.e. R,G,B,A). Errors in windowed mode (no offscreen target) or if buffer mapping fails. Blocks on the GPU copy, so call it after `render_frame`.
+    pub fn read_rgba(&self) -> Result<Vec<u8>, RendererError> {
+        let texture = self.offscreen_output.as_ref().ok_or_else(|| {
+            RendererError::Backend("read_rgba requires headless mode (no offscreen target)".into())
+        })?;
+        let width = texture.width();
+        let height = texture.height();
+        let unpadded_bytes_per_row = width * 4;
+        // Buffer copies require each row to start at a COPY_BYTES_PER_ROW_ALIGNMENT (256) boundary; pad the stride and strip the padding after mapping.
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("rsx-readback"),
+            size: (padded_bytes_per_row * height) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("rsx-readback-encoder"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        let slice = buffer.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| {});
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|e| RendererError::Backend(format!("readback poll failed: {e:?}")))?;
+
+        let data = slice.get_mapped_range();
+        let mut out = Vec::with_capacity((unpadded_bytes_per_row * height) as usize);
+        for row in 0..height {
+            let start = (row * padded_bytes_per_row) as usize;
+            out.extend_from_slice(&data[start..start + unpadded_bytes_per_row as usize]);
+        }
+        drop(data);
+        buffer.unmap();
+        Ok(out)
+    }
+
+    /// Blocks until all submitted GPU work has completed. Intended for headless/benchmark/test use where there is no present() to pace the queue; the windowed runtime never needs this.
+    pub fn wait_idle(&self) -> Result<(), RendererError> {
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map(|_| ())
+            .map_err(|e| RendererError::Backend(format!("poll failed: {e:?}")))
     }
 
     // Returns a viewport bind group backed by a pooled uniform buffer holding `viewport`. Reuses a pre-allocated slot via round-robin (writing the new contents in place) when available, otherwise grows the pool with a fresh slot. The returned BindGroup is an Arc-backed clone, so the pool retains ownership of the underlying resources.
@@ -640,7 +790,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             desired_maximum_frame_latency: 2,
         };
 
-        self.surface.configure(&self.device, &config);
+        // Headless mode has no surface to configure; the SurfaceConfiguration is still kept in `self.config` so the same `config.is_some()` gating used by the windowed path applies unchanged.
+        if let Some(surface) = self.surface.as_ref() {
+            surface.configure(&self.device, &config);
+        }
         self.config = Some(config);
         self.viewport_dirty = true;
         // msaa_samples==1: the "resolve" is a texture copy (COPY_SRC), and the idle-blit samples this texture directly (TEXTURE_BINDING) instead of a separate retained copy. A multisample texture cannot be sampled, so TEXTURE_BINDING is added only on the single-sample branch.
@@ -689,6 +842,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         });
         self.retained_view = Some(retained.create_view(&wgpu::TextureViewDescriptor::default()));
         self.retained_texture = Some(retained);
+        // Headless: (re)create the offscreen render target at the new size. The windowed path presents to the surface swapchain instead, so it has no offscreen target.
+        if self.surface.is_none() {
+            self.offscreen_output = Some(create_offscreen_texture(
+                &self.device,
+                self.surface_format,
+                width,
+                height,
+            ));
+        }
         // Invalidate prev_commands on resize so scroll blit is never applied across size changes.
         self.prev_commands.clear();
     }
@@ -769,5 +931,85 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.flush_text();
         self.flush_line();
         self.flush_image();
+    }
+}
+
+impl HardwareRenderer<HeadlessWindow> {
+    /// Build a windowless renderer that draws into an offscreen texture instead of a swapchain surface. Read the rendered frame back with [`HardwareRenderer::read_rgba`]. Same font/cache/config parameters as [`HardwareRenderer::new_async`] minus the window; `width`/`height` are the initial physical target size and are re-derived from `begin_frame` on the first frame.
+    pub async fn new_headless(
+        width: u32,
+        height: u32,
+        cache_path: Option<&std::path::Path>,
+        vulkan_only: bool,
+        font_config: renderer_text::TextShaperConfig,
+        config: HardwareRendererConfig,
+    ) -> Result<Self, RendererError> {
+        let backends = if vulkan_only {
+            wgpu::Backends::VULKAN
+        } else {
+            wgpu::Backends::all()
+        };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends,
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        });
+
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await
+            .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
+
+        // No surface to query, so pick the format the windowed path prefers (pool::preferred_format's first choice). Rgba8Unorm is a mandatory renderable format, so read_rgba yields straight R,G,B,A bytes.
+        let surface_format = wgpu::TextureFormat::Rgba8Unorm;
+        let msaa_samples = if adapter
+            .get_texture_format_features(surface_format)
+            .flags
+            .contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4)
+        {
+            4
+        } else {
+            1
+        };
+        // present_mode/alpha_mode are only consumed when configuring a surface, which never happens headless; they still fill the shared SurfaceConfiguration built in reconfigure.
+        let present_mode = wgpu::PresentMode::Fifo;
+        let alpha_mode = wgpu::CompositeAlphaMode::Opaque;
+        tracing::info!(
+            "hw init (headless): format={:?} msaa={} target={}x{}",
+            surface_format,
+            msaa_samples,
+            width,
+            height,
+        );
+
+        let mut renderer = Self::from_parts(
+            instance,
+            adapter,
+            None,
+            None,
+            surface_format,
+            msaa_samples,
+            present_mode,
+            alpha_mode,
+            cache_path,
+            font_config,
+            config,
+        )
+        .await?;
+
+        // Allocate an initial offscreen target so read_rgba works even before the first begin_frame; begin_frame's reconfigure recreates it at the real frame size.
+        if width > 0 && height > 0 {
+            renderer.offscreen_output = Some(create_offscreen_texture(
+                &renderer.device,
+                surface_format,
+                width,
+                height,
+            ));
+        }
+
+        Ok(renderer)
     }
 }

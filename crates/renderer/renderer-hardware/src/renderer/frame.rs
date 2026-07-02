@@ -4,6 +4,55 @@ use super::pool::{bucket_size, return_pooled_texture, take_pooled_texture};
 use super::shadow::{ShadowCacheKind, ShadowKind};
 use super::steps::LayerAccum;
 
+// A layer-boundary-split render segment: a run of draw steps, or a layer begin/composite/prerendered marker. Lifted to module scope so it can appear in the phase-method signatures that build and execute segments.
+pub(super) enum Segment {
+    Draw {
+        start: usize,
+        end: usize,
+    },
+    BeginLayer {
+        msaa_texture: wgpu::Texture,
+        msaa_view: wgpu::TextureView,
+        resolve_texture: wgpu::Texture,
+        resolve_view: wgpu::TextureView,
+        viewport_bind_group: wgpu::BindGroup,
+        width: u32,
+        height: u32,
+        offset_x: f32,
+        offset_y: f32,
+        backdrop_blur: f32,
+    },
+    EndLayerComposite {
+        bind_group: wgpu::BindGroup,
+        cache_hash: Option<u64>,
+        scissor: Option<Rect>,
+    },
+    PrerenderedLayer {
+        bind_group: wgpu::BindGroup,
+        scissor: Option<Rect>,
+    },
+}
+
+// Owned per-frame state threaded through the render_frame phase methods. Holds only owned values (never borrows of `self`) so it survives across the `&mut self` phase calls; `retained_view` in particular is a cheap Arc-backed clone of `self.retained_view` for exactly that reason.
+pub(super) struct FrameCtx {
+    direct_to_surface: bool,
+    scroll_prime: bool,
+    prime_delta: (f32, f32),
+    dirty_scissor: Option<Rect>,
+    load_op: wgpu::LoadOp<wgpu::Color>,
+    output: Option<wgpu::SurfaceTexture>,
+    surface_view: Option<wgpu::TextureView>,
+    msaa_view: Option<wgpu::TextureView>,
+    retained_view: Option<wgpu::TextureView>,
+    frame_scratch_textures: Vec<(
+        u32,
+        u32,
+        wgpu::TextureFormat,
+        wgpu::Texture,
+        wgpu::TextureView,
+    )>,
+}
+
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
     for HardwareRenderer<W>
 {
@@ -72,8 +121,57 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         );
         let direct_to_surface =
             self.msaa_samples == 1 && clear_color.is_some() && !frame_has_backdrop_blur;
-        // Idle-frame fast path: skip full pipeline and blit retained texture when content generation and viewport are unchanged. Disabled under direct-to-surface (nothing retains the last frame to blit from); idle frames simply re-render at the keepalive cadence instead.
+
+        if self.try_idle_blit(direct_to_surface)? {
+            return Ok(());
+        }
+
+        self.draw_state.reset();
+
+        let (scroll_blit, scroll_prime, prime_delta, dirty_scissor) =
+            self.analyze_frame(commands, clear_color, frame_has_backdrop_blur);
+
+        self.interpret_commands(commands, dirty_scissor, scroll_blit.as_ref());
+
+        let mut ctx = FrameCtx {
+            direct_to_surface,
+            scroll_prime,
+            prime_delta,
+            dirty_scissor,
+            load_op: wgpu::LoadOp::Load,
+            output: None,
+            surface_view: None,
+            msaa_view: None,
+            retained_view: None,
+            frame_scratch_textures: Vec::new(),
+        };
+
+        if self.acquire_surface_and_upload(clear_color, &mut ctx)? {
+            return Ok(());
+        }
+
+        // Single encoder for both the shadow pre-passes and the main pass; wgpu inserts the necessary barriers between render passes, so a separate pre-encoder and extra queue.submit are unnecessary.
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("rsx-encoder"),
+            });
+
+        self.resolve_shadows(&mut encoder);
+
+        let (steps, segments) = self.build_segments(&mut ctx)?;
+
+        self.execute_segments(&mut encoder, &mut ctx, &steps, segments)?;
+
+        self.present(encoder, ctx, commands)
+    }
+}
+
+impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
+    fn try_idle_blit(&mut self, direct_to_surface: bool) -> Result<bool, RendererError> {
+        // Idle-frame fast path: skip full pipeline and blit retained texture when content generation and viewport are unchanged. Disabled under direct-to-surface (nothing retains the last frame to blit from); idle frames simply re-render at the keepalive cadence instead. Also disabled headless (surface None): there is no swapchain to present into and read_rgba wants each render_frame to leave a freshly-composited frame in offscreen_output, so headless always takes the main path.
         if !direct_to_surface
+            && self.surface.is_some()
             && self.incoming_generation == self.prev_generation
             && self.retained_view.is_some()
             && !self.viewport_dirty
@@ -81,7 +179,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             && self.width > 0
             && self.height > 0
         {
-            let output = match self.surface.get_current_texture() {
+            let output = match self.surface.as_ref().unwrap().get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(t) => t,
                 wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
                     tracing::debug!("hw idle-blit: suboptimal surface");
@@ -90,20 +188,23 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
                     tracing::warn!("hw idle-blit: surface Lost/Outdated, reconfiguring");
                     if let Some(config) = &self.config.clone() {
-                        self.surface.configure(&self.device, config);
+                        self.surface
+                            .as_ref()
+                            .unwrap()
+                            .configure(&self.device, config);
                     }
                     self.clear_pending();
-                    return Ok(());
+                    return Ok(true);
                 }
                 wgpu::CurrentSurfaceTexture::Timeout => {
                     tracing::warn!("hw idle-blit: Timeout, skipping frame");
                     self.clear_pending();
-                    return Ok(());
+                    return Ok(true);
                 }
                 wgpu::CurrentSurfaceTexture::Occluded => {
                     tracing::warn!("hw idle-blit: Occluded, skipping frame");
                     self.clear_pending();
-                    return Ok(());
+                    return Ok(true);
                 }
                 other => {
                     self.clear_pending();
@@ -165,10 +266,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             tracing::debug!("hw idle-blit: presenting");
             output.present();
             self.clear_pending();
-            return Ok(());
+            return Ok(true);
         }
+        Ok(false)
+    }
 
-        self.draw_state.reset();
+    fn analyze_frame(
+        &self,
+        commands: &[DrawCommand],
+        clear_color: Option<Color>,
+        frame_has_backdrop_blur: bool,
+    ) -> (
+        Option<renderer_core::ScrollBlit>,
+        bool,
+        (f32, f32),
+        Option<Rect>,
+    ) {
         // scroll_blit normally requires LoadOp::Load (clear_color forces LoadOp::Clear). The experimental scroll-blit-with-clear path keeps the optimization for a cleared frame by priming the offscreen with the previous frame shifted by the scroll delta (so only the exposed band needs redrawing); restricted to the MSAA (desktop, explicit-init-pass) path with a retained previous frame and no backdrop blur.
         let allow_scroll_with_clear = hw_scroll_blit_enabled()
             && clear_color.is_some()
@@ -196,6 +309,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             } else {
                 None
             };
+        (scroll_blit, scroll_prime, prime_delta, dirty_scissor)
+    }
+
+    fn interpret_commands(
+        &mut self,
+        commands: &[DrawCommand],
+        dirty_scissor: Option<Rect>,
+        scroll_blit: Option<&renderer_core::ScrollBlit>,
+    ) {
         let mut current_scissor: Option<Rect> = None;
         let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new(); // saves/restores current_scissor across PushLayer/PopLayer; layers disable frustum culling inside their bounds
         let mut layer_accum_stack: Vec<LayerAccum> = Vec::new();
@@ -203,8 +325,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let mut round_clip_composite: Vec<wgpu::BindGroup> = Vec::new();
         // Parallel to draw_state clip stack: true = rounded mini-layer, false = scissor rect.
         let mut clip_is_round: Vec<bool> = Vec::new();
-
-        let orig_commands = commands;
         let expanded_commands = expand_fill_layers(commands);
         let commands: &[DrawCommand] = expanded_commands.as_deref().unwrap_or(commands);
 
@@ -224,8 +344,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
-                        {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
@@ -253,8 +372,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
-                        {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
@@ -358,8 +476,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
-                        {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
@@ -402,8 +519,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
-                        {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
@@ -431,8 +547,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                         self.draw_state.cumulative_matrix,
                         &self.font_metrics,
                     ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit.as_ref())
-                        {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
                             continue;
                         }
                         if let Some(accum) = layer_accum_stack.last_mut() {
@@ -953,8 +1068,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         self.flush_all();
+    }
 
-        let load_op = if let Some(c) = clear_color {
+    fn acquire_surface_and_upload(
+        &mut self,
+        clear_color: Option<Color>,
+        ctx: &mut FrameCtx,
+    ) -> Result<bool, RendererError> {
+        ctx.load_op = if let Some(c) = clear_color {
             let c_arr = c.to_array();
             wgpu::LoadOp::Clear(wgpu::Color {
                 r: c_arr[0] as f64,
@@ -974,42 +1095,51 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 self.height
             );
             self.clear_pending();
-            return Ok(());
+            return Ok(true);
         }
 
-        let output = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t) => t,
-            wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
-                tracing::debug!("hw render_frame: suboptimal surface, rendering anyway");
-                t
-            }
-            wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
-                tracing::warn!(
-                    "hw render_frame: surface Lost/Outdated, reconfiguring {}x{}",
-                    self.width,
-                    self.height
-                );
-                if let Some(config) = &self.config.clone() {
-                    self.surface.configure(&self.device, config);
+        // Windowed: acquire the swapchain texture to present into. Headless (surface None): `output` stays None and every draw targets `offscreen_output` instead.
+        let output: Option<wgpu::SurfaceTexture> = if self.surface.is_some() {
+            match self.surface.as_ref().unwrap().get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(t) => Some(t),
+                wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
+                    tracing::debug!("hw render_frame: suboptimal surface, rendering anyway");
+                    Some(t)
                 }
-                self.clear_pending();
-                return Ok(());
+                wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                    tracing::warn!(
+                        "hw render_frame: surface Lost/Outdated, reconfiguring {}x{}",
+                        self.width,
+                        self.height
+                    );
+                    if let Some(config) = &self.config.clone() {
+                        self.surface
+                            .as_ref()
+                            .unwrap()
+                            .configure(&self.device, config);
+                    }
+                    self.clear_pending();
+                    return Ok(true);
+                }
+                wgpu::CurrentSurfaceTexture::Timeout => {
+                    tracing::warn!("hw render_frame: surface Timeout, skipping frame");
+                    self.clear_pending();
+                    return Ok(true);
+                }
+                wgpu::CurrentSurfaceTexture::Occluded => {
+                    tracing::warn!("hw render_frame: surface Occluded, skipping frame");
+                    self.clear_pending();
+                    return Ok(true);
+                }
+                other => {
+                    self.clear_pending();
+                    return Err(RendererError::Present(format!("surface error: {other:?}")));
+                }
             }
-            wgpu::CurrentSurfaceTexture::Timeout => {
-                tracing::warn!("hw render_frame: surface Timeout, skipping frame");
-                self.clear_pending();
-                return Ok(());
-            }
-            wgpu::CurrentSurfaceTexture::Occluded => {
-                tracing::warn!("hw render_frame: surface Occluded, skipping frame");
-                self.clear_pending();
-                return Ok(());
-            }
-            other => {
-                self.clear_pending();
-                return Err(RendererError::Present(format!("surface error: {other:?}")));
-            }
+        } else {
+            None
         };
+        ctx.output = output;
 
         if self.viewport_dirty {
             let viewport = Viewport::new(
@@ -1122,6 +1252,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             );
         }
 
+        Ok(false)
+    }
+
+    fn resolve_shadows(&mut self, encoder: &mut wgpu::CommandEncoder) {
         let has_text_shadows = self
             .pending_shadows
             .iter()
@@ -1131,13 +1265,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             .pending_shadows
             .iter()
             .any(|op| matches!(op.kind, ShadowKind::Path { .. }));
-
-        // Single encoder for both the shadow pre-passes and the main pass; wgpu inserts the necessary barriers between render passes, so a separate pre-encoder and extra queue.submit are unnecessary.
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("rsx-encoder"),
-            });
 
         let shadow_results: Vec<Option<wgpu::BindGroup>> = if has_text_shadows || has_path_shadows {
             // Reuse the retained shadow instance buffer + bind group when the instance data is unchanged; otherwise (re)create and cache them. This avoids a create_buffer_init + create_bind_group round-trip every frame for static shadows.
@@ -1414,7 +1541,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                 let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
                     &self.device,
-                    &mut encoder,
+                    &mut *encoder,
                     &cap_resolve_view,
                     cap_bucket_w,
                     cap_bucket_h,
@@ -1468,7 +1595,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
             }
         }
+    }
 
+    fn build_segments(
+        &mut self,
+        ctx: &mut FrameCtx,
+    ) -> Result<(Vec<DrawStep>, Vec<Segment>), RendererError> {
         // Image-batching pre-pass: stable-sort each run of consecutive ImageBatch steps by (id, filter) so non-adjacent draws of the same image become adjacent. This is safe for z-order because the reorder is confined to a single run with no intervening non-image steps.
         {
             let steps = &mut self.pending_steps;
@@ -1505,15 +1637,35 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         self.merge_opaque_batches();
 
-        let surface_view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        // Under direct-to-surface the main target IS the swapchain texture, so every existing `msaa_view` reference (top-level draw passes and layer composites) renders straight to the surface; the trailing copy-to-surface is then skipped.
-        let msaa_view = if direct_to_surface {
-            output
+        // Windowed: the swapchain texture. Headless: the persistent offscreen target that read_rgba later copies from.
+        let surface_view = match ctx.output.as_ref() {
+            Some(o) => o
                 .texture
-                .create_view(&wgpu::TextureViewDescriptor::default())
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+            None => self
+                .offscreen_output
+                .as_ref()
+                .ok_or_else(|| {
+                    RendererError::Backend("offscreen_output missing in headless mode".into())
+                })?
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+        };
+        ctx.surface_view = Some(surface_view);
+
+        // Under direct-to-surface the main target IS the presentation texture (swapchain windowed, offscreen headless), so every existing `msaa_view` reference (top-level draw passes and layer composites) renders straight to it; the trailing copy/resolve is then skipped.
+        let msaa_view = if ctx.direct_to_surface {
+            match ctx.output.as_ref() {
+                Some(o) => o
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default()),
+                None => self
+                    .offscreen_output
+                    .as_ref()
+                    .ok_or_else(|| {
+                        RendererError::Backend("offscreen_output missing in headless mode".into())
+                    })?
+                    .create_view(&wgpu::TextureViewDescriptor::default()),
+            }
         } else {
             self.msaa_texture
                 .as_ref()
@@ -1524,38 +1676,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 })?
                 .create_view(&wgpu::TextureViewDescriptor::default())
         };
+        ctx.msaa_view = Some(msaa_view);
 
-        let retained_view = self.retained_view.as_ref().ok_or_else(|| {
+        ctx.retained_view = Some(self.retained_view.clone().ok_or_else(|| {
             RendererError::Backend("retained_view not initialized; call begin_frame first".into())
-        })?;
-
-        enum Segment {
-            Draw {
-                start: usize,
-                end: usize,
-            },
-            BeginLayer {
-                msaa_texture: wgpu::Texture,
-                msaa_view: wgpu::TextureView,
-                resolve_texture: wgpu::Texture,
-                resolve_view: wgpu::TextureView,
-                viewport_bind_group: wgpu::BindGroup,
-                width: u32,
-                height: u32,
-                offset_x: f32,
-                offset_y: f32,
-                backdrop_blur: f32,
-            },
-            EndLayerComposite {
-                bind_group: wgpu::BindGroup,
-                cache_hash: Option<u64>,
-                scissor: Option<Rect>,
-            },
-            PrerenderedLayer {
-                bind_group: wgpu::BindGroup,
-                scissor: Option<Rect>,
-            },
-        }
+        })?);
 
         let mut steps = std::mem::take(&mut self.pending_steps);
         let mut segments: Vec<Segment> = Vec::new();
@@ -1634,6 +1759,29 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 end: steps.len(),
             });
         }
+        Ok((steps, segments))
+    }
+
+    fn execute_segments(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        ctx: &mut FrameCtx,
+        steps: &[DrawStep],
+        segments: Vec<Segment>,
+    ) -> Result<(), RendererError> {
+        // Views are owned clones (cheap Arc bumps) so no borrow of `ctx` is held across the `ctx.frame_scratch_textures` writes below.
+        let msaa_view = ctx
+            .msaa_view
+            .clone()
+            .expect("msaa_view set in build_segments");
+        let retained_view = ctx
+            .retained_view
+            .clone()
+            .expect("retained_view set in build_segments");
+        let load_op = ctx.load_op;
+        let dirty_scissor = ctx.dirty_scissor;
+        let scroll_prime = ctx.scroll_prime;
+        let prime_delta = ctx.prime_delta;
 
         // The top-level target needs `load_op` (usually a full-screen Clear) applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store+load every frame on tiled mobile GPUs; when the first segment is itself a top-level Draw, fold the clear into that pass instead. Gated to the single-sample (mobile tiler) path: immediate-mode desktop GPUs gain little and keep the simpler explicit-init pass. Falls back to the standalone init pass when the frame opens with a layer (nothing draws to the top-level target first).
         // EXPERIMENTAL scroll-blit-with-clear: seed the offscreen with the previous frame translated by the scroll delta. The clear (load_op) paints the exposed band with clear_color; the shifted retained quad fills everything else; the main draw passes (which Load) then redraw only the band (everything else is culled by scroll_blit).
@@ -1643,7 +1791,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             Some(self.composite_pipeline.create_bind_group(
                 &self.device,
                 &self.queue,
-                retained_view,
+                &retained_view,
                 [prime_delta.0, prime_delta.1, logical_w, logical_h],
                 1.0,
                 0.0,
@@ -1689,16 +1837,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             u32,               // layer texture width
             u32,               // layer texture height
         )> = Vec::new();
-
-        // Backdrop-blur scratch textures borrowed from texture_pool this frame. Held until after submit so the same texture is never reused within one encoder (which would alias reads and writes); returned to the pool below.
-        let mut frame_scratch_textures: Vec<(
-            u32,
-            u32,
-            wgpu::TextureFormat,
-            wgpu::Texture,
-            wgpu::TextureView,
-        )> = Vec::new();
-
         // Marks draw segments preceding EndLayerComposite to inline MSAA resolve into the drawing pass, skipping the dedicated resolve pass.
         let mut inline_resolve_targets: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
@@ -2029,7 +2167,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
                         let (_blurred_tex, blurred_view) = self.blur_pipeline.apply(
                             &self.device,
-                            &mut encoder,
+                            &mut *encoder,
                             cropped_view,
                             crop_w.max(1),
                             crop_h.max(1),
@@ -2074,8 +2212,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                             backdrop_pass.draw(0..6, 0..1);
                         }
                         // Hold these scratch textures until after submit; returning them to the pool now would let a later layer in this same encoder reuse and overwrite them before the GPU reads them.
-                        frame_scratch_textures.push(temp_resolve_entry);
-                        frame_scratch_textures.push(cropped_entry);
+                        ctx.frame_scratch_textures.push(temp_resolve_entry);
+                        ctx.frame_scratch_textures.push(cropped_entry);
                     }
 
                     layer_stack.push((
@@ -2248,6 +2386,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 }
             }
         }
+        Ok(())
+    }
+
+    fn present(
+        &mut self,
+        mut encoder: wgpu::CommandEncoder,
+        ctx: FrameCtx,
+        orig_commands: &[DrawCommand],
+    ) -> Result<(), RendererError> {
+        let FrameCtx {
+            direct_to_surface,
+            msaa_view,
+            surface_view,
+            retained_view,
+            output,
+            mut frame_scratch_textures,
+            ..
+        } = ctx;
+        let msaa_view = msaa_view.expect("msaa_view set in build_segments");
+        let surface_view = surface_view.expect("surface_view set in build_segments");
+        let retained_view = retained_view.expect("retained_view set in build_segments");
 
         if direct_to_surface {
             // Already rendered straight into the swapchain texture; no copy/resolve to the surface needed.
@@ -2258,7 +2417,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     label: Some("rsx-final-resolve"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &msaa_view,
-                        resolve_target: Some(retained_view),
+                        resolve_target: Some(&retained_view),
                         depth_slice: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -2274,7 +2433,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             let retained_bg = self.retained_blit_pipeline.create_bind_group(
                 &self.device,
                 &self.queue,
-                retained_view,
+                &retained_view,
                 [
                     0.0,
                     0.0,
@@ -2313,6 +2472,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                 .msaa_texture
                 .as_ref()
                 .ok_or_else(|| RendererError::Backend("msaa_texture missing for copy".into()))?;
+            // Windowed: copy into the swapchain texture. Headless: into the offscreen target read_rgba reads.
+            let dest_texture: &wgpu::Texture = match output.as_ref() {
+                Some(o) => &o.texture,
+                None => self.offscreen_output.as_ref().ok_or_else(|| {
+                    RendererError::Backend("offscreen_output missing in headless mode".into())
+                })?,
+            };
             encoder.copy_texture_to_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture: msaa_tex,
@@ -2321,7 +2487,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
                     aspect: wgpu::TextureAspect::All,
                 },
                 wgpu::TexelCopyTextureInfo {
-                    texture: &output.texture,
+                    texture: dest_texture,
                     mip_level: 0,
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
@@ -2345,8 +2511,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             );
         }
 
-        tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
-        output.present();
+        // Headless has no swapchain: the frame already lives in offscreen_output, so present is a windowed-only no-op.
+        if let Some(output) = output {
+            tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
+            output.present();
+        }
         // generation already bumps iff content changed (same invariant the idle-blit fast path relies on), so it replaces the per-frame O(n) hash_draw_commands here; the is_empty() guard repopulates prev_commands after a resize cleared it without a content change.
         if self.incoming_generation != self.prev_generation || self.prev_commands.is_empty() {
             self.prev_commands = orig_commands.to_vec();

@@ -14,3 +14,10 @@ lyon = "1.0.19"
 tracing = { workspace = true }
 geometry-core = { workspace = true }
 rustc-hash = { workspace = true }
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "render_frame"
+harness = false
