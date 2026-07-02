@@ -64,11 +64,15 @@ pub use renderer_core::{
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint, PathData, PathStyle, PathVerb,
     RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
+#[cfg(all(feature = "runtime", feature = "svg"))]
+pub use renderer_core::{SvgData, SvgError};
 pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]
 pub use services_core::{Scope, provide, try_inject, with_service};
 #[cfg(feature = "runtime")]
 pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme};
+#[cfg(all(feature = "runtime", feature = "svg"))]
+pub use ui_core::Svg;
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Image,

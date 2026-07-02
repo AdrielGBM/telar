@@ -11,6 +11,8 @@ mod pointer;
 mod rect;
 mod scroll_area;
 mod styled_container;
+#[cfg(feature = "svg")]
+mod svg;
 mod text;
 
 pub use button::{Button, ButtonStyle};
@@ -27,5 +29,7 @@ pub use path::Path;
 pub use rect::Rectangle;
 pub use scroll_area::{LayoutScrollArea, ScrollbarStyle};
 pub use styled_container::StyledContainer;
+#[cfg(feature = "svg")]
+pub use svg::Svg;
 pub use text::Text;
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};

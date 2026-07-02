@@ -29,6 +29,8 @@ runtime = [
 preview = ["runtime"]
 # Dependency-injection scope/registry, re-exported from services-core. Opt-in; no runtime path wires it yet.
 di = ["services-core/di"]
+# Both ui-core and renderer-core are optional deps of this crate, so use `?/` to only forward the feature if `runtime` already pulled them in.
+svg = ["ui-core?/svg", "renderer-core?/svg"]
 
 [dependencies]
 serde = { workspace = true }

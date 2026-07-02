@@ -62,9 +62,30 @@ impl LayoutStyle {
         self
     }
 
+    /// The node's `width` in pixels if it is a definite length, else `None` (e.g. percent or auto).
+    /// Lets widgets with an intrinsic size (e.g. `<svg>`/`<img>`) inspect a caller-supplied width before registering their layout leaf.
+    pub fn width_px(&self) -> Option<f32> {
+        self.inner.size.width.into_option()
+    }
+
+    /// True when `width` was left at its default, which taffy also treats as `auto`.
+    pub fn is_width_auto(&self) -> bool {
+        self.inner.size.width.is_auto()
+    }
+
     pub fn width(mut self, dim: impl Into<SizeDimension>) -> Self {
         self.inner.size.width = dim.into().into();
         self
+    }
+
+    /// The node's `height` in pixels if it is a definite length, else `None` (e.g. percent or auto).
+    pub fn height_px(&self) -> Option<f32> {
+        self.inner.size.height.into_option()
+    }
+
+    /// True when `height` was left at its default, which taffy also treats as `auto`.
+    pub fn is_height_auto(&self) -> bool {
+        self.inner.size.height.is_auto()
     }
 
     pub fn height(mut self, dim: impl Into<SizeDimension>) -> Self {
@@ -321,6 +342,22 @@ mod tests {
     fn style_width_sets_dimension() {
         let style = LayoutStyle::new().width(120.0);
         assert_eq!(style.inner.size.width, Dimension::length(120.0));
+    }
+
+    #[test]
+    fn style_width_px_reads_back_length() {
+        let style = LayoutStyle::new().width(120.0);
+        assert_eq!(style.width_px(), Some(120.0));
+        assert!(!style.is_width_auto());
+    }
+
+    #[test]
+    fn style_width_px_none_for_percent_or_default() {
+        assert_eq!(LayoutStyle::new().width_px(), None);
+        assert!(LayoutStyle::new().is_width_auto());
+        let percent = LayoutStyle::new().width(SizeDimension::Percent(0.5));
+        assert_eq!(percent.width_px(), None);
+        assert!(!percent.is_width_auto());
     }
 
     #[test]
