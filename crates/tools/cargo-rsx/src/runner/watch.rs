@@ -1,0 +1,490 @@
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+
+use super::android::{android_install_and_launch, make_android_cmd};
+use super::config::{
+    CargoManifest, RsxConfig, WindowConfig, backend_as_str, expand_member, find_package_dir,
+    read_package_manifest, split_android_flag,
+};
+use super::package::{package_bin_path, package_lib_path};
+
+fn inject_feature(args: &mut Vec<String>, feature: &str) {
+    if let Some(pos) = args.iter().position(|a| a == "--features" || a == "-F") {
+        if pos + 1 < args.len() {
+            args[pos + 1] = format!("{},{feature}", args[pos + 1]);
+            return;
+        }
+    }
+    args.push("--features".to_string());
+    args.push(feature.to_string());
+}
+
+fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
+    let mut lib_build_args = vec!["build".to_string(), "--lib".to_string()];
+    for pair in args.windows(2) {
+        if pair[0] == "-p" || pair[0] == "--package" {
+            lib_build_args.push(pair[0].clone());
+            lib_build_args.push(pair[1].clone());
+        }
+    }
+    if args.contains(&"--release".to_string()) {
+        lib_build_args.push("--release".to_string());
+    }
+    for feature in features {
+        inject_feature(&mut lib_build_args, feature);
+    }
+    lib_build_args
+}
+
+fn apply_dev_window_env(envs: &mut Vec<(String, String)>, window: &WindowConfig) {
+    if let Some(title) = &window.title {
+        envs.push(("RSX_DEV_WINDOW_TITLE".to_string(), title.clone()));
+    }
+    if let Some(width) = window.width {
+        envs.push(("RSX_DEV_WINDOW_WIDTH".to_string(), width.to_string()));
+    }
+    if let Some(height) = window.height {
+        envs.push(("RSX_DEV_WINDOW_HEIGHT".to_string(), height.to_string()));
+    }
+    if let Some(decorations) = window.decorations {
+        envs.push((
+            "RSX_DEV_WINDOW_DECORATIONS".to_string(),
+            if decorations { "1" } else { "0" }.to_string(),
+        ));
+    }
+    if let Some(resizable) = window.resizable {
+        envs.push((
+            "RSX_DEV_WINDOW_RESIZABLE".to_string(),
+            if resizable { "1" } else { "0" }.to_string(),
+        ));
+    }
+    if let Some(transparent) = window.transparent {
+        envs.push((
+            "RSX_DEV_WINDOW_TRANSPARENT".to_string(),
+            if transparent { "1" } else { "0" }.to_string(),
+        ));
+    }
+    if let Some(fullscreen) = &window.fullscreen {
+        envs.push(("RSX_DEV_WINDOW_FULLSCREEN".to_string(), fullscreen.clone()));
+    }
+    if let Some(position) = &window.position {
+        envs.push(("RSX_DEV_WINDOW_POSITION".to_string(), position.clone()));
+    }
+}
+
+fn is_source_event(event: &notify::Event) -> bool {
+    if !matches!(
+        event.kind,
+        EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+    ) {
+        return false;
+    }
+    event.paths.iter().any(|p| {
+        matches!(
+            p.extension().and_then(|e| e.to_str()).unwrap_or(""),
+            "rs" | "rsx" | "toml"
+        )
+    })
+}
+
+fn collect_src_dirs(workspace_root: &Path) -> Vec<PathBuf> {
+    let manifest_path = workspace_root.join("Cargo.toml");
+    let Ok(content) = std::fs::read_to_string(&manifest_path) else {
+        return vec![];
+    };
+    let Ok(manifest) = toml::from_str::<CargoManifest>(&content) else {
+        return vec![];
+    };
+    let members = manifest.workspace.map(|w| w.members).unwrap_or_default();
+    members
+        .iter()
+        .flat_map(|pattern| expand_member(workspace_root, pattern))
+        .map(|member| member.join("src"))
+        .filter(|src| src.is_dir())
+        .collect()
+}
+
+fn hot_reload_rustflags() -> String {
+    let existing = std::env::var("RUSTFLAGS").unwrap_or_default();
+    // Adding --cfg=rsx_hot_reload changes the Cargo fingerprint, forcing a recompile so the proc macro re-runs with RSX_HOT_RELOAD_BUILD=1 and generates the hot reload code.
+    let flag = "--cfg=rsx_hot_reload";
+    if existing.is_empty() {
+        flag.to_string()
+    } else {
+        format!("{existing} {flag}")
+    }
+}
+
+fn preview_rustflags() -> String {
+    // --cfg=rsx_preview is in the fingerprint so Cargo always recompiles when switching between dev and preview, ensuring the proc-macro-generated _rsx_hot_create_app includes or omits the preview branch correctly.
+    format!("{} --cfg=rsx_preview", hot_reload_rustflags())
+}
+
+// TCP loopback channel to the running app (instead of a unix socket, so hot reload works on non-Unix hosts). cargo-rsx binds, the app connects once at startup (RSX_HOT_PORT) and reads line events.
+struct HotChannel {
+    listener: std::net::TcpListener,
+    stream: Option<std::net::TcpStream>,
+    port: u16,
+}
+
+impl HotChannel {
+    fn bind() -> Self {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .expect("[cargo-rsx] failed to bind hot reload port");
+        let port = listener
+            .local_addr()
+            .expect("[cargo-rsx] failed to read hot reload port")
+            .port();
+        // Non-blocking so send() can drain pending connections without stalling the watch loop.
+        listener
+            .set_nonblocking(true)
+            .expect("[cargo-rsx] failed to configure hot reload listener");
+        HotChannel {
+            listener,
+            stream: None,
+            port,
+        }
+    }
+
+    fn notify_hot_reload(&mut self, lib_path: &str) {
+        self.send(&format!("hot:{lib_path}"));
+    }
+
+    fn notify_build_error(&mut self, message: &str) {
+        // Flatten multi-line error to a single line for the simple line-based protocol
+        let single_line = message.replace('\n', " | ").replace('\r', "");
+        self.send(&format!("err:{single_line}"));
+    }
+
+    fn send(&mut self, message: &str) {
+        use std::io::Write;
+        // The app's connection sits in the accept backlog until the first send; a reconnect replaces the previous stream.
+        while let Ok((stream, _)) = self.listener.accept() {
+            self.stream = Some(stream);
+        }
+        match &mut self.stream {
+            Some(stream) => {
+                if let Err(e) = writeln!(stream, "{message}") {
+                    eprintln!("[cargo-rsx] Failed to write to hot reload channel: {e}");
+                    self.stream = None;
+                }
+            }
+            None => eprintln!("[cargo-rsx] App not connected to the hot reload channel."),
+        }
+    }
+}
+
+fn make_watcher(
+    tx: mpsc::Sender<notify::Result<notify::Event>>,
+    workspace_root: &Path,
+) -> RecommendedWatcher {
+    let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default())
+        .expect("[cargo-rsx] failed to create file watcher");
+    for src_dir in collect_src_dirs(workspace_root) {
+        watcher
+            .watch(&src_dir, RecursiveMode::Recursive)
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "[cargo-rsx] warning: could not watch {}: {e}",
+                    src_dir.display()
+                )
+            });
+    }
+    watcher
+}
+
+fn watch_and_hot_reload(
+    build_args: Vec<String>,
+    bin_path: PathBuf,
+    lib_path: PathBuf,
+    mut channel: HotChannel,
+    envs: Vec<(String, String)>,
+    rustflags: String,
+    workspace_root: PathBuf,
+) -> ! {
+    let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+    let _watcher = make_watcher(tx, &workspace_root);
+
+    eprintln!("[cargo-rsx] Starting with hot reload...");
+    let mut child = Command::new(&bin_path)
+        .env("RSX_HOT_LIB", lib_path.to_str().unwrap_or_default())
+        .env("RSX_HOT_PORT", channel.port.to_string())
+        .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+        .spawn()
+        .expect("[cargo-rsx] failed to spawn app binary");
+
+    let debounce = Duration::from_millis(200);
+    let mut last_event = Instant::now();
+    let mut pending_rebuild = false;
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                eprintln!("[cargo-rsx] App exited.");
+                std::process::exit(0);
+            }
+            Ok(None) => {}
+            Err(e) => eprintln!("[cargo-rsx] error: {e}"),
+        }
+
+        while let Ok(Ok(event)) = rx.try_recv() {
+            if is_source_event(&event) {
+                last_event = Instant::now();
+                pending_rebuild = true;
+            }
+        }
+
+        if pending_rebuild && last_event.elapsed() >= debounce {
+            pending_rebuild = false;
+            while rx.try_recv().is_ok() {}
+            eprintln!("[cargo-rsx] Change detected, rebuilding...");
+            let output = Command::new("cargo")
+                .args(&build_args)
+                .env("RSX_HOT_RELOAD_BUILD", "1")
+                .env("RUSTFLAGS", &rustflags)
+                .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+                .output()
+                .expect("[cargo-rsx] failed to invoke cargo");
+            if output.status.success() {
+                channel.notify_hot_reload(lib_path.to_str().unwrap_or_default());
+                eprintln!("[cargo-rsx] Hot reloaded.");
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                eprintln!("{stderr}");
+                eprintln!("[cargo-rsx] Build failed, waiting for changes...");
+                channel.notify_build_error(&stderr);
+            }
+        }
+
+        if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
+            if is_source_event(&event) {
+                last_event = Instant::now();
+                pending_rebuild = true;
+            }
+        }
+    }
+}
+
+fn watch_and_run(
+    cargo_args: Vec<String>,
+    envs: Vec<(String, String)>,
+    workspace_root: PathBuf,
+) -> ! {
+    let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+    let _watcher = make_watcher(tx, &workspace_root);
+
+    loop {
+        eprintln!("[cargo-rsx] Starting...");
+        let mut child = Command::new("cargo")
+            .args(&cargo_args)
+            .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .spawn()
+            .expect("[cargo-rsx] failed to spawn cargo");
+
+        let debounce = Duration::from_millis(200);
+        let mut last_event = Instant::now();
+        let mut pending_restart = false;
+
+        'watch: loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    // Killed by signal (e.g. Ctrl+C) — propagate and exit
+                    if status.code().is_none() {
+                        std::process::exit(130);
+                    }
+                    let code = status.code().unwrap_or(1);
+                    if code == 0 {
+                        std::process::exit(0);
+                    }
+                    eprintln!("[cargo-rsx] Process exited ({code}). Watching for changes...");
+                    loop {
+                        match rx.recv() {
+                            Ok(Ok(event)) if is_source_event(&event) => {
+                                while rx.try_recv().is_ok() {}
+                                eprintln!("[cargo-rsx] Change detected, restarting...");
+                                break 'watch;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => eprintln!("[cargo-rsx] error: {e}"),
+            }
+
+            while let Ok(Ok(event)) = rx.try_recv() {
+                if is_source_event(&event) {
+                    last_event = Instant::now();
+                    pending_restart = true;
+                }
+            }
+
+            if pending_restart && last_event.elapsed() >= debounce {
+                while rx.try_recv().is_ok() {}
+                eprintln!("[cargo-rsx] Change detected, restarting...");
+                child.kill().ok();
+                child.wait().ok();
+                break 'watch;
+            }
+
+            if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
+                if is_source_event(&event) {
+                    last_event = Instant::now();
+                    pending_restart = true;
+                }
+            }
+        }
+    }
+}
+
+pub(crate) enum HotMode {
+    Dev,
+    Preview,
+}
+
+impl HotMode {
+    fn is_preview(&self) -> bool {
+        matches!(self, HotMode::Preview)
+    }
+
+    fn features(&self) -> &'static [&'static str] {
+        match self {
+            HotMode::Dev => &["rsx/dev"],
+            HotMode::Preview => &["rsx/preview", "rsx/dev"],
+        }
+    }
+
+    fn rustflags(&self) -> String {
+        match self {
+            HotMode::Dev => hot_reload_rustflags(),
+            HotMode::Preview => preview_rustflags(),
+        }
+    }
+}
+
+pub(crate) struct HotLoopOpts {
+    pub(crate) args: Vec<String>,
+    pub(crate) config: RsxConfig,
+    pub(crate) no_hot_reload: bool,
+}
+
+pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
+    let HotLoopOpts {
+        args,
+        config,
+        no_hot_reload,
+    } = opts;
+
+    let (android, rest) = split_android_flag(args);
+    let features = mode.features();
+    let backend_value = backend_as_str(config.backend.unwrap_or_default());
+    let is_preview = mode.is_preview();
+
+    if android {
+        // `cargo apk run --lib` crashes on UID parsing when launching; work around by doing build → adb install → adb shell am start manually.
+        let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
+        build_args.extend(rest.iter().cloned());
+        for feature in features {
+            inject_feature(&mut build_args, feature);
+        }
+
+        let status = make_android_cmd(build_args, config)
+            .status()
+            .expect("[cargo-rsx] failed to invoke cargo");
+        if !status.success() {
+            std::process::exit(status.code().unwrap_or(1));
+        }
+
+        android_install_and_launch(&rest);
+        std::process::exit(0);
+    }
+
+    let mut launch_envs = vec![(
+        "RSX_RENDERER_BACKEND".to_string(),
+        backend_value.to_string(),
+    )];
+    if is_preview {
+        launch_envs.push(("RSX_PREVIEW".to_string(), "1".to_string()));
+    }
+    let devtools_disabled = config.dev.as_ref().and_then(|d| d.devtools) == Some(false);
+    if devtools_disabled {
+        launch_envs.push(("RSX_DEVTOOLS".to_string(), "0".to_string()));
+    }
+    if let Some(dev) = &config.dev
+        && let Some(window) = &dev.window
+    {
+        apply_dev_window_env(&mut launch_envs, window);
+    }
+
+    let mut cargo_args = vec!["run".to_string()];
+    cargo_args.extend(rest.clone());
+    for feature in features {
+        inject_feature(&mut cargo_args, feature);
+    }
+
+    let package_dir = find_package_dir(&rest);
+    let workspace_root =
+        rsx_workspace::find_workspace_root(&package_dir).unwrap_or(package_dir.clone());
+    let profile = if rest.contains(&"--release".to_string()) {
+        "release"
+    } else {
+        "debug"
+    };
+
+    if !no_hot_reload {
+        let rustflags = mode.rustflags();
+        let package_name = read_package_manifest(&rest)
+            .map(|p| p.name)
+            .unwrap_or_else(|| "app".to_string());
+        let lib_path = package_lib_path(&workspace_root, &package_name, profile);
+        let bin_path = package_bin_path(&workspace_root, &package_name, profile);
+
+        // Initial build (produces both binary and dylib).
+        let mut build_args = vec!["build".to_string()];
+        build_args.extend(rest.clone());
+        for feature in features {
+            inject_feature(&mut build_args, feature);
+        }
+        eprintln!("[cargo-rsx] Building...");
+        let mut build_cmd = Command::new("cargo");
+        build_cmd
+            .args(&build_args)
+            .env("RSX_HOT_RELOAD_BUILD", "1")
+            .env("RUSTFLAGS", &rustflags);
+        if is_preview {
+            build_cmd.env("RSX_PREVIEW_BUILD", "1");
+        }
+        let status = build_cmd
+            .status()
+            .expect("[cargo-rsx] failed to invoke cargo");
+        if !status.success() {
+            eprintln!("[cargo-rsx] Initial build failed. Watching for changes...");
+        }
+
+        if bin_path.exists() && lib_path.exists() {
+            let lib_build_args = make_lib_build_args(&rest, features);
+
+            let mut build_envs = launch_envs.clone();
+            if is_preview {
+                build_envs.push(("RSX_PREVIEW_BUILD".to_string(), "1".to_string()));
+            }
+
+            watch_and_hot_reload(
+                lib_build_args,
+                bin_path,
+                lib_path,
+                HotChannel::bind(),
+                build_envs,
+                rustflags,
+                workspace_root,
+            );
+        }
+        // Fallback if binary or lib not found: use process-restart watch.
+    }
+
+    watch_and_run(cargo_args, launch_envs, workspace_root);
+}

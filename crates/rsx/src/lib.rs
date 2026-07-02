@@ -1,3 +1,5 @@
+mod macros;
+
 pub mod config;
 
 #[cfg(feature = "runtime")]
@@ -23,12 +25,10 @@ pub mod runner;
 pub use config::RendererBackend;
 
 #[cfg(feature = "runtime")]
-#[derive(Clone)]
-pub struct PreviewEntry {
-    pub component_name: &'static str,
-    pub preview_name: &'static str,
-    pub build: fn(&mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>,
-}
+mod preview_runner;
+
+#[cfg(feature = "runtime")]
+pub use preview_runner::PreviewEntry;
 
 #[cfg(feature = "runtime")]
 pub use app_config::AppConfig;
@@ -102,84 +102,6 @@ pub use runner::run_hot_reload_host;
 pub use rsx_macros::app;
 
 #[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]
-pub fn make_hot_preview_app(entries: Vec<PreviewEntry>) -> Box<dyn App> {
-    Box::new(preview::PreviewApp { entries })
-}
-
+pub use preview_runner::make_hot_preview_app;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub fn try_run_preview(entries: Vec<PreviewEntry>, config: AppConfig) -> bool {
-    #[cfg(feature = "preview")]
-    {
-        run_preview_window(entries, config);
-        return true;
-    }
-    #[allow(unreachable_code)]
-    let _ = (entries, config);
-    false
-}
-
-/// Renders every preview component headlessly (build → layout → flatten) and exits with a non-zero code if any panics or returns a layout error. Backs `cargo rsx test`, entered via the `RSX_TEST` env var set on the app binary.
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
-    use std::panic::{AssertUnwindSafe, catch_unwind};
-
-    let width = config.window.width as f32;
-    let height = config.window.height as f32;
-    println!("running {} preview component(s)", entries.len());
-
-    let mut passed = 0usize;
-    let mut failed = 0usize;
-    for entry in &entries {
-        let label = format!("{}::{}", entry.component_name, entry.preview_name);
-        // Do NOT reset the runtime between components: the app's setup block installed the theme once, and resetting would drop it, making previews that read theme tokens panic spuriously.
-        let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<usize, LayoutError> {
-            let mut ctx = WidgetCtx::new();
-            let item = (entry.build)(&mut ctx)?;
-            let node = item.layout_node();
-            compute_layout(
-                &mut ctx,
-                node,
-                AvailableSpace::Definite(width),
-                AvailableSpace::Definite(height),
-            )?;
-            let tree = ComponentList::new(item);
-            Ok(tree.commands().len())
-        }));
-        match outcome {
-            Ok(Ok(count)) => {
-                passed += 1;
-                println!("  ok    {label}  ({count} draw commands)");
-            }
-            Ok(Err(err)) => {
-                failed += 1;
-                println!("  FAIL  {label}  layout error: {err}");
-            }
-            Err(_) => {
-                failed += 1;
-                println!("  FAIL  {label}  panicked during render");
-            }
-        }
-    }
-
-    println!();
-    println!("test result: {passed} passed, {failed} failed");
-    std::process::exit(if failed == 0 { 0 } else { 1 });
-}
-
-#[macro_export]
-macro_rules! children {
-    ($($item:expr),* $(,)?) => {
-        vec![$($crate::box_item($item)),*]
-    }
-}
-
-/// Caches an `Arc<str>` per call site in thread-local storage so a string literal allocates at most once per thread instead of once per frame.
-#[macro_export]
-macro_rules! static_rc_str {
-    ($s:literal) => {{
-        thread_local! {
-            static V: ::std::sync::Arc<str> = ::std::sync::Arc::from($s as &str);
-        }
-        V.with(::std::sync::Arc::clone)
-    }};
-}
+pub use preview_runner::{try_run_preview, try_run_test};

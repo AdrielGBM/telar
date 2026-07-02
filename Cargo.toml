@@ -53,7 +53,6 @@ default-members = [
     "crates/tools/rsx-transpiler",
     "crates/tools/devtools-core",
     "crates/tools/rsx-devtools",
-    "crates/tools/rsx-analyzer",
     "crates/tools/rsx-diagnostics",
     "crates/tools/rsx-macros",
     "crates/tools/rsx-workspace",
