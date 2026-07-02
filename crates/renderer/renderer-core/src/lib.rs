@@ -13,6 +13,8 @@ mod renderer;
 mod shadow;
 mod style;
 pub mod style_pool;
+#[cfg(feature = "svg")]
+mod svg;
 
 pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 
@@ -35,3 +37,5 @@ pub use style::{
     Paint, PathStyle, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
 pub use style_pool::{hash_path_style, hash_rect_style, hash_text_style};
+#[cfg(feature = "svg")]
+pub use svg::{SvgData, SvgError};

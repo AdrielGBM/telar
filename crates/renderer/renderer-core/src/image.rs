@@ -36,6 +36,21 @@ impl ImageData {
             height,
         }
     }
+
+    /// Builds from bytes that are ALREADY premultiplied (e.g. a resvg `Pixmap`), skipping the premultiply step `new()` performs.
+    pub fn from_premultiplied(pixels: Vec<u8>, width: u32, height: u32) -> Self {
+        assert_eq!(
+            pixels.len(),
+            (width * height * 4) as usize,
+            "pixels must be RGBA8: width * height * 4 bytes"
+        );
+        Self {
+            id: NEXT_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
+            pixels,
+            width,
+            height,
+        }
+    }
 }
 
 #[inline]
