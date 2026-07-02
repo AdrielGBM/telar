@@ -498,6 +498,15 @@ mod tests {
         );
     }
 
+    struct AnimatedLeaf {
+        x: motion_core::Animated<f32>,
+    }
+    impl Component for AnimatedLeaf {
+        fn view(&self) -> RenderNode {
+            rect(self.x.get())
+        }
+    }
+
     fn animated_rect_x(root: &SegmentRoot) -> f32 {
         match &root.commands()[0] {
             DrawCommand::Rect { rect, .. } => rect.x,
@@ -505,4 +514,78 @@ mod tests {
         }
     }
 
+    // T-5.2: a segment reading `Animated::get()` must see the ticker's interpolated value in the
+    // SAME `commands()` call once `motion_core::tick` has run — mirroring the runner, which flushes
+    // right after tick() so tree.commands() reflects the tick within one frame (docs/animations.md
+    // "Ticker integration in the runner"). No sleeps: a fixed base `Instant` advanced by explicit
+    // `Duration`s drives the tween deterministically.
+    #[test]
+    fn animated_get_reflects_tick_in_commands_and_settles() {
+        use std::time::{Duration, Instant};
+
+        // Isolate this test's ticker state: the registry is thread-local and other tests on a
+        // reused libtest thread must not leak active animations into this one (mirrors the
+        // `fresh()` helper in motion-core's own tests).
+        motion_core::reset();
+        motion_core::set_scale(1.0);
+
+        let anim = motion_core::Animated::new(
+            0.0f32,
+            motion_core::tween(Duration::from_millis(100), motion_core::Easing::Linear),
+        );
+        let root = SegmentRoot::mount(AnimatedLeaf { x: anim.clone() });
+
+        // Baseline compose at the resting value.
+        assert_eq!(animated_rect_x(&root), 0.0);
+        let g0 = root.generation();
+
+        anim.retarget(10.0);
+        assert!(
+            motion_core::has_active(),
+            "retarget must register an active animation"
+        );
+
+        let base = Instant::now();
+        // First tick only establishes t0 (no dt to integrate yet); nothing should change or recompose.
+        motion_core::tick(base);
+        assert_eq!(
+            root.generation(),
+            g0,
+            "the t0-establishing tick must not recompose"
+        );
+        assert_eq!(animated_rect_x(&root), 0.0);
+
+        // Halfway through the tween: commands() must reflect the interpolated value in this same tick.
+        // generation() only bumps inside commands()'s lazy recompose, so read the value first and
+        // capture the generation right after — capturing it beforehand would still show the stale
+        // pre-tick generation and make the `assert_ne!` below vacuous.
+        motion_core::tick(base + Duration::from_millis(50));
+        let mid_x = animated_rect_x(&root);
+        let g1 = root.generation();
+        assert!(
+            (mid_x - 5.0).abs() < 1e-3,
+            "expected the midpoint of the tween, got {mid_x}"
+        );
+        assert_ne!(g1, g0, "an in-flight tick must bump the compose generation");
+
+        // Full duration: the tween settles and deregisters.
+        motion_core::tick(base + Duration::from_millis(100));
+        let end_x = animated_rect_x(&root);
+        let g2 = root.generation();
+        assert_eq!(end_x, 10.0);
+        assert_ne!(g2, g1, "the settling tick must still bump the generation");
+        assert!(
+            !motion_core::has_active(),
+            "a settled tween must deregister"
+        );
+
+        // An extra tick after settling integrates nothing and must not recompose again.
+        motion_core::tick(base + Duration::from_millis(200));
+        assert_eq!(animated_rect_x(&root), 10.0);
+        assert_eq!(
+            root.generation(),
+            g2,
+            "a tick with no active animations must not bump the generation"
+        );
+    }
 }

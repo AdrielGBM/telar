@@ -334,6 +334,11 @@ where
                 }
             }
         }
+        // Drive the motion engine before tree_dirty is read below: tick()'s .set() calls only enqueue effects while a batch is open (new_events already opened one), so force a flush here to re-run any segment reading an animated value now, not on the next cycle. This is what makes an animation-only frame (no user event, tree otherwise clean) observe interpolated values in this same frame's tree.commands().
+        self.app.motion_tick(std::time::Instant::now());
+        end_batch();
+        begin_batch();
+
         let mut redraw_requested = false;
         {
             let mut ctx = crate::app_context::AppCtx {
@@ -578,7 +583,8 @@ where
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
         end_batch();
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
-        if tree_dirty {
+        // An unsettled animation must keep the loop scheduling frames even while the tree itself is momentarily clean (e.g. the tick that only established t0); once it settles, has_active() drops out and this falls through to the existing idle/keepalive branch below.
+        if tree_dirty || self.app.motion_has_active() {
             // Return the time remaining in the current frame budget so the platform wakes us up exactly when the next 60fps slot opens (or immediately if already past it).
             Some(FRAME_BUDGET.saturating_sub(self.last_frame.elapsed()))
         } else {

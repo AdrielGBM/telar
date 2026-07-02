@@ -50,6 +50,8 @@ pub use layout_core::{
     AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
     TemplateTrack,
 };
+// Always-on, no feature gate (D2 in docs/animations.md): kernel functionality, not an opt-in module. The transpiler emits `motion::Animated`/`motion::tween`/`motion::spring`/`motion::Easing` paths against this re-export.
+pub use motion_core as motion;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use paths::DesktopPathsProvider;
 #[cfg(feature = "runtime")]

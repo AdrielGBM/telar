@@ -34,6 +34,26 @@ impl crate::app::App for HotApp {
             unsafe { restore(blob) }
         }
     }
+
+    // Resolved per call rather than cached: this is a dev-only path (never compiled into release builds), the symbol lookup is a cheap hashmap hit, and per-call resolution avoids storing a `Symbol` borrowed from `_lib` inside the same struct. Missing symbol (dylib built before hot motion existed) degrades to a no-op: the host's own motion-core copy is a separate, empty registry, so ticking it would accomplish nothing useful.
+    fn motion_tick(&self, now: std::time::Instant) {
+        if let Ok(tick) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(std::time::Instant)>(b"_rsx_hot_motion_tick\0")
+        } {
+            unsafe { tick(now) }
+        }
+    }
+
+    fn motion_has_active(&self) -> bool {
+        let Ok(active) = (unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn() -> bool>(b"_rsx_hot_motion_active\0")
+        }) else {
+            return false;
+        };
+        unsafe { active() }
+    }
 }
 
 #[cfg(feature = "dev")]

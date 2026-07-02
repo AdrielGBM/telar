@@ -250,6 +250,8 @@ pub fn app(input: TokenStream) -> TokenStream {
         quote! {
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_cleanup() {
+                // Drop in-flight animations alongside the signals they target so none outlive this dylib's reset runtime.
+                ::rsx::motion::reset();
                 ::rsx::reset_runtime();
             }
         }
@@ -267,6 +269,22 @@ pub fn app(input: TokenStream) -> TokenStream {
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_restore(blob: &str) {
                 ::rsx::hot_restore_json(blob);
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    // Motion-tick symbols: host and dylib link separate copies of motion-core, each with its own registry; the `Animated` values live in the dylib's, so the host must call across this boundary instead of ticking its own (empty) copy.
+    let hot_motion_symbols = if is_hot_reload {
+        quote! {
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_motion_tick(now: ::std::time::Instant) {
+                ::rsx::motion::tick(now);
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_motion_active() -> bool {
+                ::rsx::motion::has_active()
             }
         }
     } else {
@@ -296,6 +314,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         #hot_export
         #hot_cleanup
         #hot_state_symbols
+        #hot_motion_symbols
     }
     .into()
 }

@@ -43,6 +43,8 @@ renderer-software = { workspace = true, optional = true }
 renderer-hardware = { workspace = true, optional = true }
 renderer-text = { workspace = true, optional = true }
 reactive-core = { workspace = true, optional = true }
+# Always-on (D2): the motion engine is small and dependency-free, and the `rsx` facade must always expose `motion::*` for transpiler codegen regardless of which optional features are active.
+motion-core = { workspace = true }
 services-core = { workspace = true }
 layout-core = { workspace = true, optional = true }
 theme-core = { workspace = true, optional = true }
