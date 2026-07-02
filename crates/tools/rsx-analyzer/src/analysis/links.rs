@@ -1,4 +1,4 @@
-//! `textDocument/documentLink`: turns an `img src:"./logo.png"` literal into a clickable link to the asset on disk. Only static, quoted, local paths that exist are linked — remote URLs (`http…`) and interpolated values (`{…}`) carry no resolvable target.
+//! `textDocument/documentLink`: turns an `img src:"./logo.png"` (or `svg src:"./icon.svg"`) literal into a clickable link to the asset on disk. Only static, quoted, local paths that exist are linked — remote URLs (`http…`) and interpolated values (`{…}`) carry no resolvable target.
 
 use std::path::Path;
 
@@ -20,7 +20,7 @@ fn collect(nodes: &[ViewNode], source: &str, file_dir: &Path, out: &mut Vec<Docu
     for node in nodes {
         match node {
             ViewNode::Element(el) => {
-                if matches!(el.tag.as_str(), "img" | "image") {
+                if matches!(el.tag.as_str(), "img" | "image" | "svg") {
                     for attr in &el.attributes {
                         if attr.key == "src"
                             && attr.is_quoted
@@ -94,5 +94,20 @@ mod tests {
             links[0].range.end.character - links[0].range.start.character,
             8
         );
+    }
+
+    #[test]
+    fn links_existing_local_svg_assets_too() {
+        let dir = std::env::temp_dir().join("rsx_links_svg_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("icon.svg"), b"<svg></svg>").unwrap();
+
+        let src = "[view]\ncol\n    svg src:\"icon.svg\"\n";
+        let doc = parse(src).unwrap();
+        let links = document_links(&doc, src, &dir);
+
+        assert_eq!(links.len(), 1);
+        let target = links[0].target.as_ref().unwrap().as_str();
+        assert!(target.ends_with("icon.svg"), "target: {target}");
     }
 }

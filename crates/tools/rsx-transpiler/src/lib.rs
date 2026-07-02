@@ -829,4 +829,67 @@ col @card
         let gs = span.gen_start as usize;
         assert_eq!(&out.rust_code[gs..gs + span.len as usize], "hero");
     }
+
+    #[test]
+    fn svg_generates_src_tint_and_layout() {
+        let src =
+            "[view]\ncol\n    svg src:props.icon tint:Color::hex(\"#ff5722\") width:24 height:24\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let code = &out.rust_code;
+        assert!(code.contains("Svg::new("), "missing Svg::new:\n{code}");
+        assert!(
+            code.contains("let __src = props.icon.clone();"),
+            "missing src hoist:\n{code}"
+        );
+        assert!(
+            code.contains("move || __src.clone(),"),
+            "missing src closure:\n{code}"
+        );
+        assert!(
+            code.contains("move || Some(Color::hex(\"#ff5722\")),"),
+            "missing tint closure:\n{code}"
+        );
+        assert!(
+            code.contains(".width(24.0)") && code.contains(".height(24.0)"),
+            "missing layout dims:\n{code}"
+        );
+    }
+
+    #[test]
+    fn svg_without_tint_generates_none() {
+        let src = "[view]\ncol\n    svg src:props.icon\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        assert!(
+            out.rust_code.contains("|| None,"),
+            "missing default tint closure:\n{}",
+            out.rust_code
+        );
+    }
+
+    #[test]
+    fn svg_missing_src_falls_back_to_undefined_placeholder() {
+        // No `src` attr: falls back to an undefined `__svg_data` identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map — the same diagnostic strategy `img` uses for a missing `src`.
+        let src = "[view]\ncol\n    svg width:24 height:24\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        assert!(
+            out.rust_code.contains("__svg_data"),
+            "missing placeholder identifier:\n{}",
+            out.rust_code
+        );
+    }
+
+    #[test]
+    fn svg_src_value_carries_an_expr_span() {
+        let src = "[logic]\nlet icon = 1i32;\n[view]\ncol\n    svg src:icon width:24\n";
+        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let spans: Vec<&str> = out
+            .expr_spans
+            .iter()
+            .map(|s| &src[s.rsx_start as usize..(s.rsx_start + s.len) as usize])
+            .collect();
+        assert!(
+            spans.contains(&"icon"),
+            "svg src value should map back to `icon`; got spans {spans:?}"
+        );
+    }
 }

@@ -22,6 +22,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("box", "StyledContainer::new"),
         ("img", "Image::new"),
         ("image", "Image::new"),
+        ("svg", "Svg::new"),
         ("scroll", "LayoutScrollArea::new"),
         ("canvas", "Canvas::new"),
         ("widget", TAG_REFERENCES_VARIABLE),
@@ -80,6 +81,7 @@ pub fn color_attr_keys() -> &'static [&'static str] {
         "to",
         "mid",
         "shadow_color",
+        "tint",
     ]
 }
 
@@ -108,6 +110,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "mid",
         ]),
         "img" | "image" => with(&["src"]),
+        "svg" => with(&["src", "tint"]),
         _ if is_builtin_tag(tag) => layout_attr_keys().to_vec(),
         _ => vec![],
     }
@@ -133,6 +136,9 @@ mod tests {
         assert!(btn.contains(&"on_press") && btn.contains(&"gap"));
         // `img` exposes `src`; a component (non-builtin) takes Props, so no suggestions here.
         assert!(tag_attr_keys("img").contains(&"src"));
+        // `svg` exposes `src` (required) and `tint` (optional).
+        let svg = tag_attr_keys("svg");
+        assert!(svg.contains(&"src") && svg.contains(&"tint") && svg.contains(&"gap"));
         assert!(tag_attr_keys("feature_card").is_empty());
     }
 
@@ -147,6 +153,7 @@ mod tests {
             "to",
             "mid",
             "shadow_color",
+            "tint",
         ] {
             assert!(color_attr_keys().contains(&key), "missing {key}");
         }
