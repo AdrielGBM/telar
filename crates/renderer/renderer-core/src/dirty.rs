@@ -123,8 +123,11 @@ pub fn compute_dirty_rect(
         let old_matrix = old_state.cumulative_matrix;
 
         if new_cmd != old_cmd {
-            // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible due to the new clip require a full re-render.
-            if matches!(new_cmd, DrawCommand::PushClip { .. }) {
+            // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible due to the new clip require a full re-render. Same for a changed layer: its opacity/blur re-tints every command inside it (which all compare equal and would contribute nothing), so an animating layer would otherwise never repaint.
+            if matches!(
+                new_cmd,
+                DrawCommand::PushClip { .. } | DrawCommand::PushLayer { .. }
+            ) {
                 return None;
             }
             if let Some(r) = visual_rect(new_cmd, new_matrix) {
@@ -338,6 +341,37 @@ mod tests {
                 &FontMetrics::default()
             ))
             .is_none()
+        );
+    }
+
+    // Regression: an opacity-only PushLayer change must force a full re-render (None). The layer has no geometry and its inner commands compare equal, so treating it like a normal changed command yields an empty dirty list and the animating layer never repaints.
+    #[test]
+    fn changed_push_layer_opacity_forces_full_render() {
+        let inner = rect_cmd(10.0, 10.0, 50.0, 50.0);
+        let old = vec![
+            DrawCommand::PushLayer {
+                opacity: 0.9,
+                backdrop_blur: 0.0,
+            },
+            inner.clone(),
+            DrawCommand::PopLayer,
+        ];
+        let new = vec![
+            DrawCommand::PushLayer {
+                opacity: 0.8,
+                backdrop_blur: 0.0,
+            },
+            inner,
+            DrawCommand::PopLayer,
+        ];
+        assert!(
+            compute_dirty_rect(&new, &old, |cmd, m| culling::command_visual_rect(
+                cmd,
+                m,
+                &FontMetrics::default()
+            ))
+            .is_none(),
+            "changed layer must not be expressible as a bounded dirty region"
         );
     }
 
