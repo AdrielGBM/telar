@@ -60,14 +60,14 @@ pub use platform_core::{Event, FullscreenMode, ScrollDelta, WindowConfig, Window
 pub use reactive_core::{
     Effect, Memo, ReadSignal, RwSignal, batch, effect, memo, reset_runtime, signal,
 };
+#[cfg(all(feature = "runtime", feature = "svg"))]
+pub use renderer_assets::{SvgData, SvgError};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint, PathData, PathStyle, PathVerb,
     RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
 };
-#[cfg(all(feature = "runtime", feature = "svg"))]
-pub use renderer_core::{SvgData, SvgError};
 pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]
 pub use services_core::{Scope, provide, try_inject, with_service};

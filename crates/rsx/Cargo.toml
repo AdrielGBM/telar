@@ -9,6 +9,7 @@ dev = ["runtime", "dep:rsx-devtools", "dep:libloading", "dep:serde_json"]
 runtime = [
     "dep:platform-core",
     "dep:renderer-core",
+    "dep:renderer-assets",
     "dep:renderer-software",
     "dep:renderer-hardware",
     "dep:renderer-text",
@@ -29,8 +30,13 @@ runtime = [
 preview = ["runtime"]
 # Dependency-injection scope/registry, re-exported from services-core. Opt-in; no runtime path wires it yet.
 di = ["services-core/di"]
-# Both ui-core and renderer-core are optional deps of this crate, so use `?/` to only forward the feature if `runtime` already pulled them in.
-svg = ["ui-core?/svg", "renderer-core?/svg"]
+# Both ui-core and renderer-assets are optional deps of this crate, so use `?/` to only forward the feature if `runtime` already pulled them in.
+# SVG widget capability plus the baked `SvgData`/`SvgError` re-exports; does NOT pull usvg, so build-time static baking works with just this.
+svg = ["ui-core?/svg"]
+# Adds runtime SVG parsing (`SvgData::from_str` via usvg); implies `svg`.
+dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
+# Runtime image decoding via the `image` crate (`renderer_assets::decode`).
+dynamic-image = ["renderer-assets?/dynamic-image"]
 
 [dependencies]
 serde = { workspace = true }
@@ -39,6 +45,7 @@ tracing = { workspace = true, optional = true }
 
 platform-core = { workspace = true, optional = true }
 renderer-core = { workspace = true, optional = true }
+renderer-assets = { workspace = true, optional = true }
 renderer-software = { workspace = true, optional = true }
 renderer-hardware = { workspace = true, optional = true }
 renderer-text = { workspace = true, optional = true }

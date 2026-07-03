@@ -14,6 +14,7 @@ mod text;
 
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::path::{Path, PathBuf};
 
 use rsx_parser::{Element, StyleClass, StyleConstant, ViewNode};
 
@@ -121,6 +122,10 @@ pub struct ViewGen<'a> {
     loop_variables: Vec<String>,
     /// Monotonic counter for the hoisted `__transition_N` animation handles.
     transition_count: usize,
+    /// Directory of the `.rsx` being transpiled, used to resolve static `svg`/`img` asset paths for build-time baking. `None` (e.g. an in-memory transpile) makes a static `src:"path"` yield a `compile_error!`.
+    base_dir: Option<PathBuf>,
+    /// Monotonic counter for the hoisted `BAKED_*_N` static asset handles, unique per component so two baked assets never share a `static` name.
+    baked_asset_count: usize,
 }
 
 impl<'a> ViewGen<'a> {
@@ -128,6 +133,7 @@ impl<'a> ViewGen<'a> {
         classes: &'a [StyleClass],
         constants: &'a [StyleConstant],
         theme_type: Option<&str>,
+        base_dir: Option<&Path>,
     ) -> Self {
         Self {
             classes,
@@ -137,6 +143,8 @@ impl<'a> ViewGen<'a> {
             indent: 1,
             loop_variables: Vec::new(),
             transition_count: 0,
+            base_dir: base_dir.map(Path::to_path_buf),
+            baked_asset_count: 0,
         }
     }
 
@@ -257,7 +265,7 @@ mod tests {
     use super::*;
 
     fn make_gen<'a>() -> ViewGen<'a> {
-        ViewGen::with_theme(&[], &[], None)
+        ViewGen::with_theme(&[], &[], None, None)
     }
 
     #[test]
@@ -290,14 +298,14 @@ mod tests {
     #[test]
     fn widget_ref_passthrough() {
         let src = "[logic]\nlet canvas = build_canvas(ctx)?;\n[view]\nwidget \"canvas\"\n";
-        let out = crate::transpile_source_with_theme(src, "my_section", None).unwrap();
+        let out = crate::transpile_source_with_theme(src, "my_section", None, None).unwrap();
         assert!(out.rust_code.contains("Ok(Box::new(canvas))"));
     }
 
     #[test]
     fn canvas_with_rect_and_text_children() {
         let src = "[logic]\n[view]\ncanvas width:100 height:50\n    rect fill:#3c77fa radius:8\n    text \"hi\" x:0 y:4 w:full h:42 size:12 color:white\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(code.contains("Canvas::new(ctx,"), "missing Canvas::new");
         assert!(
@@ -330,7 +338,7 @@ mod tests {
     #[test]
     fn unknown_tag_becomes_component_call() {
         let src = "[logic]\n[view]\nmy_card\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         assert!(
             out.rust_code.contains("my_card(ctx)?"),
             "no-attr tag should call fn directly"
@@ -340,7 +348,7 @@ mod tests {
     #[test]
     fn class_paint_promotes_container_and_is_consumed() {
         let src = "[style]\n@card\n    fill: #ffffff\n    radius: 12\n    padding: 8\n[view]\ncol @card\n    text \"hi\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         // A `col` carrying paint from its class becomes a StyledContainer, not a plain Container.
         assert!(

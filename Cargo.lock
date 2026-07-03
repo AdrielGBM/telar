@@ -1514,6 +1514,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.25.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
+dependencies = [
+ "bytemuck",
+ "byteorder-lite",
+ "moxcms",
+ "num-traits",
+ "png",
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
 name = "image-webp"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2032,6 +2047,16 @@ dependencies = [
  "geometry-core",
  "reactive-core",
  "renderer-core",
+]
+
+[[package]]
+name = "moxcms"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
+dependencies = [
+ "num-traits",
+ "pxfm",
 ]
 
 [[package]]
@@ -2844,6 +2869,12 @@ checksum = "0194e6e1966c23cc5fd988714f85b18d548d773e81965413555d96569931833d"
 dependencies = [
  "pulldown-cmark",
 ]
+
+[[package]]
+name = "pxfm"
+version = "0.1.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0c5ccf5294c6ccd63a74f1565028353830a9c2f5eb0c682c355c471726a6e3f"
 
 [[package]]
 name = "quick-error"
@@ -3807,17 +3838,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
+name = "renderer-assets"
+version = "0.1.0"
+dependencies = [
+ "geometry-core",
+ "image",
+ "renderer-core",
+ "resvg",
+ "rustc-hash 2.1.2",
+ "thiserror 2.0.18",
+ "usvg",
+]
+
+[[package]]
 name = "renderer-core"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
  "criterion",
  "geometry-core",
- "resvg",
  "rustc-hash 2.1.2",
  "smallvec",
  "thiserror 2.0.18",
- "usvg",
  "wide",
 ]
 
@@ -3944,6 +3986,7 @@ dependencies = [
  "platform-core",
  "platform-winit",
  "reactive-core",
+ "renderer-assets",
  "renderer-core",
  "renderer-hardware",
  "renderer-software",
@@ -4024,6 +4067,7 @@ dependencies = [
 name = "rsx-transpiler"
 version = "0.1.0"
 dependencies = [
+ "renderer-assets",
  "rsx-parser",
  "thiserror 2.0.18",
 ]
@@ -4998,6 +5042,7 @@ dependencies = [
  "layout-reactive",
  "platform-core",
  "reactive-core",
+ "renderer-assets",
  "renderer-core",
  "renderer-text",
  "theme-core",

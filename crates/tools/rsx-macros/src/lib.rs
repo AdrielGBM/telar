@@ -59,6 +59,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             &source,
             &stem,
             Some(theme_type_str.as_str()),
+            rsx_file.parent(),
         ) {
             Ok(r) => r,
             Err(rsx_transpiler::TranspileError::Parse(ref pe)) => {

@@ -5,6 +5,7 @@ members = [
     "crates/platform/platform-winit",
     "crates/platform/platform-android",
     "crates/renderer/renderer-core",
+    "crates/renderer/renderer-assets",
     "crates/renderer/renderer-software",
     "crates/renderer/renderer-hardware",
     "crates/renderer/renderer-text",
@@ -35,6 +36,7 @@ default-members = [
     "crates/platform/platform-core",
     "crates/platform/platform-winit",
     "crates/renderer/renderer-core",
+    "crates/renderer/renderer-assets",
     "crates/renderer/renderer-software",
     "crates/renderer/renderer-hardware",
     "crates/renderer/renderer-text",
@@ -88,6 +90,7 @@ platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }
 platform-android = { path = "crates/platform/platform-android" }
 renderer-core = { path = "crates/renderer/renderer-core" }
+renderer-assets = { path = "crates/renderer/renderer-assets" }
 renderer-software = { path = "crates/renderer/renderer-software" }
 renderer-hardware = { path = "crates/renderer/renderer-hardware" }
 renderer-text = { path = "crates/renderer/renderer-text" }

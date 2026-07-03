@@ -1,7 +1,8 @@
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
@@ -86,9 +87,61 @@ fn is_source_event(event: &notify::Event) -> bool {
     event.paths.iter().any(|p| {
         matches!(
             p.extension().and_then(|e| e.to_str()).unwrap_or(""),
-            "rs" | "rsx" | "toml"
+            "rs" | "rsx" | "toml" | "svg" | "png" | "jpg" | "jpeg"
         )
     })
+}
+
+// An asset change (svg/png/jpg/jpeg) leaves every `.rsx` untouched, so cargo's fingerprint is unchanged and the baker never re-runs; these events need the `.rsx`-touch workaround below.
+fn is_asset_event(event: &notify::Event) -> bool {
+    if !matches!(
+        event.kind,
+        EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+    ) {
+        return false;
+    }
+    event.paths.iter().any(|p| {
+        matches!(
+            p.extension().and_then(|e| e.to_str()).unwrap_or(""),
+            "svg" | "png" | "jpg" | "jpeg"
+        )
+    })
+}
+
+// Classifies an event for the watch loops: returns whether it should trigger a rebuild, and eagerly forces a re-bake when only an asset changed. Touching an asset's `.rsx` produces a `.rsx` event that is a source (not asset) event, so it never re-enters this touch path — no cascade.
+fn note_event(event: &notify::Event, src_dirs: &[PathBuf]) -> bool {
+    if !is_source_event(event) {
+        return false;
+    }
+    if is_asset_event(event) {
+        touch_rsx_files(src_dirs);
+    }
+    true
+}
+
+// Proc macros can't emit `cargo:rerun-if-changed` and read assets via `std::fs` (untracked by rustc), so an asset-only edit never re-runs the baker. Bumping the mtime of every watched `.rsx` (each wired into rustc's dep graph via `include_str!`) forces the recompile that re-bakes. Coarse for v1: it touches all `.rsx`, not just the one referencing the asset; a precise asset->`.rsx` manifest is a future refinement.
+fn touch_rsx_files(src_dirs: &[PathBuf]) {
+    let now = SystemTime::now();
+    for dir in src_dirs {
+        touch_rsx_in_dir(dir, now);
+    }
+}
+
+fn touch_rsx_in_dir(dir: &Path, now: SystemTime) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            touch_rsx_in_dir(&path, now);
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
+            // write(true) opens without truncating; set_modified needs the file opened for writing.
+            if let Ok(file) = OpenOptions::new().write(true).open(&path) {
+                let _ = file.set_modified(now);
+            }
+        }
+    }
 }
 
 fn collect_src_dirs(workspace_root: &Path) -> Vec<PathBuf> {
@@ -208,6 +261,7 @@ fn watch_and_hot_reload(
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let _watcher = make_watcher(tx, &workspace_root);
+    let src_dirs = collect_src_dirs(&workspace_root);
 
     eprintln!("[cargo-rsx] Starting with hot reload...");
     let mut child = Command::new(&bin_path)
@@ -232,7 +286,7 @@ fn watch_and_hot_reload(
         }
 
         while let Ok(Ok(event)) = rx.try_recv() {
-            if is_source_event(&event) {
+            if note_event(&event, &src_dirs) {
                 last_event = Instant::now();
                 pending_rebuild = true;
             }
@@ -261,7 +315,7 @@ fn watch_and_hot_reload(
         }
 
         if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
-            if is_source_event(&event) {
+            if note_event(&event, &src_dirs) {
                 last_event = Instant::now();
                 pending_rebuild = true;
             }
@@ -276,6 +330,7 @@ fn watch_and_run(
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let _watcher = make_watcher(tx, &workspace_root);
+    let src_dirs = collect_src_dirs(&workspace_root);
 
     loop {
         eprintln!("[cargo-rsx] Starting...");
@@ -303,7 +358,7 @@ fn watch_and_run(
                     eprintln!("[cargo-rsx] Process exited ({code}). Watching for changes...");
                     loop {
                         match rx.recv() {
-                            Ok(Ok(event)) if is_source_event(&event) => {
+                            Ok(Ok(event)) if note_event(&event, &src_dirs) => {
                                 while rx.try_recv().is_ok() {}
                                 eprintln!("[cargo-rsx] Change detected, restarting...");
                                 break 'watch;
@@ -317,7 +372,7 @@ fn watch_and_run(
             }
 
             while let Ok(Ok(event)) = rx.try_recv() {
-                if is_source_event(&event) {
+                if note_event(&event, &src_dirs) {
                     last_event = Instant::now();
                     pending_restart = true;
                 }
@@ -332,7 +387,7 @@ fn watch_and_run(
             }
 
             if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
-                if is_source_event(&event) {
+                if note_event(&event, &src_dirs) {
                     last_event = Instant::now();
                     pending_restart = true;
                 }

@@ -83,6 +83,26 @@ impl PathData {
         self
     }
 
+    /// Re-fits every point by `p' = p * s + (dx, dy)` (uniform scale + translation), returning a new path.
+    ///
+    /// Baking transforms points into path coordinates (not a matrix) so lyon never facets curves; this applies the runtime letterbox fit the same way, keeping the baked path equivalent to the dynamic one.
+    pub fn refit(&self, s: f32, dx: f32, dy: f32) -> Self {
+        let map = |p: Point| Point::new(p.x * s + dx, p.y * s + dy);
+        let mut out = Self::new();
+        for verb in &self.verbs {
+            out = match verb {
+                PathVerb::MoveTo(p) => out.move_to(map(*p)),
+                PathVerb::LineTo(p) => out.line_to(map(*p)),
+                PathVerb::QuadTo { ctrl, to } => out.quad_to(map(*ctrl), map(*to)),
+                PathVerb::CubicTo { ctrl1, ctrl2, to } => {
+                    out.cubic_to(map(*ctrl1), map(*ctrl2), map(*to))
+                }
+                PathVerb::Close => out.close(),
+            };
+        }
+        out
+    }
+
     /// A closed polygon through `points` (first point is the start; the path is closed back to it).
     pub fn polygon(points: &[Point]) -> Self {
         let mut path = Self::new();

@@ -1,5 +1,7 @@
 //! The codegen engine: turns a parsed [`RsxDocument`] into compilable Rust source, wiring the `[logic]`, `[style]`, `[view]`, and `[preview]` zones together with a per-line source map.
 
+use std::path::Path;
+
 use rsx_parser::RsxDocument;
 
 use crate::error::TranspileError;
@@ -16,6 +18,8 @@ pub(crate) struct TranspileInput<'a> {
     pub component_name: &'a str,
     /// Concrete theme type path (e.g. `SandboxTheme`). When set, `[style]` color references resolve through `use_theme::<Type>()` instead of `COLOR_*` consts.
     pub theme_type: Option<&'a str>,
+    /// Directory of the `.rsx` being transpiled, used to resolve static `svg`/`img` asset paths (`src:"path"`) for build-time baking. `None` when no filesystem anchor is available (e.g. some analyzer/test paths), in which case a static asset yields a `compile_error!`.
+    pub base_dir: Option<&'a Path>,
 }
 
 /// The generated Rust source for one `.rsx` file.
@@ -55,17 +59,19 @@ pub fn source_map_to_json(map: &[Option<u32>]) -> String {
     out
 }
 
-/// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect.
+/// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect. `base_dir` is the directory of the `.rsx` (its parent), against which static `svg`/`img` asset paths are resolved and baked at build time.
 pub fn transpile_source_with_theme(
     source: &str,
     component_name: &str,
     theme_type: Option<&str>,
+    base_dir: Option<&Path>,
 ) -> Result<TranspiledSource, TranspileError> {
     let document = rsx_parser::parse(source)?;
     transpile(TranspileInput {
         document: &document,
         component_name,
         theme_type,
+        base_dir,
     })
 }
 
@@ -114,8 +120,12 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
 
     let style_section = generate_style_section(&doc.style, input.theme_type.is_some());
 
-    let mut view_gen =
-        ViewGen::with_theme(&doc.style.classes, &doc.style.constants, input.theme_type);
+    let mut view_gen = ViewGen::with_theme(
+        &doc.style.classes,
+        &doc.style.constants,
+        input.theme_type,
+        input.base_dir,
+    );
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
 
@@ -246,8 +256,12 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         // Each preview is its own build fn — so a prop-taking component can be previewed via its markup body — plus a PreviewEntry the bundler collects. The body reuses the view codegen with no signals in scope (a preview has no `[logic]`).
         for (i, preview) in doc.previews.iter().enumerate() {
             let pfn = format!("{fn_name}_preview_{i}");
-            let mut pgen =
-                ViewGen::with_theme(&doc.style.classes, &doc.style.constants, input.theme_type);
+            let mut pgen = ViewGen::with_theme(
+                &doc.style.classes,
+                &doc.style.constants,
+                input.theme_type,
+                input.base_dir,
+            );
             let pbody = pgen.generate_root(&preview.body);
             code.push("\n", None);
             code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);

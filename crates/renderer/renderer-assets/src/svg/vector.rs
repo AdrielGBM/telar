@@ -2,7 +2,7 @@ use geometry_core::Point;
 
 use usvg::tiny_skia_path::{Point as SkiaPoint, Transform as SkiaTransform};
 
-use crate::{
+use renderer_core::{
     Color, DrawCommand, FillRule, Gradient, LineCap, LineJoin, Paint, PathData, PathStyle, Stroke,
 };
 

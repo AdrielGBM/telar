@@ -10,9 +10,13 @@ layout-reactive = { workspace = true }
 platform-core = { workspace = true }
 reactive-core = { workspace = true }
 renderer-core = { workspace = true }
+renderer-assets = { workspace = true }
 renderer-text = { workspace = true }
 theme-core = { workspace = true }
 ui-tree = { workspace = true }
 
 [features]
-svg = ["renderer-core/svg"]
+# Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.
+svg = []
+# Adds runtime SVG parsing (`SvgData::from_str` via usvg); required to compile the widget's from_str-based tests.
+dynamic-svg = ["svg", "renderer-assets/dynamic-svg"]

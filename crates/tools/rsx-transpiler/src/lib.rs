@@ -28,7 +28,7 @@ mod tests {
     fn source_map_points_generated_logic_back_to_rsx() {
         // rsx lines (1-based): 1 [logic], 2 derive, 3 struct, 4 body field, 5 close, 6 let, 8 [view], 9 col.
         let src = "[logic]\n#[derive(Props)]\npub struct Props {\n    pub body: &'static st,\n}\nlet count = signal(0i32);\n\n[view]\ncol\n";
-        let result = transpile_source_with_theme(src, "demo", None).unwrap();
+        let result = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let lines: Vec<&str> = result.rust_code.lines().collect();
         assert_eq!(lines.len(), result.source_map.len());
 
@@ -56,7 +56,7 @@ mod tests {
         // rsx lines (1-based): 1 [view], 2 col, 3 text, 4 row, 5 btn (with closure).
         let src =
             "[view]\ncol\n    text \"hi\"\n    row\n        btn \"+\" on_press:|| missing.set(1)\n";
-        let result = transpile_source_with_theme(src, "demo", None).unwrap();
+        let result = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let lines: Vec<&str> = result.rust_code.lines().collect();
         assert_eq!(lines.len(), result.source_map.len());
 
@@ -148,7 +148,7 @@ col @card
 
     #[test]
     fn generates_counter() {
-        let out = transpile_source_with_theme(COUNTER, "counter", None).unwrap();
+        let out = transpile_source_with_theme(COUNTER, "counter", None, None).unwrap();
         let code = out.rust_code;
         assert!(code.contains("pub fn counter(ctx: &mut WidgetCtx)"));
         // [style]-declared colors become local constants.
@@ -164,7 +164,7 @@ col @card
     #[test]
     fn section_and_heading_expand_to_primitives() {
         let src = "[view]\nsection \"Cards\"\n    heading \"Subtitle\"\n    text \"Body\" size:14 color:dark\n";
-        let code = transpile_source_with_theme(src, "cards", None)
+        let code = transpile_source_with_theme(src, "cards", None, None)
             .unwrap()
             .rust_code;
         // `section`/`heading` no longer reference removed library components.
@@ -192,7 +192,8 @@ col @card
     fn theme_type_resolves_colors_via_use_theme() {
         // Colors not declared in [style] resolve reactively through the theme.
         let out =
-            transpile_source_with_theme(COUNTER_THEMED, "counter", Some("SandboxTheme")).unwrap();
+            transpile_source_with_theme(COUNTER_THEMED, "counter", Some("SandboxTheme"), None)
+                .unwrap();
         let code = out.rust_code;
         assert!(code.contains("use rsx::use_theme;"));
         assert!(code.contains("use_theme::<SandboxTheme>().dark"));
@@ -206,7 +207,8 @@ col @card
     #[test]
     fn style_declared_colors_resolve_via_theme_when_active() {
         // With a theme configured, [style]-declared colors resolve reactively through use_theme like undeclared ones, and their now-dead COLOR_* consts are omitted.
-        let out = transpile_source_with_theme(COUNTER, "counter", Some("SandboxTheme")).unwrap();
+        let out =
+            transpile_source_with_theme(COUNTER, "counter", Some("SandboxTheme"), None).unwrap();
         let code = out.rust_code;
         assert!(code.contains("use_theme::<SandboxTheme>().primary"));
         assert!(code.contains("use_theme::<SandboxTheme>().dark"));
@@ -220,7 +222,7 @@ col @card
     #[test]
     fn extracts_props_struct_to_file_scope() {
         let src = "[logic]\n#[derive(Props)]\npub struct Props { pub title: &'static str }\n[view]\ntext \"hi\"\n";
-        let out = transpile_source_with_theme(src, "card", None).unwrap();
+        let out = transpile_source_with_theme(src, "card", None, None).unwrap();
         let code = &out.rust_code;
         // Props struct is renamed and lifted before the fn declaration.
         assert!(
@@ -249,7 +251,7 @@ col @card
     fn expr_spans_map_interpolation_verbatim() {
         // `[logic]` line 2 declares `count`; `[view]` line 4 interpolates it.
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ntext \"Count: {count}\"\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
 
         // No marker leaks into the generated Rust.
         assert!(!out.rust_code.contains("@RSX@"), "markers must be stripped");
@@ -273,7 +275,7 @@ col @card
     fn expr_spans_are_char_boundary_safe_with_multibyte() {
         // A multi-byte literal precedes the interpolation; the span must still land on char boundaries in both source and generated (the byte-wise affine map would otherwise mis-slice / panic).
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ntext \"caf\u{e9} {count}\"\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         assert_eq!(out.expr_spans.len(), 1);
         let span = &out.expr_spans[0];
         let (rs, re) = (
@@ -293,7 +295,7 @@ col @card
     #[test]
     fn expr_spans_cover_if_and_let() {
         let src = "[logic]\n[view]\ncol\n    let n = 1\n    if n > 0\n        text \"hi\"\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         assert!(!out.rust_code.contains("@RSX@"));
 
         // Each span must point at the identical fragment in both source and generated output.
@@ -318,7 +320,7 @@ col @card
     #[test]
     fn component_with_quoted_string_attr() {
         let src = "[logic]\n[view]\nmy_widget label:\"hello\" size:16\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("my_widget(ctx, crate::MyWidgetProps {"),
@@ -334,7 +336,7 @@ col @card
     #[test]
     fn preview_section_generates_build_fn_and_entry() {
         let src = "[logic]\n[view]\ncol\n    text \"x\"\n\n[preview \"Default\"]\ncounter\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         // A dedicated build fn per preview (so prop-taking components can be previewed)...
         assert!(
@@ -360,7 +362,7 @@ col @card
     #[test]
     fn dollar_marks_reactive_reads_and_clones_closure_captures() {
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    btn \"+\" on_press:|| $count.update(|n| *n += 1)\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         // `$count` in interpolation is a read.
         assert!(
@@ -389,7 +391,7 @@ col @card
     fn img_src_value_carries_an_expr_span() {
         // The `src` attr is a verbatim Rust expression, so the analyzer must get an expr-span that maps back onto the `hero` identifier in source (this is what makes refs/rename precise in `[view]`).
         let src = "[logic]\nlet hero = 1i32;\n[view]\ncol\n    img src:hero width:100\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let spans: Vec<&str> = out
             .expr_spans
             .iter()
@@ -413,7 +415,7 @@ col @card
     fn svg_generates_src_tint_and_layout() {
         let src =
             "[view]\ncol\n    svg src:props.icon tint:Color::hex(\"#ff5722\") width:24 height:24\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(code.contains("Svg::new("), "missing Svg::new:\n{code}");
         assert!(
@@ -437,7 +439,7 @@ col @card
     #[test]
     fn svg_without_tint_generates_none() {
         let src = "[view]\ncol\n    svg src:props.icon\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         assert!(
             out.rust_code.contains("|| None,"),
             "missing default tint closure:\n{}",
@@ -449,7 +451,7 @@ col @card
     fn svg_missing_src_falls_back_to_undefined_placeholder() {
         // No `src` attr: falls back to an undefined `__svg_data` identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map — the same diagnostic strategy `img` uses for a missing `src`.
         let src = "[view]\ncol\n    svg width:24 height:24\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         assert!(
             out.rust_code.contains("__svg_data"),
             "missing placeholder identifier:\n{}",
@@ -460,7 +462,7 @@ col @card
     #[test]
     fn svg_src_value_carries_an_expr_span() {
         let src = "[logic]\nlet icon = 1i32;\n[view]\ncol\n    svg src:icon width:24\n";
-        let out = transpile_source_with_theme(src, "demo", None).unwrap();
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let spans: Vec<&str> = out
             .expr_spans
             .iter()
@@ -476,7 +478,7 @@ col @card
     fn transition_opacity_hoists_animated_and_wraps_reactive_read() {
         // A `transition:opacity` over a reactive `opacity:$sig`: the Animated is hoisted into setup (built once), and the opacity closure re-targets it to the current value and reads it.
         let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox opacity:$fade transition:opacity 200ms ease-out\n    text \"hi\"\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -492,7 +494,7 @@ col @card
     #[test]
     fn transition_fill_with_theme_color_and_cubic_bezier() {
         let src = "[view]\nbox fill:primary transition:fill 150ms cubic-bezier(0.4,0,0.2,1)\n    text \"x\"\n";
-        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"))
+        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
         assert!(
@@ -508,7 +510,7 @@ col @card
     #[test]
     fn transition_fill_spring() {
         let src = "[view]\nbox fill:#3d78fa transition:fill spring(170,26)\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -524,7 +526,7 @@ col @card
     #[test]
     fn transition_multiple_properties_comma_separated() {
         let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox fill:#3d78fa opacity:$fade transition:opacity 200ms, fill 150ms linear\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         // The fill transition uses linear...
@@ -551,7 +553,7 @@ col @card
     #[test]
     fn transition_unsupported_property_emits_compile_error() {
         let src = "[view]\nbox fill:#3d78fa transition:radius 200ms\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -563,7 +565,7 @@ col @card
     #[test]
     fn transition_invalid_duration_emits_compile_error() {
         let src = "[view]\nbox opacity:0.5 transition:opacity 200\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -576,7 +578,7 @@ col @card
     fn transition_inside_for_loop_hoists_animated_per_iteration() {
         // `for` is a construction loop (runs once per component instance, pushing one widget per item into `__children`), not a reactive list needing key-based identity; the `Animated` for a `transition:` inside its body must sit inside the loop's own per-iteration `let __sbox_N = { .. }` block, so a fresh, persistent handle is installed for every item.
         let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition:fill 200ms\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -607,7 +609,7 @@ col @card
     fn transition_inside_for_loop_uses_distinct_counters_per_element() {
         // Two elements with `transition:` in the same loop body are two distinct code sites, so the global `transition_count` must still hand out unique names for each — not one shared name reused per iteration.
         let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition:fill 150ms\n        box stroke:#111111 transition:stroke 150ms\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -623,7 +625,7 @@ col @card
     #[test]
     fn reactive_opacity_without_transition_reads_signal_each_run() {
         let src = "[logic]\nlet fade = signal(0.5f32);\n[view]\nbox opacity:$fade\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -640,7 +642,7 @@ col @card
     fn static_opacity_still_supported_as_closure() {
         // T-3.1: opacity is now a closure; a static value becomes a capture-free `|| 0.5`.
         let src = "[view]\nbox fill:#3d78fa opacity:0.5\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -653,7 +655,7 @@ col @card
     fn transition_fill_from_class_is_wired_without_false_error() {
         // The fill comes from the `@card` class, not an inline attribute; it must still be animatable (no spurious "no matching value").
         let src = "[style]\n@card\n    fill: #3d78fa\n    radius: 12\n[view]\ncol @card transition:fill 150ms\n    text \"x\"\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -669,7 +671,7 @@ col @card
     #[test]
     fn transition_color_on_text_wraps_text_style() {
         let src = "[view]\ntext \"hi\" color:primary transition:color 120ms\n";
-        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"))
+        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
         assert!(
@@ -686,7 +688,7 @@ col @card
     fn fill_signal_reads_reactively_and_clones_into_the_closure() {
         // No `transition:`: `fill:$accent` must still re-evaluate every time the styling closure runs, and must clone `accent` into that closure so the outer binding (declared in `[logic]`) stays usable elsewhere.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -703,7 +705,7 @@ col @card
     fn fill_signal_with_spring_transition_seeds_and_retargets_from_the_same_read() {
         // The `Animated`'s initial value and every `retarget` call must both read through the same `accent.get()` expression — the transition mechanism wraps a `$signal` fill exactly like it already does theme colors.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent transition:fill spring(170, 26)\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -724,7 +726,7 @@ col @card
     fn stroke_signal_reads_reactively_and_clones_into_the_closure() {
         // `stroke:` shares `color_expr`/`rect_style_pieces` with `fill:`, so `$ident` must work identically.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox stroke:$accent\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -740,7 +742,7 @@ col @card
         // `text`'s `color:` also shares `color_expr` (via `text_style`), confirming the `$ident` branch and its clone-wrapping generalize beyond fill/stroke.
         let src =
             "[logic]\nlet accent = signal(Color::WHITE);\n[view]\ntext \"hi\" color:$accent\n";
-        let code = transpile_source_with_theme(src, "demo", None)
+        let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -755,7 +757,7 @@ col @card
     fn hex_theme_and_keyword_colors_are_unaffected_by_signal_support() {
         // Regression guard: adding the `$ident` branch to `color_expr` must not touch the pre-existing hex/theme/keyword paths.
         let src = "[view]\nbox fill:#3d78fa stroke:white\n    text \"x\" color:primary\n";
-        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"))
+        let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
         assert!(
@@ -766,6 +768,63 @@ col @card
         assert!(
             !code.contains(".clone()"),
             "no signal clone should appear for static/theme colors:\n{code}"
+        );
+    }
+
+    #[test]
+    fn quoted_svg_src_bakes_static_asset_at_build_time() {
+        // A quoted `src:"path"` resolves against `base_dir` and bakes the SVG into a shared `static LazyLock<Arc<SvgData>>`; `tint` still flows through its own dynamic closure.
+        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let src = "[view]\ncol\n    svg src:\"icon.svg\" tint:Color::WHITE width:24 height:24\n";
+        let code = transpile_source_with_theme(src, "demo", None, Some(base.as_path()))
+            .unwrap()
+            .rust_code;
+
+        // The fixture is a solid-fill path, so it bakes to a vector display list, not a raster.
+        assert!(
+            code.contains("SvgData::from_baked_vector("),
+            "quoted src should bake to a vector SvgData:\n{code}"
+        );
+        // Baked once into a shared static, cloned per reactive call.
+        assert!(
+            code.contains(
+                "static BAKED_SVG_0: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new("
+            ),
+            "missing baked LazyLock static:\n{code}"
+        );
+        assert!(
+            code.contains("move || std::sync::Arc::clone(&BAKED_SVG_0)"),
+            "data_fn should clone the shared Arc:\n{code}"
+        );
+        // The baked expression uses bare type names (resolved via `use rsx::*`), never qualified paths.
+        assert!(
+            !code.contains("::renderer_core::") && !code.contains("::geometry_core::"),
+            "baked expression must use bare type names:\n{code}"
+        );
+        // `tint` keeps its dynamic path.
+        assert!(
+            code.contains("move || Some(Color::WHITE)"),
+            "tint should stay on its dynamic closure path:\n{code}"
+        );
+        // No dynamic `__src` hoist for a baked asset.
+        assert!(
+            !code.contains("let __src ="),
+            "baked asset must not hoist a dynamic __src:\n{code}"
+        );
+    }
+
+    #[test]
+    fn quoted_svg_src_missing_file_emits_compile_error() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let src = "[view]\nsvg src:\"does_not_exist.svg\" width:24\n";
+        let code = transpile_source_with_theme(src, "demo", None, Some(base.as_path()))
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!(")
+                && code.contains("does_not_exist.svg")
+                && code.contains("not found"),
+            "a missing asset should surface a compile_error:\n{code}"
         );
     }
 }

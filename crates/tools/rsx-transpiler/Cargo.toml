@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Always-on baker: renderer-assets (usvg/resvg/image) compiles into the proc-macro HOST only, never the app binary. `dynamic-svg`/`dynamic-image` are the host features that let the baker parse SVG / decode images at build time.
+renderer-assets = { workspace = true, features = ["dynamic-svg", "dynamic-image"] }
 rsx-parser = { workspace = true }
 thiserror = { workspace = true }

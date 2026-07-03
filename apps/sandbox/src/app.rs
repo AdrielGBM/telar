@@ -38,6 +38,8 @@ fn build_content(
             blurred,
         },
     )?;
+    // Prop-less: its svg/img sources are quoted paths baked at build time, so it needs no runtime SvgData/ImageData passed in.
+    let s_static = crate::sections_static_assets_section(ctx)?;
     let s_lines = crate::sections_lines_section(ctx)?;
     let s_paths = crate::sections_paths_section(ctx)?;
     let s_gradients = crate::sections_gradients_section(ctx)?;
@@ -55,6 +57,7 @@ fn build_content(
     sections.push(s_cards);
     sections.push(s_images);
     sections.push(s_svg);
+    sections.push(s_static);
     sections.push(s_lines);
     sections.push(s_paths);
     sections.push(s_gradients);

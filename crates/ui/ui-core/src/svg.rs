@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
-use renderer_core::{Color, SvgData};
+use renderer_assets::SvgData;
+use renderer_core::Color;
 use ui_tree::{Component, EventResult, NodeVec, RenderNode};
 
 use crate::impl_leaf_widget;
@@ -83,7 +84,8 @@ impl Component for Svg {
 
 impl_leaf_widget!(Svg);
 
-#[cfg(test)]
+// Gated on `dynamic-svg`: these tests build `SvgData` with `from_str`, which is unavailable under bare `svg`.
+#[cfg(all(test, feature = "dynamic-svg"))]
 mod tests {
     use layout_core::AvailableSpace;
     use renderer_core::DrawCommand;

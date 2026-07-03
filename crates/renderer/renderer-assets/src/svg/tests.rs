@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use geometry_core::Point;
 
-use crate::{Color, DrawCommand, GradientKind, Paint, PathData, PathStyle, PathVerb};
+use renderer_core::{Color, DrawCommand, GradientKind, Paint, PathData, PathStyle, PathVerb};
 
 use super::SvgData;
 
@@ -175,4 +175,114 @@ fn id_is_stable_across_instances() {
         SvgData::from_str(svg).unwrap().id(),
         SvgData::from_str(svg).unwrap().id()
     );
+}
+
+// Correctness guardrail: the baked path must reproduce the dynamic display list. Baking converts under an identity transform, so re-fitting `p * s + offset` at runtime must equal the dynamic `fit_ts.pre_concat(abs)` mapping. The math is bit-exact when the SVG's absolute transform is identity (no nested transforms), which every SVG below satisfies — so these assert EXACT `DrawCommand` equality, not an epsilon.
+#[cfg(feature = "dynamic-svg")]
+mod equivalence {
+    use std::sync::Arc;
+
+    use super::super::bake::bake;
+    use super::SvgData;
+    use renderer_core::{Color, DrawCommand};
+
+    // Scales chosen so `sqrt(s*s) == s` exactly (integers / halves): the dynamic stroke width uses `uniform_scale = sqrt(det)` while the re-fit multiplies by `s`, and these agree bit-for-bit only when that square root is exact. Non-square aspect ratios (20x40, 40x20) force offset != 0.
+    const SIZES: &[(f32, f32)] = &[
+        (20.0, 20.0),
+        (20.0, 40.0),
+        (40.0, 20.0),
+        (60.0, 60.0),
+        (30.0, 30.0),
+    ];
+
+    fn tints() -> [Option<Color>; 3] {
+        [
+            None,
+            Some(Color::rgba(0.0, 0.0, 1.0, 0.5)),
+            Some(Color::rgba(1.0, 0.5, 0.0, 1.0)),
+        ]
+    }
+
+    fn dynamic(svg: &str, w: f32, h: f32, tint: Option<Color>) -> Arc<Vec<DrawCommand>> {
+        SvgData::from_str(svg).unwrap().commands_for(w, h, tint)
+    }
+
+    fn baked(svg: &str, w: f32, h: f32, tint: Option<Color>) -> Arc<Vec<DrawCommand>> {
+        let (size, baked) = bake(svg).unwrap();
+        SvgData::from_baked(size, baked).commands_for(w, h, tint)
+    }
+
+    fn assert_vector_equivalent(svg: &str) {
+        for &(w, h) in SIZES {
+            for tint in tints() {
+                let d = dynamic(svg, w, h, tint);
+                let b = baked(svg, w, h, tint);
+                assert_eq!(
+                    *d, *b,
+                    "baked != dynamic at ({w}x{h}) tint={tint:?}\n dynamic={d:#?}\n baked={b:#?}"
+                );
+            }
+        }
+    }
+
+    // A rasterized fallback can only match structurally, never byte-for-byte: `DrawCommand::Image`'s PartialEq compares `ImageData::id`, a fresh per-instance counter, and the dynamic fallback rasterizes at 2x the fitted (display-dependent) size while the bake rasterizes at 2x intrinsic. What must agree is placement: the same single Image drawn into the same letterboxed content rect with the same filter.
+    fn assert_raster_structurally_equivalent(svg: &str) {
+        for &(w, h) in SIZES {
+            for tint in tints() {
+                let d = dynamic(svg, w, h, tint);
+                let b = baked(svg, w, h, tint);
+                assert_eq!(d.len(), 1, "dynamic raster should be one command");
+                assert_eq!(b.len(), 1, "baked raster should be one command");
+                match (&d[0], &b[0]) {
+                    (
+                        DrawCommand::Image {
+                            rect: rd,
+                            filter: fd,
+                            ..
+                        },
+                        DrawCommand::Image {
+                            rect: rb,
+                            filter: fb,
+                            ..
+                        },
+                    ) => {
+                        assert_eq!(rd, rb, "raster content rect mismatch at ({w}x{h})");
+                        assert_eq!(fd, fb, "raster filter mismatch at ({w}x{h})");
+                    }
+                    other => panic!("expected an Image fallback from both, got {other:?}"),
+                }
+            }
+        }
+    }
+
+    const FILLS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect x="0" y="0" width="10" height="10" fill="#ff0000"/></svg>"##;
+    const STROKE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20"><rect x="2" y="2" width="16" height="16" fill="none" stroke="#00ff00" stroke-width="2"/></svg>"##;
+    const GRADIENT: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="10" y2="0"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>"##;
+    const OPACITY_GROUP: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><g opacity="0.5"><rect width="10" height="10" fill="#00ff00"/></g></svg>"##;
+    const RASTER: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><filter id="b"><feGaussianBlur stdDeviation="1"/></filter></defs><g filter="url(#b)"><rect width="10" height="10" fill="#ff0000"/></g></svg>"##;
+
+    #[test]
+    fn fills_only_equivalent() {
+        assert_vector_equivalent(FILLS);
+    }
+
+    #[test]
+    fn stroke_equivalent() {
+        assert_vector_equivalent(STROKE);
+    }
+
+    #[test]
+    fn linear_gradient_equivalent() {
+        assert_vector_equivalent(GRADIENT);
+    }
+
+    #[test]
+    fn opacity_group_equivalent() {
+        assert_vector_equivalent(OPACITY_GROUP);
+    }
+
+    #[test]
+    fn raster_fallback_equivalent() {
+        assert_raster_structurally_equivalent(RASTER);
+    }
 }
