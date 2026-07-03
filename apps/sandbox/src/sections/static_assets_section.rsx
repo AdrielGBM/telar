@@ -23,10 +23,29 @@ section "Static assets (baked)"
             img src:"assets/dot.png" width:48 height:48
             img src:"assets/dot.png" filter:Nearest width:96 height:96
     col gap:4
-        text "responsive re-fit (width:100% inside a 280px column)" size:11 color:muted
-        col width:280 gap:8
-            svg src:"assets/badge.svg" width:100% height:96
-            img src:"assets/dot.png" width:100% height:96
+        text "object-fit — svg in a non-square 120x60 box (fill distorts the aspect ratio)" size:11 color:muted
+        row gap:20 align:start
+            col gap:4 align:center
+                svg src:"assets/badge.svg" fit:contain width:120 height:60
+                text "contain (default)" size:11 color:muted
+            col gap:4 align:center
+                svg src:"assets/badge.svg" fit:cover width:120 height:60
+                text "cover" size:11 color:muted
+            col gap:4 align:center
+                svg src:"assets/badge.svg" fit:fill width:120 height:60
+                text "fill" size:11 color:muted
+    col gap:4
+        text "object-fit — img in a non-square 120x60 box" size:11 color:muted
+        row gap:20 align:start
+            col gap:4 align:center
+                img src:"assets/dot.png" fit:contain width:120 height:60
+                text "contain (default)" size:11 color:muted
+            col gap:4 align:center
+                img src:"assets/dot.png" fit:cover width:120 height:60
+                text "cover" size:11 color:muted
+            col gap:4 align:center
+                img src:"assets/dot.png" fit:fill width:120 height:60
+                text "fill" size:11 color:muted
 
 [preview "Static assets"]
 sections_static_assets_section

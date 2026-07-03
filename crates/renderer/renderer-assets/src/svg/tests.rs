@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use geometry_core::Point;
+use geometry_core::{ObjectFit, Point};
 
 use renderer_core::{Color, DrawCommand, GradientKind, Paint, PathData, PathStyle, PathVerb};
 
@@ -38,7 +38,7 @@ fn solid_path_scales_and_centers() {
     // 10x10 viewBox, a filled rect covering the whole box, rendered into a 20x40 widget.
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect x="0" y="0" width="10" height="10" fill="#ff0000"/></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
-    let cmds = data.commands_for(20.0, 40.0, None);
+    let cmds = data.commands_for(20.0, 40.0, None, ObjectFit::Contain);
     let (path, style) = only_path(&cmds);
 
     // Fit scale is min(20/10, 40/10) = 2, centered vertically: offset_y = (40 - 20)/2 = 10.
@@ -72,7 +72,7 @@ fn solid_path_scales_and_centers() {
 fn group_opacity_emits_balanced_layer() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><g opacity="0.5"><rect width="10" height="10" fill="#00ff00"/></g></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
-    let cmds = data.commands_for(10.0, 10.0, None);
+    let cmds = data.commands_for(10.0, 10.0, None, ObjectFit::Contain);
     let pushes = cmds
         .iter()
         .filter(|c| matches!(c, DrawCommand::PushLayer { .. }))
@@ -103,7 +103,7 @@ fn linear_gradient_becomes_gradient_paint() {
         </linearGradient></defs>
         <rect width="10" height="10" fill="url(#g)"/></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
-    let cmds = data.commands_for(10.0, 10.0, None);
+    let cmds = data.commands_for(10.0, 10.0, None, ObjectFit::Contain);
     let (_, style) = only_path(&cmds);
     match style.fill {
         Some(Paint::Gradient(g)) => match g.kind {
@@ -123,7 +123,7 @@ fn filter_falls_back_to_raster_image() {
         <defs><filter id="b"><feGaussianBlur stdDeviation="1"/></filter></defs>
         <g filter="url(#b)"><rect width="10" height="10" fill="#ff0000"/></g></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
-    let cmds = data.commands_for(10.0, 10.0, None);
+    let cmds = data.commands_for(10.0, 10.0, None, ObjectFit::Contain);
     assert_eq!(
         cmds.len(),
         1,
@@ -144,7 +144,7 @@ fn tint_replaces_vector_paint() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#ff0000"/></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
     let tint = Color::rgba(0.0, 0.0, 1.0, 1.0);
-    let cmds = data.commands_for(10.0, 10.0, Some(tint));
+    let cmds = data.commands_for(10.0, 10.0, Some(tint), ObjectFit::Contain);
     let (_, style) = only_path(&cmds);
     match style.fill {
         Some(Paint::Solid(c)) => {
@@ -158,10 +158,10 @@ fn tint_replaces_vector_paint() {
 fn commands_for_is_memoized() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#ff0000"/></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
-    let a = data.commands_for(10.0, 10.0, None);
-    let b = data.commands_for(10.0, 10.0, None);
+    let a = data.commands_for(10.0, 10.0, None, ObjectFit::Contain);
+    let b = data.commands_for(10.0, 10.0, None, ObjectFit::Contain);
     assert!(Arc::ptr_eq(&a, &b), "same args must return the same Arc");
-    let c = data.commands_for(20.0, 20.0, None);
+    let c = data.commands_for(20.0, 20.0, None, ObjectFit::Contain);
     assert!(
         !Arc::ptr_eq(&a, &c),
         "different args must return a different Arc"
@@ -183,10 +183,10 @@ mod equivalence {
     use std::sync::Arc;
 
     use super::super::bake::bake;
-    use super::SvgData;
+    use super::{ObjectFit, SvgData};
     use renderer_core::{Color, DrawCommand};
 
-    // Scales chosen so `sqrt(s*s) == s` exactly (integers / halves): the dynamic stroke width uses `uniform_scale = sqrt(det)` while the re-fit multiplies by `s`, and these agree bit-for-bit only when that square root is exact. Non-square aspect ratios (20x40, 40x20) force offset != 0.
+    // Scales chosen so `sqrt(sx*sy) == s` exactly (integers / halves): the dynamic stroke width uses `uniform_scale = sqrt(det)` while the re-fit multiplies by the geometric-mean scale, and these agree bit-for-bit only when that square root is exact. This holds for every (size, fit) pair below — the aspect ratios are 1:1, 1:2 or 2:1, so `sx*sy` is a perfect square (1, 4, 9, 2.25) even under `fill`. Non-square aspect ratios (20x40, 40x20) force offset != 0 under contain/cover and stretch under fill.
     const SIZES: &[(f32, f32)] = &[
         (20.0, 20.0),
         (20.0, 40.0),
@@ -194,6 +194,9 @@ mod equivalence {
         (60.0, 60.0),
         (30.0, 30.0),
     ];
+
+    // Every fit re-fits through the same shared `fit_params`, so baked and dynamic must agree exactly for each.
+    const FITS: &[ObjectFit] = &[ObjectFit::Contain, ObjectFit::Cover, ObjectFit::Fill];
 
     fn tints() -> [Option<Color>; 3] {
         [
@@ -203,53 +206,74 @@ mod equivalence {
         ]
     }
 
-    fn dynamic(svg: &str, w: f32, h: f32, tint: Option<Color>) -> Arc<Vec<DrawCommand>> {
-        SvgData::from_str(svg).unwrap().commands_for(w, h, tint)
+    fn dynamic(
+        svg: &str,
+        w: f32,
+        h: f32,
+        tint: Option<Color>,
+        fit: ObjectFit,
+    ) -> Arc<Vec<DrawCommand>> {
+        SvgData::from_str(svg)
+            .unwrap()
+            .commands_for(w, h, tint, fit)
     }
 
-    fn baked(svg: &str, w: f32, h: f32, tint: Option<Color>) -> Arc<Vec<DrawCommand>> {
+    fn baked(
+        svg: &str,
+        w: f32,
+        h: f32,
+        tint: Option<Color>,
+        fit: ObjectFit,
+    ) -> Arc<Vec<DrawCommand>> {
         let (size, baked) = bake(svg).unwrap();
-        SvgData::from_baked(size, baked).commands_for(w, h, tint)
+        SvgData::from_baked(size, baked).commands_for(w, h, tint, fit)
     }
 
     fn assert_vector_equivalent(svg: &str) {
         for &(w, h) in SIZES {
             for tint in tints() {
-                let d = dynamic(svg, w, h, tint);
-                let b = baked(svg, w, h, tint);
-                assert_eq!(
-                    *d, *b,
-                    "baked != dynamic at ({w}x{h}) tint={tint:?}\n dynamic={d:#?}\n baked={b:#?}"
-                );
+                for &fit in FITS {
+                    let d = dynamic(svg, w, h, tint, fit);
+                    let b = baked(svg, w, h, tint, fit);
+                    assert_eq!(
+                        *d, *b,
+                        "baked != dynamic at ({w}x{h}) tint={tint:?} fit={fit:?}\n dynamic={d:#?}\n baked={b:#?}"
+                    );
+                }
             }
         }
     }
 
-    // A rasterized fallback can only match structurally, never byte-for-byte: `DrawCommand::Image`'s PartialEq compares `ImageData::id`, a fresh per-instance counter, and the dynamic fallback rasterizes at 2x the fitted (display-dependent) size while the bake rasterizes at 2x intrinsic. What must agree is placement: the same single Image drawn into the same letterboxed content rect with the same filter.
+    // A rasterized fallback can only match structurally, never byte-for-byte: `DrawCommand::Image`'s PartialEq compares `ImageData::id`, a fresh per-instance counter, and the dynamic fallback rasterizes at 2x the fitted (display-dependent) size while the bake rasterizes at 2x intrinsic. What must agree is placement: the same single Image drawn into the same content rect with the same filter.
     fn assert_raster_structurally_equivalent(svg: &str) {
         for &(w, h) in SIZES {
             for tint in tints() {
-                let d = dynamic(svg, w, h, tint);
-                let b = baked(svg, w, h, tint);
-                assert_eq!(d.len(), 1, "dynamic raster should be one command");
-                assert_eq!(b.len(), 1, "baked raster should be one command");
-                match (&d[0], &b[0]) {
-                    (
-                        DrawCommand::Image {
-                            rect: rd,
-                            filter: fd,
-                            ..
-                        },
-                        DrawCommand::Image {
-                            rect: rb,
-                            filter: fb,
-                            ..
-                        },
-                    ) => {
-                        assert_eq!(rd, rb, "raster content rect mismatch at ({w}x{h})");
-                        assert_eq!(fd, fb, "raster filter mismatch at ({w}x{h})");
+                for &fit in FITS {
+                    let d = dynamic(svg, w, h, tint, fit);
+                    let b = baked(svg, w, h, tint, fit);
+                    assert_eq!(d.len(), 1, "dynamic raster should be one command");
+                    assert_eq!(b.len(), 1, "baked raster should be one command");
+                    match (&d[0], &b[0]) {
+                        (
+                            DrawCommand::Image {
+                                rect: rd,
+                                filter: fd,
+                                ..
+                            },
+                            DrawCommand::Image {
+                                rect: rb,
+                                filter: fb,
+                                ..
+                            },
+                        ) => {
+                            assert_eq!(
+                                rd, rb,
+                                "raster content rect mismatch at ({w}x{h}) fit={fit:?}"
+                            );
+                            assert_eq!(fd, fb, "raster filter mismatch at ({w}x{h}) fit={fit:?}");
+                        }
+                        other => panic!("expected an Image fallback from both, got {other:?}"),
                     }
-                    other => panic!("expected an Image fallback from both, got {other:?}"),
                 }
             }
         }

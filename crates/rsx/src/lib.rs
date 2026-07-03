@@ -44,7 +44,7 @@ pub use app::App;
 #[cfg(feature = "runtime")]
 pub use devtools_core::{DevAction, DevPlugin};
 #[cfg(feature = "runtime")]
-pub use geometry_core::{Point, Rect, Transform};
+pub use geometry_core::{ObjectFit, Point, Rect, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
     AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,

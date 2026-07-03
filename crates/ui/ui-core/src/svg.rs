@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use geometry_core::{ObjectFit, Rect};
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use renderer_assets::SvgData;
-use renderer_core::Color;
+use renderer_core::{BorderRadius, Color};
 use ui_tree::{Component, EventResult, NodeVec, RenderNode};
 
 use crate::impl_leaf_widget;
@@ -12,6 +13,7 @@ use crate::layout_leaf::LayoutLeaf;
 pub struct Svg {
     data: Box<dyn Fn() -> Arc<SvgData>>,
     tint: Box<dyn Fn() -> Option<Color>>,
+    fit: Box<dyn Fn() -> ObjectFit>,
     leaf: LayoutLeaf,
 }
 
@@ -21,6 +23,7 @@ impl Svg {
         layout_style: LayoutStyle,
         data_fn: impl Fn() -> Arc<SvgData> + 'static,
         tint_fn: impl Fn() -> Option<Color> + 'static,
+        fit_fn: impl Fn() -> ObjectFit + 'static,
     ) -> Result<Self, LayoutError> {
         // Parity with `<img>`: a side left at `auto` falls back to the SVG's intrinsic size, and a single px side derives the other from the intrinsic aspect ratio; a percent side is left untouched.
         let width_auto = layout_style.is_width_auto();
@@ -60,6 +63,7 @@ impl Svg {
         Ok(Self {
             data: Box::new(data_fn),
             tint: Box::new(tint_fn),
+            fit: Box::new(fit_fn),
             leaf,
         })
     }
@@ -68,9 +72,26 @@ impl Svg {
 impl Component for Svg {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
-        let commands = (self.data)().commands_for(r.width, r.height, (self.tint)());
+        let fit = (self.fit)();
+        let commands = (self.data)().commands_for(r.width, r.height, (self.tint)(), fit);
         let children = NodeVec::collect(commands.iter().cloned().map(RenderNode::Primitive));
-        self.leaf.at_layout_position(RenderNode::Group { children })
+        let group = RenderNode::Group { children };
+        // Cover scales the paths past the box; clip the overflow to the widget's local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll.
+        let node = if fit == ObjectFit::Cover {
+            RenderNode::Clip {
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: r.width,
+                    height: r.height,
+                },
+                radius: BorderRadius::zero(),
+                children: NodeVec::collect([group]),
+            }
+        } else {
+            group
+        };
+        self.leaf.at_layout_position(node)
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {
@@ -110,6 +131,7 @@ mod tests {
             LayoutStyle::new(),
             move || Arc::clone(&data),
             || None,
+            || ObjectFit::Contain,
         )
         .unwrap();
         let root = new_container(
@@ -140,6 +162,7 @@ mod tests {
             LayoutStyle::new().width(48.0),
             move || Arc::clone(&data),
             || None,
+            || ObjectFit::Contain,
         )
         .unwrap();
         let root = new_container(
@@ -170,6 +193,7 @@ mod tests {
             LayoutStyle::new().width(20.0).height(20.0),
             move || Arc::clone(&data),
             || None,
+            || ObjectFit::Contain,
         )
         .unwrap();
         let root = new_container(

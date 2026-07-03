@@ -260,3 +260,58 @@ fn render_frame_pixel_golden() {
         "render_frame pixel output changed: got {hash:#018x}, expected {EXPECTED:#018x}"
     );
 }
+
+// A clip emitted UNDER an active matrix (the `object-fit: cover` / scrolled-widget case) must move
+// with that matrix: PushMatrix{100,80} then PushClip{(0,0,40,30)} clips to window (100,80,40,30),
+// so a fill covering the whole window only survives inside that transformed box.
+#[test]
+fn clip_composes_with_active_matrix() {
+    let mut renderer =
+        SoftwareRenderer::<Fake, Fake>::new_headless(200, 160, SoftwareRendererConfig::default());
+    let red = Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(220, 40, 40)));
+    let cmds = vec![
+        DrawCommand::PushMatrix {
+            matrix: [1.0, 0.0, 0.0, 1.0, 100.0, 80.0],
+        },
+        DrawCommand::PushClip {
+            rect: Rect::new(0.0, 0.0, 40.0, 30.0),
+            radius: BorderRadius::zero(),
+        },
+        // Local-space rect spanning the whole window (window 0,0..200,160) so only the clip crops it.
+        DrawCommand::Rect {
+            rect: Rect::new(-100.0, -80.0, 400.0, 400.0),
+            style: red.clone(),
+        },
+        DrawCommand::PopClip,
+        DrawCommand::PopMatrix,
+    ];
+    renderer.begin_frame(200, 160, 1.0, 0).unwrap();
+    renderer
+        .render_frame(&cmds, Some(Color::from_rgb_u8(0, 0, 0)))
+        .unwrap();
+    let rgba = renderer.read_rgba().unwrap();
+    let red_at = |x: u32, y: u32| rgba[((y * 200 + x) * 4) as usize];
+
+    // Inside the transformed clip window (100..140, 80..110): red.
+    assert!(
+        red_at(120, 95) > 150,
+        "inside the transformed clip should be red, got r={}",
+        red_at(120, 95)
+    );
+    // Outside the transformed clip: clear (this is exactly what regressed as "cover shows nothing").
+    assert!(
+        red_at(20, 20) < 60,
+        "above/left of the clip should be clear, got r={}",
+        red_at(20, 20)
+    );
+    assert!(
+        red_at(150, 95) < 60,
+        "just past the clip's right edge should be clear, got r={}",
+        red_at(150, 95)
+    );
+    assert!(
+        red_at(170, 140) < 60,
+        "below/right of the clip should be clear, got r={}",
+        red_at(170, 140)
+    );
+}

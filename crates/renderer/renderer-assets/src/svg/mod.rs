@@ -11,7 +11,7 @@ mod vector;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
-use geometry_core::Point;
+use geometry_core::{ObjectFit, Point};
 use rustc_hash::{FxHashMap, FxHasher};
 
 use renderer_core::{Color, DrawCommand, GradientKind, ImageData, Paint, PathStyle, PathVerb};
@@ -28,8 +28,8 @@ pub use bake::bake_to_source;
 #[error("failed to parse SVG: {0}")]
 pub struct SvgError(String);
 
-// Memo key: (width bits, height bits, tint as packed rgba bits or None). f32 goes through `to_bits` so it is Eq/Hash.
-type MemoKey = (u32, u32, Option<[u32; 4]>);
+// Memo key: (width bits, height bits, tint as packed rgba bits or None, object-fit discriminant). f32 goes through `to_bits` so it is Eq/Hash.
+type MemoKey = (u32, u32, Option<[u32; 4]>, u8);
 
 /// An SVG document that converts to the renderer's `DrawCommand`s.
 ///
@@ -126,23 +126,25 @@ impl SvgData {
         self.size
     }
 
-    /// Display list in the widget's LOCAL space (`0,0..width,height`), memoized per `(width, height, tint)`.
+    /// Display list in the widget's LOCAL space (`0,0..width,height`), memoized per `(width, height, tint, fit)`.
     pub fn commands_for(
         &self,
         width: f32,
         height: f32,
         tint: Option<Color>,
+        fit: ObjectFit,
     ) -> Arc<Vec<DrawCommand>> {
         let key: MemoKey = (
             width.to_bits(),
             height.to_bits(),
             tint.map(|c| [c.r.to_bits(), c.g.to_bits(), c.b.to_bits(), c.a.to_bits()]),
+            fit as u8,
         );
         let mut memo = self.memo.lock().unwrap();
         if let Some(cached) = memo.get(&key) {
             return Arc::clone(cached);
         }
-        let commands = Arc::new(self.build_commands(width, height, tint));
+        let commands = Arc::new(self.build_commands(width, height, tint, fit));
         // Simple bound: drop the whole cache rather than track an LRU; these display lists are cheap to rebuild.
         if memo.len() >= 16 {
             memo.clear();
@@ -151,22 +153,26 @@ impl SvgData {
         commands
     }
 
-    fn build_commands(&self, width: f32, height: f32, tint: Option<Color>) -> Vec<DrawCommand> {
+    fn build_commands(
+        &self,
+        width: f32,
+        height: f32,
+        tint: Option<Color>,
+        fit: ObjectFit,
+    ) -> Vec<DrawCommand> {
         let (vb_w, vb_h) = self.size;
         if vb_w <= 0.0 || vb_h <= 0.0 || width <= 0.0 || height <= 0.0 {
             return Vec::new();
         }
-        // Uniform scale, centered (xMidYMid meet letterbox).
-        let s = (width / vb_w).min(height / vb_h);
-        let fitted_w = vb_w * s;
-        let fitted_h = vb_h * s;
-        let offset_x = (width - fitted_w) * 0.5;
-        let offset_y = (height - fitted_h) * 0.5;
+        // Shared by both paths so the baked re-fit reproduces the dynamic mapping bit-for-bit (see the equivalence guardrail). `contain`/`cover` give `sx == sy` (uniform, centered); `fill` gives `sx != sy` at the origin.
+        let (sx, sy, offset_x, offset_y) = fit_params(vb_w, vb_h, width, height, fit);
+        let fitted_w = vb_w * sx;
+        let fitted_h = vb_h * sy;
 
         match &self.source {
             #[cfg(feature = "dynamic-svg")]
             SvgSource::Parsed(tree) => {
-                let fit_ts = SkiaTransform::from_row(s, 0.0, 0.0, s, offset_x, offset_y);
+                let fit_ts = SkiaTransform::from_row(sx, 0.0, 0.0, sy, offset_x, offset_y);
                 let mut out = Vec::new();
                 match convert_group(tree.root(), fit_ts, tint, &mut out) {
                     Ok(()) => out,
@@ -176,12 +182,39 @@ impl SvgData {
                 }
             }
             SvgSource::Baked(baked) => match baked {
-                // Baking converts under an identity transform, so re-fitting each point by `p * s + offset` reproduces the dynamic `fit_ts.pre_concat(abs)` mapping exactly (the determinant argument makes stroke widths and gradient radii agree too).
-                BakedSvg::Vector(cmds) => refit::refit_vector(cmds, s, offset_x, offset_y, tint),
+                // Baking converts under an identity transform, so re-fitting each point by `(p.x*sx+dx, p.y*sy+dy)` reproduces the dynamic `fit_ts.pre_concat(abs)` mapping exactly (the determinant argument makes stroke widths and gradient radii agree too).
+                BakedSvg::Vector(cmds) => {
+                    refit::refit_vector(cmds, sx, sy, offset_x, offset_y, tint)
+                }
                 BakedSvg::Raster { image, .. } => {
                     refit::refit_raster(image, fitted_w, fitted_h, offset_x, offset_y, tint)
                 }
             },
+        }
+    }
+}
+
+/// Maps the intrinsic viewBox into widget space for `fit`, as `(scale_x, scale_y, offset_x, offset_y)`.
+///
+/// `contain` and `cover` are uniform (`sx == sy`) and centered — `contain` fits inside (letterbox), `cover` fills and overflows (the widget clips it). `fill` stretches each axis independently to the box, anchored at the origin.
+fn fit_params(
+    vb_w: f32,
+    vb_h: f32,
+    width: f32,
+    height: f32,
+    fit: ObjectFit,
+) -> (f32, f32, f32, f32) {
+    match fit {
+        ObjectFit::Fill => (width / vb_w, height / vb_h, 0.0, 0.0),
+        ObjectFit::Contain | ObjectFit::Cover => {
+            let sx = width / vb_w;
+            let sy = height / vb_h;
+            let s = if fit == ObjectFit::Contain {
+                sx.min(sy)
+            } else {
+                sx.max(sy)
+            };
+            (s, s, (width - vb_w * s) * 0.5, (height - vb_h * s) * 0.5)
         }
     }
 }

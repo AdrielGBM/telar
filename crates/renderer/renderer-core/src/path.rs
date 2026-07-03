@@ -87,7 +87,12 @@ impl PathData {
     ///
     /// Baking transforms points into path coordinates (not a matrix) so lyon never facets curves; this applies the runtime letterbox fit the same way, keeping the baked path equivalent to the dynamic one.
     pub fn refit(&self, s: f32, dx: f32, dy: f32) -> Self {
-        let map = |p: Point| Point::new(p.x * s + dx, p.y * s + dy);
+        self.refit_xy(s, s, dx, dy)
+    }
+
+    /// Non-uniform variant of `refit`: `p' = (p.x * sx + dx, p.y * sy + dy)`. `object-fit: fill` uses `sx != sy` to stretch the path to the box (distorting the aspect ratio).
+    pub fn refit_xy(&self, sx: f32, sy: f32, dx: f32, dy: f32) -> Self {
+        let map = |p: Point| Point::new(p.x * sx + dx, p.y * sy + dy);
         let mut out = Self::new();
         for verb in &self.verbs {
             out = match verb {

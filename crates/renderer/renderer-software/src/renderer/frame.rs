@@ -457,7 +457,12 @@ where
                 }
                 DrawCommand::PushClip { rect, radius } => {
                     let prev_dirty = self.clip_mask_dirty;
-                    let effective = self.draw_state.push_clip(*rect);
+                    // Clip rects arrive in the emitting widget's local space; map through the active matrix so the clip composes with scroll/layout transforms (the mask is painted in window pixels).
+                    let clip_rect = renderer_core::transform_clip_rect(
+                        self.draw_state.cumulative_matrix,
+                        *rect,
+                    );
+                    let effective = self.draw_state.push_clip(clip_rect);
                     if let Some(ref mut m) = self.clip_mask_buffer {
                         if radius.is_zero() {
                             repaint_mask(m, effective, prev_dirty, self.width, self.height);

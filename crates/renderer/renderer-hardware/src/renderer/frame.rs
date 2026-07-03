@@ -681,6 +681,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 }
                 DrawCommand::PushClip { rect, radius } => {
                     self.flush_all();
+                    // Clip rects arrive in the emitting widget's local space; map through the active matrix so scissors and rounded mini-layers land in window space (composes with scroll/layout transforms).
+                    let rect = &renderer_core::transform_clip_rect(
+                        self.draw_state.cumulative_matrix,
+                        *rect,
+                    );
                     if radius.is_zero() {
                         let effective = self.draw_state.push_clip(*rect);
                         current_scissor = Some(effective);

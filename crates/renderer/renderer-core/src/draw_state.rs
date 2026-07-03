@@ -4,6 +4,34 @@ use crate::DrawCommand;
 
 pub const IDENTITY_MATRIX: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
+/// Maps clip rect `r` (in the currently-active transform's local space) to window space — the axis-aligned bounds of its four mapped corners. Widgets emit clip rects in their own local space, but the renderer clips in window space, so a clip must be mapped through the active cumulative matrix (scroll/layout translations) to compose correctly.
+pub fn transform_clip_rect(m: [f32; 6], r: Rect) -> Rect {
+    let [a, b, c, d, e, f] = m;
+    let map = |x: f32, y: f32| (a * x + c * y + e, b * x + d * y + f);
+    let corners = [
+        map(r.x, r.y),
+        map(r.x + r.width, r.y),
+        map(r.x, r.y + r.height),
+        map(r.x + r.width, r.y + r.height),
+    ];
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    for (x, y) in corners {
+        min_x = min_x.min(x);
+        min_y = min_y.min(y);
+        max_x = max_x.max(x);
+        max_y = max_y.max(y);
+    }
+    Rect {
+        x: min_x,
+        y: min_y,
+        width: max_x - min_x,
+        height: max_y - min_y,
+    }
+}
+
 // Computes parent(child(point)) for two affine matrices [a, b, c, d, e, f].
 pub fn compose_matrix(parent: [f32; 6], child: [f32; 6]) -> [f32; 6] {
     let [a1, b1, c1, d1, e1, f1] = child;

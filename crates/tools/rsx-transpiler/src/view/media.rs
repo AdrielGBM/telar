@@ -5,6 +5,18 @@ use rsx_parser::{Attr, Element};
 use super::signals::rust_str;
 use super::{ChildEmit, ViewGen, expr_marker};
 
+/// Parses the shared `fit:` attribute (CSS `object-fit`) for `img`/`svg` into a reactive `ObjectFit` closure. Absent or unrecognized values default to `Contain` (preserve aspect ratio, letterbox), matching the widget defaults.
+fn fit_closure(attributes: &[Attr]) -> &'static str {
+    match attributes.iter().find(|a| a.key == "fit") {
+        Some(a) => match a.value.trim().to_ascii_lowercase().as_str() {
+            "fill" => "move || ObjectFit::Fill",
+            "cover" => "move || ObjectFit::Cover",
+            _ => "move || ObjectFit::Contain",
+        },
+        None => "move || ObjectFit::Contain",
+    }
+}
+
 /// Which media widget a `src` binding is for; selects the runtime data type, the baked-asset `static` prefix, the missing-`src` placeholder identifier, and the baker used at build time.
 #[derive(Clone, Copy)]
 enum MediaKind {
@@ -62,6 +74,8 @@ impl ViewGen<'_> {
             })
             .unwrap_or("ImageFilter::Linear");
 
+        let fit = fit_closure(&el.attributes);
+
         let layout_style = self.make_layout_style("img", &el.classes, &el.attributes);
 
         let code = format!(
@@ -72,6 +86,7 @@ impl ViewGen<'_> {
              {pad}        {layout_style},\n\
              {pad}        {data_fn},\n\
              {pad}        move || {filter},\n\
+             {pad}        {fit},\n\
              {pad}    )?\n\
              {pad}}};"
         );
@@ -103,6 +118,8 @@ impl ViewGen<'_> {
             None => "|| None".to_string(),
         };
 
+        let fit = fit_closure(&el.attributes);
+
         let layout_style = self.make_layout_style("svg", &el.classes, &el.attributes);
 
         let code = format!(
@@ -113,6 +130,7 @@ impl ViewGen<'_> {
              {pad}        {layout_style},\n\
              {pad}        {data_fn},\n\
              {pad}        {tint_fn},\n\
+             {pad}        {fit},\n\
              {pad}    )?\n\
              {pad}}};"
         );
