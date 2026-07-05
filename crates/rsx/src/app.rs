@@ -39,4 +39,22 @@ pub trait App: 'static {
     fn motion_has_active(&self) -> bool {
         motion_core::has_active()
     }
+
+    /// Opens a reactive batch in THIS app's runtime for the duration of event dispatch (paired with
+    /// `end_event_batch`). Only the dylib-backed `HotApp` overrides it — in dev mode host and app link
+    /// separate reactive-core copies with separate runtimes, and the host's own batch cannot reach the
+    /// app's. Without batching the app's runtime, a signal written by an event handler flushes immediately,
+    /// re-running a segment's effect while its widget is still borrowed for `on_event`; that render is
+    /// skipped and the segment silently loses its reactive subscriptions. Deferring the flush until after
+    /// dispatch releases every borrow keeps them intact.
+    #[doc(hidden)]
+    fn begin_event_batch(&self) {
+        reactive_core::begin_batch();
+    }
+
+    /// Closes the batch opened by `begin_event_batch`, flushing the app's runtime once dispatch is done.
+    #[doc(hidden)]
+    fn end_event_batch(&self) {
+        reactive_core::end_batch();
+    }
 }

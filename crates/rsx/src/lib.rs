@@ -58,7 +58,8 @@ pub use paths::DesktopPathsProvider;
 pub use platform_core::{Event, FullscreenMode, ScrollDelta, WindowConfig, WindowPosition};
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
-    Effect, Memo, ReadSignal, RwSignal, batch, effect, memo, reset_runtime, signal,
+    Effect, Memo, ReadSignal, RwSignal, batch, begin_batch, effect, end_batch, memo, reset_runtime,
+    signal,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError};

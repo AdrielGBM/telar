@@ -54,6 +54,25 @@ impl crate::app::App for HotApp {
         };
         unsafe { active() }
     }
+
+    // Batch the dylib's own reactive runtime (separate from the host's) across event dispatch. Missing symbol (dylib built before this existed) degrades to a no-op: without it the app runs as before, just without the mid-dispatch flush protection.
+    fn begin_event_batch(&self) {
+        if let Ok(begin) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn()>(b"_rsx_hot_begin_batch\0")
+        } {
+            unsafe { begin() }
+        }
+    }
+
+    fn end_event_batch(&self) {
+        if let Ok(end) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn()>(b"_rsx_hot_end_batch\0")
+        } {
+            unsafe { end() }
+        }
+    }
 }
 
 #[cfg(feature = "dev")]

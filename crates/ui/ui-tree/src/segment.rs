@@ -498,6 +498,97 @@ mod tests {
         );
     }
 
+    // A widget whose view() color tracks `theme` and whose on_event writes `sel` — like a nav button
+    // reading the theme and flipping its own hover/selection state on a pointer event.
+    struct ThemedButton {
+        theme: RwSignal<f32>,
+        sel: RwSignal<i32>,
+    }
+    impl Component for ThemedButton {
+        fn view(&self) -> RenderNode {
+            let c = self.theme.get(); // subscribe to theme
+            self.sel.get(); // subscribe to sel
+            RenderNode::rect(
+                Rect::new(0.0, 0.0, 10.0, 10.0),
+                RectStyle::default().with_fill(Color::rgba(c, c, c, 1.0)),
+            )
+        }
+        fn on_event(&mut self, _event: &platform_core::Event) -> crate::component::EventResult {
+            self.sel.update(|n| *n += 1); // a handler write, like is_hovered/selected
+            crate::component::EventResult::Handled
+        }
+    }
+
+    fn first_rect_r(root: &SegmentRoot) -> f32 {
+        match &root.commands()[0] {
+            DrawCommand::Rect { style, .. } => style.fill.unwrap().solid_color().r,
+            _ => unreachable!(),
+        }
+    }
+
+    // A segment must keep its reactive subscriptions across event dispatch. The one hard invariant that
+    // guarantees it: dispatch must be BATCHED, so a signal written by a handler flushes only after the
+    // widget's borrow is released. If dispatch runs UNBATCHED, the write flushes synchronously while the
+    // widget is still borrowed — the segment's effect can't borrow it to re-render, skips, and drops its
+    // theme subscription (the hot-reload theme-freeze: the app dylib's runtime was never batched). This
+    // pins both halves: unbatched loses the subscription; batched preserves it.
+    #[test]
+    fn dispatch_must_be_batched_or_segment_drops_subscriptions() {
+        use reactive_core::{batch, signal};
+
+        // Unbatched dispatch: the handler's write flushes mid-borrow → subscription to `theme` is lost.
+        {
+            let theme = signal(0.2f32);
+            let sel = signal(0i32);
+            let widget = Rc::new(RefCell::new(ThemedButton {
+                theme: theme.clone(),
+                sel: sel.clone(),
+            }));
+            let render = {
+                let w = Rc::clone(&widget);
+                move || w.try_borrow().ok().map(|c| c.view())
+            };
+            let root = SegmentRoot::from_segment(Segment::mount_fn(render));
+            assert!((first_rect_r(&root) - 0.2).abs() < 1e-6);
+
+            widget
+                .borrow_mut()
+                .on_event(&platform_core::Event::CursorLeft); // UNBATCHED write mid-borrow
+            theme.set(0.9);
+            assert!(
+                (first_rect_r(&root) - 0.2).abs() < 1e-6,
+                "unbatched dispatch must drop the theme subscription (frozen at old value)"
+            );
+        }
+
+        // Batched dispatch (what the fix guarantees for the app dylib's runtime): subscription is preserved.
+        {
+            let theme = signal(0.2f32);
+            let sel = signal(0i32);
+            let widget = Rc::new(RefCell::new(ThemedButton {
+                theme: theme.clone(),
+                sel: sel.clone(),
+            }));
+            let render = {
+                let w = Rc::clone(&widget);
+                move || w.try_borrow().ok().map(|c| c.view())
+            };
+            let root = SegmentRoot::from_segment(Segment::mount_fn(render));
+            assert!((first_rect_r(&root) - 0.2).abs() < 1e-6);
+
+            batch(|| {
+                widget
+                    .borrow_mut()
+                    .on_event(&platform_core::Event::CursorLeft)
+            });
+            theme.set(0.9);
+            assert!(
+                (first_rect_r(&root) - 0.9).abs() < 1e-6,
+                "batched dispatch must preserve the theme subscription (tracks new value)"
+            );
+        }
+    }
+
     struct AnimatedLeaf {
         x: motion_core::Animated<f32>,
     }

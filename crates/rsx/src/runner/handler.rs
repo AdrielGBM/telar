@@ -251,15 +251,27 @@ where
                 return;
             }
         }
-        if let Some(tree) = &mut self.tree {
-            if tree.on_event(&event) == EventResult::Handled {
-                #[cfg(feature = "dev")]
+        // Batch the app's OWN reactive runtime across dispatch. In hot-reload the app dylib links its own
+        // reactive-core copy (separate runtime), which the host's begin/end_batch cannot reach; a handler's
+        // signal write would then flush immediately and re-run a segment's effect while its widget is still
+        // borrowed for on_event, silently dropping that segment's subscriptions. Closing the batch after
+        // dispatch (every borrow released) makes the deferred effects flush safely. No-op for a normal app.
+        self.app.begin_event_batch();
+        let handled = self
+            .tree
+            .as_mut()
+            .map(|tree| tree.on_event(&event))
+            .unwrap_or(EventResult::Ignored);
+        self.app.end_event_batch();
+        if handled == EventResult::Handled {
+            #[cfg(feature = "dev")]
+            if let Some(tree) = &self.tree {
                 tree.bump_force_ticks();
-                // Flush reactive effects immediately so on_redraw() in the same cycle finds tree_dirty=true rather than deferring to the next cycle.
-                end_batch();
-                begin_batch();
-                window.request_redraw();
             }
+            // Flush reactive effects immediately so on_redraw() in the same cycle finds tree_dirty=true rather than deferring to the next cycle.
+            end_batch();
+            begin_batch();
+            window.request_redraw();
         }
     }
 

@@ -255,6 +255,15 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_motion_active() -> bool {
                 ::rsx::motion::has_active()
             }
+            // Batch the dylib's reactive runtime around event dispatch: host and dylib link separate reactive-core copies, so the host must open/close the batch on the app's own runtime across this boundary — otherwise a handler's signal write flushes mid-dispatch and a segment loses its subscriptions while its widget is borrowed.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_begin_batch() {
+                ::rsx::begin_batch();
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_end_batch() {
+                ::rsx::end_batch();
+            }
         }
     } else {
         quote! {}
