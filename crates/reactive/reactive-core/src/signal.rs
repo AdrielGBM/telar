@@ -103,6 +103,13 @@ impl<T: Clone + 'static> RwSignal<T> {
     }
 }
 
+impl RwSignal<bool> {
+    /// Flip a boolean signal in place — sugar for `.update(|v| *v = !*v)`, so `$flag.toggle()` reads cleanly.
+    pub fn toggle(&self) {
+        self.update(|v| *v = !*v);
+    }
+}
+
 pub fn signal<T: 'static>(value: T) -> RwSignal<T> {
     let id = runtime::create_signal_storage(value, 1);
     RwSignal {

@@ -85,10 +85,24 @@ pub(super) fn pattern_idents(pattern: &str) -> Vec<String> {
         .collect()
 }
 
-/// Renders a Rust string literal, escaping quotes and backslashes.
+/// Renders a Rust string literal, escaping quotes, backslashes, and control chars. Newlines/tabs are
+/// escaped (not emitted raw) so a decoded newline in `.rsx` content stays a single line in the generated
+/// source — [`crate::view::resolve_source_map`] splits the body on `\n`, so a raw newline would desync it.
 pub(super) fn rust_str(s: &str) -> String {
-    let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("\"{escaped}\"")
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// An [`expr_marker`] for a verbatim closure attribute value (one beginning with `|`), or an empty string otherwise. The value is emitted byte-for-byte after `move `, so the span maps directly.
@@ -104,14 +118,62 @@ pub(super) fn closure_marker(attr: Option<&Attr>) -> String {
     expr_marker(attr.value_start + lead, attr.value.trim().len())
 }
 
-/// The parser strips `on_press:` leaving `|| expr` or `|ev| expr`. Ensure the value is a closure; wrap bare expressions in a zero-arg closure.
+/// The parser strips `on_press:` leaving `|| expr` or `|ev| expr`. Ensure the value is a closure; wrap bare expressions in a zero-arg closure. Then desugar a lone compound-assignment on a signal.
 pub(super) fn normalize_closure(value: &str) -> String {
     let v = value.trim();
-    if v.starts_with('|') {
+    let closure = if v.starts_with('|') {
         v.to_string()
     } else {
         format!("|| {{ {v} }}")
+    };
+    rewrite_compound_assign(&closure)
+}
+
+/// Sugar: a closure whose body is a single compound assignment on a signal (`|| $count += 1`, and the
+/// single-statement block form `|| { $count += 1 }`) is rewritten to `|| $count.update(|__v| *__v += (1))`.
+/// The `$` is kept so signal-cloning and [`substitute_handles`] still see the handle. Anything more
+/// complex (multiple statements, no compound operator, not a signal target) is returned unchanged.
+fn rewrite_compound_assign(closure: &str) -> String {
+    // `closure` starts with `|` (guaranteed by `normalize_closure`); split off its `||` / `|args|` head.
+    let Some(bar) = closure[1..].find('|') else {
+        return closure.to_string();
+    };
+    let params_end = bar + 2;
+    let params = &closure[..params_end];
+    let mut body = closure[params_end..].trim();
+    // Accept a single-statement block wrapper: `{ $x += 1 }`.
+    if body.starts_with('{') && body.ends_with('}') && body.len() >= 2 {
+        body = body[1..body.len() - 1].trim();
+        body = body.strip_suffix(';').unwrap_or(body).trim();
     }
+    if body.contains(';') {
+        return closure.to_string();
+    }
+    let Some(rest) = body.strip_prefix('$') else {
+        return closure.to_string();
+    };
+    let ident_len = rest
+        .bytes()
+        .take_while(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        .count();
+    if ident_len == 0 {
+        return closure.to_string();
+    }
+    let (ident, tail) = rest.split_at(ident_len);
+    let tail = tail.trim_start();
+    let Some(op) = ["+=", "-=", "*=", "/=", "%="]
+        .into_iter()
+        .find(|o| tail.starts_with(o))
+    else {
+        return closure.to_string();
+    };
+    let rhs = tail[op.len()..].trim();
+    if rhs.is_empty() {
+        return closure.to_string();
+    }
+    // No parens around `rhs`: compound-assignment is Rust's lowest precedence, so `*__v *= a + b`
+    // already binds as `*__v *= (a + b)` — wrapping would only trip `unused_parens`.
+    format!("{params} ${ident}.update(|__v| *__v {op} {rhs})")
 }
 
 /// Replaces every `$ident` in `s` with `ident.get()` — a reactive read, for `[view]` interpolation where a signal reference is a value read.

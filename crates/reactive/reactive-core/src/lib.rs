@@ -62,6 +62,15 @@ mod tests {
     }
 
     #[test]
+    fn bool_signal_toggle() {
+        let flag = signal(false);
+        flag.toggle();
+        assert!(flag.get());
+        flag.toggle();
+        assert!(!flag.get());
+    }
+
+    #[test]
     fn effect_runs_immediately() {
         let ran = Rc::new(RefCell::new(false));
         let ran_clone = Rc::clone(&ran);

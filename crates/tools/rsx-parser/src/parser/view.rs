@@ -277,6 +277,7 @@ fn parse_element_header(
         // First find where the `key:` part ends (if any) to detect closure values. We scan the token up to the first whitespace, while watching for a `:` that introduces a closure value spanning the rest of the line.
         let mut j = i;
         let mut colon_at: Option<usize> = None;
+        let mut paren_at: Option<usize> = None;
         while j < len && !chars[j].is_whitespace() {
             if chars[j] == ':' {
                 // Ignore `::` path separators.
@@ -287,7 +288,35 @@ fn parse_element_header(
                 colon_at = Some(j);
                 break;
             }
+            // `key(expr)`: a parenthesized value (closure or spec), delimited by balanced parens so it
+            // does not run to end of line and attribute order stops mattering — e.g. `on_press(|| f())`
+            // and `transition(fill 250ms ease-out)` can sit on one line in any order.
+            if chars[j] == '(' {
+                paren_at = Some(j);
+                break;
+            }
             j += 1;
+        }
+
+        if let Some(paren) = paren_at {
+            let key: String = chars[token_start..paren].iter().collect();
+            let (value, next) = read_balanced_parens(&chars, paren).ok_or_else(|| ParseError {
+                message: "unterminated `(` in attribute value".to_string(),
+                line,
+            })?;
+            // Map the value span to the first non-space char inside the parens (matches the colon form).
+            let mut vs = paren + 1;
+            while vs < len && chars[vs].is_whitespace() {
+                vs += 1;
+            }
+            element.attributes.push(Attr {
+                key: key.trim().to_string(),
+                value: value.trim().to_string(),
+                is_quoted: false,
+                value_start: content_start + byte_at(&chars, vs),
+            });
+            i = next;
+            continue;
         }
 
         if let Some(colon) = colon_at {
@@ -390,8 +419,10 @@ fn byte_at(chars: &[char], idx: usize) -> usize {
     chars[..idx].iter().map(|c| c.len_utf8()).sum()
 }
 
-/// Reads a double-quoted string starting at `start`; returns the inner text with escape sequences preserved verbatim, plus the index past the closing quote.
-/// `pub(super)` because `preview::parse_preview_header` reads the quoted preview name with it too.
+/// Reads a double-quoted string starting at `start`; interprets the C-style escapes `\"`, `\\`, `\n`,
+/// `\t`, `\r`, `\0` into their real characters (so a literal `"` inside content is written `\"`) and
+/// returns the decoded text plus the index past the closing quote. An unknown escape (`\d`) keeps both
+/// chars verbatim. `pub(super)` because `preview::parse_preview_header` reads the quoted preview name with it too.
 pub(super) fn read_quoted(chars: &[char], start: usize) -> Option<(String, usize)> {
     debug_assert_eq!(chars.get(start), Some(&'"'));
     let mut i = start + 1;
@@ -399,19 +430,80 @@ pub(super) fn read_quoted(chars: &[char], start: usize) -> Option<(String, usize
     while i < chars.len() {
         let c = chars[i];
         if c == '\\' {
-            // Keep the escape sequence verbatim so the transpiler can re-emit it.
-            out.push(c);
-            if let Some(&next) = chars.get(i + 1) {
-                out.push(next);
-                i += 2;
-                continue;
+            match chars.get(i + 1) {
+                Some('"') => out.push('"'),
+                Some('\\') => out.push('\\'),
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('r') => out.push('\r'),
+                Some('0') => out.push('\0'),
+                // Unknown escape: keep the backslash and the following char literally.
+                Some(&other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                // Dangling backslash at end of input: unterminated.
+                None => return None,
             }
-            return None;
+            i += 2;
+            continue;
         }
         if c == '"' {
             return Some((out, i + 1));
         }
         out.push(c);
+        i += 1;
+    }
+    None
+}
+
+/// Reads a balanced `( … )` group starting at `open` (which must be `(`). Returns the inner text with the
+/// outer parens stripped, plus the index past the closing `)`. Nested parens are balanced and parens inside
+/// a `"…"` string literal are ignored, so a closure body like `|| f(x)` is captured whole. `None` if unbalanced.
+fn read_balanced_parens(chars: &[char], open: usize) -> Option<(String, usize)> {
+    debug_assert_eq!(chars.get(open), Some(&'('));
+    let mut depth = 0usize;
+    let mut in_str = false;
+    let mut out = String::new();
+    let mut i = open;
+    while i < chars.len() {
+        let c = chars[i];
+        if in_str {
+            out.push(c);
+            if c == '\\' {
+                if let Some(&n) = chars.get(i + 1) {
+                    out.push(n);
+                    i += 2;
+                    continue;
+                }
+            }
+            if c == '"' {
+                in_str = false;
+            }
+            i += 1;
+            continue;
+        }
+        match c {
+            '"' => {
+                in_str = true;
+                out.push(c);
+            }
+            // The outermost `(` and its matching `)` are delimiters, not part of the value.
+            '(' => {
+                depth += 1;
+                if depth > 1 {
+                    out.push(c);
+                }
+            }
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((out, i + 1));
+                }
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
         i += 1;
     }
     None
