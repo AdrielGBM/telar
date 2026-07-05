@@ -17,7 +17,7 @@ col gap:20
         code_line code:"box shadow_y:6 shadow_blur:16 shadow_color:#00000033"
     col gap:8
         text "Colored glows — a shadow the same hue as the fill" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:24
+        card pad:24
             row gap:20 wrap
                 box fill:primary radius:12 width:150 height:72 shadow_y:8 shadow_blur:22 shadow_color:primary align:center justify:center
                     text "primary" size:12 color:on_primary
@@ -28,7 +28,7 @@ col gap:20
         code_line code:"box fill:primary shadow_y:8 shadow_blur:22 shadow_color:primary"
     col gap:8
         text "Offset — push the shadow on the x and y axes" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:24
+        card pad:24
             box fill:surface_alt radius:10 width:170 height:80 shadow_x:8 shadow_y:8 shadow_blur:4 shadow_color:warning
         code_line code:"box shadow_x:8 shadow_y:8 shadow_blur:4 shadow_color:warning"
     col gap:8
