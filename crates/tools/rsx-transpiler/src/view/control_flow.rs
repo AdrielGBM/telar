@@ -9,6 +9,11 @@ use super::{ChildEmit, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
     pub(super) fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {
+        // A `$`-signal in the condition makes this a reactive conditional: the shown branch swaps when the
+        // condition changes. A plain condition stays a one-shot construction `if` (branch chosen at build).
+        if block.condition.contains('$') {
+            return self.emit_reactive_if(block);
+        }
         let pad = self.indent_str();
         let mut code = String::new();
         // The condition is already trimmed by the parser and emitted verbatim, so its span maps directly.
@@ -27,6 +32,52 @@ impl ViewGen<'_> {
         }
         let _ = write!(code, "{pad}}}");
         ChildEmit::Dynamic { code }
+    }
+
+    /// Emits a reactive `if $cond { … } else { … }` as a single-item `ReactiveList` keyed on the condition
+    /// boolean: when the condition flips, the key changes, so the old branch's nodes are disposed and the
+    /// new branch is built. Modeling it on the list reconciler reuses all of its build/dispose/relayout
+    /// machinery — an `if` is just a list that holds one of two branches. A missing `else` is an empty branch.
+    fn emit_reactive_if(&mut self, block: &IfBlock) -> ChildEmit {
+        let var = self.next_variable_name("node");
+        let pad = self.indent_str();
+        let cond = block.condition.trim();
+
+        // Source yields a one-element `vec![<bool>]`; the element is the reconciliation key and the branch selector.
+        let source =
+            wrap_signal_clones(&[cond], format!("move || vec![{}]", substitute_reads(cond)));
+
+        let mut code = String::new();
+        let _ = writeln!(code, "{pad}let {var} = ReactiveList::new(");
+        let _ = writeln!(code, "{pad}    ctx,");
+        let _ = writeln!(code, "{pad}    {source},");
+        let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
+        let _ = writeln!(
+            code,
+            "{pad}    move |ctx: &mut WidgetCtx, __cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+        );
+        let _ = writeln!(
+            code,
+            "{pad}        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
+        );
+        let _ = writeln!(code, "{pad}        if __cond {{");
+        self.indent += 3;
+        self.emit_branch_into_children(&block.then_branch, &mut code);
+        self.indent -= 3;
+        let _ = writeln!(code, "{pad}        }} else {{");
+        if let Some(else_branch) = &block.else_branch {
+            self.indent += 3;
+            self.emit_branch_into_children(else_branch, &mut code);
+            self.indent -= 3;
+        }
+        let _ = writeln!(code, "{pad}        }}");
+        let _ = writeln!(
+            code,
+            "{pad}        Ok(box_item(Container::new(ctx, LayoutStyle::new().flex_column(), __children)?))"
+        );
+        let _ = writeln!(code, "{pad}    }},");
+        let _ = write!(code, "{pad})?;");
+        ChildEmit::Simple { name: var, code }
     }
 
     pub(super) fn emit_for(&mut self, block: &ForBlock) -> ChildEmit {

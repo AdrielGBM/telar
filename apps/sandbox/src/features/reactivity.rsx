@@ -26,6 +26,9 @@ let todos = signal(vec![
     },
 ]);
 
+// A reactive conditional: `if $show { … } else { … }` swaps the visible branch when this flips.
+let show = signal(true);
+
 [view]
 col gap:20
     doc_header kicker:"14 · INTERACTION" title:"Reactivity" desc:"A signal is reactive state; a memo derives from it. Read one with {$signal} and only the widgets that touch it recompute — no virtual DOM, no diffing."
@@ -59,6 +62,17 @@ col gap:20
                     box fill:primary radius:4 width:8 height:8
                     text "{todo.label}" size:14 color:ink
         code_line code:"for todo in $todos key todo.id   >   row …   (reused/moved/dropped by key)"
+    col gap:8
+        text "Reactive if/else — the shown branch swaps on a signal" size:13 color:ink
+        card gap:10
+            btn "Toggle" fill:primary on_press:|| $show.toggle()
+            if $show
+                row gap:8 align:center pad_y:4
+                    box fill:primary radius:4 width:8 height:8
+                    text "Now you see me" size:14 color:ink
+            else
+                text "…now you don't" size:14 color:muted
+        code_line code:"if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)"
     col gap:8
         text "Primitives" size:13 color:ink
         col gap:6

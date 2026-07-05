@@ -780,6 +780,46 @@ mod tests {
         );
     }
 
+    // An `if` whose condition reads a signal (`$`) becomes a reactive conditional: a single-item
+    // ReactiveList keyed on the bool, whose builder holds the then/else branches.
+    #[test]
+    fn reactive_if_emits_reactive_list() {
+        let src = "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"yes\"\n    else\n        text \"no\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("ReactiveList::new("),
+            "reactive if builds a ReactiveList:\n{code}"
+        );
+        assert!(
+            code.contains("move || vec![show.get()]"),
+            "condition read as source:\n{code}"
+        );
+        assert!(
+            code.contains("|__cond: &bool| *__cond"),
+            "bool key:\n{code}"
+        );
+        assert!(code.contains("if __cond"), "branch selector:\n{code}");
+    }
+
+    // A plain (non-`$`) condition stays a one-shot construction `if`.
+    #[test]
+    fn static_if_stays_construction() {
+        let src = "[view]\ncol\n    if some_flag\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("ReactiveList"),
+            "a plain if must not be reactive:\n{code}"
+        );
+        assert!(
+            code.contains("some_flag"),
+            "condition emitted verbatim:\n{code}"
+        );
+    }
+
     // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call
     // (no slot arg, no default), preserving the per-file fallback.
     #[test]
