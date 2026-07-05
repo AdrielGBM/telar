@@ -2,9 +2,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use geometry_core::Rect;
-use layout_core::{LayoutError, LayoutStyle};
+use layout_core::{AvailableSpace, LayoutError, LayoutStyle};
 use platform_core::{Event, ScrollDelta};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_widget_theme;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
@@ -284,6 +284,10 @@ impl Component for ScrollArea {
 pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
     core: ScrollCore,
+    // Lays the detached content subtree out against the viewport width whenever the viewport is (re)sized,
+    // so a `scroll` element works on its own — its content is not a taffy child of the viewport leaf, so
+    // nothing else would lay it out (the app shell computes only its OWN top-level scroll by hand).
+    _layout_effect: Effect,
 }
 
 impl LayoutScrollArea {
@@ -292,12 +296,31 @@ impl LayoutScrollArea {
         layout_style: LayoutStyle,
         content: Box<dyn LayoutItem>,
     ) -> Result<Self, LayoutError> {
+        let content_node = content.layout_node();
         let content_rect_signal =
-            track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
+            track_layout(ctx, content_node).expect("content node not registered in ctx");
         let leaf = LayoutLeaf::register(ctx, layout_style)?;
+
+        // Re-lay out the content at the viewport width (unbounded height, so it can overflow and scroll)
+        // each time the viewport resizes. The viewport rect is set by the surrounding layout; this effect
+        // fires during that flush — after the runtime borrow is released — so computing here is re-entrancy
+        // safe (same pattern as reactive lists).
+        let viewport = leaf.rect.clone();
+        let layout_effect = effect(move || {
+            let vp = viewport.get();
+            if vp.width > 0.0 {
+                let _ = crate::context::compute_layout_root(
+                    content_node,
+                    AvailableSpace::Definite(vp.width),
+                    AvailableSpace::MaxContent,
+                );
+            }
+        });
+
         Ok(Self {
             leaf,
             core: ScrollCore::new(content_rect_signal, content),
+            _layout_effect: layout_effect,
         })
     }
 
@@ -346,9 +369,42 @@ mod tests {
 
     use super::*;
     use crate::canvas::Canvas;
-    use crate::context::{WidgetCtx, compute_layout, new_container};
+    use crate::context::{WidgetCtx, compute_layout, new_container, track_layout};
     use crate::layout_item::LayoutItem;
     use crate::layout_leaf::LayoutLeaf;
+
+    // Laying out only the scroll node must, via its effect, lay out the detached content subtree too —
+    // a `scroll` element has no other owner to compute its content.
+    #[test]
+    fn scroll_area_lays_out_its_detached_content() {
+        let mut ctx = WidgetCtx::new();
+        let content = Canvas::new(
+            &mut ctx,
+            LayoutStyle::new().width(400.0).height(1000.0),
+            |_| RenderNode::Empty,
+        )
+        .unwrap();
+        let content_node = content.layout_node();
+        let scroll = LayoutScrollArea::new(
+            &mut ctx,
+            LayoutStyle::new().width(300.0).height(160.0),
+            Box::new(content),
+        )
+        .unwrap();
+        let scroll_node = scroll.layout_node();
+        compute_layout(
+            &mut ctx,
+            scroll_node,
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(160.0),
+        )
+        .unwrap();
+        let content_rect = track_layout(&ctx, content_node).unwrap().get();
+        assert!(
+            content_rect.height > 0.0,
+            "scroll must lay out its content, got {content_rect:?}"
+        );
+    }
 
     fn make_scroll_area() -> ScrollArea {
         let mut ctx = WidgetCtx::new();

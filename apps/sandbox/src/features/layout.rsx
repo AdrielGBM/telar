@@ -61,7 +61,7 @@ col gap:20
         text "scroll — a bounded viewport that scrolls its overflowing content" size:13 color:ink
         card
             scroll height:160
-                col gap:8 pad_x:2
+                col gap:8 pad_x:2 width:100%
                     for i in 0..12
                         box fill:surface_alt stroke:border radius:8 pad_x:14 pad_y:10
                             text "Scrollable item {i}" size:13 color:ink
