@@ -1,5 +1,7 @@
 [logic]
 let clicks = signal(0i32);
+let hovering = signal(false);
+let keys = signal(0i32);
 
 [view]
 col gap:20
@@ -40,6 +42,15 @@ col gap:20
                     text "Stroke + radius" size:13 color:ink
             text "Each box carries its own hover(...) — different hovers in one file, no signals." size:12 color:muted
         code_line code:"box fill:surface_alt hover(fill:primary)      (swap style while hovered)"
+    col gap:8
+        text "Event callbacks — on_hover (a bool) and on_key (global shortcut)" size:13 color:ink
+        card gap:10
+            box fill:surface_alt radius:10 pad:16 on_hover(|h| $hovering.set(h))
+                text "hover me — hovering: {$hovering}" size:14 color:ink
+            col on_key(|_k| $keys += 1)
+                text "keys pressed anywhere: {$keys}" size:14 color:muted
+            text "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key." size:12 color:muted
+        code_line code:"box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)"
     col gap:8
         text "Attributes" size:13 color:ink
         col gap:6

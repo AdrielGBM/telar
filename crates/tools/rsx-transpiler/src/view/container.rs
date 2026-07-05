@@ -24,11 +24,19 @@ impl ViewGen<'_> {
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
         let transform_call = self.transform_call(el);
+        let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
+        let on_key = self.closure_attr_call(el, "on_key", "on_key");
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
-        // A transform also upgrades a plain col/row to a StyledContainer (only it carries `with_transform`).
-        let pieces = if has_paint(&pattrs) || !hover_call.is_empty() || !transform_call.is_empty() {
+        // A transform or an event callback also upgrades a plain col/row to a StyledContainer (only it
+        // carries `with_transform`/`on_hover`/`on_key`).
+        let pieces = if has_paint(&pattrs)
+            || !hover_call.is_empty()
+            || !transform_call.is_empty()
+            || !on_hover.is_empty()
+            || !on_key.is_empty()
+        {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
         } else {
             None
@@ -54,7 +62,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}"
+                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}"
                 );
             }
             None => {
@@ -79,6 +87,8 @@ impl ViewGen<'_> {
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
         let transform_call = self.transform_call(el);
+        let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
+        let on_key = self.closure_attr_call(el, "on_key", "on_key");
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
@@ -102,7 +112,7 @@ impl ViewGen<'_> {
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
         let _ = writeln!(
             code,
-            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}"
+            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}"
         );
 
         let _ = write!(code, "{pad}}};");
@@ -126,11 +136,11 @@ impl ViewGen<'_> {
         format!(".on_hover_style({closure})")
     }
 
-    /// Builds the trailing `.on_press(...)` for a container element, or an empty string when there is no
-    /// `on_press` attribute. Mirrors the button emitter: `$name` signals are cloned into the closure,
+    /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`),
+    /// or an empty string when the attribute is absent. `$name` signals are cloned into the closure,
     /// `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
-    fn on_press_call(&self, el: &Element) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == "on_press") else {
+    fn closure_attr_call(&self, el: &Element, key: &str, method: &str) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
         let closure = substitute_handles(&normalize_closure(&attr.value));
@@ -141,7 +151,11 @@ impl ViewGen<'_> {
             closure_marker(Some(attr))
         };
         let call = wrap_signal_clones(&[attr.value.as_str()], format!("move {marker}{closure}"));
-        format!(".on_press({call})")
+        format!(".{method}({call})")
+    }
+
+    fn on_press_call(&self, el: &Element) -> String {
+        self.closure_attr_call(el, "on_press", "on_press")
     }
 
     /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate`

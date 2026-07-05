@@ -55,7 +55,9 @@ pub use motion_core as motion;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use paths::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
-pub use platform_core::{Event, FullscreenMode, ScrollDelta, WindowConfig, WindowPosition};
+pub use platform_core::{
+    Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowConfig, WindowPosition,
+};
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
     Effect, Memo, ReadSignal, RwSignal, batch, begin_batch, effect, end_batch, memo, reset_runtime,

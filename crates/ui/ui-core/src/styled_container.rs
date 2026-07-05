@@ -1,6 +1,6 @@
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::{Event, PointerButton, PointerSource};
+use platform_core::{Event, Key, PointerButton, PointerSource};
 use reactive_core::{RwSignal, signal};
 use renderer_core::RectStyle;
 use ui_tree::{Component, EventResult, RenderNode};
@@ -24,6 +24,11 @@ pub struct StyledContainer {
     children: TrackedChildren,
     // Optional tap gesture so a styled box can itself be pressable (a clickable card); children still hit-test first.
     press: PressGesture,
+    // Fires with `true`/`false` as the mouse enters/leaves the box (mouse only, like the hover style).
+    on_hover: Option<Box<dyn Fn(bool)>>,
+    // Fires on every key press. Key events carry no pointer position, so they are broadcast to every widget
+    // — this is a GLOBAL shortcut handler (there is no per-widget focus), not focused text input.
+    on_key: Option<Box<dyn Fn(&Key)>>,
 }
 
 impl StyledContainer {
@@ -44,6 +49,8 @@ impl StyledContainer {
             transform: Box::new(|_| None),
             children,
             press: PressGesture::default(),
+            on_hover: None,
+            on_key: None,
         })
     }
 
@@ -73,6 +80,20 @@ impl StyledContainer {
     /// a child widget that handles the press wins, and a scroll gesture started on the box does not fire it.
     pub fn on_press(mut self, f: impl Fn() + 'static) -> Self {
         self.press.set(f);
+        self
+    }
+
+    /// Fire `f(true)` when the mouse enters the box and `f(false)` when it leaves (mouse only). Independent
+    /// of `on_hover_style`: a box can observe hover without swapping its paint.
+    pub fn on_hover(mut self, f: impl Fn(bool) + 'static) -> Self {
+        self.on_hover = Some(Box::new(f));
+        self
+    }
+
+    /// Fire `f(&key)` on every key press. This is a GLOBAL handler (key events reach every widget; there is
+    /// no per-widget focus), so it suits app-level shortcuts, not focused text entry.
+    pub fn on_key(mut self, f: impl Fn(&Key) + 'static) -> Self {
+        self.on_key = Some(Box::new(f));
         self
     }
 }
@@ -116,8 +137,12 @@ impl Component for StyledContainer {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        // No tap handler and no hover style: behave exactly as a plain container (pure child routing).
-        if !self.press.is_set() && self.hover_style.is_none() {
+        // No tap handler, hover style, or event callbacks: behave exactly as a plain container (pure routing).
+        if !self.press.is_set()
+            && self.hover_style.is_none()
+            && self.on_hover.is_none()
+            && self.on_key.is_none()
+        {
             return dispatch_container_event(&mut self.children, event);
         }
         let rect = self.rect.get();
@@ -128,10 +153,14 @@ impl Component for StyledContainer {
             Event::PointerMoved { x, y, source } => {
                 self.press.track_move(event);
                 let child = dispatch_container_event(&mut self.children, event);
-                if self.hover_style.is_some() && matches!(source, PointerSource::Mouse) {
+                let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
+                if tracks_hover && matches!(source, PointerSource::Mouse) {
                     let inside = rect.contains(*x as f32, *y as f32);
                     if inside != self.is_hovered.get() {
                         self.is_hovered.set(inside);
+                        if let Some(cb) = &self.on_hover {
+                            cb(inside);
+                        }
                         return EventResult::Handled;
                     }
                 }
@@ -168,8 +197,19 @@ impl Component for StyledContainer {
             }
             Event::CursorLeft => {
                 self.press.cancel();
-                if self.hover_style.is_some() && self.is_hovered.get() {
+                if (self.hover_style.is_some() || self.on_hover.is_some()) && self.is_hovered.get()
+                {
                     self.is_hovered.set(false);
+                    if let Some(cb) = &self.on_hover {
+                        cb(false);
+                    }
+                }
+                dispatch_container_event(&mut self.children, event)
+            }
+            // Broadcast (no pointer position): fire the global key handler, then keep routing to children.
+            Event::KeyPressed { key, .. } => {
+                if let Some(cb) = &self.on_key {
+                    cb(key);
                 }
                 dispatch_container_event(&mut self.children, event)
             }
@@ -279,6 +319,70 @@ mod tests {
             button: PointerButton::Primary,
             source,
         }
+    }
+
+    #[test]
+    fn on_hover_fires_on_enter_and_leave() {
+        let seen: Rc<Cell<Option<bool>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let mut ctx = WidgetCtx::new();
+        let inner = Container::new(
+            &mut ctx,
+            LayoutStyle::new().width(100.0).height(100.0),
+            vec![],
+        )
+        .unwrap();
+        let mut card = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![Box::new(inner)],
+        )
+        .unwrap()
+        .on_hover(move |h| sink.set(Some(h)));
+        let node = card.layout_node();
+        compute_layout(
+            &mut ctx,
+            node,
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        card.on_event(&Event::PointerMoved {
+            x: 50.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(seen.get(), Some(true), "entering fires on_hover(true)");
+        card.on_event(&Event::CursorLeft);
+        assert_eq!(seen.get(), Some(false), "leaving fires on_hover(false)");
+    }
+
+    #[test]
+    fn on_key_fires_on_key_press() {
+        let count = Rc::new(Cell::new(0u32));
+        let sink = count.clone();
+        let mut ctx = WidgetCtx::new();
+        let inner = Container::new(
+            &mut ctx,
+            LayoutStyle::new().width(10.0).height(10.0),
+            vec![],
+        )
+        .unwrap();
+        let mut card = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column(),
+            |_r| RectStyle::default(),
+            vec![Box::new(inner)],
+        )
+        .unwrap()
+        .on_key(move |_k| sink.set(sink.get() + 1));
+        card.on_event(&Event::KeyPressed {
+            key: Key::Char('a'),
+            modifiers: platform_core::ModifiersState::default(),
+        });
+        assert_eq!(count.get(), 1, "a key press fires on_key");
     }
 
     #[derive(Clone)]

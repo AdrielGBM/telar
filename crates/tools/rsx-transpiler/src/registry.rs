@@ -111,6 +111,8 @@ const CONTAINER_PAINT: &[&str] = &[
     "gr",
     "opacity",
     "on_press",
+    "on_hover",
+    "on_key",
     "hover",
     "transition",
     // Declarative affine transform (see `container::transform_call`); resolved per-render like opacity.

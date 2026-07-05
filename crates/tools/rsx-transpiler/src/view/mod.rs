@@ -875,6 +875,32 @@ mod tests {
         );
     }
 
+    // `on_hover`/`on_key` attributes emit the matching container methods, with signal sugar applied.
+    #[test]
+    fn event_callbacks_emit_on_hover_and_on_key() {
+        // Paren form for both, since `key:value` consumes to end of line (only the last attr can use `:`).
+        let src = "[logic]\nlet hot = signal(false);\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_hover(|h| $hot.set(h)) on_key(|_k| $n += 1)\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(".on_hover("), "emits on_hover:\n{code}");
+        assert!(code.contains(".on_key("), "emits on_key:\n{code}");
+    }
+
+    // An event callback upgrades a plain col/row to a StyledContainer (only it carries the callbacks).
+    #[test]
+    fn on_hover_promotes_plain_container() {
+        let src = "[view]\ncol\n    col on_hover:|_h| ()\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("StyledContainer"),
+            "promoted to styled:\n{code}"
+        );
+        assert!(code.contains(".on_hover("), "carries the callback:\n{code}");
+    }
+
     // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call
     // (no slot arg, no default), preserving the per-file fallback.
     #[test]
