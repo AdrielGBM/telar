@@ -11,7 +11,10 @@ mod transition;
 mod view;
 
 pub use codegen::{ExprSpan, TranspiledSource, source_map_to_json, transpile_source_with_theme};
-pub use discovery::{collect_files_by_ext, find_rsx_files, relative_output_path, relative_stem};
+pub use discovery::{
+    assets_root, auto_modules_enabled, collect_files_by_ext, discover_rust_modules, find_rsx_files,
+    relative_output_path, relative_stem,
+};
 pub use error::TranspileError;
 pub use registry::{
     TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, is_builtin_tag,
@@ -159,6 +162,29 @@ col @card
         assert!(code.contains(".on_click(move || count.update(|n| *n += 1))"));
         assert!(code.contains("Container::new(ctx, style_card(), children!["));
         assert!(code.contains("Ok(Box::new(__col_0))"));
+    }
+
+    // `has_props` lets the app macro alias a nested component's `Props` type by its base name only when it actually has one.
+    #[test]
+    fn reports_has_props() {
+        let with = transpile_source_with_theme(
+            "[logic]\npub struct Props {\n    pub title: &'static str,\n}\n[view]\ntext \"{props.title}\"\n",
+            "shared_components_card",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(with.has_props);
+        assert!(with.rust_code.contains("SharedComponentsCardProps"));
+
+        let without = transpile_source_with_theme(
+            "[view]\ntext \"hi\"\n",
+            "shared_components_note",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(!without.has_props);
     }
 
     #[test]

@@ -8,3 +8,4 @@ edition = "2024"
 renderer-assets = { workspace = true, features = ["dynamic-svg", "dynamic-image"] }
 rsx-parser = { workspace = true }
 thiserror = { workspace = true }
+toml.workspace = true

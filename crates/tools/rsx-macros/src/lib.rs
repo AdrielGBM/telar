@@ -39,6 +39,9 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     let src_dir = manifest_dir.join("src");
     let rsx_files = rsx_transpiler::find_rsx_files(&src_dir);
+    // Baked `src:"..."` asset paths resolve against one project asset root (default `./assets`), not
+    // each `.rsx`'s own directory — see `[rsx] assets` in rsx.toml.
+    let assets_root = rsx_transpiler::assets_root(&manifest_dir);
 
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
@@ -59,7 +62,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             &source,
             &stem,
             Some(theme_type_str.as_str()),
-            rsx_file.parent(),
+            Some(assets_root.as_path()),
         ) {
             Ok(r) => r,
             Err(rsx_transpiler::TranspileError::Parse(ref pe)) => {
@@ -121,11 +124,65 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub use #mod_ident::*;
         });
 
+        // Let a nested component be referenced in markup by its bare file name, not its path-flattened
+        // name: alias the path-derived fn (and Props type) to the basename at crate root. Skipped for
+        // files directly under src/ (basename already equals the full name). Two files sharing a basename
+        // in different dirs make the alias ambiguous — a compile error only if actually referenced by the
+        // short name, which is the intended "keep basenames unique" contract.
+        let base_name = rsx_file
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let base_fn = rsx_transpiler::naming::to_snake_case(&base_name);
+        let full_fn = rsx_transpiler::naming::to_snake_case(&stem);
+        if !base_fn.is_empty() && base_fn != full_fn {
+            let full_fn_ident = Ident::new(&full_fn, Span::call_site());
+            let base_fn_ident = Ident::new(&base_fn, Span::call_site());
+            include_stmts.extend(quote! {
+                #[allow(unused_imports)]
+                pub use #mod_ident::#full_fn_ident as #base_fn_ident;
+            });
+            if result.has_props {
+                let full_props = Ident::new(
+                    &(rsx_transpiler::naming::to_pascal_case(&full_fn) + "Props"),
+                    Span::call_site(),
+                );
+                let base_props = Ident::new(
+                    &(rsx_transpiler::naming::to_pascal_case(&base_fn) + "Props"),
+                    Span::call_site(),
+                );
+                include_stmts.extend(quote! {
+                    #[allow(unused_imports)]
+                    pub use #mod_ident::#full_props as #base_props;
+                });
+            }
+        }
+
         let rsx_path_str = rsx_file.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_path_str); });
 
         if !result.preview_names.is_empty() {
             preview_const_idents.push(preview_const_ident(&stem));
+        }
+    }
+
+    // Opt-in via `[rsx] auto_modules = true` in rsx.toml: declare the hand-written `.rs` modules by
+    // walking the source tree, so an app needs no `mod.rs`/`mod` statements for them — mirroring how
+    // `.rsx` files are auto-wired. The emitted `pub mod` tree resolves file paths naturally (no `#[path]`).
+    let rsx_toml = manifest_dir.join("rsx.toml");
+    if rsx_toml.exists() {
+        // Re-run the macro when rsx.toml changes (e.g. toggling auto_modules), like the `.rsx` sources.
+        let rsx_toml_str = rsx_toml.to_string_lossy().to_string();
+        rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_toml_str); });
+    }
+    if rsx_transpiler::auto_modules_enabled(&manifest_dir) {
+        let modules_src = rsx_transpiler::discover_rust_modules(&src_dir);
+        match modules_src.parse::<TokenStream2>() {
+            Ok(tokens) => include_stmts.extend(tokens),
+            Err(e) => {
+                let msg = format!("Failed to emit auto-discovered modules: {e}");
+                return quote! { compile_error!(#msg) }.into();
+            }
         }
     }
 

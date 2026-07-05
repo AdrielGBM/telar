@@ -30,6 +30,8 @@ pub struct TranspiledSource {
     pub source_map: Vec<Option<u32>>,
     /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the generated Rust. In-memory only (not serialized, not part of the `.rs.map`): the analyzer uses them to offer Rust completion inside `[view]` expressions. See [`ExprSpan`].
     pub expr_spans: Vec<ExprSpan>,
+    /// Whether the component takes a `Props` argument, so callers can alias its `Props` type by base name.
+    pub has_props: bool,
 }
 
 /// A `[view]` Rust expression that is copied byte-for-byte from the `.rsx` source into the generated Rust, so `gen_start + (cursor_byte - rsx_start)` maps a `.rsx` cursor onto the generated file on a UTF-8 char boundary. Only emitted for verbatim fragments (interpolation `{expr}`, `if`/`let` expressions, verbatim closure / pass-through attr values); non-verbatim ones (`for` re-tokenized patterns, transformed numeric/color attrs) produce no span.
@@ -317,6 +319,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         preview_names: doc.previews.iter().map(|p| p.name.clone()).collect(),
         source_map: code.map,
         expr_spans,
+        has_props,
     })
 }
 

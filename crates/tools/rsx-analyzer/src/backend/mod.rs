@@ -599,13 +599,17 @@ impl Backend {
     /// `textDocument/documentLink`: clickable links for `img src:"…"` asset paths that exist on disk.
     pub async fn document_link(&self, params: DocumentLinkParams) -> Option<Vec<DocumentLink>> {
         let uri = &params.text_document.uri;
-        let file_dir = crate::uri::to_path(uri)?.parent()?.to_path_buf();
+        let path = crate::uri::to_path(uri)?;
+        // Resolve links against the project asset root (matching the baker), falling back to the file's dir when there is no rsx.toml.
+        let assets_dir = rsx_workspace::find_rsx_root(&path)
+            .map(|root| rsx_transpiler::assets_root(&root))
+            .or_else(|| path.parent().map(|p| p.to_path_buf()))?;
         let store = self.store.read().await;
         let parsed = store.get(uri)?;
         Some(crate::analysis::links::document_links(
             &parsed.document,
             &parsed.source,
-            &file_dir,
+            &assets_dir,
         ))
     }
 

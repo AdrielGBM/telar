@@ -40,9 +40,15 @@ pub fn generated_target(
     let src_dir = root.join("src");
     let rel = rsx_transpiler::relative_output_path(rsx_path, &src_dir)?;
     let stem = rsx_transpiler::relative_stem(rsx_path, &src_dir);
-    let result =
-        rsx_transpiler::transpile_source_with_theme(source, &stem, theme_type, rsx_path.parent())
-            .ok()?;
+    // Match the macro: baked `src:"..."` paths resolve against the project asset root, not the `.rsx` dir.
+    let assets_root = rsx_transpiler::assets_root(&root);
+    let result = rsx_transpiler::transpile_source_with_theme(
+        source,
+        &stem,
+        theme_type,
+        Some(assets_root.as_path()),
+    )
+    .ok()?;
     let out_path = root.join(".rsx").join("build").join(&rel);
     Some(GeneratedTarget {
         path: out_path,

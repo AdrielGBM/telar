@@ -31,6 +31,7 @@ pub(crate) struct RsxConfig {
     pub backend: Option<RendererBackend>,
     #[serde(default)]
     pub dev: Option<DevConfig>,
+    // Note: `[rsx] auto_modules` is read directly by the `rsx::app!` macro, not by cargo-rsx; serde ignores the unknown key here so it needs no field.
 }
 
 #[derive(Deserialize, Default)]
