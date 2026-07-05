@@ -51,6 +51,20 @@ impl LayoutEngine {
             .map_err(LayoutError::from)
     }
 
+    /// Replaces `parent`'s children with `children`, in order. Used by reactive lists to insert, move,
+    /// and drop item nodes as their source collection changes.
+    pub fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
+        self.tree
+            .set_children(parent, children)
+            .map_err(LayoutError::from)
+    }
+
+    /// Frees a node (and its measure context) from the tree. The caller must have already detached it from
+    /// its parent (via [`set_children`]); a removed node id must not be used again.
+    pub fn remove(&mut self, node: NodeId) {
+        let _ = self.tree.remove(node);
+    }
+
     pub fn mark_dirty(&mut self, node: NodeId) -> Result<(), LayoutError> {
         self.tree.mark_dirty(node).map_err(LayoutError::from)
     }

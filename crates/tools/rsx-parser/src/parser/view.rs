@@ -134,8 +134,8 @@ impl Parser {
         let rest = after.trim().to_string();
         self.pos += 1;
 
-        // Split on the first standalone ` in ` keyword.
-        let (pattern, iterable) = split_for_in(&rest).ok_or_else(|| ParseError {
+        // Split on the first standalone ` in ` keyword, then peel off an optional `key <expr>` clause.
+        let (pattern, iterable, key_expr) = split_for_in(&rest).ok_or_else(|| ParseError {
             message: format!("expected `for <pattern> in <expr>`, got `for {rest}`"),
             line: number,
         })?;
@@ -145,6 +145,7 @@ impl Parser {
         Ok(ViewNode::ForBlock(ForBlock {
             pattern,
             iterable,
+            key_expr,
             body,
             line: number,
             pattern_start: rest_start,
@@ -207,16 +208,23 @@ impl Parser {
     }
 }
 
-/// Splits a `for` header on the first top-level ` in ` keyword.
-fn split_for_in(rest: &str) -> Option<(String, String)> {
+/// Splits a `for` header into `(pattern, iterable, key_expr)`: on the first ` in ` keyword, then on an
+/// optional trailing ` key <expr>` clause (used to key a reactive list for reconciliation).
+fn split_for_in(rest: &str) -> Option<(String, String, Option<String>)> {
     let tokens: Vec<&str> = rest.split_whitespace().collect();
     let in_idx = tokens.iter().position(|&t| t == "in")?;
     if in_idx == 0 || in_idx + 1 >= tokens.len() {
         return None;
     }
     let pattern = tokens[..in_idx].join(" ");
-    let iterable = tokens[in_idx + 1..].join(" ");
-    Some((pattern, iterable))
+    let after_in = &tokens[in_idx + 1..];
+    let (iterable, key_expr) = match after_in.iter().position(|&t| t == "key") {
+        Some(ki) if ki > 0 && ki + 1 < after_in.len() => {
+            (after_in[..ki].join(" "), Some(after_in[ki + 1..].join(" ")))
+        }
+        _ => (after_in.join(" "), None),
+    };
+    Some((pattern, iterable, key_expr))
 }
 
 /// Extracts `w, h` from a `|w, h|` canvas closure-param line.

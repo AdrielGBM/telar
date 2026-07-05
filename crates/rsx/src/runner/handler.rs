@@ -319,6 +319,13 @@ where
         // Drive the motion engine before tree_dirty is read below: tick()'s .set() calls only enqueue effects while a batch is open (new_events already opened one), so force a flush here to re-run any segment reading an animated value now, not on the next cycle. This is what makes an animation-only frame (no user event, tree otherwise clean) observe interpolated values in this same frame's tree.commands().
         self.app.motion_tick(std::time::Instant::now());
         end_batch();
+        // Runtime-driven relayout: a reactive change (e.g. a reactive list adding/removing items) mutated
+        // the layout tree during the flush above but the app shell only recomputes layout on resize/route
+        // changes. Re-lay out any dirtied root here — outside a batch, so the rect updates it produces flush
+        // their segment effects before tree_dirty is read below and the frame is composed. Routed through
+        // the app so the dylib-backed `HotApp` relayouts the dylib's runtime (where the tree lives), not the
+        // host's empty one.
+        self.app.relayout();
         begin_batch();
 
         let mut redraw_requested = false;

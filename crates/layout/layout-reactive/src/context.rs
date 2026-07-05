@@ -1,56 +1,141 @@
+use std::cell::RefCell;
+
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, MeasureFn, NodeId};
 use reactive_core::{RwSignal, batch, signal};
 use rustc_hash::FxHashMap;
 
+thread_local! {
+    // The layout tree is a per-thread singleton so nodes can be created and laid out from anywhere —
+    // including reactive effects (reactive lists) that fire without a `&mut WidgetCtx` in hand. `WidgetCtx`
+    // is now just a handle; its parameters are kept on the public functions so existing widget
+    // constructors and generated `.rsx` fns compile unchanged.
+    static RUNTIME: RefCell<LayoutRuntime> = RefCell::new(LayoutRuntime::new());
+}
+
+fn with_runtime<R>(f: impl FnOnce(&mut LayoutRuntime) -> R) -> R {
+    RUNTIME.with(|rt| f(&mut rt.borrow_mut()))
+}
+
 pub fn new_leaf(
-    ctx: &mut WidgetCtx,
+    _ctx: &mut WidgetCtx,
     style: LayoutStyle,
 ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
-    ctx.new_leaf(style)
+    with_runtime(|rt| rt.new_leaf(style))
 }
 
 /// A leaf whose intrinsic size is computed by `measure` at layout time (e.g. text
 /// whose height depends on how many lines it wraps into at the resolved width).
 pub fn new_measured_leaf(
-    ctx: &mut WidgetCtx,
+    _ctx: &mut WidgetCtx,
     style: LayoutStyle,
     measure: MeasureFn,
 ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
-    ctx.new_measured_leaf(style, measure)
+    with_runtime(|rt| rt.new_measured_leaf(style, measure))
 }
 
 pub fn new_container(
-    ctx: &mut WidgetCtx,
+    _ctx: &mut WidgetCtx,
     style: LayoutStyle,
     children: &[NodeId],
 ) -> Result<NodeId, LayoutError> {
-    ctx.new_container(style, children)
+    with_runtime(|rt| rt.new_container(style, children))
 }
 
 pub fn compute_layout(
-    ctx: &mut WidgetCtx,
+    _ctx: &mut WidgetCtx,
     root: NodeId,
     width: AvailableSpace,
     height: AvailableSpace,
 ) -> Result<(), LayoutError> {
-    ctx.compute_layout(root, width, height)
+    compute_layout_root(root, width, height)
 }
 
-pub fn track_layout(ctx: &WidgetCtx, node: NodeId) -> Option<RwSignal<Rect>> {
-    ctx.track_layout(node)
+/// Lays out `root` against the given space and reflects the result into each node's rect signal.
+/// Collects the (signal, rect) updates while holding the runtime borrow, then applies them in a batch
+/// *after* releasing it — a rect `.set()` can flush effects, and one of those may itself touch the
+/// layout runtime (a reactive list), which would re-enter the borrow.
+pub fn compute_layout_root(
+    root: NodeId,
+    width: AvailableSpace,
+    height: AvailableSpace,
+) -> Result<(), LayoutError> {
+    let updates = with_runtime(|rt| rt.compute_layout(root, width, height))?;
+    batch(|| {
+        for (sig, rect) in updates {
+            if sig.peek() != rect {
+                sig.set(rect);
+            }
+        }
+    });
+    Ok(())
 }
 
-pub fn mark_dirty(ctx: &mut WidgetCtx, node: NodeId) -> Result<(), LayoutError> {
-    ctx.mark_dirty(node)
+/// Re-lays out every root that has been computed at least once, picking up any nodes a reactive change
+/// dirtied since the last frame. Each `compute_layout` early-returns when its root is clean and the space
+/// is unchanged, so this is cheap on a still frame. The runtime calls it once per redraw (after flushing
+/// reactive effects, before rendering) so a data change deep in the tree — e.g. a reactive list adding an
+/// item — is reflected in layout without the app shell knowing about it. Node dirtiness propagates up to
+/// the root through taffy, so a dirtied list container makes its root recompute.
+pub fn relayout_if_dirty() {
+    let roots: Vec<(NodeId, AvailableSpace, AvailableSpace)> = with_runtime(|rt| {
+        rt.last_space
+            .iter()
+            .map(|(&n, &(w, h))| (n, w, h))
+            .collect()
+    });
+    for (root, width, height) in roots {
+        let _ = compute_layout_root(root, width, height);
+    }
+}
+
+pub fn track_layout(_ctx: &WidgetCtx, node: NodeId) -> Option<RwSignal<Rect>> {
+    with_runtime(|rt| rt.track_layout(node))
+}
+
+pub fn mark_dirty(_ctx: &mut WidgetCtx, node: NodeId) -> Result<(), LayoutError> {
+    with_runtime(|rt| rt.mark_dirty(node))
 }
 
 /// Shows or hides a node in layout flow. A hidden node takes no space (and lays out none of its subtree); mark an ancestor dirty and recompute for the change to take effect. Used for responsive layouts (e.g. collapsing a sidebar on narrow windows).
-pub fn set_display(ctx: &mut WidgetCtx, node: NodeId, visible: bool) {
-    ctx.set_display(node, visible)
+pub fn set_display(_ctx: &mut WidgetCtx, node: NodeId, visible: bool) {
+    with_runtime(|rt| rt.set_display(node, visible))
 }
 
-pub struct WidgetCtx {
+/// Replaces `parent`'s children with `children`, in order, marking `parent` dirty. Takes no `WidgetCtx`
+/// because reactive lists call it from an effect (which has no `&mut ctx`), operating on the thread-local
+/// runtime. `parent` must be a container already registered in the runtime.
+pub fn set_children(parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
+    with_runtime(|rt| rt.set_children(parent, children))
+}
+
+/// Detaches and frees `node` (a former list item) from the runtime: removes it from the layout tree and
+/// drops its rect signal and bookkeeping. The caller must have removed it from its parent's child list
+/// (via [`set_children`]) first.
+pub fn remove_node(node: NodeId) {
+    with_runtime(|rt| rt.remove_node(node))
+}
+
+/// A handle to the thread-local layout runtime. Carries no state itself; kept as a parameter on widget
+/// constructors and generated `.rsx` functions so the migration to a runtime-driven layout does not
+/// churn every signature. `new()` resets the runtime for a fresh tree (one live tree per thread).
+pub struct WidgetCtx;
+
+impl WidgetCtx {
+    pub fn new() -> Self {
+        with_runtime(|rt| *rt = LayoutRuntime::new());
+        WidgetCtx
+    }
+
+    /// A handle to the existing runtime that does NOT reset it, so code running after the tree is built
+    /// (a reactive list's effect) can construct widgets against the live tree. Unlike `new()`, which
+    /// starts a fresh tree, this leaves all existing nodes in place.
+    pub fn handle() -> Self {
+        WidgetCtx
+    }
+}
+
+struct LayoutRuntime {
     engine: LayoutEngine,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
     parents: FxHashMap<NodeId, NodeId>,
@@ -66,8 +151,8 @@ pub struct WidgetCtx {
     is_computing: bool,
 }
 
-impl WidgetCtx {
-    pub fn new() -> Self {
+impl LayoutRuntime {
+    fn new() -> Self {
         Self {
             engine: LayoutEngine::new(),
             registry: FxHashMap::default(),
@@ -131,19 +216,19 @@ impl WidgetCtx {
         Ok(node)
     }
 
-    pub(crate) fn compute_layout(
+    fn compute_layout(
         &mut self,
         root: NodeId,
         width: AvailableSpace,
         height: AvailableSpace,
-    ) -> Result<(), LayoutError> {
+    ) -> Result<Vec<(RwSignal<Rect>, Rect)>, LayoutError> {
         // A changed available space (window resize) must re-run layout even when the node is clean: dirty the root so the cached size from the previous space is discarded. Skip only when both the node is clean and the space is unchanged.
         let is_space_changed = self.last_space.get(&root) != Some(&(width, height));
         if is_space_changed {
             self.engine.mark_dirty(root).ok();
             self.last_space.insert(root, (width, height));
         } else if !self.engine.is_dirty(root) {
-            return Ok(());
+            return Ok(Vec::new());
         }
         // A layout root fills the definite space it is computed in: an auto width or height becomes the available size, so a top-level page need not declare width:100% to avoid collapsing to its content. Only this root is affected.
         let (width_auto, height_auto) = match self.root_auto.get(&root).copied() {
@@ -189,7 +274,7 @@ impl WidgetCtx {
         let mut dirty_nodes = Vec::new();
         self.engine.collect_dirty_nodes(root, &mut dirty_nodes);
         if dirty_nodes.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         #[cfg(debug_assertions)]
         {
@@ -230,23 +315,23 @@ impl WidgetCtx {
             self.engine
                 .compute_layout(layout_root, layout_width, layout_height)?;
         }
+        // Collect the changed rects while holding the runtime borrow, but apply them (`sig.set`) only
+        // after the caller releases it: a set flushes effects, one of which may re-enter the runtime.
+        let mut updates: Vec<(RwSignal<Rect>, Rect)> = Vec::new();
         let registry = &self.registry;
-        let mut walk_result = Ok(());
-        batch(|| {
-            walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
-                if let Some(sig) = registry.get(&node_id) {
-                    if sig.peek() != rect {
-                        sig.set(rect);
-                    }
+        let walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
+            if let Some(sig) = registry.get(&node_id) {
+                if sig.peek() != rect {
+                    updates.push((sig.clone(), rect));
                 }
-                true
-            });
+            }
+            true
         });
         #[cfg(debug_assertions)]
         {
             self.is_computing = false;
         }
-        walk_result
+        walk_result.map(|()| updates)
     }
 
     fn find_boundary_root(
@@ -304,6 +389,25 @@ impl WidgetCtx {
 
     pub(crate) fn set_display(&mut self, node: NodeId, visible: bool) {
         self.engine.set_display(node, visible);
+    }
+
+    fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
+        self.engine.set_children(parent, children)?;
+        for &child in children {
+            self.parents.insert(child, parent);
+        }
+        self.engine.mark_dirty(parent).ok();
+        Ok(())
+    }
+
+    fn remove_node(&mut self, node: NodeId) {
+        self.engine.remove(node);
+        self.registry.remove(&node);
+        self.parents.remove(&node);
+        self.boundary_nodes.remove(&node);
+        self.last_space.remove(&node);
+        self.root_auto.remove(&node);
+        self.constrained.retain(|(n, _, _)| *n != node);
     }
 }
 

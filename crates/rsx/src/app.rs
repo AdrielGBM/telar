@@ -40,6 +40,15 @@ pub trait App: 'static {
         motion_core::has_active()
     }
 
+    /// Re-lays out any dirtied layout root so a reactive change (e.g. a reactive list adding an item)
+    /// is reflected before the frame is composed. Only the dylib-backed `HotApp` overrides this — in dev
+    /// mode the app's layout tree lives in the dylib's runtime, so the host must relayout across the FFI
+    /// boundary rather than its own (empty) copy.
+    #[doc(hidden)]
+    fn relayout(&self) {
+        ui_core::relayout_if_dirty();
+    }
+
     /// Opens a reactive batch in THIS app's runtime for the duration of event dispatch (paired with
     /// `end_event_batch`). Only the dylib-backed `HotApp` overrides it — in dev mode host and app link
     /// separate reactive-core copies with separate runtimes, and the host's own batch cannot reach the

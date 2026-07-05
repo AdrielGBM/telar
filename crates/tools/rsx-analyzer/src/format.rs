@@ -266,7 +266,13 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
         }
         ViewNode::ForBlock(block) => {
             out.push_str(&pad);
-            out.push_str(&format!("for {} in {}\n", block.pattern, block.iterable));
+            match &block.key_expr {
+                Some(key) => out.push_str(&format!(
+                    "for {} in {} key {}\n",
+                    block.pattern, block.iterable, key
+                )),
+                None => out.push_str(&format!("for {} in {}\n", block.pattern, block.iterable)),
+            }
             for child in &block.body {
                 emit_node(child, depth + 1, out);
             }
@@ -482,6 +488,19 @@ mod tests {
         let out = format_document(src).unwrap();
         let expected = "[view]\ncol @card\n    text \"Hi\" size:14 color:dark\n    row gap:8\n        btn \"+\" fill:primary on_press:|| count.update(|n| *n += 1)\n";
         assert_eq!(out, expected);
+    }
+
+    // Formatting a reactive `for` must preserve its `key <expr>` clause — dropping it turns a reactive
+    // list into a compile error on the next save.
+    #[test]
+    fn preserves_reactive_for_key_clause() {
+        let src =
+            "[view]\ncol\n    for todo in $todos key todo.id\n        text \"{todo.label}\"\n";
+        let out = format_document(src).unwrap();
+        assert!(
+            out.contains("for todo in $todos key todo.id"),
+            "the key clause must survive formatting:\n{out}"
+        );
     }
 
     #[test]

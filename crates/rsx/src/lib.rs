@@ -79,9 +79,9 @@ pub use ui_core::Svg;
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Button, ButtonStyle, Canvas, ClippedItem, Component, ComponentList, Container, EventResult,
-    Image, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, Rectangle, RenderNode,
-    ScrollbarStyle, Slots, StyledContainer, Text, WidgetCtx, box_item, compute_layout, mark_dirty,
-    new_container, new_leaf, set_display, track_layout,
+    Image, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, ReactiveList, Rectangle,
+    RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, WidgetCtx, box_item, compute_layout,
+    mark_dirty, new_container, new_leaf, relayout_if_dirty, set_display, track_layout,
 };
 
 #[cfg(all(feature = "preview", not(target_os = "android")))]

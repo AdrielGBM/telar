@@ -725,6 +725,61 @@ mod tests {
         assert!(code.contains(".with_ellipsis(true)"), "ellipsis:\n{code}");
     }
 
+    // A `$`-source `for` with a `key` clause emits a ReactiveList (source read, key closure, item builder).
+    #[test]
+    fn reactive_for_emits_reactive_list() {
+        let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("ReactiveList::new("),
+            "reactive for should build a ReactiveList:\n{code}"
+        );
+        assert!(
+            code.contains("move || items.get()"),
+            "source reads the signal:\n{code}"
+        );
+        assert!(
+            code.contains("|n| *n"),
+            "key closure from `key *n`:\n{code}"
+        );
+        assert!(
+            code.contains("move |ctx: &mut WidgetCtx, n|"),
+            "item builder closure:\n{code}"
+        );
+    }
+
+    // A reactive `for` without a `key` clause is a compile_error (reconciliation needs identity).
+    #[test]
+    fn reactive_for_without_key_errors() {
+        let src = "[view]\ncol\n    for n in $items\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!") && code.contains("key"),
+            "a keyless reactive for should emit a compile_error:\n{code}"
+        );
+    }
+
+    // A non-`$` `for` stays the one-time construction loop.
+    #[test]
+    fn static_for_stays_construction_loop() {
+        let src = "[view]\ncol\n    for n in 0..3\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("ReactiveList"),
+            "a plain for must not be reactive:\n{code}"
+        );
+        assert!(
+            code.contains("for n in 0..3"),
+            "construction loop preserved:\n{code}"
+        );
+    }
+
     // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call
     // (no slot arg, no default), preserving the per-file fallback.
     #[test]

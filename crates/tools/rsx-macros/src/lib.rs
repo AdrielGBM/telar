@@ -341,6 +341,13 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_end_batch() {
                 ::rsx::end_batch();
             }
+            // Relayout the dylib's own layout runtime: the layout tree (taffy nodes) lives in the dylib's
+            // thread-local runtime, so the host must drive relayout across this boundary for a reactive
+            // list change to be laid out — its own copy is empty.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_relayout() {
+                ::rsx::relayout_if_dirty();
+            }
         }
     } else {
         quote! {}

@@ -73,6 +73,17 @@ impl crate::app::App for HotApp {
             unsafe { end() }
         }
     }
+
+    // Relayout the dylib's own layout runtime (separate from the host's) so a reactive list change is laid
+    // out before the frame composes. Missing symbol (dylib built before this existed) degrades to a no-op.
+    fn relayout(&self) {
+        if let Ok(relayout) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn()>(b"_rsx_hot_relayout\0")
+        } {
+            unsafe { relayout() }
+        }
+    }
 }
 
 #[cfg(feature = "dev")]

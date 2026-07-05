@@ -13,10 +13,34 @@ use crate::layout_leaf::LayoutLeaf;
 /// A container child. The boxed widget is shared (`Rc<RefCell<…>>`) between event dispatch (which
 /// borrows it mutably) and its render `segment` (which borrows it immutably to flatten its `view()`)
 /// — they never overlap because dispatch is batched. `rect` is the child's layout signal for hit-testing.
+/// `Clone` is a cheap handle copy (all fields are `Rc`/signal): a reactive list clones a `Child` to move
+/// a reused item to its new position without rebuilding it.
+#[derive(Clone)]
 pub(crate) struct Child {
     pub(crate) item: Rc<RefCell<Box<dyn LayoutItem>>>,
     pub(crate) rect: Option<RwSignal<Rect>>,
     pub(crate) segment: Rc<Segment>,
+}
+
+impl Child {
+    /// The child's layout node, read through the shared widget.
+    pub(crate) fn node(&self) -> layout_core::NodeId {
+        self.item.borrow().layout_node()
+    }
+}
+
+/// Registers an already-built widget as a container child: tracks its layout rect and mounts its render
+/// segment. Used by reactive lists to fold a freshly-built item into the child set (the per-item half of
+/// [`register_container`]).
+pub(crate) fn make_child(widget: Box<dyn LayoutItem>) -> Child {
+    let rect = track_layout(&WidgetCtx::handle(), widget.layout_node());
+    let item = Rc::new(RefCell::new(widget));
+    let segment = mount_item_segment(Rc::clone(&item));
+    Child {
+        item,
+        rect,
+        segment,
+    }
 }
 
 pub(crate) type TrackedChildren = Vec<Child>;
