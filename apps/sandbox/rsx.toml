@@ -1,5 +1,8 @@
 [rsx]
 backend = "auto"
+auto_modules = true
+# Root for baked `src:"..."` assets, relative to the package. Defaults to "assets"; e.g. "src/shared/assets".
+# assets = "assets"
 
 [rsx.dev]
 devtools = true
