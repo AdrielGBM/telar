@@ -123,6 +123,25 @@ col @card
     }
 
     #[test]
+    fn parses_raw_strings_without_escaping() {
+        let doc = parse("[view]\ntext r\"a\\b c\" title:r\"C:\\x\"\n").unwrap();
+        let ViewNode::Element(text) = &doc.view.nodes[0] else {
+            panic!("text element");
+        };
+        assert_eq!(
+            text.content.as_deref(),
+            Some("a\\b c"),
+            "raw content keeps the backslash literal"
+        );
+        let title = text.attributes.iter().find(|a| a.key == "title").unwrap();
+        assert_eq!(
+            title.value, "C:\\x",
+            "raw attr value keeps the backslash literal"
+        );
+        assert!(title.is_quoted);
+    }
+
+    #[test]
     fn parses_view_tree_with_indentation() {
         let doc = parse(SAMPLE).unwrap();
         assert_eq!(doc.view.nodes.len(), 1);

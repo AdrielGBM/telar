@@ -268,14 +268,14 @@ fn parse_element_header(
             break;
         }
 
-        if chars[i] == '"' {
-            let (text, next) = read_quoted(&chars, i).ok_or_else(|| ParseError {
-                message: "unterminated string literal".to_string(),
-                line,
-            })?;
+        if chars[i] == '"' || (chars[i] == 'r' && chars.get(i + 1) == Some(&'"')) {
+            let (text, next, content_at) =
+                read_string_value(&chars, i).ok_or_else(|| ParseError {
+                    message: "unterminated string literal".to_string(),
+                    line,
+                })?;
             element.content = Some(text);
-            // Content starts one char past the opening quote.
-            element.content_start = content_start + byte_at(&chars, i + 1);
+            element.content_start = content_start + byte_at(&chars, content_at);
             i = next;
             continue;
         }
@@ -357,18 +357,20 @@ fn parse_element_header(
             }
 
             let mut k = val_start;
-            // Allow quoted attribute values.
-            if chars.get(k) == Some(&'"') {
-                let (text, next) = read_quoted(&chars, k).ok_or_else(|| ParseError {
-                    message: "unterminated string literal in attribute value".to_string(),
-                    line,
-                })?;
+            // Allow quoted attribute values, escaped (`"…"`) or raw (`r"…"`).
+            if chars.get(k) == Some(&'"')
+                || (chars.get(k) == Some(&'r') && chars.get(k + 1) == Some(&'"'))
+            {
+                let (text, next, content_at) =
+                    read_string_value(&chars, k).ok_or_else(|| ParseError {
+                        message: "unterminated string literal in attribute value".to_string(),
+                        line,
+                    })?;
                 element.attributes.push(Attr {
                     key: key.trim().to_string(),
                     value: text,
                     is_quoted: true,
-                    // Value starts one char past the opening quote.
-                    value_start: content_start + byte_at(&chars, k + 1),
+                    value_start: content_start + byte_at(&chars, content_at),
                 });
                 i = next;
                 continue;
@@ -463,6 +465,37 @@ pub(super) fn read_quoted(chars: &[char], start: usize) -> Option<(String, usize
         i += 1;
     }
     None
+}
+
+/// Reads a raw string `r"…"` (`chars[start] == 'r'`, `chars[start + 1] == '"'`): the content is taken
+/// verbatim up to the next `"`, with NO escape processing, so `\` is a literal backslash — handy for
+/// Windows paths, regexes, or code snippets. A raw string cannot itself contain a `"`; use the escaped
+/// form (`"…\"…"`) for that. Returns the content and the index past the closing quote.
+pub(super) fn read_raw_quoted(chars: &[char], start: usize) -> Option<(String, usize)> {
+    debug_assert_eq!(chars.get(start), Some(&'r'));
+    debug_assert_eq!(chars.get(start + 1), Some(&'"'));
+    let mut i = start + 2;
+    let mut out = String::new();
+    while i < chars.len() {
+        if chars[i] == '"' {
+            return Some((out, i + 1));
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    None
+}
+
+/// Reads a string value at `k` — an escaped `"…"` or a raw `r"…"`. Returns `(content, index past it, char
+/// index where the content begins)`, the last for source-map offsets. `None` if `k` is not a string start.
+pub(super) fn read_string_value(chars: &[char], k: usize) -> Option<(String, usize, usize)> {
+    if chars.get(k) == Some(&'"') {
+        read_quoted(chars, k).map(|(s, next)| (s, next, k + 1))
+    } else if chars.get(k) == Some(&'r') && chars.get(k + 1) == Some(&'"') {
+        read_raw_quoted(chars, k).map(|(s, next)| (s, next, k + 2))
+    } else {
+        None
+    }
 }
 
 /// Reads a balanced `( … )` group starting at `open` (which must be `(`). Returns the inner text with the

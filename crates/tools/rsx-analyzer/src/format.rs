@@ -293,7 +293,7 @@ fn format_element_header(element: &Element) -> String {
         parts.push(format!("@{class}"));
     }
     if let Some(content) = &element.content {
-        parts.push(format!("\"{content}\""));
+        parts.push(format!("\"{}\"", escape_rsx_string(content)));
     }
     for attr in &element.attributes {
         parts.push(format_attr(attr));
@@ -301,9 +301,29 @@ fn format_element_header(element: &Element) -> String {
     parts.join(" ")
 }
 
+/// Escapes a string value for re-emission inside `"…"`. Parsed content is stored unescaped (the parser
+/// interprets `\n`/`\"`/… and raw `r"…"` keeps backslashes literal), so re-emitting verbatim would corrupt
+/// any value containing a quote, backslash, or control char on the next save. Always emits the escaped
+/// form; raw literals normalize to it (same content).
+fn escape_rsx_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            '\0' => out.push_str("\\0"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 fn format_attr(attr: &Attr) -> String {
     if attr.is_quoted {
-        format!("{}:\"{}\"", attr.key, attr.value)
+        format!("{}:\"{}\"", attr.key, escape_rsx_string(&attr.value))
     } else if attr.value.is_empty() {
         // Bare flag attribute, e.g. `ghost`.
         attr.key.clone()
@@ -492,6 +512,22 @@ mod tests {
 
     // Formatting a reactive `for` must preserve its `key <expr>` clause — dropping it turns a reactive
     // list into a compile error on the next save.
+    // A backslash (e.g. from a raw string) must be escaped on re-emit, and formatting must be idempotent —
+    // otherwise every save mangles the value.
+    #[test]
+    fn escapes_string_values_and_is_idempotent() {
+        let out = format_document("[view]\ntext r\"a\\b\"\n").unwrap();
+        assert!(
+            out.contains("\"a\\\\b\""),
+            "backslash escaped on re-emit:\n{out}"
+        );
+        assert_eq!(
+            out,
+            format_document(&out).unwrap(),
+            "re-formatting is a fixed point"
+        );
+    }
+
     #[test]
     fn preserves_reactive_for_key_clause() {
         let src =
