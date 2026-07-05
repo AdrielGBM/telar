@@ -901,6 +901,23 @@ mod tests {
         assert!(code.contains(".on_hover("), "carries the callback:\n{code}");
     }
 
+    // `heading` renders a real title (20px, semibold accent), not the old 12px muted caption.
+    #[test]
+    fn heading_is_a_real_title() {
+        let src = "[view]\ncol\n    heading \"Title\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("TextStyle::new(20.0"),
+            "heading is 20px:\n{code}"
+        );
+        assert!(
+            code.contains(".with_weight(600)"),
+            "heading is semibold:\n{code}"
+        );
+    }
+
     // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call
     // (no slot arg, no default), preserving the per-file fallback.
     #[test]

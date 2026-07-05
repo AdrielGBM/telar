@@ -11,10 +11,13 @@ use crate::style::{format_f32, layout_prop_call};
 use super::signals::{emit_transition_prelude, signal_idents, wrap_signal_clones};
 use super::{ChildEmit, ViewGen};
 
-// `heading`/`section` styling reproduced inline (the library no longer ships `Heading`/`Section`): a 12px caption colored from the theme's `widget_muted` token, and an 8px-gap column wrapping the heading above its content.
-const HEADING_FONT_SIZE: &str = "12.0";
+// `heading`/`section` styling reproduced inline (the library no longer ships `Heading`/`Section`): a real
+// title — 20px, semibold, colored from the theme's accent (`widget_primary`, the only strong colour the
+// kernel WidgetTheme exposes; there is no app-level "ink" token here) — and an 8px-gap column wrapping the
+// heading above its content.
+const HEADING_FONT_SIZE: &str = "20.0";
 const SECTION_GAP: &str = "8.0";
-const HEADING_STYLE_CLOSURE: &str = "move || { let color = use_widget_theme().map(|t| t.widget_muted()).unwrap_or(Color::rgba(0.5, 0.5, 0.6, 1.0)); TextStyle::new(12.0, color) }";
+const HEADING_STYLE_CLOSURE: &str = "move || { let color = use_widget_theme().map(|t| t.widget_primary()).unwrap_or(Color::rgba(0.1, 0.1, 0.12, 1.0)); TextStyle::new(20.0, color).with_weight(600) }";
 
 impl ViewGen<'_> {
     pub(super) fn emit_text(&mut self, el: &Element) -> ChildEmit {

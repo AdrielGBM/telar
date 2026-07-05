@@ -54,6 +54,15 @@ col gap:20
         code_line code:"text 'Count: {$count}'      text '{props.title}'"
 
     col gap:8
+        text "heading and section — an accent title, alone or above its content" size:13 color:ink
+        card gap:12
+            heading "A heading is a real title"
+            section "A section wraps a heading above its own content"
+                text "The heading sits above these children in a small-gap column." size:13 color:muted
+                text "Use it to group a labelled block without hand-building the column." size:13 color:muted
+        code_line code:"heading 'Title'      section 'Title' > …children…"
+
+    col gap:8
         text "Attributes" size:13 color:ink
         col gap:6
             prop_row name:"size" values:"number" about:"Font size in px (default 14)."
