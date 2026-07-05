@@ -8,8 +8,9 @@ const PATHS_DESIGN_W: f32 = 520.0;
 
 let result = Canvas::with_intrinsic_height(ctx, 430.0, |rect| {
     let t = theme();
-    let (primary, success, danger, warning, purple, ink, muted) =
-        (t.primary, t.success, t.danger, t.warning, t.purple, t.ink, t.muted);
+    let (primary, success, danger, warning, purple, ink, muted) = (
+        t.primary, t.success, t.danger, t.warning, t.purple, t.ink, t.muted,
+    );
     let mut kids: Vec<RenderNode> = Vec::new();
 
     // Row 1 — filled and stroked polygons.
@@ -18,13 +19,25 @@ let result = Canvas::with_intrinsic_height(ctx, 430.0, |rect| {
         Point::new(110.0, 120.0),
         Point::new(10.0, 120.0),
     ]));
-    kids.push(Path::static_data(triangle, move || PathStyle {
-        fill: Some(Paint::Solid(primary)),
-        stroke: None,
-        shadow: None,
-        fill_rule: FillRule::Winding,
-    }).view());
-    kids.push(RenderNode::text(rsx::static_rc_str!("polygon fill"), Rect { x: 0.0, y: 128.0, width: 160.0, height: 14.0 }, TextStyle::new(11.0, muted)));
+    kids.push(
+        Path::static_data(triangle, move || PathStyle {
+            fill: Some(Paint::Solid(primary)),
+            stroke: None,
+            shadow: None,
+            fill_rule: FillRule::Winding,
+        })
+        .view(),
+    );
+    kids.push(RenderNode::text(
+        rsx::static_rc_str!("polygon fill"),
+        Rect {
+            x: 0.0,
+            y: 128.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
 
     let star = {
         let (cx, cy, outer, inner) = (230.0f32, 76.0f32, 48.0f32, 20.0f32);
@@ -37,29 +50,59 @@ let result = Canvas::with_intrinsic_height(ctx, 430.0, |rect| {
             .collect();
         Arc::new(PathData::polygon(&pts))
     };
-    kids.push(Path::static_data(star, move || PathStyle {
-        fill: Some(Paint::Solid(warning)),
-        stroke: Some(Stroke::new(ink, 1.5)),
-        shadow: None,
-        fill_rule: FillRule::Winding,
-    }).view());
-    kids.push(RenderNode::text(rsx::static_rc_str!("fill + stroke"), Rect { x: 175.0, y: 128.0, width: 160.0, height: 14.0 }, TextStyle::new(11.0, muted)));
+    kids.push(
+        Path::static_data(star, move || PathStyle {
+            fill: Some(Paint::Solid(warning)),
+            stroke: Some(Stroke::new(ink, 1.5)),
+            shadow: None,
+            fill_rule: FillRule::Winding,
+        })
+        .view(),
+    );
+    kids.push(RenderNode::text(
+        rsx::static_rc_str!("fill + stroke"),
+        Rect {
+            x: 175.0,
+            y: 128.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
 
     // Even-odd fill carves a hole where two rectangles overlap.
     let donut = Arc::new(
         PathData::new()
-            .move_to(Point::new(360.0, 30.0)).line_to(Point::new(460.0, 30.0))
-            .line_to(Point::new(460.0, 120.0)).line_to(Point::new(360.0, 120.0)).close()
-            .move_to(Point::new(385.0, 55.0)).line_to(Point::new(435.0, 55.0))
-            .line_to(Point::new(435.0, 95.0)).line_to(Point::new(385.0, 95.0)).close(),
+            .move_to(Point::new(360.0, 30.0))
+            .line_to(Point::new(460.0, 30.0))
+            .line_to(Point::new(460.0, 120.0))
+            .line_to(Point::new(360.0, 120.0))
+            .close()
+            .move_to(Point::new(385.0, 55.0))
+            .line_to(Point::new(435.0, 55.0))
+            .line_to(Point::new(435.0, 95.0))
+            .line_to(Point::new(385.0, 95.0))
+            .close(),
     );
-    kids.push(Path::static_data(donut, move || PathStyle {
-        fill: Some(Paint::Solid(purple)),
-        stroke: None,
-        shadow: None,
-        fill_rule: FillRule::EvenOdd,
-    }).view());
-    kids.push(RenderNode::text(rsx::static_rc_str!("even-odd fill"), Rect { x: 350.0, y: 128.0, width: 160.0, height: 14.0 }, TextStyle::new(11.0, muted)));
+    kids.push(
+        Path::static_data(donut, move || PathStyle {
+            fill: Some(Paint::Solid(purple)),
+            stroke: None,
+            shadow: None,
+            fill_rule: FillRule::EvenOdd,
+        })
+        .view(),
+    );
+    kids.push(RenderNode::text(
+        rsx::static_rc_str!("even-odd fill"),
+        Rect {
+            x: 350.0,
+            y: 128.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
 
     // Row 2 — Bézier curves.
     let quad = Arc::new(
@@ -67,26 +110,50 @@ let result = Canvas::with_intrinsic_height(ctx, 430.0, |rect| {
             .move_to(Point::new(10.0, 250.0))
             .quad_to(Point::new(80.0, 180.0), Point::new(150.0, 250.0)),
     );
-    kids.push(Path::static_data(quad, move || PathStyle {
-        fill: None,
-        stroke: Some(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
-        shadow: None,
-        fill_rule: FillRule::Winding,
-    }).view());
-    kids.push(RenderNode::text(rsx::static_rc_str!("quad_to arch"), Rect { x: 0.0, y: 258.0, width: 160.0, height: 14.0 }, TextStyle::new(11.0, muted)));
-
-    let cubic = Arc::new(
-        PathData::new()
-            .move_to(Point::new(185.0, 200.0))
-            .cubic_to(Point::new(260.0, 200.0), Point::new(185.0, 250.0), Point::new(260.0, 250.0)),
+    kids.push(
+        Path::static_data(quad, move || PathStyle {
+            fill: None,
+            stroke: Some(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
+            shadow: None,
+            fill_rule: FillRule::Winding,
+        })
+        .view(),
     );
-    kids.push(Path::static_data(cubic, move || PathStyle {
-        fill: None,
-        stroke: Some(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
-        shadow: None,
-        fill_rule: FillRule::Winding,
-    }).view());
-    kids.push(RenderNode::text(rsx::static_rc_str!("cubic_to S-curve"), Rect { x: 175.0, y: 258.0, width: 160.0, height: 14.0 }, TextStyle::new(11.0, muted)));
+    kids.push(RenderNode::text(
+        rsx::static_rc_str!("quad_to arch"),
+        Rect {
+            x: 0.0,
+            y: 258.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+
+    let cubic = Arc::new(PathData::new().move_to(Point::new(185.0, 200.0)).cubic_to(
+        Point::new(260.0, 200.0),
+        Point::new(185.0, 250.0),
+        Point::new(260.0, 250.0),
+    ));
+    kids.push(
+        Path::static_data(cubic, move || PathStyle {
+            fill: None,
+            stroke: Some(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
+            shadow: None,
+            fill_rule: FillRule::Winding,
+        })
+        .view(),
+    );
+    kids.push(RenderNode::text(
+        rsx::static_rc_str!("cubic_to S-curve"),
+        Rect {
+            x: 175.0,
+            y: 258.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
 
     // A drop shadow under a hand-rolled circle.
     let k = 0.5523f32;
@@ -94,18 +161,46 @@ let result = Canvas::with_intrinsic_height(ctx, 430.0, |rect| {
     let circle = Arc::new(
         PathData::new()
             .move_to(Point::new(cx, cy - r))
-            .cubic_to(Point::new(cx + k * r, cy - r), Point::new(cx + r, cy - k * r), Point::new(cx + r, cy))
-            .cubic_to(Point::new(cx + r, cy + k * r), Point::new(cx + k * r, cy + r), Point::new(cx, cy + r))
-            .cubic_to(Point::new(cx - k * r, cy + r), Point::new(cx - r, cy + k * r), Point::new(cx - r, cy))
-            .cubic_to(Point::new(cx - r, cy - k * r), Point::new(cx - k * r, cy - r), Point::new(cx, cy - r))
+            .cubic_to(
+                Point::new(cx + k * r, cy - r),
+                Point::new(cx + r, cy - k * r),
+                Point::new(cx + r, cy),
+            )
+            .cubic_to(
+                Point::new(cx + r, cy + k * r),
+                Point::new(cx + k * r, cy + r),
+                Point::new(cx, cy + r),
+            )
+            .cubic_to(
+                Point::new(cx - k * r, cy + r),
+                Point::new(cx - r, cy + k * r),
+                Point::new(cx - r, cy),
+            )
+            .cubic_to(
+                Point::new(cx - r, cy - k * r),
+                Point::new(cx - k * r, cy - r),
+                Point::new(cx, cy - r),
+            )
             .close(),
     );
-    kids.push(Path::static_data(circle, move || {
-        PathStyle::default()
-            .with_fill(primary)
-            .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4)))
-    }).view());
-    kids.push(RenderNode::text(rsx::static_rc_str!("path + drop shadow"), Rect { x: 350.0, y: 268.0, width: 170.0, height: 14.0 }, TextStyle::new(11.0, muted)));
+    kids.push(
+        Path::static_data(circle, move || {
+            PathStyle::default()
+                .with_fill(primary)
+                .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4)))
+        })
+        .view(),
+    );
+    kids.push(RenderNode::text(
+        rsx::static_rc_str!("path + drop shadow"),
+        Rect {
+            x: 350.0,
+            y: 268.0,
+            width: 170.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
 
     let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
     RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
@@ -114,13 +209,11 @@ let result = Canvas::with_intrinsic_height(ctx, 430.0, |rect| {
 [view]
 col gap:20
     doc_header kicker:"11 · MEDIA" title:"Paths" desc:"Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas."
-
     col gap:8
         text "Polygons, curves, fills and a path shadow" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             widget "result"
         code_line code:"PathData::new().move_to(p).cubic_to(a, b, c)   >   Path::static_data(d, style)"
-
     col gap:8
         text "The PathData API" size:13 color:ink
         col gap:6
