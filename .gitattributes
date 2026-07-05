@@ -1,0 +1,43 @@
+# Normalize line endings to LF across all platforms
+* text=auto eol=lf
+
+# Rust sources
+*.rs   text eol=lf diff=rust
+*.rsx  text eol=lf linguist-language=Rust
+
+# Shaders
+*.wgsl text eol=lf
+
+# Config & manifests
+*.toml        text eol=lf
+*.lock        text eol=lf
+*.json        text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+.gitignore    text eol=lf
+.gitattributes text eol=lf
+.vscodeignore text eol=lf
+
+# Web / tooling
+*.ts   text eol=lf
+
+# Docs
+*.md   text eol=lf
+
+# Vector assets (text-based, kept diffable)
+*.svg  text eol=lf
+
+# Binary assets
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.wav   binary
+*.mp3   binary
+*.ogg   binary
