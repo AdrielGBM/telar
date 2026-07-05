@@ -226,14 +226,14 @@ col @card
             code.contains("Container::new(ctx, LayoutStyle::new().flex_column().gap(8.0)"),
             "expected section's flex-column Container in:\n{code}"
         );
-        // `heading` becomes a Text colored from the theme's widget_muted token.
+        // `heading` becomes a real title Text: 20px semibold, colored from the theme's accent.
         assert!(
-            code.contains("use_widget_theme().map(|t| t.widget_muted())"),
-            "expected heading's muted style in:\n{code}"
+            code.contains("use_widget_theme().map(|t| t.widget_primary())"),
+            "expected heading's accent style in:\n{code}"
         );
         assert!(
-            code.contains("TextStyle::new(12.0, color)"),
-            "expected heading's 12px caption in:\n{code}"
+            code.contains("TextStyle::new(20.0, color).with_weight(600)"),
+            "expected heading's 20px semibold title in:\n{code}"
         );
     }
 
