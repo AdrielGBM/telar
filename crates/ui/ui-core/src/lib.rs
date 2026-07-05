@@ -34,7 +34,7 @@ pub use reactive_list::ReactiveList;
 pub use rect::Rectangle;
 pub use scroll_area::{LayoutScrollArea, ScrollbarStyle};
 pub use slots::Slots;
-pub use styled_container::StyledContainer;
+pub use styled_container::{StyledContainer, box_transform};
 #[cfg(feature = "svg")]
 pub use svg::Svg;
 pub use text::Text;

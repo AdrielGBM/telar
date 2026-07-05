@@ -1,4 +1,4 @@
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, PointerButton, PointerSource};
 use reactive_core::{RwSignal, signal};
@@ -19,6 +19,8 @@ pub struct StyledContainer {
     is_hovered: RwSignal<bool>,
     // A closure (not a plain f32) so `view()` re-reads it every run: a reactive opacity or a `transition:opacity` animation resolves to its current value on each re-render.
     opacity: Box<dyn Fn() -> f32>,
+    // Resolved per `view()` (like `opacity`) so a `$signal`-driven transform re-reads its current value. Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity (no wrapping node).
+    transform: Box<dyn Fn(Rect) -> Option<[f32; 6]>>,
     children: TrackedChildren,
     // Optional tap gesture so a styled box can itself be pressable (a clickable card); children still hit-test first.
     press: PressGesture,
@@ -39,6 +41,7 @@ impl StyledContainer {
             hover_style: None,
             is_hovered: signal(false),
             opacity: Box::new(|| 1.0),
+            transform: Box::new(|_| None),
             children,
             press: PressGesture::default(),
         })
@@ -46,6 +49,16 @@ impl StyledContainer {
 
     pub fn with_opacity(mut self, opacity: impl Fn() -> f32 + 'static) -> Self {
         self.opacity = Box::new(opacity);
+        self
+    }
+
+    /// Apply an affine transform (rotate/scale/translate) to the whole box each `view()`. The closure
+    /// takes the laid-out rect and returns the 2×3 matrix, or `None` for identity.
+    pub fn with_transform(
+        mut self,
+        transform: impl Fn(Rect) -> Option<[f32; 6]> + 'static,
+    ) -> Self {
+        self.transform = Box::new(transform);
         self
     }
 
@@ -91,10 +104,14 @@ impl Component for StyledContainer {
             std::iter::once(background).chain(self.children.iter().map(|c| c.segment.boundary())),
         );
         let opacity = (self.opacity)();
-        if opacity < 1.0 {
+        let composed = if opacity < 1.0 {
             RenderNode::layer(opacity, 0.0, [content])
         } else {
             content
+        };
+        match (self.transform)(r) {
+            Some(matrix) => RenderNode::transform_with(matrix, [composed]),
+            None => composed,
         }
     }
 
@@ -165,6 +182,33 @@ impl Component for StyledContainer {
     }
 }
 
+/// Builds the affine matrix for a box's declarative `rotate`/`scale`/`translate` attributes, pivoting
+/// rotation and scale on the box centre. Returns `None` when every component is identity, so an untransformed
+/// box skips the extra transform node entirely.
+pub fn box_transform(
+    rect: Rect,
+    rotate_deg: f32,
+    scale_x: f32,
+    scale_y: f32,
+    translate_x: f32,
+    translate_y: f32,
+) -> Option<[f32; 6]> {
+    if rotate_deg == 0.0
+        && scale_x == 1.0
+        && scale_y == 1.0
+        && translate_x == 0.0
+        && translate_y == 0.0
+    {
+        return None;
+    }
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    let matrix = Transform::rotate_around(rotate_deg, cx, cy)
+        .then(Transform::scale_around(scale_x, scale_y, cx, cy))
+        .then(Transform::translate(translate_x, translate_y));
+    Some(matrix.to_array())
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
@@ -176,6 +220,46 @@ mod tests {
     use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme};
 
     use super::*;
+
+    #[test]
+    fn box_transform_identity_is_none() {
+        let r = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        };
+        assert!(box_transform(r, 0.0, 1.0, 1.0, 0.0, 0.0).is_none());
+    }
+
+    #[test]
+    fn box_transform_scale_pivots_on_center() {
+        let r = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
+        // scale_around(2, 2, 50, 50): pins the centre, so e = f = 50 - 2*50 = -50.
+        assert_eq!(
+            box_transform(r, 0.0, 2.0, 2.0, 0.0, 0.0).unwrap(),
+            [2.0, 0.0, 0.0, 2.0, -50.0, -50.0]
+        );
+    }
+
+    #[test]
+    fn box_transform_translate_offsets_origin() {
+        let r = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        };
+        assert_eq!(
+            box_transform(r, 0.0, 1.0, 1.0, 8.0, -4.0).unwrap(),
+            [1.0, 0.0, 0.0, 1.0, 8.0, -4.0]
+        );
+    }
     use crate::button::Button;
     use crate::container::Container;
     use crate::context::{compute_layout, track_layout};

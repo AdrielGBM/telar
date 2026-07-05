@@ -820,6 +820,61 @@ mod tests {
         );
     }
 
+    // Declarative transform attrs emit `.with_transform(box_transform(...))`; `scale` fills both axes.
+    #[test]
+    fn transform_attrs_emit_with_transform() {
+        let src = "[view]\ncol\n    box fill:primary rotate:30 scale:1.2\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".with_transform("),
+            "emits with_transform:\n{code}"
+        );
+        assert!(
+            code.contains("box_transform(__r,"),
+            "calls the helper:\n{code}"
+        );
+        assert!(
+            code.contains("(30) as f32"),
+            "rotate arg cast to f32:\n{code}"
+        );
+        assert!(
+            code.matches("(1.2) as f32").count() >= 2,
+            "scale fills both axes:\n{code}"
+        );
+    }
+
+    // A transform upgrades a plain col/row to a StyledContainer (only it carries `with_transform`).
+    #[test]
+    fn transform_promotes_plain_container() {
+        let src = "[view]\ncol\n    col rotate:5\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("StyledContainer"),
+            "promoted to styled:\n{code}"
+        );
+        assert!(
+            code.contains(".with_transform("),
+            "carries the transform:\n{code}"
+        );
+    }
+
+    // A box with no transform attrs emits no transform call.
+    #[test]
+    fn no_transform_no_call() {
+        let src = "[view]\ncol\n    box fill:primary\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains(".with_transform("),
+            "no transform, no call:\n{code}"
+        );
+    }
+
     // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call
     // (no slot arg, no default), preserving the per-file fallback.
     #[test]

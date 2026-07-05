@@ -83,6 +83,17 @@ col gap:20
         code_line code:"Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))"
 
     col gap:8
+        text "Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)" size:13 color:ink
+        card
+            row gap:24 justify:center pad_y:16
+                box fill:primary radius:8 width:56 height:56
+                box fill:success radius:8 width:56 height:56 rotate:20
+                box fill:warning radius:8 width:56 height:56 scale:1.3
+                box fill:danger radius:8 width:56 height:56 rotate:15 scale:0.85
+                box fill:ink radius:8 width:56 height:56 rotate:-12 translate_y:-8
+        code_line code:"box fill:success rotate:20      box fill:danger rotate:15 scale:0.85"
+
+    col gap:8
         text "The Transform API" size:13 color:ink
         col gap:6
             prop_row name:"scale_around" values:"sx, sy, cx, cy" about:"Scale about a pivot point."

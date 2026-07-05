@@ -31,6 +31,18 @@ impl Transform {
         f: 0.0,
     };
 
+    /// Translate by `(tx, ty)`.
+    pub fn translate(tx: f32, ty: f32) -> Self {
+        Self {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            e: tx,
+            f: ty,
+        }
+    }
+
     /// Scale by `(sx, sy)` keeping the point `(cx, cy)` fixed.
     pub fn scale_around(sx: f32, sy: f32, cx: f32, cy: f32) -> Self {
         Self {

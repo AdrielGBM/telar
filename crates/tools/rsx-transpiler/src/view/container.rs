@@ -9,7 +9,7 @@ use crate::style::format_f32;
 
 use super::signals::{
     build_gradient_stops, closure_marker, emit_transition_prelude, has_paint, normalize_closure,
-    substitute_handles, wrap_signal_clones,
+    substitute_handles, substitute_reads, wrap_signal_clones,
 };
 use super::{ChildEmit, ViewGen, forces_child_vec};
 
@@ -23,10 +23,12 @@ impl ViewGen<'_> {
         // A `col`/`row` with paint (inline or from its class) or a `hover(...)` override upgrades to a StyledContainer so it can carry a background like `box`; otherwise it stays a plain Container.
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
+        let transform_call = self.transform_call(el);
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
-        let pieces = if has_paint(&pattrs) || !hover_call.is_empty() {
+        // A transform also upgrades a plain col/row to a StyledContainer (only it carries `with_transform`).
+        let pieces = if has_paint(&pattrs) || !hover_call.is_empty() || !transform_call.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
         } else {
             None
@@ -52,7 +54,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}"
+                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}"
                 );
             }
             None => {
@@ -76,6 +78,7 @@ impl ViewGen<'_> {
         // Paint merges inline attrs with the element's class (inline wins), so a `@card` class can carry fill/stroke/radius/etc. — not only inline `box` attributes. `box` is always styled.
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
+        let transform_call = self.transform_call(el);
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
@@ -99,7 +102,7 @@ impl ViewGen<'_> {
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
         let _ = writeln!(
             code,
-            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}"
+            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}"
         );
 
         let _ = write!(code, "{pad}}};");
@@ -139,6 +142,51 @@ impl ViewGen<'_> {
         };
         let call = wrap_signal_clones(&[attr.value.as_str()], format!("move {marker}{closure}"));
         format!(".on_press({call})")
+    }
+
+    /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate`
+    /// in degrees, `scale`/`scale_x`/`scale_y`, `translate_x`/`translate_y`), or an empty string when there
+    /// are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal`
+    /// reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure;
+    /// every value is cast to `f32` so integer and float literals both type-check.
+    fn transform_call(&self, el: &Element) -> String {
+        const KEYS: [&str; 6] = [
+            "rotate",
+            "scale",
+            "scale_x",
+            "scale_y",
+            "translate_x",
+            "translate_y",
+        ];
+        if !el.attributes.iter().any(|a| KEYS.contains(&a.key.as_str())) {
+            return String::new();
+        }
+        let raw = |key: &str| {
+            el.attributes
+                .iter()
+                .find(|a| a.key == key)
+                .map(|a| a.value.trim().to_string())
+        };
+        let scale = raw("scale");
+        let rotate = raw("rotate").unwrap_or_else(|| "0".into());
+        let scale_x = raw("scale_x")
+            .or_else(|| scale.clone())
+            .unwrap_or_else(|| "1".into());
+        let scale_y = raw("scale_y").or(scale).unwrap_or_else(|| "1".into());
+        let tx = raw("translate_x").unwrap_or_else(|| "0".into());
+        let ty = raw("translate_y").unwrap_or_else(|| "0".into());
+        let values = [rotate, scale_x, scale_y, tx, ty];
+        let args = values
+            .iter()
+            .map(|v| format!("({}) as f32", substitute_reads(v)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let refs: Vec<&str> = values.iter().map(String::as_str).collect();
+        let call = wrap_signal_clones(
+            &refs,
+            format!("move |__r: Rect| box_transform(__r, {args})"),
+        );
+        format!(".with_transform({call})")
     }
 
     /// Builds a `Paint::Gradient(...)` expression for a `box` element, using the closure parameter `r` (the rendered `Bounds`) for absolute gradient points.

@@ -113,6 +113,13 @@ const CONTAINER_PAINT: &[&str] = &[
     "on_press",
     "hover",
     "transition",
+    // Declarative affine transform (see `container::transform_call`); resolved per-render like opacity.
+    "rotate",
+    "scale",
+    "scale_x",
+    "scale_y",
+    "translate_x",
+    "translate_y",
 ];
 
 /// Completion attribute keys for `tag`: the shared layout keys plus the tag's own visual/behavioral keys. Mirrors the per-tag attribute handling in [`crate::view`]; a component tag (not built-in) takes its `Props` fields, so it returns no suggestions here.
