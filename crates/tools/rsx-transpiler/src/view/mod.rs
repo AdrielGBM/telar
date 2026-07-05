@@ -918,6 +918,18 @@ mod tests {
         );
     }
 
+    // A `$signal` button colour must be cloned into the style closure (color_expr drops the `$`, so the
+    // clone scan needs the raw fill/outline value) — otherwise reusing the signal elsewhere fails to compile.
+    #[test]
+    fn btn_signal_color_is_cloned_into_style_closure() {
+        let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbtn \"x\" fill:$c\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains("let c = c.clone();"), "signal colour cloned:\n{code}");
+        assert!(code.contains("c.get()"), "read inside the style closure:\n{code}");
+    }
+
     // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call
     // (no slot arg, no default), preserving the per-file fallback.
     #[test]

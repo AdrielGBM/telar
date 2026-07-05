@@ -24,6 +24,14 @@ impl ViewGen<'_> {
         if let Some(c) = &on_press {
             snippets.push(c);
         }
+        // `color_expr` lowered any `$color` inside the style closure to `ident.get()`, dropping the `$`
+        // that `signal_idents` keys on; scan the raw fill/outline values too so a reused signal colour is
+        // still cloned into the closure instead of moved (which would fail to compile).
+        for key in ["fill", "outline"] {
+            if let Some(a) = el.attributes.iter().find(|a| a.key == key) {
+                snippets.push(&a.value);
+            }
+        }
         let clones = self.clone_bindings(&snippets, &pad, "    ");
 
         let mut code = String::new();
