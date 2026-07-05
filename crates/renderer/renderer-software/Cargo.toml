@@ -22,6 +22,7 @@ ndk = { version = "0.9", features = ["nativewindow"] }
 
 [dev-dependencies]
 criterion = "0.8.2"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 [[bench]]
 name = "render_frame"
