@@ -58,6 +58,15 @@ col gap:20
                 text "3.1 GB of 4 GB used" size:11 color:muted
         code_line code:"box pad:14 gap:8   >   row justify:between   >   text …"
     col gap:8
+        text "scroll — a bounded viewport that scrolls its overflowing content" size:13 color:ink
+        card
+            scroll height:160
+                col gap:8 pad_x:2
+                    for i in 0..12
+                        box fill:surface_alt stroke:border radius:8 pad_x:14 pad_y:10
+                            text "Scrollable item {i}" size:13 color:ink
+        code_line code:"scroll height:160   >   col …   >   for i in 0..12   >   box …"
+    col gap:8
         text "Attributes" size:13 color:ink
         col gap:6
             prop_row name:"direction" values:"row · col" about:"Main axis. row/col/box set a sensible default."
