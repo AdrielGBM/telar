@@ -78,10 +78,10 @@ pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_
 pub use ui_core::Svg;
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Button, ButtonStyle, Canvas, Component, ComponentList, Container, EventResult, Image,
-    LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, Rectangle, RenderNode,
+    Button, ButtonStyle, Canvas, ClippedItem, Component, ComponentList, Container, EventResult,
+    Image, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, Rectangle, RenderNode,
     ScrollbarStyle, StyledContainer, Text, WidgetCtx, box_item, compute_layout, mark_dirty,
-    new_container, new_leaf, track_layout,
+    new_container, new_leaf, set_display, track_layout,
 };
 
 #[cfg(all(feature = "preview", not(target_os = "android")))]

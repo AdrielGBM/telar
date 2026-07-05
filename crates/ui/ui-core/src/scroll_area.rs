@@ -144,6 +144,15 @@ impl ScrollCore {
         }
     }
 
+    fn scroll_to_top(&mut self) {
+        if self.scroll_x.get() != 0.0 {
+            self.scroll_x.set(0.0);
+        }
+        if self.scroll_y.get() != 0.0 {
+            self.scroll_y.set(0.0);
+        }
+    }
+
     fn clamp_scroll(&mut self, viewport: Rect) {
         let content_rect = self.content_rect_signal.get();
         let max_x = (content_rect.width - viewport.width).max(0.0);
@@ -261,6 +270,11 @@ impl LayoutScrollArea {
 
     pub fn clamp_scroll(&mut self) {
         self.core.clamp_scroll(self.leaf.rect.get());
+    }
+
+    /// Resets the scroll offset to the top-left, e.g. when swapping the content shown in the viewport.
+    pub fn scroll_to_top(&mut self) {
+        self.core.scroll_to_top();
     }
 
     pub fn viewport_rect(&self) -> Rect {

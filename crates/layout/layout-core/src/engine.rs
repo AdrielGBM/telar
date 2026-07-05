@@ -81,6 +81,19 @@ impl LayoutEngine {
         }
     }
 
+    /// Toggles a node in or out of layout flow. A hidden node (`Display::None`) takes no space and lays out none of its subtree; a visible node is `Display::Flex`. Used for responsive show/hide (e.g. collapsing a sidebar on narrow windows).
+    pub fn set_display(&mut self, node: NodeId, visible: bool) {
+        if let Ok(s) = self.tree.style(node) {
+            let mut style = s.clone();
+            style.display = if visible {
+                taffy::Display::Flex
+            } else {
+                taffy::Display::None
+            };
+            let _ = self.tree.set_style(node, style);
+        }
+    }
+
     pub fn compute_layout(
         &mut self,
         root: NodeId,
@@ -158,6 +171,10 @@ impl LayoutEngine {
             node: NodeId,
             offset_x: f32,
             offset_y: f32,
+            // `display:none` on an ancestor: taffy stops laying out the subtree, leaving stale layouts,
+            // so descendants keep their last visible size and widgets that draw at fixed coordinates
+            // (e.g. a Canvas) would still paint. Force the whole subtree to a zero size instead.
+            hidden: bool,
         }
 
         let mut stack = Vec::with_capacity(64);
@@ -165,17 +182,26 @@ impl LayoutEngine {
             node: root,
             offset_x: 0.0,
             offset_y: 0.0,
+            hidden: false,
         });
 
         while let Some(entry) = stack.pop() {
             let layout = self.tree.layout(entry.node).map_err(LayoutError::from)?;
             let abs_x = entry.offset_x + layout.location.x;
             let abs_y = entry.offset_y + layout.location.y;
+            let hidden = entry.hidden
+                || self
+                    .tree
+                    .style(entry.node)
+                    .map(|s| s.display == taffy::Display::None)
+                    .unwrap_or(false);
+            let (w, h) = if hidden {
+                (0.0, 0.0)
+            } else {
+                (layout.size.width, layout.size.height)
+            };
 
-            let descend = f(
-                entry.node,
-                geometry_core::Rect::new(abs_x, abs_y, layout.size.width, layout.size.height),
-            );
+            let descend = f(entry.node, geometry_core::Rect::new(abs_x, abs_y, w, h));
 
             if descend {
                 let base = stack.len();
@@ -184,6 +210,7 @@ impl LayoutEngine {
                         node: child,
                         offset_x: abs_x,
                         offset_y: abs_y,
+                        hidden,
                     });
                 }
                 stack[base..].reverse();

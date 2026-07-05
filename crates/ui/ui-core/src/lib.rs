@@ -19,10 +19,11 @@ pub use button::{Button, ButtonStyle};
 pub use canvas::Canvas;
 pub use container::Container;
 pub use context::{
-    NodeId, WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf, track_layout,
+    NodeId, WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf, set_display,
+    track_layout,
 };
 pub use image::Image;
-pub use layout_item::{LayoutItem, box_item};
+pub use layout_item::{ClippedItem, LayoutItem, box_item};
 pub use layout_leaf::LayoutLeaf;
 pub use line::Line;
 pub use path::Path;

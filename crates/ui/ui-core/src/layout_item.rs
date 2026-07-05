@@ -40,6 +40,47 @@ pub trait LayoutItem: Component {
     fn layout_node(&self) -> NodeId;
 }
 
+/// Wraps a child so its rendered output is clipped to the child's own layout rect. When the child
+/// collapses to a zero rect (e.g. a section hidden via `display:none`), the clip is empty, so nothing
+/// inside draws — even a widget left with a stale rect or one that paints at fixed coordinates. Layout
+/// is unchanged: `layout_node` passes through to the wrapped child.
+pub struct ClippedItem {
+    inner: Box<dyn LayoutItem>,
+    rect: RwSignal<Rect>,
+}
+
+impl ClippedItem {
+    pub fn new(ctx: &WidgetCtx, inner: Box<dyn LayoutItem>) -> Self {
+        let rect =
+            track_layout(ctx, inner.layout_node()).expect("clipped item's node not registered");
+        Self { inner, rect }
+    }
+}
+
+impl LayoutItem for ClippedItem {
+    fn layout_node(&self) -> NodeId {
+        self.inner.layout_node()
+    }
+}
+
+impl Component for ClippedItem {
+    fn view(&self) -> RenderNode {
+        RenderNode::Clip {
+            rect: self.rect.get(),
+            radius: renderer_core::BorderRadius::zero(),
+            children: ui_tree::NodeVec::collect([self.inner.view()]),
+        }
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        self.inner.on_event(event)
+    }
+
+    fn debug_name(&self) -> &'static str {
+        "Clipped"
+    }
+}
+
 impl<T: LeafWidget + Component> LayoutItem for T {
     fn layout_node(&self) -> NodeId {
         self.layout_leaf().node

@@ -45,6 +45,11 @@ pub fn mark_dirty(ctx: &mut WidgetCtx, node: NodeId) -> Result<(), LayoutError> 
     ctx.mark_dirty(node)
 }
 
+/// Shows or hides a node in layout flow. A hidden node takes no space (and lays out none of its subtree); mark an ancestor dirty and recompute for the change to take effect. Used for responsive layouts (e.g. collapsing a sidebar on narrow windows).
+pub fn set_display(ctx: &mut WidgetCtx, node: NodeId, visible: bool) {
+    ctx.set_display(node, visible)
+}
+
 pub struct WidgetCtx {
     engine: LayoutEngine,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
@@ -149,6 +154,18 @@ impl WidgetCtx {
                 v
             }
         };
+        // Undo any width pins from a previous layout so each max-width box resolves against the new available space before we re-pin it after the first pass. Idempotent: only touch a box when the space changed (everything must re-resolve) or it actually carried a pin to lift. Leaving unpinned boxes alone when the space is unchanged avoids dirtying their ancestors, which would otherwise force find_boundary_root to fall back to global_root every frame. This runs before the root-fill below so that when the root itself is a max-width box, restoring its original (auto-width) style does not clobber the definite width the fill assigns.
+        for i in 0..self.constrained.len() {
+            let node = self.constrained[i].0;
+            let had_pin = self.constrained[i].2.is_some();
+            if !is_space_changed && !had_pin {
+                continue;
+            }
+            let style = self.constrained[i].1.clone();
+            self.engine.set_style(node, style).ok();
+            self.engine.mark_dirty(node).ok();
+            self.constrained[i].2 = None;
+        }
         let mut did_fill_root = false;
         if width_auto {
             let w = match width {
@@ -168,18 +185,6 @@ impl WidgetCtx {
         }
         if did_fill_root {
             self.engine.mark_dirty(root).ok();
-        }
-        // Undo any width pins from a previous layout so each max-width box resolves against the new available space before we re-pin it after the first pass. Idempotent: only touch a box when the space changed (everything must re-resolve) or it actually carried a pin to lift. Leaving unpinned boxes alone when the space is unchanged avoids dirtying their ancestors, which would otherwise force find_boundary_root to fall back to global_root every frame.
-        for i in 0..self.constrained.len() {
-            let node = self.constrained[i].0;
-            let had_pin = self.constrained[i].2.is_some();
-            if !is_space_changed && !had_pin {
-                continue;
-            }
-            let style = self.constrained[i].1.clone();
-            self.engine.set_style(node, style).ok();
-            self.engine.mark_dirty(node).ok();
-            self.constrained[i].2 = None;
         }
         let mut dirty_nodes = Vec::new();
         self.engine.collect_dirty_nodes(root, &mut dirty_nodes);
@@ -295,6 +300,10 @@ impl WidgetCtx {
 
     pub(crate) fn mark_dirty(&mut self, node: NodeId) -> Result<(), LayoutError> {
         self.engine.mark_dirty(node)
+    }
+
+    pub(crate) fn set_display(&mut self, node: NodeId, visible: bool) {
+        self.engine.set_display(node, visible);
     }
 }
 
@@ -453,6 +462,177 @@ mod tests {
         assert!(
             (w - 1000.0).abs() < 1.0,
             "auto root did not fill width: {w}"
+        );
+    }
+
+    // Repro: an auto-width root that ALSO carries max_width must still fill the definite space (capped by max_width), not collapse to its content width.
+    #[test]
+    fn hidden_child_collapses_to_zero_rect() {
+        // A section toggled to `display:none` must collapse to a zero rect so its view draws nothing and
+        // does not overlap the visible section (the tab-switch mechanism in the sandbox relies on this).
+        let mut ctx = WidgetCtx::new();
+        let (a, _) = new_leaf(&mut ctx, LayoutStyle::new().width(50.0).height(30.0)).unwrap();
+        let (b, b_rect) = new_leaf(&mut ctx, LayoutStyle::new().width(50.0).height(30.0)).unwrap();
+        let root = new_container(&mut ctx, LayoutStyle::new().flex_column(), &[a, b]).unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        assert!(b_rect.get().height > 0.0, "b should start visible");
+
+        set_display(&mut ctx, b, false);
+        mark_dirty(&mut ctx, root).unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        let r = b_rect.get();
+        assert_eq!(
+            (r.width, r.height),
+            (0.0, 0.0),
+            "hidden child not collapsed: {r:?}"
+        );
+    }
+
+    // Hiding a section must collapse its whole subtree, not just the section node: taffy leaves stale
+    // layouts on descendants of a `display:none` node, so without zeroing them a Canvas (which paints at
+    // fixed coordinates) in a hidden section would still draw over the visible one.
+    #[test]
+    fn hidden_subtree_collapses_descendants() {
+        let mut ctx = WidgetCtx::new();
+        let (grandchild, gc_rect) =
+            new_leaf(&mut ctx, LayoutStyle::new().width(40.0).height(20.0)).unwrap();
+        let section =
+            new_container(&mut ctx, LayoutStyle::new().flex_column(), &[grandchild]).unwrap();
+        let root = new_container(&mut ctx, LayoutStyle::new().flex_column(), &[section]).unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        assert!(gc_rect.get().width > 0.0, "grandchild should start visible");
+
+        set_display(&mut ctx, section, false);
+        mark_dirty(&mut ctx, root).unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        let r = gc_rect.get();
+        assert_eq!(
+            (r.width, r.height),
+            (0.0, 0.0),
+            "descendant of hidden section not collapsed: {r:?}"
+        );
+    }
+
+    #[test]
+    fn auto_root_with_max_width_fills_capped() {
+        let mut ctx = WidgetCtx::new();
+        let (child, _) = new_leaf(&mut ctx, LayoutStyle::new().height(40.0)).unwrap();
+        let page = new_container(
+            &mut ctx,
+            LayoutStyle::new().flex_column().max_width(600.0),
+            &[child],
+        )
+        .unwrap();
+        // Wider than the cap: should fill up to max_width (600), not shrink to content (0).
+        compute_layout(
+            &mut ctx,
+            page,
+            AvailableSpace::Definite(1000.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        let w = track_layout(&ctx, page).unwrap().get().width;
+        assert!((w - 600.0).abs() < 1.0, "capped fill failed: {w}");
+        // Narrower than the cap: should fill the available width (400).
+        compute_layout(
+            &mut ctx,
+            page,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        let w = track_layout(&ctx, page).unwrap().get().width;
+        assert!((w - 400.0).abs() < 1.0, "sub-cap fill failed: {w}");
+    }
+
+    // The landing/sandbox shell pattern: an auto-width outer that fills and centers a capped inner column.
+    #[test]
+    fn centered_capped_column_tracks_width() {
+        let mut ctx = WidgetCtx::new();
+        let (child, _) = new_leaf(&mut ctx, LayoutStyle::new().height(40.0)).unwrap();
+        let inner = new_container(
+            &mut ctx,
+            LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0))
+                .max_width(960.0),
+            &[child],
+        )
+        .unwrap();
+        let outer = new_container(
+            &mut ctx,
+            LayoutStyle::new()
+                .flex_column()
+                .align_items(layout_core::AlignItems::CENTER),
+            &[inner],
+        )
+        .unwrap();
+        let inner_rect = track_layout(&ctx, inner).unwrap();
+        let outer_rect = track_layout(&ctx, outer).unwrap();
+        // Wide window: outer fills 1400, inner caps at 960 and is centered ((1400-960)/2 = 220).
+        compute_layout(
+            &mut ctx,
+            outer,
+            AvailableSpace::Definite(1400.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert!(
+            (outer_rect.get().width - 1400.0).abs() < 1.0,
+            "outer fill: {}",
+            outer_rect.get().width
+        );
+        assert!(
+            (inner_rect.get().width - 960.0).abs() < 1.0,
+            "inner cap: {}",
+            inner_rect.get().width
+        );
+        assert!(
+            (inner_rect.get().x - 220.0).abs() < 1.0,
+            "inner centered: {}",
+            inner_rect.get().x
+        );
+        // Narrow window: inner fills the full width and centering adds no margin.
+        compute_layout(
+            &mut ctx,
+            outer,
+            AvailableSpace::Definite(700.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert!(
+            (inner_rect.get().width - 700.0).abs() < 1.0,
+            "inner tracks narrow: {}",
+            inner_rect.get().width
+        );
+        assert!(
+            inner_rect.get().x.abs() < 1.0,
+            "no margin when full: {}",
+            inner_rect.get().x
         );
     }
 

@@ -27,3 +27,41 @@ impl LayoutLeaf {
         }
     }
 }
+
+/// Resolves the `auto` sides of a media leaf (img/svg) against an intrinsic size: both auto → the
+/// intrinsic size; one auto with the other a px length → derive the auto side from the intrinsic
+/// aspect ratio; a percent side is left untouched. `intrinsic` is only evaluated when needed.
+pub(crate) fn resolve_intrinsic_size(
+    style: LayoutStyle,
+    intrinsic: impl FnOnce() -> (f32, f32),
+) -> LayoutStyle {
+    match (style.is_width_auto(), style.is_height_auto()) {
+        (true, true) => {
+            let (iw, ih) = intrinsic();
+            style.width(iw).height(ih)
+        }
+        (true, false) => match style.height_px() {
+            Some(h) => {
+                let (iw, ih) = intrinsic();
+                if ih > 0.0 {
+                    style.width(h * iw / ih)
+                } else {
+                    style
+                }
+            }
+            None => style,
+        },
+        (false, true) => match style.width_px() {
+            Some(w) => {
+                let (iw, ih) = intrinsic();
+                if iw > 0.0 {
+                    style.height(w * ih / iw)
+                } else {
+                    style
+                }
+            }
+            None => style,
+        },
+        (false, false) => style,
+    }
+}

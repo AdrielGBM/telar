@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use layout_core::{LayoutError, LayoutStyle};
-use platform_core::{Event, PointerButton};
+use layout_core::{LayoutError, LayoutStyle, MeasureFn};
+use platform_core::{Event, PointerButton, PointerSource};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use theme_core::use_widget_theme;
@@ -9,6 +9,12 @@ use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
+
+/// Horizontal / vertical padding a content-sized button reserves around its label.
+const PAD_X: f32 = 14.0;
+const PAD_Y: f32 = 8.0;
+/// Font size a content-sized button measures its label at (matches the default `ButtonStyle` text).
+const DEFAULT_FONT_SIZE: f32 = 14.0;
 
 pub struct ButtonStyle {
     pub rect: RectStyle,
@@ -26,13 +32,36 @@ pub struct Button {
 }
 
 impl Button {
+    /// Default button: sizes to its label plus padding (`PAD_X` / `PAD_Y`), height from the line box.
     pub fn new(
         ctx: &mut crate::context::WidgetCtx,
         label: impl Into<String>,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, LayoutStyle::new().height(36.0).min_width(80.0))?;
-        Ok(Self {
-            label: Arc::from(label.into()),
+        let label: Arc<str> = Arc::from(label.into());
+        let measure_label = Arc::clone(&label);
+        // Buttons are single-line, so measure at an unbounded width; the box is text + padding.
+        let measure: MeasureFn = Box::new(move |_max_width: f32| {
+            let (text_w, _) = renderer_text::measure_text(&measure_label, 1.0e6, DEFAULT_FONT_SIZE);
+            let line_h = DEFAULT_FONT_SIZE * renderer_text::LINE_HEIGHT_FACTOR;
+            (text_w + 2.0 * PAD_X, line_h + 2.0 * PAD_Y)
+        });
+        let (node, rect) = crate::context::new_measured_leaf(ctx, LayoutStyle::new(), measure)?;
+        Ok(Self::from_leaf(label, LayoutLeaf { node, rect }))
+    }
+
+    /// Button with a caller-supplied layout style, for fixed sizes the default doesn't cover (e.g. a square icon button).
+    pub fn with_layout(
+        ctx: &mut crate::context::WidgetCtx,
+        label: impl Into<String>,
+        layout_style: LayoutStyle,
+    ) -> Result<Self, LayoutError> {
+        let leaf = LayoutLeaf::register(ctx, layout_style)?;
+        Ok(Self::from_leaf(Arc::from(label.into()), leaf))
+    }
+
+    fn from_leaf(label: Arc<str>, leaf: LayoutLeaf) -> Self {
+        Self {
+            label,
             leaf,
             on_click: None,
             style: Box::new(|| {
@@ -49,12 +78,12 @@ impl Button {
                     rect_hover: RectStyle::default()
                         .with_fill(primary.darken(0.15))
                         .with_radius(BorderRadius::all(4.0)),
-                    text: TextStyle::new(14.0, on_primary),
-                    text_hover: TextStyle::new(14.0, on_primary),
+                    text: TextStyle::new(DEFAULT_FONT_SIZE, on_primary),
+                    text_hover: TextStyle::new(DEFAULT_FONT_SIZE, on_primary),
                 }
             }),
             is_hovered: signal(false),
-        })
+        }
     }
 
     pub fn on_click(mut self, f: impl Fn() + 'static) -> Self {
@@ -90,9 +119,21 @@ impl Component for Button {
             height: r.height,
         };
 
+        // TextStyle carries no alignment, so center the label. The renderer top-aligns the baseline at
+        // rect.y, so vertical centering is done via rect.y against the true single-line height — not
+        // measure_text's height, which is padded for layout reservation (baseline + a full line box).
+        let (text_w, _) = renderer_text::measure_text(&self.label, r.width, text_style.font_size);
+        let line_h = text_style.font_size * renderer_text::LINE_HEIGHT_FACTOR;
+        let text_rect = geometry_core::Rect {
+            x: ((r.width - text_w) * 0.5).max(0.0),
+            y: ((r.height - line_h) * 0.5).max(0.0),
+            width: text_w,
+            height: line_h,
+        };
+
         self.leaf.at_layout_position(RenderNode::group([
             RenderNode::rect(local, rect_style),
-            RenderNode::text(Arc::clone(&self.label), local, text_style),
+            RenderNode::text(Arc::clone(&self.label), text_rect, text_style),
         ]))
     }
 
@@ -100,7 +141,13 @@ impl Component for Button {
     fn on_event(&mut self, event: &Event) -> EventResult {
         let rect = self.leaf.rect.get();
         match event {
-            Event::PointerMoved { x, y, .. } => {
+            // Hover is a mouse-only concept. Touch has no "pointer left" event, so tracking hover on a
+            // touch move leaves the button stuck in its hover style after a tap. Ignore non-mouse moves.
+            Event::PointerMoved {
+                x,
+                y,
+                source: PointerSource::Mouse,
+            } => {
                 let is_inside = rect.contains(*x as f32, *y as f32);
                 if is_inside != self.is_hovered.get() {
                     self.is_hovered.set(is_inside);
@@ -123,6 +170,14 @@ impl Component for Button {
                 } else {
                     EventResult::Ignored
                 }
+            }
+            // Clear hover on release / cursor-leave (a touch tap can still synthesize a mouse move that
+            // sets hover); return Ignored so the event keeps propagating to other widgets.
+            Event::PointerReleased { .. } | Event::CursorLeft => {
+                if self.is_hovered.get() {
+                    self.is_hovered.set(false);
+                }
+                EventResult::Ignored
             }
             _ => EventResult::Ignored,
         }
@@ -168,6 +223,133 @@ mod tests {
         )
         .unwrap();
         button
+    }
+
+    #[test]
+    fn button_sizes_to_content_plus_padding() {
+        let mut ctx = WidgetCtx::new();
+        let button = Button::new(&mut ctx, "OK").unwrap();
+        let node = button.layout_node();
+        let rect_sig = crate::context::track_layout(&ctx, node).unwrap();
+        // A row with start alignment leaves both axes at the button's measured size (no stretch).
+        let root = new_container(
+            &mut ctx,
+            layout_core::LayoutStyle::new()
+                .flex_row()
+                .align_items(layout_core::AlignItems::FLEX_START)
+                .width(400.0)
+                .height(100.0),
+            &[node],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let rect = rect_sig.get();
+        let (text_w, _) = renderer_text::measure_text("OK", 1.0e6, super::DEFAULT_FONT_SIZE);
+        let line_h = super::DEFAULT_FONT_SIZE * renderer_text::LINE_HEIGHT_FACTOR;
+        assert!(
+            (rect.width - (text_w + 2.0 * super::PAD_X)).abs() < 0.5,
+            "width not content+padding: got {} want {}",
+            rect.width,
+            text_w + 2.0 * super::PAD_X
+        );
+        assert!(
+            (rect.height - (line_h + 2.0 * super::PAD_Y)).abs() < 0.5,
+            "height not line+padding: got {} want {}",
+            rect.height,
+            line_h + 2.0 * super::PAD_Y
+        );
+    }
+
+    #[test]
+    fn measured_buttons_stack_in_column() {
+        let mut ctx = WidgetCtx::new();
+        let b0 = Button::new(&mut ctx, "One").unwrap();
+        let b1 = Button::new(&mut ctx, "Two").unwrap();
+        let b2 = Button::new(&mut ctx, "Three").unwrap();
+        let r0 = crate::context::track_layout(&ctx, b0.layout_node()).unwrap();
+        let r1 = crate::context::track_layout(&ctx, b1.layout_node()).unwrap();
+        let r2 = crate::context::track_layout(&ctx, b2.layout_node()).unwrap();
+        let col = new_container(
+            &mut ctx,
+            layout_core::LayoutStyle::new().flex_column().gap(3.0),
+            &[b0.layout_node(), b1.layout_node(), b2.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            col,
+            AvailableSpace::Definite(208.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert!(
+            r1.get().y > r0.get().y,
+            "b1 should be below b0: {:?} {:?}",
+            r0.get(),
+            r1.get()
+        );
+        assert!(r2.get().y > r1.get().y, "b2 should be below b1");
+    }
+
+    #[test]
+    fn button_label_is_centered() {
+        let mut ctx = WidgetCtx::new();
+        let button = Button::with_layout(
+            &mut ctx,
+            "OK",
+            layout_core::LayoutStyle::new().width(40.0).height(40.0),
+        )
+        .unwrap();
+        let root = new_container(
+            &mut ctx,
+            layout_core::LayoutStyle::new()
+                .flex_column()
+                .width(200.0)
+                .height(100.0),
+            &[button.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let RenderNode::Transform { children, .. } = button.view() else {
+            panic!("expected Transform");
+        };
+        let RenderNode::Group {
+            children: inner, ..
+        } = &children[0]
+        else {
+            panic!("expected Group");
+        };
+        let RenderNode::Primitive(DrawCommand::Text { rect, .. }) = &inner[1] else {
+            panic!("expected Text primitive");
+        };
+        // Vertical: the label's line box is centered in the 40px button (not pinned to the top).
+        let line_h = 14.0 * renderer_text::LINE_HEIGHT_FACTOR;
+        assert!(
+            (rect.y - (40.0 - line_h) / 2.0).abs() < 0.5,
+            "label not vertically centered: y={} line_h={line_h}",
+            rect.y
+        );
+        // Horizontal: equal margins left and right.
+        assert!(
+            (rect.x - (40.0 - rect.width) / 2.0).abs() < 0.5,
+            "label not horizontally centered: x={} w={}",
+            rect.x,
+            rect.width
+        );
     }
 
     #[test]

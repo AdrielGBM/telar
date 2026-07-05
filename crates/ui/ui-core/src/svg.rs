@@ -25,39 +25,9 @@ impl Svg {
         tint_fn: impl Fn() -> Option<Color> + 'static,
         fit_fn: impl Fn() -> ObjectFit + 'static,
     ) -> Result<Self, LayoutError> {
-        // Parity with `<img>`: a side left at `auto` falls back to the SVG's intrinsic size, and a single px side derives the other from the intrinsic aspect ratio; a percent side is left untouched.
-        let width_auto = layout_style.is_width_auto();
-        let height_auto = layout_style.is_height_auto();
-        let layout_style = if width_auto && height_auto {
-            let (iw, ih) = data_fn().intrinsic_size();
-            layout_style.width(iw).height(ih)
-        } else if width_auto {
-            match layout_style.height_px() {
-                Some(h) => {
-                    let (iw, ih) = data_fn().intrinsic_size();
-                    if ih > 0.0 {
-                        layout_style.width(h * iw / ih)
-                    } else {
-                        layout_style
-                    }
-                }
-                None => layout_style,
-            }
-        } else if height_auto {
-            match layout_style.width_px() {
-                Some(w) => {
-                    let (iw, ih) = data_fn().intrinsic_size();
-                    if iw > 0.0 {
-                        layout_style.height(w * ih / iw)
-                    } else {
-                        layout_style
-                    }
-                }
-                None => layout_style,
-            }
-        } else {
-            layout_style
-        };
+        // A side left at `auto` falls back to the SVG's intrinsic size; a single px side derives the other from the intrinsic aspect ratio; a percent side is left untouched.
+        let layout_style =
+            crate::layout_leaf::resolve_intrinsic_size(layout_style, || data_fn().intrinsic_size());
 
         let leaf = LayoutLeaf::register(ctx, layout_style)?;
         Ok(Self {

@@ -21,7 +21,9 @@ pub use colr::ColrGlyph;
 use cache::{AlphaCacheKey, AlphaCacheScale, PixelCacheScale, ShapingCacheKey, ShapingCacheScale};
 use clru::{CLruCache, CLruCacheConfig};
 
-const LINE_HEIGHT_FACTOR: f32 = 1.2;
+/// Line height as a multiple of font size, applied uniformly at layout time. Exposed so widgets that
+/// vertically place text (e.g. centering a button label) center against the exact box the renderer uses.
+pub const LINE_HEIGHT_FACTOR: f32 = 1.2;
 
 // Entry caps for the measure and has-COLR caches. Values are tiny (a few bytes each), so the cap trades negligible memory for a high hit rate.
 const MEASURE_CACHE_CAP: usize = 1000;

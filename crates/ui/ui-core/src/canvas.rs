@@ -39,6 +39,11 @@ impl_leaf_widget!(Canvas);
 impl Component for Canvas {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
+        // A Canvas closure draws at fixed coordinates that ignore the layout rect, so a collapsed rect
+        // (e.g. a section hidden via `display:none`) would still paint over other content. Draw nothing.
+        if r.width <= 0.0 || r.height <= 0.0 {
+            return RenderNode::Empty;
+        }
         // The closure draws in local space (at_layout_position translates the output), so it gets a zero-origin rect — passing the absolute layout rect would double-offset anything derived from rect.x/y.
         let local = Rect {
             x: 0.0,
