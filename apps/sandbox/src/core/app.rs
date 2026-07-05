@@ -13,49 +13,39 @@ const TOPBAR_H: f32 = 52.0;
 /// Below this logical window width the rail collapses into a hamburger drawer.
 const MOBILE_BREAKPOINT: f32 = 600.0;
 
-/// Sidebar nav labels, in the same order `build_content` stacks the sections. The index is the section id.
-const SECTIONS: [&str; 17] = [
-    "Overview",
-    "Layout",
-    "Sizing & grid",
-    "Typography",
-    "Color & theme",
-    "Boxes & borders",
-    "Gradients",
-    "Shadows",
-    "Opacity & layers",
-    "Images",
-    "SVG",
-    "Paths",
-    "Transforms",
-    "Buttons",
-    "Reactivity",
-    "Transitions",
-    "Motion",
+/// Builds one doc section into its content pane. Every `.rsx` feature transpiles to a fn of this shape.
+type SectionBuild = fn(&mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>;
+
+/// Every doc section — nav label and content builder — in display order. The index is the section id, and
+/// this is the single source of truth the sidebar nav and the content pane both derive from: adding or
+/// reordering a section is a one-line edit here, not three in sync.
+const SECTIONS: &[(&str, SectionBuild)] = &[
+    ("Overview", crate::features_overview),
+    ("Layout", crate::features_layout),
+    ("Sizing & grid", crate::features_sizing),
+    ("Typography", crate::features_typography),
+    ("Color & theme", crate::features_color),
+    ("Boxes & borders", crate::features_boxes),
+    ("Gradients", crate::features_gradients),
+    ("Shadows", crate::features_shadows),
+    ("Opacity & layers", crate::features_opacity),
+    ("Images", crate::features_images),
+    ("SVG", crate::features_svg),
+    ("Paths", crate::features_paths),
+    ("Transforms", crate::features_transforms),
+    ("Buttons", crate::features_buttons),
+    ("Reactivity", crate::features_reactivity),
+    ("Transitions", crate::features_transitions),
+    ("Motion", crate::features_motion),
 ];
 
 /// Builds every section once and returns the content pane plus each section's layout node, so the
 /// shell can show only the selected one by toggling the others' `display`.
 fn build_content(ctx: &mut WidgetCtx) -> Result<(Box<dyn LayoutItem>, Vec<NodeId>), LayoutError> {
-    let sections: Vec<Box<dyn LayoutItem>> = vec![
-        crate::features_overview(ctx)?,
-        crate::features_layout(ctx)?,
-        crate::features_sizing(ctx)?,
-        crate::features_typography(ctx)?,
-        crate::features_color(ctx)?,
-        crate::features_boxes(ctx)?,
-        crate::features_gradients(ctx)?,
-        crate::features_shadows(ctx)?,
-        crate::features_opacity(ctx)?,
-        crate::features_images(ctx)?,
-        crate::features_svg(ctx)?,
-        crate::features_paths(ctx)?,
-        crate::features_transforms(ctx)?,
-        crate::features_buttons(ctx)?,
-        crate::features_reactivity(ctx)?,
-        crate::features_transitions(ctx)?,
-        crate::features_motion(ctx)?,
-    ];
+    let mut sections: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(SECTIONS.len());
+    for (_, build) in SECTIONS {
+        sections.push(build(ctx)?);
+    }
     let section_nodes: Vec<NodeId> = sections.iter().map(|s| s.layout_node()).collect();
     // Clip each section to its own rect so a hidden one (zero rect via display:none) draws nothing —
     // robust against stale descendant rects and Canvas art that paints at fixed coordinates.
@@ -112,7 +102,7 @@ fn build_nav(
     selected: RwSignal<usize>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut buttons: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(SECTIONS.len());
-    for (i, title) in SECTIONS.iter().enumerate() {
+    for (i, (title, _)) in SECTIONS.iter().enumerate() {
         let on_style = selected.clone();
         let on_click = selected.clone();
         let btn = Button::new(ctx, *title)?
