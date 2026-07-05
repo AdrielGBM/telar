@@ -78,7 +78,7 @@ col gap:20
 
     col gap:8
         text "Scale, rotate, and a composed rotate-then-scale" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             widget "result"
         code_line code:"Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))"
 

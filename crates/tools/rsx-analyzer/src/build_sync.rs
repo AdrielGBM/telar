@@ -42,11 +42,15 @@ pub fn generated_target(
     let stem = rsx_transpiler::relative_stem(rsx_path, &src_dir);
     // Match the macro: baked `src:"..."` paths resolve against the project asset root, not the `.rsx` dir.
     let assets_root = rsx_transpiler::assets_root(&root);
-    let result = rsx_transpiler::transpile_source_with_theme(
+    // Match the macro's cross-file registry so component calls (optional props, slot arg) resolve the same
+    // in the editor as in the build. The file being edited uses its live buffer, not its on-disk content.
+    let registry = build_component_registry(&src_dir, rsx_path, source);
+    let result = rsx_transpiler::transpile_source_full(
         source,
         &stem,
         theme_type,
         Some(assets_root.as_path()),
+        Some(&registry),
     )
     .ok()?;
     let out_path = root.join(".rsx").join("build").join(&rel);
@@ -71,6 +75,33 @@ pub fn sync_build_file(rsx_path: &Path, source: &str, theme_type: Option<&str>) 
         &path.with_extension("rs.map"),
         &rsx_transpiler::source_map_to_json(&map),
     );
+}
+
+/// Scans every `.rsx` under `src_dir` for its component signature, mirroring the macro's pre-pass so the
+/// editor and the build agree on cross-file call shapes. The file at `current_path` is scanned from its
+/// live `current_source` buffer (not disk), so unsaved edits to a component's props/slots take effect.
+fn build_component_registry(
+    src_dir: &Path,
+    current_path: &Path,
+    current_source: &str,
+) -> rsx_transpiler::ComponentRegistry {
+    let mut registry = rsx_transpiler::ComponentRegistry::new();
+    for rsx_file in rsx_transpiler::find_rsx_files(src_dir) {
+        let source = if rsx_file == current_path {
+            current_source.to_string()
+        } else {
+            std::fs::read_to_string(&rsx_file).unwrap_or_default()
+        };
+        let sig = rsx_transpiler::scan_component_sig(&source);
+        let stem = rsx_transpiler::relative_stem(&rsx_file, src_dir);
+        registry.insert(rsx_transpiler::naming::to_snake_case(&stem), sig.clone());
+        if let Some(base) = rsx_file.file_stem().and_then(|s| s.to_str()) {
+            registry
+                .entry(rsx_transpiler::naming::to_snake_case(base))
+                .or_insert(sig);
+        }
+    }
+    registry
 }
 
 /// The `<crate>/.rsx/build/` path segment that marks a generated file (platform separators).

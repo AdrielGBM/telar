@@ -4,7 +4,7 @@ col gap:20
 
     col gap:8
         text "Fill, stroke, and both" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:14 wrap
                 box fill:primary radius:10 width:150 height:70 align:center justify:center
                     text "fill" size:13 color:on_primary
@@ -16,7 +16,7 @@ col gap:20
 
     col gap:8
         text "Corner radius — from sharp to a full pill" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:14 wrap align:center
                 box fill:purple radius:0 width:110 height:64 align:center justify:center
                     text "0" size:13 color:on_primary
@@ -30,7 +30,7 @@ col gap:20
 
     col gap:8
         text "Stroke width — a plain box makes a hairline or a heavy border" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:14 wrap align:center
                 box stroke:success stroke_w:1 radius:8 width:120 height:56
                 box stroke:success stroke_w:2 radius:8 width:120 height:56
@@ -39,7 +39,7 @@ col gap:20
 
     col gap:8
         text "Content alignment inside a box" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             box fill:surface_alt radius:10 width:100% height:96 align:center justify:center
                 text "align:center justify:center" size:13 color:ink
         code_line code:"box align:center justify:center   (a box is a flex column)"

@@ -1,17 +1,20 @@
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::Event;
+use platform_core::{Event, PointerButton};
 use reactive_core::RwSignal;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::WidgetCtx;
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
+use crate::press::PressGesture;
 
 pub struct Container {
     node: NodeId,
     rect: RwSignal<Rect>,
     children: TrackedChildren,
+    // Optional tap gesture so a plain row/col can be pressable; children still hit-test first.
+    press: PressGesture,
 }
 
 impl Container {
@@ -25,11 +28,19 @@ impl Container {
             node,
             rect,
             children,
+            press: PressGesture::default(),
         })
     }
 
     pub fn rect(&self) -> RwSignal<Rect> {
         self.rect.clone()
+    }
+
+    /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it;
+    /// a child widget that handles the press wins, and a scroll gesture started on it does not fire it.
+    pub fn on_press(mut self, f: impl Fn() + 'static) -> Self {
+        self.press.set(f);
+        self
     }
 
     pub fn column(
@@ -53,7 +64,42 @@ impl Component for Container {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        dispatch_container_event(&mut self.children, event)
+        // No tap handler: behave exactly as before (pure child routing).
+        if !self.press.is_set() {
+            return dispatch_container_event(&mut self.children, event);
+        }
+        let rect = self.rect.get();
+        match event {
+            Event::PointerMoved { .. } => {
+                self.press.track_move(event);
+                dispatch_container_event(&mut self.children, event)
+            }
+            Event::PointerPressed {
+                button: PointerButton::Primary,
+                ..
+            } => {
+                if dispatch_container_event(&mut self.children, event) == EventResult::Handled {
+                    self.press.cancel();
+                    return EventResult::Handled;
+                }
+                self.press.arm(event, rect)
+            }
+            Event::PointerReleased {
+                button: PointerButton::Primary,
+                ..
+            } => {
+                if dispatch_container_event(&mut self.children, event) == EventResult::Handled {
+                    self.press.cancel();
+                    return EventResult::Handled;
+                }
+                self.press.release(event, rect)
+            }
+            Event::CursorLeft => {
+                self.press.cancel();
+                dispatch_container_event(&mut self.children, event)
+            }
+            _ => dispatch_container_event(&mut self.children, event),
+        }
     }
 
     fn debug_name(&self) -> &'static str {

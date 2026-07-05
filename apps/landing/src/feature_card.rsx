@@ -1,4 +1,5 @@
 [logic]
+#[derive(Default)]
 pub struct Props {
     pub icon: &'static str,
     pub title: &'static str,

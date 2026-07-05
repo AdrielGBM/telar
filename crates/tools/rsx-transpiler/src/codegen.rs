@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use rsx_parser::RsxDocument;
+use rsx_parser::{RsxDocument, ViewNode};
 
 use crate::error::TranspileError;
 use crate::naming::{
@@ -12,6 +12,114 @@ use crate::signal_scan::scan_signals;
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
 
+/// The call-relevant shape of a component: what its function signature and `Props` struct look like,
+/// so a *caller* in another `.rsx` can emit the right arguments (optional props, the slot argument)
+/// without seeing the callee's source. Collected across the workspace into a [`ComponentRegistry`].
+#[derive(Clone, Debug, Default)]
+pub struct ComponentSig {
+    /// The component declares a `pub struct Props`, so calls must pass a `Props` argument.
+    pub has_props: bool,
+    /// `Props` derives `Default`, so a call may omit fields (`..Default::default()` fills the rest).
+    pub props_default: bool,
+    /// The `Props` field names, so a caller knows when it has omitted some (and must default them).
+    pub prop_fields: Vec<String>,
+    /// The view uses a `children` slot placeholder, so every call must pass a `Slots` argument — even a
+    /// childless one (which passes `Slots::new()`).
+    pub has_slot: bool,
+}
+
+/// Maps a component's callable name (both its path-flattened stem and its bare basename) to its
+/// [`ComponentSig`]. Built once per build/analyze pass and threaded into every file's transpile.
+pub type ComponentRegistry = std::collections::HashMap<String, ComponentSig>;
+
+/// Scans one `.rsx` source for its [`ComponentSig`] (its `Props` shape and whether it takes a slot).
+/// A parse failure yields an empty sig, so a temporarily-broken file never poisons the registry.
+pub fn scan_component_sig(source: &str) -> ComponentSig {
+    let Ok(doc) = rsx_parser::parse(source) else {
+        return ComponentSig::default();
+    };
+    let (has_props, props_default, prop_fields) = scan_props_struct(&doc.logic.source);
+    ComponentSig {
+        has_props,
+        props_default,
+        prop_fields,
+        has_slot: view_uses_slot(&doc.view.nodes),
+    }
+}
+
+/// Scans the logic zone for `struct Props`: returns whether it exists, whether a preceding
+/// `#[derive(...)]` lists `Default` (→ optional props), and the field names.
+fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>) {
+    let Some(spos) = logic.find("struct Props") else {
+        return (false, false, Vec::new());
+    };
+
+    // A `#[derive(...Default...)]` on the attribute lines immediately above the struct opts it into defaults.
+    let lines: Vec<&str> = logic.lines().collect();
+    let sidx = lines
+        .iter()
+        .position(|l| l.contains("struct Props"))
+        .unwrap_or(0);
+    let mut derives_default = false;
+    let mut i = sidx;
+    while i > 0 {
+        let t = lines[i - 1].trim();
+        if t.is_empty() || t.starts_with("//") {
+            i -= 1;
+            continue;
+        }
+        if t.starts_with('#') {
+            if t.contains("Default") {
+                derives_default = true;
+            }
+            i -= 1;
+            continue;
+        }
+        break;
+    }
+
+    // Field names live between the struct's first `{` and its matching `}`.
+    let Some(open_rel) = logic[spos..].find('{') else {
+        return (true, derives_default, Vec::new());
+    };
+    let body_start = spos + open_rel + 1;
+    let mut depth = 1i32;
+    let mut end = body_start;
+    for (i, c) in logic[body_start..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = body_start + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let fields = logic[body_start..end]
+        .split(',')
+        .filter_map(parse_field_name)
+        .collect();
+    (true, derives_default, fields)
+}
+
+/// Extracts the field name from a `[pub] name: Type` struct-field chunk, skipping comment lines.
+fn parse_field_name(chunk: &str) -> Option<String> {
+    let cleaned = chunk
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let t = cleaned.trim();
+    let t = t.strip_prefix("pub ").unwrap_or(t).trim_start();
+    let colon = t.find(':')?;
+    let name = t[..colon].trim();
+    (!name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        .then(|| name.to_string())
+}
+
 /// Input to a single transpilation: the parsed document plus the desired component function name (typically derived from the source file stem).
 pub(crate) struct TranspileInput<'a> {
     pub document: &'a RsxDocument,
@@ -20,6 +128,8 @@ pub(crate) struct TranspileInput<'a> {
     pub theme_type: Option<&'a str>,
     /// Directory of the `.rsx` being transpiled, used to resolve static `svg`/`img` asset paths (`src:"path"`) for build-time baking. `None` when no filesystem anchor is available (e.g. some analyzer/test paths), in which case a static asset yields a `compile_error!`.
     pub base_dir: Option<&'a Path>,
+    /// Signatures of every component in the workspace, so a call site emits optional props and the slot argument correctly. `None` (tests, isolated transpiles) falls back to the per-file heuristic: pass a slot arg only when markup children are present, and require every prop field.
+    pub registry: Option<&'a ComponentRegistry>,
 }
 
 /// The generated Rust source for one `.rsx` file.
@@ -68,12 +178,26 @@ pub fn transpile_source_with_theme(
     theme_type: Option<&str>,
     base_dir: Option<&Path>,
 ) -> Result<TranspiledSource, TranspileError> {
+    transpile_source_full(source, component_name, theme_type, base_dir, None)
+}
+
+/// Like [`transpile_source_with_theme`], but also given the workspace [`ComponentRegistry`] so calls to
+/// other components emit optional props and the slot argument correctly (a childless call to a slotted
+/// component still passes `Slots::new()`; a call that omits defaultable props adds `..Default::default()`).
+pub fn transpile_source_full(
+    source: &str,
+    component_name: &str,
+    theme_type: Option<&str>,
+    base_dir: Option<&Path>,
+    registry: Option<&ComponentRegistry>,
+) -> Result<TranspiledSource, TranspileError> {
     let document = rsx_parser::parse(source)?;
     transpile(TranspileInput {
         document: &document,
         component_name,
         theme_type,
         base_dir,
+        registry,
     })
 }
 
@@ -127,18 +251,27 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         &doc.style.constants,
         input.theme_type,
         input.base_dir,
-    );
+    )
+    .with_registry(input.registry);
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
 
     let logic = logic_source.trim_end();
 
-    let signature = if has_props {
-        format!(
-            "pub fn {fn_name}(ctx: &mut WidgetCtx, props: {props_type}) -> Result<Box<dyn LayoutItem>, LayoutError>"
-        )
-    } else {
-        format!("pub fn {fn_name}(ctx: &mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>")
+    // A `children` placeholder anywhere in the view makes the component take a `Slots` argument.
+    let has_slot = view_uses_slot(&doc.view.nodes);
+    let ret = "Result<Box<dyn LayoutItem>, LayoutError>";
+    let signature = match (has_props, has_slot) {
+        (true, true) => format!(
+            "pub fn {fn_name}(ctx: &mut WidgetCtx, props: {props_type}, mut __slots: Slots) -> {ret}"
+        ),
+        (true, false) => {
+            format!("pub fn {fn_name}(ctx: &mut WidgetCtx, props: {props_type}) -> {ret}")
+        }
+        (false, true) => {
+            format!("pub fn {fn_name}(ctx: &mut WidgetCtx, mut __slots: Slots) -> {ret}")
+        }
+        (false, false) => format!("pub fn {fn_name}(ctx: &mut WidgetCtx) -> {ret}"),
     };
 
     // 0-based `.rsx` line of `logic_source` line 0, used to map generated lines back to the source.
@@ -263,7 +396,8 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
                 &doc.style.constants,
                 input.theme_type,
                 input.base_dir,
-            );
+            )
+            .with_registry(input.registry);
             let pbody = pgen.generate_root(&preview.body);
             code.push("\n", None);
             code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
@@ -321,6 +455,23 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         expr_spans,
         has_props,
     })
+}
+
+/// Whether any node in the view tree is a `children` slot placeholder, so the component function must
+/// take a `Slots` argument. Recurses through element children and `if`/`for` branches.
+fn view_uses_slot(nodes: &[ViewNode]) -> bool {
+    nodes.iter().any(node_uses_slot)
+}
+
+fn node_uses_slot(node: &ViewNode) -> bool {
+    match node {
+        ViewNode::Element(el) => el.tag == "children" || view_uses_slot(&el.children),
+        ViewNode::IfBlock(b) => {
+            view_uses_slot(&b.then_branch) || b.else_branch.as_deref().is_some_and(view_uses_slot)
+        }
+        ViewNode::ForBlock(b) => view_uses_slot(&b.body),
+        ViewNode::LetStmt { .. } => false,
+    }
 }
 
 /// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone, renames it to `{PascalFnName}Props`, and returns the renamed struct code together with the logic zone with the struct removed.

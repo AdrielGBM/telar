@@ -8,8 +8,10 @@ mod layout_leaf;
 mod line;
 mod path;
 mod pointer;
+mod press;
 mod rect;
 mod scroll_area;
+mod slots;
 mod styled_container;
 #[cfg(feature = "svg")]
 mod svg;
@@ -29,6 +31,7 @@ pub use line::Line;
 pub use path::Path;
 pub use rect::Rectangle;
 pub use scroll_area::{LayoutScrollArea, ScrollbarStyle};
+pub use slots::Slots;
 pub use styled_container::StyledContainer;
 #[cfg(feature = "svg")]
 pub use svg::Svg;

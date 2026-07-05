@@ -13,7 +13,7 @@ col gap:20
 
     col gap:8
         text "One source, drawn crisp at every size" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:20 align:end
                 svg src:icon width:20 height:20
                 svg src:icon width:36 height:36
@@ -23,7 +23,7 @@ col gap:20
 
     col gap:8
         text "Tint — recolor a monochrome glyph (reads the active theme)" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:20 align:center
                 svg src:icon tint:theme().primary width:48 height:48
                 svg src:icon tint:theme().success width:48 height:48
@@ -33,7 +33,7 @@ col gap:20
 
     col gap:8
         text "Full-color vectors and a raster fallback for filters" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:24 align:center
                 col gap:6 align:center
                     svg src:logo width:88 height:88
@@ -45,7 +45,7 @@ col gap:20
 
     col gap:8
         text "A vector baked from disk at build time (no runtime parser)" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:20 align:center
                 svg src:"badge.svg" width:40 height:40
                 svg src:"badge.svg" width:72 height:72

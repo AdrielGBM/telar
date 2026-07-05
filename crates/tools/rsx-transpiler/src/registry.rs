@@ -5,6 +5,10 @@
 /// Sentinel constructor for tags that have no constructor because they reference an existing in-scope variable rather than building a widget (e.g. `widget`).
 pub const TAG_REFERENCES_VARIABLE: &str = "<in-scope variable>";
 
+/// Sentinel constructor for the `children` slot placeholder, which builds no widget: it splices the
+/// caller-supplied children (from the component's `Slots` argument) into the enclosing container.
+pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
+
 /// Built-in RSX tags paired with the Rust constructor path they transpile to.
 ///
 /// Mirrors the tag dispatch in `ViewGen::emit_element`. Tags that share a constructor (e.g. `col`/`row`/`grid` -> `Container::new`) are listed once per spelling so lookups by tag name resolve every alias. A tag whose constructor is [`TAG_REFERENCES_VARIABLE`] emits no constructor: `widget` inlines the in-scope variable named by its content.
@@ -26,6 +30,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("scroll", "LayoutScrollArea::new"),
         ("canvas", "Canvas::new"),
         ("widget", TAG_REFERENCES_VARIABLE),
+        ("children", TAG_SLOT_PLACEHOLDER),
     ]
 }
 
@@ -85,6 +90,31 @@ pub fn color_attr_keys() -> &'static [&'static str] {
     ]
 }
 
+/// The full paint + behavior attribute set every styled container (`box`, `col`, `row`, `grid`) accepts.
+/// Kept in one place so the four tags stay consistent — the codegen already treats them identically
+/// (`rect_style_pieces` resolves fill/stroke/shadow/gradient/opacity for all of them, and `on_press`
+/// is wired on both `Container` and `StyledContainer`).
+const CONTAINER_PAINT: &[&str] = &[
+    "fill",
+    "stroke",
+    "stroke_w",
+    "radius",
+    "shadow_x",
+    "shadow_y",
+    "shadow_blur",
+    "shadow_color",
+    "gradient",
+    "from",
+    "to",
+    "mid",
+    "mid_pos",
+    "gr",
+    "opacity",
+    "on_press",
+    "hover",
+    "transition",
+];
+
 /// Completion attribute keys for `tag`: the shared layout keys plus the tag's own visual/behavioral keys. Mirrors the per-tag attribute handling in [`crate::view`]; a component tag (not built-in) takes its `Props` fields, so it returns no suggestions here.
 pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
     let with = |extra: &[&'static str]| {
@@ -96,10 +126,18 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         // `transition:` animates a paint/color property (see `transition::parse_transition_value`), so it is offered on the tags whose codegen wires it: `text` (color), `box`/containers (fill/stroke/opacity).
         "text" | "heading" => vec!["size", "color", "lines", "transition"],
         "widget" => vec![],
+        // The `children` slot placeholder takes only an optional `name:` for a named slot.
+        "children" => vec!["name"],
         "btn" | "button" => with(&["on_press", "fill", "outline"]),
-        "grid" => with(&["cols", "span", "row_span", "transition"]),
-        "col" | "row" | "column" => with(&["fill", "stroke", "radius", "opacity", "transition"]),
-        "box" | "section" => with(&[
+        // box/col/row/grid share one paint+behavior set (the codegen treats them identically); grid adds its track keys.
+        "grid" => {
+            let mut keys = with(CONTAINER_PAINT);
+            keys.extend_from_slice(&["cols", "span", "row_span"]);
+            keys
+        }
+        "col" | "row" | "column" | "box" => with(CONTAINER_PAINT),
+        // `section` is a text+heading widget, not a container: it keeps its own narrower paint set and no on_press.
+        "section" => with(&[
             "fill",
             "stroke",
             "radius",

@@ -4,10 +4,9 @@ let clicks = signal(0i32);
 [view]
 col gap:20
     doc_header kicker:"13 · INTERACTION" title:"Buttons" desc:"btn takes a label, a variant, and an on_press closure. The variant is the color token you pass to fill or outline; ghost is a bare flag."
-
     col gap:8
         text "Variants" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:12 wrap align:center
                 btn "Filled" fill:primary
                 btn "Outline" outline:primary
@@ -15,17 +14,32 @@ col gap:20
                 btn "Danger" fill:danger
                 btn "Success" fill:success
         code_line code:"btn 'Filled' fill:primary   ·   outline:primary   ·   ghost"
-
     col gap:8
         text "on_press — every click runs a closure that mutates a signal" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16 gap:12
+        card gap:12
             text "Clicks · {$clicks}" size:18 color:ink
             row gap:10
-                btn "+1" fill:primary on_press:|| $clicks.update(|n| *n += 1)
-                btn "+10" fill:primary on_press:|| $clicks.update(|n| *n += 10)
+                btn "+1" fill:primary on_press:|| $clicks += 1
+                btn "+10" fill:primary on_press:|| $clicks += 10
                 btn "Reset" ghost on_press:|| $clicks.set(0)
-        code_line code:"btn '+1' fill:primary on_press:|| $clicks.update(|n| *n += 1)"
-
+        code_line code:"btn '+1' fill:primary on_press:|| $clicks += 1      ($x += n desugars to .update)"
+    col gap:8
+        text "A whole box is clickable — on_press works on any container, not just buttons" size:13 color:ink
+        card gap:10
+            box fill:surface_alt radius:10 pad:20 align:center justify:center on_press(|| $clicks += 1)
+                text "Tap anywhere in this card · {$clicks}" size:14 color:ink
+            text "The card itself takes on_press; a child button would still win its own taps." size:12 color:muted
+        code_line code:"box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)"
+    col gap:8
+        text "hover — a container restyles while the pointer is over it (mouse only)" size:13 color:ink
+        card gap:10
+            row gap:10 wrap
+                box fill:surface_alt radius:10 pad:16 hover(fill:primary) align:center justify:center width:150 height:64
+                    text "Fill on hover" size:13 color:ink
+                box fill:surface_alt stroke:border radius:10 pad:16 hover(stroke:primary radius:16) align:center justify:center width:150 height:64
+                    text "Stroke + radius" size:13 color:ink
+            text "Each box carries its own hover(...) — different hovers in one file, no signals." size:12 color:muted
+        code_line code:"box fill:surface_alt hover(fill:primary)      (swap style while hovered)"
     col gap:8
         text "Attributes" size:13 color:ink
         col gap:6

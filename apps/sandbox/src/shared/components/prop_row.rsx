@@ -1,5 +1,6 @@
 [logic]
 // One documentation row for an attribute: its name, accepted values, and a short description.
+#[derive(Default)]
 pub struct Props {
     pub name: &'static str,
     pub values: &'static str,

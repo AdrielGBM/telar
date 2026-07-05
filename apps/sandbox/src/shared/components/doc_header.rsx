@@ -1,4 +1,5 @@
 [logic]
+#[derive(Default)]
 pub struct Props {
     pub kicker: &'static str,
     pub title: &'static str,

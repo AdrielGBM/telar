@@ -3,36 +3,36 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use rsx_parser::{Attr, Element, ViewNode};
+use rsx_parser::{Attr, Element};
 
 use crate::style::format_f32;
 
-use super::signals::{build_gradient_stops, emit_transition_prelude, has_paint};
-use super::{ChildEmit, ViewGen};
+use super::signals::{
+    build_gradient_stops, closure_marker, emit_transition_prelude, has_paint, normalize_closure,
+    substitute_handles, wrap_signal_clones,
+};
+use super::{ChildEmit, ViewGen, forces_child_vec};
 
 impl ViewGen<'_> {
     pub(super) fn emit_container(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
+        let on_press = self.on_press_call(el);
 
-        // A `col`/`row` with paint (inline or from its class) upgrades to a StyledContainer so it can carry a background like `box`; otherwise it stays a plain Container.
+        // A `col`/`row` with paint (inline or from its class) or a `hover(...)` override upgrades to a StyledContainer so it can carry a background like `box`; otherwise it stays a plain Container.
         let pattrs = self.paint_attrs(el);
+        let hover_call = self.hover_style_call(el, &pattrs);
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
-        let pieces = if has_paint(&pattrs) {
+        let pieces = if has_paint(&pattrs) || !hover_call.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
         } else {
             None
         };
 
-        let has_dynamic = el.children.iter().any(|n| {
-            matches!(
-                n,
-                ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::LetStmt { .. }
-            )
-        });
+        let has_dynamic = el.children.iter().any(forces_child_vec);
 
         self.indent += 1;
         let inner_pad = self.indent_str();
@@ -52,11 +52,14 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}"
+                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}"
                 );
             }
             None => {
-                let _ = writeln!(code, "{inner_pad}Container::new(ctx, {style}, {children})?");
+                let _ = writeln!(
+                    code,
+                    "{inner_pad}Container::new(ctx, {style}, {children})?{on_press}"
+                );
             }
         }
 
@@ -68,20 +71,17 @@ impl ViewGen<'_> {
         let var = self.next_variable_name("box");
         let pad = self.indent_str();
         let layout_style = self.make_layout_style("box", &el.classes, &el.attributes);
+        let on_press = self.on_press_call(el);
 
         // Paint merges inline attrs with the element's class (inline wins), so a `@card` class can carry fill/stroke/radius/etc. — not only inline `box` attributes. `box` is always styled.
         let pattrs = self.paint_attrs(el);
+        let hover_call = self.hover_style_call(el, &pattrs);
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         let (closure, opacity_call) = self.rect_style_pieces(&pattrs, &transitions, &mut hoists);
 
-        let has_dynamic = el.children.iter().any(|n| {
-            matches!(
-                n,
-                ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::LetStmt { .. }
-            )
-        });
+        let has_dynamic = el.children.iter().any(forces_child_vec);
 
         self.indent += 1;
         let inner_pad = self.indent_str();
@@ -99,11 +99,46 @@ impl ViewGen<'_> {
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
         let _ = writeln!(
             code,
-            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}"
+            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}"
         );
 
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
+    }
+
+    /// Builds the trailing `.on_hover_style(...)` from a `hover(...)` attribute, or an empty string when
+    /// there is none. The parenthesized value is a mini list of paint props (`hover(fill:x stroke:y)`);
+    /// they override the element's base paint for the hovered state, so `view()` swaps to them while the
+    /// mouse is over the box. Reuses `rect_style_pieces`, so `$signal` colors are cloned into the closure
+    /// just like the base style. Transitions are intentionally not applied to the hover variant.
+    fn hover_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "hover") else {
+            return String::new();
+        };
+        // Overrides first so `rect_style_pieces`' first-match `find` picks the hover value over the base.
+        let mut merged = parse_inline_paint_attrs(&attr.value);
+        merged.extend(base_pattrs.iter().cloned());
+        let mut hoists: Vec<String> = Vec::new();
+        let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
+        format!(".on_hover_style({closure})")
+    }
+
+    /// Builds the trailing `.on_press(...)` for a container element, or an empty string when there is no
+    /// `on_press` attribute. Mirrors the button emitter: `$name` signals are cloned into the closure,
+    /// `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
+    fn on_press_call(&self, el: &Element) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "on_press") else {
+            return String::new();
+        };
+        let closure = substitute_handles(&normalize_closure(&attr.value));
+        // A `$` substitution breaks the byte-for-byte span, so only a `$`-free closure carries a marker.
+        let marker = if attr.value.contains('$') {
+            String::new()
+        } else {
+            closure_marker(Some(attr))
+        };
+        let call = wrap_signal_clones(&[attr.value.as_str()], format!("move {marker}{closure}"));
+        format!(".on_press({call})")
     }
 
     /// Builds a `Paint::Gradient(...)` expression for a `box` element, using the closure parameter `r` (the rendered `Bounds`) for absolute gradient points.
@@ -156,4 +191,22 @@ impl ViewGen<'_> {
             _ => None,
         }
     }
+}
+
+/// Parses a `hover(...)` inner value — a whitespace-separated list of `key:value` paint props — into
+/// `Attr`s. Paint values carry no spaces (color tokens, `#hex`, numbers), so a simple split suffices.
+/// A token without a `:` (a bare flag) is ignored: hover overrides are always keyed paint props.
+fn parse_inline_paint_attrs(value: &str) -> Vec<Attr> {
+    value
+        .split_whitespace()
+        .filter_map(|tok| {
+            let (key, val) = tok.split_once(':')?;
+            Some(Attr {
+                key: key.to_string(),
+                value: val.to_string(),
+                is_quoted: false,
+                value_start: 0,
+            })
+        })
+        .collect()
 }

@@ -43,6 +43,25 @@ pub fn app(input: TokenStream) -> TokenStream {
     // each `.rsx`'s own directory — see `[rsx] assets` in rsx.toml.
     let assets_root = rsx_transpiler::assets_root(&manifest_dir);
 
+    // Pre-pass: collect every component's signature (its Props shape + whether it takes a slot) so each
+    // file's transpile can emit calls to other components correctly — optional props and the slot arg,
+    // both of which need the callee's shape, which lives in another file. Keyed by both the path-flattened
+    // stem and the bare basename (markup calls a component by its basename).
+    let mut registry = rsx_transpiler::ComponentRegistry::new();
+    for rsx_file in &rsx_files {
+        let Ok(source) = std::fs::read_to_string(rsx_file) else {
+            continue;
+        };
+        let sig = rsx_transpiler::scan_component_sig(&source);
+        let stem = rsx_transpiler::relative_stem(rsx_file, &src_dir);
+        registry.insert(rsx_transpiler::naming::to_snake_case(&stem), sig.clone());
+        if let Some(base) = rsx_file.file_stem().and_then(|s| s.to_str()) {
+            registry
+                .entry(rsx_transpiler::naming::to_snake_case(base))
+                .or_insert(sig);
+        }
+    }
+
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
     let mut preview_const_idents: Vec<Ident> = Vec::new();
@@ -58,11 +77,12 @@ pub fn app(input: TokenStream) -> TokenStream {
 
         let stem = rsx_transpiler::relative_stem(rsx_file, &src_dir);
 
-        let result = match rsx_transpiler::transpile_source_with_theme(
+        let result = match rsx_transpiler::transpile_source_full(
             &source,
             &stem,
             Some(theme_type_str.as_str()),
             Some(assets_root.as_path()),
+            Some(&registry),
         ) {
             Ok(r) => r,
             Err(rsx_transpiler::TranspileError::Parse(ref pe)) => {

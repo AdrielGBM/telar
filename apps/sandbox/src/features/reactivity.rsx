@@ -11,7 +11,7 @@ col gap:20
 
     col gap:8
         text "One signal, several derived readers" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16 gap:8
+        card gap:8
             text "count · {$count}" size:22 color:ink
             text "doubled memo · {$doubled}" size:14 color:muted
             text "{$remaining} left before 10" size:14 color:primary
@@ -23,7 +23,7 @@ col gap:20
 
     col gap:8
         text "A reactive property — the bar's opacity tracks the same signal" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16 gap:8
+        card gap:8
             box fill:primary radius:8 height:36 opacity:$level align:center justify:center
                 text "opacity = count / 10" size:13 color:on_primary
             text "Press + and this bar fades in — a signal wired straight into a style." size:12 color:muted

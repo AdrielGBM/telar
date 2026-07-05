@@ -4,7 +4,7 @@ col gap:20
 
     col gap:8
         text "Linear — direction sets the axis" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             grid cols:"fit 160" gap:12
                 col gap:6 align:center
                     box gradient:horizontal from:danger to:primary radius:10 width:100% height:72
@@ -19,13 +19,13 @@ col gap:20
 
     col gap:8
         text "Three stops — add a middle color and its position" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             box gradient:horizontal from:primary mid:purple mid_pos:0.5 to:danger radius:10 width:100% height:80
         code_line code:"box gradient:horizontal from:primary mid:purple mid_pos:0.5 to:danger"
 
     col gap:8
         text "Radial — a burst from the center; gr sets the radius" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             grid cols:"fit 160" gap:12
                 col gap:6 align:center
                     box gradient:radial gr:70 from:cyan to:primary radius:10 width:100% height:80

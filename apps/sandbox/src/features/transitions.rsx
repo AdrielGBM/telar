@@ -11,7 +11,7 @@ col gap:20
 
     col gap:8
         text "Color — the fill eases to its new value" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16 gap:12
+        card gap:12
             row gap:14 align:center wrap
                 col gap:6 align:center
                     box width:72 height:72 fill:$accent radius:14 transition:fill 250ms ease-out
@@ -24,7 +24,7 @@ col gap:20
 
     col gap:8
         text "Opacity — the same signal, animated" size:13 color:ink
-        box fill:surface stroke:border radius:12 pad:16
+        card
             row gap:14 align:center wrap
                 box width:130 height:64 fill:primary radius:12 opacity:$fade transition:opacity 300ms ease-in-out align:center justify:center
                     text "fade" size:13 color:on_primary

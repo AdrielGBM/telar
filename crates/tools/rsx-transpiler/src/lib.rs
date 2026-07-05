@@ -10,7 +10,10 @@ mod style;
 mod transition;
 mod view;
 
-pub use codegen::{ExprSpan, TranspiledSource, source_map_to_json, transpile_source_with_theme};
+pub use codegen::{
+    ComponentRegistry, ComponentSig, ExprSpan, TranspiledSource, scan_component_sig,
+    source_map_to_json, transpile_source_full, transpile_source_with_theme,
+};
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, discover_rust_modules, find_rsx_files,
     relative_output_path, relative_stem,
@@ -165,6 +168,26 @@ col @card
     }
 
     // `has_props` lets the app macro alias a nested component's `Props` type by its base name only when it actually has one.
+    #[test]
+    fn scan_component_sig_detects_default_fields_and_slot() {
+        let src = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub gap: f32,\n    pub title: &'static str,\n}\n[view]\nbox\n    children\n";
+        let sig = scan_component_sig(src);
+        assert!(sig.has_props && sig.props_default && sig.has_slot);
+        assert_eq!(
+            sig.prop_fields,
+            vec!["gap".to_string(), "title".to_string()]
+        );
+    }
+
+    #[test]
+    fn scan_component_sig_no_default_no_slot() {
+        let src =
+            "[logic]\npub struct Props {\n    pub title: &'static str,\n}\n[view]\ntext \"hi\"\n";
+        let sig = scan_component_sig(src);
+        assert!(sig.has_props && !sig.props_default && !sig.has_slot);
+        assert_eq!(sig.prop_fields, vec!["title".to_string()]);
+    }
+
     #[test]
     fn reports_has_props() {
         let with = transpile_source_with_theme(

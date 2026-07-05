@@ -126,6 +126,8 @@ pub struct ViewGen<'a> {
     base_dir: Option<PathBuf>,
     /// Monotonic counter for the hoisted `BAKED_*_N` static asset handles, unique per component so two baked assets never share a `static` name.
     baked_asset_count: usize,
+    /// Signatures of every component in the workspace, so `emit_component_call` emits optional props and the slot argument correctly. `None` falls back to the per-file heuristic.
+    registry: Option<&'a crate::codegen::ComponentRegistry>,
 }
 
 impl<'a> ViewGen<'a> {
@@ -145,7 +147,17 @@ impl<'a> ViewGen<'a> {
             transition_count: 0,
             base_dir: base_dir.map(Path::to_path_buf),
             baked_asset_count: 0,
+            registry: None,
         }
+    }
+
+    /// Attaches the workspace component registry so `emit_component_call` can consult callee signatures.
+    pub(crate) fn with_registry(
+        mut self,
+        registry: Option<&'a crate::codegen::ComponentRegistry>,
+    ) -> Self {
+        self.registry = registry;
+        self
     }
 
     fn next_variable_name(&mut self, tag: &str) -> String {
@@ -254,8 +266,19 @@ impl<'a> ViewGen<'a> {
             "scroll" => self.emit_scroll(el),
             "canvas" => self.emit_canvas(el),
             "widget" => self.emit_widget_ref(el),
+            "children" => self.emit_slot(el),
             other => self.emit_component_call(el, other),
         }
+    }
+}
+
+/// Whether a view node must build a mutable `__children` vec rather than a `children![...]` literal:
+/// control flow (`if`/`for`/`let`) that mutates the vec in place, or a `children` slot placeholder that
+/// splices a runtime `Vec` into it.
+pub(crate) fn forces_child_vec(node: &ViewNode) -> bool {
+    match node {
+        ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::LetStmt { .. } => true,
+        ViewNode::Element(el) => el.tag == "children",
     }
 }
 
@@ -359,6 +382,310 @@ mod tests {
         assert!(
             code.contains("with_fill"),
             "class fill should reach the RectStyle:\n{code}"
+        );
+    }
+
+    #[test]
+    fn container_on_press_emits_click_handler() {
+        // A painted `box` (StyledContainer) and a plain `col` (Container) both wire `.on_press`.
+        let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press:|| $n.update(|v| *v += 1)\n    col on_press:|| $n.set(0)\n        text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.matches(".on_press(").count() >= 2,
+            "both box and col should emit .on_press:\n{code}"
+        );
+        // The signal is cloned into the closure so the outer handle stays usable elsewhere.
+        assert!(
+            code.contains("let n = n.clone();"),
+            "on_press closure should clone the captured signal:\n{code}"
+        );
+        // `$n` is rewritten to the bare handle inside the closure body.
+        assert!(
+            code.contains("n.update(") && code.contains("n.set(0)"),
+            "$n should be substituted to the handle:\n{code}"
+        );
+    }
+
+    #[test]
+    fn compound_assign_sugar_rewrites_to_update() {
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    btn \"+\" on_press:|| $count += 1\n    btn \"-\" on_press:|| $count -= 2\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("count.update(|__v| *__v += 1)"),
+            "+= should desugar to update:\n{code}"
+        );
+        assert!(
+            code.contains("count.update(|__v| *__v -= 2)"),
+            "-= should desugar to update:\n{code}"
+        );
+    }
+
+    #[test]
+    fn toggle_and_update_closures_pass_through() {
+        // `.toggle()` (a real RwSignal<bool> method) and an explicit `.update(...)` are left untouched.
+        let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    btn \"t\" on_press:|| $flag.toggle()\n    btn \"u\" on_press:|| $count.update(|n| *n += 1)\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("flag.toggle()"),
+            "toggle passes through:\n{code}"
+        );
+        assert!(
+            code.contains("count.update(|n| *n += 1)"),
+            ".update must be left untouched:\n{code}"
+        );
+    }
+
+    #[test]
+    fn quoted_escape_decodes_then_reemits() {
+        // `\"` in .rsx content decodes to a real quote, then re-emits as an escaped quote in the Rust literal.
+        let src = "[logic]\n[view]\ntext \"say \\\"hi\\\"\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains(r#"say \"hi\""#),
+            "escaped quotes should round-trip:\n{code}"
+        );
+    }
+
+    #[test]
+    fn paren_attr_form_captures_nested_and_coexists() {
+        // `transition(...)` and `on_press(...)` are paren-delimited, so a box can be animated AND clickable
+        // on one line in any order, and a closure with nested parens is captured whole.
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\nbox fill:primary transition(fill 200ms ease-out) on_press(|| $count.update(|n| *n += 1))\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains(".on_press("),
+            "paren on_press should emit a handler:\n{code}"
+        );
+        assert!(
+            code.contains("count.update(|n| *n += 1)"),
+            "nested-paren closure should be captured whole:\n{code}"
+        );
+        assert!(
+            code.contains("motion::Animated::new"),
+            "transition should still wire even when it precedes on_press:\n{code}"
+        );
+    }
+
+    // A `box` with a `hover(...)` override wires `.on_hover_style(...)`.
+    #[test]
+    fn box_hover_emits_on_hover_style() {
+        let src = "[view]\nbox fill:#101010 hover(fill:#f0f0f0 stroke:#ff0000) radius:10\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains(".on_hover_style("),
+            "hover(...) should wire on_hover_style:\n{}",
+            out.rust_code
+        );
+    }
+
+    // A plain `col` gains a hover style, so it must upgrade to a StyledContainer (which has a background).
+    #[test]
+    fn plain_col_with_hover_upgrades_to_styled_container() {
+        let src = "[view]\ncol hover(fill:#f0f0f0)\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("StyledContainer::new(ctx,"),
+            "a col with hover should become a StyledContainer:\n{code}"
+        );
+        assert!(
+            code.contains(".on_hover_style("),
+            "and wire on_hover_style:\n{code}"
+        );
+    }
+
+    // A component whose view uses a `children` placeholder takes a `Slots` arg and drains the default slot.
+    #[test]
+    fn component_default_slot_takes_slots_arg() {
+        let src = "[view]\nbox fill:#101010 pad:16\n    children\n";
+        let out = crate::transpile_source_with_theme(src, "card", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("mut __slots: Slots"),
+            "a slotted component takes a Slots argument:\n{code}"
+        );
+        assert!(
+            code.contains("__children.extend(__slots.take_default());"),
+            "the default slot splices take_default():\n{code}"
+        );
+    }
+
+    // Named + default slots drain their respective buckets.
+    #[test]
+    fn component_named_and_default_slots() {
+        let src = "[view]\nbox pad:16\n    children name:\"header\"\n    children\n";
+        let out = crate::transpile_source_with_theme(src, "panel", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("__children.extend(__slots.take(\"header\"));"),
+            "named slot drains take(\"header\"):\n{code}"
+        );
+        assert!(
+            code.contains("__children.extend(__slots.take_default());"),
+            "default slot drains take_default():\n{code}"
+        );
+    }
+
+    // Calling a component with markup children builds a Slots value and passes it as the trailing arg.
+    #[test]
+    fn component_call_with_children_builds_slots() {
+        let src = "[view]\ncard\n    text \"hi\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("let mut __slots = Slots::new();"),
+            "a call with children builds a Slots:\n{code}"
+        );
+        assert!(
+            code.contains("card(ctx, __slots)?"),
+            "the Slots is the trailing arg:\n{code}"
+        );
+    }
+
+    // A child written with `slot:"name"` is routed to that named slot; the `slot` attr is not a prop.
+    #[test]
+    fn component_call_routes_named_slot() {
+        let src = "[view]\npanel\n    text \"T\" slot:\"header\"\n    text \"B\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("__slots.push(Some(\"header\"), box_item("),
+            "slot:\"header\" routes to the named slot:\n{code}"
+        );
+        assert!(
+            code.contains("__children.push(box_item("),
+            "a bare child goes to the default slot:\n{code}"
+        );
+    }
+
+    // A bare flag prop becomes a bool `true`.
+    #[test]
+    fn component_bool_flag_prop() {
+        let src = "[view]\ncard elevated\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("crate::CardProps { elevated: true }"),
+            "a bare flag prop should be bool true:\n{code}"
+        );
+    }
+
+    // A lone `$signal` prop passes the cloned handle.
+    #[test]
+    fn component_signal_prop_clones_handle() {
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard count:$count\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("count: count.clone()"),
+            "a $signal prop should pass the cloned handle:\n{code}"
+        );
+    }
+
+    // A closure prop is boxed, with its captured signal cloned and `$` sugar desugared.
+    #[test]
+    fn component_closure_prop_is_boxed() {
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard on_tap(|| $count += 1)\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("Box::new("),
+            "a closure prop should be boxed:\n{code}"
+        );
+        assert!(
+            code.contains("count.update(|__v| *__v += 1)"),
+            "the closure's $ sugar should desugar:\n{code}"
+        );
+    }
+
+    fn sig(props_default: bool, fields: &[&str], has_slot: bool) -> crate::ComponentSig {
+        crate::ComponentSig {
+            has_props: !fields.is_empty(),
+            props_default,
+            prop_fields: fields.iter().map(|s| s.to_string()).collect(),
+            has_slot,
+        }
+    }
+
+    // With the registry, a childless call to a slotted component still passes a `Slots` arg (empty), so it
+    // matches the callee's 3-arg signature instead of erroring "expected 3 arguments, found 2".
+    #[test]
+    fn childless_slotted_call_passes_empty_slots() {
+        let mut reg = crate::ComponentRegistry::new();
+        reg.insert("card".to_string(), sig(true, &["gap"], true));
+        let out =
+            crate::transpile_source_full("[view]\ncard\n", "demo", None, None, Some(&reg)).unwrap();
+        assert!(
+            out.rust_code
+                .contains("card(ctx, crate::CardProps { ..Default::default() }, Slots::new())?"),
+            "childless slotted call should pass defaulted props + empty Slots:\n{}",
+            out.rust_code
+        );
+    }
+
+    // A call that omits some fields of a `Default`-deriving component adds `..Default::default()`.
+    #[test]
+    fn omitted_prop_adds_default_update() {
+        let mut reg = crate::ComponentRegistry::new();
+        reg.insert(
+            "doc_header".to_string(),
+            sig(true, &["kicker", "title", "desc"], false),
+        );
+        let out = crate::transpile_source_full(
+            "[view]\ndoc_header title:\"X\"\n",
+            "demo",
+            None,
+            None,
+            Some(&reg),
+        )
+        .unwrap();
+        assert!(
+            out.rust_code
+                .contains("crate::DocHeaderProps { title: \"X\", ..Default::default() }"),
+            "an omitted field should default:\n{}",
+            out.rust_code
+        );
+    }
+
+    // A full-field call omits `..Default::default()` (so a clean, `Default`-agnostic struct literal, no
+    // clippy::needless_update), even when the component derives Default.
+    #[test]
+    fn full_field_call_omits_default_update() {
+        let mut reg = crate::ComponentRegistry::new();
+        reg.insert(
+            "prop_row".to_string(),
+            sig(true, &["name", "values", "about"], false),
+        );
+        let out = crate::transpile_source_full(
+            "[view]\nprop_row name:\"a\" values:\"b\" about:\"c\"\n",
+            "demo",
+            None,
+            None,
+            Some(&reg),
+        )
+        .unwrap();
+        assert!(
+            !out.rust_code.contains("..Default::default()"),
+            "a full-field call must not add ..Default::default():\n{}",
+            out.rust_code
+        );
+    }
+
+    // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call
+    // (no slot arg, no default), preserving the per-file fallback.
+    #[test]
+    fn no_registry_keeps_flat_call() {
+        let out =
+            crate::transpile_source_with_theme("[view]\nmy_card\n", "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains("my_card(ctx)?"),
+            "without a registry a no-attr call stays flat:\n{}",
+            out.rust_code
         );
     }
 }
