@@ -221,6 +221,7 @@ pub(crate) fn draw_text(
                 texture_width,
                 texture_height,
                 style.paint.solid_color(),
+                renderer_text::text_style_bits(style),
             );
             let paint = tiny_skia::PixmapPaint {
                 blend_mode: tiny_skia::BlendMode::SourceOver,
@@ -280,6 +281,7 @@ pub(crate) fn draw_text(
         tex_width,
         tex_height,
         style.paint.solid_color(),
+        renderer_text::text_style_bits(style),
     );
 
     let paint = tiny_skia::PixmapPaint {

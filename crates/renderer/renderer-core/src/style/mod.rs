@@ -43,11 +43,29 @@ impl Default for BorderRadius {
     }
 }
 
+/// Horizontal alignment of text within its box. `Start` is the writing-direction start (left in LTR).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextAlign {
+    #[default]
+    Start,
+    Center,
+    End,
+    Justify,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextStyle {
     pub font_size: f32,
     pub paint: Paint,
     pub shadow: Option<Shadow>,
+    /// OpenType weight axis: 400 is normal, 700 is bold. Selects the matching font face.
+    pub weight: u16,
+    pub italic: bool,
+    pub align: TextAlign,
+    /// Clamp the text to at most this many lines (`None` = unlimited). Lines beyond it are dropped.
+    pub max_lines: Option<u16>,
+    /// When clamped by `max_lines`, replace the overflowing tail with an ellipsis (`…`).
+    pub ellipsis: bool,
 }
 
 impl TextStyle {
@@ -56,7 +74,37 @@ impl TextStyle {
             font_size,
             paint: paint.into(),
             shadow: None,
+            weight: 400,
+            italic: false,
+            align: TextAlign::Start,
+            max_lines: None,
+            ellipsis: false,
         }
+    }
+
+    pub fn with_weight(mut self, weight: u16) -> Self {
+        self.weight = weight;
+        self
+    }
+
+    pub fn with_italic(mut self, italic: bool) -> Self {
+        self.italic = italic;
+        self
+    }
+
+    pub fn with_align(mut self, align: TextAlign) -> Self {
+        self.align = align;
+        self
+    }
+
+    pub fn with_max_lines(mut self, max_lines: u16) -> Self {
+        self.max_lines = Some(max_lines);
+        self
+    }
+
+    pub fn with_ellipsis(mut self, ellipsis: bool) -> Self {
+        self.ellipsis = ellipsis;
+        self
     }
 }
 

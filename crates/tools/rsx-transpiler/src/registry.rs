@@ -124,7 +124,16 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
     };
     match tag {
         // `transition:` animates a paint/color property (see `transition::parse_transition_value`), so it is offered on the tags whose codegen wires it: `text` (color), `box`/containers (fill/stroke/opacity).
-        "text" | "heading" => vec!["size", "color", "lines", "transition"],
+        "text" | "heading" => vec![
+            "size",
+            "color",
+            "weight",
+            "italic",
+            "align",
+            "lines",
+            "ellipsis",
+            "transition",
+        ],
         "widget" => vec![],
         // The `children` slot placeholder takes only an optional `name:` for a named slot.
         "children" => vec!["name"],

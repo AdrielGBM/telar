@@ -1,6 +1,9 @@
-use cosmic_text::{Attrs, Buffer, CacheKey, FontSystem, Metrics, Shaping, SwashCache};
+use cosmic_text::{
+    Align, Attrs, Buffer, CacheKey, FontSystem, Metrics, Shaping, Style, SwashCache, Weight,
+};
 use geometry_core::Rect;
 use lru::LruCache;
+use renderer_core::{TextAlign, TextStyle};
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -15,7 +18,7 @@ mod raster;
 mod tests;
 
 pub use atlas::{ATLAS_SIZE, GlyphAtlas, GlyphInfo};
-pub use cache::{TextCacheKey, make_text_cache_key};
+pub use cache::{TextCacheKey, make_text_cache_key, text_style_bits};
 pub use colr::ColrGlyph;
 
 use cache::{AlphaCacheKey, AlphaCacheScale, PixelCacheScale, ShapingCacheKey, ShapingCacheScale};
@@ -59,10 +62,10 @@ pub struct TextShaper {
         FxBuildHasher,
         ShapingCacheScale,
     >,
-    // Keyed by (text_hash, max_width_bits, font_size_bits); LRU-evicted at MEASURE_CACHE_CAP so a hot subset survives the cap instead of a full clear dropping everything.
-    measure_cache: LruCache<(u64, u32, u32), (f32, f32), FxBuildHasher>,
+    // Keyed by (text_hash, max_width_bits, font_size_bits, style_bits); LRU-evicted at MEASURE_CACHE_CAP so a hot subset survives the cap instead of a full clear dropping everything.
+    measure_cache: LruCache<(u64, u32, u32, u32), (f32, f32), FxBuildHasher>,
     // Whether a (text_hash, font_size_bits) shapes to any COLR glyph. Lets the software COLR fallback skip make_buffer + per-glyph get_image for plain UI text after the first evaluation. Symmetric with `blank_glyphs`.
-    has_colr_cache: LruCache<(u64, u32), bool, FxBuildHasher>,
+    has_colr_cache: LruCache<(u64, u32, u32), bool, FxBuildHasher>,
     // Raw font bytes + face index, cached by font id so COLR rasterization does not re-read the font file on every atlas miss.
     colr_font_cache: FxHashMap<cosmic_text::fontdb::ID, Arc<(Vec<u8>, u32)>>,
     // Glyphs that swash cannot rasterize and that are not COLR glyphs either (e.g. whitespace); skipped on later frames so we do not re-attempt COLR rasterization for them every frame.
@@ -71,13 +74,80 @@ pub struct TextShaper {
     font_metrics_cache: Option<renderer_core::FontMetrics>,
 }
 
-fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, font_size: f32) -> Buffer {
+fn cosmic_align(align: TextAlign) -> Option<Align> {
+    match align {
+        // Start keeps cosmic-text's default (left in LTR), so no explicit per-line align is set.
+        TextAlign::Start => None,
+        TextAlign::Center => Some(Align::Center),
+        TextAlign::End => Some(Align::End),
+        TextAlign::Justify => Some(Align::Justified),
+    }
+}
+
+fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &TextStyle) -> Buffer {
+    let font_size = style.font_size;
     let metrics = Metrics::new(font_size, font_size * LINE_HEIGHT_FACTOR);
     let mut buffer = Buffer::new(font_system, metrics);
     buffer.set_size(Some(rect.width), Some(rect.height));
-    buffer.set_text(text, &Attrs::new(), Shaping::Advanced, None);
+    let attrs = Attrs::new()
+        .weight(Weight(style.weight))
+        .style(if style.italic {
+            Style::Italic
+        } else {
+            Style::Normal
+        });
+    buffer.set_text(text, &attrs, Shaping::Advanced, None);
+    // Alignment shifts glyph x within the line box; applied before shaping so positions bake it in.
+    if let Some(a) = cosmic_align(style.align) {
+        for line in buffer.lines.iter_mut() {
+            line.set_align(Some(a));
+        }
+    }
     buffer.shape_until_scroll(font_system, false);
     buffer
+}
+
+/// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public
+/// ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and
+/// (with ellipsis) `…` is appended and characters are dropped until it fits. Single logical line per
+/// call is assumed for the cut offset (UI labels), which is the common clamp case.
+fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &TextStyle) -> Buffer {
+    let buffer = shape_buffer(font_system, text, rect, style);
+    let Some(max) = style.max_lines.map(usize::from).filter(|&n| n > 0) else {
+        return buffer;
+    };
+    // Byte offset (within the single buffer line) where each visual line begins.
+    let line_starts: Vec<usize> = buffer
+        .layout_runs()
+        .map(|run| run.glyphs.first().map(|g| g.start).unwrap_or(0))
+        .collect();
+    if line_starts.len() <= max {
+        return buffer;
+    }
+    let cut = line_starts[max].min(text.len());
+    let head = text[..cut].trim_end();
+    if !style.ellipsis {
+        return shape_buffer(font_system, head, rect, style);
+    }
+    // Ellipsis: append `…`, dropping trailing chars until the result fits in `max` lines.
+    let mut end = head.len();
+    loop {
+        let candidate = format!("{}\u{2026}", &head[..end]);
+        let b = shape_buffer(font_system, &candidate, rect, style);
+        if b.layout_runs().count() <= max {
+            return b;
+        }
+        if end == 0 {
+            return b;
+        }
+        end -= 1;
+        while end > 0 && !head.is_char_boundary(end) {
+            end -= 1;
+        }
+        while end > 0 && head.as_bytes()[end - 1].is_ascii_whitespace() {
+            end -= 1;
+        }
+    }
 }
 
 impl TextShaper {

@@ -1,5 +1,5 @@
 use super::TextShaper;
-use super::cache::{AlphaCacheKey, hash_text, make_text_cache_key};
+use super::cache::{AlphaCacheKey, hash_text, make_text_cache_key, text_style_bits};
 use super::make_buffer;
 use cosmic_text::Color as CosmicColor;
 use geometry_core::Rect;
@@ -18,7 +18,14 @@ impl TextShaper {
         let width = rect.width.ceil() as u32;
         let height = rect.height.ceil() as u32;
 
-        let key = make_text_cache_key(text, font_size, width, height, color);
+        let key = make_text_cache_key(
+            text,
+            font_size,
+            width,
+            height,
+            color,
+            text_style_bits(style),
+        );
 
         if width == 0 || height == 0 {
             return (Arc::from([].as_slice()), 0, 0);
@@ -32,7 +39,7 @@ impl TextShaper {
         let [r, g, b, a] = rgba;
         let cosmic_color = CosmicColor::rgba(r, g, b, a);
 
-        let mut buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+        let mut buffer = make_buffer(&mut self.font_system, text, rect, style);
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
         buffer.draw(
@@ -90,6 +97,7 @@ impl TextShaper {
             font_size_bits: font_size.to_bits(),
             width,
             height,
+            style_bits: text_style_bits(style),
         };
 
         if let Some(cached) = self.alpha_pixel_cache.get(&key) {
@@ -98,7 +106,7 @@ impl TextShaper {
 
         let white = CosmicColor::rgba(255, 255, 255, 255);
 
-        let mut buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+        let mut buffer = make_buffer(&mut self.font_system, text, rect, style);
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
         buffer.draw(

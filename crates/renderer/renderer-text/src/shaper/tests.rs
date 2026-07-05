@@ -1,4 +1,4 @@
-use super::cache::hash_text;
+use super::cache::{hash_text, text_style_bits};
 use super::*;
 use geometry_core::Rect;
 use renderer_core::{Color, TextStyle};
@@ -57,7 +57,7 @@ fn text_shaper_with_font_data_empty_vec() {
 #[ignore]
 fn measure_text_returns_nonzero_for_text() {
     let mut shaper = TextShaper::new();
-    let (w, h) = shaper.measure_text("hello", 500.0, 16.0);
+    let (w, h) = shaper.measure_text("hello", 500.0, &TextStyle::new(16.0, Color::BLACK));
     assert!(
         w > 0.0 && h > 0.0,
         "Systems without installed fonts may not render text correctly"
@@ -67,7 +67,7 @@ fn measure_text_returns_nonzero_for_text() {
 #[test]
 fn measure_text_empty_returns_zero() {
     let mut shaper = TextShaper::new();
-    let (w, h) = shaper.measure_text("", 500.0, 16.0);
+    let (w, h) = shaper.measure_text("", 500.0, &TextStyle::new(16.0, Color::BLACK));
     assert_eq!(w, 0.0);
     assert_eq!(h, 0.0);
 }
@@ -77,12 +77,18 @@ fn measure_cache_keeps_hot_entry_past_cap() {
     // The old policy cleared the whole cache at 1000 entries, evicting even constantly-used keys. The LRU must keep a re-touched "hot" entry alive while cold ones flood past the cap. Pure cache bookkeeping: independent of whether fonts are installed.
     let mut sh = TextShaper::new();
     let hot = "hot text that stays warm";
-    let hot_key = (hash_text(hot), 200.0f32.to_bits(), 16.0f32.to_bits());
-    sh.measure_text(hot, 200.0, 16.0);
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let hot_key = (
+        hash_text(hot),
+        200.0f32.to_bits(),
+        16.0f32.to_bits(),
+        text_style_bits(&style),
+    );
+    sh.measure_text(hot, 200.0, &style);
     for i in 0..(MEASURE_CACHE_CAP as u32 + 50) {
-        sh.measure_text(&format!("cold entry {i}"), 200.0, 16.0);
+        sh.measure_text(&format!("cold entry {i}"), 200.0, &style);
         // Keep the hot entry most-recently-used so the LRU never evicts it.
-        sh.measure_text(hot, 200.0, 16.0);
+        sh.measure_text(hot, 200.0, &style);
     }
     assert!(sh.measure_cache.contains(&hot_key));
     assert!(sh.measure_cache.len() <= MEASURE_CACHE_CAP);
@@ -100,7 +106,7 @@ fn collect_colr_gating_records_and_skips() {
         width: 200.0,
         height: 100.0,
     };
-    let flag_key = (hash_text(text), 16.0f32.to_bits());
+    let flag_key = (hash_text(text), 16.0f32.to_bits(), text_style_bits(&style));
 
     assert!(sh.has_colr_cache.peek(&flag_key).is_none());
     let mut out = Vec::new();

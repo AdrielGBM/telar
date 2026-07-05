@@ -1,5 +1,5 @@
 use super::TextShaper;
-use super::cache::{ShapingCacheKey, hash_text};
+use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
 use super::{LINE_HEIGHT_FACTOR, make_buffer};
 use cosmic_text::{CacheKey, SwashContent};
 use geometry_core::Rect;
@@ -35,6 +35,7 @@ impl TextShaper {
             font_size_bits: font_size.to_bits(),
             width,
             scale_factor_bits: scale_factor.to_bits(),
+            style_bits: text_style_bits(style),
         };
 
         let positions: std::sync::Arc<Vec<(CacheKey, i32, i32)>> = if let Some(cached) =
@@ -42,7 +43,7 @@ impl TextShaper {
         {
             cached.clone()
         } else {
-            let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+            let buffer = make_buffer(&mut self.font_system, text, rect, style);
             let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
             for run in buffer.layout_runs() {
                 for glyph in run.glyphs.iter() {
@@ -188,7 +189,7 @@ impl TextShaper {
         }
     }
 
-    pub fn measure_text(&mut self, text: &str, max_width: f32, font_size: f32) -> (f32, f32) {
+    pub fn measure_text(&mut self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
         if text.is_empty() {
             return (0.0, 0.0);
         }
@@ -198,7 +199,12 @@ impl TextShaper {
             return (0.0, 0.0);
         }
 
-        let cache_key = (hash_text(text), max_width.to_bits(), font_size.to_bits());
+        let cache_key = (
+            hash_text(text),
+            max_width.to_bits(),
+            style.font_size.to_bits(),
+            text_style_bits(style),
+        );
         if let Some(&cached) = self.measure_cache.get(&cache_key) {
             return cached;
         }
@@ -209,11 +215,12 @@ impl TextShaper {
             width: max_width,
             height: 100000.0,
         };
-        let buffer = make_buffer(&mut self.font_system, text, rect, font_size);
+        // make_buffer already applies max_lines/ellipsis, so the measured extent reflects the clamp.
+        let buffer = make_buffer(&mut self.font_system, text, rect, style);
 
         let mut width: f32 = 0.0;
         let mut height: f32 = 0.0;
-        let line_height = font_size * LINE_HEIGHT_FACTOR;
+        let line_height = style.font_size * LINE_HEIGHT_FACTOR;
 
         for run in buffer.layout_runs() {
             height = (run.line_y + line_height) as f32;

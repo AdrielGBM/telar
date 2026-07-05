@@ -67,7 +67,7 @@ pub use renderer_assets::{SvgData, SvgError};
 pub use renderer_core::{
     BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint, PathData, PathStyle, PathVerb,
-    RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextStyle,
+    RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextAlign, TextStyle,
 };
 pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]

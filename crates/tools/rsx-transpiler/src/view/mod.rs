@@ -676,6 +676,55 @@ mod tests {
         );
     }
 
+    // Rich text: weight keyword, italic flag, and alignment become TextStyle builder calls.
+    #[test]
+    fn text_rich_weight_italic_align() {
+        let src = "[view]\ntext \"Hi\" weight:bold italic align:center\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains(".with_weight(700)"),
+            "weight keyword:\n{code}"
+        );
+        assert!(code.contains(".with_italic(true)"), "italic flag:\n{code}");
+        assert!(
+            code.contains(".with_align(TextAlign::Center)"),
+            "align:\n{code}"
+        );
+    }
+
+    // Numeric weight and `align:right` map correctly; absent italic emits no builder call.
+    #[test]
+    fn text_rich_numeric_weight_and_align_end() {
+        let src = "[view]\ntext \"Hi\" weight:600 align:right\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".with_weight(600)"),
+            "numeric weight:\n{code}"
+        );
+        assert!(
+            code.contains(".with_align(TextAlign::End)"),
+            "align end:\n{code}"
+        );
+        assert!(
+            !code.contains(".with_italic"),
+            "no italic when absent:\n{code}"
+        );
+    }
+
+    // `lines:N` and the `ellipsis` flag become max-lines / ellipsis builder calls.
+    #[test]
+    fn text_lines_and_ellipsis() {
+        let src = "[view]\ntext \"Long copy here\" lines:2 ellipsis max_width:200\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(".with_max_lines(2)"), "max_lines:\n{code}");
+        assert!(code.contains(".with_ellipsis(true)"), "ellipsis:\n{code}");
+    }
+
     // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call
     // (no slot arg, no default), preserving the per-file fallback.
     #[test]

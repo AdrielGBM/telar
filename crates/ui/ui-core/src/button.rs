@@ -47,7 +47,11 @@ impl Button {
         let measure_label = Arc::clone(&label);
         // Buttons are single-line, so measure at an unbounded width; the box is text + padding.
         let measure: MeasureFn = Box::new(move |_max_width: f32| {
-            let (text_w, _) = renderer_text::measure_text(&measure_label, 1.0e6, DEFAULT_FONT_SIZE);
+            let (text_w, _) = renderer_text::measure_text(
+                &measure_label,
+                1.0e6,
+                &TextStyle::new(DEFAULT_FONT_SIZE, Color::WHITE),
+            );
             let line_h = DEFAULT_FONT_SIZE * renderer_text::LINE_HEIGHT_FACTOR;
             (text_w + 2.0 * PAD_X, line_h + 2.0 * PAD_Y)
         });
@@ -129,7 +133,7 @@ impl Component for Button {
         // TextStyle carries no alignment, so center the label. The renderer top-aligns the baseline at
         // rect.y, so vertical centering is done via rect.y against the true single-line height — not
         // measure_text's height, which is padded for layout reservation (baseline + a full line box).
-        let (text_w, _) = renderer_text::measure_text(&self.label, r.width, text_style.font_size);
+        let (text_w, _) = renderer_text::measure_text(&self.label, r.width, &text_style);
         let line_h = text_style.font_size * renderer_text::LINE_HEIGHT_FACTOR;
         let text_rect = geometry_core::Rect {
             x: ((r.width - text_w) * 0.5).max(0.0),
@@ -285,7 +289,11 @@ mod tests {
         .unwrap();
 
         let rect = rect_sig.get();
-        let (text_w, _) = renderer_text::measure_text("OK", 1.0e6, super::DEFAULT_FONT_SIZE);
+        let (text_w, _) = renderer_text::measure_text(
+            "OK",
+            1.0e6,
+            &TextStyle::new(super::DEFAULT_FONT_SIZE, Color::WHITE),
+        );
         let line_h = super::DEFAULT_FONT_SIZE * renderer_text::LINE_HEIGHT_FACTOR;
         assert!(
             (rect.width - (text_w + 2.0 * super::PAD_X)).abs() < 0.5,

@@ -29,7 +29,10 @@ impl ViewGen<'_> {
 
         let mut extra = String::new();
         for a in &el.attributes {
-            if matches!(a.key.as_str(), "size" | "color" | "lines" | "height") {
+            if matches!(
+                a.key.as_str(),
+                "size" | "color" | "weight" | "italic" | "align" | "lines" | "ellipsis" | "height"
+            ) {
                 continue;
             }
             if let Some(call) = layout_prop_call(&a.key, &a.value) {
@@ -232,9 +235,79 @@ impl ViewGen<'_> {
         if let Some(curve) = transitions.get("color") {
             color = self.wrap_transition(curve, &color, hoists);
         }
-        let closure = format!("move || TextStyle::new({size}, {color})");
+
+        // Rich-text modifiers: weight (keyword or numeric), italic (flag or bool), align (keyword).
+        let mut modifiers = String::new();
+        if let Some(w) = attrs
+            .iter()
+            .find(|a| a.key == "weight")
+            .and_then(|a| parse_weight(&a.value))
+        {
+            modifiers.push_str(&format!(".with_weight({w})"));
+        }
+        if let Some(a) = attrs.iter().find(|a| a.key == "italic") {
+            // A bare `italic` flag (empty value) or `italic:true` turns it on; `italic:false` is the default.
+            let v = a.value.trim();
+            if v.is_empty() || v == "true" {
+                modifiers.push_str(".with_italic(true)");
+            }
+        }
+        if let Some(variant) = attrs
+            .iter()
+            .find(|a| a.key == "align")
+            .and_then(|a| parse_text_align(&a.value))
+        {
+            modifiers.push_str(&format!(".with_align(TextAlign::{variant})"));
+        }
+        if let Some(n) = attrs
+            .iter()
+            .find(|a| a.key == "lines")
+            .and_then(|a| a.value.trim().parse::<u16>().ok())
+        {
+            modifiers.push_str(&format!(".with_max_lines({n})"));
+        }
+        if let Some(a) = attrs.iter().find(|a| a.key == "ellipsis") {
+            let v = a.value.trim();
+            if v.is_empty() || v == "true" {
+                modifiers.push_str(".with_ellipsis(true)");
+            }
+        }
+
+        let closure = format!("move || TextStyle::new({size}, {color}){modifiers}");
         // `color_attr`'s raw value (not `color`, already substituted by `color_expr`) is scanned for `$ident` so a signal-backed color clones itself into this closure, leaving the outer binding usable by sibling widgets.
         let raw_color = color_attr.map(|a| a.value.as_str()).unwrap_or("");
         wrap_signal_clones(&[raw_color], closure)
     }
+}
+
+/// Maps a `weight:` value — a keyword (`thin`…`black`) or a numeric 100–900 — to the OpenType weight number.
+fn parse_weight(value: &str) -> Option<String> {
+    let v = value.trim();
+    if let Ok(n) = v.parse::<u16>() {
+        return Some(n.to_string());
+    }
+    let n = match v {
+        "thin" | "hairline" => 100,
+        "extralight" | "extra-light" | "ultralight" => 200,
+        "light" => 300,
+        "normal" | "regular" => 400,
+        "medium" => 500,
+        "semibold" | "semi-bold" | "demibold" => 600,
+        "bold" => 700,
+        "extrabold" | "extra-bold" | "ultrabold" => 800,
+        "black" | "heavy" => 900,
+        _ => return None,
+    };
+    Some(n.to_string())
+}
+
+/// Maps an `align:` value to a `TextAlign` variant name.
+fn parse_text_align(value: &str) -> Option<&'static str> {
+    Some(match value.trim() {
+        "left" | "start" => "Start",
+        "center" | "centre" => "Center",
+        "right" | "end" => "End",
+        "justify" | "justified" => "Justify",
+        _ => return None,
+    })
 }

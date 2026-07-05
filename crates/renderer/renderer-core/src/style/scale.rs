@@ -88,6 +88,7 @@ impl Scale for TextStyle {
             font_size: self.font_size * sf,
             paint: self.paint.scale(sf),
             shadow: self.shadow.map(|s| s.scale(sf)),
+            ..self
         }
     }
 }

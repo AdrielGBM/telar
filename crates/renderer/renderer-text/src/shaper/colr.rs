@@ -1,5 +1,5 @@
 use super::TextShaper;
-use super::cache::hash_text;
+use super::cache::{hash_text, text_style_bits};
 use super::make_buffer;
 use cosmic_text::CacheKey;
 use geometry_core::Rect;
@@ -31,12 +31,16 @@ impl TextShaper {
             return;
         }
         // Plain UI text (no emoji / COLR glyphs) is the overwhelmingly common case. Once a (text, font_size) is known to shape to zero COLR glyphs, skip the whole buffer build + per-glyph swash probe. COLR-ness depends only on the font + codepoint, never on rect/wrap, so this flag is layout-independent.
-        let flag_key = (hash_text(text), style.font_size.to_bits());
+        let flag_key = (
+            hash_text(text),
+            style.font_size.to_bits(),
+            text_style_bits(style),
+        );
         if self.has_colr_cache.get(&flag_key) == Some(&false) {
             return;
         }
         let start_len = out.len();
-        let buffer = make_buffer(&mut self.font_system, text, rect, style.font_size);
+        let buffer = make_buffer(&mut self.font_system, text, rect, style);
         let color = style.paint.solid_color();
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {

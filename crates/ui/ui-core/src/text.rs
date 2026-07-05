@@ -50,8 +50,8 @@ impl Text {
         let measure_content = Rc::clone(&content_fn);
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |max_width: f32| {
-            let font_size = (measure_style)().font_size;
-            renderer_text::measure_text(&(measure_content)(), max_width, font_size)
+            let s = (measure_style)();
+            renderer_text::measure_text(&(measure_content)(), max_width, &s)
         });
 
         let (node, rect) =
