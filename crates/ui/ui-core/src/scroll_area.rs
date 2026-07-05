@@ -128,7 +128,18 @@ pub(crate) struct ScrollCore {
     content: Rc<RefCell<Box<dyn LayoutItem>>>,
     content_segment: Rc<Segment>,
     scrollbar_style: ScrollbarStyle,
+    // Touch tap-vs-scroll: finger travel accumulated while a pointer is pressed. Content children see
+    // content-space coords pinned under the finger during a drag, so they can't detect the scroll themselves;
+    // once travel passes SCROLL_TAP_SLOP the scroll area cancels their pending tap (one CursorLeft) so a scroll
+    // doesn't click. Gated on `press_active` so a mouse wheel scroll (no press) never cancels anything.
+    press_active: bool,
+    gesture_scroll: f32,
+    tap_cancelled: bool,
 }
+
+/// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll
+/// and cancels any pending tap on its content.
+const SCROLL_TAP_SLOP: f32 = 8.0;
 
 impl ScrollCore {
     fn new(content_rect_signal: RwSignal<Rect>, content: Box<dyn LayoutItem>) -> Self {
@@ -141,6 +152,9 @@ impl ScrollCore {
             content,
             content_segment,
             scrollbar_style: ScrollbarStyle::default(),
+            press_active: false,
+            gesture_scroll: 0.0,
+            tap_cancelled: false,
         }
     }
 
@@ -197,6 +211,30 @@ impl ScrollCore {
     }
 
     fn on_event(&mut self, event: &Event, viewport: Rect) -> EventResult {
+        match event {
+            // A new press starts a fresh tap candidate; forget the prior gesture's accumulated scroll.
+            Event::PointerPressed { .. } => {
+                self.press_active = true;
+                self.gesture_scroll = 0.0;
+                self.tap_cancelled = false;
+            }
+            Event::PointerReleased { .. } => self.press_active = false,
+            // While a pointer is down (a touch drag, not a mouse wheel), once the finger has travelled past
+            // the slop this gesture is a scroll, not a tap: cancel the pending press on the content once (it
+            // sees pinned content-space coords and can't tell on its own).
+            Event::Scrolled { delta } if self.press_active && !self.tap_cancelled => {
+                let (dx, dy) = match delta {
+                    ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
+                    ScrollDelta::Pixels { x, y } => (*x, *y),
+                };
+                self.gesture_scroll += (dx * dx + dy * dy).sqrt();
+                if self.gesture_scroll > SCROLL_TAP_SLOP {
+                    self.tap_cancelled = true;
+                    self.content.borrow_mut().on_event(&Event::CursorLeft);
+                }
+            }
+            _ => {}
+        }
         handle_scroll_event(
             event,
             viewport,
@@ -396,24 +434,114 @@ mod tests {
         let mut tree = crate::ComponentList::new(sa);
         let _ = tree.commands();
 
-        begin_batch();
-        let handled = tree.on_event(&Event::PointerPressed {
-            x: (br.x + br.width / 2.0) as f64,
-            y: (br.y + br.height / 2.0) as f64,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        });
-        if handled == EventResult::Handled {
-            tree.bump_force_ticks();
-            end_batch();
+        // The button fires on release (tap), so send press then release.
+        let cx = (br.x + br.width / 2.0) as f64;
+        let cy = (br.y + br.height / 2.0) as f64;
+        for phase in [true, false] {
             begin_batch();
+            let ev = if phase {
+                Event::PointerPressed {
+                    x: cx,
+                    y: cy,
+                    button: PointerButton::Primary,
+                    source: PointerSource::Mouse,
+                }
+            } else {
+                Event::PointerReleased {
+                    x: cx,
+                    y: cy,
+                    button: PointerButton::Primary,
+                    source: PointerSource::Mouse,
+                }
+            };
+            if tree.on_event(&ev) == EventResult::Handled {
+                tree.bump_force_ticks();
+                end_batch();
+                begin_batch();
+            }
+            let _ = tree.commands();
+            end_batch();
         }
-        let _ = tree.commands();
-        end_batch();
         assert_eq!(
             s.get(),
             1,
             "scroll-content click should increment the signal"
+        );
+    }
+
+    // A scroll gesture that begins on a button (touch-down, drag past the slop, release) must scroll the
+    // content and NOT click the button — the scroll area cancels the pending tap once it detects the scroll.
+    #[test]
+    fn scroll_gesture_over_button_does_not_click() {
+        use crate::button::Button;
+        use crate::container::Container;
+        use crate::context::track_layout;
+        use platform_core::PointerButton;
+        use reactive_core::signal;
+
+        let mut ctx = WidgetCtx::new();
+        let s = signal(0i32);
+        let s_cb = s.clone();
+        let btn = Button::new(&mut ctx, "x").unwrap();
+        let btn_node = btn.layout_node();
+        let btn = btn.on_click(move || s_cb.update(|n| *n += 1));
+        let content = Container::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column().width(400.0).height(1000.0),
+            vec![Box::new(btn)],
+        )
+        .unwrap();
+        let content_node = content.layout_node();
+        let mut sa = ScrollArea::new(
+            &ctx,
+            || Rect::new(0.0, 0.0, 400.0, 300.0),
+            Box::new(content),
+        );
+        compute_layout(
+            &mut ctx,
+            content_node,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        let br = track_layout(&ctx, btn_node).unwrap().get();
+        let (cx, cy) = (
+            (br.x + br.width / 2.0) as f64,
+            (br.y + br.height / 2.0) as f64,
+        );
+
+        // Touch-down on the button, then a drag: on Android each move sends Scrolled + PointerMoved.
+        sa.on_event(&Event::PointerPressed {
+            x: cx,
+            y: cy,
+            button: PointerButton::Primary,
+            source: PointerSource::Touch { id: 1 },
+        });
+        for _ in 0..5 {
+            sa.on_event(&Event::Scrolled {
+                delta: ScrollDelta::Pixels { x: 0.0, y: -20.0 },
+            });
+            sa.on_event(&Event::PointerMoved {
+                x: cx,
+                y: cy,
+                source: PointerSource::Touch { id: 1 },
+            });
+        }
+        sa.on_event(&Event::PointerReleased {
+            x: cx,
+            y: cy,
+            button: PointerButton::Primary,
+            source: PointerSource::Touch { id: 1 },
+        });
+
+        assert_eq!(
+            s.get(),
+            0,
+            "a scroll gesture over a button must not click it"
+        );
+        assert!(
+            sa.core.scroll_y.get() > 0.0,
+            "the gesture should have scrolled the content"
         );
     }
 

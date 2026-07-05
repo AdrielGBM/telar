@@ -195,21 +195,35 @@ mod tests {
         let mut tree = crate::ComponentList::new(root);
         let _ = tree.commands();
 
-        // Mimic the runner's event cycle, including the dev-only force-tick.
-        begin_batch();
-        let handled = tree.on_event(&Event::PointerPressed {
-            x: (br.x + br.width / 2.0) as f64,
-            y: (br.y + br.height / 2.0) as f64,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        });
-        if handled == EventResult::Handled {
-            tree.bump_force_ticks();
-            end_batch();
+        // Mimic the runner's event cycle, including the dev-only force-tick. The button fires on release
+        // (tap), so send press then release.
+        let cx = (br.x + br.width / 2.0) as f64;
+        let cy = (br.y + br.height / 2.0) as f64;
+        for phase in [true, false] {
             begin_batch();
+            let ev = if phase {
+                Event::PointerPressed {
+                    x: cx,
+                    y: cy,
+                    button: PointerButton::Primary,
+                    source: PointerSource::Mouse,
+                }
+            } else {
+                Event::PointerReleased {
+                    x: cx,
+                    y: cy,
+                    button: PointerButton::Primary,
+                    source: PointerSource::Mouse,
+                }
+            };
+            if tree.on_event(&ev) == EventResult::Handled {
+                tree.bump_force_ticks();
+                end_batch();
+                begin_batch();
+            }
+            let _ = tree.commands();
+            end_batch();
         }
-        let _ = tree.commands();
-        end_batch();
 
         assert_eq!(s.get(), 1, "click should have incremented the signal");
     }

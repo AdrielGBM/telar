@@ -15,6 +15,8 @@ const PAD_X: f32 = 14.0;
 const PAD_Y: f32 = 8.0;
 /// Font size a content-sized button measures its label at (matches the default `ButtonStyle` text).
 const DEFAULT_FONT_SIZE: f32 = 14.0;
+/// Max pointer travel (logical px) from the press point still counted as a tap rather than a scroll/drag.
+const TAP_SLOP: f32 = 10.0;
 
 pub struct ButtonStyle {
     pub rect: RectStyle,
@@ -29,6 +31,10 @@ pub struct Button {
     on_click: Option<Box<dyn Fn()>>,
     style: Box<dyn Fn() -> ButtonStyle>,
     is_hovered: RwSignal<bool>,
+    // Touch/scroll disambiguation: the press point while a tap is pending. on_click fires on release, not
+    // press, and this is cleared once the pointer travels past TAP_SLOP — so a scroll gesture that begins
+    // on a button (touch-down then drag) never triggers it.
+    press_origin: Option<(f32, f32)>,
 }
 
 impl Button {
@@ -83,6 +89,7 @@ impl Button {
                 }
             }),
             is_hovered: signal(false),
+            press_origin: None,
         }
     }
 
@@ -141,21 +148,28 @@ impl Component for Button {
     fn on_event(&mut self, event: &Event) -> EventResult {
         let rect = self.leaf.rect.get();
         match event {
-            // Hover is a mouse-only concept. Touch has no "pointer left" event, so tracking hover on a
-            // touch move leaves the button stuck in its hover style after a tap. Ignore non-mouse moves.
-            Event::PointerMoved {
-                x,
-                y,
-                source: PointerSource::Mouse,
-            } => {
-                let is_inside = rect.contains(*x as f32, *y as f32);
-                if is_inside != self.is_hovered.get() {
-                    self.is_hovered.set(is_inside);
-                    EventResult::Handled
-                } else {
-                    EventResult::Ignored
+            Event::PointerMoved { x, y, source } => {
+                // Past the slop the gesture is a scroll/drag, not a tap: drop the pending press so the
+                // release won't fire on_click. This is what stops a scroll begun on a button from clicking.
+                if let Some((ox, oy)) = self.press_origin {
+                    let (dx, dy) = (*x as f32 - ox, *y as f32 - oy);
+                    if dx * dx + dy * dy > TAP_SLOP * TAP_SLOP {
+                        self.press_origin = None;
+                    }
                 }
+                // Hover is a mouse-only concept. Touch has no "pointer left" event, so tracking hover on a
+                // touch move leaves the button stuck in its hover style after a tap.
+                if matches!(source, PointerSource::Mouse) {
+                    let is_inside = rect.contains(*x as f32, *y as f32);
+                    if is_inside != self.is_hovered.get() {
+                        self.is_hovered.set(is_inside);
+                        return EventResult::Handled;
+                    }
+                }
+                EventResult::Ignored
             }
+            // Arm a candidate tap; on_click fires on release, not here, so a scroll gesture starting on the
+            // button (touch-down then drag) doesn't trigger it.
             Event::PointerPressed {
                 x,
                 y,
@@ -163,6 +177,26 @@ impl Component for Button {
                 ..
             } => {
                 if rect.contains(*x as f32, *y as f32) {
+                    self.press_origin = Some((*x as f32, *y as f32));
+                    EventResult::Handled
+                } else {
+                    self.press_origin = None;
+                    EventResult::Ignored
+                }
+            }
+            // A tap completes only if the press landed here and the release is still on the button (a drag
+            // past the slop already cleared press_origin). Clear hover too (a touch tap can synthesize a move).
+            Event::PointerReleased {
+                x,
+                y,
+                button: PointerButton::Primary,
+                ..
+            } => {
+                let armed = self.press_origin.take().is_some();
+                if self.is_hovered.get() {
+                    self.is_hovered.set(false);
+                }
+                if armed && rect.contains(*x as f32, *y as f32) {
                     if let Some(cb) = &self.on_click {
                         cb();
                     }
@@ -171,9 +205,9 @@ impl Component for Button {
                     EventResult::Ignored
                 }
             }
-            // Clear hover on release / cursor-leave (a touch tap can still synthesize a mouse move that
-            // sets hover); return Ignored so the event keeps propagating to other widgets.
+            // Any other release / cursor-leave cancels the pending tap and clears hover, then keeps propagating.
             Event::PointerReleased { .. } | Event::CursorLeft => {
+                self.press_origin = None;
                 if self.is_hovered.get() {
                     self.is_hovered.set(false);
                 }
@@ -430,15 +464,73 @@ mod tests {
         )
         .unwrap();
 
-        let result = button.on_event(&Event::PointerPressed {
+        // The tap fires on release, not press, so a scroll begun on the button doesn't click it.
+        let pressed = button.on_event(&Event::PointerPressed {
             x: 1.0,
             y: 1.0,
             button: PointerButton::Primary,
             source: PointerSource::Mouse,
         });
+        assert!(matches!(pressed, EventResult::Handled));
+        assert!(!flag.get(), "press alone must not fire the callback");
 
-        assert!(flag.get());
-        assert!(matches!(result, EventResult::Handled));
+        let released = button.on_event(&Event::PointerReleased {
+            x: 1.0,
+            y: 1.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        assert!(flag.get(), "release on the button fires the callback");
+        assert!(matches!(released, EventResult::Handled));
+    }
+
+    #[test]
+    fn button_scroll_gesture_does_not_click() {
+        // Press on the button, then drag past the slop (a scroll): the release must NOT fire the callback.
+        let flag = Rc::new(Cell::new(false));
+        let flag_clone = flag.clone();
+        let mut ctx = WidgetCtx::new();
+        let mut button = Button::new(&mut ctx, "OK")
+            .unwrap()
+            .on_click(move || flag_clone.set(true));
+        let root = new_container(
+            &mut ctx,
+            layout_core::LayoutStyle::new()
+                .flex_column()
+                .width(200.0)
+                .height(100.0),
+            &[button.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        button.on_event(&Event::PointerPressed {
+            x: 5.0,
+            y: 5.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Touch { id: 1 },
+        });
+        button.on_event(&Event::PointerMoved {
+            x: 5.0,
+            y: 40.0, // > TAP_SLOP away
+            source: PointerSource::Touch { id: 1 },
+        });
+        button.on_event(&Event::PointerReleased {
+            x: 5.0,
+            y: 40.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Touch { id: 1 },
+        });
+        assert!(
+            !flag.get(),
+            "a scroll drag over the button must not click it"
+        );
     }
 
     #[test]
