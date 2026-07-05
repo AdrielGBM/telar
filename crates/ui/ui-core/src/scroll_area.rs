@@ -91,8 +91,19 @@ fn handle_scroll_event(
     scroll_y: RwSignal<f32>,
     content_rect_signal: RwSignal<Rect>,
     content: &Rc<RefCell<Box<dyn LayoutItem>>>,
+    last_pointer: Option<(f32, f32)>,
 ) -> EventResult {
     if let Event::Scrolled { delta } = event {
+        // Nested scroll: offer the wheel to the content first, so an inner scroll area under the pointer
+        // consumes it before this (outer) one does.
+        if content.borrow_mut().on_event(event) == EventResult::Handled {
+            return EventResult::Handled;
+        }
+        // A wheel event carries no position, so only scroll here if the last pointer move was inside this
+        // viewport; otherwise leave it Ignored for an ancestor scroll area to handle.
+        if last_pointer.is_some_and(|(px, py)| !viewport.contains(px, py)) {
+            return EventResult::Ignored;
+        }
         let (delta_x, delta_y) = match delta {
             ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
             ScrollDelta::Pixels { x, y } => (*x, *y),
@@ -135,6 +146,9 @@ pub(crate) struct ScrollCore {
     press_active: bool,
     gesture_scroll: f32,
     tap_cancelled: bool,
+    // Last pointer position seen (this area's own coordinate space). A wheel `Scrolled` event carries no
+    // position, so nested scroll routing uses this to decide whether the pointer is over this viewport.
+    last_pointer: Option<(f32, f32)>,
 }
 
 /// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll
@@ -155,6 +169,7 @@ impl ScrollCore {
             press_active: false,
             gesture_scroll: 0.0,
             tap_cancelled: false,
+            last_pointer: None,
         }
     }
 
@@ -219,6 +234,9 @@ impl ScrollCore {
                 self.tap_cancelled = false;
             }
             Event::PointerReleased { .. } => self.press_active = false,
+            // Remember where the pointer is so a subsequent (position-less) wheel `Scrolled` can tell
+            // whether it belongs to this viewport or an ancestor's.
+            Event::PointerMoved { x, y, .. } => self.last_pointer = Some((*x as f32, *y as f32)),
             // While a pointer is down (a touch drag, not a mouse wheel), once the finger has travelled past
             // the slop this gesture is a scroll, not a tap: cancel the pending press on the content once (it
             // sees pinned content-space coords and can't tell on its own).
@@ -242,6 +260,7 @@ impl ScrollCore {
             self.scroll_y.clone(),
             self.content_rect_signal.clone(),
             &self.content,
+            self.last_pointer,
         )
     }
 }
@@ -695,6 +714,44 @@ mod tests {
             delta: ScrollDelta::Lines { x: 0.0, y: -3.0 },
         });
         assert_eq!(sa.core.scroll_y.get(), 60.0);
+    }
+
+    // Nested scroll: a wheel event is ignored when the pointer is outside this viewport (it belongs to an
+    // ancestor, or to an inner scroll that already consumed it), so the outer area does not steal it.
+    #[test]
+    fn wheel_outside_viewport_does_not_scroll() {
+        let mut sa = make_scroll_area(); // viewport 400x300
+        sa.on_event(&Event::PointerMoved {
+            x: 500.0,
+            y: 500.0,
+            source: PointerSource::Mouse,
+        });
+        let result = sa.on_event(&Event::Scrolled {
+            delta: ScrollDelta::Lines { x: 0.0, y: -3.0 },
+        });
+        assert_eq!(result, EventResult::Ignored);
+        assert_eq!(
+            sa.core.scroll_y.get(),
+            0.0,
+            "must not scroll when the pointer is elsewhere"
+        );
+    }
+
+    #[test]
+    fn wheel_inside_viewport_scrolls() {
+        let mut sa = make_scroll_area();
+        sa.on_event(&Event::PointerMoved {
+            x: 100.0,
+            y: 100.0,
+            source: PointerSource::Mouse,
+        });
+        sa.on_event(&Event::Scrolled {
+            delta: ScrollDelta::Lines { x: 0.0, y: -3.0 },
+        });
+        assert!(
+            sa.core.scroll_y.get() > 0.0,
+            "wheel over the viewport scrolls it"
+        );
     }
 
     #[test]
