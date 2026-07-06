@@ -465,18 +465,25 @@ mod tests {
 
     #[test]
     fn scroll_content_click_force_tick_no_panic() {
-        use crate::button::Button;
         use crate::container::Container;
         use crate::context::track_layout;
+        use crate::styled_container::StyledContainer;
         use platform_core::PointerButton;
         use reactive_core::{begin_batch, end_batch, signal};
 
         let mut ctx = WidgetCtx::new();
         let s = signal(0i32);
         let s_cb = s.clone();
-        let btn = Button::new(&mut ctx, "x").unwrap();
+        // A pressable primitive stands in for the old high-level Button (now in ui-components).
+        let btn = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().width(50.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || s_cb.update(|n| *n += 1));
         let btn_node = btn.layout_node();
-        let btn = btn.on_click(move || s_cb.update(|n| *n += 1));
         let s_txt = s.clone();
         let txt = crate::text::Text::new(
             &mut ctx,
@@ -548,18 +555,25 @@ mod tests {
     // content and NOT click the button — the scroll area cancels the pending tap once it detects the scroll.
     #[test]
     fn scroll_gesture_over_button_does_not_click() {
-        use crate::button::Button;
         use crate::container::Container;
         use crate::context::track_layout;
+        use crate::styled_container::StyledContainer;
         use platform_core::PointerButton;
         use reactive_core::signal;
 
         let mut ctx = WidgetCtx::new();
         let s = signal(0i32);
         let s_cb = s.clone();
-        let btn = Button::new(&mut ctx, "x").unwrap();
+        // A pressable primitive stands in for the old high-level Button (now in ui-components).
+        let btn = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().width(50.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || s_cb.update(|n| *n += 1));
         let btn_node = btn.layout_node();
-        let btn = btn.on_click(move || s_cb.update(|n| *n += 1));
         let content = Container::new(
             &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(1000.0),

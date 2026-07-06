@@ -203,17 +203,24 @@ mod tests {
 
     #[test]
     fn click_with_force_tick_does_not_panic() {
-        use crate::button::Button;
         use crate::context::track_layout;
+        use crate::styled_container::StyledContainer;
         use platform_core::PointerButton;
         use reactive_core::{begin_batch, end_batch, signal};
 
         let mut ctx = WidgetCtx::new();
         let s = signal(0i32);
         let s_cb = s.clone();
-        let btn = Button::new(&mut ctx, "x").unwrap();
+        // A pressable primitive stands in for the old high-level Button (now in ui-components).
+        let btn = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().width(50.0).height(30.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || s_cb.update(|n| *n += 1));
         let btn_node = btn.layout_node();
-        let btn = btn.on_click(move || s_cb.update(|n| *n += 1));
         let s_txt = s.clone();
         let txt = crate::text::Text::new(
             &mut ctx,
