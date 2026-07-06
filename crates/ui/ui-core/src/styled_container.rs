@@ -1,11 +1,13 @@
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::{Event, Key, PointerButton, PointerSource};
-use reactive_core::{RwSignal, signal};
+use platform_core::{Event, Key, NamedKey, PointerButton, PointerSource};
+use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::RectStyle;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::WidgetCtx;
+use crate::drag::DragGesture;
+use crate::focus::{self, FocusId};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 use crate::press::PressGesture;
@@ -24,11 +26,18 @@ pub struct StyledContainer {
     children: TrackedChildren,
     // Optional tap gesture so a styled box can itself be pressable (a clickable card); children still hit-test first.
     press: PressGesture,
+    // Optional drag gesture (slider/reorder/resize): reports the pointer position on press and each move.
+    drag: DragGesture,
     // Fires with `true`/`false` as the mouse enters/leaves the box (mouse only, like the hover style).
     on_hover: Option<Box<dyn Fn(bool)>>,
     // Fires on every key press. Key events carry no pointer position, so they are broadcast to every widget
     // — this is a GLOBAL shortcut handler (there is no per-widget focus), not focused text input.
     on_key: Option<Box<dyn Fn(&Key)>>,
+    // When set, the box is focusable: it joins the tab order, takes focus on tap, and handles Tab while
+    // focused. `on_focus` observes the transitions.
+    focus_id: Option<FocusId>,
+    // Watches focus transitions for `on_focus`; dropping it (with the box) tears the subscription down.
+    _focus_effect: Option<Effect>,
 }
 
 impl StyledContainer {
@@ -49,8 +58,11 @@ impl StyledContainer {
             transform: Box::new(|_| None),
             children,
             press: PressGesture::default(),
+            drag: DragGesture::default(),
             on_hover: None,
             on_key: None,
+            focus_id: None,
+            _focus_effect: None,
         })
     }
 
@@ -83,6 +95,14 @@ impl StyledContainer {
         self
     }
 
+    /// Make the box draggable. The callback fires with the pointer position (layout space) on a press
+    /// inside the box and on every move until release — even after the pointer leaves the box. Map the
+    /// coordinate to a value (slider) or an offset (reorder/resize).
+    pub fn on_drag(mut self, f: impl Fn(f32, f32) + 'static) -> Self {
+        self.drag.set(f);
+        self
+    }
+
     /// Fire `f(true)` when the mouse enters the box and `f(false)` when it leaves (mouse only). Independent
     /// of `on_hover_style`: a box can observe hover without swapping its paint.
     pub fn on_hover(mut self, f: impl Fn(bool) + 'static) -> Self {
@@ -94,6 +114,24 @@ impl StyledContainer {
     /// no per-widget focus), so it suits app-level shortcuts, not focused text entry.
     pub fn on_key(mut self, f: impl Fn(&Key) + 'static) -> Self {
         self.on_key = Some(Box::new(f));
+        self
+    }
+
+    /// Make the box focusable and fire `f(true)`/`f(false)` when it gains/loses keyboard focus. It joins
+    /// the tab order (Tab/Shift-Tab reach it) and takes focus on tap. Use it to drive a focus ring or to
+    /// build a custom focusable widget on top of a `box`.
+    pub fn on_focus(mut self, f: impl Fn(bool) + 'static) -> Self {
+        let id = *self.focus_id.get_or_insert_with(focus::next_id);
+        focus::register(id);
+        // An effect fires the callback only on an actual transition (its first run seeds `last`, no fire).
+        let last = std::rc::Rc::new(std::cell::Cell::new(focus::is_focused(id)));
+        self._focus_effect = Some(effect(move || {
+            let now = focus::is_focused(id);
+            if now != last.get() {
+                last.set(now);
+                f(now);
+            }
+        }));
         self
     }
 }
@@ -137,11 +175,13 @@ impl Component for StyledContainer {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        // No tap handler, hover style, or event callbacks: behave exactly as a plain container (pure routing).
+        // No tap/drag handler, hover style, or event callbacks: behave exactly as a plain container (pure routing).
         if !self.press.is_set()
+            && !self.drag.is_set()
             && self.hover_style.is_none()
             && self.on_hover.is_none()
             && self.on_key.is_none()
+            && self.focus_id.is_none()
         {
             return dispatch_container_event(&mut self.children, event);
         }
@@ -152,6 +192,7 @@ impl Component for StyledContainer {
             // leave the box stuck in its hover style.
             Event::PointerMoved { x, y, source } => {
                 self.press.track_move(event);
+                let dragged = self.drag.moved(event, rect) == EventResult::Handled;
                 let child = dispatch_container_event(&mut self.children, event);
                 let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
                 if tracks_hover && matches!(source, PointerSource::Mouse) {
@@ -164,19 +205,34 @@ impl Component for StyledContainer {
                         return EventResult::Handled;
                     }
                 }
-                child
+                if dragged { EventResult::Handled } else { child }
             }
-            // A child (e.g. an inner button) hit-tests first and wins; only a press on the bare box arms our tap.
+            // A child (e.g. an inner button) hit-tests first and wins; only a press on the bare box arms our tap/drag.
             Event::PointerPressed {
+                x,
+                y,
                 button: PointerButton::Primary,
                 ..
             } => {
                 if dispatch_container_event(&mut self.children, event) == EventResult::Handled {
                     self.press.cancel();
+                    self.drag.end();
                     return EventResult::Handled;
                 }
-                if self.press.is_set() {
-                    self.press.arm(event, rect)
+                // A tap inside a focusable box takes focus (and consumes the press so focus sticks).
+                let focused = match self.focus_id {
+                    Some(id) if rect.contains(*x as f32, *y as f32) => {
+                        focus::request(id);
+                        true
+                    }
+                    _ => false,
+                };
+                let tapped =
+                    self.press.is_set() && self.press.arm(event, rect) == EventResult::Handled;
+                let dragged =
+                    self.drag.is_set() && self.drag.press(event, rect) == EventResult::Handled;
+                if tapped || dragged || focused {
+                    EventResult::Handled
                 } else {
                     EventResult::Ignored
                 }
@@ -187,16 +243,21 @@ impl Component for StyledContainer {
             } => {
                 if dispatch_container_event(&mut self.children, event) == EventResult::Handled {
                     self.press.cancel();
+                    self.drag.end();
                     return EventResult::Handled;
                 }
-                if self.press.is_set() {
-                    self.press.release(event, rect)
+                let dragged = self.drag.end();
+                let tapped =
+                    self.press.is_set() && self.press.release(event, rect) == EventResult::Handled;
+                if tapped || dragged {
+                    EventResult::Handled
                 } else {
                     EventResult::Ignored
                 }
             }
             Event::CursorLeft => {
                 self.press.cancel();
+                self.drag.end();
                 if (self.hover_style.is_some() || self.on_hover.is_some()) && self.is_hovered.get()
                 {
                     self.is_hovered.set(false);
@@ -207,7 +268,19 @@ impl Component for StyledContainer {
                 dispatch_container_event(&mut self.children, event)
             }
             // Broadcast (no pointer position): fire the global key handler, then keep routing to children.
-            Event::KeyPressed { key, .. } => {
+            Event::KeyPressed { key, modifiers } => {
+                // While this focusable box holds focus, Tab moves focus to the next/previous field.
+                if let Some(id) = self.focus_id
+                    && focus::is_focused(id)
+                    && matches!(key, Key::Named(NamedKey::Tab))
+                {
+                    if modifiers.is_shift {
+                        focus::focus_prev();
+                    } else {
+                        focus::focus_next();
+                    }
+                    return EventResult::Handled;
+                }
                 if let Some(cb) = &self.on_key {
                     cb(key);
                 }
@@ -219,6 +292,16 @@ impl Component for StyledContainer {
 
     fn debug_name(&self) -> &'static str {
         "StyledContainer"
+    }
+}
+
+impl Drop for StyledContainer {
+    fn drop(&mut self) {
+        // Drop the focus watcher first so releasing focus below doesn't fire `on_focus` during teardown.
+        self._focus_effect.take();
+        if let Some(id) = self.focus_id {
+            focus::unregister(id);
+        }
     }
 }
 
@@ -646,5 +729,128 @@ mod tests {
         });
         card.on_event(&release(50.0, 120.0, touch));
         assert!(!flag.get(), "a scroll drag over the box must not press it");
+    }
+
+    // on_drag fires on a press inside, on every subsequent move (even once the pointer leaves the box),
+    // then stops after release.
+    #[test]
+    fn on_drag_reports_press_then_moves_until_release() {
+        use std::cell::RefCell;
+        let seen: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink = seen.clone();
+        let mut ctx = WidgetCtx::new();
+        let mut card = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column().width(200.0).height(200.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_drag(move |x, y| sink.borrow_mut().push((x, y)));
+        compute_layout(
+            &mut ctx,
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+
+        let moved = |x: f64, y: f64| Event::PointerMoved {
+            x,
+            y,
+            source: PointerSource::Mouse,
+        };
+        card.on_event(&press(40.0, 40.0, PointerSource::Mouse));
+        card.on_event(&moved(80.0, 90.0));
+        card.on_event(&moved(400.0, 400.0)); // outside the box: drag still tracks
+        card.on_event(&release(400.0, 400.0, PointerSource::Mouse));
+        card.on_event(&moved(10.0, 10.0)); // after release: no longer dragging
+
+        assert_eq!(
+            *seen.borrow(),
+            vec![(40.0, 40.0), (80.0, 90.0), (400.0, 400.0)],
+            "drag reports the press point then each move until release"
+        );
+    }
+
+    // Regression: a drag released OUTSIDE the widget must still end. Dispatched through a parent (whose
+    // release path position-filters presses) — the release must broadcast to the dragging child anyway,
+    // else it stays stuck to the pointer (fires on_drag on later moves).
+    #[test]
+    fn drag_released_outside_bounds_ends_via_parent_dispatch() {
+        use std::cell::RefCell;
+        let seen: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink = seen.clone();
+        let mut ctx = WidgetCtx::new();
+        let child = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_drag(move |x, y| sink.borrow_mut().push((x, y)));
+        let mut parent = Container::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column().width(300.0).height(300.0),
+            vec![Box::new(child)],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            parent.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(300.0),
+        )
+        .unwrap();
+
+        let moved = |x: f64, y: f64| Event::PointerMoved {
+            x,
+            y,
+            source: PointerSource::Mouse,
+        };
+        // child sits at (0,0) 100×100. Press inside, drag well outside, release outside.
+        parent.on_event(&press(50.0, 50.0, PointerSource::Mouse));
+        parent.on_event(&moved(250.0, 250.0));
+        parent.on_event(&release(250.0, 250.0, PointerSource::Mouse));
+        // After release the drag must be over: a later move fires nothing.
+        parent.on_event(&moved(60.0, 60.0));
+        assert_eq!(
+            *seen.borrow(),
+            vec![(50.0, 50.0), (250.0, 250.0)],
+            "drag ended on the outside release; the post-release move must not fire"
+        );
+    }
+
+    // A focusable box fires on_focus(true) when tapped and on_focus(false) when focus is cleared.
+    #[test]
+    fn on_focus_fires_on_gain_and_loss() {
+        use std::cell::RefCell;
+        let seen: Rc<RefCell<Vec<bool>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink = seen.clone();
+        let mut ctx = WidgetCtx::new();
+        let mut card = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_focus(move |f| sink.borrow_mut().push(f));
+        compute_layout(
+            &mut ctx,
+            card.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        card.on_event(&press(50.0, 50.0, PointerSource::Mouse)); // tap focuses → on_focus(true)
+        crate::focus::clear(); // → on_focus(false)
+        assert_eq!(
+            *seen.borrow(),
+            vec![true, false],
+            "on_focus fires true on gain then false on loss"
+        );
     }
 }

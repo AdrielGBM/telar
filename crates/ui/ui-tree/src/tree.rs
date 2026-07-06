@@ -44,6 +44,11 @@ impl ComponentList {
 
     pub fn on_event(&mut self, event: &Event) -> EventResult {
         // Batch so any signals mutated by handlers flush their effects AFTER on_event returns (and releases the borrow_mut), never re-entering a segment effect mid-borrow.
+        // Overlay priority routing (blocking a modal's background) is NOT done here: it must run on the
+        // side that owns the overlay registry, which under hot reload is the app dylib, not the host that
+        // holds this `ComponentList`. The runner consults it via `App::dispatch_overlays` (bridged across
+        // the dylib boundary like `relayout`) before calling this, and skips this call when an overlay
+        // consumed the event. See `overlay_dispatch` and `crate::app::App::dispatch_overlays`.
         batch(|| self.root.borrow_mut().on_event(event))
     }
 

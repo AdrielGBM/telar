@@ -27,13 +27,29 @@ pub fn bump_force_ticks() {
     FORCE_TICK.with(|s| s.set(s.peek().wrapping_add(1)));
 }
 
+/// (index into `own` where the child's commands splice, child segment, whether inside an `Overlay`).
+type ChildSlots = Vec<(usize, Rc<Segment>, bool)>;
+
+/// One entry on the flatten work stack: a node to process, or a marker that closes the current overlay
+/// region (pushed after an `Overlay`'s children so the region's end position is recorded once they are all
+/// flattened). Kept private to the flatten walk. The `Node` variant dwarfs `EndOverlay`, but boxing it
+/// would add an allocation on the hot flatten path for no real memory win (the stack is short-lived).
+#[allow(clippy::large_enum_variant)]
+enum Step {
+    Node(RenderNode),
+    EndOverlay,
+}
+
 pub struct Segment {
     // Human-readable widget type name, captured at mount for the devtools tree inspector.
     name: &'static str,
     // This component's own flattened commands, excluding children (spliced in at compose time).
     own_commands: Rc<RefCell<Vec<DrawCommand>>>,
-    // (index into `own` where the child's commands splice, child segment), in emission order.
-    child_slots: Rc<RefCell<Vec<(usize, Rc<Segment>)>>>,
+    // Parallel to `own_commands`: whether each command belongs to an `Overlay` region (hoisted to the top
+    // layer at compose time). Same length as `own_commands`.
+    own_overlay: Rc<RefCell<Vec<bool>>>,
+    // Child splice points in emission order (see [`ChildSlots`]).
+    child_slots: Rc<RefCell<ChildSlots>>,
     // Set by the effect when this segment's output changes; cleared when composed. This lives on the Segment object (not a thread-local) so it works across the hot-reload dylib boundary: a dylib segment's effect sets it and the binary's compose/dirty-check read the same `Cell` — whereas a thread-local generation would be a separate duplicated instance per side.
     is_dirty: Rc<Cell<bool>>,
     _effect: Effect,
@@ -97,12 +113,14 @@ impl Segment {
         render: impl Fn() -> Option<RenderNode> + 'static,
     ) -> Rc<Segment> {
         let own_commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
-        let child_slots: Rc<RefCell<Vec<(usize, Rc<Segment>)>>> = Default::default();
-        let stack: Rc<RefCell<Vec<RenderNode>>> = Default::default();
+        let own_overlay: Rc<RefCell<Vec<bool>>> = Default::default();
+        let child_slots: Rc<RefCell<ChildSlots>> = Default::default();
+        let stack: Rc<RefCell<Vec<Step>>> = Default::default();
         // Starts dirty so the first compose includes this segment.
         let is_dirty = Rc::new(Cell::new(true));
 
         let own_c = Rc::clone(&own_commands);
+        let overlay_c = Rc::clone(&own_overlay);
         let slots_c = Rc::clone(&child_slots);
         let dirty_c = Rc::clone(&is_dirty);
         let _effect = effect(move || {
@@ -111,18 +129,21 @@ impl Segment {
                 return; // widget is mutably borrowed (event dispatch); keep last render
             };
             let mut own = own_c.borrow_mut();
+            let mut overlay = overlay_c.borrow_mut();
             let mut stk = stack.borrow_mut();
-            let mut new_slots: Vec<(usize, Rc<Segment>)> = Vec::new();
-            let own_changed = flatten_segment(node, &mut own, &mut new_slots, &mut stk);
+            let mut new_slots: ChildSlots = Vec::new();
+            let own_changed =
+                flatten_segment(node, &mut own, &mut overlay, &mut new_slots, &mut stk);
             drop(stk);
             drop(own);
+            drop(overlay);
             let mut slots = slots_c.borrow_mut();
             // The boundary structure also changes the output, even if own commands are identical.
             let slots_changed = slots.len() != new_slots.len()
                 || slots
                     .iter()
                     .zip(new_slots.iter())
-                    .any(|(a, b)| a.0 != b.0 || !Rc::ptr_eq(&a.1, &b.1));
+                    .any(|(a, b)| a.0 != b.0 || a.2 != b.2 || !Rc::ptr_eq(&a.1, &b.1));
             if own_changed || slots_changed {
                 *slots = new_slots;
                 dirty_c.set(true);
@@ -132,6 +153,7 @@ impl Segment {
         Rc::new(Segment {
             name,
             own_commands,
+            own_overlay,
             child_slots,
             is_dirty,
             _effect,
@@ -182,7 +204,7 @@ impl Segment {
             bounds = union_nonempty(bounds, rect);
         }
 
-        for (_, child) in self.child_slots.borrow().iter() {
+        for (_, child, _) in self.child_slots.borrow().iter() {
             bounds = union_nonempty(bounds, child.collect(depth + 1, out));
         }
 
@@ -196,13 +218,19 @@ impl Segment {
 fn flatten_segment(
     root: RenderNode,
     out: &mut Vec<DrawCommand>,
-    slots: &mut Vec<(usize, Rc<Segment>)>,
-    stack: &mut Vec<RenderNode>,
+    overlay: &mut Vec<bool>,
+    slots: &mut ChildSlots,
+    stack: &mut Vec<Step>,
 ) -> bool {
     stack.clear();
-    stack.push(root);
+    stack.push(Step::Node(root));
     let mut pos: usize = 0;
     let mut changed = false;
+    // Nesting depth of `Overlay` regions; > 0 means the commands/children emitted now are hoisted content.
+    let mut overlay_depth: usize = 0;
+    // Rebuilt fresh each flatten (parallel to `out`), then compared with the stored flags to detect a
+    // pure overlay-membership change (same commands, different layering).
+    let mut new_overlay: Vec<bool> = Vec::with_capacity(out.len());
 
     macro_rules! emit_command {
         ($command:expr) => {{
@@ -216,23 +244,31 @@ fn flatten_segment(
                 out.push(command);
                 changed = true;
             }
+            new_overlay.push(overlay_depth > 0);
             pos += 1;
         }};
     }
 
-    while let Some(node) = stack.pop() {
+    while let Some(step) = stack.pop() {
+        let node = match step {
+            Step::EndOverlay => {
+                overlay_depth -= 1;
+                continue;
+            }
+            Step::Node(node) => node,
+        };
         match node {
             RenderNode::Empty => {}
             RenderNode::Primitive(cmd) => emit_command!(cmd),
             RenderNode::Group { children } => {
                 for child in children.into_iter().rev() {
-                    stack.push(child);
+                    stack.push(Step::Node(child));
                 }
             }
             RenderNode::Transform { matrix, children } => {
-                stack.push(RenderNode::Primitive(DrawCommand::PopMatrix));
+                stack.push(Step::Node(RenderNode::Primitive(DrawCommand::PopMatrix)));
                 for child in children.into_iter().rev() {
-                    stack.push(child);
+                    stack.push(Step::Node(child));
                 }
                 emit_command!(DrawCommand::PushMatrix { matrix });
             }
@@ -241,9 +277,9 @@ fn flatten_segment(
                 radius,
                 children,
             } => {
-                stack.push(RenderNode::Primitive(DrawCommand::PopClip));
+                stack.push(Step::Node(RenderNode::Primitive(DrawCommand::PopClip)));
                 for child in children.into_iter().rev() {
-                    stack.push(child);
+                    stack.push(Step::Node(child));
                 }
                 emit_command!(DrawCommand::PushClip { rect, radius });
             }
@@ -252,22 +288,35 @@ fn flatten_segment(
                 backdrop_blur,
                 children,
             } => {
-                stack.push(RenderNode::Primitive(DrawCommand::PopLayer));
+                stack.push(Step::Node(RenderNode::Primitive(DrawCommand::PopLayer)));
                 for child in children.into_iter().rev() {
-                    stack.push(child);
+                    stack.push(Step::Node(child));
                 }
                 emit_command!(DrawCommand::PushLayer {
                     opacity,
                     backdrop_blur
                 });
             }
-            // The child's commands are owned by its own segment; record where they splice in.
-            RenderNode::Boundary { child } => slots.push((pos, child)),
+            // Everything emitted until the matching EndOverlay marker is overlay content (hoisted at compose).
+            RenderNode::Overlay { children } => {
+                overlay_depth += 1;
+                stack.push(Step::EndOverlay);
+                for child in children.into_iter().rev() {
+                    stack.push(Step::Node(child));
+                }
+            }
+            // The child's commands are owned by its own segment; record where they splice in, plus whether
+            // this splice point sits inside an overlay region.
+            RenderNode::Boundary { child } => slots.push((pos, child, overlay_depth > 0)),
         }
     }
 
     if pos != out.len() {
         out.truncate(pos);
+        changed = true;
+    }
+    if *overlay != new_overlay {
+        *overlay = new_overlay;
         changed = true;
     }
     changed
@@ -276,20 +325,34 @@ fn flatten_segment(
 /// Lazily composes a segment subtree into a flat command list, splicing each child's current
 /// commands at its recorded position. O(total commands) but only cheap clones — the expensive
 /// `view()` + flatten already ran (per segment) and is skipped for unchanged segments.
-pub(crate) fn compose_into(seg: &Segment, out: &mut Vec<DrawCommand>) {
+/// Composes a segment subtree into `out`, routing any command that belongs to an `Overlay` region into
+/// `overlay_out` instead — so overlays land at the end of the final list (drawn on top, free of any
+/// ancestor clip/transform). `in_overlay` propagates that state into child segments spliced within an
+/// overlay. See [`SegmentRoot::commands`] for the final `out ++ overlay_out` concatenation.
+pub(crate) fn compose_into(
+    seg: &Segment,
+    out: &mut Vec<DrawCommand>,
+    overlay_out: &mut Vec<DrawCommand>,
+    in_overlay: bool,
+) {
     seg.is_dirty.set(false);
     let own_commands = seg.own_commands.borrow();
+    let own_overlay = seg.own_overlay.borrow();
     let slots = seg.child_slots.borrow();
     let mut si = 0;
     for (i, cmd) in own_commands.iter().enumerate() {
         while si < slots.len() && slots[si].0 == i {
-            compose_into(&slots[si].1, out);
+            compose_into(&slots[si].1, out, overlay_out, in_overlay || slots[si].2);
             si += 1;
         }
-        out.push(cmd.clone());
+        if in_overlay || own_overlay.get(i).copied().unwrap_or(false) {
+            overlay_out.push(cmd.clone());
+        } else {
+            out.push(cmd.clone());
+        }
     }
     while si < slots.len() {
-        compose_into(&slots[si].1, out);
+        compose_into(&slots[si].1, out, overlay_out, in_overlay || slots[si].2);
         si += 1;
     }
 }
@@ -303,7 +366,7 @@ fn any_dirty(seg: &Segment) -> bool {
     seg.child_slots
         .borrow()
         .iter()
-        .any(|(_, child)| any_dirty(child))
+        .any(|(_, child, _)| any_dirty(child))
 }
 
 /// Top-level holder for a segment tree (analog of `ComponentList`): exposes the composed commands.
@@ -349,7 +412,11 @@ impl SegmentRoot {
         if !self.cache_valid.get() || any_dirty(&self.root) {
             let mut cached = self.cached.borrow_mut();
             cached.clear();
-            compose_into(&self.root, &mut cached); // clears dirty flags as it walks
+            // Overlay content is routed aside during compose, then appended so it draws on top of (and
+            // outside any clip of) the main tree.
+            let mut overlay: Vec<DrawCommand> = Vec::new();
+            compose_into(&self.root, &mut cached, &mut overlay, false); // clears dirty flags as it walks
+            cached.extend(overlay);
             drop(cached);
             self.compose_generation
                 .set(self.compose_generation.get().wrapping_add(1));
@@ -422,6 +489,48 @@ mod tests {
         let root = SegmentRoot::mount(Parent { children });
         // 2 children × 2 rects each.
         assert_eq!(root.commands().len(), 4);
+    }
+
+    fn cmd_x(c: &DrawCommand) -> f32 {
+        match c {
+            DrawCommand::Rect { rect, .. } => rect.x,
+            _ => -1.0,
+        }
+    }
+
+    struct WithOverlay;
+    impl Component for WithOverlay {
+        fn view(&self) -> RenderNode {
+            RenderNode::group([rect(1.0), RenderNode::overlay([rect(2.0)]), rect(3.0)])
+        }
+    }
+
+    #[test]
+    fn overlay_hoists_to_end() {
+        let root = SegmentRoot::mount(WithOverlay);
+        let cmds = root.commands();
+        let xs: Vec<f32> = cmds.iter().map(cmd_x).collect();
+        // The overlay's rect(2) is emitted between rect(1) and rect(3) but composes last (drawn on top).
+        assert_eq!(xs, vec![1.0, 3.0, 2.0]);
+    }
+
+    struct OverlayParent {
+        child: Rc<Segment>,
+    }
+    impl Component for OverlayParent {
+        fn view(&self) -> RenderNode {
+            RenderNode::group([rect(1.0), RenderNode::overlay([self.child.boundary()])])
+        }
+    }
+
+    #[test]
+    fn overlay_hoists_child_segment() {
+        // An overlay whose content is a child segment: the child's commands must hoist too.
+        let child = Segment::mount(Leaf { x: signal(9.0) }); // emits rect(9), rect(14)
+        let root = SegmentRoot::mount(OverlayParent { child });
+        let cmds = root.commands();
+        let xs: Vec<f32> = cmds.iter().map(cmd_x).collect();
+        assert_eq!(xs, vec![1.0, 9.0, 14.0]);
     }
 
     #[test]

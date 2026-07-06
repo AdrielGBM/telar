@@ -116,6 +116,37 @@ pub fn remove_node(node: NodeId) {
     with_runtime(|rt| rt.remove_node(node))
 }
 
+/// Attaches `node` (an overlay's out-of-flow content) as an extra child of the current layout host — the
+/// top-level root computed against the window — so it fills the viewport regardless of where the `overlay`
+/// was declared in the tree. Returns `true` when attached; `false` when no host has been computed yet (the
+/// caller then falls back to normal in-tree layout). The host is marked dirty so the next frame lays the
+/// portal out.
+pub fn attach_overlay(node: NodeId) -> bool {
+    with_runtime(|rt| {
+        let Some(host) = rt.overlay_host else {
+            return false;
+        };
+        if rt.engine.add_child(host, node).is_err() {
+            return false;
+        }
+        rt.parents.insert(node, host);
+        rt.engine.mark_dirty(host).ok();
+        true
+    })
+}
+
+/// Detaches an overlay's content from the layout host (inverse of [`attach_overlay`]); the caller frees it
+/// afterwards with [`remove_node`]. A no-op if the host is gone.
+pub fn detach_overlay(node: NodeId) {
+    with_runtime(|rt| {
+        if let Some(host) = rt.overlay_host {
+            rt.engine.remove_child(host, node).ok();
+            rt.engine.mark_dirty(host).ok();
+        }
+        rt.parents.remove(&node);
+    });
+}
+
 /// A handle to the thread-local layout runtime. Carries no state itself; kept as a parameter on widget
 /// constructors and generated `.rsx` functions so the migration to a runtime-driven layout does not
 /// churn every signature. `new()` resets the runtime for a fresh tree (one live tree per thread).
@@ -146,6 +177,9 @@ struct LayoutRuntime {
     constrained: Vec<(NodeId, LayoutStyle, Option<f32>)>,
     // Whether each compute-root's width/height were originally `auto`, captured the first time it is computed. An auto-sized root fills the definite space it is computed in, so a top-level page need not declare width:100% to avoid collapsing to its content width.
     root_auto: FxHashMap<NodeId, (bool, bool)>,
+    // The parent-less (top-level) root last computed against the window — the layout host that `overlay`s
+    // attach their out-of-flow content to, so a portal fills the viewport regardless of where it is declared.
+    overlay_host: Option<NodeId>,
     // Guards against recursive compute(): an effect that reads a layout signal and calls compute_layout() again creates a re-layout cycle caught immediately in debug builds.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -161,6 +195,7 @@ impl LayoutRuntime {
             last_space: FxHashMap::default(),
             constrained: Vec::new(),
             root_auto: FxHashMap::default(),
+            overlay_host: None,
             #[cfg(debug_assertions)]
             is_computing: false,
         }
@@ -222,6 +257,12 @@ impl LayoutRuntime {
         width: AvailableSpace,
         height: AvailableSpace,
     ) -> Result<Vec<(RwSignal<Rect>, Rect)>, LayoutError> {
+        // A top-level root (no parent) computed against the window is the overlay host: overlays attach
+        // their content here so a portal fills the viewport wherever it is declared. Refreshed each compute
+        // so it stays current across a hot-reload rebuild (which mints a new root node).
+        if !self.parents.contains_key(&root) {
+            self.overlay_host = Some(root);
+        }
         // A changed available space (window resize) must re-run layout even when the node is clean: dirty the root so the cached size from the previous space is discarded. Skip only when both the node is clean and the space is unchanged.
         let is_space_changed = self.last_space.get(&root) != Some(&(width, height));
         if is_space_changed {
@@ -784,5 +825,48 @@ mod tests {
         .unwrap();
         assert_eq!(rect.get().width, 100.0);
         assert_eq!(rect.get().height, 50.0);
+    }
+
+    // An overlay's content, attached to the host, fills the viewport — not the small box it was declared in.
+    #[test]
+    fn attached_overlay_fills_host_viewport_not_its_small_parent() {
+        let mut ctx = WidgetCtx::new();
+        // Computing a parent-less root registers it as the overlay host (an 800×600 viewport).
+        let (small, _) = new_leaf(&mut ctx, LayoutStyle::new().width(50.0).height(50.0)).unwrap();
+        let root = new_container(&mut ctx, LayoutStyle::new().flex_column(), &[small]).unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(800.0),
+            AvailableSpace::Definite(600.0),
+        )
+        .unwrap();
+
+        // Overlay content: an absolute-fill container with a 100%×100% inner leaf we can measure.
+        let (inner, inner_rect) = new_leaf(
+            &mut ctx,
+            LayoutStyle::new()
+                .width(SizeDimension::Percent(1.0))
+                .height(SizeDimension::Percent(1.0)),
+        )
+        .unwrap();
+        let content =
+            new_container(&mut ctx, LayoutStyle::new().absolute_fill(), &[inner]).unwrap();
+        assert!(
+            attach_overlay(content),
+            "the host must be set after the first compute"
+        );
+        relayout_if_dirty();
+
+        let r = inner_rect.get();
+        assert!(
+            (r.width - 800.0).abs() < 0.5 && (r.height - 600.0).abs() < 0.5,
+            "portal fills the viewport, not its 50px parent: {r:?}"
+        );
+
+        // Detaching and freeing the content must leave the host laying out cleanly (no panic, still valid).
+        detach_overlay(content);
+        remove_node(content);
+        relayout_if_dirty();
     }
 }

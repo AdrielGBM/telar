@@ -59,6 +59,22 @@ impl LayoutEngine {
             .map_err(LayoutError::from)
     }
 
+    /// Appends `child` to `parent`'s existing children (unlike [`set_children`], which replaces them). Used
+    /// to attach an overlay's out-of-flow content to the layout root without touching the root's other children.
+    pub fn add_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
+        self.tree
+            .add_child(parent, child)
+            .map_err(LayoutError::from)
+    }
+
+    /// Detaches `child` from `parent` (does not free it — call [`remove`] afterwards to release the node).
+    pub fn remove_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
+        self.tree
+            .remove_child(parent, child)
+            .map(|_| ())
+            .map_err(LayoutError::from)
+    }
+
     /// Frees a node (and its measure context) from the tree. The caller must have already detached it from
     /// its parent (via [`set_children`]); a removed node id must not be used again.
     pub fn remove(&mut self, node: NodeId) {

@@ -70,6 +70,12 @@ pub enum RenderNode {
         backdrop_blur: f32,
         children: NodeVec,
     },
+    // A portal: its subtree is hoisted to the top layer at compose time (drawn last, above everything, and
+    // escaping any ancestor clip/transform/layer). Used for overlays — dropdowns, modals, drawers, toasts.
+    // Positioning is the caller's job (lay the content out where it should appear, e.g. an absolute-fill box).
+    Overlay {
+        children: NodeVec,
+    },
     // A reactive boundary: the child segment maintains its own flattened commands via its own effect, so the parent's view() references it without re-running the child's view(). Composed lazily at collect time (see segment.rs). Enables O(changed component) updates instead of O(tree).
     Boundary {
         child: std::rc::Rc<crate::segment::Segment>,
@@ -123,6 +129,13 @@ impl RenderNode {
         Self::Layer {
             opacity,
             backdrop_blur,
+            children: NodeVec::collect(children),
+        }
+    }
+
+    /// A portal whose subtree is hoisted to the top layer at compose time (see [`RenderNode::Overlay`]).
+    pub fn overlay(children: impl IntoIterator<Item = RenderNode>) -> Self {
+        Self::Overlay {
             children: NodeVec::collect(children),
         }
     }

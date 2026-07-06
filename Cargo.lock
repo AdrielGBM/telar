@@ -3888,16 +3888,21 @@ dependencies = [
  "criterion",
  "geometry-core",
  "image",
+ "layout-core",
  "lru",
  "ndk",
+ "platform-core",
  "raw-window-handle",
  "rayon",
+ "reactive-core",
  "renderer-core",
  "renderer-text",
  "rustc-hash 2.1.2",
  "smallvec",
  "softbuffer",
  "tiny-skia 0.12.0",
+ "ui-core",
+ "ui-tree",
  "wide",
 ]
 
@@ -4000,6 +4005,7 @@ dependencies = [
  "theme-core",
  "toml",
  "tracing",
+ "ui-components",
  "ui-core",
  "ui-tree",
 ]
@@ -5034,6 +5040,17 @@ name = "typeid"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
+
+[[package]]
+name = "ui-components"
+version = "0.1.0"
+dependencies = [
+ "geometry-core",
+ "layout-core",
+ "renderer-core",
+ "theme-core",
+ "ui-core",
+]
 
 [[package]]
 name = "ui-core"

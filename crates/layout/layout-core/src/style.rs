@@ -62,6 +62,21 @@ impl LayoutStyle {
         self
     }
 
+    /// Takes the node out of normal flow (`position: absolute`) with all four insets pinned to 0, so it
+    /// fills its containing block without affecting sibling layout — used by `overlay` to cover the
+    /// viewport. Combine with `flex_column`/alignment to position the overlay's content within the layer.
+    pub fn absolute_fill(mut self) -> Self {
+        self.inner.position = taffy::Position::Absolute;
+        let zero = LengthPercentageAuto::length(0.0);
+        self.inner.inset = taffy::Rect {
+            left: zero,
+            right: zero,
+            top: zero,
+            bottom: zero,
+        };
+        self
+    }
+
     /// The node's `width` in pixels if it is a definite length, else `None` (e.g. percent or auto).
     /// Lets widgets with an intrinsic size (e.g. `<svg>`/`<img>`) inspect a caller-supplied width before registering their layout leaf.
     pub fn width_px(&self) -> Option<f32> {
