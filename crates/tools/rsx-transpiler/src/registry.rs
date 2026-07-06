@@ -24,6 +24,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("image", "Image::new"),
         ("input", "Input::new"),
         ("svg", "Svg::new"),
+        ("path", "Path::new"),
         ("scroll", "LayoutScrollArea::new"),
         ("canvas", "Canvas::new"),
         ("overlay", "Overlay::new"),
@@ -92,6 +93,14 @@ pub fn color_attr_keys() -> &'static [&'static str] {
 /// Kept in one place so the four tags stay consistent — the codegen already treats them identically
 /// (`rect_style_pieces` resolves fill/stroke/shadow/gradient/opacity for all of them, and `on_press`
 /// is wired on both `Container` and `StyledContainer`).
+///
+/// `on_change` is deliberately NOT in this list: a container has no "value" to change, so a generic
+/// container-level `on_change` would be meaningless (and the codegen has no `.on_change` to call on
+/// `Container`/`StyledContainer` — adding the key here without it would be a broken suggestion). A
+/// value-bearing widget (checkbox/slider/text_field, built as components) declares its own `on_change`
+/// as a `Props` field instead; `emit_component_call` already boxes any closure-valued attr generically
+/// by field name (see `component_props_arg` in `view/component.rs`), so `on_change:|v| ...` on such a
+/// component works today with no transpiler change needed here.
 const CONTAINER_PAINT: &[&str] = &[
     "fill",
     "stroke",
@@ -109,6 +118,7 @@ const CONTAINER_PAINT: &[&str] = &[
     "gr",
     "opacity",
     "on_press",
+    "on_long_press",
     "on_hover",
     "on_key",
     "on_drag",
@@ -141,6 +151,8 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "align",
             "lines",
             "ellipsis",
+            "line_height",
+            "letter_spacing",
             "transition",
         ],
         "widget" => vec![],
@@ -157,6 +169,8 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
         "input" => with(&["value", "size", "color", "on_submit"]),
         "svg" => with(&["src", "tint"]),
+        // `path` draws SVG path-data (`d:`) with a solid fill/stroke; sized by width/height like a leaf.
+        "path" => with(&["d", "fill", "stroke", "stroke_width", "fill_rule"]),
         _ if is_builtin_tag(tag) => layout_attr_keys().to_vec(),
         _ => vec![],
     }

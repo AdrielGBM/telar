@@ -1,7 +1,7 @@
 //! `[view]` section: the indentation-based element tree (elements, `if`/`for`/`let` nodes).
 
-use super::Parser;
 use super::style::check_hex_value;
+use super::{Parser, split_once_colon};
 use crate::ast::*;
 use crate::error::ParseError;
 use crate::lexer::Section;
@@ -134,11 +134,12 @@ impl Parser {
         let rest = after.trim().to_string();
         self.pos += 1;
 
-        // Split on the first standalone ` in ` keyword, then peel off an optional `key <expr>` clause.
-        let (pattern, iterable, key_expr) = split_for_in(&rest).ok_or_else(|| ParseError {
-            message: format!("expected `for <pattern> in <expr>`, got `for {rest}`"),
-            line: number,
-        })?;
+        // Split on the first standalone ` in ` keyword, then peel off optional `key <expr>` / `gap:<expr>` clauses.
+        let (pattern, iterable, key_expr, gap_expr) =
+            split_for_in(&rest).ok_or_else(|| ParseError {
+                message: format!("expected `for <pattern> in <expr>`, got `for {rest}`"),
+                line: number,
+            })?;
 
         let body = self.parse_children(indent)?;
 
@@ -146,6 +147,7 @@ impl Parser {
             pattern,
             iterable,
             key_expr,
+            gap_expr,
             body,
             line: number,
             pattern_start: rest_start,
@@ -208,23 +210,38 @@ impl Parser {
     }
 }
 
-/// Splits a `for` header into `(pattern, iterable, key_expr)`: on the first ` in ` keyword, then on an
-/// optional trailing ` key <expr>` clause (used to key a reactive list for reconciliation).
-fn split_for_in(rest: &str) -> Option<(String, String, Option<String>)> {
+/// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr)`: on the first ` in ` keyword, then
+/// an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional
+/// ` key <expr>` clause (identity for reconciliation; without it a reactive list reconciles by position).
+/// `gap` is always the last token on the line, so it's peeled off before the `key` search.
+fn split_for_in(rest: &str) -> Option<(String, String, Option<String>, Option<String>)> {
     let tokens: Vec<&str> = rest.split_whitespace().collect();
     let in_idx = tokens.iter().position(|&t| t == "in")?;
     if in_idx == 0 || in_idx + 1 >= tokens.len() {
         return None;
     }
     let pattern = tokens[..in_idx].join(" ");
-    let after_in = &tokens[in_idx + 1..];
+    let mut after_in: Vec<&str> = tokens[in_idx + 1..].to_vec();
+
+    let gap_expr = match (
+        after_in.len(),
+        after_in.last().and_then(|t| split_once_colon(t)),
+    ) {
+        (len, Some((name, value))) if len > 1 && name == "gap" => {
+            let value = value.to_string();
+            after_in.pop();
+            Some(value)
+        }
+        _ => None,
+    };
+
     let (iterable, key_expr) = match after_in.iter().position(|&t| t == "key") {
         Some(ki) if ki > 0 && ki + 1 < after_in.len() => {
             (after_in[..ki].join(" "), Some(after_in[ki + 1..].join(" ")))
         }
         _ => (after_in.join(" "), None),
     };
-    Some((pattern, iterable, key_expr))
+    Some((pattern, iterable, key_expr, gap_expr))
 }
 
 /// Extracts `w, h` from a `|w, h|` canvas closure-param line.

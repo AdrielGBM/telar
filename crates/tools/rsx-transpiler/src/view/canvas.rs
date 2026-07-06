@@ -6,7 +6,9 @@ use rsx_parser::{Attr, Element, ViewNode};
 
 use crate::style::format_f32;
 
-use super::signals::{build_gradient_stops, build_rect_style, canvas_param_bindings, rust_str};
+use super::signals::{
+    build_gradient_stops, build_rect_style, canvas_param_bindings, rust_str, wrap_signal_clones,
+};
 use super::{ChildEmit, ViewGen};
 
 impl ViewGen<'_> {
@@ -28,38 +30,40 @@ impl ViewGen<'_> {
             })
             .collect();
 
-        let mut code = String::new();
-        let _ = writeln!(
-            code,
-            "{pad}let {var} = Canvas::new(ctx, {style}, move |__rect| {{"
-        );
-
+        let mut body = String::new();
         if canvas_children.is_empty() {
             // Legacy behaviour: explicit (w, h) param bindings or empty stub.
             let params = el.canvas_parameters.as_deref().unwrap_or("");
             let bindings = canvas_param_bindings(params, &pad);
-            code.push_str(&bindings);
-            let _ = writeln!(code, "{inner}RenderNode::group([])");
+            body.push_str(&bindings);
+            let _ = writeln!(body, "{inner}RenderNode::group([])");
         } else {
             // Inject dimension locals so children can write w:full / h:full.
-            let _ = writeln!(code, "{inner}let __w = __rect.width;");
-            let _ = writeln!(code, "{inner}let __h = __rect.height;");
+            let _ = writeln!(body, "{inner}let __w = __rect.width;");
+            let _ = writeln!(body, "{inner}let __h = __rect.height;");
             let exprs: Vec<String> = canvas_children
                 .iter()
                 .map(|child| self.emit_render_node_expr(child))
                 .collect();
             if exprs.len() == 1 {
-                let _ = writeln!(code, "{inner}{}", exprs[0]);
+                let _ = writeln!(body, "{inner}{}", exprs[0]);
             } else {
-                let _ = writeln!(code, "{inner}RenderNode::group([");
+                let _ = writeln!(body, "{inner}RenderNode::group([");
                 for expr in &exprs {
-                    let _ = writeln!(code, "{inner}    {expr},");
+                    let _ = writeln!(body, "{inner}    {expr},");
                 }
-                let _ = writeln!(code, "{inner}])");
+                let _ = writeln!(body, "{inner}])");
             }
         }
 
-        let _ = write!(code, "{pad}}})?;");
+        // A `$ident` colour anywhere in the subtree (rect fill/stroke/gradient stops, line/text color, shadow color) already resolves through `color_expr`'s `.get()` branch (see `emit_canvas_rect`/`emit_canvas_line`/`emit_canvas_text`); clone every such signal into the shared draw closure up front so the outer binding stays usable elsewhere, mirroring `rect_style_pieces`' `wrap_signal_clones` for a styled container.
+        let mut raw_colors: Vec<&str> = Vec::new();
+        for child in &canvas_children {
+            collect_canvas_colors(child, &mut raw_colors);
+        }
+        let closure = wrap_signal_clones(&raw_colors, format!("move |__rect| {{\n{body}{pad}}}"));
+
+        let code = format!("{pad}let {var} = Canvas::new(ctx, {style}, {closure})?;");
         ChildEmit::Simple { name: var, code }
     }
 
@@ -329,5 +333,19 @@ impl ViewGen<'_> {
                 }
             })
             .unwrap_or_else(|| default.to_string())
+    }
+}
+
+/// Recursively collects the raw values of colour-bearing attrs (see `color_attr_keys`) anywhere in a canvas child subtree, including nested `layer` children, so `emit_canvas` can clone every `$ident` signal referenced by a descendant's `fill`/`stroke`/`color`/`shadow_color`/... once, before the shared draw closure captures it.
+fn collect_canvas_colors<'e>(el: &'e Element, out: &mut Vec<&'e str>) {
+    for a in &el.attributes {
+        if crate::registry::color_attr_keys().contains(&a.key.as_str()) {
+            out.push(a.value.as_str());
+        }
+    }
+    for child in &el.children {
+        if let ViewNode::Element(e) = child {
+            collect_canvas_colors(e, out);
+        }
     }
 }

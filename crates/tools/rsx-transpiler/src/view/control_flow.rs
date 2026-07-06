@@ -111,28 +111,32 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// Emits a `for x in $items key <expr>` reactive list as a `ReactiveList` widget: a source closure
-    /// that reads the signal, a key closure for identity, and a per-item builder that wraps the loop body's
-    /// widgets in a column. The list re-runs and reconciles (reuse/move/insert/drop) when the source changes.
+    /// Emits a `for x in $items [key <expr>] [gap:<expr>]` reactive list as a `ReactiveList` widget: a
+    /// source closure that reads the signal, an optional key closure for identity (keyless reconciles by
+    /// position instead), and a per-item builder that wraps the loop body's widgets in a column. The list
+    /// re-runs and reconciles (reuse/move/insert/drop) when the source changes.
     fn emit_reactive_for(&mut self, block: &ForBlock) -> ChildEmit {
         let var = self.next_variable_name("node");
         let pad = self.indent_str();
         let iterable = block.iterable.trim();
         let pattern = block.pattern.trim();
 
-        let Some(key_expr) = block
+        let key_expr = block
             .key_expr
             .as_deref()
             .map(str::trim)
-            .filter(|s| !s.is_empty())
-        else {
-            let msg = format!(
-                "a reactive `for {pattern} in {iterable}` needs a `key <expr>` clause so items reconcile by identity"
-            );
-            let code = format!(
-                "{pad}compile_error!(\"{msg}\");\n{pad}let {var} = Container::column(ctx, children![])?;"
-            );
-            return ChildEmit::Simple { name: var, code };
+            .filter(|s| !s.is_empty());
+        let gap_expr = block
+            .gap_expr
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+
+        let constructor = match (key_expr.is_some(), gap_expr.is_some()) {
+            (true, false) => "new",
+            (true, true) => "with_gap",
+            (false, false) => "positional",
+            (false, true) => "positional_with_gap",
         };
 
         // Source: `move || items.get()`, cloning the captured signal so the closure owns a 'static handle.
@@ -142,10 +146,12 @@ impl ViewGen<'_> {
         );
 
         let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = ReactiveList::new(");
+        let _ = writeln!(code, "{pad}let {var} = ReactiveList::{constructor}(");
         let _ = writeln!(code, "{pad}    ctx,");
         let _ = writeln!(code, "{pad}    {source},");
-        let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
+        if let Some(key_expr) = key_expr {
+            let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
+        }
         let _ = writeln!(
             code,
             "{pad}    move |ctx: &mut WidgetCtx, {pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
@@ -170,6 +176,9 @@ impl ViewGen<'_> {
             "{pad}        Ok(box_item(Container::new(ctx, LayoutStyle::new().flex_column(), __children)?))"
         );
         let _ = writeln!(code, "{pad}    }},");
+        if let Some(gap_expr) = gap_expr {
+            let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
+        }
         let _ = write!(code, "{pad})?;");
         ChildEmit::Simple { name: var, code }
     }

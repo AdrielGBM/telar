@@ -7,6 +7,7 @@ mod control_flow;
 mod input;
 mod interp;
 mod media;
+mod path;
 mod scroll;
 mod signals;
 mod style_helpers;
@@ -170,6 +171,7 @@ impl<'a> ViewGen<'a> {
             "img" | "image" => "img",
             "input" => "input",
             "svg" => "svg",
+            "path" => "path",
             "canvas" => "canvas",
             _ => "node",
         };
@@ -263,6 +265,7 @@ impl<'a> ViewGen<'a> {
             "img" | "image" => self.emit_image(el),
             "input" => self.emit_input(el),
             "svg" => self.emit_svg(el),
+            "path" => self.emit_path(el),
             "scroll" => self.emit_scroll(el),
             "canvas" => self.emit_canvas(el),
             "widget" => self.emit_widget_ref(el),
@@ -643,6 +646,7 @@ mod tests {
             prop_fields: fields.iter().map(|s| s.to_string()).collect(),
             has_slot,
             color_fields: Vec::new(),
+            optional_fields: Vec::new(),
         }
     }
 
@@ -807,16 +811,21 @@ mod tests {
         );
     }
 
-    // A reactive `for` without a `key` clause is a compile_error (reconciliation needs identity).
+    // A reactive `for` without a `key` clause reconciles by position instead of erroring (no per-item
+    // identity, but append/truncate reuse the surviving nodes cheaply).
     #[test]
-    fn reactive_for_without_key_errors() {
+    fn reactive_for_without_key_uses_positional_reconciliation() {
         let src = "[view]\ncol\n    for n in $items\n        text \"x\"\n";
         let code = crate::transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("compile_error!") && code.contains("key"),
-            "a keyless reactive for should emit a compile_error:\n{code}"
+            code.contains("ReactiveList::positional("),
+            "a keyless reactive for should reconcile by position:\n{code}"
+        );
+        assert!(
+            !code.contains("compile_error!"),
+            "a keyless reactive for must compile, not error:\n{code}"
         );
     }
 

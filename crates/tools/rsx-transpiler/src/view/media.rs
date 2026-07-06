@@ -2,7 +2,7 @@
 
 use rsx_parser::{Attr, Element};
 
-use super::signals::rust_str;
+use super::signals::{rust_str, wrap_signal_clones};
 use super::{ChildEmit, ViewGen, expr_marker};
 
 /// Parses the shared `fit:` attribute (CSS `object-fit`) for `img`/`svg` into a reactive `ObjectFit` closure. Absent or unrecognized values default to `Contain` (preserve aspect ratio, letterbox), matching the widget defaults.
@@ -104,19 +104,7 @@ impl ViewGen<'_> {
             MediaKind::Svg,
         );
 
-        let tint = el.attributes.iter().find(|a| a.key == "tint").map(|a| {
-            if !a.is_quoted && !a.value.trim().is_empty() {
-                let v = a.value.trim();
-                let lead = a.value.len() - a.value.trim_start().len();
-                format!("{}{v}", expr_marker(a.value_start + lead, v.len()))
-            } else {
-                a.value.clone()
-            }
-        });
-        let tint_fn = match tint {
-            Some(expr) => format!("move || Some({expr})"),
-            None => "|| None".to_string(),
-        };
+        let tint_fn = self.svg_tint_closure(el.attributes.iter().find(|a| a.key == "tint"));
 
         let fit = fit_closure(&el.attributes);
 
@@ -136,6 +124,28 @@ impl ViewGen<'_> {
         );
 
         ChildEmit::Simple { name: var, code }
+    }
+
+    /// Resolves `tint:` into a `move || Option<Color>` closure. A bare `$ident` is a reactive signal read: it shares `color_expr`'s `$ident -> ident.get()` resolution (so it stays consistent with `fill`/`stroke`) and the signal is cloned into the closure via `wrap_signal_clones`, mirroring `box fill:$sig`. Any other value keeps the pre-existing verbatim-Rust-expression passthrough (with its `expr_marker` span) since `tint` has always accepted arbitrary color expressions beyond what `color_expr` understands, e.g. a user-defined `theme().primary` call — routing those through `color_expr` would misparse them.
+    fn svg_tint_closure(&self, tint_attr: Option<&Attr>) -> String {
+        let Some(a) = tint_attr else {
+            return "|| None".to_string();
+        };
+        let trimmed = a.value.trim();
+        if trimmed.starts_with('$') {
+            let expr = self.color_expr(trimmed);
+            return wrap_signal_clones(&[trimmed], format!("move || Some({expr})"));
+        }
+        let expr = if !a.is_quoted && !trimmed.is_empty() {
+            let lead = a.value.len() - a.value.trim_start().len();
+            format!(
+                "{}{trimmed}",
+                expr_marker(a.value_start + lead, trimmed.len())
+            )
+        } else {
+            a.value.clone()
+        };
+        format!("move || Some({expr})")
     }
 
     /// Resolves a media widget's `src` attribute into `(setup, data_fn)` fragments that slot into its construction block.

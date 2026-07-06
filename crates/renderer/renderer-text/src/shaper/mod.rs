@@ -74,6 +74,12 @@ pub struct TextShaper {
     font_metrics_cache: Option<renderer_core::FontMetrics>,
 }
 
+/// The buffer line height in pixels for `style`: `line_height` (a multiple of font size) when set, else
+/// the natural `LINE_HEIGHT_FACTOR`. Shared by shaping and measuring so both reserve the same vertical space.
+pub(crate) fn effective_line_height(style: &TextStyle) -> f32 {
+    style.font_size * style.line_height.unwrap_or(LINE_HEIGHT_FACTOR)
+}
+
 fn cosmic_align(align: TextAlign) -> Option<Align> {
     match align {
         // Start keeps cosmic-text's default (left in LTR), so no explicit per-line align is set.
@@ -86,16 +92,20 @@ fn cosmic_align(align: TextAlign) -> Option<Align> {
 
 fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &TextStyle) -> Buffer {
     let font_size = style.font_size;
-    let metrics = Metrics::new(font_size, font_size * LINE_HEIGHT_FACTOR);
+    let metrics = Metrics::new(font_size, effective_line_height(style));
     let mut buffer = Buffer::new(font_system, metrics);
     buffer.set_size(Some(rect.width), Some(rect.height));
-    let attrs = Attrs::new()
+    let mut attrs = Attrs::new()
         .weight(Weight(style.weight))
         .style(if style.italic {
             Style::Italic
         } else {
             Style::Normal
         });
+    // Only set letter spacing when non-default so unspaced text keeps cosmic-text's exact default shaping (and the byte-golden).
+    if style.letter_spacing != 0.0 {
+        attrs = attrs.letter_spacing(style.letter_spacing);
+    }
     buffer.set_text(text, &attrs, Shaping::Advanced, None);
     // Alignment shifts glyph x within the line box; applied before shaping so positions bake it in.
     if let Some(a) = cosmic_align(style.align) {

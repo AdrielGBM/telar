@@ -135,12 +135,15 @@ pub struct IfBlock {
 
 /// A `for ... in ...` loop block in the view. A `$`-prefixed `iterable` marks a reactive list (re-run +
 /// keyed reconciliation); a plain iterable is a one-time construction loop. `key_expr` is the optional
-/// `key <expr>` clause giving each item a stable identity for reconciliation.
+/// `key <expr>` clause giving each item a stable identity for reconciliation; without it, a reactive list
+/// reconciles by position instead. `gap_expr` is the optional trailing `gap:<expr>` clause (space between
+/// reconciled items), reactive-list only.
 #[derive(Debug, Clone)]
 pub struct ForBlock {
     pub pattern: String,
     pub iterable: String,
     pub key_expr: Option<String>,
+    pub gap_expr: Option<String>,
     pub body: Vec<ViewNode>,
     /// 1-based `.rsx` line of the `for` header, used to map generated code back to source.
     pub line: usize,

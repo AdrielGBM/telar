@@ -297,6 +297,38 @@ col @card
         assert_eq!(for_block.pattern, "(i, item)");
         assert_eq!(for_block.iterable, "items.iter().enumerate()");
         assert_eq!(for_block.body.len(), 1);
+        assert_eq!(for_block.key_expr, None);
+        assert_eq!(for_block.gap_expr, None);
+    }
+
+    #[test]
+    fn parses_reactive_for_key_and_gap_clauses() {
+        let src = "[logic]\n[view]\ncol\n    for item in $items key item.id gap:8\n        text \"{item}\"\n";
+        let doc = parse(src).unwrap();
+        let ViewNode::Element(col) = &doc.view.nodes[0] else {
+            panic!();
+        };
+        let ViewNode::ForBlock(for_block) = &col.children[0] else {
+            panic!("expected for block");
+        };
+        assert_eq!(for_block.iterable, "$items");
+        assert_eq!(for_block.key_expr.as_deref(), Some("item.id"));
+        assert_eq!(for_block.gap_expr.as_deref(), Some("8"));
+    }
+
+    #[test]
+    fn parses_reactive_for_with_gap_but_no_key() {
+        let src = "[logic]\n[view]\ncol\n    for item in $items gap:8\n        text \"{item}\"\n";
+        let doc = parse(src).unwrap();
+        let ViewNode::Element(col) = &doc.view.nodes[0] else {
+            panic!();
+        };
+        let ViewNode::ForBlock(for_block) = &col.children[0] else {
+            panic!("expected for block");
+        };
+        assert_eq!(for_block.iterable, "$items");
+        assert_eq!(for_block.key_expr, None);
+        assert_eq!(for_block.gap_expr.as_deref(), Some("8"));
     }
 
     #[test]

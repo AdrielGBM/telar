@@ -215,6 +215,14 @@ col gap:20
             widget "result"
         code_line code:"PathData::new().move_to(p).cubic_to(a, b, c)   >   Path::static_data(d, style)"
     col gap:8
+        text "Declarative paths in [view]" size:13 color:ink
+        card
+            row gap:28 align:center
+                path d:"M0,0 L100,0 L50,80 Z" fill:primary stroke:ink stroke_width:2 width:100 height:80
+                path d:"M6,42 L34,70 L74,14" stroke:success stroke_width:7 width:80 height:80
+                path d:"M40,2 L50,30 L80,30 L56,48 L64,78 L40,60 L16,78 L24,48 L0,30 L30,30 Z" fill:warning stroke:ink stroke_width:1 width:80 height:80
+        code_line code:"path d:\"M0,0 L100,0 L50,80 Z\" fill:primary stroke:ink stroke_width:2 width:100 height:80"
+    col gap:8
         text "The PathData API" size:13 color:ink
         col gap:6
             prop_row name:"move_to / line_to" values:"Point" about:"Start a subpath, add a straight segment."

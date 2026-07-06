@@ -1,6 +1,6 @@
 use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
-use super::{LINE_HEIGHT_FACTOR, make_buffer};
+use super::{effective_line_height, make_buffer};
 use cosmic_text::{CacheKey, SwashContent};
 use geometry_core::Rect;
 use renderer_core::TextStyle;
@@ -220,7 +220,7 @@ impl TextShaper {
 
         let mut width: f32 = 0.0;
         let mut height: f32 = 0.0;
-        let line_height = style.font_size * LINE_HEIGHT_FACTOR;
+        let line_height = effective_line_height(style);
 
         for run in buffer.layout_runs() {
             height = (run.line_y + line_height) as f32;

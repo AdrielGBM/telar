@@ -26,7 +26,16 @@ impl ViewGen<'_> {
         for a in &el.attributes {
             if matches!(
                 a.key.as_str(),
-                "size" | "color" | "weight" | "italic" | "align" | "lines" | "ellipsis" | "height"
+                "size"
+                    | "color"
+                    | "weight"
+                    | "italic"
+                    | "align"
+                    | "lines"
+                    | "ellipsis"
+                    | "height"
+                    | "line_height"
+                    | "letter_spacing"
             ) {
                 continue;
             }
@@ -193,6 +202,20 @@ impl ViewGen<'_> {
             if v.is_empty() || v == "true" {
                 modifiers.push_str(".with_ellipsis(true)");
             }
+        }
+        if let Some(lh) = attrs
+            .iter()
+            .find(|a| a.key == "line_height")
+            .and_then(|a| a.value.trim().parse::<f32>().ok())
+        {
+            modifiers.push_str(&format!(".with_line_height({})", format_f32(lh)));
+        }
+        if let Some(ls) = attrs
+            .iter()
+            .find(|a| a.key == "letter_spacing")
+            .and_then(|a| a.value.trim().parse::<f32>().ok())
+        {
+            modifiers.push_str(&format!(".with_letter_spacing({})", format_f32(ls)));
         }
 
         let closure = format!("move || TextStyle::new({size}, {color}){modifiers}");

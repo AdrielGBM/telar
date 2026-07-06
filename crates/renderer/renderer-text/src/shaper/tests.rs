@@ -29,6 +29,40 @@ fn line_layout_is_scale_independent() {
     );
 }
 
+// A larger line_height must measure to a taller box so multi-line text reserves the extra vertical space. Guarded on a real measured height so a font-less CI machine can't turn a vacuous 0==0 into a false pass.
+#[test]
+fn larger_line_height_increases_measured_height() {
+    let mut sh = TextShaper::new();
+    let text = "Line height affects the reserved vertical space";
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let (_, h_natural) = sh.measure_text(text, 120.0, &base);
+    if h_natural <= 0.0 {
+        return;
+    }
+    let (_, h_tall) = sh.measure_text(text, 120.0, &base.with_line_height(2.5));
+    assert!(
+        h_tall > h_natural,
+        "a larger line_height should increase measured height: natural={h_natural} tall={h_tall}"
+    );
+}
+
+// Default spacing keeps the exact packed style bits (so existing keys and the byte-golden are untouched), while any non-default line_height or letter_spacing yields distinct bits so cached measures/rasters aren't reused across spacing. Pure bit math: font-independent.
+#[test]
+fn text_style_bits_default_unchanged_and_spacing_perturbs() {
+    let base = TextStyle::new(16.0, Color::BLACK);
+    // The packed layout for a plain 400-weight style is exactly the weight value.
+    assert_eq!(text_style_bits(&base), 400);
+    let bits_default = text_style_bits(&base);
+    let bits_lh = text_style_bits(&base.with_line_height(1.5));
+    let bits_ls = text_style_bits(&base.with_letter_spacing(2.0));
+    assert_ne!(bits_lh, bits_default, "line_height must perturb the bits");
+    assert_ne!(
+        bits_ls, bits_default,
+        "letter_spacing must perturb the bits"
+    );
+    assert_ne!(bits_lh, bits_ls, "the two axes must not alias each other");
+}
+
 #[test]
 fn text_shaper_new_does_not_panic() {
     let _ = TextShaper::new();

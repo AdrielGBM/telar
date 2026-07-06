@@ -13,7 +13,67 @@ use lyon::tessellation::{
 use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 use wgpu::Device;
 
-use super::encode_fill_style;
+// Paths encode the core's full 8-stop gradient (rect/text still use the shared 4-stop encode_fill_style), so this is a dedicated encoder rather than a shared one.
+struct EncodedFill8 {
+    fill_type: u32,
+    fill_color: [f32; 4],
+    grad_p0: [f32; 2],
+    grad_p1: [f32; 2],
+    grad_radius: f32,
+    grad_stop_count: u32,
+    grad_positions: [f32; 8],
+    grad_colors: [[f32; 4]; 8],
+}
+
+fn encode_fill_style_8(fill: &renderer_core::Paint, matrix: [f32; 6]) -> EncodedFill8 {
+    let ap = |x: f32, y: f32| -> [f32; 2] {
+        let [a, b, c, d, e, f] = matrix;
+        [a * x + c * y + e, b * x + d * y + f]
+    };
+    match fill {
+        renderer_core::Paint::Solid(c) => EncodedFill8 {
+            fill_type: 0,
+            fill_color: c.to_array(),
+            grad_p0: [0.0; 2],
+            grad_p1: [0.0; 2],
+            grad_radius: 0.0,
+            grad_stop_count: 0,
+            grad_positions: [0.0; 8],
+            grad_colors: [[0.0; 4]; 8],
+        },
+        renderer_core::Paint::Gradient(g) => {
+            let mut positions = [0.0f32; 8];
+            let mut colors = [[0.0f32; 4]; 8];
+            for (i, s) in g.stops.active().iter().enumerate() {
+                positions[i] = s.position;
+                colors[i] = s.color.to_array();
+            }
+            let stop_count = g.stops.active().len() as u32;
+            match g.kind {
+                renderer_core::GradientKind::Linear { start, end } => EncodedFill8 {
+                    fill_type: 1,
+                    fill_color: [0.0; 4],
+                    grad_p0: ap(start.x, start.y),
+                    grad_p1: ap(end.x, end.y),
+                    grad_radius: 0.0,
+                    grad_stop_count: stop_count,
+                    grad_positions: positions,
+                    grad_colors: colors,
+                },
+                renderer_core::GradientKind::Radial { center, radius } => EncodedFill8 {
+                    fill_type: 2,
+                    fill_color: [0.0; 4],
+                    grad_p0: ap(center.x, center.y),
+                    grad_p1: [0.0; 2],
+                    grad_radius: radius,
+                    grad_stop_count: stop_count,
+                    grad_positions: positions,
+                    grad_colors: colors,
+                },
+            }
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -26,13 +86,13 @@ pub(crate) struct PathFillData {
     pub grad_radius: f32,
     pub grad_stop_count: u32,
     pub _pad2: [f32; 2],
-    pub grad_positions: [f32; 4],
-    pub grad_colors: [[f32; 4]; 4],
+    pub grad_positions: [f32; 8],
+    pub grad_colors: [[f32; 4]; 8],
 }
 
 impl PathFillData {
     pub(crate) fn from_fill_style(fill: renderer_core::Paint) -> Self {
-        let enc = encode_fill_style(&fill, renderer_core::IDENTITY_MATRIX);
+        let enc = encode_fill_style_8(&fill, renderer_core::IDENTITY_MATRIX);
         Self {
             fill_type: enc.fill_type,
             _pad: [0; 3],

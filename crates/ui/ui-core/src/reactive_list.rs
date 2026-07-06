@@ -31,9 +31,11 @@ struct ListState {
     keys: Vec<u64>,
 }
 
-/// A keyed reactive list: `for item in $items key id` in `.rsx`. Re-runs its source reactively and
-/// reconciles the item widgets — reused keys keep their node/widget, new keys are built, gone keys are
-/// disposed, and the layout children are reordered — instead of rebuilding the whole block on every change.
+/// A reactive list: `for item in $items key id` (or, keyless, `for item in $items`) in `.rsx`. Re-runs its
+/// source reactively and reconciles the item widgets — reused keys/positions keep their node/widget, new
+/// ones are built, gone ones are disposed, and the layout children are reordered — instead of rebuilding the
+/// whole block on every change. `new`/`with_gap` reconcile by key (identity-stable); `positional`/
+/// `positional_with_gap` reconcile by index (no `key` clause needed, cheap append/truncate).
 pub struct ReactiveList {
     node: NodeId,
     rect: RwSignal<Rect>,
@@ -61,7 +63,83 @@ impl ReactiveList {
         K: Fn(&Item) -> Key + 'static,
         B: Fn(&mut WidgetCtx, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        let node = new_container(ctx, LayoutStyle::new().flex_column(), &[])?;
+        Self::build(ctx, source, build, 0.0, move |item: &Item, _idx: usize| {
+            hash_key(&key(item))
+        })
+    }
+
+    /// Same as `new`, but with a `gap` (px) laid out between item containers — `for … key … gap:N` in `.rsx`.
+    pub fn with_gap<Item, Key, S, K, B>(
+        ctx: &mut WidgetCtx,
+        source: S,
+        key: K,
+        build: B,
+        gap: f32,
+    ) -> Result<Self, LayoutError>
+    where
+        Key: Hash + 'static,
+        Item: 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        K: Fn(&Item) -> Key + 'static,
+        B: Fn(&mut WidgetCtx, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    {
+        Self::build(ctx, source, build, gap, move |item: &Item, _idx: usize| {
+            hash_key(&key(item))
+        })
+    }
+
+    /// A keyless reactive list: `for item in $items` with no `key` clause. Reconciles by POSITION — the
+    /// item at index `i` always reuses the node previously at index `i`, so an append/truncate reuses every
+    /// surviving node cheaply, but a reorder rebuilds rather than moving nodes (no per-item identity without
+    /// a key).
+    pub fn positional<Item, S, B>(
+        ctx: &mut WidgetCtx,
+        source: S,
+        build: B,
+    ) -> Result<Self, LayoutError>
+    where
+        Item: 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        B: Fn(&mut WidgetCtx, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    {
+        Self::build(ctx, source, build, 0.0, |_item: &Item, idx: usize| {
+            idx as u64
+        })
+    }
+
+    /// `positional` with an item gap — `for item in $items gap:N` (no `key`).
+    pub fn positional_with_gap<Item, S, B>(
+        ctx: &mut WidgetCtx,
+        source: S,
+        build: B,
+        gap: f32,
+    ) -> Result<Self, LayoutError>
+    where
+        Item: 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        B: Fn(&mut WidgetCtx, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    {
+        Self::build(ctx, source, build, gap, |_item: &Item, idx: usize| {
+            idx as u64
+        })
+    }
+
+    /// Shared constructor: `keyer` erases both reconciliation modes (hashed key, or plain index) to a
+    /// `u64` so `reconcile` doesn't need to know which mode produced it.
+    fn build<Item, S, B, KeyFn>(
+        ctx: &mut WidgetCtx,
+        source: S,
+        build: B,
+        gap: f32,
+        keyer: KeyFn,
+    ) -> Result<Self, LayoutError>
+    where
+        Item: 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        B: Fn(&mut WidgetCtx, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+        KeyFn: Fn(&Item, usize) -> u64 + 'static,
+    {
+        let node = new_container(ctx, LayoutStyle::new().flex_column().gap(gap), &[])?;
         let rect = track_layout(ctx, node).expect("list container is registered");
         let state = Rc::new(RefCell::new(ListState {
             node,
@@ -75,7 +153,7 @@ impl ReactiveList {
         // Runs once now (builds the initial list) and again on every change to a signal `source` reads.
         let _effect = effect(move || {
             let items = source();
-            reconcile(&eff_state, items, &key, &build);
+            reconcile(&eff_state, items, &keyer, &build);
             eff_version.update(|v| *v = v.wrapping_add(1));
         });
 
@@ -89,10 +167,13 @@ impl ReactiveList {
     }
 }
 
-fn reconcile<Item, Key, K, B>(state: &Rc<RefCell<ListState>>, items: Vec<Item>, key: &K, build: &B)
-where
-    Key: Hash,
-    K: Fn(&Item) -> Key,
+fn reconcile<Item, KeyFn, B>(
+    state: &Rc<RefCell<ListState>>,
+    items: Vec<Item>,
+    keyer: &KeyFn,
+    build: &B,
+) where
+    KeyFn: Fn(&Item, usize) -> u64,
     B: Fn(&mut WidgetCtx, Item) -> Result<Box<dyn LayoutItem>, LayoutError>,
 {
     let mut st = state.borrow_mut();
@@ -111,8 +192,8 @@ where
     let mut keys: Vec<u64> = Vec::with_capacity(items.len());
     let mut nodes: Vec<NodeId> = Vec::with_capacity(items.len());
 
-    for item in items {
-        let k = hash_key(&key(&item));
+    for (idx, item) in items.into_iter().enumerate() {
+        let k = keyer(&item, idx);
         let child = match old.remove(&k) {
             Some(existing) => existing,
             None => make_child(build(&mut ctx, item).expect("reactive list item build")),
@@ -276,5 +357,70 @@ mod tests {
         assert_eq!(st.children.len(), 3);
         let v2: Vec<NodeId> = st.children.iter().map(|c| c.node()).collect();
         assert_eq!(&v2[..2], &v1[..], "existing items keep their nodes");
+    }
+
+    // `with_gap` lays out the parent container's flex-column gap, so item N+1 sits `item_height + gap`
+    // below item N instead of flush.
+    #[test]
+    fn with_gap_spaces_items_in_layout() {
+        use crate::context::compute_layout;
+        use layout_core::AvailableSpace;
+
+        let mut ctx = WidgetCtx::new();
+        let items = signal(vec![1i32, 2]);
+        let src = items.clone();
+        let list = ReactiveList::with_gap(
+            &mut ctx,
+            move || src.get(),
+            |n: &i32| *n,
+            |c, _| leaf(c),
+            8.0,
+        )
+        .unwrap();
+        let list_node = list.layout_node();
+        compute_layout(
+            &mut ctx,
+            list_node,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+
+        let st = list.state.borrow();
+        let y0 = track_layout(&ctx, st.children[0].node()).unwrap().get().y;
+        let y1 = track_layout(&ctx, st.children[1].node()).unwrap().get().y;
+        assert_eq!(
+            y1 - y0,
+            18.0,
+            "each leaf is 10px tall; an 8px gap pushes the second item to 18px, not flush at 10px"
+        );
+    }
+
+    // A keyless reactive list (`for item in $items`, no `key` clause) reconciles by position: the item
+    // previously at index 0/1 keeps its node when a third item is appended past the end.
+    #[test]
+    fn positional_reuses_nodes_on_append() {
+        let mut ctx = WidgetCtx::new();
+        let items = signal(vec![1, 2]);
+        let src = items.clone();
+        let list = ReactiveList::positional(&mut ctx, move || src.get(), |c, _| leaf(c)).unwrap();
+        let v1: Vec<NodeId> = list
+            .state
+            .borrow()
+            .children
+            .iter()
+            .map(|c| c.node())
+            .collect();
+
+        items.set(vec![1, 2, 3]);
+
+        let st = list.state.borrow();
+        assert_eq!(st.children.len(), 3);
+        let v2: Vec<NodeId> = st.children.iter().map(|c| c.node()).collect();
+        assert_eq!(
+            &v2[..2],
+            &v1[..],
+            "the first two positions keep their nodes"
+        );
     }
 }

@@ -88,6 +88,8 @@ impl Scale for TextStyle {
             font_size: self.font_size * sf,
             paint: self.paint.scale(sf),
             shadow: self.shadow.map(|s| s.scale(sf)),
+            // letter_spacing is a pixel advance, so it scales with font_size; line_height is a unitless multiple and rides along via `..self`.
+            letter_spacing: self.letter_spacing * sf,
             ..self
         }
     }

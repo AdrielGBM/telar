@@ -78,8 +78,11 @@ impl_leaf_widget!(Svg);
 // Gated on `dynamic-svg`: these tests build `SvgData` with `from_str`, which is unavailable under bare `svg`.
 #[cfg(all(test, feature = "dynamic-svg"))]
 mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
     use layout_core::AvailableSpace;
-    use renderer_core::DrawCommand;
+    use renderer_core::{DrawCommand, Paint};
 
     use super::*;
     use crate::context::{WidgetCtx, compute_layout, new_container};
@@ -195,5 +198,60 @@ mod tests {
             "expected at least one Path primitive among {} children",
             inner.len()
         );
+    }
+
+    // `tint_fn` must be invoked fresh on every `view()` (not cached from construction), so a `$signal`
+    // tint (the reactive path the transpiler now wires for `svg tint:$accent`) recolors live.
+    #[test]
+    fn tint_closure_is_re_read_each_view_and_recolors_the_path() {
+        let mut ctx = WidgetCtx::new();
+        let data = make_svg_data(10.0, 10.0);
+        let tint = Rc::new(Cell::new(Color::GREEN));
+        let tint_read = tint.clone();
+        let svg = Svg::new(
+            &mut ctx,
+            LayoutStyle::new().width(20.0).height(20.0),
+            move || Arc::clone(&data),
+            move || Some(tint_read.get()),
+            || ObjectFit::Contain,
+        )
+        .unwrap();
+        let root = new_container(
+            &mut ctx,
+            LayoutStyle::new().width(20.0).height(20.0),
+            &[svg.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(20.0),
+            AvailableSpace::Definite(20.0),
+        )
+        .unwrap();
+
+        assert_eq!(path_fill(&svg.view()), Paint::Solid(Color::GREEN));
+        tint.set(Color::BLUE);
+        assert_eq!(
+            path_fill(&svg.view()),
+            Paint::Solid(Color::BLUE),
+            "tint closure must be re-read on the second view(), not cached from construction"
+        );
+    }
+
+    fn path_fill(view: &RenderNode) -> Paint {
+        let RenderNode::Transform { children, .. } = view else {
+            panic!("expected Transform")
+        };
+        let RenderNode::Group { children: inner } = &children[0] else {
+            panic!("expected Group inside Transform")
+        };
+        inner
+            .iter()
+            .find_map(|n| match n {
+                RenderNode::Primitive(DrawCommand::Path { style, .. }) => style.fill,
+                _ => None,
+            })
+            .expect("expected a filled Path primitive")
     }
 }
