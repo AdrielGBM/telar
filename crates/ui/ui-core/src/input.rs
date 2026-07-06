@@ -4,7 +4,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{Color, Paint, RectStyle, ShapeStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::focus::{self, FocusId};
@@ -27,6 +27,9 @@ pub struct Input {
     id: FocusId,
     leaf: LayoutLeaf,
     on_submit: Option<Box<dyn Fn()>>,
+    // Hint shown (muted) while the value is empty. Rendered in place of the text so the field stays a live,
+    // tappable `Input` even when empty — a separate placeholder widget swapped in would not take focus.
+    placeholder: String,
 }
 
 impl Input {
@@ -48,12 +51,20 @@ impl Input {
             id,
             leaf,
             on_submit: None,
+            placeholder: String::new(),
         })
     }
 
     /// Runs when Enter is pressed while focused (e.g. submit a form / run a search).
     pub fn on_submit(mut self, f: impl Fn() + 'static) -> Self {
         self.on_submit = Some(Box::new(f));
+        self
+    }
+
+    /// A muted hint shown while the value is empty (the field stays tappable/focusable, unlike a swapped-in
+    /// placeholder widget).
+    pub fn placeholder(mut self, p: impl Into<String>) -> Self {
+        self.placeholder = p.into();
         self
     }
 
@@ -142,7 +153,19 @@ impl Component for Input {
             width: r.width,
             height: r.height,
         };
-        let text_node = RenderNode::text(text.clone(), full, style);
+        // Empty value → draw the muted placeholder in the text's place (the field itself stays live: the
+        // caret and hit-test still work, so it's tappable/typable from empty).
+        let text_node = if text.is_empty() && !self.placeholder.is_empty() {
+            let muted = match style.paint {
+                Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * 0.5)),
+                _ => Paint::Solid(Color::rgba(0.5, 0.5, 0.55, 0.5)),
+            };
+            let mut ph_style = style;
+            ph_style.paint = muted;
+            RenderNode::text(self.placeholder.clone(), full, ph_style)
+        } else {
+            RenderNode::text(text.clone(), full, style)
+        };
 
         // The caret is drawn only while focused; reading `is_focused` subscribes this view to focus moves.
         if focus::is_focused(self.id) {

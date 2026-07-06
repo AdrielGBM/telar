@@ -30,6 +30,12 @@ pub struct ComponentSig {
     /// closure (re-read each frame) instead of a resolved `Color`, so a theme token or `$signal` colour
     /// re-colours live. Empty for scanned `.rsx` components; set only for the built-in component catalogue.
     pub color_fields: Vec<String>,
+    /// Prop fields the callee declares `Option<...>` (so `Default` yields `None`): the caller wraps a
+    /// provided value in `Some(...)` and lets an omitted one fall to `..Default::default()`. Lets a widget
+    /// expose a `RwSignal<T>` or a required `Box<dyn Fn(..)>` field — neither of which is `Default` — while
+    /// still deriving `Default` for its other props. Scanned from a `.rsx`'s `Option<...>` fields; listed
+    /// explicitly for the built-in component catalogue.
+    pub optional_fields: Vec<String>,
 }
 
 /// Signatures for the built-in component catalogue (`ui-components`, opt-in via the `components` feature). These
@@ -37,12 +43,15 @@ pub struct ComponentSig {
 /// [`ComponentRegistry`] (and backstops call-site lookups) so calls emit the right arity and reactive
 /// colour props. Keep in sync with `crates/ui/ui-components`.
 pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
-    let s = |fields: &[&str], has_slot: bool, color: &[&str]| ComponentSig {
+    // `optional` names the subset of `fields` the callee declares `Option<...>`; the caller wraps their
+    // values in `Some(...)` and defaults an omitted one to `None`.
+    let s = |fields: &[&str], has_slot: bool, color: &[&str], optional: &[&str]| ComponentSig {
         has_props: true,
         props_default: true,
         prop_fields: fields.iter().map(|f| f.to_string()).collect(),
         has_slot,
         color_fields: color.iter().map(|f| f.to_string()).collect(),
+        optional_fields: optional.iter().map(|f| f.to_string()).collect(),
     };
     vec![
         (
@@ -51,10 +60,103 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 &["label", "fill", "outline", "ghost", "on_press"],
                 false,
                 &["fill", "outline"],
+                &[],
             ),
         ),
-        ("heading", s(&["text"], false, &[])),
-        ("section", s(&["title"], true, &[])),
+        ("heading", s(&["text"], false, &[], &[])),
+        ("section", s(&["title"], true, &[], &[])),
+        // Form controls (built on box/text/on_press/on_drag/input). A bound `RwSignal` field is `Option`
+        // (so `Props` derives `Default`): `None` = uncontrolled, `Some` = caller-bound.
+        (
+            "checkbox",
+            s(
+                &["checked", "label", "color", "on_toggle"],
+                false,
+                &["color"],
+                &["checked", "on_toggle"],
+            ),
+        ),
+        (
+            "toggle",
+            s(
+                &["checked", "label", "color", "on_toggle"],
+                false,
+                &["color"],
+                &["checked", "on_toggle"],
+            ),
+        ),
+        (
+            "radio",
+            s(
+                &["selected", "value", "label", "color", "on_select"],
+                false,
+                &["color"],
+                &["selected", "on_select"],
+            ),
+        ),
+        (
+            "slider",
+            s(
+                &["value", "color", "track_color", "width", "on_change"],
+                false,
+                &["color", "track_color"],
+                &["value", "on_change"],
+            ),
+        ),
+        (
+            "text_field",
+            s(
+                &[
+                    "value",
+                    "placeholder",
+                    "label",
+                    "width",
+                    "color",
+                    "on_submit",
+                ],
+                false,
+                &["color"],
+                &["value", "on_submit"],
+            ),
+        ),
+        // Overlay-backed (built on the `overlay` portal + anchor).
+        (
+            "select",
+            s(
+                &["selected", "options", "color", "on_change"],
+                false,
+                &["color"],
+                &["selected", "on_change"],
+            ),
+        ),
+        (
+            "menu",
+            s(
+                &["label", "items", "on_select", "color"],
+                false,
+                &["color"],
+                &["on_select"],
+            ),
+        ),
+        (
+            "modal",
+            s(
+                &["open", "title", "on_close", "color"],
+                true,
+                &["color"],
+                &["open", "on_close"],
+            ),
+        ),
+        (
+            "drawer",
+            s(
+                &["open", "side", "width", "on_close", "color"],
+                true,
+                &["color"],
+                &["open", "on_close"],
+            ),
+        ),
+        ("tooltip", s(&["text", "color"], true, &["color"], &[])),
     ]
 }
 
@@ -68,7 +170,8 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
     let Ok(doc) = rsx_parser::parse(source) else {
         return ComponentSig::default();
     };
-    let (has_props, props_default, prop_fields) = scan_props_struct(&doc.logic.source);
+    let (has_props, props_default, prop_fields, optional_fields) =
+        scan_props_struct(&doc.logic.source);
     ComponentSig {
         has_props,
         props_default,
@@ -76,14 +179,16 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
         has_slot: view_uses_slot(&doc.view.nodes),
         // Scanned `.rsx` components declare no reactive colour props; only the built-in component catalogue does.
         color_fields: Vec::new(),
+        optional_fields,
     }
 }
 
 /// Scans the logic zone for `struct Props`: returns whether it exists, whether a preceding
-/// `#[derive(...)]` lists `Default` (→ optional props), and the field names.
-fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>) {
+/// `#[derive(...)]` lists `Default` (→ optional props), the field names, and the subset of those whose
+/// type is `Option<...>` (→ the caller `Some(...)`-wraps their values).
+fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>, Vec<String>) {
     let Some(spos) = logic.find("struct Props") else {
-        return (false, false, Vec::new());
+        return (false, false, Vec::new(), Vec::new());
     };
 
     // A `#[derive(...Default...)]` on the attribute lines immediately above the struct opts it into defaults.
@@ -112,7 +217,7 @@ fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>) {
 
     // Field names live between the struct's first `{` and its matching `}`.
     let Some(open_rel) = logic[spos..].find('{') else {
-        return (true, derives_default, Vec::new());
+        return (true, derives_default, Vec::new(), Vec::new());
     };
     let body_start = spos + open_rel + 1;
     let mut depth = 1i32;
@@ -130,15 +235,22 @@ fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>) {
             _ => {}
         }
     }
-    let fields = logic[body_start..end]
-        .split(',')
-        .filter_map(parse_field_name)
-        .collect();
-    (true, derives_default, fields)
+    let mut fields = Vec::new();
+    let mut optional = Vec::new();
+    for chunk in logic[body_start..end].split(',') {
+        if let Some((name, is_optional)) = parse_field(chunk) {
+            if is_optional {
+                optional.push(name.clone());
+            }
+            fields.push(name);
+        }
+    }
+    (true, derives_default, fields, optional)
 }
 
-/// Extracts the field name from a `[pub] name: Type` struct-field chunk, skipping comment lines.
-fn parse_field_name(chunk: &str) -> Option<String> {
+/// Extracts the field name and whether its type is `Option<...>` from a `[pub] name: Type` struct-field
+/// chunk, skipping comment lines. An `Option<...>` field is `Some(...)`-wrapped at the call-site.
+fn parse_field(chunk: &str) -> Option<(String, bool)> {
     let cleaned = chunk
         .lines()
         .filter(|l| !l.trim_start().starts_with("//"))
@@ -148,8 +260,12 @@ fn parse_field_name(chunk: &str) -> Option<String> {
     let t = t.strip_prefix("pub ").unwrap_or(t).trim_start();
     let colon = t.find(':')?;
     let name = t[..colon].trim();
-    (!name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
-        .then(|| name.to_string())
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    let ty = t[colon + 1..].trim_start();
+    let optional = ty.starts_with("Option<") || ty.starts_with("Option <");
+    Some((name.to_string(), optional))
 }
 
 /// Input to a single transpilation: the parsed document plus the desired component function name (typically derived from the source file stem).

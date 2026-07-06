@@ -1,9 +1,10 @@
 use crate::core::theme::theme;
 use rsx::{
-    AlignItems, App, AvailableSpace, BorderRadius, Button, ButtonStyle, ClippedItem, Color, Component, Container,
-    Event, EventResult, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, NodeVec,
-    Rect, RectStyle, RenderNode, RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text,
-    TextStyle, WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf, set_display, signal,
+    AlignItems, App, AvailableSpace, BorderRadius, ClippedItem, Color, Component, Container, Event,
+    EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
+    NodeVec, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text,
+    TextStyle, WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf, set_display,
+    set_overlay_host, signal,
 };
 
 /// Width of the navigation rail / drawer, in px. Kept in sync with the `width:` on `sidebar.rsx`'s root.
@@ -34,6 +35,11 @@ const SECTIONS: &[(&str, SectionBuild)] = &[
     ("Paths", crate::features_paths),
     ("Transforms", crate::features_transforms),
     ("Buttons", crate::features_buttons),
+    ("Form controls", crate::features_forms),
+    ("Sliders", crate::features_sliders),
+    ("Text fields", crate::features_text_fields),
+    ("Menus & select", crate::features_menus),
+    ("Dialogs & overlays", crate::features_dialogs),
     ("Reactivity", crate::features_reactivity),
     ("Transitions", crate::features_transitions),
     ("Motion", crate::features_motion),
@@ -75,39 +81,64 @@ fn build_content(ctx: &mut WidgetCtx) -> Result<(Box<dyn LayoutItem>, Vec<NodeId
     Ok((Box::new(outer), section_nodes))
 }
 
-/// Flat list-item look for a nav button: transparent (blends with the rail) until hovered, filled when it is the active section.
-fn nav_button_style(active: bool) -> ButtonStyle {
+/// Base paint for a nav item: the active section is filled with the accent; the rest blend into the rail
+/// (its `surface_alt` panel), so an inactive item reads as flat until hovered.
+fn nav_rect(active: bool) -> RectStyle {
     let t = theme();
     let radius = BorderRadius::all(8.0);
-    if active {
-        ButtonStyle {
-            rect: RectStyle::default().with_fill(t.primary).with_radius(radius),
-            rect_hover: RectStyle::default().with_fill(t.primary).with_radius(radius),
-            text: TextStyle::new(13.0, t.on_primary),
-            text_hover: TextStyle::new(13.0, t.on_primary),
-        }
-    } else {
-        ButtonStyle {
-            rect: RectStyle::default().with_fill(t.surface_alt).with_radius(radius),
-            rect_hover: RectStyle::default().with_fill(t.border).with_radius(radius),
-            text: TextStyle::new(13.0, t.ink),
-            text_hover: TextStyle::new(13.0, t.ink),
-        }
-    }
+    let fill = if active { t.primary } else { t.surface_alt };
+    RectStyle::default().with_fill(fill).with_radius(radius)
+}
+
+/// Hover paint for a nav item: the active one keeps the accent; an inactive one lifts to the border tone.
+fn nav_rect_hover(active: bool) -> RectStyle {
+    let t = theme();
+    let radius = BorderRadius::all(8.0);
+    let fill = if active { t.primary } else { t.border };
+    RectStyle::default().with_fill(fill).with_radius(radius)
 }
 
 /// Contents nav: one full-width button per section that sets `selected`; the active one is highlighted.
+/// Built on the kernel primitives — a `StyledContainer` (transparent-blending until hover, filled when
+/// active) with a centred `Text::auto` label and an `on_press` that selects the section.
 fn build_nav(
     ctx: &mut WidgetCtx,
     selected: RwSignal<usize>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut buttons: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(SECTIONS.len());
     for (i, (title, _)) in SECTIONS.iter().enumerate() {
-        let on_style = selected.clone();
-        let on_click = selected.clone();
-        let btn = Button::new(ctx, *title)?
-            .style(move || nav_button_style(on_style.get() == i))
-            .on_click(move || on_click.set(i));
+        let title = *title;
+        let on_label = selected.clone();
+        let label = Text::auto(
+            ctx,
+            move || title.to_string(),
+            LayoutStyle::new(),
+            move || {
+                let t = theme();
+                let color = if on_label.get() == i { t.on_primary } else { t.ink };
+                TextStyle::new(13.0, color)
+            },
+        )?;
+        let on_base = selected.clone();
+        let on_hover = selected.clone();
+        let on_press = selected.clone();
+        // A row: the parent column stretches the item to full width, and `justify_content:center` centres
+        // the measured `Text::auto` label within it (a column would collapse the label's stretched cross axis).
+        let btn = StyledContainer::new(
+            ctx,
+            LayoutStyle::new()
+                .flex_row()
+                .align_items(AlignItems::CENTER)
+                .justify_content(JustifyContent::CENTER)
+                .padding_horizontal(14.0)
+                // Light vertical padding keeps each item near its old height (`Text::auto` already reserves a
+                // full line box), so the tall nav still fits the rail and every section stays reachable.
+                .padding_vertical(3.0),
+            move |_r| nav_rect(on_base.get() == i),
+            vec![Box::new(label)],
+        )?
+        .on_hover_style(move |_r| nav_rect_hover(on_hover.get() == i))
+        .on_press(move || on_press.set(i));
         buttons.push(Box::new(btn));
     }
     let list = Container::new(ctx, LayoutStyle::new().flex_column().gap(3.0), buttons)?;
@@ -147,24 +178,37 @@ fn build_topbar(
     menu_open: RwSignal<bool>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let toggle = menu_open.clone();
-    let burger = Button::with_layout(ctx, "\u{2630}", LayoutStyle::new().width(40.0).height(40.0))?
-        .style(|| {
-            let t = theme();
-            ButtonStyle {
-                rect: RectStyle::default()
-                    .with_fill(t.surface)
-                    .with_radius(BorderRadius::all(8.0)),
-                rect_hover: RectStyle::default()
-                    .with_fill(t.border)
-                    .with_radius(BorderRadius::all(8.0)),
-                text: TextStyle::new(20.0, t.ink),
-                text_hover: TextStyle::new(20.0, t.ink),
-            }
-        })
-        .on_click(move || {
-            let open = toggle.peek();
-            toggle.set(!open);
-        });
+    let glyph = Text::auto(
+        ctx,
+        || "\u{2630}".to_string(),
+        LayoutStyle::new(),
+        || TextStyle::new(20.0, theme().ink),
+    )?;
+    let burger = StyledContainer::new(
+        ctx,
+        // Padding content-sizes the icon to ~40x40; a row keeps the measured glyph from collapsing.
+        LayoutStyle::new()
+            .flex_row()
+            .align_items(AlignItems::CENTER)
+            .justify_content(JustifyContent::CENTER)
+            .padding_horizontal(10.0)
+            .padding_vertical(6.0),
+        |_r| {
+            RectStyle::default()
+                .with_fill(theme().surface)
+                .with_radius(BorderRadius::all(8.0))
+        },
+        vec![Box::new(glyph)],
+    )?
+    .on_hover_style(|_r| {
+        RectStyle::default()
+            .with_fill(theme().border)
+            .with_radius(BorderRadius::all(8.0))
+    })
+    .on_press(move || {
+        let open = toggle.peek();
+        toggle.set(!open);
+    });
     let logo = Text::single_line(
         ctx,
         || "\u{25b2} rsx".to_string(),
@@ -346,6 +390,10 @@ impl ShellPage {
             AvailableSpace::Definite(height),
         )
         .ok();
+        // Pin the window-spanning root as the overlay host: the sidebar/content are computed as their own
+        // parent-less roots below, and auto-detection would otherwise make the last one (the 248px sidebar)
+        // the host — so modals/drawers/menus would portal over the sidebar instead of the viewport.
+        set_overlay_host(self.root);
         // Content measures its height against whatever width the scroll viewport actually got.
         let content_width = self.scroll_area.viewport_rect().width.max(0.0);
         compute_layout(

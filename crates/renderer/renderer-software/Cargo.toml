@@ -27,6 +27,7 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 layout-core.workspace = true
 platform-core.workspace = true
 reactive-core.workspace = true
+ui-components.workspace = true
 ui-core.workspace = true
 ui-tree.workspace = true
 

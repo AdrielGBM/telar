@@ -193,6 +193,61 @@ col @card
     }
 
     #[test]
+    fn optional_prop_wraps_provided_value_and_defaults_when_omitted() {
+        // A widget whose `checked` prop is `Option<RwSignal<bool>>` (Default = None): the scan marks it
+        // optional, the caller wraps a provided `$signal` in `Some(...)`, and an omitted `checked` falls to
+        // `..Default::default()` — the ergonomics a signal/closure field could not get from `#[derive(Default)]`.
+        let widget = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub checked: Option<RwSignal<bool>>,\n    pub label: &'static str,\n}\n[view]\nbox\n";
+        let sig = scan_component_sig(widget);
+        assert_eq!(sig.optional_fields, vec!["checked".to_string()]);
+        assert_eq!(
+            sig.prop_fields,
+            vec!["checked".to_string(), "label".to_string()]
+        );
+
+        let mut reg = ComponentRegistry::new();
+        reg.insert("checkbox".to_string(), sig);
+
+        // Provided: the `$flag` signal is wrapped `Some(flag.clone())`; the omitted `label` defaults.
+        let with = transpile_source_full(
+            "[logic]\nlet flag = signal(false);\n[view]\ncheckbox checked:$flag\n",
+            "demo",
+            None,
+            None,
+            Some(&reg),
+        )
+        .unwrap();
+        assert!(
+            with.rust_code
+                .contains("CheckboxProps { checked: Some(flag.clone()), ..Default::default() }"),
+            "optional signal prop should be Some-wrapped and other fields defaulted:\n{}",
+            with.rust_code
+        );
+
+        // Omitted: no `checked:` field is emitted; `..Default::default()` supplies its `None`.
+        let without = transpile_source_full(
+            "[view]\ncheckbox label:\"Agree\"\n",
+            "demo",
+            None,
+            None,
+            Some(&reg),
+        )
+        .unwrap();
+        assert!(
+            without
+                .rust_code
+                .contains("CheckboxProps { label: \"Agree\", ..Default::default() }"),
+            "an omitted optional prop should rely on Default (None):\n{}",
+            without.rust_code
+        );
+        assert!(
+            !without.rust_code.contains("checked:"),
+            "an omitted optional prop must not be emitted:\n{}",
+            without.rust_code
+        );
+    }
+
+    #[test]
     fn reports_has_props() {
         let with = transpile_source_with_theme(
             "[logic]\npub struct Props {\n    pub title: &'static str,\n}\n[view]\ntext \"{props.title}\"\n",
@@ -484,6 +539,23 @@ col @card
         assert!(
             code.contains(".width(24.0)") && code.contains(".height(24.0)"),
             "missing layout dims:\n{code}"
+        );
+    }
+
+    #[test]
+    fn svg_tint_signal_reads_reactively_and_clones_into_the_closure() {
+        // `tint:$accent` must share `fill`/`stroke`'s `$ident` resolution (via `color_expr`) and clone the signal into the tint closure so the outer binding stays usable elsewhere, matching `box fill:$sig`.
+        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\ncol\n    svg src:props.icon tint:$accent width:24 height:24\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("compile_error!"),
+            "a signal tint must not error:\n{code}"
+        );
+        assert!(
+            code.contains("{ let accent = accent.clone(); move || Some(accent.get()) }"),
+            "tint should reactively read the cloned signal:\n{code}"
         );
     }
 
@@ -876,6 +948,165 @@ col @card
                 && code.contains("does_not_exist.svg")
                 && code.contains("not found"),
             "a missing asset should surface a compile_error:\n{code}"
+        );
+    }
+
+    // `for … key … gap:N` threads the gap through to the `with_gap` constructor as a trailing `f32` arg.
+    #[test]
+    fn reactive_for_key_and_gap_emits_with_gap_constructor() {
+        let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n gap:8\n        text \"x\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("ReactiveList::with_gap("),
+            "a keyed `for … gap:N` should build via with_gap:\n{code}"
+        );
+        assert!(code.contains("|n| *n"), "key closure preserved:\n{code}");
+        assert!(
+            code.contains("(8) as f32,"),
+            "the gap clause is threaded through as the trailing f32 arg:\n{code}"
+        );
+    }
+
+    // A keyless reactive `for` (no `key` clause) compiles by reconciling positionally instead of erroring.
+    #[test]
+    fn reactive_for_without_key_compiles_positionally() {
+        let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items\n        text \"x\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("ReactiveList::positional("),
+            "a keyless reactive for should build via positional:\n{code}"
+        );
+        assert!(
+            !code.contains("compile_error!"),
+            "a keyless reactive for must compile, not error:\n{code}"
+        );
+    }
+
+    // A keyless reactive `for` with a `gap:N` clause builds via `positional_with_gap`.
+    #[test]
+    fn reactive_for_without_key_with_gap_uses_positional_with_gap() {
+        let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items gap:8\n        text \"x\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("ReactiveList::positional_with_gap("),
+            "a keyless `for … gap:N` should build via positional_with_gap:\n{code}"
+        );
+        assert!(
+            code.contains("(8) as f32,"),
+            "the gap clause is threaded through as the trailing f32 arg:\n{code}"
+        );
+    }
+
+    // `line_height:N` and `letter_spacing:N` become the matching TextStyle builder calls.
+    #[test]
+    fn text_line_height_and_letter_spacing() {
+        let src = "[view]\ntext \"Hi\" line_height:1.5 letter_spacing:2\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".with_line_height(1.5)"),
+            "line_height:\n{code}"
+        );
+        assert!(
+            code.contains(".with_letter_spacing(2.0)"),
+            "letter_spacing:\n{code}"
+        );
+    }
+
+    // A declarative `path d:"…"` compiles its SVG path-data into a `PathData` builder chain and draws it
+    // as a `Path` inside a sized `Canvas` (the layout wrapper, since `Path` is not a `LayoutItem`).
+    #[test]
+    fn path_tag_emits_pathdata_builder_and_widget() {
+        let src = "[view]\npath d:\"M0,0 L10,0 Z\" fill:#ff0000 stroke:#000000 stroke_width:2 width:10 height:10\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(10.0, 0.0)).close()"),
+            "d: compiles to a PathData builder chain:\n{code}"
+        );
+        assert!(
+            code.contains("Path::static_data(__path_data.clone(),"),
+            "draws a Path widget from the baked path data:\n{code}"
+        );
+        assert!(
+            code.contains("Canvas::new(ctx,"),
+            "wrapped in a Canvas so it lays out:\n{code}"
+        );
+        assert!(
+            code.contains("fill: Some(Paint::Solid(")
+                && code.contains("stroke: Some(Stroke::new(")
+                && code.contains("Stroke::new(Color::rgba(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0), 2.0)"),
+            "fill/stroke/stroke_width reach the PathStyle:\n{code}"
+        );
+        assert!(
+            code.contains(".width(10") && code.contains(".height(10"),
+            "width/height size the wrapping canvas:\n{code}"
+        );
+    }
+
+    // Relative commands and Bézier curves resolve to absolute `PathData` builder calls at compile time.
+    #[test]
+    fn path_tag_relative_and_curves() {
+        let src = "[view]\npath d:\"m10,10 l10,0 q5,-5 10,0 c1,1 2,2 3,0\" stroke:#111111 width:40 height:40\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".move_to(Point::new(10.0, 10.0)).line_to(Point::new(20.0, 10.0))"),
+            "relative moveto/lineto resolve to absolute:\n{code}"
+        );
+        assert!(
+            code.contains(".quad_to(Point::new(25.0, 5.0), Point::new(30.0, 10.0))"),
+            "relative quad resolves to absolute:\n{code}"
+        );
+        assert!(
+            code.contains(
+                ".cubic_to(Point::new(31.0, 11.0), Point::new(32.0, 12.0), Point::new(33.0, 10.0))"
+            ),
+            "relative cubic resolves to absolute:\n{code}"
+        );
+        // A stroke with no fill leaves the fill None.
+        assert!(
+            code.contains("fill: None"),
+            "no fill attr means PathStyle.fill is None:\n{code}"
+        );
+    }
+
+    // A `$signal` path fill is cloned into the reactive style closure so the outer handle stays usable.
+    #[test]
+    fn path_tag_signal_fill_is_cloned() {
+        let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\npath d:\"M0,0 L10,10 Z\" fill:$c width:10 height:10\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("let c = c.clone();"),
+            "the signal fill is cloned into the closure:\n{code}"
+        );
+        assert!(
+            code.contains("Paint::Solid(c.get())"),
+            "the fill re-reads the signal inside the style closure:\n{code}"
+        );
+    }
+
+    // A malformed `d:` surfaces a compile_error! on the path's line rather than emitting broken code.
+    #[test]
+    fn path_tag_invalid_d_is_compile_error() {
+        let src = "[view]\npath d:\"L10,10\" width:10 height:10\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!"),
+            "a `d` that does not start with a moveto is a compile_error:\n{code}"
         );
     }
 }

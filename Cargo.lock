@@ -3901,6 +3901,7 @@ dependencies = [
  "smallvec",
  "softbuffer",
  "tiny-skia 0.12.0",
+ "ui-components",
  "ui-core",
  "ui-tree",
  "wide",
@@ -5047,6 +5048,9 @@ version = "0.1.0"
 dependencies = [
  "geometry-core",
  "layout-core",
+ "motion-core",
+ "platform-core",
+ "reactive-core",
  "renderer-core",
  "theme-core",
  "ui-core",

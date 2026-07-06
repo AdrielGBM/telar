@@ -80,17 +80,22 @@ pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_
 pub use ui_core::Svg;
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Button, ButtonStyle, Canvas, ClippedItem, Component, ComponentList, Container, EventResult,
-    Image, Input, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path, ReactiveList,
-    Rectangle, RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, WidgetCtx, box_item,
-    box_transform, compute_layout, focus, mark_dirty, new_container, new_leaf, relayout_if_dirty,
-    set_display, track_layout,
+    Canvas, ClippedItem, Component, ComponentList, Container, EventResult, Image, Input,
+    LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle,
+    RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, WidgetCtx, box_item, box_transform,
+    compute_layout, focus, mark_dirty, new_container, new_leaf, relayout_if_dirty, set_display,
+    set_overlay_host, track_layout,
 };
 
 // Opt-in component catalogue. Re-exported at the prelude root so generated component calls resolve them
 // (`button`/`ButtonProps`/…) by bare name through the `use rsx::*` every transpiled file emits.
 #[cfg(feature = "components")]
-pub use ui_components::{ButtonProps, HeadingProps, SectionProps, button, heading, section};
+pub use ui_components::{
+    ButtonProps, CheckboxProps, DrawerProps, HeadingProps, MenuProps, ModalProps, RadioProps,
+    SectionProps, SelectProps, SliderProps, TextFieldProps, ToggleProps, TooltipProps, button,
+    checkbox, drawer, heading, menu, modal, radio, section, select, slider, text_field, toggle,
+    tooltip,
+};
 
 /// Consults this crate's overlay registry and reports whether an overlay consumed the pointer event. The
 /// hot-reload dylib exports this (as `_rsx_hot_dispatch_overlays`) so the host can route modal events into
