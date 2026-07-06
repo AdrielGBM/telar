@@ -1,6 +1,6 @@
 [logic]
+use crate::demo_images::{make_checker, make_gradient, make_radial_alpha};
 use std::sync::Arc;
-use crate::demo_images::{make_gradient, make_checker, make_radial_alpha};
 
 let signups = signal(0i32);
 let spots_left = memo(move || (200 - signups.get()).max(0));
@@ -61,7 +61,7 @@ col @page
                 text "Features" size:14 color:muted
                 text "Gallery" size:14 color:muted
                 text "Pricing" size:14 color:muted
-                btn "Get started" fill:primary on_press:|| $signups.update(|n| *n += 1)
+                button label:"Get started" fill:primary on_press:|| $signups.update(|n| *n += 1)
     box @band fill:surface
         col @wrap
             row gap:48 wrap align:center
@@ -69,8 +69,8 @@ col @page
                     text "Native UIs in Rust, without the boilerplate" size:40 color:dark
                     text "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android." size:18 color:muted
                     row gap:12 wrap
-                        btn "Get started" fill:primary on_press:|| $signups.update(|n| *n += 1)
-                        btn "Read the docs" outline:primary
+                        button label:"Get started" fill:primary on_press:|| $signups.update(|n| *n += 1)
+                        button label:"Read the docs" outline:primary
                     text "{$spots_left} of 200 early-access seats left" size:13 color:accent
                 col grow:1 min_width:320
                     img src:gradient_img width:100% height:320
@@ -129,7 +129,7 @@ col @page
             text "Join the private beta" size:30 color:on_primary
             text "{$spots_left} of 200 seats remaining" size:16 color:on_primary
             row gap:12 align:center wrap
-                btn "Reserve a seat" fill:accent on_press:|| $signups.update(|n| *n += 1)
+                button label:"Reserve a seat" fill:accent on_press:|| $signups.update(|n| *n += 1)
                 text "{$signups} developers reserved" size:14 color:on_primary
     box @footband fill:dark
         row @footwrap

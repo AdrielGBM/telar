@@ -3,21 +3,13 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use rsx_parser::{Attr, Element, ViewNode};
+use rsx_parser::{Attr, Element};
 
 use crate::naming::contains_ident;
 use crate::style::{format_f32, layout_prop_call};
 
 use super::signals::{emit_transition_prelude, signal_idents, wrap_signal_clones};
 use super::{ChildEmit, ViewGen};
-
-// `heading`/`section` styling reproduced inline (the library no longer ships `Heading`/`Section`): a real
-// title — 20px, semibold, colored from the theme's accent (`widget_primary`, the only strong colour the
-// kernel WidgetTheme exposes; there is no app-level "ink" token here) — and an 8px-gap column wrapping the
-// heading above its content.
-const HEADING_FONT_SIZE: &str = "20.0";
-const SECTION_GAP: &str = "8.0";
-const HEADING_STYLE_CLOSURE: &str = "move || { let color = use_widget_theme().map(|t| t.widget_primary()).unwrap_or(Color::rgba(0.1, 0.1, 0.12, 1.0)); TextStyle::new(20.0, color).with_weight(600) }";
 
 impl ViewGen<'_> {
     pub(super) fn emit_text(&mut self, el: &Element) -> ChildEmit {
@@ -78,80 +70,7 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    // A muted section caption: a single-line `Text` whose color reads `widget_muted` from the active theme (falling back to a neutral gray when none is set).
-    pub(super) fn emit_heading(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_variable_name("heading");
-        let pad = self.indent_str();
-        let content = el.content.as_deref().unwrap_or("");
-        let content_fn = self.interpolate_content(content, el.content_start);
-        let clones = self.clone_bindings(&[content], &pad, "    ");
-        let style_closure = HEADING_STYLE_CLOSURE;
-        let code = format!(
-            "{pad}let {var} = {{\n\
-             {clones}\
-             {pad}    Text::new(\n\
-             {pad}        ctx,\n\
-             {pad}        {content_fn},\n\
-             {pad}        LayoutStyle::new().height({HEADING_FONT_SIZE}_f32 * 1.4),\n\
-             {pad}        {style_closure},\n\
-             {pad}    )?\n\
-             {pad}}};"
-        );
-        ChildEmit::Simple { name: var, code }
-    }
-
-    // A titled column: a muted `heading` Text prepended to the children inside a `flex_column` Container with a small gap. Child emission mirrors `emit_container`; the title comes from `content` rather than a child node.
-    pub(super) fn emit_section(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_variable_name("section");
-        let heading_var = self.next_variable_name("heading");
-        let pad = self.indent_str();
-        let content = el.content.as_deref().unwrap_or("");
-        let title_fn = self.interpolate_content(content, el.content_start);
-        let style_closure = HEADING_STYLE_CLOSURE;
-
-        let has_dynamic = el.children.iter().any(|n| {
-            matches!(
-                n,
-                ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::LetStmt { .. }
-            )
-        });
-
-        self.indent += 1;
-        let inner_pad = self.indent_str();
-        let mut child_emits = Vec::new();
-        for child in &el.children {
-            child_emits.push(self.emit_node(child));
-        }
-        self.indent -= 1;
-
-        // Clone signals captured by the title closure so children can still use them (scan raw `content`).
-        let clones = self.clone_bindings(&[content], &inner_pad, "");
-
-        let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = {{");
-        let _ = write!(code, "{clones}");
-        let _ = writeln!(
-            code,
-            "{inner_pad}let {heading_var} = Text::new(ctx, {title_fn}, LayoutStyle::new().height({HEADING_FONT_SIZE}_f32 * 1.4), {style_closure})?;"
-        );
-
-        let children = self.emit_children_collection(
-            &mut code,
-            &child_emits,
-            &inner_pad,
-            has_dynamic,
-            std::slice::from_ref(&heading_var),
-        );
-        let _ = writeln!(
-            code,
-            "{inner_pad}Container::new(ctx, LayoutStyle::new().flex_column().gap({SECTION_GAP}), {children})?"
-        );
-
-        let _ = write!(code, "{pad}}};");
-        ChildEmit::Simple { name: var, code }
-    }
-
-    /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended before the emitted children (e.g. a `section`'s heading). When any child is dynamic control flow, this builds a mutable `__children` vec and returns `__children`; otherwise it returns a `children![...]` literal. Used by `emit_section`/`emit_container`/`emit_box`; `emit_scroll` differs and is intentionally excluded.
+    /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended before the emitted children (e.g. a `section`'s heading). When any child is dynamic control flow, this builds a mutable `__children` vec and returns `__children`; otherwise it returns a `children![...]` literal. Used by `emit_container`/`emit_box`; `emit_scroll` differs and is intentionally excluded.
     pub(super) fn emit_children_collection(
         &self,
         code: &mut String,

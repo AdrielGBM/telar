@@ -13,7 +13,7 @@ col gap:22
         text "THEME" size:11 color:muted
         col gap:6
             row gap:6 wrap
-                btn "Modern" fill:primary on_press:|| set_theme_with_widgets(SandboxTheme::modern())
-                btn "Pastel" fill:primary on_press:|| set_theme_with_widgets(SandboxTheme::pastel())
-                btn "Midnight" fill:primary on_press:|| set_theme_with_widgets(SandboxTheme::midnight())
+                button label:"Modern" fill:primary on_press:|| set_theme_with_widgets(SandboxTheme::modern())
+                button label:"Pastel" fill:primary on_press:|| set_theme_with_widgets(SandboxTheme::pastel())
+                button label:"Midnight" fill:primary on_press:|| set_theme_with_widgets(SandboxTheme::midnight())
             text "Active · {$theme_name}" size:12 color:muted

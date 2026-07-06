@@ -86,6 +86,10 @@ fn build_component_registry(
     current_source: &str,
 ) -> rsx_transpiler::ComponentRegistry {
     let mut registry = rsx_transpiler::ComponentRegistry::new();
+    // Seed the built-in component catalogue first so a local `.rsx` of the same name still overrides it.
+    for (name, sig) in rsx_transpiler::external_component_sigs() {
+        registry.insert(name.to_string(), sig);
+    }
     for rsx_file in rsx_transpiler::find_rsx_files(src_dir) {
         let source = if rsx_file == current_path {
             current_source.to_string()

@@ -26,6 +26,36 @@ pub struct ComponentSig {
     /// The view uses a `children` slot placeholder, so every call must pass a `Slots` argument — even a
     /// childless one (which passes `Slots::new()`).
     pub has_slot: bool,
+    /// Prop fields whose value is a reactive colour: the caller emits them as a `Box<dyn Fn() -> Color>`
+    /// closure (re-read each frame) instead of a resolved `Color`, so a theme token or `$signal` colour
+    /// re-colours live. Empty for scanned `.rsx` components; set only for the built-in component catalogue.
+    pub color_fields: Vec<String>,
+}
+
+/// Signatures for the built-in component catalogue (`ui-components`, opt-in via the `components` feature). These
+/// components are not local `.rsx` files, so `scan_component_sig` never sees them; this seeds the
+/// [`ComponentRegistry`] (and backstops call-site lookups) so calls emit the right arity and reactive
+/// colour props. Keep in sync with `crates/ui/ui-components`.
+pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
+    let s = |fields: &[&str], has_slot: bool, color: &[&str]| ComponentSig {
+        has_props: true,
+        props_default: true,
+        prop_fields: fields.iter().map(|f| f.to_string()).collect(),
+        has_slot,
+        color_fields: color.iter().map(|f| f.to_string()).collect(),
+    };
+    vec![
+        (
+            "button",
+            s(
+                &["label", "fill", "outline", "ghost", "on_press"],
+                false,
+                &["fill", "outline"],
+            ),
+        ),
+        ("heading", s(&["text"], false, &[])),
+        ("section", s(&["title"], true, &[])),
+    ]
 }
 
 /// Maps a component's callable name (both its path-flattened stem and its bare basename) to its
@@ -44,6 +74,8 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
         props_default,
         prop_fields,
         has_slot: view_uses_slot(&doc.view.nodes),
+        // Scanned `.rsx` components declare no reactive colour props; only the built-in component catalogue does.
+        color_fields: Vec::new(),
     }
 }
 

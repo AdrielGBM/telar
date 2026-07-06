@@ -26,16 +26,20 @@ impl ViewGen<'_> {
         let transform_call = self.transform_call(el);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
+        let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
+        let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         // A transform or an event callback also upgrades a plain col/row to a StyledContainer (only it
-        // carries `with_transform`/`on_hover`/`on_key`).
+        // carries `with_transform`/`on_hover`/`on_key`/`on_drag`/`on_focus`).
         let pieces = if has_paint(&pattrs)
             || !hover_call.is_empty()
             || !transform_call.is_empty()
             || !on_hover.is_empty()
             || !on_key.is_empty()
+            || !on_drag.is_empty()
+            || !on_focus.is_empty()
         {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
         } else {
@@ -62,7 +66,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}"
+                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}"
                 );
             }
             None => {
@@ -89,6 +93,8 @@ impl ViewGen<'_> {
         let transform_call = self.transform_call(el);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
+        let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
+        let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
@@ -112,9 +118,35 @@ impl ViewGen<'_> {
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
         let _ = writeln!(
             code,
-            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}"
+            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}"
         );
 
+        let _ = write!(code, "{pad}}};");
+        ChildEmit::Simple { name: var, code }
+    }
+
+    /// Emits an `overlay` as an `Overlay` widget: a top-layer, out-of-flow portal (see `ui_core::Overlay`).
+    /// Children are collected like a container; layout attrs (`align`/`justify`/`pad`) position the content
+    /// within the viewport-filling layer.
+    pub(super) fn emit_overlay(&mut self, el: &Element) -> ChildEmit {
+        let var = self.next_variable_name("overlay");
+        let pad = self.indent_str();
+        let style = self.make_layout_style("overlay", &el.classes, &el.attributes);
+
+        let has_dynamic = el.children.iter().any(forces_child_vec);
+        self.indent += 1;
+        let inner_pad = self.indent_str();
+        let mut child_emits = Vec::new();
+        for child in &el.children {
+            child_emits.push(self.emit_node(child));
+        }
+        self.indent -= 1;
+
+        let mut code = String::new();
+        let _ = writeln!(code, "{pad}let {var} = {{");
+        let children =
+            self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
+        let _ = writeln!(code, "{inner_pad}Overlay::new(ctx, {style}, {children})?");
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
     }

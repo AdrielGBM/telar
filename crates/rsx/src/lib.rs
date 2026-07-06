@@ -81,11 +81,24 @@ pub use ui_core::Svg;
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Button, ButtonStyle, Canvas, ClippedItem, Component, ComponentList, Container, EventResult,
-    Image, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Path, ReactiveList, Rectangle,
-    RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, WidgetCtx, box_item, box_transform,
-    compute_layout, mark_dirty, new_container, new_leaf, relayout_if_dirty, set_display,
-    track_layout,
+    Image, Input, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path, ReactiveList,
+    Rectangle, RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, WidgetCtx, box_item,
+    box_transform, compute_layout, focus, mark_dirty, new_container, new_leaf, relayout_if_dirty,
+    set_display, track_layout,
 };
+
+// Opt-in component catalogue. Re-exported at the prelude root so generated component calls resolve them
+// (`button`/`ButtonProps`/…) by bare name through the `use rsx::*` every transpiled file emits.
+#[cfg(feature = "components")]
+pub use ui_components::{ButtonProps, HeadingProps, SectionProps, button, heading, section};
+
+/// Consults this crate's overlay registry and reports whether an overlay consumed the pointer event. The
+/// hot-reload dylib exports this (as `_rsx_hot_dispatch_overlays`) so the host can route modal events into
+/// the dylib's registry across the FFI boundary; the runner calls it via [`App::dispatch_overlays`].
+#[cfg(feature = "runtime")]
+pub fn dispatch_overlays(event: &Event) -> bool {
+    ui_core::dispatch_overlays(event) == EventResult::Handled
+}
 
 #[cfg(all(feature = "preview", not(target_os = "android")))]
 mod preview;

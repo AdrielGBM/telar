@@ -48,6 +48,10 @@ pub fn app(input: TokenStream) -> TokenStream {
     // both of which need the callee's shape, which lives in another file. Keyed by both the path-flattened
     // stem and the bare basename (markup calls a component by its basename).
     let mut registry = rsx_transpiler::ComponentRegistry::new();
+    // Seed the built-in component catalogue first so a local `.rsx` of the same name still overrides it.
+    for (name, sig) in rsx_transpiler::external_component_sigs() {
+        registry.insert(name.to_string(), sig);
+    }
     for rsx_file in &rsx_files {
         let Ok(source) = std::fs::read_to_string(rsx_file) else {
             continue;
@@ -347,6 +351,13 @@ pub fn app(input: TokenStream) -> TokenStream {
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_relayout() {
                 ::rsx::relayout_if_dirty();
+            }
+            // Consult the dylib's own overlay registry: `overlay` widgets register in this dylib's
+            // thread-local, so the host must route pointer events to overlays (modal priority / background
+            // blocking) across this boundary — its own copy is empty.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_dispatch_overlays(event: &::rsx::Event) -> bool {
+                ::rsx::dispatch_overlays(event)
             }
         }
     } else {

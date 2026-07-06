@@ -8,7 +8,6 @@ let fade = signal(1.0f32);
 [view]
 col gap:20
     doc_header kicker:"15 · INTERACTION" title:"Transitions" desc:"Add transition: to any animatable property and a value change eases over time instead of snapping. Choose a duration + easing, or a spring."
-
     col gap:8
         text "Color — the fill eases to its new value" size:13 color:ink
         card gap:12
@@ -19,18 +18,16 @@ col gap:20
                 col gap:6 align:center
                     box width:72 height:72 fill:$accent radius:14 transition:fill spring(170, 16)
                     text "spring(170, 16)" size:11 color:muted
-                btn "Toggle" fill:primary on_press:|| { let a = $alt.peek(); $alt.set(!a); $accent.set(if a { theme().primary } else { theme().purple }) }
+                button label:"Toggle" fill:primary on_press:|| { let a = $alt.peek(); $alt.set(!a); $accent.set(if a { theme().primary } else { theme().purple }) }
         code_line code:"box fill:$accent transition:fill 250ms ease-out"
-
     col gap:8
         text "Opacity — the same signal, animated" size:13 color:ink
         card
             row gap:14 align:center wrap
                 box width:130 height:64 fill:primary radius:12 opacity:$fade transition:opacity 300ms ease-in-out align:center justify:center
                     text "fade" size:13 color:on_primary
-                btn "Toggle" fill:primary on_press:|| { let v = $fade.peek(); $fade.set(if v > 0.5 { 0.15 } else { 1.0 }) }
+                button label:"Toggle" fill:primary on_press:|| { let v = $fade.peek(); $fade.set(if v > 0.5 { 0.15 } else { 1.0 }) }
         code_line code:"box opacity:$fade transition:opacity 300ms ease-in-out"
-
     col gap:8
         text "Notes" size:13 color:ink
         col gap:6

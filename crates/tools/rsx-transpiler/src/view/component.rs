@@ -24,18 +24,20 @@ impl ViewGen<'_> {
         let props_attrs: Vec<&Attr> = el.attributes.iter().filter(|a| a.key != "slot").collect();
         let has_children = !el.children.is_empty();
 
-        // Consult the callee's signature (from the workspace registry) so the call matches its arity.
-        // Copy out the scalars up front so the registry borrow doesn't tangle with later `&mut self` calls.
-        let (callee_has_slot, callee_has_props, props_default, field_count) =
-            match self.registry.and_then(|r| r.get(tag)) {
-                Some(s) => (
-                    Some(s.has_slot),
-                    Some(s.has_props),
-                    s.props_default,
-                    Some(s.prop_fields.len()),
-                ),
-                None => (None, None, false, None),
-            };
+        // Consult the callee's signature (workspace registry, else the built-in component catalogue) so the
+        // call matches its arity. Copy out the scalars up front so the borrow doesn't tangle with later
+        // `&mut self` calls.
+        let sig = self.lookup_component_sig(tag);
+        let (callee_has_slot, callee_has_props, props_default, field_count) = match &sig {
+            Some(s) => (
+                Some(s.has_slot),
+                Some(s.has_props),
+                s.props_default,
+                Some(s.prop_fields.len()),
+            ),
+            None => (None, None, false, None),
+        };
+        let color_fields: &[String] = sig.as_ref().map_or(&[], |s| s.color_fields.as_slice());
         // Pass a `Slots` arg when there are markup children, or when the callee declares a slot (so a
         // childless call still matches its 3-arg signature). Unknown callee → the old "children ⇒ slots".
         let pass_slots = has_children || callee_has_slot == Some(true);
@@ -46,6 +48,7 @@ impl ViewGen<'_> {
             callee_has_props,
             props_default,
             field_count,
+            color_fields,
         );
 
         // No children: flat call form. A childless slotted callee still gets `Slots::new()`.
@@ -93,12 +96,22 @@ impl ViewGen<'_> {
         callee_has_props: Option<bool>,
         props_default: bool,
         field_count: Option<usize>,
+        color_fields: &[String],
     ) -> Option<String> {
+        // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
+        // `use super::*` glob at crate root) or in a component library re-exported through `use rsx::*`.
         let props_type = to_pascal_case(tag) + "Props";
         if !props_attrs.is_empty() {
             let fields: Vec<String> = props_attrs
                 .iter()
-                .map(|attr| format!("{}: {}", attr.key, self.component_attr_expr(attr)))
+                .map(|attr| {
+                    let value = if color_fields.iter().any(|f| f == &attr.key) {
+                        self.component_color_attr_expr(attr)
+                    } else {
+                        self.component_attr_expr(attr)
+                    };
+                    format!("{}: {}", attr.key, value)
+                })
                 .collect();
             let omits = field_count.is_some_and(|n| props_attrs.len() < n);
             let tail = if props_default && omits {
@@ -106,16 +119,36 @@ impl ViewGen<'_> {
             } else {
                 ""
             };
-            Some(format!(
-                "crate::{props_type} {{ {}{tail} }}",
-                fields.join(", ")
-            ))
+            Some(format!("{props_type} {{ {}{tail} }}", fields.join(", ")))
         } else if callee_has_props == Some(true) {
             // No props passed but the callee has a `Props`: default them all (works when it derives Default).
-            Some(format!("crate::{props_type} {{ ..Default::default() }}"))
+            Some(format!("{props_type} {{ ..Default::default() }}"))
         } else {
             None
         }
+    }
+
+    /// Looks up a callee's signature: the workspace registry first, then the built-in component catalogue
+    /// (`button`/`heading`/`section`) so a call resolves correctly even before the registry is seeded
+    /// (isolated transpiles, tests). Returns an owned clone so the borrow doesn't tangle with `&mut self`.
+    fn lookup_component_sig(&self, tag: &str) -> Option<crate::codegen::ComponentSig> {
+        if let Some(s) = self.registry.and_then(|r| r.get(tag)) {
+            return Some(s.clone());
+        }
+        crate::codegen::external_component_sigs()
+            .into_iter()
+            .find(|(name, _)| *name == tag)
+            .map(|(_, sig)| sig)
+    }
+
+    /// A reactive colour prop (e.g. a button's `fill`): a `move ||` closure re-read every frame, so a
+    /// theme token or `$signal` colour re-colours live. Mirrors the treatment of a `text` colour: the
+    /// raw value is scanned for `$idents` to clone in, and `color_expr` applies the same `[style]`/theme
+    /// precedence as built-in elements. The Props field is expected to be `Box<dyn Fn() -> Color>`.
+    fn component_color_attr_expr(&self, attr: &Attr) -> String {
+        let color = self.color_expr(&attr.value);
+        let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {color}"));
+        format!("Box::new({wrapped})")
     }
 
     /// Emits the markup children of a component call into a `Slots` value: a child written with

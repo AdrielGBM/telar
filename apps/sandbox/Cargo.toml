@@ -11,8 +11,7 @@ name = "sandbox"
 path = "src/main.rs"
 
 [dependencies]
-# dynamic-svg (implies svg): demo_svgs.rs builds SvgData with `from_str` at runtime, so it needs usvg.
-rsx = { workspace = true, features = ["runtime", "dynamic-svg"] }
+rsx = { workspace = true, features = ["runtime", "dynamic-svg", "components"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [dev-dependencies]

@@ -15,10 +15,6 @@ pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
 pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
     &[
         ("text", "Text::new"),
-        ("heading", "Text::new"),
-        ("section", "Container::new"),
-        ("btn", "Button::new"),
-        ("button", "Button::new"),
         ("col", "Container::new"),
         ("column", "Container::new"),
         ("row", "Container::new"),
@@ -26,9 +22,11 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("box", "StyledContainer::new"),
         ("img", "Image::new"),
         ("image", "Image::new"),
+        ("input", "Input::new"),
         ("svg", "Svg::new"),
         ("scroll", "LayoutScrollArea::new"),
         ("canvas", "Canvas::new"),
+        ("overlay", "Overlay::new"),
         ("widget", TAG_REFERENCES_VARIABLE),
         ("children", TAG_SLOT_PLACEHOLDER),
     ]
@@ -113,6 +111,8 @@ const CONTAINER_PAINT: &[&str] = &[
     "on_press",
     "on_hover",
     "on_key",
+    "on_drag",
+    "on_focus",
     "hover",
     "transition",
     // Declarative affine transform (see `container::transform_call`); resolved per-render like opacity.
@@ -133,7 +133,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
     };
     match tag {
         // `transition:` animates a paint/color property (see `transition::parse_transition_value`), so it is offered on the tags whose codegen wires it: `text` (color), `box`/containers (fill/stroke/opacity).
-        "text" | "heading" => vec![
+        "text" => vec![
             "size",
             "color",
             "weight",
@@ -146,7 +146,6 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         "widget" => vec![],
         // The `children` slot placeholder takes only an optional `name:` for a named slot.
         "children" => vec!["name"],
-        "btn" | "button" => with(&["on_press", "fill", "outline"]),
         // box/col/row/grid share one paint+behavior set (the codegen treats them identically); grid adds its track keys.
         "grid" => {
             let mut keys = with(CONTAINER_PAINT);
@@ -154,22 +153,9 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             keys
         }
         "col" | "row" | "column" | "box" => with(CONTAINER_PAINT),
-        // `section` is a text+heading widget, not a container: it keeps its own narrower paint set and no on_press.
-        "section" => with(&[
-            "fill",
-            "stroke",
-            "radius",
-            "shadow_x",
-            "shadow_y",
-            "shadow_blur",
-            "shadow_color",
-            "from",
-            "to",
-            "mid",
-            "opacity",
-            "transition",
-        ]),
         "img" | "image" => with(&["src"]),
+        // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
+        "input" => with(&["value", "size", "color", "on_submit"]),
         "svg" => with(&["src", "tint"]),
         _ if is_builtin_tag(tag) => layout_attr_keys().to_vec(),
         _ => vec![],
@@ -184,6 +170,8 @@ mod tests {
     fn builtin_and_control_flow_classification() {
         assert!(is_builtin_tag("col") && is_builtin_tag("text"));
         assert!(!is_builtin_tag("feature_card"));
+        // `btn`/`heading`/`section` are no longer built-in tags: they resolve as widget components.
+        assert!(!is_builtin_tag("btn") && !is_builtin_tag("heading") && !is_builtin_tag("section"));
         assert!(is_control_flow_keyword("for") && !is_control_flow_keyword("col"));
     }
 
@@ -191,9 +179,8 @@ mod tests {
     fn tag_attr_keys_layer_layout_and_tag_specific() {
         // A built-in container gets the shared layout keys.
         assert!(tag_attr_keys("col").contains(&"gap"));
-        // The button adds its own keys on top of layout.
-        let btn = tag_attr_keys("btn");
-        assert!(btn.contains(&"on_press") && btn.contains(&"gap"));
+        // `btn` is now a component (not built-in): its attributes come from its Props, so no builtin keys here.
+        assert!(tag_attr_keys("btn").is_empty());
         // `img` exposes `src`; a component (non-builtin) takes Props, so no suggestions here.
         assert!(tag_attr_keys("img").contains(&"src"));
         // `svg` exposes `src` (required) and `tint` (optional).

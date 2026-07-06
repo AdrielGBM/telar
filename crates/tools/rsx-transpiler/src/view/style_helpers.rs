@@ -197,7 +197,7 @@ impl ViewGen<'_> {
             if !self.class_has_direction(first) {
                 match tag {
                     "row" | "grid" => base.push_str(".flex_row()"),
-                    "col" => base.push_str(".flex_column()"),
+                    "col" | "overlay" => base.push_str(".flex_column()"),
                     _ => {}
                 }
             }
@@ -205,7 +205,7 @@ impl ViewGen<'_> {
         } else {
             match tag {
                 "row" => "LayoutStyle::new().flex_row()".to_string(),
-                "col" | "box" => "LayoutStyle::new().flex_column()".to_string(),
+                "col" | "box" | "overlay" => "LayoutStyle::new().flex_column()".to_string(),
                 // `cols:` adds `.display_grid()`, so start neutral; fall back to flex_row when no cols are declared (legacy behaviour).
                 "grid" => {
                     if attrs.iter().any(|a| a.key == "cols") {

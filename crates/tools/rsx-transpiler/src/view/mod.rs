@@ -1,10 +1,10 @@
 //! Generates the body of the component function from the `[view]` section.
 
-mod button;
 mod canvas;
 mod component;
 mod container;
 mod control_flow;
+mod input;
 mod interp;
 mod media;
 mod scroll;
@@ -163,11 +163,12 @@ impl<'a> ViewGen<'a> {
     fn next_variable_name(&mut self, tag: &str) -> String {
         let prefix = match tag {
             "text" => "text",
-            "btn" | "button" => "btn",
             "col" | "column" => "col",
             "row" => "row",
             "box" => "sbox",
+            "overlay" => "overlay",
             "img" | "image" => "img",
+            "input" => "input",
             "svg" => "svg",
             "canvas" => "canvas",
             _ => "node",
@@ -256,12 +257,11 @@ impl<'a> ViewGen<'a> {
     fn emit_element(&mut self, el: &Element) -> ChildEmit {
         match el.tag.as_str() {
             "text" => self.emit_text(el),
-            "heading" => self.emit_heading(el),
-            "section" => self.emit_section(el),
-            "btn" => self.emit_button(el),
             "col" | "row" | "grid" => self.emit_container(el),
             "box" => self.emit_box(el),
+            "overlay" => self.emit_overlay(el),
             "img" | "image" => self.emit_image(el),
+            "input" => self.emit_input(el),
             "svg" => self.emit_svg(el),
             "scroll" => self.emit_scroll(el),
             "canvas" => self.emit_canvas(el),
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn compound_assign_sugar_rewrites_to_update() {
-        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    btn \"+\" on_press:|| $count += 1\n    btn \"-\" on_press:|| $count -= 2\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:|| $count += 1\n    button on_press:|| $count -= 2\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -425,7 +425,7 @@ mod tests {
     #[test]
     fn toggle_and_update_closures_pass_through() {
         // `.toggle()` (a real RwSignal<bool> method) and an explicit `.update(...)` are left untouched.
-        let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    btn \"t\" on_press:|| $flag.toggle()\n    btn \"u\" on_press:|| $count.update(|n| *n += 1)\n";
+        let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:|| $flag.toggle()\n    button on_press:|| $count.update(|n| *n += 1)\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -471,6 +471,23 @@ mod tests {
         );
     }
 
+    // `overlay` builds an `Overlay` widget (a top-layer portal) and collects its children.
+    #[test]
+    fn overlay_builds_overlay_widget() {
+        let src = "[view]\ncol\n    text \"behind\"\n    overlay align:center justify:center\n        text \"on top\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("Overlay::new(ctx,"),
+            "overlay emits an Overlay widget:\n{code}"
+        );
+        assert!(
+            code.contains(".align_items(") && code.contains(".justify_content("),
+            "overlay forwards layout attrs for positioning content:\n{code}"
+        );
+    }
+
     // A `box` with a `hover(...)` override wires `.on_hover_style(...)`.
     #[test]
     fn box_hover_emits_on_hover_style() {
@@ -480,6 +497,22 @@ mod tests {
             out.rust_code.contains(".on_hover_style("),
             "hover(...) should wire on_hover_style:\n{}",
             out.rust_code
+        );
+    }
+
+    // `on_drag` wires the drag gesture and (on a plain col) forces the StyledContainer upgrade.
+    #[test]
+    fn on_drag_wires_and_upgrades_container() {
+        let src = "[logic]\nlet x = signal(0.0f32);\n[view]\ncol on_drag(|px, _py| $x.set(px))\n    text \"t\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("StyledContainer::new(ctx,"),
+            "on_drag upgrades a plain col to a StyledContainer:\n{code}"
+        );
+        assert!(
+            code.contains(".on_drag(") && code.contains("move |px, _py| x.set(px)"),
+            "on_drag wires the handler (with the $signal cloned in):\n{code}"
         );
     }
 
@@ -570,7 +603,7 @@ mod tests {
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("crate::CardProps { elevated: true }"),
+            code.contains("CardProps { elevated: true }"),
             "a bare flag prop should be bool true:\n{code}"
         );
     }
@@ -609,6 +642,7 @@ mod tests {
             props_default,
             prop_fields: fields.iter().map(|s| s.to_string()).collect(),
             has_slot,
+            color_fields: Vec::new(),
         }
     }
 
@@ -622,7 +656,7 @@ mod tests {
             crate::transpile_source_full("[view]\ncard\n", "demo", None, None, Some(&reg)).unwrap();
         assert!(
             out.rust_code
-                .contains("card(ctx, crate::CardProps { ..Default::default() }, Slots::new())?"),
+                .contains("card(ctx, CardProps { ..Default::default() }, Slots::new())?"),
             "childless slotted call should pass defaulted props + empty Slots:\n{}",
             out.rust_code
         );
@@ -646,7 +680,7 @@ mod tests {
         .unwrap();
         assert!(
             out.rust_code
-                .contains("crate::DocHeaderProps { title: \"X\", ..Default::default() }"),
+                .contains("DocHeaderProps { title: \"X\", ..Default::default() }"),
             "an omitted field should default:\n{}",
             out.rust_code
         );
@@ -723,6 +757,29 @@ mod tests {
             .rust_code;
         assert!(code.contains(".with_max_lines(2)"), "max_lines:\n{code}");
         assert!(code.contains(".with_ellipsis(true)"), "ellipsis:\n{code}");
+    }
+
+    // `input` binds `value:$signal` (cloned), builds a size/color text style, forwards layout attrs, and
+    // wires an optional `on_submit`.
+    #[test]
+    fn input_binds_value_style_and_submit() {
+        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name size:16 color:primary width:200 on_submit:|| $name.set(String::new())\n";
+        let code = crate::transpile_source_with_theme(src, "demo", Some("SandboxTheme"), None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("Input::new(ctx, name.clone(),"),
+            "binds the value signal (cloned):\n{code}"
+        );
+        assert!(
+            code.contains("TextStyle::new(16.0, use_theme::<SandboxTheme>().primary)"),
+            "size + reactive colour style:\n{code}"
+        );
+        assert!(
+            code.contains(".width(200"),
+            "forwards layout attrs:\n{code}"
+        );
+        assert!(code.contains(".on_submit("), "wires on_submit:\n{code}");
     }
 
     // A `$`-source `for` with a `key` clause emits a ReactiveList (source read, key closure, item builder).
@@ -901,33 +958,35 @@ mod tests {
         assert!(code.contains(".on_hover("), "carries the callback:\n{code}");
     }
 
-    // `heading` renders a real title (20px, semibold accent), not the old 12px muted caption.
+    // `heading` resolves as a component call carrying its `text` (its title style lives in `ui-components`).
     #[test]
-    fn heading_is_a_real_title() {
-        let src = "[view]\ncol\n    heading \"Title\"\n";
+    fn heading_resolves_as_widget_component() {
+        let src = "[view]\ncol\n    heading text:\"Title\"\n";
         let code = crate::transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("TextStyle::new(20.0"),
-            "heading is 20px:\n{code}"
-        );
-        assert!(
-            code.contains(".with_weight(600)"),
-            "heading is semibold:\n{code}"
+            code.contains("heading(ctx, HeadingProps { text: \"Title\" })"),
+            "heading is a component call carrying its text:\n{code}"
         );
     }
 
-    // A `$signal` button colour must be cloned into the style closure (color_expr drops the `$`, so the
-    // clone scan needs the raw fill/outline value) — otherwise reusing the signal elsewhere fails to compile.
+    // A `$signal` button colour must be cloned into the reactive colour closure (color_expr drops the `$`,
+    // so the clone scan needs the raw fill value) — otherwise reusing the signal elsewhere fails to compile.
     #[test]
     fn btn_signal_color_is_cloned_into_style_closure() {
-        let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbtn \"x\" fill:$c\n";
+        let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbutton label:\"x\" fill:$c\n";
         let code = crate::transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
-        assert!(code.contains("let c = c.clone();"), "signal colour cloned:\n{code}");
-        assert!(code.contains("c.get()"), "read inside the style closure:\n{code}");
+        assert!(
+            code.contains("let c = c.clone();"),
+            "signal colour cloned:\n{code}"
+        );
+        assert!(
+            code.contains("c.get()"),
+            "read inside the style closure:\n{code}"
+        );
     }
 
     // Without a registry, behavior is unchanged: a childless unknown component is a bare `tag(ctx)?` call

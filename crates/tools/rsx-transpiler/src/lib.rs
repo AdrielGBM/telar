@@ -11,8 +11,8 @@ mod transition;
 mod view;
 
 pub use codegen::{
-    ComponentRegistry, ComponentSig, ExprSpan, TranspiledSource, scan_component_sig,
-    source_map_to_json, transpile_source_full, transpile_source_with_theme,
+    ComponentRegistry, ComponentSig, ExprSpan, TranspiledSource, external_component_sigs,
+    scan_component_sig, source_map_to_json, transpile_source_full, transpile_source_with_theme,
 };
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, discover_rust_modules, find_rsx_files,
@@ -59,9 +59,9 @@ mod tests {
 
     #[test]
     fn source_map_points_generated_view_back_to_rsx() {
-        // rsx lines (1-based): 1 [view], 2 col, 3 text, 4 row, 5 btn (with closure).
+        // rsx lines (1-based): 1 [view], 2 col, 3 text, 4 row, 5 button (with closure).
         let src =
-            "[view]\ncol\n    text \"hi\"\n    row\n        btn \"+\" on_press:|| missing.set(1)\n";
+            "[view]\ncol\n    text \"hi\"\n    row\n        button on_press:|| missing.set(1)\n";
         let result = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let lines: Vec<&str> = result.rust_code.lines().collect();
         assert_eq!(lines.len(), result.source_map.len());
@@ -109,7 +109,7 @@ dark: #141424
 [view]
 col @card
     text "Count: {$count}" size:14 color:dark
-    btn "Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
+    button label:"Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
 "#;
 
     // COUNTER_THEMED has no [style] color declarations — colors flow through the live theme so they react to `set_theme_with_widgets(...)` calls at runtime.
@@ -127,7 +127,7 @@ let count = signal(0i32);
 [view]
 col @card
     text "Count: {$count}" size:14 color:dark
-    btn "Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
+    button label:"Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
 "#;
 
     #[test]
@@ -161,8 +161,12 @@ col @card
         assert!(code.contains("const COLOR_PRIMARY: Color = Color::rgba(61.0 / 255.0"));
         assert!(code.contains("fn style_card() -> LayoutStyle"));
         assert!(code.contains("move || format!(\"Count: {}\", { count.get() })"));
-        assert!(code.contains("Button::new(ctx, \"Increment\")?"));
-        assert!(code.contains(".on_click(move || count.update(|n| *n += 1))"));
+        // `button` is now a widget component call, not the removed `Button::new` builtin.
+        assert!(code.contains("button(ctx, ButtonProps {"));
+        assert!(code.contains("label: \"Increment\""));
+        // Its `fill` is a reactive colour closure; with no theme it reads the [style] const.
+        assert!(code.contains("fill: Box::new(move || COLOR_PRIMARY)"));
+        assert!(code.contains("count.update(|n| *n += 1)"));
         assert!(code.contains("Container::new(ctx, style_card(), children!["));
         assert!(code.contains("Ok(Box::new(__col_0))"));
     }
@@ -211,29 +215,27 @@ col @card
     }
 
     #[test]
-    fn section_and_heading_expand_to_primitives() {
-        let src = "[view]\nsection \"Cards\"\n    heading \"Subtitle\"\n    text \"Body\" size:14 color:dark\n";
+    fn section_and_heading_resolve_as_widget_components() {
+        // `section`/`heading` are no longer built-in tags: they resolve as component calls into the
+        // component catalogue (their bodies live in `ui-components`, not the transpiler).
+        let src = "[view]\nsection title:\"Cards\"\n    heading text:\"Subtitle\"\n    text \"Body\" size:14 color:dark\n";
         let code = transpile_source_with_theme(src, "cards", None, None)
             .unwrap()
             .rust_code;
-        // `section`/`heading` no longer reference removed library components.
+        // No inlined library components remain.
         assert!(
             !code.contains("Section::new") && !code.contains("Heading::new"),
             "section/heading must not reference removed components in:\n{code}"
         );
-        // `section` becomes a muted-heading Text inside a flex-column Container.
+        // `section` is a slotted component call carrying its title...
         assert!(
-            code.contains("Container::new(ctx, LayoutStyle::new().flex_column().gap(8.0)"),
-            "expected section's flex-column Container in:\n{code}"
+            code.contains("section(ctx, SectionProps { title: \"Cards\" }"),
+            "expected section component call in:\n{code}"
         );
-        // `heading` becomes a real title Text: 20px semibold, colored from the theme's accent.
+        // ...and `heading` a plain component call carrying its text.
         assert!(
-            code.contains("use_widget_theme().map(|t| t.widget_primary())"),
-            "expected heading's accent style in:\n{code}"
-        );
-        assert!(
-            code.contains("TextStyle::new(20.0, color).with_weight(600)"),
-            "expected heading's 20px semibold title in:\n{code}"
+            code.contains("heading(ctx, HeadingProps { text: \"Subtitle\" })"),
+            "expected heading component call in:\n{code}"
         );
     }
 
@@ -372,7 +374,7 @@ col @card
         let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("my_widget(ctx, crate::MyWidgetProps {"),
+            code.contains("my_widget(ctx, MyWidgetProps {"),
             "should call component fn with Props"
         );
         assert!(
@@ -410,7 +412,7 @@ col @card
 
     #[test]
     fn dollar_marks_reactive_reads_and_clones_closure_captures() {
-        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    btn \"+\" on_press:|| $count.update(|n| *n += 1)\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    button on_press:|| $count.update(|n| *n += 1)\n";
         let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         // `$count` in interpolation is a read.

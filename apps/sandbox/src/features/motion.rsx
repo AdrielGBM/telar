@@ -133,7 +133,7 @@ col gap:20
         card gap:12
             row gap:20 align:center
                 widget "spring_box"
-                btn "Bounce" fill:primary on_press:|| { let b = $big.peek(); $big.set(!b); $scale.retarget(if b { 0.6 } else { 1.3 }) }
+                button label:"Bounce" fill:primary on_press:|| { let b = $big.peek(); $big.set(!b); $scale.retarget(if b { 0.6 } else { 1.3 }) }
         code_line code:"let scale = motion::Animated::new(1.0, spring(170, 12));   scale.retarget(1.3)"
     col gap:8
         text "Staggered keyframes — six PingPong loops offset by hold()" size:13 color:ink
@@ -146,5 +146,5 @@ col gap:20
             row gap:12 align:center
                 widget "progress_bar"
                 text "{$progress.round()}%" size:12 color:muted
-                btn "Replay" fill:primary on_press:|| { $progress.restart() }
+                button label:"Replay" fill:primary on_press:|| { $progress.restart() }
         code_line code:"Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)"

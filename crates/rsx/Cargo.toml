@@ -28,6 +28,9 @@ runtime = [
     "dep:libc",
 ]
 preview = ["runtime"]
+# First-party high-level component catalogue (`button`/`heading`/`section`), resolved as component calls.
+# Opt-in: the kernel ships only the primitive tags, and an app that wants these enables `components`.
+components = ["runtime", "dep:ui-components"]
 # Dependency-injection scope/registry, re-exported from services-core. Opt-in; no runtime path wires it yet.
 di = ["services-core/di"]
 # Both ui-core and renderer-assets are optional deps of this crate, so use `?/` to only forward the feature if `runtime` already pulled them in.
@@ -57,6 +60,7 @@ layout-core = { workspace = true, optional = true }
 theme-core = { workspace = true, optional = true }
 ui-core = { workspace = true, optional = true }
 ui-tree = { workspace = true, optional = true }
+ui-components = { workspace = true, optional = true }
 geometry-core = { workspace = true, optional = true }
 devtools-core = { workspace = true, optional = true }
 rsx-devtools = { workspace = true, optional = true }

@@ -84,6 +84,22 @@ impl crate::app::App for HotApp {
             unsafe { relayout() }
         }
     }
+
+    // Consult the dylib's own overlay registry (separate thread-local from the host's): `overlay` widgets
+    // register in the dylib where the view is built, so a modal's priority routing / background blocking
+    // must be driven across this boundary. Missing symbol (dylib built before this existed) degrades to
+    // `false` — the event falls through to the tree walk, as before this feature.
+    fn dispatch_overlays(&self, event: &platform_core::Event) -> bool {
+        let Ok(dispatch) = (unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(&platform_core::Event) -> bool>(
+                    b"_rsx_hot_dispatch_overlays\0",
+                )
+        }) else {
+            return false;
+        };
+        unsafe { dispatch(event) }
+    }
 }
 
 #[cfg(feature = "dev")]

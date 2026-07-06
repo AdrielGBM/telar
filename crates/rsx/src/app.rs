@@ -66,4 +66,14 @@ pub trait App: 'static {
     fn end_event_batch(&self) {
         reactive_core::end_batch();
     }
+
+    /// Routes a positioned pointer event to the overlay layer (modals, dropdowns) with priority over the
+    /// tree walk; returns `true` when an overlay consumed it, so the runner blocks the event from the
+    /// content behind. Only the dylib-backed `HotApp` overrides it — the overlay registry is a thread-local
+    /// that lives in the dylib (where `overlay` widgets register), so the host must consult it across the
+    /// FFI boundary rather than its own (empty) copy.
+    #[doc(hidden)]
+    fn dispatch_overlays(&self, event: &platform_core::Event) -> bool {
+        ui_core::dispatch_overlays(event) == ui_core::EventResult::Handled
+    }
 }

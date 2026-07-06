@@ -1,0 +1,11 @@
+[package]
+name = "ui-components"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+geometry-core.workspace = true
+layout-core.workspace = true
+renderer-core.workspace = true
+theme-core.workspace = true
+ui-core.workspace = true

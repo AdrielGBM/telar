@@ -257,11 +257,18 @@ where
         // borrowed for on_event, silently dropping that segment's subscriptions. Closing the batch after
         // dispatch (every borrow released) makes the deferred effects flush safely. No-op for a normal app.
         self.app.begin_event_batch();
-        let handled = self
-            .tree
-            .as_mut()
-            .map(|tree| tree.on_event(&event))
-            .unwrap_or(EventResult::Ignored);
+        // Overlays (modals/dropdowns) paint on top, so a positioned pointer event over one must reach it
+        // FIRST and be blocked from the content behind. The overlay registry lives on the app's side of the
+        // hot-reload boundary (where `overlay` widgets register), so consult it via the App bridge before
+        // the tree walk; when an overlay consumes the event, skip the walk entirely (this is the block).
+        let handled = if self.app.dispatch_overlays(&event) {
+            EventResult::Handled
+        } else {
+            self.tree
+                .as_mut()
+                .map(|tree| tree.on_event(&event))
+                .unwrap_or(EventResult::Ignored)
+        };
         self.app.end_event_batch();
         if handled == EventResult::Handled {
             #[cfg(feature = "dev")]

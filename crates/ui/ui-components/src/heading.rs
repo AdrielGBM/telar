@@ -1,0 +1,33 @@
+use layout_core::{LayoutError, LayoutStyle};
+use renderer_core::{Color, TextStyle};
+use theme_core::use_widget_theme;
+use ui_core::{LayoutItem, Text, WidgetCtx, box_item};
+
+/// A section title: 20px, semibold, coloured from the theme's accent (`widget_primary`). High-level
+/// sugar over `text`; lives in `ui-components`, not the kernel.
+#[derive(Default)]
+pub struct HeadingProps {
+    pub text: &'static str,
+}
+
+pub fn heading(
+    ctx: &mut WidgetCtx,
+    props: HeadingProps,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let label = props.text;
+    let t = Text::new(
+        ctx,
+        move || label.to_string(),
+        LayoutStyle::new().height(20.0 * 1.4),
+        heading_style,
+    )?;
+    Ok(box_item(t))
+}
+
+/// The shared title text style, re-read every frame so it tracks the active theme. Reused by `section`.
+pub(crate) fn heading_style() -> TextStyle {
+    let color = use_widget_theme()
+        .map(|t| t.widget_primary())
+        .unwrap_or(Color::rgba(0.1, 0.1, 0.12, 1.0));
+    TextStyle::new(20.0, color).with_weight(600)
+}
