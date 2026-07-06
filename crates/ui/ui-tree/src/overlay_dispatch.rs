@@ -12,7 +12,12 @@
 //! content is dispatched to that overlay (topmost first) and consumed — so the tree walk never runs for
 //! it and the content behind is blocked. A press outside every overlay falls through to the tree as
 //! before, so a scrim that fills the viewport reads as a modal (blocks everything) while a small toast
-//! blocks only clicks that actually land on it — the content rect *is* the barrier, no extra flag needed.
+//! blocks only clicks that actually land on it — the content rect is the coarse barrier.
+//!
+//! Click-through: an overlay may opt out of blocking ([`OverlaySink::blocking`] = false). Then, even for a
+//! point inside its content rect, the event is consumed only when one of its children actually handles it;
+//! otherwise it falls through to the overlays/tree behind. This is how a full-viewport toast or tooltip
+//! layer stays non-modal — clicks on its transparent area reach the page, only its visible panel captures.
 //!
 //! Capture: the overlay that handles a press captures the gesture, so the following moves/releases route
 //! to it regardless of where the pointer travels (a drag started in an overlay keeps tracking after the
@@ -29,11 +34,18 @@ use crate::component::EventResult;
 /// An overlay's hook into priority pointer routing. Implemented in `ui-core` by the `overlay` widget.
 pub trait OverlaySink {
     /// The overlay content's current bounds, used as the hit-test barrier. A full-viewport scrim returns
-    /// the whole viewport (modal); a corner toast returns just its box (blocks only clicks on itself).
+    /// the whole viewport (modal); a corner toast or an anchored dropdown returns just its box (blocks
+    /// only clicks on itself).
     fn content_rect(&self) -> Rect;
     /// Routes a positioned pointer event into the overlay's own children (same path its in-tree
-    /// `on_event` would take for non-pointer events).
+    /// `on_event` would take for non-pointer events). Returns `Handled` when a child consumed it.
     fn dispatch(&self, event: &Event) -> EventResult;
+    /// Whether the overlay swallows every pointer event inside its [`content_rect`](Self::content_rect)
+    /// (a modal, the default) or only those a child actually handled (a click-through toast/tooltip layer,
+    /// so clicks on its transparent area fall through to the content behind).
+    fn blocking(&self) -> bool {
+        true
+    }
 }
 
 thread_local! {
@@ -111,9 +123,14 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
             let (x, y) = pointer_pos(event).unwrap();
             for (id, sink) in entries.iter().rev() {
                 if sink.content_rect().contains(x, y) {
-                    OVERLAYS.with(|r| r.borrow_mut().captured = Some(*id));
-                    sink.dispatch(event);
-                    return EventResult::Handled;
+                    let handled = sink.dispatch(event) == EventResult::Handled;
+                    // A modal consumes the press regardless; a click-through overlay only when a child took
+                    // it — otherwise the loop continues to the overlays below and ultimately the tree.
+                    if sink.blocking() || handled {
+                        // Capture the gesture so following moves/releases route here wherever the pointer goes.
+                        OVERLAYS.with(|r| r.borrow_mut().captured = Some(*id));
+                        return EventResult::Handled;
+                    }
                 }
             }
             EventResult::Ignored
@@ -134,8 +151,12 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
             let (x, y) = pointer_pos(event).unwrap();
             for (_, sink) in entries.iter().rev() {
                 if sink.content_rect().contains(x, y) {
-                    sink.dispatch(event);
-                    return EventResult::Handled;
+                    let handled = sink.dispatch(event) == EventResult::Handled;
+                    // Same rule as a press: a modal swallows it over its whole barrier; a click-through one
+                    // only when a child handled it, else the move/release falls through to the layer behind.
+                    if sink.blocking() || handled {
+                        return EventResult::Handled;
+                    }
                 }
             }
             EventResult::Ignored
@@ -160,6 +181,9 @@ mod tests {
     struct RecordingSink {
         rect: Rect,
         hits: Rc<Cell<u32>>,
+        blocking: bool,
+        // What `dispatch` reports: `true` mimics a child consuming the event, `false` a click that missed.
+        child_handles: bool,
     }
 
     impl OverlaySink for RecordingSink {
@@ -168,15 +192,33 @@ mod tests {
         }
         fn dispatch(&self, _event: &Event) -> EventResult {
             self.hits.set(self.hits.get() + 1);
-            EventResult::Handled
+            if self.child_handles {
+                EventResult::Handled
+            } else {
+                EventResult::Ignored
+            }
+        }
+        fn blocking(&self) -> bool {
+            self.blocking
         }
     }
 
+    // A blocking overlay whose children always handle — the default used by the routing/capture tests.
     fn sink(rect: Rect) -> (Rc<dyn OverlaySink>, Rc<Cell<u32>>) {
+        configured_sink(rect, true, true)
+    }
+
+    fn configured_sink(
+        rect: Rect,
+        blocking: bool,
+        child_handles: bool,
+    ) -> (Rc<dyn OverlaySink>, Rc<Cell<u32>>) {
         let hits = Rc::new(Cell::new(0));
         let sink: Rc<dyn OverlaySink> = Rc::new(RecordingSink {
             rect,
             hits: Rc::clone(&hits),
+            blocking,
+            child_handles,
         });
         (sink, hits)
     }
@@ -296,5 +338,62 @@ mod tests {
             EventResult::Ignored
         );
         assert_eq!(dispatch_overlays(&press(50.0, 50.0)), EventResult::Ignored);
+    }
+
+    // A modal (blocking) overlay swallows a press inside its content rect even where no child sits, so the
+    // scrim reads as modal and nothing behind it receives the press.
+    #[test]
+    fn blocking_overlay_consumes_press_in_empty_region() {
+        reset();
+        let (s, hits) = configured_sink(Rect::new(0.0, 0.0, 100.0, 100.0), true, false);
+        let id = register_overlay(s);
+
+        assert_eq!(dispatch_overlays(&press(50.0, 50.0)), EventResult::Handled);
+        assert_eq!(
+            hits.get(),
+            1,
+            "the modal is still asked to dispatch the press"
+        );
+
+        unregister_overlay(id);
+    }
+
+    // A click-through overlay does NOT consume a press its children ignore (the click landed on the
+    // transparent absolute-fill area, not the visible panel): it falls through to the tree behind.
+    #[test]
+    fn click_through_overlay_falls_through_when_child_ignores() {
+        reset();
+        let (s, hits) = configured_sink(Rect::new(0.0, 0.0, 100.0, 100.0), false, false);
+        let id = register_overlay(s);
+
+        assert_eq!(dispatch_overlays(&press(50.0, 50.0)), EventResult::Ignored);
+        assert_eq!(
+            hits.get(),
+            1,
+            "the overlay is offered the press before falling through"
+        );
+        // A move afterwards also falls through (no gesture was captured by the click-through overlay).
+        assert_eq!(dispatch_overlays(&moved(50.0, 50.0)), EventResult::Ignored);
+
+        unregister_overlay(id);
+    }
+
+    // A click-through overlay DOES consume a press when a child handles it (the click hit the panel),
+    // capturing the gesture so the following release routes back to it.
+    #[test]
+    fn click_through_overlay_consumes_when_child_handles() {
+        reset();
+        let (s, hits) = configured_sink(Rect::new(0.0, 0.0, 100.0, 100.0), false, true);
+        let id = register_overlay(s);
+
+        assert_eq!(dispatch_overlays(&press(50.0, 50.0)), EventResult::Handled);
+        // The gesture is captured: a release even outside the rect routes back to the overlay.
+        assert_eq!(
+            dispatch_overlays(&released(500.0, 500.0)),
+            EventResult::Handled
+        );
+        assert_eq!(hits.get(), 2);
+
+        unregister_overlay(id);
     }
 }

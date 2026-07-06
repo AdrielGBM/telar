@@ -25,31 +25,14 @@ impl ViewGen<'_> {
         let has_children = !el.children.is_empty();
 
         // Consult the callee's signature (workspace registry, else the built-in component catalogue) so the
-        // call matches its arity. Copy out the scalars up front so the borrow doesn't tangle with later
-        // `&mut self` calls.
+        // call matches its arity, arg count, and optional/reactive-colour props. Owned (a clone), so passing
+        // `sig.as_ref()` into the `&self` prop builder never tangles with the later `&mut self` slot calls.
         let sig = self.lookup_component_sig(tag);
-        let (callee_has_slot, callee_has_props, props_default, field_count) = match &sig {
-            Some(s) => (
-                Some(s.has_slot),
-                Some(s.has_props),
-                s.props_default,
-                Some(s.prop_fields.len()),
-            ),
-            None => (None, None, false, None),
-        };
-        let color_fields: &[String] = sig.as_ref().map_or(&[], |s| s.color_fields.as_slice());
         // Pass a `Slots` arg when there are markup children, or when the callee declares a slot (so a
         // childless call still matches its 3-arg signature). Unknown callee → the old "children ⇒ slots".
-        let pass_slots = has_children || callee_has_slot == Some(true);
+        let pass_slots = has_children || sig.as_ref().is_some_and(|s| s.has_slot);
 
-        let props_arg = self.component_props_arg(
-            tag,
-            &props_attrs,
-            callee_has_props,
-            props_default,
-            field_count,
-            color_fields,
-        );
+        let props_arg = self.component_props_arg(tag, &props_attrs, sig.as_ref());
 
         // No children: flat call form. A childless slotted callee still gets `Slots::new()`.
         if !has_children {
@@ -88,16 +71,19 @@ impl ViewGen<'_> {
     /// Builds the `NameProps { … }` argument for a component call, or `None` when no props are needed.
     /// Emits `..Default::default()` only when the callee opts in (its `Props` derives `Default`) and the
     /// call omits some fields, so a full-field call stays literal (no `clippy::needless_update`). When no
-    /// props are passed but the callee requires a `Props`, defaults them all.
+    /// props are passed but the callee requires a `Props`, defaults them all. A field the sig marks optional
+    /// (its type is `Option<...>`) has its value wrapped in `Some(...)`; omitting it defaults to `None`.
     fn component_props_arg(
         &self,
         tag: &str,
         props_attrs: &[&Attr],
-        callee_has_props: Option<bool>,
-        props_default: bool,
-        field_count: Option<usize>,
-        color_fields: &[String],
+        sig: Option<&crate::codegen::ComponentSig>,
     ) -> Option<String> {
+        let callee_has_props = sig.map(|s| s.has_props);
+        let props_default = sig.is_some_and(|s| s.props_default);
+        let field_count = sig.map(|s| s.prop_fields.len());
+        let color_fields: &[String] = sig.map_or(&[], |s| s.color_fields.as_slice());
+        let optional_fields: &[String] = sig.map_or(&[], |s| s.optional_fields.as_slice());
         // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
         // `use super::*` glob at crate root) or in a component library re-exported through `use rsx::*`.
         let props_type = to_pascal_case(tag) + "Props";
@@ -109,6 +95,13 @@ impl ViewGen<'_> {
                         self.component_color_attr_expr(attr)
                     } else {
                         self.component_attr_expr(attr)
+                    };
+                    // An `Option<...>` prop: wrap the value so a `$signal`, closure, or plain value all fit
+                    // (`Some(sig.clone())` / `Some(Box::new(move || …))` / `Some(<expr>)`).
+                    let value = if optional_fields.iter().any(|f| f == &attr.key) {
+                        format!("Some({value})")
+                    } else {
+                        value
                     };
                     format!("{}: {}", attr.key, value)
                 })

@@ -28,11 +28,12 @@ impl ViewGen<'_> {
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
         let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
         let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
+        let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         // A transform or an event callback also upgrades a plain col/row to a StyledContainer (only it
-        // carries `with_transform`/`on_hover`/`on_key`/`on_drag`/`on_focus`).
+        // carries `with_transform`/`on_hover`/`on_key`/`on_drag`/`on_focus`/`on_long_press`).
         let pieces = if has_paint(&pattrs)
             || !hover_call.is_empty()
             || !transform_call.is_empty()
@@ -40,6 +41,7 @@ impl ViewGen<'_> {
             || !on_key.is_empty()
             || !on_drag.is_empty()
             || !on_focus.is_empty()
+            || !on_long_press.is_empty()
         {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
         } else {
@@ -66,7 +68,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}"
+                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
                 );
             }
             None => {
@@ -95,6 +97,7 @@ impl ViewGen<'_> {
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
         let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
         let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
+        let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
@@ -118,7 +121,7 @@ impl ViewGen<'_> {
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
         let _ = writeln!(
             code,
-            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}"
+            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
         );
 
         let _ = write!(code, "{pad}}};");
@@ -168,8 +171,8 @@ impl ViewGen<'_> {
         format!(".on_hover_style({closure})")
     }
 
-    /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`),
-    /// or an empty string when the attribute is absent. `$name` signals are cloned into the closure,
+    /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`/
+    /// `on_drag`/`on_focus`/`on_long_press`), or an empty string when the attribute is absent. `$name` signals are cloned into the closure,
     /// `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
     fn closure_attr_call(&self, el: &Element, key: &str, method: &str) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {

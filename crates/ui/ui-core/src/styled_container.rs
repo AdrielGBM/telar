@@ -95,6 +95,15 @@ impl StyledContainer {
         self
     }
 
+    /// Fires once a press inside the box is held past ~500ms without moving past the tap slop, instead of
+    /// `on_press`'s tap-on-release. There is no dedicated timer in the gesture pipeline, so the threshold is
+    /// only checked on the next pointer event after the press (a move or the release) — it fires slightly
+    /// late, never at exactly 500ms, and a release before that next check-in is a normal tap.
+    pub fn on_long_press(mut self, f: impl Fn() + 'static) -> Self {
+        self.press.set_long_press(f);
+        self
+    }
+
     /// Make the box draggable. The callback fires with the pointer position (layout space) on a press
     /// inside the box and on every move until release — even after the pointer leaves the box. Map the
     /// coordinate to a value (slider) or an offset (reorder/resize).
@@ -383,7 +392,6 @@ mod tests {
             [1.0, 0.0, 0.0, 1.0, 8.0, -4.0]
         );
     }
-    use crate::button::Button;
     use crate::container::Container;
     use crate::context::{compute_layout, track_layout};
 
@@ -490,9 +498,16 @@ mod tests {
         set_theme_with_widgets(TestTheme(Color::RED));
 
         let mut ctx = WidgetCtx::new();
-        let btn = Button::new(&mut ctx, "x").unwrap();
+        // A pressable primitive stands in for the old high-level Button (now in ui-components).
+        let btn = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().width(50.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || set_theme_with_widgets(TestTheme(Color::GREEN)));
         let btn_node = btn.layout_node();
-        let btn = btn.on_click(move || set_theme_with_widgets(TestTheme(Color::GREEN)));
         let inner = Container::new(
             &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
@@ -569,6 +584,53 @@ mod tests {
         assert!(flag.get(), "release inside the box fires on_press");
     }
 
+    // Holding a press past the long-press threshold fires on_long_press on the next pointer event (there is
+    // no dedicated timer) and suppresses the tap; a quick release stays a normal tap and never fires on_long_press.
+    #[test]
+    fn on_long_press_fires_after_threshold_not_on_quick_release() {
+        let long_flag = Rc::new(Cell::new(false));
+        let tap_flag = Rc::new(Cell::new(false));
+        let lf = long_flag.clone();
+        let tf = tap_flag.clone();
+        let mut ctx = WidgetCtx::new();
+        let mut card = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || tf.set(true))
+        .on_long_press(move || lf.set(true));
+        compute_layout(
+            &mut ctx,
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        // A quick release (well under the threshold) stays a normal tap.
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        card.on_event(&release(100.0, 50.0, PointerSource::Mouse));
+        assert!(tap_flag.get(), "a quick release still fires on_press");
+        assert!(
+            !long_flag.get(),
+            "a quick release must not fire on_long_press"
+        );
+
+        // Holding past the threshold: the next event (the release here) fires on_long_press instead of on_press.
+        tap_flag.set(false);
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        std::thread::sleep(std::time::Duration::from_millis(550));
+        card.on_event(&release(100.0, 50.0, PointerSource::Mouse));
+        assert!(
+            long_flag.get(),
+            "a release after the threshold fires on_long_press"
+        );
+        assert!(!tap_flag.get(), "a long press must not also fire on_press");
+    }
+
     // A child that handles the press (an inner button) wins; the box's own on_press must stay silent.
     #[test]
     fn inner_button_press_wins_over_box() {
@@ -577,9 +639,15 @@ mod tests {
         let cf = card_flag.clone();
         let bf = btn_flag.clone();
         let mut ctx = WidgetCtx::new();
-        let btn = Button::new(&mut ctx, "x")
-            .unwrap()
-            .on_click(move || bf.set(true));
+        // A pressable primitive child stands in for the old high-level Button (now in ui-components).
+        let btn = StyledContainer::new(
+            &mut ctx,
+            LayoutStyle::new().width(50.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || bf.set(true));
         let btn_node = btn.layout_node();
         let mut card = StyledContainer::new(
             &mut ctx,

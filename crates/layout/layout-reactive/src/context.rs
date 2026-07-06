@@ -93,6 +93,20 @@ pub fn track_layout(_ctx: &WidgetCtx, node: NodeId) -> Option<RwSignal<Rect>> {
     with_runtime(|rt| rt.track_layout(node))
 }
 
+/// The node's WINDOW-absolute rect (top-left from the top-level walk, size from its layout), or `None` if it
+/// has not been laid out under a window root yet. Unlike `track_layout`, this is correct even for a node in a
+/// sub-root computed separately (whose rect signal is root-local) — use it to anchor a portaled overlay to a
+/// trigger, since the portal hoists out of ancestor transforms and needs absolute coordinates. Note: it is
+/// the trigger's laid-out (un-scrolled) position; a scrolled-away trigger's on-screen spot also needs the
+/// scroll offset, which the layout runtime does not track (a follow-up).
+pub fn absolute_rect(node: NodeId) -> Option<Rect> {
+    with_runtime(|rt| {
+        let &(x, y) = rt.abs_pos.get(&node)?;
+        let size = rt.registry.get(&node).map(|s| s.peek()).unwrap_or_default();
+        Some(Rect::new(x, y, size.width, size.height))
+    })
+}
+
 pub fn mark_dirty(_ctx: &mut WidgetCtx, node: NodeId) -> Result<(), LayoutError> {
     with_runtime(|rt| rt.mark_dirty(node))
 }
@@ -114,6 +128,18 @@ pub fn set_children(parent: NodeId, children: &[NodeId]) -> Result<(), LayoutErr
 /// (via [`set_children`]) first.
 pub fn remove_node(node: NodeId) {
     with_runtime(|rt| rt.remove_node(node))
+}
+
+/// Pins the overlay host to `node` — the app's window-spanning root — so overlays always fill the viewport
+/// even when the app computes several independent layout roots (e.g. a shell with a separate sidebar root
+/// computed after the main one, which the auto-detection would otherwise pick as the host). Call it each
+/// relayout with the current main root (it survives hot-reload rebuilds, which mint a new root node). Once
+/// pinned, auto-detection no longer overrides the host.
+pub fn set_overlay_host(node: NodeId) {
+    with_runtime(|rt| {
+        rt.overlay_host = Some(node);
+        rt.host_pinned = true;
+    });
 }
 
 /// Attaches `node` (an overlay's out-of-flow content) as an extra child of the current layout host — the
@@ -180,6 +206,17 @@ struct LayoutRuntime {
     // The parent-less (top-level) root last computed against the window — the layout host that `overlay`s
     // attach their out-of-flow content to, so a portal fills the viewport regardless of where it is declared.
     overlay_host: Option<NodeId>,
+    // When set, `overlay_host` was pinned by the app via `set_overlay_host` and auto-detection (last
+    // parent-less root wins) must NOT override it. An app with several independent roots (e.g. a shell with a
+    // separate sidebar root computed after the main one) needs this: the window-spanning root is the host,
+    // not whichever root happened to be computed last.
+    host_pinned: bool,
+    // Window-absolute top-left of each node, captured during the top-level (parent-less) root's walk (which
+    // runs from the window origin, so its rects ARE window-absolute). Node rect SIGNALS stay root-local (a
+    // sub-root computed separately, like the sandbox's scrolling `content`, leaves them content-local); this
+    // map is the ONE place with window-absolute positions, so `absolute_rect` can anchor a portaled overlay
+    // (which hoists out of ancestor transforms → needs absolute coords) to a trigger in a sub-root.
+    abs_pos: FxHashMap<NodeId, (f32, f32)>,
     // Guards against recursive compute(): an effect that reads a layout signal and calls compute_layout() again creates a re-layout cycle caught immediately in debug builds.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -196,6 +233,8 @@ impl LayoutRuntime {
             constrained: Vec::new(),
             root_auto: FxHashMap::default(),
             overlay_host: None,
+            host_pinned: false,
+            abs_pos: FxHashMap::default(),
             #[cfg(debug_assertions)]
             is_computing: false,
         }
@@ -260,7 +299,7 @@ impl LayoutRuntime {
         // A top-level root (no parent) computed against the window is the overlay host: overlays attach
         // their content here so a portal fills the viewport wherever it is declared. Refreshed each compute
         // so it stays current across a hot-reload rebuild (which mints a new root node).
-        if !self.parents.contains_key(&root) {
+        if !self.host_pinned && !self.parents.contains_key(&root) {
             self.overlay_host = Some(root);
         }
         // A changed available space (window resize) must re-run layout even when the node is clean: dirty the root so the cached size from the previous space is discarded. Skip only when both the node is clean and the space is unchanged.
@@ -359,6 +398,10 @@ impl LayoutRuntime {
         // Collect the changed rects while holding the runtime borrow, but apply them (`sig.set`) only
         // after the caller releases it: a set flushes effects, one of which may re-enter the runtime.
         let mut updates: Vec<(RwSignal<Rect>, Rect)> = Vec::new();
+        // Only a full walk of a parent-less root runs from the window origin, so only then are the walked
+        // rects window-absolute. A sub-boundary or sub-root walk is root-local — don't capture those.
+        let is_window_walk = layout_root == root && !self.parents.contains_key(&root);
+        let mut abs_updates: Vec<(NodeId, f32, f32)> = Vec::new();
         let registry = &self.registry;
         let walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
             if let Some(sig) = registry.get(&node_id) {
@@ -366,8 +409,14 @@ impl LayoutRuntime {
                     updates.push((sig.clone(), rect));
                 }
             }
+            if is_window_walk {
+                abs_updates.push((node_id, rect.x, rect.y));
+            }
             true
         });
+        for (n, x, y) in abs_updates {
+            self.abs_pos.insert(n, (x, y));
+        }
         #[cfg(debug_assertions)]
         {
             self.is_computing = false;
@@ -448,6 +497,7 @@ impl LayoutRuntime {
         self.boundary_nodes.remove(&node);
         self.last_space.remove(&node);
         self.root_auto.remove(&node);
+        self.abs_pos.remove(&node);
         self.constrained.retain(|(n, _, _)| *n != node);
     }
 }
@@ -868,5 +918,61 @@ mod tests {
         detach_overlay(content);
         remove_node(content);
         relayout_if_dirty();
+    }
+
+    // Reproduces the sandbox shell's coordinate trap: a `[sidebar | content]` window root, then the `content`
+    // computed AGAIN as its own root (for scroll-height measurement) — which rewrites the content subtree's
+    // rect signals to content-local coords. `absolute_rect` must still report a trigger's WINDOW-absolute
+    // position (past the sidebar), so a portaled dropdown anchors correctly instead of landing over the sidebar.
+    #[test]
+    fn absolute_rect_stays_window_absolute_across_a_separate_content_root() {
+        let mut ctx = WidgetCtx::new();
+        let (sidebar, _) =
+            new_leaf(&mut ctx, LayoutStyle::new().width(248.0).height(600.0)).unwrap();
+        let (trigger, trigger_sig) =
+            new_leaf(&mut ctx, LayoutStyle::new().width(120.0).height(30.0)).unwrap();
+        let content = new_container(
+            &mut ctx,
+            LayoutStyle::new().flex_column().flex_grow(1.0),
+            &[trigger],
+        )
+        .unwrap();
+        let root =
+            new_container(&mut ctx, LayoutStyle::new().flex_row(), &[sidebar, content]).unwrap();
+        compute_layout(
+            &mut ctx,
+            root,
+            AvailableSpace::Definite(1000.0),
+            AvailableSpace::Definite(600.0),
+        )
+        .unwrap();
+        set_overlay_host(root);
+        // The trigger is at window x ≈ 248 (immediately right of the sidebar).
+        assert!(
+            (absolute_rect(trigger).unwrap().x - 248.0).abs() < 1.0,
+            "abs x should be past the 248px sidebar: {:?}",
+            absolute_rect(trigger)
+        );
+
+        // Compute `content` as its own root (the sandbox does this for scroll height): the SIGNAL goes local.
+        mark_dirty(&mut ctx, content).unwrap();
+        compute_layout(
+            &mut ctx,
+            content,
+            AvailableSpace::Definite(752.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert!(
+            trigger_sig.get().x < 1.0,
+            "the rect signal is now content-local (~0): {:?}",
+            trigger_sig.get()
+        );
+        // But absolute_rect still reports window-absolute (past the sidebar) — this is the fix.
+        assert!(
+            (absolute_rect(trigger).unwrap().x - 248.0).abs() < 1.0,
+            "absolute_rect must stay window-absolute across the sub-root compute: {:?}",
+            absolute_rect(trigger)
+        );
     }
 }
