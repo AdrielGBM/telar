@@ -19,7 +19,6 @@ pub struct Svg {
 
 impl Svg {
     pub fn new(
-        ctx: &mut crate::context::WidgetCtx,
         layout_style: LayoutStyle,
         data_fn: impl Fn() -> Arc<SvgData> + 'static,
         tint_fn: impl Fn() -> Option<Color> + 'static,
@@ -29,7 +28,7 @@ impl Svg {
         let layout_style =
             crate::layout_leaf::resolve_intrinsic_size(layout_style, || data_fn().intrinsic_size());
 
-        let leaf = LayoutLeaf::register(ctx, layout_style)?;
+        let leaf = LayoutLeaf::register(layout_style)?;
         Ok(Self {
             data: Box::new(data_fn),
             tint: Box::new(tint_fn),
@@ -85,7 +84,7 @@ mod tests {
     use renderer_core::{DrawCommand, Paint};
 
     use super::*;
-    use crate::context::{WidgetCtx, compute_layout, new_container};
+    use crate::context::{compute_layout, new_container, reset_layout_runtime};
     use crate::layout_item::LayoutItem;
 
     fn make_svg_data(w: f32, h: f32) -> Arc<SvgData> {
@@ -97,10 +96,9 @@ mod tests {
 
     #[test]
     fn svg_without_size_uses_intrinsic_size() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let data = make_svg_data(24.0, 16.0);
         let svg = Svg::new(
-            &mut ctx,
             LayoutStyle::new(),
             move || Arc::clone(&data),
             || None,
@@ -108,13 +106,11 @@ mod tests {
         )
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(200.0),
             &[svg.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -128,10 +124,9 @@ mod tests {
 
     #[test]
     fn svg_with_only_width_derives_height_from_aspect_ratio() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let data = make_svg_data(24.0, 16.0); // 1.5:1 aspect ratio
         let svg = Svg::new(
-            &mut ctx,
             LayoutStyle::new().width(48.0),
             move || Arc::clone(&data),
             || None,
@@ -139,13 +134,11 @@ mod tests {
         )
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(200.0),
             &[svg.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -159,10 +152,9 @@ mod tests {
 
     #[test]
     fn svg_view_emits_group_with_path_primitive() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let data = make_svg_data(10.0, 10.0);
         let svg = Svg::new(
-            &mut ctx,
             LayoutStyle::new().width(20.0).height(20.0),
             move || Arc::clone(&data),
             || None,
@@ -170,13 +162,11 @@ mod tests {
         )
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().width(20.0).height(20.0),
             &[svg.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(20.0),
             AvailableSpace::Definite(20.0),
@@ -204,12 +194,11 @@ mod tests {
     // tint (the reactive path the transpiler now wires for `svg tint:$accent`) recolors live.
     #[test]
     fn tint_closure_is_re_read_each_view_and_recolors_the_path() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let data = make_svg_data(10.0, 10.0);
         let tint = Rc::new(Cell::new(Color::GREEN));
         let tint_read = tint.clone();
         let svg = Svg::new(
-            &mut ctx,
             LayoutStyle::new().width(20.0).height(20.0),
             move || Arc::clone(&data),
             move || Some(tint_read.get()),
@@ -217,13 +206,11 @@ mod tests {
         )
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().width(20.0).height(20.0),
             &[svg.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(20.0),
             AvailableSpace::Definite(20.0),

@@ -5,14 +5,14 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
 use theme_core::use_widget_theme;
-use ui_core::{LayoutItem, StyledContainer, WidgetCtx, box_item, box_transform};
+use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
+
+use crate::shared;
 
 /// Track thickness (px) — a slim pill rail with a floating thumb.
 const TRACK_HEIGHT: f32 = 8.0;
 /// Thumb diameter (px), bigger than the track so it stays easy to grab; it overhangs the rail on purpose.
 const THUMB_SIZE: f32 = 16.0;
-/// Fallback accent when no reactive `color` is supplied and no theme is active (matches `Button`'s default primary).
-const DEFAULT_ACCENT: Color = Color::rgba(0.24, 0.47, 0.98, 1.0);
 /// Fallback track fill when no theme is active — light enough that the accent fill/thumb still read clearly.
 const DEFAULT_TRACK: Color = Color::rgba(0.5, 0.5, 0.6, 0.3);
 
@@ -48,7 +48,7 @@ impl Default for SliderProps {
     }
 }
 
-pub fn slider(ctx: &mut WidgetCtx, props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SliderProps {
         value,
         color,
@@ -60,18 +60,22 @@ pub fn slider(ctx: &mut WidgetCtx, props: SliderProps) -> Result<Box<dyn LayoutI
     let value = value.unwrap_or_else(|| signal(0.0));
     let width = if width > 0.0 { width } else { 220.0 };
     // Shared across the fill and thumb style closures (a `Box<dyn Fn>` is not `Clone`, an `Rc` handle is).
-    let color: Rc<dyn Fn() -> Color> = Rc::from(color);
+    let color: shared::ReactiveColor = Rc::from(color);
 
     // The fill: an `absolute_fill` child (so it exactly overlays the track) scaled horizontally from the left
     // edge by `value` — cheaper than relaying out a narrower box on every drag move.
     let fill_value = value.clone();
     let fill_color = color.clone();
     let fill = StyledContainer::new(
-        ctx,
         LayoutStyle::new().absolute_fill(),
         move |_r| {
+            let fill = shared::resolve(fill_color.as_ref(), || {
+                use_widget_theme()
+                    .map(|t| t.widget_primary())
+                    .unwrap_or(shared::DEFAULT_ACCENT)
+            });
             RectStyle::default()
-                .with_fill(accent(fill_color.as_ref()))
+                .with_fill(fill)
                 .with_radius(BorderRadius::all(TRACK_HEIGHT / 2.0))
         },
         vec![],
@@ -89,11 +93,15 @@ pub fn slider(ctx: &mut WidgetCtx, props: SliderProps) -> Result<Box<dyn LayoutI
     let thumb_value = value.clone();
     let thumb_color = color.clone();
     let thumb = StyledContainer::new(
-        ctx,
         LayoutStyle::new().width(THUMB_SIZE).height(THUMB_SIZE),
         move |_r| {
+            let fill = shared::resolve(thumb_color.as_ref(), || {
+                use_widget_theme()
+                    .map(|t| t.widget_primary())
+                    .unwrap_or(shared::DEFAULT_ACCENT)
+            });
             RectStyle::default()
-                .with_fill(accent(thumb_color.as_ref()))
+                .with_fill(fill)
                 .with_stroke(Stroke::new(Color::WHITE, 2.0))
                 .with_radius(BorderRadius::all(THUMB_SIZE / 2.0))
         },
@@ -107,11 +115,15 @@ pub fn slider(ctx: &mut WidgetCtx, props: SliderProps) -> Result<Box<dyn LayoutI
     });
 
     let track = StyledContainer::new(
-        ctx,
         LayoutStyle::new().width(width).height(TRACK_HEIGHT),
         move |_r| {
+            let fill = shared::resolve(track_color.as_ref(), || {
+                use_widget_theme()
+                    .map(|t| t.widget_muted())
+                    .unwrap_or(DEFAULT_TRACK)
+            });
             RectStyle::default()
-                .with_fill(track_fill(track_color.as_ref()))
+                .with_fill(fill)
                 .with_radius(BorderRadius::all(TRACK_HEIGHT / 2.0))
         },
         vec![box_item(fill), box_item(thumb)],
@@ -127,42 +139,17 @@ pub fn slider(ctx: &mut WidgetCtx, props: SliderProps) -> Result<Box<dyn LayoutI
     Ok(box_item(track))
 }
 
-/// The accent colour: the caller's reactive `color` if set, else the theme's widget primary (as `Button` does).
-fn accent(color: &dyn Fn() -> Color) -> Color {
-    let c = color();
-    if c == Color::TRANSPARENT {
-        use_widget_theme()
-            .map(|t| t.widget_primary())
-            .unwrap_or(DEFAULT_ACCENT)
-    } else {
-        c
-    }
-}
-
-/// The track colour: the caller's reactive `track_color` if set, else the theme's muted token.
-fn track_fill(color: &dyn Fn() -> Color) -> Color {
-    let c = color();
-    if c == Color::TRANSPARENT {
-        use_widget_theme()
-            .map(|t| t.widget_muted())
-            .unwrap_or(DEFAULT_TRACK)
-    } else {
-        c
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
+    use ui_core::reset_layout_runtime;
 
     use geometry_core::Rect;
     use layout_core::{AvailableSpace, LayoutStyle};
     use platform_core::{Event, PointerButton, PointerSource};
     use reactive_core::signal;
-    use ui_core::{
-        Component, LayoutItem, NodeId, WidgetCtx, compute_layout, new_container, track_layout,
-    };
+    use ui_core::{Component, LayoutItem, NodeId, compute_layout, new_container, track_layout};
 
     use super::*;
 
@@ -191,16 +178,14 @@ mod tests {
     }
 
     // Lays `node` out inside a 300×100 root and returns its laid-out rect, for computing drag points on the track.
-    fn lay_out(ctx: &mut WidgetCtx, node: NodeId) -> Rect {
-        let rect = track_layout(ctx, node).unwrap();
+    fn lay_out(node: NodeId) -> Rect {
+        let rect = track_layout(node).unwrap();
         let root = new_container(
-            ctx,
             LayoutStyle::new().flex_column().width(300.0).height(100.0),
             &[node],
         )
         .unwrap();
         compute_layout(
-            ctx,
             root,
             AvailableSpace::Definite(300.0),
             AvailableSpace::Definite(100.0),
@@ -212,18 +197,15 @@ mod tests {
     // The core contract: dragging to the track's midpoint maps to value ≈ 0.5, and to the far edge maps to 1.0.
     #[test]
     fn drag_to_midpoint_sets_value_half() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let value = signal(0.0f32);
-        let mut widget = slider(
-            &mut ctx,
-            SliderProps {
-                value: Some(value.clone()),
-                width: 200.0,
-                ..Default::default()
-            },
-        )
+        let mut widget = slider(SliderProps {
+            value: Some(value.clone()),
+            width: 200.0,
+            ..Default::default()
+        })
         .unwrap();
-        let rect = lay_out(&mut ctx, widget.layout_node());
+        let rect = lay_out(widget.layout_node());
 
         widget.on_event(&press((rect.x + 100.0) as f64, (rect.y + 4.0) as f64));
         assert!(
@@ -244,8 +226,8 @@ mod tests {
     // An unset `value` prop must fall back to a working internal signal (uncontrolled mode), not panic.
     #[test]
     fn uncontrolled_slider_builds_with_default_value() {
-        let mut ctx = WidgetCtx::new();
-        let result = slider(&mut ctx, SliderProps::default());
+        reset_layout_runtime();
+        let result = slider(SliderProps::default());
         assert!(result.is_ok());
     }
 
@@ -254,17 +236,14 @@ mod tests {
     fn on_change_fires_with_mapped_value() {
         let seen: Rc<Cell<f32>> = Rc::new(Cell::new(-1.0));
         let sink = seen.clone();
-        let mut ctx = WidgetCtx::new();
-        let mut widget = slider(
-            &mut ctx,
-            SliderProps {
-                width: 100.0,
-                on_change: Some(Box::new(move |v| sink.set(v))),
-                ..Default::default()
-            },
-        )
+        reset_layout_runtime();
+        let mut widget = slider(SliderProps {
+            width: 100.0,
+            on_change: Some(Box::new(move |v| sink.set(v))),
+            ..Default::default()
+        })
         .unwrap();
-        let rect = lay_out(&mut ctx, widget.layout_node());
+        let rect = lay_out(widget.layout_node());
 
         widget.on_event(&press((rect.x + 25.0) as f64, (rect.y + 4.0) as f64));
         assert!(

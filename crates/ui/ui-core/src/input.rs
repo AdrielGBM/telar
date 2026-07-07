@@ -34,12 +34,11 @@ pub struct Input {
 
 impl Input {
     pub fn new(
-        ctx: &mut crate::context::WidgetCtx,
         value: RwSignal<String>,
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, layout_style)?;
+        let leaf = LayoutLeaf::register(layout_style)?;
         let caret = value.with(|s| s.len());
         let id = focus::next_id();
         // Join the tab order so Tab/Shift-Tab can reach this field.
@@ -250,12 +249,13 @@ fn next_boundary(s: &str, i: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::context::reset_layout_runtime;
     use layout_core::AvailableSpace;
     use platform_core::PointerSource;
     use renderer_core::Color;
 
     use super::*;
-    use crate::context::{WidgetCtx, compute_layout, new_container};
+    use crate::context::{compute_layout, new_container};
     use crate::layout_item::LayoutItem;
 
     fn key(k: Key) -> Event {
@@ -267,23 +267,20 @@ mod tests {
 
     // Builds a focused, laid-out input bound to `initial` and returns it plus its value signal.
     fn focused_input(initial: &str) -> (Input, RwSignal<String>) {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let value = signal(initial.to_string());
         let input = Input::new(
-            &mut ctx,
             value.clone(),
             LayoutStyle::new().width(200.0).height(20.0),
             || TextStyle::new(14.0, Color::BLACK),
         )
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             &[input.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),

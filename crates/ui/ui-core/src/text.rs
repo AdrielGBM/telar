@@ -20,13 +20,12 @@ pub struct Text {
 
 impl Text {
     pub fn new(
-        ctx: &mut crate::context::WidgetCtx,
         content_fn: impl Fn() -> String + 'static,
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
         // Stretch overrides any parent align-items (e.g. center) so text always fills the parent's cross-axis width instead of collapsing to 0.
-        let leaf = LayoutLeaf::register(ctx, layout_style.align_self_stretch())?;
+        let leaf = LayoutLeaf::register(layout_style.align_self_stretch())?;
         Ok(Self {
             content: Rc::new(content_fn),
             cached_content: RefCell::new((String::new(), Arc::from(""))),
@@ -39,7 +38,6 @@ impl Text {
     /// resolved width, so the box grows to fit however many lines the text wraps
     /// into and pushes following siblings down instead of overflowing onto them.
     pub fn auto(
-        ctx: &mut crate::context::WidgetCtx,
         content_fn: impl Fn() -> String + 'static,
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
@@ -55,7 +53,7 @@ impl Text {
         });
 
         let (node, rect) =
-            crate::context::new_measured_leaf(ctx, layout_style.align_self_stretch(), measure)?;
+            crate::context::new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         Ok(Self {
             content: content_fn,
             cached_content: RefCell::new((String::new(), Arc::from(""))),
@@ -65,12 +63,11 @@ impl Text {
     }
 
     pub fn single_line(
-        ctx: &mut crate::context::WidgetCtx,
         content_fn: impl Fn() -> String + 'static,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
         let height = style_fn().font_size * 1.4;
-        Text::new(ctx, content_fn, LayoutStyle::new().height(height), style_fn)
+        Text::new(content_fn, LayoutStyle::new().height(height), style_fn)
     }
 }
 

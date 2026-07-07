@@ -11,7 +11,7 @@ use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use ui_tree::NodeVec;
 
-use crate::context::{WidgetCtx, track_layout};
+use crate::context::track_layout;
 use crate::impl_leaf_widget;
 use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
@@ -274,13 +274,9 @@ struct ScrollArea {
 
 #[cfg(test)]
 impl ScrollArea {
-    fn new(
-        ctx: &WidgetCtx,
-        viewport: impl Fn() -> Rect + 'static,
-        content: Box<dyn LayoutItem>,
-    ) -> Self {
+    fn new(viewport: impl Fn() -> Rect + 'static, content: Box<dyn LayoutItem>) -> Self {
         let content_rect_signal =
-            track_layout(ctx, content.layout_node()).expect("content node not registered in ctx");
+            track_layout(content.layout_node()).expect("content node not registered in ctx");
         Self {
             viewport: Box::new(viewport),
             core: ScrollCore::new(content_rect_signal, content),
@@ -311,14 +307,13 @@ pub struct LayoutScrollArea {
 
 impl LayoutScrollArea {
     pub fn new(
-        ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
         content: Box<dyn LayoutItem>,
     ) -> Result<Self, LayoutError> {
         let content_node = content.layout_node();
         let content_rect_signal =
-            track_layout(ctx, content_node).expect("content node not registered in ctx");
-        let leaf = LayoutLeaf::register(ctx, layout_style)?;
+            track_layout(content_node).expect("content node not registered in ctx");
+        let leaf = LayoutLeaf::register(layout_style)?;
 
         // Re-lay out the content at the viewport width (unbounded height, so it can overflow and scroll)
         // each time the viewport resizes. The viewport rect is set by the surrounding layout; this effect
@@ -380,6 +375,7 @@ impl Component for LayoutScrollArea {
 
 #[cfg(test)]
 mod tests {
+    use crate::context::reset_layout_runtime;
     use geometry_core::Rect;
     use layout_core::{AvailableSpace, LayoutStyle, NodeId};
     use platform_core::{Event, PointerSource, ScrollDelta};
@@ -388,7 +384,7 @@ mod tests {
 
     use super::*;
     use crate::canvas::Canvas;
-    use crate::context::{WidgetCtx, compute_layout, new_container, track_layout};
+    use crate::context::{compute_layout, new_container, track_layout};
     use crate::layout_item::LayoutItem;
     use crate::layout_leaf::LayoutLeaf;
 
@@ -396,29 +392,25 @@ mod tests {
     // a `scroll` element has no other owner to compute its content.
     #[test]
     fn scroll_area_lays_out_its_detached_content() {
-        let mut ctx = WidgetCtx::new();
-        let content = Canvas::new(
-            &mut ctx,
-            LayoutStyle::new().width(400.0).height(1000.0),
-            |_| RenderNode::Empty,
-        )
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(400.0).height(1000.0), |_| {
+            RenderNode::Empty
+        })
         .unwrap();
         let content_node = content.layout_node();
         let scroll = LayoutScrollArea::new(
-            &mut ctx,
             LayoutStyle::new().width(300.0).height(160.0),
             Box::new(content),
         )
         .unwrap();
         let scroll_node = scroll.layout_node();
         compute_layout(
-            &mut ctx,
             scroll_node,
             AvailableSpace::Definite(300.0),
             AvailableSpace::Definite(160.0),
         )
         .unwrap();
-        let content_rect = track_layout(&ctx, content_node).unwrap().get();
+        let content_rect = track_layout(content_node).unwrap().get();
         assert!(
             content_rect.height > 0.0,
             "scroll must lay out its content, got {content_rect:?}"
@@ -426,16 +418,14 @@ mod tests {
     }
 
     fn make_scroll_area() -> ScrollArea {
-        let mut ctx = WidgetCtx::new();
-        let ctx = &mut ctx;
-        let content = Canvas::new(ctx, LayoutStyle::new().width(400.0).height(1000.0), |_| {
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(400.0).height(1000.0), |_| {
             RenderNode::Empty
         })
         .unwrap();
         let node = content.layout_node();
-        let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+        let sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
         compute_layout(
-            ctx,
             node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::MaxContent,
@@ -445,16 +435,14 @@ mod tests {
     }
 
     fn make_scroll_area_small() -> ScrollArea {
-        let mut ctx = WidgetCtx::new();
-        let ctx = &mut ctx;
-        let content = Canvas::new(ctx, LayoutStyle::new().width(400.0).height(200.0), |_| {
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(400.0).height(200.0), |_| {
             RenderNode::Empty
         })
         .unwrap();
         let node = content.layout_node();
-        let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+        let sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
         compute_layout(
-            ctx,
             node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::MaxContent,
@@ -471,12 +459,11 @@ mod tests {
         use platform_core::PointerButton;
         use reactive_core::{begin_batch, end_batch, signal};
 
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let s = signal(0i32);
         let s_cb = s.clone();
         // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().width(50.0).height(30.0),
             |_r| RectStyle::default(),
             vec![],
@@ -486,32 +473,25 @@ mod tests {
         let btn_node = btn.layout_node();
         let s_txt = s.clone();
         let txt = crate::text::Text::new(
-            &mut ctx,
             move || format!("{}", s_txt.get()),
             LayoutStyle::new().width(50.0).height(20.0),
             || renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK),
         )
         .unwrap();
         let content = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(1000.0),
             vec![Box::new(btn), Box::new(txt)],
         )
         .unwrap();
         let content_node = content.layout_node();
-        let sa = ScrollArea::new(
-            &ctx,
-            || Rect::new(0.0, 0.0, 400.0, 300.0),
-            Box::new(content),
-        );
+        let sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
         compute_layout(
-            &mut ctx,
             content_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let br = track_layout(&ctx, btn_node).unwrap().get();
+        let br = track_layout(btn_node).unwrap().get();
 
         let mut tree = crate::ComponentList::new(sa);
         let _ = tree.commands();
@@ -561,12 +541,11 @@ mod tests {
         use platform_core::PointerButton;
         use reactive_core::signal;
 
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let s = signal(0i32);
         let s_cb = s.clone();
         // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().width(50.0).height(30.0),
             |_r| RectStyle::default(),
             vec![],
@@ -575,25 +554,19 @@ mod tests {
         .on_press(move || s_cb.update(|n| *n += 1));
         let btn_node = btn.layout_node();
         let content = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(1000.0),
             vec![Box::new(btn)],
         )
         .unwrap();
         let content_node = content.layout_node();
-        let mut sa = ScrollArea::new(
-            &ctx,
-            || Rect::new(0.0, 0.0, 400.0, 300.0),
-            Box::new(content),
-        );
+        let mut sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
         compute_layout(
-            &mut ctx,
             content_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let br = track_layout(&ctx, btn_node).unwrap().get();
+        let br = track_layout(btn_node).unwrap().get();
         let (cx, cy) = (
             (br.x + br.width / 2.0) as f64,
             (br.y + br.height / 2.0) as f64,
@@ -636,34 +609,29 @@ mod tests {
 
     #[test]
     fn as_layout_item_uses_leaf_rect_as_viewport() {
-        let mut ctx = WidgetCtx::new();
-        let ctx = &mut ctx;
-        let content = Canvas::new(ctx, LayoutStyle::new().width(400.0).height(1000.0), |_| {
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(400.0).height(1000.0), |_| {
             RenderNode::Empty
         })
         .unwrap();
         let content_node = content.layout_node();
         let sa = LayoutScrollArea::new(
-            ctx,
             LayoutStyle::new().width(400.0).height(300.0),
             Box::new(content),
         )
         .unwrap();
         let root = new_container(
-            ctx,
             LayoutStyle::new().flex_column().width(400.0).height(300.0),
             &[sa.layout_node()],
         )
         .unwrap();
         compute_layout(
-            ctx,
             root,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(300.0),
         )
         .unwrap();
         compute_layout(
-            ctx,
             content_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::MaxContent,
@@ -676,34 +644,29 @@ mod tests {
 
     #[test]
     fn as_layout_item_emits_clip_and_vbar_on_overflow() {
-        let mut ctx = WidgetCtx::new();
-        let ctx = &mut ctx;
-        let content = Canvas::new(ctx, LayoutStyle::new().width(400.0).height(1000.0), |_| {
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(400.0).height(1000.0), |_| {
             RenderNode::Empty
         })
         .unwrap();
         let content_node = content.layout_node();
         let sa = LayoutScrollArea::new(
-            ctx,
             LayoutStyle::new().width(400.0).height(300.0),
             Box::new(content),
         )
         .unwrap();
         let root = new_container(
-            ctx,
             LayoutStyle::new().flex_column().width(400.0).height(300.0),
             &[sa.layout_node()],
         )
         .unwrap();
         compute_layout(
-            ctx,
             root,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(300.0),
         )
         .unwrap();
         compute_layout(
-            ctx,
             content_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::MaxContent,
@@ -864,22 +827,15 @@ mod tests {
             }
         }
 
-        let mut ctx = WidgetCtx::new();
-        let ctx = &mut ctx;
-        let leaf =
-            LayoutLeaf::register(ctx, LayoutStyle::new().width(400.0).height(1000.0)).unwrap();
+        reset_layout_runtime();
+        let leaf = LayoutLeaf::register(LayoutStyle::new().width(400.0).height(1000.0)).unwrap();
         let node = leaf.node;
         let content = CapturingItem {
             leaf,
             out: captured_y_clone,
         };
-        let mut sa = ScrollArea::new(
-            ctx,
-            || Rect::new(100.0, 50.0, 400.0, 300.0),
-            Box::new(content),
-        );
+        let mut sa = ScrollArea::new(|| Rect::new(100.0, 50.0, 400.0, 300.0), Box::new(content));
         compute_layout(
-            ctx,
             node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::MaxContent,
@@ -900,16 +856,14 @@ mod tests {
     }
 
     fn make_scroll_area_wide() -> ScrollArea {
-        let mut ctx = WidgetCtx::new();
-        let ctx = &mut ctx;
-        let content = Canvas::new(ctx, LayoutStyle::new().width(1000.0).height(300.0), |_| {
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(1000.0).height(300.0), |_| {
             RenderNode::Empty
         })
         .unwrap();
         let node = content.layout_node();
-        let sa = ScrollArea::new(ctx, || Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+        let sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
         compute_layout(
-            ctx,
             node,
             AvailableSpace::Definite(1000.0),
             AvailableSpace::MaxContent,

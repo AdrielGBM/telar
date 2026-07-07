@@ -12,11 +12,10 @@ pub struct Canvas {
 
 impl Canvas {
     pub fn new(
-        ctx: &mut crate::context::WidgetCtx,
         layout_style: LayoutStyle,
         draw_fn: impl Fn(Rect) -> RenderNode + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, layout_style)?;
+        let leaf = LayoutLeaf::register(layout_style)?;
         Ok(Self {
             leaf,
             draw: Box::new(draw_fn),
@@ -26,11 +25,10 @@ impl Canvas {
 
 impl Canvas {
     pub fn with_intrinsic_height(
-        ctx: &mut crate::context::WidgetCtx,
         height: f32,
         draw_fn: impl Fn(geometry_core::Rect) -> ui_tree::RenderNode + 'static,
     ) -> Result<Self, layout_core::LayoutError> {
-        Self::new(ctx, layout_core::LayoutStyle::new().height(height), draw_fn)
+        Self::new(layout_core::LayoutStyle::new().height(height), draw_fn)
     }
 }
 
@@ -66,6 +64,7 @@ impl Component for Canvas {
 
 #[cfg(test)]
 mod tests {
+    use crate::context::reset_layout_runtime;
     use std::cell::Cell;
     use std::rc::Rc;
 
@@ -73,7 +72,7 @@ mod tests {
     use renderer_core::{Color, DrawCommand, Paint, RectStyle, ShapeStyle};
 
     use super::*;
-    use crate::context::{WidgetCtx, compute_layout, new_container};
+    use crate::context::{compute_layout, new_container};
     use crate::layout_item::LayoutItem;
 
     // `draw` must be re-invoked on every `view()`, not cached from construction — a `$signal` colour
@@ -83,21 +82,17 @@ mod tests {
     fn draw_closure_is_re_read_each_view_and_recolors() {
         let color = Rc::new(Cell::new(Color::RED));
         let color_read = color.clone();
-        let mut ctx = WidgetCtx::new();
-        let canvas = Canvas::new(
-            &mut ctx,
-            LayoutStyle::new().width(40.0).height(40.0),
-            move |r| RenderNode::rect(r, RectStyle::default().with_fill(color_read.get())),
-        )
+        reset_layout_runtime();
+        let canvas = Canvas::new(LayoutStyle::new().width(40.0).height(40.0), move |r| {
+            RenderNode::rect(r, RectStyle::default().with_fill(color_read.get()))
+        })
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().width(40.0).height(40.0),
             &[canvas.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(40.0),
             AvailableSpace::Definite(40.0),

@@ -18,7 +18,6 @@ pub struct Image {
 
 impl Image {
     pub fn new(
-        ctx: &mut crate::context::WidgetCtx,
         layout_style: LayoutStyle,
         data_fn: impl Fn() -> Arc<ImageData> + 'static,
         filter_fn: impl Fn() -> ImageFilter + 'static,
@@ -30,7 +29,7 @@ impl Image {
             (d.width as f32, d.height as f32)
         });
 
-        let leaf = LayoutLeaf::register(ctx, layout_style)?;
+        let leaf = LayoutLeaf::register(layout_style)?;
         Ok(Self {
             data: Box::new(data_fn),
             leaf,
@@ -86,18 +85,18 @@ impl_leaf_widget!(Image);
 
 #[cfg(test)]
 mod tests {
+    use crate::context::reset_layout_runtime;
     use layout_core::AvailableSpace;
 
     use super::*;
-    use crate::context::{WidgetCtx, compute_layout, new_container};
+    use crate::context::{compute_layout, new_container};
     use crate::layout_item::LayoutItem;
 
     #[test]
     fn image_without_size_uses_intrinsic_size() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let data = Arc::new(ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20));
         let image = Image::new(
-            &mut ctx,
             LayoutStyle::new(),
             move || Arc::clone(&data),
             || ImageFilter::Linear,
@@ -105,13 +104,11 @@ mod tests {
         )
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(200.0),
             &[image.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -125,11 +122,10 @@ mod tests {
 
     #[test]
     fn image_single_side_derives_aspect() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let data = Arc::new(ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20));
         // Width pinned, height auto → height follows the 2:1 intrinsic aspect ratio.
         let image = Image::new(
-            &mut ctx,
             LayoutStyle::new().width(100.0),
             move || Arc::clone(&data),
             || ImageFilter::Linear,
@@ -137,13 +133,11 @@ mod tests {
         )
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(300.0).height(300.0),
             &[image.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(300.0),
             AvailableSpace::Definite(300.0),

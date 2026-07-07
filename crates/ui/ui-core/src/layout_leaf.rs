@@ -11,11 +11,8 @@ pub struct LayoutLeaf {
 }
 
 impl LayoutLeaf {
-    pub fn register(
-        ctx: &mut context::WidgetCtx,
-        layout_style: LayoutStyle,
-    ) -> Result<Self, LayoutError> {
-        let (node, rect) = context::new_leaf(ctx, layout_style)?;
+    pub fn register(layout_style: LayoutStyle) -> Result<Self, LayoutError> {
+        let (node, rect) = context::new_leaf(layout_style)?;
         Ok(Self { node, rect })
     }
 

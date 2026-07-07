@@ -1,20 +1,11 @@
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
 use renderer_core::{Color, RectStyle, ShapeStyle, Stroke};
-use ui_core::{
-    Container, LayoutItem, Overlay, ReactiveList, Slots, StyledContainer, WidgetCtx, box_item,
-};
+use ui_core::{LayoutItem, Slots, StyledContainer, box_item};
 
-/// Scrim tone: a translucent black wash over the page (a fill, never an opacity layer, so the panel over it
-/// stays opaque — see the note in `modal`).
-const SCRIM: Color = Color::rgba(0.0, 0.0, 0.0, 0.5);
-/// Fallback panel surface when `color` is unset — an opaque near-white sheet.
-const DEFAULT_SURFACE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
-/// Hairline border on the panel's inner edge.
-const DEFAULT_BORDER: Color = Color::rgba(0.12, 0.12, 0.16, 0.15);
+use crate::scrim;
+use crate::shared;
+
 /// Panel width when `width` is unset (`0.0`).
 const DEFAULT_WIDTH: f32 = 280.0;
 const PANEL_PAD: f32 = 20.0;
@@ -37,7 +28,7 @@ pub struct DrawerProps {
     pub width: f32,
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
     pub on_close: Option<Box<dyn Fn()>>,
-    /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `DEFAULT_SURFACE`. A closure
+    /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `shared::DEFAULT_SURFACE`. A closure
     /// (re-read every frame) so a theme token or `$signal` colour re-colours live.
     pub color: Box<dyn Fn() -> Color>,
 }
@@ -54,11 +45,7 @@ impl Default for DrawerProps {
     }
 }
 
-pub fn drawer(
-    ctx: &mut WidgetCtx,
-    props: DrawerProps,
-    mut slots: Slots,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn drawer(props: DrawerProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let DrawerProps {
         open,
         side,
@@ -75,70 +62,21 @@ pub fn drawer(
         JustifyContent::START
     };
 
-    let Some(open) = open else {
-        return Ok(box_item(Container::new(
-            ctx,
-            LayoutStyle::new().width(0.0).height(0.0),
-            vec![],
-        )?));
-    };
-
-    // Built ONCE — lazily on the first open (host exists) — then kept mounted and shown/hidden via `open`, so
-    // the pre-built slot body survives close/reopen (see `modal` for the latch + `Overlay::toggleable` rationale).
-    let body = Rc::new(RefCell::new(Some(body)));
-    let color: Rc<dyn Fn() -> Color> = Rc::from(color);
-    let on_close: Option<Rc<dyn Fn()>> = on_close.map(Rc::from);
-
-    let built = Rc::new(Cell::new(false));
-    let key = {
-        let open = open.clone();
-        let built = built.clone();
-        move || {
-            if open.get() {
-                built.set(true);
-            }
-            vec![built.get()]
-        }
-    };
-    let list = ReactiveList::new(
-        ctx,
-        key,
-        |b: &bool| *b,
-        move |ctx, is_built| -> Result<Box<dyn LayoutItem>, LayoutError> {
-            if !is_built {
-                return Ok(box_item(Container::new(
-                    ctx,
-                    LayoutStyle::new().width(0.0).height(0.0),
-                    vec![],
-                )?));
-            }
-            build_open_drawer(
-                ctx,
-                width,
-                justify,
-                body.borrow_mut().take().unwrap_or_default(),
-                color.clone(),
-                open.clone(),
-                on_close.clone(),
-            )
-        },
-    )?;
-    Ok(box_item(list))
+    scrim::scrim_overlay(open, on_close, move |dismiss| {
+        build_open_drawer(width, justify, body, color, dismiss)
+    })
 }
 
-/// Builds the portalled panel for the open state: `Overlay` > scrim (dims + dismisses) > full-height opaque
-/// panel pinned to `side`. The panel swallows its own taps so a click inside it never dismisses.
+/// Builds the scrim + full-height opaque panel for the open state: scrim (dims + dismisses) > panel pinned to
+/// `side`. The panel swallows its own taps so a click inside it never dismisses.
 fn build_open_drawer(
-    ctx: &mut WidgetCtx,
     width: f32,
     justify: JustifyContent,
     body: Vec<Box<dyn LayoutItem>>,
-    color: Rc<dyn Fn() -> Color>,
-    open: RwSignal<bool>,
-    on_close: Option<Rc<dyn Fn()>>,
+    color: Box<dyn Fn() -> Color>,
+    dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let panel = StyledContainer::new(
-        ctx,
         LayoutStyle::new()
             .flex_column()
             .width(width)
@@ -146,8 +84,8 @@ fn build_open_drawer(
             .padding_all(PANEL_PAD),
         move |_r| {
             RectStyle::default()
-                .with_fill(surface(color.as_ref()))
-                .with_stroke(Stroke::new(DEFAULT_BORDER, 1.0))
+                .with_fill(shared::resolve(color.as_ref(), || shared::DEFAULT_SURFACE))
+                .with_stroke(Stroke::new(scrim::DEFAULT_BORDER, 1.0))
         },
         body,
     )?
@@ -156,45 +94,17 @@ fn build_open_drawer(
 
     // Cross axis (STRETCH) gives the panel full viewport height; the main axis (justify) pins it to the edge.
     let scrim = StyledContainer::new(
-        ctx,
         LayoutStyle::new()
             .flex_row()
             .flex_grow(1.0)
             .align_items(AlignItems::STRETCH)
             .justify_content(justify),
-        |_r| RectStyle::default().with_fill(SCRIM),
+        |_r| RectStyle::default().with_fill(scrim::SCRIM),
         vec![box_item(panel)],
     )?
-    .on_press(dismiss(open.clone(), on_close));
+    .on_press(move || (*dismiss)());
 
-    // Kept mounted; shown only while `open`, so the pre-built body survives a close/reopen.
-    let overlay = Overlay::toggleable(
-        ctx,
-        LayoutStyle::new().flex_column(),
-        vec![box_item(scrim)],
-        move || open.get(),
-    )?;
-    Ok(box_item(overlay))
-}
-
-/// A dismiss handler: set `open = false`, then run `on_close`.
-fn dismiss(open: RwSignal<bool>, on_close: Option<Rc<dyn Fn()>>) -> impl Fn() + 'static {
-    move || {
-        open.set(false);
-        if let Some(cb) = &on_close {
-            cb();
-        }
-    }
-}
-
-/// The panel surface: the caller's reactive `color` if set, else the opaque default sheet colour.
-fn surface(color: &dyn Fn() -> Color) -> Color {
-    let c = color();
-    if c == Color::TRANSPARENT {
-        DEFAULT_SURFACE
-    } else {
-        c
-    }
+    Ok(box_item(scrim))
 }
 
 #[cfg(test)]
@@ -203,6 +113,7 @@ mod tests {
     use layout_core::AvailableSpace;
     use reactive_core::signal;
     use renderer_core::{DrawCommand, TextStyle};
+    use ui_core::reset_layout_runtime;
     use ui_core::{ComponentList, Text, compute_layout, new_container, relayout_if_dirty};
 
     fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
@@ -210,9 +121,8 @@ mod tests {
             .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
     }
 
-    fn slot_with_body(ctx: &mut WidgetCtx, label: &'static str) -> Slots {
+    fn slot_with_body(label: &'static str) -> Slots {
         let body = Text::new(
-            ctx,
             move || label.to_string(),
             LayoutStyle::new().height(20.0),
             || TextStyle::new(14.0, Color::BLACK),
@@ -227,11 +137,10 @@ mod tests {
     // portal is disposed when it closes (its content leaves the command stream).
     #[test]
     fn open_shows_panel_and_close_hides_it() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let open = signal(false);
-        let slots = slot_with_body(&mut ctx, "Drawer body");
+        let slots = slot_with_body("Drawer body");
         let drawer = drawer(
-            &mut ctx,
             DrawerProps {
                 open: Some(open.clone()),
                 side: "right",
@@ -242,13 +151,11 @@ mod tests {
         .unwrap();
 
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             &[drawer.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(400.0),
@@ -276,9 +183,9 @@ mod tests {
     // An unbound drawer (no `open` signal) builds a 0-size node and never portals anything.
     #[test]
     fn unbound_drawer_renders_nothing() {
-        let mut ctx = WidgetCtx::new();
-        let slots = slot_with_body(&mut ctx, "Drawer body");
-        let drawer = drawer(&mut ctx, DrawerProps::default(), slots).unwrap();
+        reset_layout_runtime();
+        let slots = slot_with_body("Drawer body");
+        let drawer = drawer(DrawerProps::default(), slots).unwrap();
         let tree = ComponentList::new(drawer);
         assert!(!find_text(&tree.commands(), "Drawer body"));
     }

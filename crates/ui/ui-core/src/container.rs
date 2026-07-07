@@ -4,7 +4,6 @@ use platform_core::{Event, PointerButton};
 use reactive_core::RwSignal;
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::context::WidgetCtx;
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 use crate::press::PressGesture;
@@ -19,11 +18,10 @@ pub struct Container {
 
 impl Container {
     pub fn new(
-        ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
     ) -> Result<Self, LayoutError> {
-        let (node, rect, children) = register_container(ctx, layout_style, children)?;
+        let (node, rect, children) = register_container(layout_style, children)?;
         Ok(Container {
             node,
             rect,
@@ -43,11 +41,8 @@ impl Container {
         self
     }
 
-    pub fn column(
-        ctx: &mut WidgetCtx,
-        children: Vec<Box<dyn LayoutItem>>,
-    ) -> Result<Self, LayoutError> {
-        Self::new(ctx, LayoutStyle::new().flex_column(), children)
+    pub fn column(children: Vec<Box<dyn LayoutItem>>) -> Result<Self, LayoutError> {
+        Self::new(LayoutStyle::new().flex_column(), children)
     }
 }
 
@@ -109,45 +104,41 @@ impl Component for Container {
 
 #[cfg(test)]
 mod tests {
+    use crate::context::reset_layout_runtime;
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerSource};
     use renderer_core::{Color, TextStyle};
 
     use super::*;
-    use crate::context::{WidgetCtx, compute_layout, new_container};
+    use crate::context::{compute_layout, new_container};
     use crate::text::Text;
 
     fn make_container_with_labels() -> Container {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let text_style = TextStyle::new(14.0, Color::WHITE);
         let text_a = Text::new(
-            &mut ctx,
             || "A".to_string(),
             LayoutStyle::new().width(50.0).height(20.0),
             move || text_style,
         )
         .unwrap();
         let text_b = Text::new(
-            &mut ctx,
             || "B".to_string(),
             LayoutStyle::new().width(50.0).height(20.0),
             move || text_style,
         )
         .unwrap();
         let container = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_row(),
             vec![Box::new(text_a), Box::new(text_b)],
         )
         .unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_row().width(200.0).height(100.0),
             &[container.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
@@ -158,15 +149,15 @@ mod tests {
 
     #[test]
     fn container_row_creates_ok() {
-        let mut ctx = WidgetCtx::new();
-        let result = Container::new(&mut ctx, LayoutStyle::new().flex_row(), vec![]);
+        reset_layout_runtime();
+        let result = Container::new(LayoutStyle::new().flex_row(), vec![]);
         assert!(result.is_ok());
     }
 
     #[test]
     fn container_column_creates_ok() {
-        let mut ctx = WidgetCtx::new();
-        let result = Container::column(&mut ctx, vec![]);
+        reset_layout_runtime();
+        let result = Container::column(vec![]);
         assert!(result.is_ok());
     }
 
@@ -194,11 +185,10 @@ mod tests {
 
     #[test]
     fn container_layout_node_is_valid() {
-        let mut ctx = WidgetCtx::new();
-        let container = Container::new(&mut ctx, LayoutStyle::new().flex_row(), vec![]).unwrap();
+        reset_layout_runtime();
+        let container = Container::new(LayoutStyle::new().flex_row(), vec![]).unwrap();
         let node = container.layout_node();
-        let _root = new_container(&mut ctx, LayoutStyle::new().flex_row(), &[node])
-            .expect("should register");
+        let _root = new_container(LayoutStyle::new().flex_row(), &[node]).expect("should register");
     }
 
     #[test]
@@ -208,12 +198,11 @@ mod tests {
         use platform_core::PointerButton;
         use reactive_core::{begin_batch, end_batch, signal};
 
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let s = signal(0i32);
         let s_cb = s.clone();
         // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().width(50.0).height(30.0),
             |_r| renderer_core::RectStyle::default(),
             vec![],
@@ -223,27 +212,24 @@ mod tests {
         let btn_node = btn.layout_node();
         let s_txt = s.clone();
         let txt = crate::text::Text::new(
-            &mut ctx,
             move || format!("{}", s_txt.get()),
             LayoutStyle::new().width(50.0).height(20.0),
             || renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK),
         )
         .unwrap();
         let root = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             vec![Box::new(btn), Box::new(txt)],
         )
         .unwrap();
         let root_node = root.layout_node();
         compute_layout(
-            &mut ctx,
             root_node,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
         )
         .unwrap();
-        let br = track_layout(&ctx, btn_node).unwrap().get();
+        let br = track_layout(btn_node).unwrap().get();
 
         let mut tree = crate::ComponentList::new(root);
         let _ = tree.commands();
@@ -283,13 +269,9 @@ mod tests {
 
     #[test]
     fn container_can_be_nested_as_layout_item() {
-        let mut ctx = WidgetCtx::new();
-        let inner = Container::column(&mut ctx, vec![]).unwrap();
-        let outer = Container::new(
-            &mut ctx,
-            LayoutStyle::new().flex_row(),
-            vec![Box::new(inner)],
-        );
+        reset_layout_runtime();
+        let inner = Container::column(vec![]).unwrap();
+        let outer = Container::new(LayoutStyle::new().flex_row(), vec![Box::new(inner)]);
         assert!(outer.is_ok());
     }
 }

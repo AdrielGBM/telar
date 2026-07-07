@@ -7,12 +7,15 @@
 mod button;
 mod checkbox;
 mod drawer;
+mod dropdown;
 mod heading;
 mod menu;
 mod modal;
 mod radio;
+mod scrim;
 mod section;
 mod select;
+mod shared;
 mod slider;
 mod text_field;
 mod toggle;

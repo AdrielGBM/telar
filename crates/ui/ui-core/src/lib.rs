@@ -8,7 +8,7 @@ mod input;
 mod layout_item;
 mod layout_leaf;
 mod line;
-mod overlay;
+pub mod overlay;
 mod path;
 mod pointer;
 mod press;
@@ -24,8 +24,8 @@ mod text;
 pub use canvas::Canvas;
 pub use container::Container;
 pub use context::{
-    NodeId, WidgetCtx, absolute_rect, compute_layout, compute_layout_root, mark_dirty,
-    new_container, new_leaf, relayout_if_dirty, remove_node, set_children, set_display,
+    NodeId, absolute_rect, compute_layout, compute_layout_root, mark_dirty, new_container,
+    new_leaf, relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_display,
     set_overlay_host, track_layout,
 };
 pub use image::Image;

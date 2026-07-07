@@ -9,7 +9,7 @@ use ui_tree::{
     Component, EventResult, OverlaySink, RenderNode, register_overlay, unregister_overlay,
 };
 
-use crate::context::{WidgetCtx, attach_overlay, detach_overlay, remove_node};
+use crate::context::{absolute_rect, attach_overlay, detach_overlay, remove_node};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::{dispatch_container_event, offset_pointer};
 
@@ -21,6 +21,11 @@ pub enum Placement {
     Below,
     /// Content's bottom-left at the trigger's top-left — a menu opening upward.
     Above,
+}
+
+/// The world-vs-local anchor fallback shared by the anchored menu/select/tooltip panels.
+pub fn anchor_rect(node: NodeId, fallback: &RwSignal<Rect>) -> Rect {
+    absolute_rect(node).unwrap_or_else(|| fallback.peek())
 }
 
 /// Anchors an overlay's content to a trigger widget. `trigger` is the trigger's laid-out rect (what
@@ -160,11 +165,10 @@ pub struct Overlay {
 impl Overlay {
     /// A modal portal: the content fills the viewport and blocks every click behind it.
     pub fn new(
-        ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
     ) -> Result<Self, LayoutError> {
-        Self::build(ctx, layout_style, children, true, None, Rc::new(|| true))
+        Self::build(layout_style, children, true, None, Rc::new(|| true))
     }
 
     /// A modal portal that is kept mounted and shown/hidden by `visible` (read each frame). Unlike disposing
@@ -172,36 +176,32 @@ impl Overlay {
     /// dialog whose body arrives as a pre-built slot (which cannot be rebuilt once consumed). Hidden, it draws
     /// nothing and blocks nothing.
     pub fn toggleable(
-        ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
         visible: impl Fn() -> bool + 'static,
     ) -> Result<Self, LayoutError> {
-        Self::build(ctx, layout_style, children, true, None, Rc::new(visible))
+        Self::build(layout_style, children, true, None, Rc::new(visible))
     }
 
     /// A non-modal portal: clicks on the transparent fill fall through to the content behind; only clicks a
     /// child actually handles are consumed. Use for a toast/tooltip layer that must not block the page.
     pub fn new_click_through(
-        ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
     ) -> Result<Self, LayoutError> {
-        Self::build(ctx, layout_style, children, false, None, Rc::new(|| true))
+        Self::build(layout_style, children, false, None, Rc::new(|| true))
     }
 
     /// A portal whose content is positioned next to `trigger` (a dropdown/menu/tooltip popping up by its
     /// button). The content sizes to its intrinsic panel and is translated to the trigger's rect per
     /// `placement`; only that panel blocks (the barrier tracks the trigger), so clicks elsewhere fall through.
     pub fn anchored(
-        ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
         trigger: RwSignal<Rect>,
         placement: Placement,
     ) -> Result<Self, LayoutError> {
         Self::build(
-            ctx,
             layout_style,
             children,
             true,
@@ -211,7 +211,6 @@ impl Overlay {
     }
 
     fn build(
-        ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
         blocking: bool,
@@ -222,7 +221,7 @@ impl Overlay {
         // host makes that container the viewport. The caller's flex alignment positions content inside; an
         // anchored overlay instead lets its content size intrinsically and moves it with a transform.
         let (content, content_rect, children) =
-            register_container(ctx, layout_style.absolute_fill(), children)?;
+            register_container(layout_style.absolute_fill(), children)?;
 
         // Register for priority pointer routing. The sink shares the same child handles as the widget.
         let sink: Rc<dyn OverlaySink> = Rc::new(OverlaySinkImpl {
@@ -237,7 +236,7 @@ impl Overlay {
         if attach_overlay(content) {
             // Portaled: the DOM parent gets a 0×0 placeholder so the portal takes no space in the flow.
             let (placeholder, _r) =
-                crate::context::new_leaf(ctx, LayoutStyle::new().width(0.0).height(0.0))?;
+                crate::context::new_leaf(LayoutStyle::new().width(0.0).height(0.0))?;
             Ok(Overlay {
                 layout_node: placeholder,
                 portaled_content: Some(content),
@@ -331,6 +330,7 @@ impl Overlay {
 
 #[cfg(test)]
 mod tests {
+    use crate::context::reset_layout_runtime;
     use layout_core::AvailableSpace;
     use platform_core::{PointerButton, PointerSource};
     use reactive_core::{RwSignal, signal};
@@ -367,8 +367,8 @@ mod tests {
 
     // A container filling 400×400 whose on_press flips `flag`, used as both the modal scrim and the
     // background it covers.
-    fn pressable(ctx: &mut WidgetCtx, flag: RwSignal<bool>) -> Container {
-        Container::new(ctx, LayoutStyle::new().width(400.0).height(400.0), vec![])
+    fn pressable(flag: RwSignal<bool>) -> Container {
+        Container::new(LayoutStyle::new().width(400.0).height(400.0), vec![])
             .unwrap()
             .on_press(move || flag.set(true))
     }
@@ -377,18 +377,16 @@ mod tests {
     // fires its on_press.
     #[test]
     fn background_alone_receives_tap() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let clicked = signal(false);
-        let bg = pressable(&mut ctx, clicked.clone());
+        let bg = pressable(clicked.clone());
         let root = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             vec![Box::new(bg)],
         )
         .unwrap();
         let root_node = root.layout_node();
         compute_layout(
-            &mut ctx,
             root_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(400.0),
@@ -409,32 +407,26 @@ mod tests {
     // (the scrim) and is blocked from the background it covers.
     #[test]
     fn overlay_receives_tap_and_blocks_background() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let bg_clicked = signal(false);
         let overlay_clicked = signal(false);
 
-        let bg = pressable(&mut ctx, bg_clicked.clone());
+        let bg = pressable(bg_clicked.clone());
         // The scrim fills the overlay (which `absolute_fill`s the root), so it covers the background.
-        let scrim = Container::new(
-            &mut ctx,
-            LayoutStyle::new().width(400.0).height(400.0),
-            vec![],
-        )
-        .unwrap()
-        .on_press({
-            let s = overlay_clicked.clone();
-            move || s.set(true)
-        });
-        let overlay = Overlay::new(&mut ctx, LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
+        let scrim = Container::new(LayoutStyle::new().width(400.0).height(400.0), vec![])
+            .unwrap()
+            .on_press({
+                let s = overlay_clicked.clone();
+                move || s.set(true)
+            });
+        let overlay = Overlay::new(LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
         let root = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             vec![Box::new(bg), Box::new(overlay)],
         )
         .unwrap();
         let root_node = root.layout_node();
         compute_layout(
-            &mut ctx,
             root_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(400.0),
@@ -465,20 +457,18 @@ mod tests {
     fn portaled_overlay_blocks_background() {
         use crate::context::relayout_if_dirty;
 
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let bg_clicked = signal(false);
 
         // 1. Lay out the page first: this registers `root` as the overlay host.
-        let bg = pressable(&mut ctx, bg_clicked.clone());
+        let bg = pressable(bg_clicked.clone());
         let root = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             vec![Box::new(bg)],
         )
         .unwrap();
         let root_node = root.layout_node();
         compute_layout(
-            &mut ctx,
             root_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(400.0),
@@ -489,17 +479,13 @@ mod tests {
 
         // 2. Now open the modal: its content portals to the host and fills the viewport after relayout.
         let overlay_clicked = signal(false);
-        let scrim = Container::new(
-            &mut ctx,
-            LayoutStyle::new().width(400.0).height(400.0),
-            vec![],
-        )
-        .unwrap()
-        .on_press({
-            let s = overlay_clicked.clone();
-            move || s.set(true)
-        });
-        let _overlay = Overlay::new(&mut ctx, LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
+        let scrim = Container::new(LayoutStyle::new().width(400.0).height(400.0), vec![])
+            .unwrap()
+            .on_press({
+                let s = overlay_clicked.clone();
+                move || s.set(true)
+            });
+        let _overlay = Overlay::new(LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
         relayout_if_dirty();
 
         // 3. A tap at the center must reach the portaled overlay and be blocked from the page behind it.
@@ -520,34 +506,27 @@ mod tests {
     // transparent area reach the background, but still consumes a tap that lands on the panel.
     #[test]
     fn click_through_overlay_lets_background_tap_through() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let bg_clicked = signal(false);
         let panel_clicked = signal(false);
 
-        let bg = pressable(&mut ctx, bg_clicked.clone());
+        let bg = pressable(bg_clicked.clone());
         // A 100×100 panel in the top-left corner; the rest of the click-through layer is transparent.
-        let panel = Container::new(
-            &mut ctx,
-            LayoutStyle::new().width(100.0).height(100.0),
-            vec![],
-        )
-        .unwrap()
-        .on_press({
-            let s = panel_clicked.clone();
-            move || s.set(true)
-        });
+        let panel = Container::new(LayoutStyle::new().width(100.0).height(100.0), vec![])
+            .unwrap()
+            .on_press({
+                let s = panel_clicked.clone();
+                move || s.set(true)
+            });
         let overlay =
-            Overlay::new_click_through(&mut ctx, LayoutStyle::new(), vec![Box::new(panel)])
-                .unwrap();
+            Overlay::new_click_through(LayoutStyle::new(), vec![Box::new(panel)]).unwrap();
         let root = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             vec![Box::new(bg), Box::new(overlay)],
         )
         .unwrap();
         let root_node = root.layout_node();
         compute_layout(
-            &mut ctx,
             root_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(400.0),
@@ -585,18 +564,16 @@ mod tests {
     fn anchored_content_tracks_trigger() {
         use crate::context::relayout_if_dirty;
 
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
 
         // 1. Lay out a page first so the overlay host exists (the anchored content portals to it).
         let root = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             vec![],
         )
         .unwrap();
         let root_node = root.layout_node();
         compute_layout(
-            &mut ctx,
             root_node,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(400.0),
@@ -607,14 +584,8 @@ mod tests {
 
         // 2. Open an anchored overlay below a trigger, with a fixed 120×60 panel.
         let trigger = signal(Rect::new(50.0, 20.0, 80.0, 30.0));
-        let panel = Container::new(
-            &mut ctx,
-            LayoutStyle::new().width(120.0).height(60.0),
-            vec![],
-        )
-        .unwrap();
+        let panel = Container::new(LayoutStyle::new().width(120.0).height(60.0), vec![]).unwrap();
         let overlay = Overlay::anchored(
-            &mut ctx,
             LayoutStyle::new(),
             vec![Box::new(panel)],
             trigger.clone(),

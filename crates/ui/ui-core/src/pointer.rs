@@ -13,20 +13,11 @@ pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
 
 // Applies the full affine inverse of `matrix` to all pointer-coordinate events. Returns None for non-pointer events or when `matrix` is degenerate (det ≈ 0), so callers fall back to the original.
 pub(crate) fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
-    let [a, b, c, d, e, f] = matrix;
-    let det = a * d - b * c;
-    if det.abs() < 1e-6 {
-        return None;
-    }
-    let inv_a = d / det;
-    let inv_b = -b / det;
-    let inv_c = -c / det;
-    let inv_d = a / det;
-    let inv_e = (c * f - d * e) / det;
-    let inv_f = (b * e - a * f) / det;
+    let inv = geometry_core::Transform::from_array(matrix).invert()?;
+    // Map in f64 so pointer coordinates keep their precision; Transform::apply would round-trip through f32.
     let apply = |world_x: f64, world_y: f64| -> (f64, f64) {
-        let local_x = inv_a as f64 * world_x + inv_c as f64 * world_y + inv_e as f64;
-        let local_y = inv_b as f64 * world_x + inv_d as f64 * world_y + inv_f as f64;
+        let local_x = inv.a as f64 * world_x + inv.c as f64 * world_y + inv.e as f64;
+        let local_y = inv.b as f64 * world_x + inv.d as f64 * world_y + inv.f as f64;
         (local_x, local_y)
     };
     match event {

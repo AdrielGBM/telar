@@ -1,7 +1,7 @@
 use layout_core::{LayoutError, LayoutStyle};
 use renderer_core::{Color, TextStyle};
 use theme_core::use_widget_theme;
-use ui_core::{LayoutItem, Text, WidgetCtx, box_item};
+use ui_core::{LayoutItem, Text, box_item};
 
 /// A section title: 20px, semibold, coloured from the theme's accent (`widget_primary`). High-level
 /// sugar over `text`; lives in `ui-components`, not the kernel.
@@ -10,13 +10,9 @@ pub struct HeadingProps {
     pub text: &'static str,
 }
 
-pub fn heading(
-    ctx: &mut WidgetCtx,
-    props: HeadingProps,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn heading(props: HeadingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label = props.text;
     let t = Text::new(
-        ctx,
         move || label.to_string(),
         LayoutStyle::new().height(20.0 * 1.4),
         heading_style,

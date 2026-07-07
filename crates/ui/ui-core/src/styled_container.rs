@@ -5,7 +5,6 @@ use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::RectStyle;
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::context::WidgetCtx;
 use crate::drag::DragGesture;
 use crate::focus::{self, FocusId};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
@@ -42,12 +41,11 @@ pub struct StyledContainer {
 
 impl StyledContainer {
     pub fn new(
-        ctx: &mut WidgetCtx,
         layout_style: LayoutStyle,
         style: impl Fn(Rect) -> RectStyle + 'static,
         children: Vec<Box<dyn LayoutItem>>,
     ) -> Result<Self, LayoutError> {
-        let (node, rect, children) = register_container(ctx, layout_style, children)?;
+        let (node, rect, children) = register_container(layout_style, children)?;
         Ok(Self {
             node,
             rect,
@@ -343,6 +341,7 @@ pub fn box_transform(
 
 #[cfg(test)]
 mod tests {
+    use crate::context::reset_layout_runtime;
     use std::cell::Cell;
     use std::rc::Rc;
 
@@ -416,15 +415,9 @@ mod tests {
     fn on_hover_fires_on_enter_and_leave() {
         let seen: Rc<Cell<Option<bool>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
-        let mut ctx = WidgetCtx::new();
-        let inner = Container::new(
-            &mut ctx,
-            LayoutStyle::new().width(100.0).height(100.0),
-            vec![],
-        )
-        .unwrap();
+        reset_layout_runtime();
+        let inner = Container::new(LayoutStyle::new().width(100.0).height(100.0), vec![]).unwrap();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(100.0).height(100.0),
             |_r| RectStyle::default(),
             vec![Box::new(inner)],
@@ -433,7 +426,6 @@ mod tests {
         .on_hover(move |h| sink.set(Some(h)));
         let node = card.layout_node();
         compute_layout(
-            &mut ctx,
             node,
             AvailableSpace::Definite(100.0),
             AvailableSpace::Definite(100.0),
@@ -454,15 +446,9 @@ mod tests {
     fn on_key_fires_on_key_press() {
         let count = Rc::new(Cell::new(0u32));
         let sink = count.clone();
-        let mut ctx = WidgetCtx::new();
-        let inner = Container::new(
-            &mut ctx,
-            LayoutStyle::new().width(10.0).height(10.0),
-            vec![],
-        )
-        .unwrap();
+        reset_layout_runtime();
+        let inner = Container::new(LayoutStyle::new().width(10.0).height(10.0), vec![]).unwrap();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column(),
             |_r| RectStyle::default(),
             vec![Box::new(inner)],
@@ -497,10 +483,9 @@ mod tests {
     fn theme_button_click_force_tick_no_panic() {
         set_theme_with_widgets(TestTheme(Color::RED));
 
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().width(50.0).height(30.0),
             |_r| RectStyle::default(),
             vec![],
@@ -509,13 +494,11 @@ mod tests {
         .on_press(move || set_theme_with_widgets(TestTheme(Color::GREEN)));
         let btn_node = btn.layout_node();
         let inner = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             vec![Box::new(btn)],
         )
         .unwrap();
         let card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default().with_fill(use_theme::<TestTheme>().0),
             vec![Box::new(inner)],
@@ -523,13 +506,12 @@ mod tests {
         .unwrap();
         let card_node = card.layout_node();
         compute_layout(
-            &mut ctx,
             card_node,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
         )
         .unwrap();
-        let br = track_layout(&ctx, btn_node).unwrap().get();
+        let br = track_layout(btn_node).unwrap().get();
 
         let mut tree = crate::ComponentList::new(card);
         let _ = tree.commands();
@@ -555,9 +537,8 @@ mod tests {
     fn on_press_fires_on_tap_not_press() {
         let flag = Rc::new(Cell::new(false));
         let f = flag.clone();
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default(),
             vec![],
@@ -565,7 +546,6 @@ mod tests {
         .unwrap()
         .on_press(move || f.set(true));
         compute_layout(
-            &mut ctx,
             card.layout_node(),
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
@@ -592,9 +572,8 @@ mod tests {
         let tap_flag = Rc::new(Cell::new(false));
         let lf = long_flag.clone();
         let tf = tap_flag.clone();
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default(),
             vec![],
@@ -603,7 +582,6 @@ mod tests {
         .on_press(move || tf.set(true))
         .on_long_press(move || lf.set(true));
         compute_layout(
-            &mut ctx,
             card.layout_node(),
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
@@ -638,10 +616,9 @@ mod tests {
         let btn_flag = Rc::new(Cell::new(false));
         let cf = card_flag.clone();
         let bf = btn_flag.clone();
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         // A pressable primitive child stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().width(50.0).height(30.0),
             |_r| RectStyle::default(),
             vec![],
@@ -650,7 +627,6 @@ mod tests {
         .on_press(move || bf.set(true));
         let btn_node = btn.layout_node();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default(),
             vec![Box::new(btn)],
@@ -658,14 +634,13 @@ mod tests {
         .unwrap()
         .on_press(move || cf.set(true));
         compute_layout(
-            &mut ctx,
             card.layout_node(),
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
         )
         .unwrap();
 
-        let br = track_layout(&ctx, btn_node).unwrap().get();
+        let br = track_layout(btn_node).unwrap().get();
         let (cx, cy) = (
             (br.x + br.width / 2.0) as f64,
             (br.y + br.height / 2.0) as f64,
@@ -682,9 +657,8 @@ mod tests {
     // A hover style swaps the box's fill while the mouse is over it (mouse only), and clears on leave.
     #[test]
     fn hover_style_swaps_on_mouse_move() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
             vec![],
@@ -692,7 +666,6 @@ mod tests {
         .unwrap()
         .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)));
         compute_layout(
-            &mut ctx,
             card.layout_node(),
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
@@ -723,9 +696,8 @@ mod tests {
     // Touch never sets hover (no "pointer left" on touch), so a tap leaves no stuck hover style.
     #[test]
     fn touch_move_does_not_set_hover() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
             vec![],
@@ -733,7 +705,6 @@ mod tests {
         .unwrap()
         .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)));
         compute_layout(
-            &mut ctx,
             card.layout_node(),
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
@@ -771,9 +742,8 @@ mod tests {
     fn scroll_drag_does_not_press_box() {
         let flag = Rc::new(Cell::new(false));
         let f = flag.clone();
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(200.0),
             |_r| RectStyle::default(),
             vec![],
@@ -781,7 +751,6 @@ mod tests {
         .unwrap()
         .on_press(move || f.set(true));
         compute_layout(
-            &mut ctx,
             card.layout_node(),
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -806,9 +775,8 @@ mod tests {
         use std::cell::RefCell;
         let seen: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = seen.clone();
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(200.0).height(200.0),
             |_r| RectStyle::default(),
             vec![],
@@ -816,7 +784,6 @@ mod tests {
         .unwrap()
         .on_drag(move |x, y| sink.borrow_mut().push((x, y)));
         compute_layout(
-            &mut ctx,
             card.layout_node(),
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -849,9 +816,8 @@ mod tests {
         use std::cell::RefCell;
         let seen: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = seen.clone();
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let child = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().width(100.0).height(100.0),
             |_r| RectStyle::default(),
             vec![],
@@ -859,13 +825,11 @@ mod tests {
         .unwrap()
         .on_drag(move |x, y| sink.borrow_mut().push((x, y)));
         let mut parent = Container::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(300.0).height(300.0),
             vec![Box::new(child)],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             parent.layout_node(),
             AvailableSpace::Definite(300.0),
             AvailableSpace::Definite(300.0),
@@ -896,9 +860,8 @@ mod tests {
         use std::cell::RefCell;
         let seen: Rc<RefCell<Vec<bool>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = seen.clone();
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut card = StyledContainer::new(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(100.0).height(100.0),
             |_r| RectStyle::default(),
             vec![],
@@ -906,7 +869,6 @@ mod tests {
         .unwrap()
         .on_focus(move |f| sink.borrow_mut().push(f));
         compute_layout(
-            &mut ctx,
             card.layout_node(),
             AvailableSpace::Definite(100.0),
             AvailableSpace::Definite(100.0),

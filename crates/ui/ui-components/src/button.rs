@@ -4,7 +4,9 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::signal;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_widget_theme;
-use ui_core::{LayoutItem, StyledContainer, Text, WidgetCtx, box_item};
+use ui_core::{LayoutItem, StyledContainer, Text, box_item};
+
+use crate::shared;
 
 /// Padding a button reserves around its label, and the label's font size / corner radius. `Text::auto`
 /// measures the label at its full line box (taller than a bare `font_size * line_height`), so the vertical
@@ -41,7 +43,7 @@ impl Default for ButtonProps {
     }
 }
 
-pub fn button(ctx: &mut WidgetCtx, props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ButtonProps {
         label,
         fill,
@@ -51,8 +53,8 @@ pub fn button(ctx: &mut WidgetCtx, props: ButtonProps) -> Result<Box<dyn LayoutI
     } = props;
     // The reactive colour closures feed three independent style closures (base rect, hover rect, label
     // colour), so share them via `Rc` rather than move them into a single one.
-    let fill: Rc<dyn Fn() -> Color> = Rc::from(fill);
-    let outline: Rc<dyn Fn() -> Color> = Rc::from(outline);
+    let fill: shared::ReactiveColor = Rc::from(fill);
+    let outline: shared::ReactiveColor = Rc::from(outline);
     // The container tracks its own hover for the rect swap; the label's colour lives on a separate leaf,
     // so mirror the hover into this signal and read it from the label style (the outline variant flips
     // its text to white on hover).
@@ -63,7 +65,6 @@ pub fn button(ctx: &mut WidgetCtx, props: ButtonProps) -> Result<Box<dyn LayoutI
     let (label_fill, label_outline, label_hover) =
         (Rc::clone(&fill), Rc::clone(&outline), hovered.clone());
     let label_widget = Text::auto(
-        ctx,
         move || label.to_string(),
         LayoutStyle::new(),
         move || {
@@ -82,7 +83,6 @@ pub fn button(ctx: &mut WidgetCtx, props: ButtonProps) -> Result<Box<dyn LayoutI
     let (base_fill, base_outline) = (Rc::clone(&fill), Rc::clone(&outline));
     let (hover_fill, hover_outline) = (Rc::clone(&fill), Rc::clone(&outline));
     let container = StyledContainer::new(
-        ctx,
         // A row so the label's measured width sets the box's main-axis size (a column would collapse the
         // cross axis: `Text::auto` sets `align_self_stretch`, which fights content-sizing and renders 0-wide).
         LayoutStyle::new()
@@ -134,7 +134,7 @@ fn variant_rect(
     }
     let primary = use_widget_theme()
         .map(|t| t.widget_primary())
-        .unwrap_or(Color::rgba(0.24, 0.47, 0.98, 1.0));
+        .unwrap_or(shared::DEFAULT_ACCENT);
     let base = if hovered {
         primary.darken(0.15)
     } else {
@@ -171,6 +171,7 @@ fn label_color(
 mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
+    use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerButton, PointerSource};
@@ -183,21 +184,17 @@ mod tests {
     fn tap_fires_on_press() {
         let flag = Rc::new(Cell::new(false));
         let sink = flag.clone();
-        let mut ctx = WidgetCtx::new();
-        let mut btn = button(
-            &mut ctx,
-            ButtonProps {
-                label: "OK",
-                fill: Box::new(|| Color::rgba(0.2, 0.4, 0.9, 1.0)),
-                on_press: Box::new(move || sink.set(true)),
-                ..Default::default()
-            },
-        )
+        reset_layout_runtime();
+        let mut btn = button(ButtonProps {
+            label: "OK",
+            fill: Box::new(|| Color::rgba(0.2, 0.4, 0.9, 1.0)),
+            on_press: Box::new(move || sink.set(true)),
+            ..Default::default()
+        })
         .unwrap();
         let node = btn.layout_node();
-        let rect = track_layout(&ctx, node).unwrap();
+        let rect = track_layout(node).unwrap();
         compute_layout(
-            &mut ctx,
             node,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(80.0),

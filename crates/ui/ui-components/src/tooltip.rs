@@ -4,9 +4,11 @@ use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use reactive_core::signal;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::{
-    Container, LayoutItem, Overlay, ReactiveList, Slots, StyledContainer, Text, WidgetCtx,
-    box_item, track_layout,
+    Container, LayoutItem, Overlay, ReactiveList, Slots, StyledContainer, Text, box_item,
+    track_layout,
 };
+
+use crate::shared;
 
 /// Fallback bubble surface when `color` is unset — an opaque dark chip.
 const DEFAULT_BUBBLE: Color = Color::rgba(0.12, 0.12, 0.16, 0.96);
@@ -37,11 +39,7 @@ impl Default for TooltipProps {
     }
 }
 
-pub fn tooltip(
-    ctx: &mut WidgetCtx,
-    props: TooltipProps,
-    mut slots: Slots,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TooltipProps { text, color } = props;
     let trigger_content = slots.take_default();
     // Reflects whether the mouse is over the trigger; drives the bubble's show/hide.
@@ -49,7 +47,6 @@ pub fn tooltip(
 
     let hover_sink = hovered.clone();
     let trigger = StyledContainer::new(
-        ctx,
         LayoutStyle::new().flex_row(),
         |_r| RectStyle::default(),
         trigger_content,
@@ -58,32 +55,28 @@ pub fn tooltip(
     let trigger_node = trigger.layout_node();
     // The trigger's laid-out rect (a fresh runtime handle, not the borrowed `ctx`): the anchored overlay
     // reads it to position the bubble below the trigger.
-    let trigger_rect =
-        track_layout(&WidgetCtx::handle(), trigger_node).expect("trigger container is registered");
+    let trigger_rect = track_layout(trigger_node).expect("trigger container is registered");
 
     // The bubble is a fresh `text` each hover (rebuildable — no slot children to preserve), so no take-once
     // cell here; keying on `hovered` mounts/disposes the anchored overlay like a reactive `if`.
-    let color: Rc<dyn Fn() -> Color> = Rc::from(color);
+    let color: shared::ReactiveColor = Rc::from(color);
     let key_hovered = hovered.clone();
     let bubble = ReactiveList::new(
-        ctx,
         move || vec![key_hovered.get()],
         |is_hovered: &bool| *is_hovered,
-        move |ctx, is_hovered| -> Result<Box<dyn LayoutItem>, LayoutError> {
+        move |is_hovered| -> Result<Box<dyn LayoutItem>, LayoutError> {
             if !is_hovered {
                 return Ok(box_item(Container::new(
-                    ctx,
                     LayoutStyle::new().width(0.0).height(0.0),
                     vec![],
                 )?));
             }
-            build_bubble(ctx, text, color.clone(), trigger_node, trigger_rect.clone())
+            build_bubble(text, color.clone(), trigger_node, trigger_rect.clone())
         },
     )?;
 
     // The trigger sits in flow; the bubble node is a 0-size portal placeholder, so it never shifts the trigger.
     Ok(box_item(Container::new(
-        ctx,
         LayoutStyle::new().flex_column(),
         vec![box_item(trigger), box_item(bubble)],
     )?))
@@ -93,24 +86,21 @@ pub fn tooltip(
 /// below the trigger (via `absolute_rect`, so it works even when the trigger is in a separately-computed
 /// sub-root) inside a NON-blocking overlay (a tooltip must not eat clicks on the page).
 fn build_bubble(
-    ctx: &mut WidgetCtx,
     text: &'static str,
-    color: Rc<dyn Fn() -> Color>,
+    color: shared::ReactiveColor,
     trigger_node: ui_core::NodeId,
     trigger_rect: reactive_core::RwSignal<geometry_core::Rect>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Window-absolute trigger position (the overlay hoists to the window); fall back to the local rect.
-    let anchor = ui_core::absolute_rect(trigger_node).unwrap_or_else(|| trigger_rect.peek());
+    let anchor = ui_core::overlay::anchor_rect(trigger_node, &trigger_rect);
     // `auto` (measured) so the bubble text gets its intrinsic WIDTH in the row chip; a plain `Text::new`
     // only stretches its cross-axis (height in a row), leaving width 0 and the tooltip empty.
     let label = Text::auto(
-        ctx,
         move || text.to_string(),
         LayoutStyle::new(),
         || TextStyle::new(BUBBLE_TEXT_SIZE, BUBBLE_INK),
     )?;
     let chip = StyledContainer::new(
-        ctx,
         LayoutStyle::new()
             .flex_row()
             .padding_horizontal(BUBBLE_PAD_X)
@@ -119,28 +109,17 @@ fn build_bubble(
             .margin_top(anchor.y + anchor.height),
         move |_r| {
             RectStyle::default()
-                .with_fill(bubble_fill(color.as_ref()))
+                .with_fill(shared::resolve(color.as_ref(), || DEFAULT_BUBBLE))
                 .with_radius(BorderRadius::all(BUBBLE_RADIUS))
         },
         vec![box_item(label)],
     )?;
     // `align_items(START)` so the chip sizes to its content instead of stretching to the full-viewport fill.
     let overlay = Overlay::new_click_through(
-        ctx,
         LayoutStyle::new().align_items(AlignItems::START),
         vec![box_item(chip)],
     )?;
     Ok(box_item(overlay))
-}
-
-/// The bubble surface: the caller's reactive `color` if set, else the opaque dark default chip.
-fn bubble_fill(color: &dyn Fn() -> Color) -> Color {
-    let c = color();
-    if c == Color::TRANSPARENT {
-        DEFAULT_BUBBLE
-    } else {
-        c
-    }
 }
 
 #[cfg(test)]
@@ -149,6 +128,7 @@ mod tests {
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerSource};
     use renderer_core::DrawCommand;
+    use ui_core::reset_layout_runtime;
     use ui_core::{ComponentList, compute_layout, new_container, relayout_if_dirty};
 
     fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
@@ -165,9 +145,8 @@ mod tests {
     }
 
     // A trigger slot child with a definite size so the trigger has a rect to hover and anchor against.
-    fn slot_with_trigger(ctx: &mut WidgetCtx) -> Slots {
-        let inner =
-            Container::new(ctx, LayoutStyle::new().width(80.0).height(30.0), vec![]).unwrap();
+    fn slot_with_trigger() -> Slots {
+        let inner = Container::new(LayoutStyle::new().width(80.0).height(30.0), vec![]).unwrap();
         let mut slots = Slots::new();
         slots.push(None, box_item(inner));
         slots
@@ -177,10 +156,9 @@ mod tests {
     // a real app: a mouse move onto the trigger fires its on_hover, mounting the anchored overlay.
     #[test]
     fn hover_shows_bubble_and_leave_hides_it() {
-        let mut ctx = WidgetCtx::new();
-        let slots = slot_with_trigger(&mut ctx);
+        reset_layout_runtime();
+        let slots = slot_with_trigger();
         let tooltip = tooltip(
-            &mut ctx,
             TooltipProps {
                 text: "Helpful hint",
                 ..Default::default()
@@ -191,13 +169,11 @@ mod tests {
 
         // A parent-less root computed against the window registers the overlay host the bubble anchors into.
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             &[tooltip.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(400.0),
@@ -228,9 +204,9 @@ mod tests {
     // Construction succeeds headless with an empty trigger and no hover.
     #[test]
     fn builds_without_hover() {
-        let mut ctx = WidgetCtx::new();
-        let slots = slot_with_trigger(&mut ctx);
-        let tooltip = tooltip(&mut ctx, TooltipProps::default(), slots).unwrap();
+        reset_layout_runtime();
+        let slots = slot_with_trigger();
+        let tooltip = tooltip(TooltipProps::default(), slots).unwrap();
         let tree = ComponentList::new(tooltip);
         assert!(!find_text(&tree.commands(), "Helpful hint"));
     }

@@ -7,9 +7,8 @@ use rustc_hash::FxHashMap;
 
 thread_local! {
     // The layout tree is a per-thread singleton so nodes can be created and laid out from anywhere —
-    // including reactive effects (reactive lists) that fire without a `&mut WidgetCtx` in hand. `WidgetCtx`
-    // is now just a handle; its parameters are kept on the public functions so existing widget
-    // constructors and generated `.rsx` fns compile unchanged.
+    // including reactive effects (reactive lists) that fire from an effect body. Every public constructor
+    // operates on this runtime directly; `reset_layout_runtime` starts a fresh tree (one live tree per thread).
     static RUNTIME: RefCell<LayoutRuntime> = RefCell::new(LayoutRuntime::new());
 }
 
@@ -17,33 +16,30 @@ fn with_runtime<R>(f: impl FnOnce(&mut LayoutRuntime) -> R) -> R {
     RUNTIME.with(|rt| f(&mut rt.borrow_mut()))
 }
 
-pub fn new_leaf(
-    _ctx: &mut WidgetCtx,
-    style: LayoutStyle,
-) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
+/// Resets the thread-local layout runtime to a fresh, empty tree. Call it once before building a new
+/// widget tree (one live tree per thread); the app/preview harness does this at construction.
+pub fn reset_layout_runtime() {
+    with_runtime(|rt| *rt = LayoutRuntime::new());
+}
+
+pub fn new_leaf(style: LayoutStyle) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
     with_runtime(|rt| rt.new_leaf(style))
 }
 
 /// A leaf whose intrinsic size is computed by `measure` at layout time (e.g. text
 /// whose height depends on how many lines it wraps into at the resolved width).
 pub fn new_measured_leaf(
-    _ctx: &mut WidgetCtx,
     style: LayoutStyle,
     measure: MeasureFn,
 ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
     with_runtime(|rt| rt.new_measured_leaf(style, measure))
 }
 
-pub fn new_container(
-    _ctx: &mut WidgetCtx,
-    style: LayoutStyle,
-    children: &[NodeId],
-) -> Result<NodeId, LayoutError> {
+pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, LayoutError> {
     with_runtime(|rt| rt.new_container(style, children))
 }
 
 pub fn compute_layout(
-    _ctx: &mut WidgetCtx,
     root: NodeId,
     width: AvailableSpace,
     height: AvailableSpace,
@@ -89,7 +85,7 @@ pub fn relayout_if_dirty() {
     }
 }
 
-pub fn track_layout(_ctx: &WidgetCtx, node: NodeId) -> Option<RwSignal<Rect>> {
+pub fn track_layout(node: NodeId) -> Option<RwSignal<Rect>> {
     with_runtime(|rt| rt.track_layout(node))
 }
 
@@ -107,18 +103,17 @@ pub fn absolute_rect(node: NodeId) -> Option<Rect> {
     })
 }
 
-pub fn mark_dirty(_ctx: &mut WidgetCtx, node: NodeId) -> Result<(), LayoutError> {
+pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {
     with_runtime(|rt| rt.mark_dirty(node))
 }
 
 /// Shows or hides a node in layout flow. A hidden node takes no space (and lays out none of its subtree); mark an ancestor dirty and recompute for the change to take effect. Used for responsive layouts (e.g. collapsing a sidebar on narrow windows).
-pub fn set_display(_ctx: &mut WidgetCtx, node: NodeId, visible: bool) {
+pub fn set_display(node: NodeId, visible: bool) {
     with_runtime(|rt| rt.set_display(node, visible))
 }
 
-/// Replaces `parent`'s children with `children`, in order, marking `parent` dirty. Takes no `WidgetCtx`
-/// because reactive lists call it from an effect (which has no `&mut ctx`), operating on the thread-local
-/// runtime. `parent` must be a container already registered in the runtime.
+/// Replaces `parent`'s children with `children`, in order, marking `parent` dirty. Operates on the
+/// thread-local runtime; `parent` must be a container already registered in the runtime.
 pub fn set_children(parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
     with_runtime(|rt| rt.set_children(parent, children))
 }
@@ -171,25 +166,6 @@ pub fn detach_overlay(node: NodeId) {
         }
         rt.parents.remove(&node);
     });
-}
-
-/// A handle to the thread-local layout runtime. Carries no state itself; kept as a parameter on widget
-/// constructors and generated `.rsx` functions so the migration to a runtime-driven layout does not
-/// churn every signature. `new()` resets the runtime for a fresh tree (one live tree per thread).
-pub struct WidgetCtx;
-
-impl WidgetCtx {
-    pub fn new() -> Self {
-        with_runtime(|rt| *rt = LayoutRuntime::new());
-        WidgetCtx
-    }
-
-    /// A handle to the existing runtime that does NOT reset it, so code running after the tree is built
-    /// (a reactive list's effect) can construct widgets against the live tree. Unlike `new()`, which
-    /// starts a fresh tree, this leaves all existing nodes in place.
-    pub fn handle() -> Self {
-        WidgetCtx
-    }
 }
 
 struct LayoutRuntime {
@@ -502,12 +478,6 @@ impl LayoutRuntime {
     }
 }
 
-impl Default for WidgetCtx {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use geometry_core::Rect;
@@ -518,11 +488,10 @@ mod tests {
     // A flex-wrap row nested in a max-width box (the full-bleed-band + centered- content pattern) must reserve height for the lines it actually wraps into, even though taffy would otherwise size the box at its uncapped 1-line width.
     #[test]
     fn maxwidth_box_reserves_height_for_wrapped_content() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut items = Vec::new();
         for _ in 0..4 {
             let (n, _) = new_leaf(
-                &mut ctx,
                 LayoutStyle::new()
                     .width(200.0)
                     .height(100.0)
@@ -532,15 +501,10 @@ mod tests {
             .unwrap();
             items.push(n);
         }
-        let row = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_row().flex_wrap().gap(24.0),
-            &items,
-        )
-        .unwrap();
+        let row =
+            new_container(LayoutStyle::new().flex_row().flex_wrap().gap(24.0), &items).unwrap();
         // Capped to 500 → 2 items per row → the 4 items wrap onto 2 lines.
         let boxed = new_container(
-            &mut ctx,
             LayoutStyle::new()
                 .flex_column()
                 .width(SizeDimension::Percent(1.0))
@@ -549,7 +513,6 @@ mod tests {
         )
         .unwrap();
         let page = new_container(
-            &mut ctx,
             LayoutStyle::new()
                 .flex_column()
                 .width(SizeDimension::Percent(1.0)),
@@ -557,14 +520,13 @@ mod tests {
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             page,
             AvailableSpace::Definite(900.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let box_rect = track_layout(&ctx, boxed).unwrap().get();
-        let row_rect = track_layout(&ctx, row).unwrap().get();
+        let box_rect = track_layout(boxed).unwrap().get();
+        let row_rect = track_layout(row).unwrap().get();
         assert!(
             (box_rect.width - 500.0).abs() < 1.0,
             "box not capped: {box_rect:?}"
@@ -582,11 +544,10 @@ mod tests {
     // Re-running compute_layout against the SAME available space (root re-dirtied by an unrelated change) must keep the max-width box correctly sized: the idempotent undo must still lift and re-pin a previously pinned box so its wrapped height holds.
     #[test]
     fn maxwidth_box_stable_across_recompute() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let mut items = Vec::new();
         for _ in 0..4 {
             let (n, _) = new_leaf(
-                &mut ctx,
                 LayoutStyle::new()
                     .width(200.0)
                     .height(100.0)
@@ -596,14 +557,9 @@ mod tests {
             .unwrap();
             items.push(n);
         }
-        let row = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_row().flex_wrap().gap(24.0),
-            &items,
-        )
-        .unwrap();
+        let row =
+            new_container(LayoutStyle::new().flex_row().flex_wrap().gap(24.0), &items).unwrap();
         let boxed = new_container(
-            &mut ctx,
             LayoutStyle::new()
                 .flex_column()
                 .width(SizeDimension::Percent(1.0))
@@ -612,7 +568,6 @@ mod tests {
         )
         .unwrap();
         let page = new_container(
-            &mut ctx,
             LayoutStyle::new()
                 .flex_column()
                 .width(SizeDimension::Percent(1.0)),
@@ -621,13 +576,13 @@ mod tests {
         .unwrap();
 
         let space = (AvailableSpace::Definite(900.0), AvailableSpace::MaxContent);
-        compute_layout(&mut ctx, page, space.0, space.1).unwrap();
-        let first = track_layout(&ctx, boxed).unwrap().get();
+        compute_layout(page, space.0, space.1).unwrap();
+        let first = track_layout(boxed).unwrap().get();
 
         // Re-dirty the root and recompute at the SAME space: exercises the idempotent undo on an already-pinned box.
-        mark_dirty(&mut ctx, page).unwrap();
-        compute_layout(&mut ctx, page, space.0, space.1).unwrap();
-        let second = track_layout(&ctx, boxed).unwrap().get();
+        mark_dirty(page).unwrap();
+        compute_layout(page, space.0, space.1).unwrap();
+        let second = track_layout(boxed).unwrap().get();
 
         assert!(
             (second.width - 500.0).abs() < 1.0,
@@ -642,18 +597,17 @@ mod tests {
     // An auto-sized layout root fills the definite space it is computed in, so a page need not declare width:100% to avoid collapsing to its content width.
     #[test]
     fn auto_root_fills_definite_width() {
-        let mut ctx = WidgetCtx::new();
-        let (child, _) = new_leaf(&mut ctx, LayoutStyle::new().height(40.0)).unwrap();
+        reset_layout_runtime();
+        let (child, _) = new_leaf(LayoutStyle::new().height(40.0)).unwrap();
         // A column with auto width whose child is content-sized would otherwise shrink to the child; the root-fill rule stretches it to the given width.
-        let page = new_container(&mut ctx, LayoutStyle::new().flex_column(), &[child]).unwrap();
+        let page = new_container(LayoutStyle::new().flex_column(), &[child]).unwrap();
         compute_layout(
-            &mut ctx,
             page,
             AvailableSpace::Definite(1000.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let w = track_layout(&ctx, page).unwrap().get().width;
+        let w = track_layout(page).unwrap().get().width;
         assert!(
             (w - 1000.0).abs() < 1.0,
             "auto root did not fill width: {w}"
@@ -665,12 +619,11 @@ mod tests {
     fn hidden_child_collapses_to_zero_rect() {
         // A section toggled to `display:none` must collapse to a zero rect so its view draws nothing and
         // does not overlap the visible section (the tab-switch mechanism in the sandbox relies on this).
-        let mut ctx = WidgetCtx::new();
-        let (a, _) = new_leaf(&mut ctx, LayoutStyle::new().width(50.0).height(30.0)).unwrap();
-        let (b, b_rect) = new_leaf(&mut ctx, LayoutStyle::new().width(50.0).height(30.0)).unwrap();
-        let root = new_container(&mut ctx, LayoutStyle::new().flex_column(), &[a, b]).unwrap();
+        reset_layout_runtime();
+        let (a, _) = new_leaf(LayoutStyle::new().width(50.0).height(30.0)).unwrap();
+        let (b, b_rect) = new_leaf(LayoutStyle::new().width(50.0).height(30.0)).unwrap();
+        let root = new_container(LayoutStyle::new().flex_column(), &[a, b]).unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -678,10 +631,9 @@ mod tests {
         .unwrap();
         assert!(b_rect.get().height > 0.0, "b should start visible");
 
-        set_display(&mut ctx, b, false);
-        mark_dirty(&mut ctx, root).unwrap();
+        set_display(b, false);
+        mark_dirty(root).unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -700,14 +652,11 @@ mod tests {
     // fixed coordinates) in a hidden section would still draw over the visible one.
     #[test]
     fn hidden_subtree_collapses_descendants() {
-        let mut ctx = WidgetCtx::new();
-        let (grandchild, gc_rect) =
-            new_leaf(&mut ctx, LayoutStyle::new().width(40.0).height(20.0)).unwrap();
-        let section =
-            new_container(&mut ctx, LayoutStyle::new().flex_column(), &[grandchild]).unwrap();
-        let root = new_container(&mut ctx, LayoutStyle::new().flex_column(), &[section]).unwrap();
+        reset_layout_runtime();
+        let (grandchild, gc_rect) = new_leaf(LayoutStyle::new().width(40.0).height(20.0)).unwrap();
+        let section = new_container(LayoutStyle::new().flex_column(), &[grandchild]).unwrap();
+        let root = new_container(LayoutStyle::new().flex_column(), &[section]).unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -715,10 +664,9 @@ mod tests {
         .unwrap();
         assert!(gc_rect.get().width > 0.0, "grandchild should start visible");
 
-        set_display(&mut ctx, section, false);
-        mark_dirty(&mut ctx, root).unwrap();
+        set_display(section, false);
+        mark_dirty(root).unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(200.0),
@@ -734,43 +682,36 @@ mod tests {
 
     #[test]
     fn auto_root_with_max_width_fills_capped() {
-        let mut ctx = WidgetCtx::new();
-        let (child, _) = new_leaf(&mut ctx, LayoutStyle::new().height(40.0)).unwrap();
-        let page = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_column().max_width(600.0),
-            &[child],
-        )
-        .unwrap();
+        reset_layout_runtime();
+        let (child, _) = new_leaf(LayoutStyle::new().height(40.0)).unwrap();
+        let page =
+            new_container(LayoutStyle::new().flex_column().max_width(600.0), &[child]).unwrap();
         // Wider than the cap: should fill up to max_width (600), not shrink to content (0).
         compute_layout(
-            &mut ctx,
             page,
             AvailableSpace::Definite(1000.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let w = track_layout(&ctx, page).unwrap().get().width;
+        let w = track_layout(page).unwrap().get().width;
         assert!((w - 600.0).abs() < 1.0, "capped fill failed: {w}");
         // Narrower than the cap: should fill the available width (400).
         compute_layout(
-            &mut ctx,
             page,
             AvailableSpace::Definite(400.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let w = track_layout(&ctx, page).unwrap().get().width;
+        let w = track_layout(page).unwrap().get().width;
         assert!((w - 400.0).abs() < 1.0, "sub-cap fill failed: {w}");
     }
 
     // The landing/sandbox shell pattern: an auto-width outer that fills and centers a capped inner column.
     #[test]
     fn centered_capped_column_tracks_width() {
-        let mut ctx = WidgetCtx::new();
-        let (child, _) = new_leaf(&mut ctx, LayoutStyle::new().height(40.0)).unwrap();
+        reset_layout_runtime();
+        let (child, _) = new_leaf(LayoutStyle::new().height(40.0)).unwrap();
         let inner = new_container(
-            &mut ctx,
             LayoutStyle::new()
                 .flex_column()
                 .width(SizeDimension::Percent(1.0))
@@ -779,18 +720,16 @@ mod tests {
         )
         .unwrap();
         let outer = new_container(
-            &mut ctx,
             LayoutStyle::new()
                 .flex_column()
                 .align_items(layout_core::AlignItems::CENTER),
             &[inner],
         )
         .unwrap();
-        let inner_rect = track_layout(&ctx, inner).unwrap();
-        let outer_rect = track_layout(&ctx, outer).unwrap();
+        let inner_rect = track_layout(inner).unwrap();
+        let outer_rect = track_layout(outer).unwrap();
         // Wide window: outer fills 1400, inner caps at 960 and is centered ((1400-960)/2 = 220).
         compute_layout(
-            &mut ctx,
             outer,
             AvailableSpace::Definite(1400.0),
             AvailableSpace::MaxContent,
@@ -813,7 +752,6 @@ mod tests {
         );
         // Narrow window: inner fills the full width and centering adds no margin.
         compute_layout(
-            &mut ctx,
             outer,
             AvailableSpace::Definite(700.0),
             AvailableSpace::MaxContent,
@@ -833,41 +771,38 @@ mod tests {
 
     #[test]
     fn ctx_register_leaf_returns_ok() {
-        let mut ctx = WidgetCtx::new();
-        let result = new_leaf(&mut ctx, LayoutStyle::new());
+        reset_layout_runtime();
+        let result = new_leaf(LayoutStyle::new());
         assert!(result.is_ok());
     }
 
     #[test]
     fn ctx_new_container_returns_ok() {
-        let mut ctx = WidgetCtx::new();
-        let leaf_result = new_leaf(&mut ctx, LayoutStyle::new());
+        reset_layout_runtime();
+        let leaf_result = new_leaf(LayoutStyle::new());
         assert!(leaf_result.is_ok());
         let (leaf, _) = leaf_result.unwrap();
-        let container_result = new_container(&mut ctx, LayoutStyle::new(), &[leaf]);
+        let container_result = new_container(LayoutStyle::new(), &[leaf]);
         assert!(container_result.is_ok());
     }
 
     #[test]
     fn ctx_register_leaf_returns_zero_rect() {
-        let mut ctx = WidgetCtx::new();
-        let (_node, rect) = new_leaf(&mut ctx, LayoutStyle::new()).unwrap();
+        reset_layout_runtime();
+        let (_node, rect) = new_leaf(LayoutStyle::new()).unwrap();
         assert_eq!(rect.get(), Rect::default());
     }
 
     #[test]
     fn ctx_compute_updates_rect() {
-        let mut ctx = WidgetCtx::new();
-        let (leaf, rect) =
-            new_leaf(&mut ctx, LayoutStyle::new().width(100.0).height(50.0)).unwrap();
+        reset_layout_runtime();
+        let (leaf, rect) = new_leaf(LayoutStyle::new().width(100.0).height(50.0)).unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_row().width(200.0).height(100.0),
             &[leaf],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(200.0),
             AvailableSpace::Definite(100.0),
@@ -880,12 +815,11 @@ mod tests {
     // An overlay's content, attached to the host, fills the viewport — not the small box it was declared in.
     #[test]
     fn attached_overlay_fills_host_viewport_not_its_small_parent() {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         // Computing a parent-less root registers it as the overlay host (an 800×600 viewport).
-        let (small, _) = new_leaf(&mut ctx, LayoutStyle::new().width(50.0).height(50.0)).unwrap();
-        let root = new_container(&mut ctx, LayoutStyle::new().flex_column(), &[small]).unwrap();
+        let (small, _) = new_leaf(LayoutStyle::new().width(50.0).height(50.0)).unwrap();
+        let root = new_container(LayoutStyle::new().flex_column(), &[small]).unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(800.0),
             AvailableSpace::Definite(600.0),
@@ -894,14 +828,12 @@ mod tests {
 
         // Overlay content: an absolute-fill container with a 100%×100% inner leaf we can measure.
         let (inner, inner_rect) = new_leaf(
-            &mut ctx,
             LayoutStyle::new()
                 .width(SizeDimension::Percent(1.0))
                 .height(SizeDimension::Percent(1.0)),
         )
         .unwrap();
-        let content =
-            new_container(&mut ctx, LayoutStyle::new().absolute_fill(), &[inner]).unwrap();
+        let content = new_container(LayoutStyle::new().absolute_fill(), &[inner]).unwrap();
         assert!(
             attach_overlay(content),
             "the host must be set after the first compute"
@@ -926,21 +858,14 @@ mod tests {
     // position (past the sidebar), so a portaled dropdown anchors correctly instead of landing over the sidebar.
     #[test]
     fn absolute_rect_stays_window_absolute_across_a_separate_content_root() {
-        let mut ctx = WidgetCtx::new();
-        let (sidebar, _) =
-            new_leaf(&mut ctx, LayoutStyle::new().width(248.0).height(600.0)).unwrap();
+        reset_layout_runtime();
+        let (sidebar, _) = new_leaf(LayoutStyle::new().width(248.0).height(600.0)).unwrap();
         let (trigger, trigger_sig) =
-            new_leaf(&mut ctx, LayoutStyle::new().width(120.0).height(30.0)).unwrap();
-        let content = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_column().flex_grow(1.0),
-            &[trigger],
-        )
-        .unwrap();
-        let root =
-            new_container(&mut ctx, LayoutStyle::new().flex_row(), &[sidebar, content]).unwrap();
+            new_leaf(LayoutStyle::new().width(120.0).height(30.0)).unwrap();
+        let content =
+            new_container(LayoutStyle::new().flex_column().flex_grow(1.0), &[trigger]).unwrap();
+        let root = new_container(LayoutStyle::new().flex_row(), &[sidebar, content]).unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(1000.0),
             AvailableSpace::Definite(600.0),
@@ -955,9 +880,8 @@ mod tests {
         );
 
         // Compute `content` as its own root (the sandbox does this for scroll height): the SIGNAL goes local.
-        mark_dirty(&mut ctx, content).unwrap();
+        mark_dirty(content).unwrap();
         compute_layout(
-            &mut ctx,
             content,
             AvailableSpace::Definite(752.0),
             AvailableSpace::MaxContent,

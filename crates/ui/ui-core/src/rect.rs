@@ -14,11 +14,10 @@ pub struct Rectangle {
 
 impl Rectangle {
     pub fn new(
-        ctx: &mut crate::context::WidgetCtx,
         layout_style: LayoutStyle,
         style: impl Fn() -> RectStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        let leaf = LayoutLeaf::register(ctx, layout_style)?;
+        let leaf = LayoutLeaf::register(layout_style)?;
         Ok(Self {
             leaf,
             style: Box::new(style),

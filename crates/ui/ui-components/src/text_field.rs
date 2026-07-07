@@ -2,7 +2,7 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_widget_theme;
-use ui_core::{Container, Input, LayoutItem, StyledContainer, Text, WidgetCtx, box_item};
+use ui_core::{Container, Input, LayoutItem, StyledContainer, Text, box_item};
 
 /// Fallback text colour ("ink") when `color` is unset, matching the button catalogue's ghost-variant text.
 const DEFAULT_INK: Color = Color::rgba(0.12, 0.12, 0.16, 1.0);
@@ -54,10 +54,7 @@ impl Default for TextFieldProps {
 /// muted hint via the `Input`'s own `placeholder` while the value is empty — the field stays a live,
 /// always-mounted `Input`, so it is tappable/typable from a cold start (no swapped-in `Text` that would
 /// refuse focus).
-pub fn text_field(
-    ctx: &mut WidgetCtx,
-    props: TextFieldProps,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TextFieldProps {
         value,
         placeholder,
@@ -73,7 +70,6 @@ pub fn text_field(
     // from a cold start — a swapped-in placeholder `Text` takes no focus, so an empty field couldn't be
     // clicked to begin typing.
     let mut input = Input::new(
-        ctx,
         value.clone(),
         LayoutStyle::new().height(FONT_SIZE * 1.4),
         move || {
@@ -95,7 +91,6 @@ pub fn text_field(
     let field = box_item(input);
 
     let box_ = StyledContainer::new(
-        ctx,
         LayoutStyle::new()
             .flex_column()
             .width(width)
@@ -114,13 +109,11 @@ pub fn text_field(
         return Ok(box_item(box_));
     }
     let caption = Text::new(
-        ctx,
         move || label.to_string(),
         LayoutStyle::new().height(LABEL_SIZE * 1.4),
         || TextStyle::new(LABEL_SIZE, muted_color()),
     )?;
     let col = Container::new(
-        ctx,
         LayoutStyle::new().flex_column().gap(LABEL_GAP).width(width),
         vec![box_item(caption), box_item(box_)],
     )?;
@@ -138,6 +131,7 @@ fn muted_color() -> Color {
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+    use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
     use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource};
@@ -159,22 +153,20 @@ mod tests {
     // outermost node's rect, valid only when `label` is empty — a labelled field's outer node is the
     // wrapping column instead, offset above the box by the caption row).
     fn laid_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, geometry_core::Rect) {
-        let mut ctx = WidgetCtx::new();
-        let field = text_field(&mut ctx, props).unwrap();
+        reset_layout_runtime();
+        let field = text_field(props).unwrap();
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_column().width(400.0).height(200.0),
             &[field.layout_node()],
         )
         .unwrap();
         compute_layout(
-            &mut ctx,
             root,
             AvailableSpace::Definite(400.0),
             AvailableSpace::Definite(200.0),
         )
         .unwrap();
-        let rect = track_layout(&ctx, field.layout_node()).unwrap().get();
+        let rect = track_layout(field.layout_node()).unwrap().get();
         (field, rect)
     }
 

@@ -7,7 +7,7 @@ use platform_core::Event;
 use reactive_core::RwSignal;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
-use crate::context::{WidgetCtx, new_container, track_layout};
+use crate::context::{new_container, track_layout};
 use crate::layout_leaf::LayoutLeaf;
 
 /// A container child. The boxed widget is shared (`Rc<RefCell<…>>`) between event dispatch (which
@@ -33,7 +33,7 @@ impl Child {
 /// segment. Used by reactive lists to fold a freshly-built item into the child set (the per-item half of
 /// [`register_container`]).
 pub(crate) fn make_child(widget: Box<dyn LayoutItem>) -> Child {
-    let rect = track_layout(&WidgetCtx::handle(), widget.layout_node());
+    let rect = track_layout(widget.layout_node());
     let item = Rc::new(RefCell::new(widget));
     let segment = mount_item_segment(Rc::clone(&item));
     Child {
@@ -74,9 +74,8 @@ pub struct ClippedItem {
 }
 
 impl ClippedItem {
-    pub fn new(ctx: &WidgetCtx, inner: Box<dyn LayoutItem>) -> Self {
-        let rect =
-            track_layout(ctx, inner.layout_node()).expect("clipped item's node not registered");
+    pub fn new(inner: Box<dyn LayoutItem>) -> Self {
+        let rect = track_layout(inner.layout_node()).expect("clipped item's node not registered");
         Self { inner, rect }
     }
 }
@@ -138,26 +137,13 @@ pub fn box_item(item: impl LayoutItem + 'static) -> Box<dyn LayoutItem> {
 }
 
 pub(crate) fn register_container(
-    ctx: &mut WidgetCtx,
     layout_style: LayoutStyle,
     children: Vec<Box<dyn LayoutItem>>,
 ) -> Result<(NodeId, RwSignal<Rect>, TrackedChildren), LayoutError> {
     let child_nodes = children.iter().map(|c| c.layout_node()).collect::<Vec<_>>();
-    let node = new_container(ctx, layout_style, &child_nodes)?;
-    let rect = track_layout(ctx, node).expect("new_container always registers a signal");
-    let children = children
-        .into_iter()
-        .map(|c| {
-            let rect = track_layout(ctx, c.layout_node());
-            let item = Rc::new(RefCell::new(c));
-            let segment = mount_item_segment(Rc::clone(&item));
-            Child {
-                item,
-                rect,
-                segment,
-            }
-        })
-        .collect();
+    let node = new_container(layout_style, &child_nodes)?;
+    let rect = track_layout(node).expect("new_container always registers a signal");
+    let children = children.into_iter().map(make_child).collect();
     Ok((node, rect, children))
 }
 
