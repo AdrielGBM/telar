@@ -116,6 +116,8 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
             font_data,
             _window: std::marker::PhantomData,
             render_tx: None,
+            render_ret_rx: None,
+            command_buf_pool: Vec::new(),
             render_join: None,
             hw_renderer: None,
             #[cfg(all(feature = "dev", not(target_os = "android")))]

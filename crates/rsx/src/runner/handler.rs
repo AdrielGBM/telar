@@ -12,12 +12,12 @@ use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
 use crate::window_signals::WindowSignals;
 
-use super::FRAME_BUDGET;
 use super::font_config::{
     build_font_config, build_hardware_font_config, build_software_renderer_config,
     hardware_cache_path,
 };
 use super::hot_host::{HardwareFrameMsg, spawn_hardware_render_thread};
+use super::{FRAME_BUDGET, HW_KEEPALIVE_GRACE};
 
 pub(super) struct AppHandler<W, D: DevPlugin>
 where
@@ -46,6 +46,10 @@ where
     pub(super) _window: std::marker::PhantomData<W>,
     pub(super) render_tx: Option<std::sync::mpsc::SyncSender<HardwareFrameMsg>>,
     pub(super) render_join: Option<std::thread::JoinHandle<HardwareRenderer<W>>>,
+    // F2: command buffers recycled back from the render thread, plus a small free-list the send path
+    // refills instead of allocating a fresh Vec each frame.
+    pub(super) render_ret_rx: Option<std::sync::mpsc::Receiver<Vec<renderer_core::DrawCommand>>>,
+    pub(super) command_buf_pool: Vec<Vec<renderer_core::DrawCommand>>,
     pub(super) hw_renderer: Option<HardwareRenderer<W>>,
     #[cfg(all(feature = "dev", not(target_os = "android")))]
     pub(super) hot_reload_rx: Option<std::sync::mpsc::Receiver<crate::hot::HotEvent>>,
@@ -108,8 +112,9 @@ where
                 };
                 match hw_result {
                     Ok(hw) => {
-                        let (tx, join) = spawn_hardware_render_thread(hw);
+                        let (tx, ret_rx, join) = spawn_hardware_render_thread(hw);
                         self.render_tx = Some(tx);
+                        self.render_ret_rx = Some(ret_rx);
                         self.render_join = Some(join);
                         self.renderer_is_hardware = true;
                     }
@@ -369,8 +374,9 @@ where
                         unsafe {
                             libc::malloc_trim(0);
                         }
-                        let (tx, join) = spawn_hardware_render_thread(new_renderer);
+                        let (tx, ret_rx, join) = spawn_hardware_render_thread(new_renderer);
                         self.render_tx = Some(tx);
+                        self.render_ret_rx = Some(ret_rx);
                         self.render_join = Some(join);
                         self.renderer_is_hardware = true;
                     }
@@ -429,8 +435,9 @@ where
                         HardwareRendererConfig::default(),
                     ) {
                         Ok(hw) => {
-                            let (tx, join) = spawn_hardware_render_thread(hw);
+                            let (tx, ret_rx, join) = spawn_hardware_render_thread(hw);
                             self.render_tx = Some(tx);
+                            self.render_ret_rx = Some(ret_rx);
                             self.render_join = Some(join);
                             self.renderer_is_hardware = true;
                         }
@@ -471,6 +478,15 @@ where
         if let Some(tx) = &self.render_tx {
             end_batch();
             begin_batch();
+            // F2: reclaim buffers the render thread finished with, capped so the free-list stays tiny.
+            if let Some(rx) = &self.render_ret_rx {
+                while let Ok(buf) = rx.try_recv() {
+                    if self.command_buf_pool.len() < 3 {
+                        self.command_buf_pool.push(buf);
+                    }
+                }
+            }
+            let build_start = renderer_core::perf::now_if_enabled();
             let clear = self.app.clear_color();
             let commands_ref = self.tree.as_ref().map(|t| t.commands());
             let base_slice: &[renderer_core::DrawCommand] =
@@ -483,7 +499,13 @@ where
             let frame_commands = self
                 .dev
                 .on_frame(base_slice, logical_w, logical_h, tree_dirty);
-            let commands = frame_commands.to_vec();
+            renderer_core::perf::record_since(renderer_core::perf::Phase::Build, build_start);
+            let clone_start = renderer_core::perf::now_if_enabled();
+            // F2: refill a recycled buffer instead of allocating a fresh Vec every frame.
+            let mut commands = self.command_buf_pool.pop().unwrap_or_default();
+            commands.clear();
+            commands.extend_from_slice(&frame_commands);
+            renderer_core::perf::record_since(renderer_core::perf::Phase::Clone, clone_start);
             let msg = HardwareFrameMsg {
                 width: w,
                 height: h,
@@ -493,8 +515,17 @@ where
                 clear,
                 timestamp: std::time::Instant::now(),
             };
-            // Drop frame if render thread is busy; keeps the main thread responsive.
-            let _ = tx.try_send(msg);
+            // Drop frame if render thread is busy; keeps the main thread responsive. On a dropped or
+            // disconnected send, recover the buffer for the free-list instead of freeing it.
+            if let Err(e) = tx.try_send(msg) {
+                let recovered = match e {
+                    std::sync::mpsc::TrySendError::Full(m)
+                    | std::sync::mpsc::TrySendError::Disconnected(m) => m.commands,
+                };
+                if self.command_buf_pool.len() < 3 {
+                    self.command_buf_pool.push(recovered);
+                }
+            }
             return;
         }
 
@@ -519,6 +550,8 @@ where
         // Flush reactive effects so clear_color and draw commands are from the same reactive pass. Without this, a RedrawRequested that fires before about_to_wait (e.g. HW keepalive) reads clear_color from the new signal value while commands still reflect the previous view() call.
         end_batch();
         begin_batch();
+        renderer_core::perf::tick();
+        let build_start = renderer_core::perf::now_if_enabled();
         let clear = self.app.clear_color();
         let commands_ref = self.tree.as_ref().map(|t| t.commands());
         let base_slice: &[renderer_core::DrawCommand] =
@@ -539,9 +572,12 @@ where
         } else {
             frame_commands
         };
+        renderer_core::perf::record_since(renderer_core::perf::Phase::Build, build_start);
+        let gpu_start = renderer_core::perf::now_if_enabled();
         if let Err(e) = renderer.as_mut().render_frame(frame_commands, clear) {
             tracing::error!("render_frame failed: {e}");
         }
+        renderer_core::perf::record_since(renderer_core::perf::Phase::Gpu, gpu_start);
         #[cfg(target_os = "android")]
         if let Some(session) = self.hint_session {
             let duration_ns = self.frame_start.elapsed().as_nanos() as std::ffi::c_long;
@@ -588,9 +624,15 @@ where
             Some(FRAME_BUDGET.saturating_sub(self.last_frame.elapsed()))
         } else {
             let dev_keepalive = self.dev.keepalive_interval();
-            if self.renderer_is_hardware || dev_keepalive.is_some() {
-                // Hardware: 1fps minimum to keep the GPU in an active power state; dev plugin: honor its requested keepalive cadence (e.g. FPS counter tick-down).
-                Some(dev_keepalive.unwrap_or(std::time::Duration::from_millis(1000)))
+            if let Some(interval) = dev_keepalive {
+                // Dev plugin drives its own cadence (e.g. FPS counter tick-down).
+                Some(interval)
+            } else if self.renderer_is_hardware && self.last_frame.elapsed() < HW_KEEPALIVE_GRACE {
+                // F4: hold the GPU in an active power state at 1fps for a short grace window after the
+                // last content frame (covers interactive bursts), then let it sleep — real input/redraw
+                // events still wake the loop. `last_frame` isn't reset by keepalive blits, so its
+                // elapsed measures true inactivity. Saves ~1 idle GPU wake/sec on battery.
+                Some(std::time::Duration::from_millis(1000))
             } else {
                 None
             }

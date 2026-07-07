@@ -6,6 +6,11 @@ mod hot_host;
 
 const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
 
+// F4: how long after the last content frame the HW backend keeps issuing 1fps keepalive blits before
+// letting the GPU sleep. Covers interactive bursts (scroll/typing gaps) without waking the GPU once a
+// second forever on a truly static screen (battery). Real input/redraw events still wake the loop.
+const HW_KEEPALIVE_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
+
 #[cfg(target_os = "android")]
 pub use android::run_android_app_with_name;
 #[cfg(not(target_os = "android"))]

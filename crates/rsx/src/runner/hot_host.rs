@@ -35,12 +35,16 @@ pub(super) fn spawn_hardware_render_thread<W>(
     renderer: HardwareRenderer<W>,
 ) -> (
     std::sync::mpsc::SyncSender<HardwareFrameMsg>,
+    std::sync::mpsc::Receiver<Vec<renderer_core::DrawCommand>>,
     std::thread::JoinHandle<HardwareRenderer<W>>,
 )
 where
     W: Window + Clone + Send + Sync + 'static,
 {
     let (tx, rx) = std::sync::mpsc::sync_channel::<HardwareFrameMsg>(1);
+    // F2: hand the consumed command buffer back to the UI thread so it refills the same allocation
+    // next frame instead of freeing it here and allocating a fresh Vec every frame.
+    let (ret_tx, ret_rx) = std::sync::mpsc::channel::<Vec<renderer_core::DrawCommand>>();
     let join = std::thread::Builder::new()
         .name("rsx-render".to_string())
         .spawn(move || {
@@ -65,6 +69,7 @@ where
                 // Drop stale frames to stay responsive, but never skip one that resizes the surface: the wgpu surface is reconfigured inside begin_frame, so a dropped resize frame leaves it at the old size and the window shows clipped content or empty margins until the next accepted frame.
                 let size_changed = msg.width != current_width || msg.height != current_height;
                 if !size_changed && msg.timestamp.elapsed() > FRAME_BUDGET {
+                    let _ = ret_tx.send(msg.commands);
                     continue;
                 }
                 #[cfg(target_os = "android")]
@@ -73,6 +78,7 @@ where
                     .begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation)
                     .is_err()
                 {
+                    let _ = ret_tx.send(msg.commands);
                     continue;
                 }
                 current_width = msg.width;
@@ -88,6 +94,8 @@ where
                         );
                     }
                 }
+                // Recycle the buffer for the UI thread to refill; a send failure (UI gone) just drops it.
+                let _ = ret_tx.send(msg.commands);
             }
             #[cfg(target_os = "android")]
             if let Some(session) = hint_session {
@@ -99,7 +107,7 @@ where
             renderer
         })
         .expect("failed to spawn render thread");
-    (tx, join)
+    (tx, ret_rx, join)
 }
 
 #[cfg(all(feature = "dev", not(target_os = "android")))]
@@ -164,6 +172,8 @@ pub fn run_hot_reload_host(
             font_data,
             _window: std::marker::PhantomData,
             render_tx: None,
+            render_ret_rx: None,
+            command_buf_pool: Vec::new(),
             render_join: None,
             hw_renderer: None,
             hot_reload_rx: Some(hot_rx),

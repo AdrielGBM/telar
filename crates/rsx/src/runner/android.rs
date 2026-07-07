@@ -47,6 +47,44 @@ pub(super) fn android_sans_serif_candidates() -> Vec<String> {
     ]
 }
 
+// Reads an Android system property (empty string when unset or on error).
+#[cfg(all(feature = "runtime", target_os = "android"))]
+fn read_sys_prop(name: &str) -> Option<String> {
+    let cname = std::ffi::CString::new(name).ok()?;
+    // PROP_VALUE_MAX is 92; keep headroom for the NUL terminator.
+    let mut buf = [0u8; 96];
+    let n = unsafe {
+        libc::__system_property_get(cname.as_ptr(), buf.as_mut_ptr() as *mut libc::c_char)
+    };
+    if n <= 0 {
+        return None;
+    }
+    let s = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr() as *const libc::c_char) };
+    s.to_str().ok().map(str::to_owned)
+}
+
+// App processes do not inherit the adb shell environment, so debug flags that are env vars on
+// desktop (RSX_PERF, RSX_HW_DAMAGE, …) are unreachable on Android. Bridge them from `debug.rsx.<k>`
+// system properties (settable without root via `adb shell setprop debug.rsx.perf 1`) into the
+// env vars the engine reads. Must run before any OnceLock reads them or the render thread spawns.
+#[cfg(all(feature = "runtime", target_os = "android"))]
+fn bridge_debug_props_to_env() {
+    for (prop, var) in [
+        ("debug.rsx.perf", "RSX_PERF"),
+        ("debug.rsx.hw_damage", "RSX_HW_DAMAGE"),
+        ("debug.rsx.scroll_blit", "RSX_HW_SCROLL_BLIT"),
+    ] {
+        if std::env::var_os(var).is_some() {
+            continue;
+        }
+        if let Some(v) = read_sys_prop(prop) {
+            if !v.is_empty() {
+                unsafe { std::env::set_var(var, v) };
+            }
+        }
+    }
+}
+
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub fn run_android_app_with_name<A: App>(
     config: AppConfig,
@@ -54,6 +92,7 @@ pub fn run_android_app_with_name<A: App>(
     app_name: &str,
     android_app: platform_android::AndroidApp,
 ) {
+    bridge_debug_props_to_env();
     #[cfg(feature = "dev")]
     run_android_with_plugin::<A, rsx_devtools::DevTools>(config, app, app_name, android_app);
     #[cfg(not(feature = "dev"))]
@@ -113,6 +152,8 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             font_data,
             _window: std::marker::PhantomData,
             render_tx: None,
+            render_ret_rx: None,
+            command_buf_pool: Vec::new(),
             render_join: None,
             hw_renderer: None,
             #[cfg(all(feature = "dev", not(target_os = "android")))]
