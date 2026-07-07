@@ -9,6 +9,7 @@ geometry-core = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 wide = { workspace = true }
 
 [dev-dependencies]

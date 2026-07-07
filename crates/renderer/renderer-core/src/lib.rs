@@ -8,6 +8,7 @@ pub mod font_config;
 mod hash;
 mod image;
 mod path;
+pub mod perf;
 mod preprocess;
 mod renderer;
 mod shadow;
@@ -29,7 +30,10 @@ pub use font_config::FontConfig;
 pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
 pub use image::{ImageData, ImageFilter, premultiply_rgba};
 pub use path::{PathData, PathVerb};
-pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers, scale_commands};
+pub use preprocess::{
+    ScaleScratch, blur_padding, blur_sigma, expand_fill_layers, scale_commands,
+    would_expand_fill_layers,
+};
 pub use renderer::RenderBackend;
 pub use shadow::ShadowLayout;
 pub use style::{

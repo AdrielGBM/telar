@@ -36,7 +36,9 @@ pub(super) enum Segment {
 // Owned per-frame state threaded through the render_frame phase methods. Holds only owned values (never borrows of `self`) so it survives across the `&mut self` phase calls; `retained_view` in particular is a cheap Arc-backed clone of `self.retained_view` for exactly that reason.
 pub(super) struct FrameCtx {
     direct_to_surface: bool,
-    scroll_prime: bool,
+    // Seed the offscreen with the retained previous frame shifted by prime_delta before the main
+    // pass Loads it: scroll-blit-with-clear (delta = scroll) or F1 damage priming (delta = 0).
+    prime: bool,
     prime_delta: (f32, f32),
     dirty_scissor: Option<Rect>,
     load_op: wgpu::LoadOp<wgpu::Color>,
@@ -51,6 +53,20 @@ pub(super) struct FrameCtx {
         wgpu::Texture,
         wgpu::TextureView,
     )>,
+}
+
+// F1: confine a top-level layer composite to the dirty rect. A layer's mini-layer can be larger than
+// the dirty region (e.g. a translucent panel), and its composite blends at opacity over the parent —
+// so without confinement it re-blends over the preserved previous frame outside the dirty rect and
+// accumulates opacity every frame. Intersecting with the dirty scissor keeps the composite inside the
+// region that was reset to the clear color, matching a full repaint. `None` dirty scissor = no damage,
+// so the composite keeps its own clip; a layer fully outside the dirty rect has empty (culled) content,
+// so falling back to the dirty rect there composites nothing.
+fn confine_to_dirty(scissor: Option<Rect>, dirty: Option<Rect>) -> Option<Rect> {
+    match dirty {
+        None => scissor,
+        Some(ds) => Some(scissor.and_then(|s| s.intersect(ds)).unwrap_or(ds)),
+    }
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
@@ -115,12 +131,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             commands.len(),
             clear_color.is_some()
         );
+        renderer_core::perf::tick();
+        let _frame_span = renderer_core::perf::span(renderer_core::perf::Phase::Frame);
         // Direct-to-swapchain fast path: when the frame clears (so there is no cross-frame scroll-blit that needs LoadOp::Load) and nothing samples the top-level target (no backdrop blur), render straight into the swapchain texture on the single-sample (Android) path. This drops the offscreen render target and its per-frame full-screen copy to the surface. MSAA (desktop, samples>1) still needs the offscreen to resolve, and a backdrop-blur layer needs a sampleable parent, so both fall back to the offscreen path.
         let frame_has_backdrop_blur = commands.iter().any(
             |c| matches!(c, DrawCommand::PushLayer { backdrop_blur, .. } if *backdrop_blur > 0.0),
         );
-        let direct_to_surface =
-            self.msaa_samples == 1 && clear_color.is_some() && !frame_has_backdrop_blur;
+        // Top-level layer composites are confined to the dirty rect (see confine_to_dirty), so F1
+        // damage priming is correct for opacity PushLayers, fill-layer-expanded translucent rounded
+        // rects, and nested rounded PushClips — their composites no longer touch preserved pixels
+        // outside the dirty region. Only a backdrop-blur layer still blocks damage: it samples the
+        // parent frame, which outside the dirty rect is the primed *previous* frame, so the blur near
+        // the dirty boundary would pull in stale content.
+        let frame_blocks_damage = frame_has_backdrop_blur;
+        // F1 on the single-sample (mobile) path damage-tracks by Loading the persistent msaa_texture,
+        // which requires rendering through the offscreen rather than straight into the rotating
+        // swapchain — so direct-to-surface is disabled whenever damage tracking is on. (RSX_HW_DAMAGE=0
+        // restores direct-to-surface + full repaints.)
+        let direct_to_surface = self.msaa_samples == 1
+            && clear_color.is_some()
+            && !frame_has_backdrop_blur
+            && !hw_damage_with_clear_enabled();
 
         if self.try_idle_blit(direct_to_surface)? {
             return Ok(());
@@ -128,14 +159,28 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         self.draw_state.reset();
 
-        let (scroll_blit, scroll_prime, prime_delta, dirty_scissor) =
-            self.analyze_frame(commands, clear_color, frame_has_backdrop_blur);
+        let interpret_start = renderer_core::perf::now_if_enabled();
+        let (scroll_blit, prime, prime_delta, dirty_scissor, damage) = self.analyze_frame(
+            commands,
+            clear_color,
+            frame_has_backdrop_blur,
+            frame_blocks_damage,
+        );
 
-        self.interpret_commands(commands, dirty_scissor, scroll_blit.as_ref());
+        renderer_core::perf::note_damage(damage);
+        // F1: when damage tracking, repaint the app background (clear_color) inside the dirty scissor
+        // so ghosts of moved/removed content left behind by the preserved previous frame are erased.
+        let damage_bg = match (damage, dirty_scissor, clear_color) {
+            (true, Some(ds), Some(c)) => Some((ds, c)),
+            _ => None,
+        };
+        self.interpret_commands(commands, dirty_scissor, scroll_blit.as_ref(), damage_bg);
+        renderer_core::perf::record_since(renderer_core::perf::Phase::Interpret, interpret_start);
 
+        let gpu_start = renderer_core::perf::now_if_enabled();
         let mut ctx = FrameCtx {
             direct_to_surface,
-            scroll_prime,
+            prime,
             prime_delta,
             dirty_scissor,
             load_op: wgpu::LoadOp::Load,
@@ -148,6 +193,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         if self.acquire_surface_and_upload(clear_color, &mut ctx)? {
             return Ok(());
+        }
+
+        // Single-sample damage: msaa_texture already holds the previous frame, so Load it (preserving
+        // everything outside the dirty scissor) instead of clearing — the injected background rect
+        // repaints clear_color only inside the dirty rect. (No effect on the MSAA prime-quad path.)
+        if damage && self.msaa_samples == 1 {
+            ctx.load_op = wgpu::LoadOp::Load;
         }
 
         // Single encoder for both the shadow pre-passes and the main pass; wgpu inserts the necessary barriers between render passes, so a separate pre-encoder and extra queue.submit are unnecessary.
@@ -163,7 +215,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
         self.execute_segments(&mut encoder, &mut ctx, &steps, segments)?;
 
-        self.present(encoder, ctx, commands)
+        let result = self.present(encoder, ctx, commands);
+        renderer_core::perf::record_since(renderer_core::perf::Phase::Gpu, gpu_start);
+        result
     }
 }
 
@@ -276,11 +330,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         commands: &[DrawCommand],
         clear_color: Option<Color>,
         frame_has_backdrop_blur: bool,
+        frame_blocks_damage: bool,
     ) -> (
         Option<renderer_core::ScrollBlit>,
         bool,
         (f32, f32),
         Option<Rect>,
+        bool,
     ) {
         // scroll_blit normally requires LoadOp::Load (clear_color forces LoadOp::Clear). The experimental scroll-blit-with-clear path keeps the optimization for a cleared frame by priming the offscreen with the previous frame shifted by the scroll delta (so only the exposed band needs redrawing); restricted to the MSAA (desktop, explicit-init-pass) path with a retained previous frame and no backdrop blur.
         let allow_scroll_with_clear = hw_scroll_blit_enabled()
@@ -299,17 +355,50 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .as_ref()
             .map(|sb| (sb.delta_x as f32, sb.delta_y as f32))
             .unwrap_or((0.0, 0.0));
+        // F1: damage-track an opaque-clear frame like scroll-with-clear but for an arbitrary dirty rect
+        // and zero delta (prime the previous frame, repaint only the dirty scissor). Same gates as
+        // scroll-with-clear, plus no PushLayer (an opacity/blur layer re-composited from only its dirty
+        // slice over the primed frame is wrong — deferred), and only when the dirty region is small
+        // enough to beat a plain full clear+repaint.
+        // Two damage substrates for the previous frame: MSAA desktop resolves into retained_view and
+        // re-seeds the multisample target with a prime quad; single-sample mobile keeps the previous
+        // frame in msaa_texture itself (it persists — its render pass stores and idle frames never
+        // write it), so its damage path Loads msaa_texture directly (see render_frame's load_op).
+        // Requires an OPAQUE clear: the injected background rect draws through the premultiplied-alpha
+        // rect pipeline, so a translucent clear_color would blend over (not replace) the primed frame
+        // inside the dirty rect and accumulate error each frame, diverging from a full LoadOp::Clear.
+        let allow_damage_with_clear = hw_damage_with_clear_enabled()
+            && clear_color.is_some_and(|c| c.a >= 1.0)
+            && !frame_blocks_damage
+            && ((self.msaa_samples > 1 && self.retained_view.is_some()) || self.msaa_samples == 1);
         // Multiple dirty rects are collapsed to their bounding union because GPUs support only a single scissor rect per pass (hardware limitation asymmetry vs. software backend which can clip per-rect).
-        let dirty_scissor: Option<Rect> =
-            if clear_color.is_none() && scroll_blit.is_none() && !self.prev_commands.is_empty() {
-                renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
-                    renderer_core::culling::command_visual_rect(cmd, m, &self.font_metrics)
-                })
-                .and_then(|rects| rects.into_iter().reduce(Rect::union))
-            } else {
-                None
-            };
-        (scroll_blit, scroll_prime, prime_delta, dirty_scissor)
+        let dirty_scissor: Option<Rect> = if scroll_blit.is_none()
+            && !self.prev_commands.is_empty()
+            && (clear_color.is_none() || allow_damage_with_clear)
+        {
+            renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
+                renderer_core::culling::command_visual_rect(cmd, m, &self.font_metrics)
+            })
+            .and_then(|rects| rects.into_iter().reduce(Rect::union))
+            .filter(|ds| self.damage_worth_priming(*ds))
+        } else {
+            None
+        };
+        let damage = allow_damage_with_clear && dirty_scissor.is_some();
+        // The prime quad only serves the multisample (desktop) target; the single-sample damage path
+        // Loads its persistent msaa_texture instead, so it primes without a quad.
+        let prime = scroll_prime || (damage && self.msaa_samples > 1);
+        (scroll_blit, prime, prime_delta, dirty_scissor, damage)
+    }
+
+    // A near-full-surface dirty rect costs more to damage-prime (retained quad + repaint) than a plain
+    // full clear+repaint, so only prime when the dirty region stays under a fraction of the surface.
+    fn damage_worth_priming(&self, ds: Rect) -> bool {
+        let logical_w = self.width as f32 / self.scale_factor;
+        let logical_h = self.height as f32 / self.scale_factor;
+        let surface_area = (logical_w * logical_h).max(1.0);
+        let dirty_area = ds.width.max(0.0) * ds.height.max(0.0);
+        dirty_area <= surface_area * 0.6
     }
 
     fn interpret_commands(
@@ -317,6 +406,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         commands: &[DrawCommand],
         dirty_scissor: Option<Rect>,
         scroll_blit: Option<&renderer_core::ScrollBlit>,
+        damage_bg: Option<(Rect, Color)>,
     ) {
         let mut current_scissor: Option<Rect> = None;
         let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new(); // saves/restores current_scissor across PushLayer/PopLayer; layers disable frustum culling inside their bounds
@@ -327,6 +417,34 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let mut clip_is_round: Vec<bool> = Vec::new();
         let expanded_commands = expand_fill_layers(commands);
         let commands: &[DrawCommand] = expanded_commands.as_deref().unwrap_or(commands);
+
+        // F1 damage prime: the init pass seeded the whole target with the previous frame. Confine the
+        // main pass to the dirty scissor (a leading SetScissor{None} resolves to dirty_scissor in
+        // execute_segments) and repaint the app background there so ghosts of moved/removed content
+        // are erased before the changed + overlapping-unchanged commands redraw on top.
+        if let Some((dirty_rect, clear_col)) = damage_bg {
+            self.pending_steps.push(DrawStep::SetScissor { rect: None });
+            // Inflate 1px so the physical scissor (which floors/ceils) is fully covered by the fill.
+            let bg_rect = Rect::new(
+                dirty_rect.x - 1.0,
+                dirty_rect.y - 1.0,
+                dirty_rect.width + 2.0,
+                dirty_rect.height + 2.0,
+            );
+            let bg_style = renderer_core::RectStyle {
+                fill: Some(renderer_core::Paint::Solid(clear_col)),
+                ..Default::default()
+            };
+            if self.batch_rect_start.is_none() {
+                self.batch_rect_start = Some(self.pending_instances.len() as u32);
+            }
+            let inst = crate::primitives::rect::prepare_rect(
+                bg_rect,
+                &bg_style,
+                renderer_core::IDENTITY_MATRIX,
+            );
+            self.pending_instances.push(inst);
+        }
 
         for (cmd_idx, cmd) in commands.iter().enumerate() {
             match cmd {
@@ -1785,12 +1903,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .expect("retained_view set in build_segments");
         let load_op = ctx.load_op;
         let dirty_scissor = ctx.dirty_scissor;
-        let scroll_prime = ctx.scroll_prime;
+        let prime = ctx.prime;
         let prime_delta = ctx.prime_delta;
 
         // The top-level target needs `load_op` (usually a full-screen Clear) applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store+load every frame on tiled mobile GPUs; when the first segment is itself a top-level Draw, fold the clear into that pass instead. Gated to the single-sample (mobile tiler) path: immediate-mode desktop GPUs gain little and keep the simpler explicit-init pass. Falls back to the standalone init pass when the frame opens with a layer (nothing draws to the top-level target first).
-        // EXPERIMENTAL scroll-blit-with-clear: seed the offscreen with the previous frame translated by the scroll delta. The clear (load_op) paints the exposed band with clear_color; the shifted retained quad fills everything else; the main draw passes (which Load) then redraw only the band (everything else is culled by scroll_blit).
-        let prime_bind_group = if scroll_prime {
+        // Prime the offscreen with the retained previous frame translated by prime_delta before the main pass Loads it: scroll-blit-with-clear (delta = scroll, redraw only the exposed band) or F1 damage priming (delta = 0, redraw only the dirty scissor). The clear (load_op) is fully covered by the full-screen quad, so its value is irrelevant on primed frames.
+        let prime_bind_group = if prime {
             let logical_w = self.width as f32 / self.scale_factor;
             let logical_h = self.height as f32 / self.scale_factor;
             Some(self.composite_pipeline.create_bind_group(
@@ -2298,7 +2416,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         blit.set_pipeline(&self.composite_pipeline.pipeline);
                         blit.set_bind_group(0, parent_vp_bg, &[]);
                         blit.set_bind_group(1, &bind_group, &[]);
-                        if let Some(s) = scissor {
+                        // Confine only a TOP-LEVEL composite (parent is the main target) to the dirty
+                        // rect; a nested composite writes into a parent layer in that layer's own
+                        // coordinate space, where the window-space dirty rect does not apply.
+                        let composite_scissor = if layer_stack.is_empty() {
+                            confine_to_dirty(scissor, dirty_scissor)
+                        } else {
+                            scissor
+                        };
+                        if let Some(s) = composite_scissor {
                             let (x, y, w, h) =
                                 physical_scissor(s, self.width, self.height, self.scale_factor);
                             blit.set_scissor_rect(x, y, w, h);
@@ -2382,7 +2508,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     blit.set_pipeline(&self.composite_pipeline.pipeline);
                     blit.set_bind_group(0, parent_vp_bg, &[]);
                     blit.set_bind_group(1, &bind_group, &[]);
-                    if let Some(s) = scissor {
+                    let composite_scissor = if layer_stack.is_empty() {
+                        confine_to_dirty(scissor, dirty_scissor)
+                    } else {
+                        scissor
+                    };
+                    if let Some(s) = composite_scissor {
                         let (x, y, w, h) =
                             physical_scissor(s, self.width, self.height, self.scale_factor);
                         blit.set_scissor_rect(x, y, w, h);
@@ -2519,11 +2650,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         // Headless has no swapchain: the frame already lives in offscreen_output, so present is a windowed-only no-op.
         if let Some(output) = output {
             tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
+            let present_start = renderer_core::perf::now_if_enabled();
             output.present();
+            renderer_core::perf::record_since(renderer_core::perf::Phase::Present, present_start);
         }
         // generation already bumps iff content changed (same invariant the idle-blit fast path relies on), so it replaces the per-frame O(n) hash_draw_commands here; the is_empty() guard repopulates prev_commands after a resize cleared it without a content change.
         if self.incoming_generation != self.prev_generation || self.prev_commands.is_empty() {
-            self.prev_commands = orig_commands.to_vec();
+            // F2: reuse the existing allocation (clear + refill) instead of allocating a fresh Vec each content frame.
+            self.prev_commands.clear();
+            self.prev_commands.extend_from_slice(orig_commands);
         }
         self.prev_generation = self.incoming_generation;
         self.clear_pending();

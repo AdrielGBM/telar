@@ -209,6 +209,16 @@ fn hw_scroll_blit_enabled() -> bool {
     *V.get_or_init(|| std::env::var("RSX_HW_SCROLL_BLIT").as_deref() != Ok("0"))
 }
 
+// Damage tracking with an opaque clear (F1): generalize the scroll-blit-with-clear prime to an
+// arbitrary dirty rect so a `clear_color` frame that changed only a small region seeds the offscreen
+// with the previous frame (retained_view) and repaints only the dirty scissor instead of the whole
+// surface. On by default for the MSAA (desktop) path; set RSX_HW_DAMAGE=0 to force a full re-render.
+fn hw_damage_with_clear_enabled() -> bool {
+    use std::sync::OnceLock;
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| std::env::var("RSX_HW_DAMAGE").as_deref() != Ok("0"))
+}
+
 fn cull_bounds(
     bounds: geometry_core::Rect,
     scissor: Option<geometry_core::Rect>,

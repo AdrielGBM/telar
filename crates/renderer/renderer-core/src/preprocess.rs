@@ -16,12 +16,18 @@ fn fill_layer_alpha(style: &RectStyle) -> Option<f32> {
     }
 }
 
-pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
-    let needs_expand = commands.iter().any(|cmd| match cmd {
+/// Cheap, allocation-free predicate for whether `expand_fill_layers` would rewrite any Rect into a
+/// synthetic `PushLayer` opacity triple. F1 damage tracking must treat these hidden layers like real
+/// `PushLayer`s (their composite is not confined to the dirty rect), so it queries this first.
+pub fn would_expand_fill_layers(commands: &[DrawCommand]) -> bool {
+    commands.iter().any(|cmd| match cmd {
         DrawCommand::Rect { style, .. } => fill_layer_alpha(style).is_some(),
         _ => false,
-    });
-    if !needs_expand {
+    })
+}
+
+pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
+    if !would_expand_fill_layers(commands) {
         return None;
     }
     let mut result = Vec::with_capacity(commands.len() + 4);
