@@ -1,5 +1,4 @@
-use geometry_core::{Point, Rect, Transform};
-use renderer_core::{BorderRadius, Color};
+use geometry_core::{BorderRadius, Color, Point, Rect, Transform};
 
 /// Interpolation plus the minimal vector-space operations the engine needs.
 ///

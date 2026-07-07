@@ -93,6 +93,34 @@ impl Transform {
     pub fn to_array(&self) -> [f32; 6] {
         [self.a, self.b, self.c, self.d, self.e, self.f]
     }
+
+    /// Rebuilds a `Transform` from the `[a, b, c, d, e, f]` layout produced by [`Transform::to_array`].
+    pub fn from_array(m: [f32; 6]) -> Transform {
+        Transform {
+            a: m[0],
+            b: m[1],
+            c: m[2],
+            d: m[3],
+            e: m[4],
+            f: m[5],
+        }
+    }
+
+    /// Returns the affine inverse, or `None` when the linear part is singular (determinant ≈ 0).
+    pub fn invert(&self) -> Option<Transform> {
+        let det = self.a * self.d - self.b * self.c;
+        if det.abs() < 1e-6 {
+            return None;
+        }
+        Some(Transform {
+            a: self.d / det,
+            b: -self.b / det,
+            c: -self.c / det,
+            d: self.a / det,
+            e: (self.c * self.f - self.d * self.e) / det,
+            f: (self.b * self.e - self.a * self.f) / det,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -132,5 +160,51 @@ mod tests {
         let c = Point::new(7.0, 2.0);
         let s = Transform::scale_around(3.0, 3.0, c.x, c.y).apply(c);
         assert!((s.x - c.x).abs() < 1e-4 && (s.y - c.y).abs() < 1e-4);
+    }
+
+    #[test]
+    fn from_array_round_trips_to_array() {
+        let t = Transform {
+            a: 1.5,
+            b: 0.5,
+            c: -0.25,
+            d: 2.0,
+            e: 3.0,
+            f: -4.0,
+        };
+        assert_eq!(Transform::from_array(t.to_array()), t);
+    }
+
+    #[test]
+    fn then_invert_is_identity() {
+        let t = Transform {
+            a: 1.5,
+            b: 0.5,
+            c: -0.25,
+            d: 2.0,
+            e: 3.0,
+            f: -4.0,
+        };
+        let id = t.then(t.invert().unwrap());
+        let approx = |x: f32, y: f32| (x - y).abs() < 1e-4;
+        assert!(approx(id.a, 1.0));
+        assert!(approx(id.b, 0.0));
+        assert!(approx(id.c, 0.0));
+        assert!(approx(id.d, 1.0));
+        assert!(approx(id.e, 0.0));
+        assert!(approx(id.f, 0.0));
+    }
+
+    #[test]
+    fn invert_singular_returns_none() {
+        let singular = Transform {
+            a: 0.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+            e: 5.0,
+            f: 5.0,
+        };
+        assert!(singular.invert().is_none());
     }
 }

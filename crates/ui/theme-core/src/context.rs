@@ -1,8 +1,8 @@
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
+use geometry_core::Color;
 use reactive_core::{RwSignal, signal};
-use renderer_core::Color;
 
 // Flexible theme contract: users define their own tokens with whatever names they want. `as_any` is the only requirement so `use_theme` can downcast back to the concrete type.
 pub trait Theme: 'static {

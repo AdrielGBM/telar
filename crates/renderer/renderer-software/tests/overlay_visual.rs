@@ -12,7 +12,7 @@ use platform_core::{Event, PointerButton, PointerSource};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, RenderBackend, ShapeStyle};
 use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
-use ui_core::{LayoutItem, Overlay, StyledContainer, WidgetCtx, compute_layout};
+use ui_core::{LayoutItem, Overlay, StyledContainer, compute_layout, reset_layout_runtime};
 use ui_tree::ComponentList;
 
 struct Fake;
@@ -27,10 +27,9 @@ impl HasWindowHandle for Fake {
     }
 }
 
-fn filled(ctx: &mut WidgetCtx, rgb: (u8, u8, u8), flag: RwSignal<bool>) -> StyledContainer {
+fn filled(rgb: (u8, u8, u8), flag: RwSignal<bool>) -> StyledContainer {
     let fill = Color::from_rgb_u8(rgb.0, rgb.1, rgb.2);
     StyledContainer::new(
-        ctx,
         LayoutStyle::new().width(200.0).height(200.0),
         move |_r| RectStyle::default().with_fill(fill),
         vec![],
@@ -59,17 +58,16 @@ fn release(x: f64, y: f64) -> Event {
 #[test]
 fn overlay_draws_on_top_and_captures_the_tap() {
     let (w, h) = (200u32, 200u32);
-    let mut ctx = WidgetCtx::new();
+    reset_layout_runtime();
 
     let bg_clicked = signal(false);
     let overlay_clicked = signal(false);
 
-    let background = filled(&mut ctx, (200, 60, 60), bg_clicked.clone()); // red
-    let scrim = filled(&mut ctx, (60, 60, 200), overlay_clicked.clone()); // blue
-    let overlay = Overlay::new(&mut ctx, LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
+    let background = filled((200, 60, 60), bg_clicked.clone()); // red
+    let scrim = filled((60, 60, 200), overlay_clicked.clone()); // blue
+    let overlay = Overlay::new(LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
 
     let root = StyledContainer::new(
-        &mut ctx,
         LayoutStyle::new().flex_column().width(200.0).height(200.0),
         |_r| RectStyle::default(),
         vec![Box::new(background), Box::new(overlay)],
@@ -77,7 +75,6 @@ fn overlay_draws_on_top_and_captures_the_tap() {
     .unwrap();
     let root_node = root.layout_node();
     compute_layout(
-        &mut ctx,
         root_node,
         AvailableSpace::Definite(w as f32),
         AvailableSpace::Definite(h as f32),

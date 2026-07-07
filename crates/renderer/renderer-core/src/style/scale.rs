@@ -1,9 +1,23 @@
-use geometry_core::Point;
+use geometry_core::{Point, Rect};
 
 use super::gradient::{Gradient, GradientKind};
 use super::paint::{Paint, Shadow, Stroke};
 use super::shape::{PathStyle, RectStyle};
-use super::{BorderRadius, Scale, TextStyle};
+use super::{Scale, TextStyle};
+use crate::BorderRadius;
+
+// `Scale` is local to renderer-core, so the orphan rules permit implementing it for these foreign value types here rather than adding arithmetic to the geometry-core crate.
+impl Scale for Point {
+    fn scale(self, sf: f32) -> Self {
+        Point::new(self.x * sf, self.y * sf)
+    }
+}
+
+impl Scale for Rect {
+    fn scale(self, sf: f32) -> Self {
+        Rect::new(self.x * sf, self.y * sf, self.width * sf, self.height * sf)
+    }
+}
 
 impl Scale for Paint {
     fn scale(self, sf: f32) -> Self {
@@ -12,11 +26,11 @@ impl Scale for Paint {
             Paint::Gradient(g) => Paint::Gradient(Gradient {
                 kind: match g.kind {
                     GradientKind::Linear { start, end } => GradientKind::Linear {
-                        start: Point::new(start.x * sf, start.y * sf),
-                        end: Point::new(end.x * sf, end.y * sf),
+                        start: start.scale(sf),
+                        end: end.scale(sf),
                     },
                     GradientKind::Radial { center, radius } => GradientKind::Radial {
-                        center: Point::new(center.x * sf, center.y * sf),
+                        center: center.scale(sf),
                         radius: radius * sf,
                     },
                 },

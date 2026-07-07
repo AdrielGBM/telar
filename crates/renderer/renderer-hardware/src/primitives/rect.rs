@@ -71,7 +71,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
     let encoded = style
         .fill
         .as_ref()
-        .map(|fill| encode_fill_style(fill, matrix))
+        .map(|fill| encode_fill_style::<4>(fill, matrix))
         .unwrap_or(super::EncodedFill {
             fill_type: 0,
             fill_color: [0.0; 4],

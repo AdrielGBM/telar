@@ -1,6 +1,5 @@
-use crate::Color;
+use crate::{BorderRadius, Color};
 
-use super::BorderRadius;
 use super::paint::{FillRule, Paint, Shadow, Stroke};
 
 pub trait ShapeStyle: Sized {

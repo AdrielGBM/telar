@@ -70,28 +70,16 @@ pub fn scale_commands(commands: &[DrawCommand], sf: f32) -> Option<Vec<DrawComma
     Some(commands.iter().map(|cmd| scale_command(cmd, sf)).collect())
 }
 
-fn scale_point(p: geometry_core::Point, sf: f32) -> geometry_core::Point {
-    geometry_core::Point::new(p.x * sf, p.y * sf)
-}
-
-fn scale_rect(r: geometry_core::Rect, sf: f32) -> geometry_core::Rect {
-    geometry_core::Rect::new(r.x * sf, r.y * sf, r.width * sf, r.height * sf)
-}
-
 fn scale_path_data(data: &crate::PathData, sf: f32) -> crate::PathData {
     let mut out = crate::PathData::new();
     for verb in data.verbs() {
         out = match verb {
-            crate::PathVerb::MoveTo(p) => out.move_to(scale_point(*p, sf)),
-            crate::PathVerb::LineTo(p) => out.line_to(scale_point(*p, sf)),
-            crate::PathVerb::QuadTo { ctrl, to } => {
-                out.quad_to(scale_point(*ctrl, sf), scale_point(*to, sf))
+            crate::PathVerb::MoveTo(p) => out.move_to(p.scale(sf)),
+            crate::PathVerb::LineTo(p) => out.line_to(p.scale(sf)),
+            crate::PathVerb::QuadTo { ctrl, to } => out.quad_to(ctrl.scale(sf), to.scale(sf)),
+            crate::PathVerb::CubicTo { ctrl1, ctrl2, to } => {
+                out.cubic_to(ctrl1.scale(sf), ctrl2.scale(sf), to.scale(sf))
             }
-            crate::PathVerb::CubicTo { ctrl1, ctrl2, to } => out.cubic_to(
-                scale_point(*ctrl1, sf),
-                scale_point(*ctrl2, sf),
-                scale_point(*to, sf),
-            ),
             crate::PathVerb::Close => out.close(),
         };
     }
@@ -101,22 +89,22 @@ fn scale_path_data(data: &crate::PathData, sf: f32) -> crate::PathData {
 fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
     match cmd {
         DrawCommand::Rect { rect, style } => DrawCommand::Rect {
-            rect: scale_rect(*rect, sf),
+            rect: rect.scale(sf),
             style: Arc::new((**style).scale(sf)),
         },
         DrawCommand::Text { text, rect, style } => DrawCommand::Text {
             text: text.clone(),
-            rect: scale_rect(*rect, sf),
+            rect: rect.scale(sf),
             style: Arc::new((**style).scale(sf)),
         },
         DrawCommand::Image { data, rect, filter } => DrawCommand::Image {
             data: data.clone(),
-            rect: scale_rect(*rect, sf),
+            rect: rect.scale(sf),
             filter: *filter,
         },
         DrawCommand::Line { p1, p2, style } => DrawCommand::Line {
-            p1: scale_point(*p1, sf),
-            p2: scale_point(*p2, sf),
+            p1: p1.scale(sf),
+            p2: p2.scale(sf),
             style: (*style).scale(sf),
         },
         DrawCommand::Path { data, style } => DrawCommand::Path {
@@ -124,7 +112,7 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             style: Arc::new((**style).scale(sf)),
         },
         DrawCommand::PushClip { rect, radius } => DrawCommand::PushClip {
-            rect: scale_rect(*rect, sf),
+            rect: rect.scale(sf),
             radius: (*radius).scale(sf),
         },
         DrawCommand::PopClip => DrawCommand::PopClip,
@@ -237,12 +225,12 @@ fn scale_command_cached(
 ) -> DrawCommand {
     match cmd {
         DrawCommand::Rect { rect, style } => DrawCommand::Rect {
-            rect: scale_rect(*rect, sf),
+            rect: rect.scale(sf),
             style: scaled_style_arc(rect_styles, style, sf),
         },
         DrawCommand::Text { text, rect, style } => DrawCommand::Text {
             text: text.clone(),
-            rect: scale_rect(*rect, sf),
+            rect: rect.scale(sf),
             style: scaled_style_arc(text_styles, style, sf),
         },
         DrawCommand::Path { data, style } => DrawCommand::Path {

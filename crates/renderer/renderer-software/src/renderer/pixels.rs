@@ -54,20 +54,11 @@ pub(super) fn compute_layer_bounds(
 ) -> Vec<Option<(i32, i32, u32, u32)>> {
     let mut result = vec![None; commands.len()];
     let mut stack: Vec<(usize, Option<Rect>)> = Vec::new();
-    let mut cumulative_matrix = renderer_core::IDENTITY_MATRIX;
-    let mut matrix_stack: Vec<[f32; 6]> = Vec::new();
 
-    for (idx, cmd) in commands.iter().enumerate() {
+    // for_each_with_matrix owns the PushMatrix/PopMatrix cumulative-matrix walk; the callback keeps only the layer-stack bounds accumulation. `idx` mirrors the command position since the callback fires once per command in order.
+    let mut idx = 0usize;
+    renderer_core::for_each_with_matrix(commands, |cmd, matrix| {
         match cmd {
-            DrawCommand::PushMatrix { matrix } => {
-                matrix_stack.push(cumulative_matrix);
-                cumulative_matrix = renderer_core::compose_matrix(cumulative_matrix, *matrix);
-            }
-            DrawCommand::PopMatrix => {
-                if let Some(prev) = matrix_stack.pop() {
-                    cumulative_matrix = prev;
-                }
-            }
             DrawCommand::PushLayer { .. } => {
                 stack.push((idx, None));
             }
@@ -86,32 +77,30 @@ pub(super) fn compute_layer_bounds(
                     };
                     result[push_idx] = Some((ox, oy, bw, bh));
                     // Propagate this layer's visual footprint to the parent layer's accumulator so the parent layer is sized to contain the composited result of all nested layers.
-                    if !stack.is_empty() {
+                    if let Some(parent) = stack.last_mut() {
                         let footprint = Rect {
                             x: ox as f32,
                             y: oy as f32,
                             width: bw as f32,
                             height: bh as f32,
                         };
-                        let last = stack.len() - 1;
-                        stack[last].1 = union_opt_rect(stack[last].1, footprint);
+                        parent.1 = union_opt_rect(parent.1, footprint);
                     }
                 }
             }
             _ => {
-                if let Some(vr) = renderer_core::culling::command_visual_rect(
-                    cmd,
-                    cumulative_matrix,
-                    font_metrics,
-                ) {
-                    if !stack.is_empty() {
-                        let last_idx = stack.len() - 1;
-                        stack[last_idx].1 = union_opt_rect(stack[last_idx].1, vr);
+                // command_visual_rect returns None for PushMatrix/PopMatrix/PushClip/PopClip, so those pass through without touching the accumulator.
+                if let Some(vr) =
+                    renderer_core::culling::command_visual_rect(cmd, matrix, font_metrics)
+                {
+                    if let Some(last) = stack.last_mut() {
+                        last.1 = union_opt_rect(last.1, vr);
                     }
                 }
             }
         }
-    }
+        idx += 1;
+    });
 
     result
 }

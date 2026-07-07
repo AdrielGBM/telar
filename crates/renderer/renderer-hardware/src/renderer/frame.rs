@@ -441,7 +441,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             let inst = crate::primitives::rect::prepare_rect(
                 bg_rect,
                 &bg_style,
-                renderer_core::IDENTITY_MATRIX,
+                geometry_core::Transform::IDENTITY.to_array(),
             );
             self.pending_instances.push(inst);
         }

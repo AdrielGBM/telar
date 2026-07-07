@@ -1,18 +1,23 @@
-pub(crate) struct EncodedFill {
+// Intermediate fill encoding parameterized over the gradient stop count `N`: rect/text consume 4 slots (rect.wgsl), paths consume 8 (path.wgsl). Not a GPU type itself — its fields are copied into the `#[repr(C)]` instance/storage structs.
+pub(crate) struct EncodedFill<const N: usize> {
     pub fill_type: u32,
     pub fill_color: [f32; 4],
     pub grad_p0: [f32; 2],
     pub grad_p1: [f32; 2],
     pub grad_radius: f32,
     pub grad_stop_count: u32,
-    pub grad_positions: [f32; 4],
-    pub grad_colors: [[f32; 4]; 4],
+    pub grad_positions: [f32; N],
+    pub grad_colors: [[f32; 4]; N],
 }
 
-pub(crate) fn encode_fill_style(fill: &renderer_core::Paint, matrix: [f32; 6]) -> EncodedFill {
-    let ap = |x: f32, y: f32| -> [f32; 2] {
-        let [a, b, c, d, e, f] = matrix;
-        [a * x + c * y + e, b * x + d * y + f]
+pub(crate) fn encode_fill_style<const N: usize>(
+    fill: &renderer_core::Paint,
+    matrix: [f32; 6],
+) -> EncodedFill<N> {
+    let transform = geometry_core::Transform::from_array(matrix);
+    let ap = |p: geometry_core::Point| -> [f32; 2] {
+        let m = transform.apply(p);
+        [m.x, m.y]
     };
     match fill {
         renderer_core::Paint::Solid(c) => EncodedFill {
@@ -22,23 +27,29 @@ pub(crate) fn encode_fill_style(fill: &renderer_core::Paint, matrix: [f32; 6]) -
             grad_p1: [0.0; 2],
             grad_radius: 0.0,
             grad_stop_count: 0,
-            grad_positions: [0.0; 4],
-            grad_colors: [[0.0; 4]; 4],
+            grad_positions: [0.0; N],
+            grad_colors: [[0.0; 4]; N],
         },
         renderer_core::Paint::Gradient(g) => {
-            let mut positions = [0.0f32; 4];
-            let mut colors = [[0.0f32; 4]; 4];
-            for (i, s) in g.stops.active().iter().enumerate() {
+            let mut positions = [0.0f32; N];
+            let mut colors = [[0.0f32; 4]; N];
+            let active = g.stops.active();
+            // The instanced/storage shader holds only N gradient slots; clamp to avoid an out-of-bounds write when core carries more stops than this encoder can hold.
+            debug_assert!(
+                active.len() <= N,
+                "fill encoder supports at most {N} gradient stops"
+            );
+            for (i, s) in active.iter().take(N).enumerate() {
                 positions[i] = s.position;
                 colors[i] = s.color.to_array();
             }
-            let stop_count = g.stops.active().len() as u32;
+            let stop_count = (active.len().min(N)) as u32;
             match g.kind {
                 renderer_core::GradientKind::Linear { start, end } => EncodedFill {
                     fill_type: 1,
                     fill_color: [0.0; 4],
-                    grad_p0: ap(start.x, start.y),
-                    grad_p1: ap(end.x, end.y),
+                    grad_p0: ap(start),
+                    grad_p1: ap(end),
                     grad_radius: 0.0,
                     grad_stop_count: stop_count,
                     grad_positions: positions,
@@ -47,7 +58,7 @@ pub(crate) fn encode_fill_style(fill: &renderer_core::Paint, matrix: [f32; 6]) -
                 renderer_core::GradientKind::Radial { center, radius } => EncodedFill {
                     fill_type: 2,
                     fill_color: [0.0; 4],
-                    grad_p0: ap(center.x, center.y),
+                    grad_p0: ap(center),
                     grad_p1: [0.0; 2],
                     grad_radius: radius,
                     grad_stop_count: stop_count,

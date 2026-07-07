@@ -48,6 +48,11 @@ pub(crate) fn register(id: u64, weak: Weak<dyn Tickable>) {
     });
 }
 
+/// A registered handle is live if it is still upgradeable and not yet settled.
+fn is_live(weak: &Weak<dyn Tickable>) -> bool {
+    matches!(weak.upgrade(), Some(anim) if !anim.is_settled())
+}
+
 /// Integrate every active animation to `now`, publishing changed values and deregistering settled ones.
 pub fn tick(now: Instant) {
     // Snapshot live handles under a short borrow, then integrate without holding the registry borrow: each `.set()` may flush effects that re-enter the registry (register new animations).
@@ -61,20 +66,13 @@ pub fn tick(now: Instant) {
     }
     // Prune dead (dropped) and settled animations so has_active() returns false at rest.
     REGISTRY.with(|r| {
-        r.borrow_mut()
-            .entries
-            .retain(|_, weak| matches!(weak.upgrade(), Some(anim) if !anim.is_settled()));
+        r.borrow_mut().entries.retain(|_, weak| is_live(weak));
     });
 }
 
-/// Whether any animation is still unsettled; the runner uses this to keep scheduling frames.
+/// Whether any animation is still unsettled; the runner uses this to keep scheduling frames. Non-mutating: a Weak can go dead between `tick` and this call, so it re-tests liveness rather than trusting emptiness.
 pub fn has_active() -> bool {
-    REGISTRY.with(|r| {
-        let mut reg = r.borrow_mut();
-        reg.entries
-            .retain(|_, weak| matches!(weak.upgrade(), Some(anim) if !anim.is_settled()));
-        !reg.entries.is_empty()
-    })
+    REGISTRY.with(|r| r.borrow().entries.values().any(is_live))
 }
 
 /// Drop all registered animations; parallels reactive `reset_runtime` on tree teardown / hot reload.

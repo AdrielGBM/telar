@@ -17,8 +17,8 @@ use ui_components::{
 };
 use ui_components::{ModalProps, modal};
 use ui_core::{
-    Container, LayoutItem, Slots, Text, WidgetCtx, box_item, compute_layout, new_container,
-    relayout_if_dirty,
+    Container, LayoutItem, Slots, Text, box_item, compute_layout, new_container, relayout_if_dirty,
+    reset_layout_runtime,
 };
 use ui_tree::ComponentList;
 
@@ -37,81 +37,59 @@ impl HasWindowHandle for Fake {
 #[test]
 fn form_widgets_render() {
     let (w, h) = (360u32, 400u32);
-    let mut ctx = WidgetCtx::new();
+    reset_layout_runtime();
 
     // Each widget in a clearly-visible state so the PNG shows selected/checked/filled looks.
-    let cb = checkbox(
-        &mut ctx,
-        CheckboxProps {
-            checked: Some(signal(true)),
-            label: "I agree to the terms",
-            ..Default::default()
-        },
-    )
+    let cb = checkbox(CheckboxProps {
+        checked: Some(signal(true)),
+        label: "I agree to the terms",
+        ..Default::default()
+    })
     .unwrap();
-    let tg = toggle(
-        &mut ctx,
-        ToggleProps {
-            checked: Some(signal(true)),
-            label: "Notifications on",
-            ..Default::default()
-        },
-    )
+    let tg = toggle(ToggleProps {
+        checked: Some(signal(true)),
+        label: "Notifications on",
+        ..Default::default()
+    })
     .unwrap();
     let choice = signal(1u32);
-    let r0 = radio(
-        &mut ctx,
-        RadioProps {
-            selected: Some(choice.clone()),
-            value: 0,
-            label: "Small",
-            ..Default::default()
-        },
-    )
+    let r0 = radio(RadioProps {
+        selected: Some(choice.clone()),
+        value: 0,
+        label: "Small",
+        ..Default::default()
+    })
     .unwrap();
-    let r1 = radio(
-        &mut ctx,
-        RadioProps {
-            selected: Some(choice.clone()),
-            value: 1,
-            label: "Medium (selected)",
-            ..Default::default()
-        },
-    )
+    let r1 = radio(RadioProps {
+        selected: Some(choice.clone()),
+        value: 1,
+        label: "Medium (selected)",
+        ..Default::default()
+    })
     .unwrap();
-    let sl = slider(
-        &mut ctx,
-        SliderProps {
-            value: Some(signal(0.62)),
-            width: 260.0,
-            ..Default::default()
-        },
-    )
+    let sl = slider(SliderProps {
+        value: Some(signal(0.62)),
+        width: 260.0,
+        ..Default::default()
+    })
     .unwrap();
-    let tf = text_field(
-        &mut ctx,
-        TextFieldProps {
-            value: Some(signal("Ada".to_string())),
-            label: "Name",
-            width: 260.0,
-            ..Default::default()
-        },
-    )
+    let tf = text_field(TextFieldProps {
+        value: Some(signal("Ada".to_string())),
+        label: "Name",
+        width: 260.0,
+        ..Default::default()
+    })
     .unwrap();
     // A SECOND field (like the demo's two): placeholder-only, its own signal. Both must render.
-    let tf2 = text_field(
-        &mut ctx,
-        TextFieldProps {
-            value: Some(signal(String::new())),
-            placeholder: "Search…",
-            width: 260.0,
-            ..Default::default()
-        },
-    )
+    let tf2 = text_field(TextFieldProps {
+        value: Some(signal(String::new())),
+        placeholder: "Search…",
+        width: 260.0,
+        ..Default::default()
+    })
     .unwrap();
 
     let col = Container::new(
-        &mut ctx,
         LayoutStyle::new()
             .flex_column()
             .gap(16.0)
@@ -131,7 +109,6 @@ fn form_widgets_render() {
     .unwrap();
     let root = col.layout_node();
     compute_layout(
-        &mut ctx,
         root,
         AvailableSpace::Definite(w as f32),
         AvailableSpace::Definite(h as f32),
@@ -163,11 +140,10 @@ fn form_widgets_render() {
 #[test]
 fn modal_renders_over_a_page() {
     let (w, h) = (420u32, 300u32);
-    let mut ctx = WidgetCtx::new();
+    reset_layout_runtime();
     let open = signal(false);
 
     let body = Text::new(
-        &mut ctx,
         || "Are you sure you want to continue?".to_string(),
         LayoutStyle::new().height(20.0),
         || TextStyle::new(14.0, Color::from_rgb_u8(40, 42, 52)),
@@ -176,7 +152,6 @@ fn modal_renders_over_a_page() {
     let mut slots = Slots::new();
     slots.push(None, box_item(body));
     let dialog = modal(
-        &mut ctx,
         ModalProps {
             open: Some(open.clone()),
             title: "Confirm action",
@@ -188,7 +163,6 @@ fn modal_renders_over_a_page() {
 
     // A parent-less root computed against the window registers the overlay host the portal attaches to.
     let root = new_container(
-        &mut ctx,
         LayoutStyle::new()
             .flex_column()
             .width(w as f32)
@@ -197,7 +171,6 @@ fn modal_renders_over_a_page() {
     )
     .unwrap();
     compute_layout(
-        &mut ctx,
         root,
         AvailableSpace::Definite(w as f32),
         AvailableSpace::Definite(h as f32),
@@ -236,22 +209,18 @@ fn select_open_renders() {
     use ui_core::{EventResult, dispatch_overlays, track_layout};
 
     let (w, h) = (300u32, 240u32);
-    let mut ctx = WidgetCtx::new();
+    reset_layout_runtime();
     let picked = signal(1u32);
-    let sel = select(
-        &mut ctx,
-        SelectProps {
-            selected: Some(picked.clone()),
-            options: vec!["Small", "Medium", "Large"],
-            ..Default::default()
-        },
-    )
+    let sel = select(SelectProps {
+        selected: Some(picked.clone()),
+        options: vec!["Small", "Medium", "Large"],
+        ..Default::default()
+    })
     .unwrap();
     let trigger_node = sel.layout_node();
-    let trigger_rect = track_layout(&ctx, trigger_node).unwrap();
+    let trigger_rect = track_layout(trigger_node).unwrap();
     // A parent-less root registers the overlay host so the dropdown portals to the viewport.
     let root = new_container(
-        &mut ctx,
         LayoutStyle::new()
             .flex_column()
             .padding_all(16.0)
@@ -261,7 +230,6 @@ fn select_open_renders() {
     )
     .unwrap();
     compute_layout(
-        &mut ctx,
         root,
         AvailableSpace::Definite(w as f32),
         AvailableSpace::Definite(h as f32),

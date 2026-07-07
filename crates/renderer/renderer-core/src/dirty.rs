@@ -1,11 +1,7 @@
-use geometry_core::Rect;
+use geometry_core::{Rect, Transform};
 use smallvec::{SmallVec, smallvec};
 
-use crate::{
-    DrawCommand, culling,
-    culling::FontMetrics,
-    draw_state::{DrawState, IDENTITY_MATRIX},
-};
+use crate::{DrawCommand, culling, culling::FontMetrics, draw_state::DrawState};
 
 // Advances a DrawState's cumulative matrix by a single command, mirroring for_each_with_matrix: PushMatrix/PopMatrix update the matrix first and every command then reads state.cumulative_matrix.
 fn advance_matrix(state: &mut DrawState, cmd: &DrawCommand) {
@@ -220,7 +216,11 @@ pub fn detect_scroll_blit(
 
     // Static visuals drawn BEFORE the scroll PushTransform (fixed headers, separators) sit inside scroll_clip, so the blit shifts their pixels. They are unchanged (scroll_idx is the first diff), so repaint each in place (plus its ghost) instead of bailing.
     for c in &new_cmds[..scroll_idx] {
-        let r = culling::command_visual_rect(c, IDENTITY_MATRIX, &FontMetrics::default());
+        let r = culling::command_visual_rect(
+            c,
+            Transform::IDENTITY.to_array(),
+            &FontMetrics::default(),
+        );
         if let Some(region) = displaced_region(r, r, dx_f, dy_f) {
             extra_dirty.push(region);
             if extra_dirty.len() > MAX_SCROLL_EXTRA_DIRTY {
