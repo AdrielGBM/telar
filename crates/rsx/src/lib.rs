@@ -17,8 +17,6 @@ pub mod app;
 pub mod hot;
 #[cfg(feature = "dev")]
 pub mod hot_state;
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub mod paths;
 #[cfg(feature = "runtime")]
 pub mod runner;
 
@@ -52,12 +50,12 @@ pub use layout_core::{
 };
 // Always-on, no feature gate (D2 in docs/animations.md): kernel functionality, not an opt-in module. The transpiler emits `motion::Animated`/`motion::tween`/`motion::spring`/`motion::Easing` paths against this re-export.
 pub use motion_core as motion;
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub use paths::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowConfig, WindowPosition,
 };
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub use platform_desktop::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
     Effect, Memo, ReadSignal, RwSignal, batch, begin_batch, effect, end_batch, memo, reset_runtime,
@@ -82,9 +80,9 @@ pub use ui_core::Svg;
 pub use ui_core::{
     Canvas, ClippedItem, Component, ComponentList, Container, EventResult, Image, Input,
     LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle,
-    RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, WidgetCtx, box_item, box_transform,
-    compute_layout, focus, mark_dirty, new_container, new_leaf, relayout_if_dirty, set_display,
-    set_overlay_host, track_layout,
+    RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, box_item, box_transform,
+    compute_layout, focus, mark_dirty, new_container, new_leaf, relayout_if_dirty,
+    reset_layout_runtime, set_display, set_overlay_host, track_layout,
 };
 
 // Opt-in component catalogue. Re-exported at the prelude root so generated component calls resolve them

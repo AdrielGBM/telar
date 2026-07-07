@@ -24,15 +24,26 @@ pub(super) fn build_font_config(
     font_data: Vec<Vec<u8>>,
     android: bool,
 ) -> renderer_core::FontConfig {
+    // `android` mirrors cfg!(target_os = "android"); the Android system font stack (family candidates + /system/fonts) is a platform-android fact, unreachable off-device.
+    #[cfg(target_os = "android")]
+    let (system_fonts_dir, sans_serif_family_candidates) = if android {
+        (
+            Some(platform_android::fonts::system_fonts_dir()),
+            platform_android::fonts::sans_serif_candidates(),
+        )
+    } else {
+        (None, Vec::new())
+    };
+    #[cfg(not(target_os = "android"))]
+    let (system_fonts_dir, sans_serif_family_candidates) = {
+        let _ = android;
+        (None, Vec::new())
+    };
     renderer_core::FontConfig {
         extra_font_paths: font_paths,
         font_data,
-        system_fonts_dir: android.then(|| std::path::PathBuf::from("/system/fonts")),
-        sans_serif_family_candidates: if android {
-            super::android::android_sans_serif_candidates()
-        } else {
-            vec![]
-        },
+        system_fonts_dir,
+        sans_serif_family_candidates,
     }
 }
 

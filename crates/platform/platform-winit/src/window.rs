@@ -7,7 +7,7 @@ use raw_window_handle::{
 use winit::window::Window as WinitInnerWindow;
 
 #[derive(Clone)]
-pub struct WinitWindow(pub(crate) Arc<WinitInnerWindow>);
+pub struct WinitWindow(pub Arc<WinitInnerWindow>);
 
 impl HasWindowHandle for WinitWindow {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {

@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/platform/platform-core",
     "crates/platform/platform-winit",
+    "crates/platform/platform-desktop",
     "crates/platform/platform-android",
     "crates/renderer/renderer-core",
     "crates/renderer/renderer-assets",
@@ -29,7 +30,8 @@ members = [
     "crates/tools/rsx-macros",
     "crates/tools/rsx-workspace",
     "apps/sandbox",
-    "apps/landing", "crates/ui/ui-components",
+    "apps/landing",
+    "crates/ui/ui-components",
 ]
 
 default-members = [
@@ -88,6 +90,7 @@ tiny-skia = "0.12.0"
 
 platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }
+platform-desktop = { path = "crates/platform/platform-desktop" }
 platform-android = { path = "crates/platform/platform-android" }
 renderer-core = { path = "crates/renderer/renderer-core" }
 renderer-assets = { path = "crates/renderer/renderer-assets" }

@@ -24,7 +24,7 @@ col gap:20
         text "Opacity — the same signal, animated" size:13 color:ink
         card
             row gap:14 align:center wrap
-                box width:130 height:64 fill:primary radius:12 opacity:$fade transition:opacity 300ms ease-in-out align:center justify:center
+                box width:130 height:64 fill:primary radius:12 opacity:$fade align:center justify:center transition:opacity 300ms ease-in-out
                     text "fade" size:13 color:on_primary
                 button label:"Toggle" fill:primary on_press:|| { let v = $fade.peek(); $fade.set(if v > 0.5 { 0.15 } else { 1.0 }) }
         code_line code:"box opacity:$fade transition:opacity 300ms ease-in-out"

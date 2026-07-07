@@ -2046,7 +2046,6 @@ version = "0.1.0"
 dependencies = [
  "geometry-core",
  "reactive-core",
- "renderer-core",
 ]
 
 [[package]]
@@ -2680,8 +2679,10 @@ name = "platform-android"
 version = "0.1.0"
 dependencies = [
  "android-activity",
+ "libc",
  "paranoid-android",
  "platform-core",
+ "platform-winit",
  "raw-window-handle",
  "services-core",
  "tracing",
@@ -2698,12 +2699,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "platform-desktop"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "platform-core",
+ "platform-winit",
+ "services-core",
+ "tracing",
+ "winit",
+]
+
+[[package]]
 name = "platform-winit"
 version = "0.1.0"
 dependencies = [
  "platform-core",
  "raw-window-handle",
- "tracing",
  "winit",
 ]
 
@@ -3984,7 +3996,6 @@ name = "rsx"
 version = "0.1.0"
 dependencies = [
  "devtools-core",
- "dirs",
  "geometry-core",
  "layout-core",
  "libc",
@@ -3992,7 +4003,7 @@ dependencies = [
  "motion-core",
  "platform-android",
  "platform-core",
- "platform-winit",
+ "platform-desktop",
  "reactive-core",
  "renderer-assets",
  "renderer-core",
@@ -4053,6 +4064,7 @@ version = "0.1.0"
 dependencies = [
  "lsp-types",
  "rsx-parser",
+ "rsx-transpiler",
 ]
 
 [[package]]
@@ -4678,8 +4690,8 @@ checksum = "f18aa187839b2bdb1ad2fa35ead8c4c2976b64e4363c386d45ac0f7ee85c9233"
 name = "theme-core"
 version = "0.1.0"
 dependencies = [
+ "geometry-core",
  "reactive-core",
- "renderer-core",
 ]
 
 [[package]]

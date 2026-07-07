@@ -3,8 +3,8 @@ use rsx::{
     AlignItems, App, AvailableSpace, BorderRadius, ClippedItem, Color, Component, Container, Event,
     EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
     NodeVec, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text,
-    TextStyle, WidgetCtx, compute_layout, mark_dirty, new_container, new_leaf, set_display,
-    set_overlay_host, signal,
+    TextStyle, compute_layout, mark_dirty, new_container, new_leaf, reset_layout_runtime,
+    set_display, set_overlay_host, signal,
 };
 
 /// Width of the navigation rail / drawer, in px. Kept in sync with the `width:` on `sidebar.rsx`'s root.
@@ -15,7 +15,7 @@ const TOPBAR_H: f32 = 52.0;
 const MOBILE_BREAKPOINT: f32 = 600.0;
 
 /// Builds one doc section into its content pane. Every `.rsx` feature transpiles to a fn of this shape.
-type SectionBuild = fn(&mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>;
+type SectionBuild = fn() -> Result<Box<dyn LayoutItem>, LayoutError>;
 
 /// Every doc section — nav label and content builder — in display order. The index is the section id, and
 /// this is the single source of truth the sidebar nav and the content pane both derive from: adding or
@@ -47,21 +47,20 @@ const SECTIONS: &[(&str, SectionBuild)] = &[
 
 /// Builds every section once and returns the content pane plus each section's layout node, so the
 /// shell can show only the selected one by toggling the others' `display`.
-fn build_content(ctx: &mut WidgetCtx) -> Result<(Box<dyn LayoutItem>, Vec<NodeId>), LayoutError> {
+fn build_content() -> Result<(Box<dyn LayoutItem>, Vec<NodeId>), LayoutError> {
     let mut sections: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(SECTIONS.len());
     for (_, build) in SECTIONS {
-        sections.push(build(ctx)?);
+        sections.push(build()?);
     }
     let section_nodes: Vec<NodeId> = sections.iter().map(|s| s.layout_node()).collect();
     // Clip each section to its own rect so a hidden one (zero rect via display:none) draws nothing —
     // robust against stale descendant rects and Canvas art that paints at fixed coordinates.
     let sections: Vec<Box<dyn LayoutItem>> = sections
         .into_iter()
-        .map(|s| Box::new(ClippedItem::new(ctx, s)) as Box<dyn LayoutItem>)
+        .map(|s| Box::new(ClippedItem::new(s)) as Box<dyn LayoutItem>)
         .collect();
     // Reading column: fills the width it is given but never past a legible line length.
     let column = Container::new(
-        ctx,
         LayoutStyle::new()
             .flex_column()
             .width(SizeDimension::Percent(1.0))
@@ -72,7 +71,6 @@ fn build_content(ctx: &mut WidgetCtx) -> Result<(Box<dyn LayoutItem>, Vec<NodeId
     )?;
     // Outer wrapper fills the scroll viewport and centers the capped column on wide windows.
     let outer = Container::new(
-        ctx,
         LayoutStyle::new()
             .flex_column()
             .align_items(AlignItems::CENTER),
@@ -102,7 +100,6 @@ fn nav_rect_hover(active: bool) -> RectStyle {
 /// Built on the kernel primitives — a `StyledContainer` (transparent-blending until hover, filled when
 /// active) with a centred `Text::auto` label and an `on_press` that selects the section.
 fn build_nav(
-    ctx: &mut WidgetCtx,
     selected: RwSignal<usize>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut buttons: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(SECTIONS.len());
@@ -110,7 +107,6 @@ fn build_nav(
         let title = *title;
         let on_label = selected.clone();
         let label = Text::auto(
-            ctx,
             move || title.to_string(),
             LayoutStyle::new(),
             move || {
@@ -125,7 +121,6 @@ fn build_nav(
         // A row: the parent column stretches the item to full width, and `justify_content:center` centres
         // the measured `Text::auto` label within it (a column would collapse the label's stretched cross axis).
         let btn = StyledContainer::new(
-            ctx,
             LayoutStyle::new()
                 .flex_row()
                 .align_items(AlignItems::CENTER)
@@ -141,14 +136,12 @@ fn build_nav(
         .on_press(move || on_press.set(i));
         buttons.push(Box::new(btn));
     }
-    let list = Container::new(ctx, LayoutStyle::new().flex_column().gap(3.0), buttons)?;
+    let list = Container::new(LayoutStyle::new().flex_column().gap(3.0), buttons)?;
     let label = Text::single_line(
-        ctx,
         || "CONTENTS".to_string(),
         || TextStyle::new(11.0, theme().muted),
     )?;
     Ok(Box::new(Container::new(
-        ctx,
         LayoutStyle::new().flex_column().gap(8.0),
         vec![Box::new(label), Box::new(list)],
     )?))
@@ -156,13 +149,11 @@ fn build_nav(
 
 /// Full sidebar: the `.rsx` header + theme switcher, then the Rust-built section nav.
 fn build_sidebar(
-    ctx: &mut WidgetCtx,
     selected: RwSignal<usize>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let header_theme = crate::core_sidebar(ctx)?;
-    let nav = build_nav(ctx, selected)?;
+    let header_theme = crate::core_sidebar()?;
+    let nav = build_nav(selected)?;
     Ok(Box::new(Container::new(
-        ctx,
         LayoutStyle::new()
             .flex_column()
             .width(SIDEBAR_W)
@@ -174,18 +165,15 @@ fn build_sidebar(
 
 /// Mobile top bar: a hamburger button (toggles `menu_open`) next to the wordmark. Shown only below the breakpoint.
 fn build_topbar(
-    ctx: &mut WidgetCtx,
     menu_open: RwSignal<bool>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let toggle = menu_open.clone();
     let glyph = Text::auto(
-        ctx,
         || "\u{2630}".to_string(),
         LayoutStyle::new(),
         || TextStyle::new(20.0, theme().ink),
     )?;
     let burger = StyledContainer::new(
-        ctx,
         // Padding content-sizes the icon to ~40x40; a row keeps the measured glyph from collapsing.
         LayoutStyle::new()
             .flex_row()
@@ -210,12 +198,10 @@ fn build_topbar(
         toggle.set(!open);
     });
     let logo = Text::single_line(
-        ctx,
         || "\u{25b2} rsx".to_string(),
         || TextStyle::new(18.0, theme().ink),
     )?;
     let bar = StyledContainer::new(
-        ctx,
         LayoutStyle::new()
             .flex_row()
             .width(SizeDimension::Percent(1.0))
@@ -235,7 +221,6 @@ fn build_topbar(
 /// that slides over a dimming scrim when `menu_open` is set. The sidebar is laid out on its own so it
 /// can overlay content in either mode; the scroll viewport is recomputed on every resize.
 struct ShellPage {
-    ctx: WidgetCtx,
     root: NodeId,
     content_node: NodeId,
     // Empty leaf that reserves the rail's width on desktop; hidden on mobile so content spans full width.
@@ -263,7 +248,6 @@ struct ShellPage {
 
 impl ShellPage {
     fn new(
-        mut ctx: WidgetCtx,
         sidebar: Box<dyn LayoutItem>,
         content: Box<dyn LayoutItem>,
         section_nodes: Vec<NodeId>,
@@ -273,11 +257,10 @@ impl ShellPage {
         let sidebar_content_node = sidebar.layout_node();
         // Start on the first section: hide the rest so the content pane shows only one section at a time.
         for (i, &node) in section_nodes.iter().enumerate() {
-            set_display(&mut ctx, node, i == 0);
+            set_display(node, i == 0);
         }
         // Wrap the sidebar so it scrolls when the nav is taller than the window; laid out as an overlay.
         let sidebar_scroll = LayoutScrollArea::new(
-            &mut ctx,
             LayoutStyle::new()
                 .width(SIDEBAR_W)
                 .height(SizeDimension::Percent(1.0)),
@@ -285,22 +268,19 @@ impl ShellPage {
         )?;
         let sidebar_scroll_node = sidebar_scroll.layout_node();
         let scroll_area = LayoutScrollArea::new(
-            &mut ctx,
             LayoutStyle::new().flex_grow(1.0).align_self_stretch(),
             content,
         )?;
         let menu_open = signal(false);
-        let topbar = build_topbar(&mut ctx, menu_open.clone())?;
+        let topbar = build_topbar(menu_open.clone())?;
         let topbar_node = topbar.layout_node();
         let (spacer, _) = new_leaf(
-            &mut ctx,
             LayoutStyle::new()
                 .width(SIDEBAR_W)
                 .height(SizeDimension::Percent(1.0)),
         )?;
         // Body row: the spacer reserves the rail on desktop, the scroll area grows into the rest.
         let body = new_container(
-            &mut ctx,
             LayoutStyle::new()
                 .flex_row()
                 .flex_grow(1.0)
@@ -309,7 +289,6 @@ impl ShellPage {
         )?;
         // Root column: an optional top bar above the body.
         let root = new_container(
-            &mut ctx,
             LayoutStyle::new()
                 .flex_column()
                 .width(SizeDimension::Percent(1.0))
@@ -317,7 +296,6 @@ impl ShellPage {
             &[topbar_node, body],
         )?;
         Ok(Self {
-            ctx,
             root,
             content_node,
             spacer,
@@ -352,12 +330,11 @@ impl ShellPage {
         }
         self.current_section = sel;
         for (i, &node) in self.section_nodes.iter().enumerate() {
-            set_display(&mut self.ctx, node, i == sel);
+            set_display(node, i == sel);
         }
         let content_width = self.scroll_area.viewport_rect().width.max(0.0);
-        mark_dirty(&mut self.ctx, self.content_node).ok();
+        mark_dirty(self.content_node).ok();
         compute_layout(
-            &mut self.ctx,
             self.content_node,
             AvailableSpace::Definite(content_width),
             AvailableSpace::MaxContent,
@@ -380,11 +357,10 @@ impl ShellPage {
             self.menu_open.set(false);
         }
         // Top bar only on mobile; the desktop rail is reserved by the spacer instead.
-        set_display(&mut self.ctx, self.topbar_node, mobile);
-        set_display(&mut self.ctx, self.spacer, !mobile);
-        mark_dirty(&mut self.ctx, self.root).ok();
+        set_display(self.topbar_node, mobile);
+        set_display(self.spacer, !mobile);
+        mark_dirty(self.root).ok();
         compute_layout(
-            &mut self.ctx,
             self.root,
             AvailableSpace::Definite(width),
             AvailableSpace::Definite(height),
@@ -397,7 +373,6 @@ impl ShellPage {
         // Content measures its height against whatever width the scroll viewport actually got.
         let content_width = self.scroll_area.viewport_rect().width.max(0.0);
         compute_layout(
-            &mut self.ctx,
             self.content_node,
             AvailableSpace::Definite(content_width),
             AvailableSpace::MaxContent,
@@ -406,14 +381,12 @@ impl ShellPage {
         // Sidebar overlay at the window's left edge: the viewport is a fixed-width, full-height column;
         // its content is measured at natural height so a tall nav overflows into a scroll instead of clipping.
         compute_layout(
-            &mut self.ctx,
             self.sidebar_scroll_node,
             AvailableSpace::Definite(SIDEBAR_W),
             AvailableSpace::Definite(height),
         )
         .ok();
         compute_layout(
-            &mut self.ctx,
             self.sidebar_content_node,
             AvailableSpace::Definite(SIDEBAR_W),
             AvailableSpace::MaxContent,
@@ -537,11 +510,11 @@ pub struct SandboxRoot;
 
 impl App for SandboxRoot {
     fn root(&self) -> Box<dyn rsx::Component> {
-        let mut ctx = WidgetCtx::new();
+        reset_layout_runtime();
         let selected = signal(0usize);
-        let sidebar = build_sidebar(&mut ctx, selected.clone()).expect("sidebar build failed");
-        let (content, section_nodes) = build_content(&mut ctx).expect("content build failed");
-        let page = ShellPage::new(ctx, sidebar, content, section_nodes, selected)
+        let sidebar = build_sidebar(selected.clone()).expect("sidebar build failed");
+        let (content, section_nodes) = build_content().expect("content build failed");
+        let page = ShellPage::new(sidebar, content, section_nodes, selected)
             .expect("shell layout failed");
         Box::new(page)
     }

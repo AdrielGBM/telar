@@ -54,7 +54,7 @@ where
     #[cfg(all(feature = "dev", not(target_os = "android")))]
     pub(super) hot_reload_rx: Option<std::sync::mpsc::Receiver<crate::hot::HotEvent>>,
     #[cfg(target_os = "android")]
-    pub(super) hint_session: Option<*mut std::ffi::c_void>,
+    pub(super) hint_session: Option<platform_android::AdpfSession>,
     #[cfg(target_os = "android")]
     pub(super) frame_start: std::time::Instant,
 }
@@ -180,19 +180,7 @@ where
         // Only the SW/fallback path reports ADPF from this (the UI/layout) thread, so only it needs a session keyed to this TID. The HW path renders on a dedicated thread and creates its own session there (correct TID); creating one here too would register the wrong thread.
         #[cfg(target_os = "android")]
         if !self.renderer_is_hardware {
-            let session = unsafe {
-                let manager = super::android::adpf::APerformanceHint_getManager();
-                if manager.is_null() {
-                    None
-                } else {
-                    let tid = libc::syscall(libc::SYS_gettid) as i32;
-                    let s = super::android::adpf::APerformanceHint_createSession(
-                        manager, &tid, 1, 16_666_667,
-                    );
-                    if s.is_null() { None } else { Some(s) }
-                }
-            };
-            self.hint_session = session;
+            self.hint_session = platform_android::AdpfSession::new(16_666_667, None);
         }
         window.request_redraw();
         true
@@ -579,14 +567,9 @@ where
         }
         renderer_core::perf::record_since(renderer_core::perf::Phase::Gpu, gpu_start);
         #[cfg(target_os = "android")]
-        if let Some(session) = self.hint_session {
-            let duration_ns = self.frame_start.elapsed().as_nanos() as std::ffi::c_long;
-            unsafe {
-                super::android::adpf::APerformanceHint_reportActualWorkDuration(
-                    session,
-                    duration_ns,
-                );
-            }
+        if let Some(session) = &self.hint_session {
+            let duration_ns = self.frame_start.elapsed().as_nanos() as i64;
+            session.report(duration_ns);
         }
     }
 
@@ -603,11 +586,10 @@ where
                 }
             }
         }
+        // Dropping the session runs closeSession (on this thread, matching the TID it was created with).
         #[cfg(target_os = "android")]
-        if let Some(session) = self.hint_session.take() {
-            unsafe {
-                super::android::adpf::APerformanceHint_closeSession(session);
-            }
+        {
+            self.hint_session = None;
         }
     }
 

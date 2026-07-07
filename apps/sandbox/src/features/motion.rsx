@@ -6,33 +6,29 @@ let big = signal(false);
 // Spring-driven scale. The canvas gets its own clone so `scale` stays free for the button's retarget.
 let scale = motion::Animated::<f32>::new(1.0, motion::spring(170.0, 12.0));
 let scale_canvas = scale.clone();
-let spring_box = Canvas::new(
-    ctx,
-    LayoutStyle::new().width(100.0).height(100.0),
-    move |rect| {
-        let s = scale_canvas.get();
-        let cx = rect.x + 50.0;
-        let cy = rect.y + 50.0;
-        let m = Transform::scale_around(s, s, cx, cy).to_array();
-        RenderNode::transform_with(
-            m,
-            [RenderNode::rect(
-                Rect {
-                    x: cx - 30.0,
-                    y: cy - 30.0,
-                    width: 60.0,
-                    height: 60.0,
-                },
-                RectStyle {
-                    fill: Some(Paint::Solid(theme().primary)),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(12.0),
-                },
-            )],
-        )
-    },
-)?;
+let spring_box = Canvas::new(LayoutStyle::new().width(100.0).height(100.0), move |rect| {
+    let s = scale_canvas.get();
+    let cx = rect.x + 50.0;
+    let cy = rect.y + 50.0;
+    let m = Transform::scale_around(s, s, cx, cy).to_array();
+    RenderNode::transform_with(
+        m,
+        [RenderNode::rect(
+            Rect {
+                x: cx - 30.0,
+                y: cy - 30.0,
+                width: 60.0,
+                height: 60.0,
+            },
+            RectStyle {
+                fill: Some(Paint::Solid(theme().primary)),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(12.0),
+            },
+        )],
+    )
+})?;
 
 // Six PingPong keyframe loops, each delayed a bit more by hold() so the wave enters left-to-right.
 let bars: Vec<motion::Keyframes<f32>> = (0..6u64)
@@ -47,38 +43,34 @@ let bars: Vec<motion::Keyframes<f32>> = (0..6u64)
             .start(motion::Repeat::PingPong)
     })
     .collect();
-let equalizer = Canvas::new(
-    ctx,
-    LayoutStyle::new().width(196.0).height(56.0),
-    move |rect| {
-        let t = theme();
-        let palette = [t.primary, t.success, t.warning, t.danger, t.purple, t.cyan];
-        let (bar_w, gap) = (24.0f32, 8.0f32);
-        let baseline = rect.y + rect.height;
-        let render: Vec<RenderNode> = bars
-            .iter()
-            .enumerate()
-            .map(|(i, kf)| {
-                let h = kf.get();
-                RenderNode::rect(
-                    Rect {
-                        x: rect.x + i as f32 * (bar_w + gap),
-                        y: baseline - h,
-                        width: bar_w,
-                        height: h,
-                    },
-                    RectStyle {
-                        fill: Some(Paint::Solid(palette[i % palette.len()])),
-                        stroke: None,
-                        shadow: None,
-                        radius: BorderRadius::all(4.0),
-                    },
-                )
-            })
-            .collect();
-        RenderNode::group(render)
-    },
-)?;
+let equalizer = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), move |rect| {
+    let t = theme();
+    let palette = [t.primary, t.success, t.warning, t.danger, t.purple, t.cyan];
+    let (bar_w, gap) = (24.0f32, 8.0f32);
+    let baseline = rect.y + rect.height;
+    let render: Vec<RenderNode> = bars
+        .iter()
+        .enumerate()
+        .map(|(i, kf)| {
+            let h = kf.get();
+            RenderNode::rect(
+                Rect {
+                    x: rect.x + i as f32 * (bar_w + gap),
+                    y: baseline - h,
+                    width: bar_w,
+                    height: h,
+                },
+                RectStyle {
+                    fill: Some(Paint::Solid(palette[i % palette.len()])),
+                    stroke: None,
+                    shadow: None,
+                    radius: BorderRadius::all(4.0),
+                },
+            )
+        })
+        .collect();
+    RenderNode::group(render)
+})?;
 
 // A one-shot timeline; the button restarts this same handle.
 let progress = motion::Keyframes::<f32>::new(0.0)
@@ -89,41 +81,37 @@ let progress = motion::Keyframes::<f32>::new(0.0)
     )
     .start(motion::Repeat::Once);
 let progress_canvas = progress.clone();
-let progress_bar = Canvas::new(
-    ctx,
-    LayoutStyle::new().width(240.0).height(14.0),
-    move |rect| {
-        let t = theme();
-        let pct = (progress_canvas.get() / 100.0).clamp(0.0, 1.0);
-        RenderNode::group([
-            RenderNode::rect(
-                rect,
-                RectStyle {
-                    fill: Some(Paint::Solid(Color::rgba(
-                        t.muted.r, t.muted.g, t.muted.b, 0.25,
-                    ))),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(7.0),
-                },
-            ),
-            RenderNode::rect(
-                Rect {
-                    x: rect.x,
-                    y: rect.y,
-                    width: rect.width * pct,
-                    height: rect.height,
-                },
-                RectStyle {
-                    fill: Some(Paint::Solid(t.primary)),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(7.0),
-                },
-            ),
-        ])
-    },
-)?;
+let progress_bar = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), move |rect| {
+    let t = theme();
+    let pct = (progress_canvas.get() / 100.0).clamp(0.0, 1.0);
+    RenderNode::group([
+        RenderNode::rect(
+            rect,
+            RectStyle {
+                fill: Some(Paint::Solid(Color::rgba(
+                    t.muted.r, t.muted.g, t.muted.b, 0.25,
+                ))),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(7.0),
+            },
+        ),
+        RenderNode::rect(
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width * pct,
+                height: rect.height,
+            },
+            RectStyle {
+                fill: Some(Paint::Solid(t.primary)),
+                stroke: None,
+                shadow: None,
+                radius: BorderRadius::all(7.0),
+            },
+        ),
+    ])
+})?;
 
 [view]
 col gap:20

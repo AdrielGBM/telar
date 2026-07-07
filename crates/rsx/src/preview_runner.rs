@@ -1,5 +1,5 @@
 #[cfg(feature = "runtime")]
-use crate::{LayoutError, LayoutItem, WidgetCtx};
+use crate::{LayoutError, LayoutItem};
 
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 use crate::{AppConfig, AvailableSpace, ComponentList, compute_layout};
@@ -9,7 +9,7 @@ use crate::{AppConfig, AvailableSpace, ComponentList, compute_layout};
 pub struct PreviewEntry {
     pub component_name: &'static str,
     pub preview_name: &'static str,
-    pub build: fn(&mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    pub build: fn() -> Result<Box<dyn LayoutItem>, LayoutError>,
 }
 
 #[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]
@@ -44,11 +44,10 @@ pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
         let label = format!("{}::{}", entry.component_name, entry.preview_name);
         // Do NOT reset the runtime between components: the app's setup block installed the theme once, and resetting would drop it, making previews that read theme tokens panic spuriously.
         let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<usize, LayoutError> {
-            let mut ctx = WidgetCtx::new();
-            let item = (entry.build)(&mut ctx)?;
+            crate::reset_layout_runtime();
+            let item = (entry.build)()?;
             let node = item.layout_node();
             compute_layout(
-                &mut ctx,
                 node,
                 AvailableSpace::Definite(width),
                 AvailableSpace::Definite(height),

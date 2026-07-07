@@ -3,7 +3,7 @@ use devtools_core::DevPlugin;
 #[cfg(not(target_os = "android"))]
 use platform_core::Platform;
 #[cfg(not(target_os = "android"))]
-use platform_winit::{WinitPlatform, WinitWindow};
+use platform_desktop::{WinitPlatform, WinitWindow};
 #[cfg(not(target_os = "android"))]
 use services_core::AppPathsProvider;
 
@@ -14,9 +14,9 @@ use crate::app_config::AppConfig;
 #[cfg(not(target_os = "android"))]
 use crate::config;
 #[cfg(not(target_os = "android"))]
-use crate::paths::DesktopPathsProvider;
-#[cfg(not(target_os = "android"))]
 use crate::prefs::UserPrefs;
+#[cfg(not(target_os = "android"))]
+use platform_desktop::DesktopPathsProvider;
 
 #[cfg(not(target_os = "android"))]
 use super::handler::AppHandler;

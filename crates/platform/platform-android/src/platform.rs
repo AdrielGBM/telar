@@ -145,16 +145,13 @@ mod choreographer {
 }
 
 use winit::application::ApplicationHandler;
-use winit::event::{
-    ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, StartCause, Touch, TouchPhase,
-    WindowEvent,
-};
+use winit::event::{ElementState, MouseScrollDelta, StartCause, Touch, TouchPhase, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{Key as WinitKey, NamedKey as WinitNamedKey};
+use winit::keyboard::Key as WinitKey;
 use winit::platform::android::EventLoopBuilderExtAndroid;
 use winit::window::{WindowAttributes, WindowId};
 
-use crate::window::AndroidWindow;
+use platform_winit::WinitWindow as AndroidWindow;
 
 pub struct AndroidPlatform {
     event_loop: EventLoop<()>,
@@ -184,7 +181,7 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     config: WindowConfig,
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
-    cursor_pos: (f64, f64),
+    cursor_position: (f64, f64),
     // Last position of an active touch finger, used to emit Scrolled deltas from drag gestures.
     last_touch_pos: Option<(f64, f64, u64)>,
     #[cfg(target_os = "android")]
@@ -363,12 +360,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                     .on_event(Event::ScaleFactorChanged { scale_factor }, window);
             }
             WindowEvent::ModifiersChanged(mods) => {
-                self.modifiers = platform_core::ModifiersState {
-                    is_shift: mods.state().shift_key(),
-                    is_ctrl: mods.state().control_key(),
-                    is_alt: mods.state().alt_key(),
-                    is_meta: mods.state().super_key(),
-                };
+                self.modifiers = platform_winit::map_modifiers(&mods);
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 let key = match &event.logical_key {
@@ -380,36 +372,8 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                         }
                     }
                     WinitKey::Named(named) => {
-                        let nk = match named {
-                            WinitNamedKey::Enter => platform_core::NamedKey::Enter,
-                            WinitNamedKey::Backspace => platform_core::NamedKey::Backspace,
-                            WinitNamedKey::Escape => platform_core::NamedKey::Escape,
-                            WinitNamedKey::Tab => platform_core::NamedKey::Tab,
-                            WinitNamedKey::Delete => platform_core::NamedKey::Delete,
-                            WinitNamedKey::Home => platform_core::NamedKey::Home,
-                            WinitNamedKey::End => platform_core::NamedKey::End,
-                            WinitNamedKey::PageUp => platform_core::NamedKey::PageUp,
-                            WinitNamedKey::PageDown => platform_core::NamedKey::PageDown,
-                            WinitNamedKey::ArrowUp => platform_core::NamedKey::ArrowUp,
-                            WinitNamedKey::ArrowDown => platform_core::NamedKey::ArrowDown,
-                            WinitNamedKey::ArrowLeft => platform_core::NamedKey::ArrowLeft,
-                            WinitNamedKey::ArrowRight => platform_core::NamedKey::ArrowRight,
-                            WinitNamedKey::F1 => platform_core::NamedKey::F1,
-                            WinitNamedKey::F2 => platform_core::NamedKey::F2,
-                            WinitNamedKey::F3 => platform_core::NamedKey::F3,
-                            WinitNamedKey::F4 => platform_core::NamedKey::F4,
-                            WinitNamedKey::F5 => platform_core::NamedKey::F5,
-                            WinitNamedKey::F6 => platform_core::NamedKey::F6,
-                            WinitNamedKey::F7 => platform_core::NamedKey::F7,
-                            WinitNamedKey::F8 => platform_core::NamedKey::F8,
-                            WinitNamedKey::F9 => platform_core::NamedKey::F9,
-                            WinitNamedKey::F10 => platform_core::NamedKey::F10,
-                            WinitNamedKey::F11 => platform_core::NamedKey::F11,
-                            WinitNamedKey::F12 => platform_core::NamedKey::F12,
-                            WinitNamedKey::Space => platform_core::NamedKey::Space,
-                            WinitNamedKey::Insert => platform_core::NamedKey::Insert,
-                            WinitNamedKey::CapsLock => platform_core::NamedKey::CapsLock,
-                            _ => return,
+                        let Some(nk) = platform_winit::map_named_key(*named) else {
+                            return;
                         };
                         platform_core::Key::Named(nk)
                     }
@@ -425,7 +389,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
             WindowEvent::CursorMoved { position, .. } => {
                 let lx = position.x / self.scale_factor;
                 let ly = position.y / self.scale_factor;
-                self.cursor_pos = (lx, ly);
+                self.cursor_position = (lx, ly);
                 self.handler.on_event(
                     Event::PointerMoved {
                         x: lx,
@@ -436,13 +400,10 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 );
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                let btn = match button {
-                    WinitMouseButton::Left => PointerButton::Primary,
-                    WinitMouseButton::Right => PointerButton::Secondary,
-                    WinitMouseButton::Middle => PointerButton::Auxiliary,
-                    _ => return,
+                let Some(btn) = platform_winit::map_mouse_button(button) else {
+                    return;
                 };
-                let (x, y) = self.cursor_pos;
+                let (x, y) = self.cursor_position;
                 let ev = match state {
                     ElementState::Pressed => Event::PointerPressed {
                         x,
@@ -508,7 +469,7 @@ impl Platform for AndroidPlatform {
             config,
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
-            cursor_pos: (0.0, 0.0),
+            cursor_position: (0.0, 0.0),
             last_touch_pos: None,
             #[cfg(target_os = "android")]
             choreographer,

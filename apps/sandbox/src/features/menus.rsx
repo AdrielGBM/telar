@@ -23,5 +23,5 @@ col gap:20
         col gap:6
             prop_row name:"selected" values:"signal" about:"select: the bound choice index; omit for an uncontrolled select."
             prop_row name:"options / items" values:"vec![…]" about:"The labels listed in the panel, in order."
-            prop_row name:"on_change / on_select" values:"closure" about:"Runs with the picked index when a choice is made."
+            prop_row name:"on_select" values:"closure" about:"Runs with the picked index when a choice is made."
             prop_row name:"color" values:"token" about:"Accent for the trigger border and highlight; falls back to the theme."

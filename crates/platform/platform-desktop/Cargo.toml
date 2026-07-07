@@ -1,0 +1,12 @@
+[package]
+name = "platform-desktop"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dirs = "6.0.0"
+platform-core.workspace = true
+platform-winit.workspace = true
+services-core.workspace = true
+tracing.workspace = true
+winit.workspace = true

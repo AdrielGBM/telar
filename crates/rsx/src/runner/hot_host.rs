@@ -7,16 +7,16 @@ use super::FRAME_BUDGET;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 use platform_core::Platform;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
-use platform_winit::{WinitPlatform, WinitWindow};
+use platform_desktop::{WinitPlatform, WinitWindow};
 
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 use crate::app::App;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 use crate::config;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
-use crate::paths::DesktopPathsProvider;
-#[cfg(all(feature = "dev", not(target_os = "android")))]
 use crate::prefs::UserPrefs;
+#[cfg(all(feature = "dev", not(target_os = "android")))]
+use platform_desktop::DesktopPathsProvider;
 
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 use super::handler::AppHandler;
@@ -51,20 +51,9 @@ where
             let mut renderer = renderer;
             let mut current_width = 0u32;
             let mut current_height = 0u32;
-            // ADPF lives on THIS thread: create the hint session with the render thread's own TID so reportActualWorkDuration drives the scheduler for the thread that actually submits GPU work. The session handle is not Send, so it is created, used, and closed here and never crosses a thread boundary. (The SW/fallback path keeps its own session on the UI thread.)
+            // ADPF lives on THIS thread: create the hint session with the render thread's own TID (None self-computes SYS_gettid here) so reportActualWorkDuration drives the scheduler for the thread that actually submits GPU work. The session is not Send, so it is created, used, and dropped here and never crosses a thread boundary. (The SW/fallback path keeps its own session on the UI thread.)
             #[cfg(target_os = "android")]
-            let hint_session = unsafe {
-                let manager = super::android::adpf::APerformanceHint_getManager();
-                if manager.is_null() {
-                    None
-                } else {
-                    let tid = libc::syscall(libc::SYS_gettid) as i32;
-                    let s = super::android::adpf::APerformanceHint_createSession(
-                        manager, &tid, 1, 16_666_667,
-                    );
-                    if s.is_null() { None } else { Some(s) }
-                }
-            };
+            let hint_session = platform_android::AdpfSession::new(16_666_667, None);
             while let Ok(msg) = rx.recv() {
                 // Drop stale frames to stay responsive, but never skip one that resizes the surface: the wgpu surface is reconfigured inside begin_frame, so a dropped resize frame leaves it at the old size and the window shows clipped content or empty margins until the next accepted frame.
                 let size_changed = msg.width != current_width || msg.height != current_height;
@@ -85,24 +74,14 @@ where
                 current_height = msg.height;
                 let _ = renderer.render_frame(&msg.commands, msg.clear);
                 #[cfg(target_os = "android")]
-                if let Some(session) = hint_session {
-                    let duration_ns = frame_start.elapsed().as_nanos() as std::ffi::c_long;
-                    unsafe {
-                        super::android::adpf::APerformanceHint_reportActualWorkDuration(
-                            session,
-                            duration_ns,
-                        );
-                    }
+                if let Some(session) = &hint_session {
+                    let duration_ns = frame_start.elapsed().as_nanos() as i64;
+                    session.report(duration_ns);
                 }
                 // Recycle the buffer for the UI thread to refill; a send failure (UI gone) just drops it.
                 let _ = ret_tx.send(msg.commands);
             }
-            #[cfg(target_os = "android")]
-            if let Some(session) = hint_session {
-                unsafe {
-                    super::android::adpf::APerformanceHint_closeSession(session);
-                }
-            }
+            // hint_session drops here (closeSession) on this render thread before it exits.
             // Return the renderer so on_suspend can reclaim it and keep warm caches across resume.
             renderer
         })

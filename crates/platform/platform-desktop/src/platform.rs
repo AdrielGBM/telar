@@ -3,15 +3,12 @@ use platform_core::{
     ScrollDelta, Window, WindowConfig, WindowPosition,
 };
 use winit::application::ApplicationHandler;
-use winit::event::{
-    ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, StartCause, Touch, TouchPhase,
-    WindowEvent,
-};
+use winit::event::{ElementState, MouseScrollDelta, StartCause, Touch, TouchPhase, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{Key as WinitKey, NamedKey as WinitNamedKey};
+use winit::keyboard::Key as WinitKey;
 use winit::window::{Fullscreen, WindowAttributes, WindowId, WindowLevel};
 
-use crate::window::WinitWindow;
+use platform_winit::WinitWindow;
 
 pub struct WinitPlatform {
     event_loop: EventLoop<()>,
@@ -136,11 +133,8 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 );
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                let btn = match button {
-                    WinitMouseButton::Left => PointerButton::Primary,
-                    WinitMouseButton::Right => PointerButton::Secondary,
-                    WinitMouseButton::Middle => PointerButton::Auxiliary,
-                    _ => return,
+                let Some(btn) = platform_winit::map_mouse_button(button) else {
+                    return;
                 };
                 let (x, y) = self.cursor_position;
                 let ev = match state {
@@ -216,12 +210,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 );
             }
             WindowEvent::ModifiersChanged(mods) => {
-                self.modifiers = platform_core::ModifiersState {
-                    is_shift: mods.state().shift_key(),
-                    is_ctrl: mods.state().control_key(),
-                    is_alt: mods.state().alt_key(),
-                    is_meta: mods.state().super_key(),
-                };
+                self.modifiers = platform_winit::map_modifiers(&mods);
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 let key = match &event.logical_key {
@@ -233,36 +222,8 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                         }
                     }
                     WinitKey::Named(named) => {
-                        let nk = match named {
-                            WinitNamedKey::Enter => platform_core::NamedKey::Enter,
-                            WinitNamedKey::Backspace => platform_core::NamedKey::Backspace,
-                            WinitNamedKey::Escape => platform_core::NamedKey::Escape,
-                            WinitNamedKey::Tab => platform_core::NamedKey::Tab,
-                            WinitNamedKey::Delete => platform_core::NamedKey::Delete,
-                            WinitNamedKey::Home => platform_core::NamedKey::Home,
-                            WinitNamedKey::End => platform_core::NamedKey::End,
-                            WinitNamedKey::PageUp => platform_core::NamedKey::PageUp,
-                            WinitNamedKey::PageDown => platform_core::NamedKey::PageDown,
-                            WinitNamedKey::ArrowUp => platform_core::NamedKey::ArrowUp,
-                            WinitNamedKey::ArrowDown => platform_core::NamedKey::ArrowDown,
-                            WinitNamedKey::ArrowLeft => platform_core::NamedKey::ArrowLeft,
-                            WinitNamedKey::ArrowRight => platform_core::NamedKey::ArrowRight,
-                            WinitNamedKey::F1 => platform_core::NamedKey::F1,
-                            WinitNamedKey::F2 => platform_core::NamedKey::F2,
-                            WinitNamedKey::F3 => platform_core::NamedKey::F3,
-                            WinitNamedKey::F4 => platform_core::NamedKey::F4,
-                            WinitNamedKey::F5 => platform_core::NamedKey::F5,
-                            WinitNamedKey::F6 => platform_core::NamedKey::F6,
-                            WinitNamedKey::F7 => platform_core::NamedKey::F7,
-                            WinitNamedKey::F8 => platform_core::NamedKey::F8,
-                            WinitNamedKey::F9 => platform_core::NamedKey::F9,
-                            WinitNamedKey::F10 => platform_core::NamedKey::F10,
-                            WinitNamedKey::F11 => platform_core::NamedKey::F11,
-                            WinitNamedKey::F12 => platform_core::NamedKey::F12,
-                            WinitNamedKey::Space => platform_core::NamedKey::Space,
-                            WinitNamedKey::Insert => platform_core::NamedKey::Insert,
-                            WinitNamedKey::CapsLock => platform_core::NamedKey::CapsLock,
-                            _ => return,
+                        let Some(nk) = platform_winit::map_named_key(*named) else {
+                            return;
                         };
                         platform_core::Key::Named(nk)
                     }

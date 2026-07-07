@@ -36,12 +36,12 @@ col gap:20
         text "hover — a container restyles while the pointer is over it (mouse only)" size:13 color:ink
         card gap:10
             row gap:10 wrap
-                box fill:surface_alt radius:10 pad:16 hover:fill:primary align:center justify:center width:150 height:64
+                box fill:surface_alt radius:10 pad:16 hover_style:fill:primary align:center justify:center width:150 height:64
                     text "Fill on hover" size:13 color:ink
-                box fill:surface_alt stroke:border radius:10 pad:16 hover:stroke:primary radius:16 align:center justify:center width:150 height:64
+                box fill:surface_alt stroke:border radius:10 pad:16 hover_style:stroke:primary radius:16 align:center justify:center width:150 height:64
                     text "Stroke + radius" size:13 color:ink
-            text "Each box carries its own hover(...) — different hovers in one file, no signals." size:12 color:muted
-        code_line code:"box fill:surface_alt hover(fill:primary)      (swap style while hovered)"
+            text "Each box carries its own hover_style(...) — different hovers in one file, no signals." size:12 color:muted
+        code_line code:"box fill:surface_alt hover_style(fill:primary)      (swap style while hovered)"
     col gap:8
         text "Event callbacks — on_hover (a bool) and on_key (global shortcut)" size:13 color:ink
         card gap:10

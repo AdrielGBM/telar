@@ -13,22 +13,21 @@ rsx::app!(
 
 #[cfg(test)]
 mod layout_tests {
-    use rsx::{AvailableSpace, LayoutItem, WidgetCtx, compute_layout, track_layout};
+    use rsx::{AvailableSpace, LayoutItem, compute_layout, track_layout};
 
     // The root page must fill the available window width at any size so its full-bleed bands stretch instead of collapsing into a centered column.
     fn page_rect_at(window_width: f32) -> (f32, f32) {
         rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
-        let mut ctx = WidgetCtx::new();
-        let page = crate::home(&mut ctx).expect("home build");
+        rsx::reset_layout_runtime();
+        let page = crate::home().expect("home build");
         let node = page.layout_node();
         compute_layout(
-            &mut ctx,
             node,
             AvailableSpace::Definite(window_width),
             AvailableSpace::MaxContent,
         )
         .expect("layout");
-        let r = track_layout(&ctx, node).expect("tracked").get();
+        let r = track_layout(node).expect("tracked").get();
         (r.width, r.height)
     }
 
@@ -97,15 +96,14 @@ mod layout_tests {
     #[test]
     fn auto_text_height_grows_when_narrower() {
         use rsx::{
-            AvailableSpace, Color, LayoutItem, LayoutStyle, Text, TextStyle, WidgetCtx,
-            compute_layout, track_layout,
+            AvailableSpace, Color, LayoutItem, LayoutStyle, Text, TextStyle, compute_layout,
+            track_layout,
         };
         let long = "This is a deliberately long paragraph of text that wraps onto several \
                     lines when the available width is small, and fewer lines when it is wide.";
         let height_at = |w: f32| -> f32 {
-            let mut ctx = WidgetCtx::new();
+            rsx::reset_layout_runtime();
             let t = Text::auto(
-                &mut ctx,
                 move || long.to_string(),
                 LayoutStyle::new(),
                 || TextStyle::new(16.0, Color::BLACK),
@@ -113,13 +111,12 @@ mod layout_tests {
             .unwrap();
             let node = t.layout_node();
             compute_layout(
-                &mut ctx,
                 node,
                 AvailableSpace::Definite(w),
                 AvailableSpace::MaxContent,
             )
             .unwrap();
-            track_layout(&ctx, node).unwrap().get().height
+            track_layout(node).unwrap().get().height
         };
         let narrow = height_at(200.0);
         let wide = height_at(800.0);
@@ -133,11 +130,11 @@ mod layout_tests {
     #[test]
     fn real_feature_cards_do_not_overflow_row() {
         use rsx::{
-            AvailableSpace, LayoutItem, LayoutStyle, WidgetCtx, compute_layout, new_container,
-            new_leaf, track_layout,
+            AvailableSpace, LayoutItem, LayoutStyle, compute_layout, new_container, new_leaf,
+            track_layout,
         };
         rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
-        let mut ctx = WidgetCtx::new();
+        rsx::reset_layout_runtime();
         let bodies = [
             (
                 "⚡",
@@ -163,43 +160,36 @@ mod layout_tests {
         let cards: Vec<Box<dyn LayoutItem>> = bodies
             .iter()
             .map(|(icon, title, body)| {
-                crate::feature_card(&mut ctx, crate::FeatureCardProps { icon, title, body })
-                    .unwrap()
+                crate::feature_card(crate::FeatureCardProps { icon, title, body }).unwrap()
             })
             .collect();
         let card_nodes: Vec<_> = cards.iter().map(|c| c.layout_node()).collect();
         let row = new_container(
-            &mut ctx,
             LayoutStyle::new().flex_row().flex_wrap().gap(24.0),
             &card_nodes,
         )
         .unwrap();
-        let (marker, _) = new_leaf(&mut ctx, LayoutStyle::new().height(50.0)).unwrap();
-        let col = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_column().gap(20.0),
-            &[row, marker],
-        )
-        .unwrap();
+        let (marker, _) = new_leaf(LayoutStyle::new().height(50.0)).unwrap();
+        let col =
+            new_container(LayoutStyle::new().flex_column().gap(20.0), &[row, marker]).unwrap();
         // 1120 = the centered content width on a large screen → 3 cards + 1 on line 2.
         compute_layout(
-            &mut ctx,
             col,
             AvailableSpace::Definite(1120.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let row_rect = track_layout(&ctx, row).unwrap().get();
+        let row_rect = track_layout(row).unwrap().get();
         let row_bottom = row_rect.y + row_rect.height;
         for (i, node) in card_nodes.iter().enumerate() {
-            let cr = track_layout(&ctx, *node).unwrap().get();
+            let cr = track_layout(*node).unwrap().get();
             assert!(
                 cr.y + cr.height <= row_bottom + 0.5,
                 "card {i} overflows row: card_bottom={} row_bottom={row_bottom}",
                 cr.y + cr.height
             );
         }
-        let marker_rect = track_layout(&ctx, marker).unwrap().get();
+        let marker_rect = track_layout(marker).unwrap().get();
         assert!(
             marker_rect.y >= row_bottom - 0.5,
             "marker overlaps row: marker.y={} row_bottom={row_bottom}",
@@ -211,14 +201,12 @@ mod layout_tests {
     #[test]
     fn wrapped_flex_row_reserves_height_for_all_lines() {
         use rsx::{
-            AvailableSpace, LayoutStyle, WidgetCtx, compute_layout, new_container, new_leaf,
-            track_layout,
+            AvailableSpace, LayoutStyle, compute_layout, new_container, new_leaf, track_layout,
         };
-        let mut ctx = WidgetCtx::new();
+        rsx::reset_layout_runtime();
         let mut cards = Vec::new();
         for _ in 0..4 {
             let (n, _) = new_leaf(
-                &mut ctx,
                 LayoutStyle::new()
                     .min_width(260.0)
                     .height(100.0)
@@ -227,29 +215,20 @@ mod layout_tests {
             .unwrap();
             cards.push(n);
         }
-        let row = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_row().flex_wrap().gap(24.0),
-            &cards,
-        )
-        .unwrap();
-        let (marker, _) = new_leaf(&mut ctx, LayoutStyle::new().height(50.0)).unwrap();
-        let col = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_column().gap(20.0),
-            &[row, marker],
-        )
-        .unwrap();
+        let row =
+            new_container(LayoutStyle::new().flex_row().flex_wrap().gap(24.0), &cards).unwrap();
+        let (marker, _) = new_leaf(LayoutStyle::new().height(50.0)).unwrap();
+        let col =
+            new_container(LayoutStyle::new().flex_column().gap(20.0), &[row, marker]).unwrap();
         // 900px wide → 3 cards on line 1, the 4th wraps to line 2.
         compute_layout(
-            &mut ctx,
             col,
             AvailableSpace::Definite(900.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let row_rect = track_layout(&ctx, row).unwrap().get();
-        let marker_rect = track_layout(&ctx, marker).unwrap().get();
+        let row_rect = track_layout(row).unwrap().get();
+        let marker_rect = track_layout(marker).unwrap().get();
         assert!(
             row_rect.height >= 220.0,
             "wrapped row height {} should cover 2 lines (~224)",
@@ -268,15 +247,13 @@ mod layout_tests {
     #[test]
     fn wrapped_content_sized_cards_reserve_height() {
         use rsx::{
-            AvailableSpace, LayoutStyle, WidgetCtx, compute_layout, new_container, new_leaf,
-            track_layout,
+            AvailableSpace, LayoutStyle, compute_layout, new_container, new_leaf, track_layout,
         };
-        let mut ctx = WidgetCtx::new();
+        rsx::reset_layout_runtime();
         let mut cards = Vec::new();
         for _ in 0..4 {
-            let (inner, _) = new_leaf(&mut ctx, LayoutStyle::new().height(100.0)).unwrap();
+            let (inner, _) = new_leaf(LayoutStyle::new().height(100.0)).unwrap();
             let card = new_container(
-                &mut ctx,
                 LayoutStyle::new()
                     .flex_column()
                     .min_width(260.0)
@@ -286,28 +263,19 @@ mod layout_tests {
             .unwrap();
             cards.push(card);
         }
-        let row = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_row().flex_wrap().gap(24.0),
-            &cards,
-        )
-        .unwrap();
-        let (marker, _) = new_leaf(&mut ctx, LayoutStyle::new().height(50.0)).unwrap();
-        let col = new_container(
-            &mut ctx,
-            LayoutStyle::new().flex_column().gap(20.0),
-            &[row, marker],
-        )
-        .unwrap();
+        let row =
+            new_container(LayoutStyle::new().flex_row().flex_wrap().gap(24.0), &cards).unwrap();
+        let (marker, _) = new_leaf(LayoutStyle::new().height(50.0)).unwrap();
+        let col =
+            new_container(LayoutStyle::new().flex_column().gap(20.0), &[row, marker]).unwrap();
         compute_layout(
-            &mut ctx,
             col,
             AvailableSpace::Definite(900.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let row_rect = track_layout(&ctx, row).unwrap().get();
-        let marker_rect = track_layout(&ctx, marker).unwrap().get();
+        let row_rect = track_layout(row).unwrap().get();
+        let marker_rect = track_layout(marker).unwrap().get();
         assert!(
             row_rect.height >= 220.0,
             "wrapped content-sized row height {} should cover 2 lines (~224)",
@@ -365,17 +333,16 @@ mod layout_tests {
         };
 
         rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
-        let mut ctx = rsx::WidgetCtx::new();
-        let page = crate::home(&mut ctx).unwrap();
+        rsx::reset_layout_runtime();
+        let page = crate::home().unwrap();
         let node = page.layout_node();
         compute_layout(
-            &mut ctx,
             node,
             AvailableSpace::Definite(1000.0),
             AvailableSpace::MaxContent,
         )
         .unwrap();
-        let page_h = track_layout(&ctx, node).unwrap().get().height;
+        let page_h = track_layout(node).unwrap().get().height;
         println!(
             "page_height={page_h} drawn_bottom={bottom} overflow={}",
             bottom - page_h

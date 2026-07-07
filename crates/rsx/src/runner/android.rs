@@ -17,52 +17,6 @@ use crate::prefs::UserPrefs;
 #[cfg(target_os = "android")]
 use super::handler::AppHandler;
 
-#[cfg(target_os = "android")]
-pub(super) mod adpf {
-    use std::ffi::c_long;
-
-    #[link(name = "android")]
-    unsafe extern "C" {
-        pub fn APerformanceHint_getManager() -> *mut std::ffi::c_void;
-        pub fn APerformanceHint_createSession(
-            manager: *mut std::ffi::c_void,
-            thread_ids: *const i32,
-            size: usize,
-            initial_target_work_duration_ns: c_long,
-        ) -> *mut std::ffi::c_void;
-        pub fn APerformanceHint_reportActualWorkDuration(
-            session: *mut std::ffi::c_void,
-            actual_duration_ns: c_long,
-        );
-        pub fn APerformanceHint_closeSession(session: *mut std::ffi::c_void);
-    }
-}
-
-pub(super) fn android_sans_serif_candidates() -> Vec<String> {
-    vec![
-        "Roboto".to_string(),
-        "Droid Sans".to_string(),
-        "MiSans Latin".to_string(),
-        "Noto Sans".to_string(),
-    ]
-}
-
-// Reads an Android system property (empty string when unset or on error).
-#[cfg(all(feature = "runtime", target_os = "android"))]
-fn read_sys_prop(name: &str) -> Option<String> {
-    let cname = std::ffi::CString::new(name).ok()?;
-    // PROP_VALUE_MAX is 92; keep headroom for the NUL terminator.
-    let mut buf = [0u8; 96];
-    let n = unsafe {
-        libc::__system_property_get(cname.as_ptr(), buf.as_mut_ptr() as *mut libc::c_char)
-    };
-    if n <= 0 {
-        return None;
-    }
-    let s = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr() as *const libc::c_char) };
-    s.to_str().ok().map(str::to_owned)
-}
-
 // App processes do not inherit the adb shell environment, so debug flags that are env vars on
 // desktop (RSX_PERF, RSX_HW_DAMAGE, …) are unreachable on Android. Bridge them from `debug.rsx.<k>`
 // system properties (settable without root via `adb shell setprop debug.rsx.perf 1`) into the
@@ -77,7 +31,7 @@ fn bridge_debug_props_to_env() {
         if std::env::var_os(var).is_some() {
             continue;
         }
-        if let Some(v) = read_sys_prop(prop) {
+        if let Some(v) = platform_android::read_sys_prop(prop) {
             if !v.is_empty() {
                 unsafe { std::env::set_var(var, v) };
             }

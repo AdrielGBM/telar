@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use services_core::AppPathsProvider;
 
-// `dirs` is excluded from Android targets via Cargo target-specific deps.
 pub struct DesktopPathsProvider;
 
 impl AppPathsProvider for DesktopPathsProvider {

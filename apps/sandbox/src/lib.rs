@@ -10,7 +10,7 @@ rsx::app!(
 
 #[cfg(test)]
 mod smoke {
-    use rsx::{App, AvailableSpace, Event, WidgetCtx, compute_layout};
+    use rsx::{App, AvailableSpace, Event, compute_layout};
 
     // The whole documentation app must build and lay out without panicking, and every section fn
     // must produce a tree — a regression guard over the two-pane shell and all `.rsx` sections.
@@ -384,11 +384,10 @@ mod smoke {
             crate::core::theme::SandboxTheme::midnight,
         ] {
             rsx::set_theme_with_widgets(make());
-            let mut ctx = WidgetCtx::new();
-            let content = crate::features_color(&mut ctx).expect("color section builds");
+            rsx::reset_layout_runtime();
+            let content = crate::features_color().expect("color section builds");
             let node = rsx::LayoutItem::layout_node(content.as_ref());
             compute_layout(
-                &mut ctx,
                 node,
                 AvailableSpace::Definite(800.0),
                 AvailableSpace::MaxContent,
