@@ -33,7 +33,7 @@ impl ViewGen<'_> {
         let mut body = String::new();
         if canvas_children.is_empty() {
             // Legacy behaviour: explicit (w, h) param bindings or empty stub.
-            let params = el.canvas_parameters.as_deref().unwrap_or("");
+            let params = el.leading_params.as_deref().unwrap_or("");
             let bindings = canvas_param_bindings(params, &pad);
             body.push_str(&bindings);
             let _ = writeln!(body, "{inner}RenderNode::group([])");
@@ -63,7 +63,7 @@ impl ViewGen<'_> {
         }
         let closure = wrap_signal_clones(&raw_colors, format!("move |__rect| {{\n{body}{pad}}}"));
 
-        let code = format!("{pad}let {var} = Canvas::new(ctx, {style}, {closure})?;");
+        let code = format!("{pad}let {var} = Canvas::new({style}, {closure})?;");
         ChildEmit::Simple { name: var, code }
     }
 
@@ -80,7 +80,7 @@ impl ViewGen<'_> {
 
     /// Generates a `RenderNode::rect(...)` expression.
     ///
-    /// Attrs: `x`, `y`, `w`, `h` (numbers or `full`), `fill`, `stroke`, `stroke_w`, `radius`, `shadow_x`, `shadow_y`, `shadow_blur`, `shadow_color`, `gradient` (linear/radial), `from`, `to`, `mid`, `mid_pos`, `x1`, `y1`, `x2`, `y2` (linear points), `cx`, `cy`, `r` (radial).
+    /// Attrs: `x`, `y`, `w`, `h` (numbers or `full`), `fill`, `stroke`, `stroke_width`, `radius`, `shadow_x`, `shadow_y`, `shadow_blur`, `shadow_color`, `gradient` (linear/radial), `from`, `to`, `mid`, `mid_pos`, `x1`, `y1`, `x2`, `y2` (linear points), `cx`, `cy`, `r` (radial).
     fn emit_canvas_rect(&self, el: &Element) -> String {
         let x = self.canvas_dim("x", &el.attributes);
         let y = self.canvas_dim("y", &el.attributes);
@@ -101,10 +101,10 @@ impl ViewGen<'_> {
             .iter()
             .find(|a| a.key == "stroke")
             .map(|a| self.color_expr(&a.value));
-        let stroke_w = el
+        let stroke_width = el
             .attributes
             .iter()
-            .find(|a| a.key == "stroke_w")
+            .find(|a| a.key == "stroke_width")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(1.0);
         let gradient = self.canvas_gradient_paint(&el.attributes);
@@ -114,7 +114,8 @@ impl ViewGen<'_> {
             .find(|a| a.key == "fill")
             .map(|a| self.color_expr(&a.value));
 
-        let rect_style = build_rect_style(gradient, solid_fill, stroke, stroke_w, shadow, &radius);
+        let rect_style =
+            build_rect_style(gradient, solid_fill, stroke, stroke_width, shadow, &radius);
 
         format!(
             "RenderNode::rect(Rect {{ x: {x}, y: {y}, width: {w}, height: {h} }}, {rect_style})"
@@ -206,7 +207,7 @@ impl ViewGen<'_> {
 
     /// Generates a `Line::new(...).view()` expression.
     ///
-    /// Attrs: `x1`, `y1`, `x2`, `y2` (coordinates), `color`, `width`/`stroke_w`.
+    /// Attrs: `x1`, `y1`, `x2`, `y2` (coordinates), `color`, `stroke_width`.
     fn emit_canvas_line(&self, el: &Element) -> String {
         let coord = |key: &str| -> String {
             el.attributes
@@ -229,7 +230,7 @@ impl ViewGen<'_> {
         let width = el
             .attributes
             .iter()
-            .find(|a| a.key == "width" || a.key == "stroke_w")
+            .find(|a| a.key == "stroke_width")
             .and_then(|a| a.value.parse::<f32>().ok())
             .map(format_f32)
             .unwrap_or_else(|| "1.0".to_string());

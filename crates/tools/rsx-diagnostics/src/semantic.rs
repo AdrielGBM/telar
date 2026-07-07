@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use rsx_parser::{Element, RsxDocument, ViewNode};
+use rsx_transpiler::{color_attr_keys, color_keywords};
 
 use crate::{Diagnostic, Span};
 
@@ -88,7 +89,7 @@ fn check_nodes(
                     diagnostics,
                 );
             }
-            ViewNode::LetStmt { .. } => {}
+            ViewNode::LetStmt(_) => {}
         }
     }
 }
@@ -115,9 +116,14 @@ fn check_element(
     if theme_configured {
         let theme_fields = theme.map(|t| t.theme_fields);
         for attr in &el.attributes {
-            if matches!(attr.key.as_str(), "color" | "fill" | "stroke" | "outline") {
+            if color_attr_keys().contains(&attr.key.as_str()) {
                 let val = &attr.value;
-                if val.starts_with('{') || val.starts_with('#') {
+                if val.starts_with('{')
+                    || val.starts_with('#')
+                    || val.starts_with('$')
+                    || val.starts_with("Color::")
+                    || color_keywords().contains(&val.as_str())
+                {
                     continue;
                 }
                 let known = local_constants.contains(val.as_str())

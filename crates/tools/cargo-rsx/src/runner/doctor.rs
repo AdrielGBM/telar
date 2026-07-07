@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
-use super::config::{CargoManifest, backend_as_str, find_package_dir, load_config};
+use super::config::{backend_as_str, find_package_dir, load_config, manifest_has_rsx};
 
 struct Doctor {
     warnings: usize,
@@ -93,13 +93,7 @@ pub(crate) fn run_doctor_cmd() -> ! {
     } else {
         doc.info("rsx.toml", "not found (using defaults)");
     }
-    let has_manifest_rsx = std::fs::read_to_string(package_dir.join("Cargo.toml"))
-        .ok()
-        .and_then(|c| toml::from_str::<CargoManifest>(&c).ok())
-        .and_then(|m| m.package)
-        .and_then(|p| p.metadata)
-        .and_then(|m| m.rsx)
-        .is_some();
+    let has_manifest_rsx = manifest_has_rsx(&package_dir);
     doc.info(
         "[package.metadata.rsx]",
         if has_manifest_rsx {

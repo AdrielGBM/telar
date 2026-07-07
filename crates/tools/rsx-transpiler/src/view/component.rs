@@ -7,11 +7,11 @@ use rsx_parser::{Attr, Element, ViewNode};
 use crate::naming::{is_ident, to_pascal_case, to_snake_case};
 use crate::style::{format_f32, hex_to_color_expr};
 
-use super::signals::{normalize_closure, rust_str, substitute_handles, wrap_signal_clones};
+use super::signals::{rust_str, wrap_signal_clones};
 use super::{ChildEmit, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// Emits an unknown tag as a component function call. A no-attr, no-child tag generates `name(ctx)?`;
+    /// Emits an unknown tag as a component function call. A no-attr, no-child tag generates `name()?`;
     /// attrs add a `NameProps { … }` struct literal; markup children are gathered into a `Slots` value
     /// (default + `slot:"name"` children) and passed as the trailing argument. The component's `.rsx`
     /// must declare a matching `pub struct NameProps` and/or use a `children` slot placeholder.
@@ -36,14 +36,7 @@ impl ViewGen<'_> {
 
         // No children: flat call form. A childless slotted callee still gets `Slots::new()`.
         if !has_children {
-            let mut args = String::from("ctx");
-            if let Some(p) = &props_arg {
-                args.push_str(", ");
-                args.push_str(p);
-            }
-            if pass_slots {
-                args.push_str(", Slots::new()");
-            }
+            let args = Self::call_args(props_arg.as_deref(), pass_slots.then_some("Slots::new()"));
             let code = format!("{pad}let {var} = {tag}({args})?;");
             return ChildEmit::Simple { name: var, code };
         }
@@ -55,17 +48,22 @@ impl ViewGen<'_> {
         self.indent += 1;
         let slots_expr = self.emit_slots(&el.children, &mut code);
         let inner_pad = self.indent_str();
-        let mut args = String::from("ctx");
-        if let Some(p) = &props_arg {
-            args.push_str(", ");
-            args.push_str(p);
-        }
-        args.push_str(", ");
-        args.push_str(&slots_expr);
+        let args = Self::call_args(props_arg.as_deref(), Some(&slots_expr));
         let _ = writeln!(code, "{inner_pad}{tag}({args})?");
         self.indent -= 1;
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
+    }
+
+    /// Assembles a component call's argument list: the optional `Props` literal, then the optional trailing
+    /// `Slots`. Both the flat and children paths route through here so the arg order stays identical; they
+    /// differ only in the slots value (`Slots::new()` when childless vs the built `__slots`).
+    fn call_args(props_arg: Option<&str>, slots_arg: Option<&str>) -> String {
+        [props_arg, slots_arg]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     /// Builds the `NameProps { … }` argument for a component call, or `None` when no props are needed.
@@ -147,6 +145,10 @@ impl ViewGen<'_> {
     /// Emits the markup children of a component call into a `Slots` value: a child written with
     /// `slot:"name"` goes to that named slot; every other child (including `if`/`for` control flow) goes
     /// to the default slot. Returns the expression naming the built value (`__slots`).
+    ///
+    /// `slot:` (route, here) and `children name:` (receive, in [`Self::emit_slot`]) deliberately use
+    /// different keys — the same route/receive asymmetry as HTML slots and Vue's `<template #x>` vs
+    /// `slot="x"`. This is not a naming inconsistency to fix; do not rename either side to match the other.
     fn emit_slots(&mut self, children: &[ViewNode], code: &mut String) -> String {
         let pad = self.indent_str();
         let _ = writeln!(code, "{pad}let mut __slots = Slots::new();");
@@ -204,6 +206,9 @@ impl ViewGen<'_> {
     /// Emits a `children` slot placeholder: splices the caller-supplied children for this slot into the
     /// enclosing container's `__children` vec. `children` drains the default slot; `children name:"x"`
     /// drains the named slot `"x"`. Dynamic, so the container builds a `__children` vec (see `forces_child_vec`).
+    ///
+    /// Receives via `name:`, the counterpart to the caller's `slot:` in [`Self::emit_slots`] — see that
+    /// doc comment for why the two ends intentionally don't share a key.
     pub(super) fn emit_slot(&mut self, el: &Element) -> ChildEmit {
         let pad = self.indent_str();
         let expr = match el.attributes.iter().find(|a| a.key == "name") {
@@ -236,12 +241,10 @@ impl ViewGen<'_> {
         if v == "true" || v == "false" {
             return v.to_string();
         }
-        // Closure prop: box a `move` closure, cloning captured `$signal`s and rewriting `$handle` reads —
-        // the same treatment `on_press` gets. The Props field is expected to be a `Box<dyn Fn(..)>`.
+        // Closure prop: box a `move` closure — the same desugaring `on_press` gets, so a `$`-free closure
+        // keeps its source span for LSP completion. The Props field is expected to be a `Box<dyn Fn(..)>`.
         if v.starts_with('|') {
-            let closure = substitute_handles(&normalize_closure(&attr.value));
-            let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move {closure}"));
-            return format!("Box::new({wrapped})");
+            return format!("Box::new({})", self.emit_closure_value(attr));
         }
         // A lone `$signal`: pass the cloned handle so the caller's binding stays usable elsewhere.
         if let Some(rest) = v.strip_prefix('$')

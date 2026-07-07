@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use rsx_parser::Element;
 
-use super::{ChildEmit, ViewGen};
+use super::{ChildEmit, ViewGen, wrap_as_single_content};
 
 impl ViewGen<'_> {
     pub(super) fn emit_scroll(&mut self, el: &Element) -> ChildEmit {
@@ -29,28 +29,15 @@ impl ViewGen<'_> {
             .any(|e| matches!(e, ChildEmit::Dynamic { .. }));
 
         if has_dynamic {
+            let children =
+                self.emit_children_collection(&mut code, &child_emits, &inner_pad, true, &[]);
             let _ = writeln!(
                 code,
-                "{inner_pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
-            );
-            for emit in &child_emits {
-                match emit {
-                    ChildEmit::Simple { name, code: c } => {
-                        let _ = writeln!(code, "{c}");
-                        let _ = writeln!(code, "{inner_pad}__children.push(box_item({name}));");
-                    }
-                    ChildEmit::Dynamic { code: c } => {
-                        let _ = writeln!(code, "{c}");
-                    }
-                }
-            }
-            let _ = writeln!(
-                code,
-                "{inner_pad}let __scroll_content = Container::column(ctx, __children)?;"
+                "{inner_pad}let __scroll_content = Container::column({children})?;"
             );
             let _ = writeln!(
                 code,
-                "{inner_pad}LayoutScrollArea::new(ctx, {style}, Box::new(__scroll_content))?"
+                "{inner_pad}LayoutScrollArea::new({style}, Box::new(__scroll_content))?"
             );
         } else {
             let mut names = Vec::new();
@@ -61,18 +48,10 @@ impl ViewGen<'_> {
                 }
             }
 
-            let content = match names.len() {
-                0 => "Container::column(ctx, children![])?".to_string(),
-                1 => names.remove(0),
-                _ => {
-                    let items = names.join(", ");
-                    format!("Container::column(ctx, children![{items}])?")
-                }
-            };
-
+            let content = wrap_as_single_content(&names);
             let _ = writeln!(
                 code,
-                "{inner_pad}LayoutScrollArea::new(ctx, {style}, Box::new({content}))?"
+                "{inner_pad}LayoutScrollArea::new({style}, Box::new({content}))?"
             );
         }
 

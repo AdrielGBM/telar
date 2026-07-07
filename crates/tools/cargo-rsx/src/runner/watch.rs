@@ -8,10 +8,10 @@ use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMod
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
-    CargoManifest, RsxConfig, WindowConfig, backend_as_str, expand_member, find_package_dir,
-    read_package_manifest, split_android_flag,
+    CargoManifest, RsxConfig, WindowConfig, backend_as_str, expand_member, resolve_package,
+    split_android_flag,
 };
-use super::package::{package_bin_path, package_lib_path};
+use super::package::{package_bin_path, package_lib_path, profile_of};
 
 fn inject_feature(args: &mut Vec<String>, feature: &str) {
     if let Some(pos) = args.iter().position(|a| a == "--features" || a == "-F") {
@@ -127,6 +127,7 @@ fn touch_rsx_files(src_dirs: &[PathBuf]) {
     }
 }
 
+// Recursive `.rsx` walk, parallel to rsx-transpiler's find_rsx_files discovery walk but touching mtimes rather than collecting paths.
 fn touch_rsx_in_dir(dir: &Path, now: SystemTime) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -481,20 +482,13 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         inject_feature(&mut cargo_args, feature);
     }
 
-    let package_dir = find_package_dir(&rest);
-    let workspace_root =
-        rsx_workspace::find_workspace_root(&package_dir).unwrap_or(package_dir.clone());
-    let profile = if rest.contains(&"--release".to_string()) {
-        "release"
-    } else {
-        "debug"
-    };
+    let resolved = resolve_package(&rest);
+    let workspace_root = resolved.workspace_root.clone();
+    let profile = profile_of(&rest);
 
     if !no_hot_reload {
         let rustflags = mode.rustflags();
-        let package_name = read_package_manifest(&rest)
-            .map(|p| p.name)
-            .unwrap_or_else(|| "app".to_string());
+        let package_name = resolved.name();
         let lib_path = package_lib_path(&workspace_root, &package_name, profile);
         let bin_path = package_bin_path(&workspace_root, &package_name, profile);
 

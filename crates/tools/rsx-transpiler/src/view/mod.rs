@@ -109,6 +109,18 @@ pub(crate) enum ChildEmit {
     Dynamic { code: String },
 }
 
+/// Collapses a set of already-bound widget `names` into a single content expression: an empty column
+/// for none, the lone widget for one, or a `Container::column` wrapping all of them for several. Shared
+/// by `generate_root` (which boxes the result as the view's return value) and `emit_scroll`'s static
+/// branch (`LayoutScrollArea` takes a single content item).
+fn wrap_as_single_content(names: &[String]) -> String {
+    match names {
+        [] => "Container::column(children![])?".to_string(),
+        [only] => only.clone(),
+        _ => format!("Container::column(children![{}])?", names.join(", ")),
+    }
+}
+
 pub struct ViewGen<'a> {
     /// Declared style classes, used to validate class references in elements.
     classes: &'a [StyleClass],
@@ -188,7 +200,6 @@ impl<'a> ViewGen<'a> {
     /// Generates the full view body and returns the final `Ok(Box::new(...))` expression.
     pub fn generate_root(&mut self, nodes: &[ViewNode]) -> String {
         let mut out = String::new();
-        let mut last_widget: Option<String> = None;
         let mut roots = Vec::new();
 
         for node in nodes {
@@ -196,7 +207,6 @@ impl<'a> ViewGen<'a> {
                 ChildEmit::Simple { name, code } => {
                     out.push_str(&code);
                     out.push('\n');
-                    last_widget = Some(name.clone());
                     roots.push(name);
                 }
                 ChildEmit::Dynamic { code } => {
@@ -208,25 +218,8 @@ impl<'a> ViewGen<'a> {
         }
 
         let pad = self.indent_str();
-        match roots.len() {
-            0 => {
-                let _ = write!(
-                    out,
-                    "{pad}Ok(Box::new(Container::column(ctx, children![])?))"
-                );
-            }
-            1 => {
-                let only = last_widget.unwrap_or_else(|| roots[0].clone());
-                let _ = write!(out, "{pad}Ok(Box::new({only}))");
-            }
-            _ => {
-                let items = roots.join(", ");
-                let _ = write!(
-                    out,
-                    "{pad}Ok(Box::new(Container::column(ctx, children![{items}])?))"
-                );
-            }
-        }
+        let content = wrap_as_single_content(&roots);
+        let _ = write!(out, "{pad}Ok(Box::new({content}))");
 
         out
     }
@@ -234,14 +227,12 @@ impl<'a> ViewGen<'a> {
     fn emit_node(&mut self, node: &ViewNode) -> ChildEmit {
         let emit = match node {
             ViewNode::Element(el) => self.emit_element(el),
-            ViewNode::LetStmt {
-                source,
-                source_start,
-            } => ChildEmit::Dynamic {
+            ViewNode::LetStmt(stmt) => ChildEmit::Dynamic {
                 code: format!(
-                    "{}{}{source};",
+                    "{}{}{};",
                     self.indent_str(),
-                    expr_marker(*source_start, source.len())
+                    expr_marker(stmt.source_start, stmt.source.len()),
+                    stmt.source
                 ),
             },
             ViewNode::IfBlock(block) => self.emit_if(block),
@@ -252,7 +243,7 @@ impl<'a> ViewGen<'a> {
             ViewNode::Element(el) => wrap_source_markers(emit, el.line),
             ViewNode::IfBlock(block) => wrap_source_markers(emit, block.line),
             ViewNode::ForBlock(block) => wrap_source_markers(emit, block.line),
-            ViewNode::LetStmt { .. } => emit,
+            ViewNode::LetStmt(_) => emit,
         }
     }
 
@@ -280,7 +271,7 @@ impl<'a> ViewGen<'a> {
 /// splices a runtime `Vec` into it.
 pub(crate) fn forces_child_vec(node: &ViewNode) -> bool {
     match node {
-        ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::LetStmt { .. } => true,
+        ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::LetStmt(_) => true,
         ViewNode::Element(el) => el.tag == "children",
     }
 }
@@ -323,7 +314,7 @@ mod tests {
 
     #[test]
     fn widget_ref_passthrough() {
-        let src = "[logic]\nlet canvas = build_canvas(ctx)?;\n[view]\nwidget \"canvas\"\n";
+        let src = "[logic]\nlet canvas = build_canvas()?;\n[view]\nwidget \"canvas\"\n";
         let out = crate::transpile_source_with_theme(src, "my_section", None, None).unwrap();
         assert!(out.rust_code.contains("Ok(Box::new(canvas))"));
     }
@@ -333,7 +324,7 @@ mod tests {
         let src = "[logic]\n[view]\ncanvas width:100 height:50\n    rect fill:#3c77fa radius:8\n    text \"hi\" x:0 y:4 w:full h:42 size:12 color:white\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
-        assert!(code.contains("Canvas::new(ctx,"), "missing Canvas::new");
+        assert!(code.contains("Canvas::new("), "missing Canvas::new");
         assert!(
             code.contains("let __w = __rect.width;"),
             "missing __w binding"
@@ -366,7 +357,7 @@ mod tests {
         let src = "[logic]\n[view]\nmy_card\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         assert!(
-            out.rust_code.contains("my_card(ctx)?"),
+            out.rust_code.contains("my_card()?"),
             "no-attr tag should call fn directly"
         );
     }
@@ -378,7 +369,7 @@ mod tests {
         let code = &out.rust_code;
         // A `col` carrying paint from its class becomes a StyledContainer, not a plain Container.
         assert!(
-            code.contains("StyledContainer::new(ctx, style_card()"),
+            code.contains("StyledContainer::new(style_card()"),
             "painted col should be a StyledContainer:\n{code}"
         );
         // The class's fill reaches the RectStyle.
@@ -482,7 +473,7 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("Overlay::new(ctx,"),
+            code.contains("Overlay::new("),
             "overlay emits an Overlay widget:\n{code}"
         );
         assert!(
@@ -494,7 +485,7 @@ mod tests {
     // A `box` with a `hover(...)` override wires `.on_hover_style(...)`.
     #[test]
     fn box_hover_emits_on_hover_style() {
-        let src = "[view]\nbox fill:#101010 hover(fill:#f0f0f0 stroke:#ff0000) radius:10\n    text \"x\"\n";
+        let src = "[view]\nbox fill:#101010 hover_style(fill:#f0f0f0 stroke:#ff0000) radius:10\n    text \"x\"\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         assert!(
             out.rust_code.contains(".on_hover_style("),
@@ -510,7 +501,7 @@ mod tests {
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("StyledContainer::new(ctx,"),
+            code.contains("StyledContainer::new("),
             "on_drag upgrades a plain col to a StyledContainer:\n{code}"
         );
         assert!(
@@ -522,11 +513,11 @@ mod tests {
     // A plain `col` gains a hover style, so it must upgrade to a StyledContainer (which has a background).
     #[test]
     fn plain_col_with_hover_upgrades_to_styled_container() {
-        let src = "[view]\ncol hover(fill:#f0f0f0)\n    text \"x\"\n";
+        let src = "[view]\ncol hover_style(fill:#f0f0f0)\n    text \"x\"\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("StyledContainer::new(ctx,"),
+            code.contains("StyledContainer::new("),
             "a col with hover should become a StyledContainer:\n{code}"
         );
         assert!(
@@ -578,7 +569,7 @@ mod tests {
             "a call with children builds a Slots:\n{code}"
         );
         assert!(
-            code.contains("card(ctx, __slots)?"),
+            code.contains("card(__slots)?"),
             "the Slots is the trailing arg:\n{code}"
         );
     }
@@ -639,6 +630,26 @@ mod tests {
         );
     }
 
+    // A `$`-free closure prop on a component carries its source span (an expr marker) so LSP completion
+    // works inside it, exactly like inside an element's `on_press`.
+    #[test]
+    fn component_free_closure_prop_carries_source_span() {
+        let src = "[view]\ncard on_tap(|| toggle())\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(!out.rust_code.contains("@RSX@"), "markers must be stripped");
+        let span = out
+            .expr_spans
+            .iter()
+            .find(|s| &src[s.rsx_start as usize..(s.rsx_start + s.len) as usize] == "|| toggle()")
+            .expect("closure prop should emit a source span");
+        let gen_frag =
+            &out.rust_code[span.gen_start as usize..(span.gen_start + span.len) as usize];
+        assert_eq!(
+            gen_frag, "|| toggle()",
+            "span must map verbatim onto the generated closure"
+        );
+    }
+
     fn sig(props_default: bool, fields: &[&str], has_slot: bool) -> crate::ComponentSig {
         crate::ComponentSig {
             has_props: !fields.is_empty(),
@@ -660,7 +671,7 @@ mod tests {
             crate::transpile_source_full("[view]\ncard\n", "demo", None, None, Some(&reg)).unwrap();
         assert!(
             out.rust_code
-                .contains("card(ctx, CardProps { ..Default::default() }, Slots::new())?"),
+                .contains("card(CardProps { ..Default::default() }, Slots::new())?"),
             "childless slotted call should pass defaulted props + empty Slots:\n{}",
             out.rust_code
         );
@@ -772,7 +783,7 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("Input::new(ctx, name.clone(),"),
+            code.contains("Input::new(name.clone(),"),
             "binds the value signal (cloned):\n{code}"
         );
         assert!(
@@ -805,10 +816,7 @@ mod tests {
             code.contains("|n| *n"),
             "key closure from `key *n`:\n{code}"
         );
-        assert!(
-            code.contains("move |ctx: &mut WidgetCtx, n|"),
-            "item builder closure:\n{code}"
-        );
+        assert!(code.contains("move |n|"), "item builder closure:\n{code}");
     }
 
     // A reactive `for` without a `key` clause reconciles by position instead of erroring (no per-item
@@ -975,7 +983,7 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("heading(ctx, HeadingProps { text: \"Title\" })"),
+            code.contains("heading(HeadingProps { text: \"Title\" })"),
             "heading is a component call carrying its text:\n{code}"
         );
     }
@@ -1005,9 +1013,30 @@ mod tests {
         let out =
             crate::transpile_source_with_theme("[view]\nmy_card\n", "demo", None, None).unwrap();
         assert!(
-            out.rust_code.contains("my_card(ctx)?"),
+            out.rust_code.contains("my_card()?"),
             "without a registry a no-attr call stays flat:\n{}",
             out.rust_code
         );
+    }
+
+    // Every name in `builtin_tags()` must have a real dispatch arm in `emit_element`; a tag missing one
+    // silently falls through to `emit_component_call` and is emitted as a bare `tag(ctx…)?` component
+    // call (see `no_registry_keeps_flat_call`). Guards the registry table and the dispatch `match`
+    // against drift (e.g. `column`, which was listed as a builtin yet handled only under `col`).
+    #[test]
+    fn every_builtin_tag_has_a_dispatch_arm() {
+        for &(tag, _ctor) in crate::registry::builtin_tags() {
+            let src = format!("[view]\n{tag}\n");
+            // A real emit arm may still reject a bare instance (missing required attr, etc.); that is not
+            // a fall-through, since `emit_component_call` returns unconditionally and never errors.
+            let Ok(out) = crate::transpile_source_with_theme(&src, "demo", None, None) else {
+                continue;
+            };
+            assert!(
+                !out.rust_code.contains(&format!("{tag}()?")),
+                "builtin tag `{tag}` fell through to emit_component_call (no dispatch arm):\n{}",
+                out.rust_code
+            );
+        }
     }
 }

@@ -39,7 +39,8 @@ fn parse_clause(clause: &str) -> Result<TransitionSpec, String> {
         .to_string();
     if !SUPPORTED_PROPS.contains(&prop.as_str()) {
         return Err(format!(
-            "transition: unsupported property `{prop}` (supported: opacity, fill, stroke, color)"
+            "transition: unsupported property `{prop}` (supported: {})",
+            SUPPORTED_PROPS.join(", ")
         ));
     }
     let second = tokens.get(1).ok_or_else(|| {
@@ -141,8 +142,12 @@ fn parse_f32_list(s: &str) -> Result<Vec<String>, String> {
         .collect()
 }
 
-/// Splits `s` on `sep`, ignoring separators nested inside parentheses.
-fn split_top_level(s: &str, sep: char) -> Vec<String> {
+/// Paren-depth-aware splitter shared by [`split_top_level`] and [`split_top_level_ws`]: a boundary char only splits at depth 0, so separators nested inside `(...)` (e.g. cubic-bezier/spring args) stay part of the current segment; `keep_empty` controls whether empty segments (including a trailing one) are dropped.
+fn split_top_level_by(
+    s: &str,
+    is_boundary: impl Fn(char) -> bool,
+    keep_empty: bool,
+) -> Vec<String> {
     let mut out = Vec::new();
     let mut depth = 0i32;
     let mut cur = String::new();
@@ -156,41 +161,28 @@ fn split_top_level(s: &str, sep: char) -> Vec<String> {
                 depth -= 1;
                 cur.push(c);
             }
-            c if c == sep && depth == 0 => out.push(std::mem::take(&mut cur)),
-            _ => cur.push(c),
-        }
-    }
-    out.push(cur);
-    out
-}
-
-/// Splits `s` on whitespace runs, ignoring whitespace nested inside parentheses (so `cubic-bezier(0.4, 0, 0.2, 1)` stays one token).
-fn split_top_level_ws(s: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut depth = 0i32;
-    let mut cur = String::new();
-    for c in s.chars() {
-        match c {
-            '(' => {
-                depth += 1;
-                cur.push(c);
-            }
-            ')' => {
-                depth -= 1;
-                cur.push(c);
-            }
-            c if c.is_whitespace() && depth == 0 => {
-                if !cur.is_empty() {
+            c if is_boundary(c) && depth == 0 => {
+                if keep_empty || !cur.is_empty() {
                     out.push(std::mem::take(&mut cur));
                 }
             }
             _ => cur.push(c),
         }
     }
-    if !cur.is_empty() {
+    if keep_empty || !cur.is_empty() {
         out.push(cur);
     }
     out
+}
+
+/// Splits `s` on `sep`, ignoring separators nested inside parentheses.
+fn split_top_level(s: &str, sep: char) -> Vec<String> {
+    split_top_level_by(s, |c| c == sep, true)
+}
+
+/// Splits `s` on whitespace runs, ignoring whitespace nested inside parentheses (so `cubic-bezier(0.4, 0, 0.2, 1)` stays one token).
+fn split_top_level_ws(s: &str) -> Vec<String> {
+    split_top_level_by(s, char::is_whitespace, false)
 }
 
 #[cfg(test)]

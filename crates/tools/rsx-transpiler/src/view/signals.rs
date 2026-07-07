@@ -4,6 +4,7 @@ use std::fmt::Write;
 
 use rsx_parser::Attr;
 
+use crate::naming::contains_ident;
 use crate::style::format_f32;
 
 use super::expr_marker;
@@ -241,16 +242,33 @@ pub(super) fn signal_idents(s: &str) -> Vec<String> {
     idents
 }
 
-/// Wraps a `move` closure literal in a block that clones every `$name` signal referenced (raw, still carrying `$`) across `raw_values` first — mirrors the `clone_prefix` pattern in `opacity_closure`, generalized for `color_expr` callers, whose reads (e.g. `accent.get()`) are embedded inside an already-built closure string rather than assembled inline. A no-op when none of `raw_values` reference a signal, so a purely static/theme color emits the closure unchanged.
-pub(super) fn wrap_signal_clones(raw_values: &[&str], closure_expr: String) -> String {
+/// The distinct identifiers a `move` closure must clone so its captures stay independent of the outer
+/// bindings: every `$name` signal referenced across `snippets` (raw, still carrying `$`), deduped,
+/// followed by any `loop_variables` a snippet uses (also deduped against the signals). Pass `&[]` for
+/// `loop_variables` at a call site with no loop scope (e.g. the free-standing [`wrap_signal_clones`]);
+/// the three clone emitters ([`wrap_signal_clones`], `clone_bindings`, `opacity_closure`) all format
+/// this list for their own context (block wrapper / standalone statements / inline prefix).
+pub(super) fn captured_idents(snippets: &[&str], loop_variables: &[String]) -> Vec<String> {
     let mut idents: Vec<String> = Vec::new();
-    for v in raw_values {
-        for id in signal_idents(v) {
+    for s in snippets {
+        for id in signal_idents(s) {
             if !idents.contains(&id) {
                 idents.push(id);
             }
         }
     }
+    for var in loop_variables {
+        if snippets.iter().any(|s| contains_ident(s, var)) && !idents.contains(var) {
+            idents.push(var.clone());
+        }
+    }
+    idents
+}
+
+/// Wraps a `move` closure literal in a block that clones every `$name` signal referenced (raw, still carrying `$`) across `raw_values` first, generalized for `color_expr` callers, whose reads (e.g. `accent.get()`) are embedded inside an already-built closure string rather than assembled inline. A no-op when none of `raw_values` reference a signal, so a purely static/theme color emits the closure unchanged.
+pub(super) fn wrap_signal_clones(raw_values: &[&str], closure_expr: String) -> String {
+    // No loop scope is available here (free function), so loop variables are captured by move as before.
+    let idents = captured_idents(raw_values, &[]);
     if idents.is_empty() {
         return closure_expr;
     }
@@ -284,7 +302,7 @@ pub(super) fn is_paint_key(key: &str) -> bool {
         key,
         "fill"
             | "stroke"
-            | "stroke_w"
+            | "stroke_width"
             | "radius"
             | "opacity"
             | "gradient"
@@ -292,7 +310,7 @@ pub(super) fn is_paint_key(key: &str) -> bool {
             | "to"
             | "mid"
             | "mid_pos"
-            | "gr"
+            | "radial_radius"
     ) || key.starts_with("shadow")
 }
 
@@ -326,7 +344,7 @@ pub(super) fn build_rect_style(
     gradient: Option<String>,
     solid_fill: Option<String>,
     stroke: Option<String>,
-    stroke_w: f32,
+    stroke_width: f32,
     shadow: Option<String>,
     radius: &str,
 ) -> String {
@@ -336,7 +354,7 @@ pub(super) fn build_rect_style(
             .or_else(|| solid_fill.map(|f| format!("Some(Paint::Solid({f}))")))
             .unwrap_or_else(|| "None".to_string());
         let stroke_s = stroke
-            .map(|s| format!("Some(Stroke::new({s}, {}))", format_f32(stroke_w)))
+            .map(|s| format!("Some(Stroke::new({s}, {}))", format_f32(stroke_width)))
             .unwrap_or_else(|| "None".to_string());
         let shadow_s = shadow.unwrap_or_else(|| "None".to_string());
         format!(

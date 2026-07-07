@@ -16,7 +16,6 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
     &[
         ("text", "Text::new"),
         ("col", "Container::new"),
-        ("column", "Container::new"),
         ("row", "Container::new"),
         ("grid", "Container::new"),
         ("box", "StyledContainer::new"),
@@ -89,22 +88,41 @@ pub fn color_attr_keys() -> &'static [&'static str] {
     ]
 }
 
+/// Named color keywords `color_expr` resolves (see `view/interp.rs`), alongside hex literals and `[style]`/
+/// theme/`$signal` references. The single source of truth so completion, hover and swatch tooling agree.
+pub fn color_keywords() -> &'static [&'static str] {
+    &["white", "black", "transparent"]
+}
+
+/// The RGBA a keyword color resolves to, matching the `Color::WHITE`/`BLACK`/`TRANSPARENT` constants
+/// `color_expr` emits (see `view/interp.rs`). `None` for anything outside [`color_keywords`].
+pub fn keyword_color_rgba(name: &str) -> Option<[u8; 4]> {
+    match name {
+        "white" => Some([255, 255, 255, 255]),
+        "black" => Some([0, 0, 0, 255]),
+        "transparent" => Some([0, 0, 0, 0]),
+        _ => None,
+    }
+}
+
 /// The full paint + behavior attribute set every styled container (`box`, `col`, `row`, `grid`) accepts.
 /// Kept in one place so the four tags stay consistent — the codegen already treats them identically
 /// (`rect_style_pieces` resolves fill/stroke/shadow/gradient/opacity for all of them, and `on_press`
 /// is wired on both `Container` and `StyledContainer`).
 ///
-/// `on_change` is deliberately NOT in this list: a container has no "value" to change, so a generic
-/// container-level `on_change` would be meaningless (and the codegen has no `.on_change` to call on
-/// `Container`/`StyledContainer` — adding the key here without it would be a broken suggestion). A
-/// value-bearing widget (checkbox/slider/text_field, built as components) declares its own `on_change`
-/// as a `Props` field instead; `emit_component_call` already boxes any closure-valued attr generically
-/// by field name (see `component_props_arg` in `view/component.rs`), so `on_change:|v| ...` on such a
-/// component works today with no transpiler change needed here.
+/// No generic value-callback key (`on_change` et al.) is in this list: a container has no "value" to
+/// change, so a container-level callback here would be meaningless (the codegen has nothing to call it
+/// on `Container`/`StyledContainer`). Instead each value-bearing widget (built as a component) declares
+/// its own callback as a `Props` field, named for what the value actually is: `on_toggle` for a bool
+/// (checkbox/toggle), `on_select` for a picked index (radio/menu/select), `on_change` for a continuous
+/// value (slider), `on_submit` for a commit (text_field, fires on Enter — it has no per-keystroke
+/// callback). `emit_component_call` boxes any closure-valued attr generically by field name (see
+/// `component_props_arg` in `view/component.rs`), so each of these works today with no transpiler change
+/// needed here.
 const CONTAINER_PAINT: &[&str] = &[
     "fill",
     "stroke",
-    "stroke_w",
+    "stroke_width",
     "radius",
     "shadow_x",
     "shadow_y",
@@ -115,7 +133,7 @@ const CONTAINER_PAINT: &[&str] = &[
     "to",
     "mid",
     "mid_pos",
-    "gr",
+    "radial_radius",
     "opacity",
     "on_press",
     "on_long_press",
@@ -123,9 +141,13 @@ const CONTAINER_PAINT: &[&str] = &[
     "on_key",
     "on_drag",
     "on_focus",
-    "hover",
+    "hover_style",
     "transition",
-    // Declarative affine transform (see `container::transform_call`); resolved per-render like opacity.
+];
+
+/// Declarative affine transform attribute keys (see `container::transform_call`, which gates
+/// `.with_transform` emission on this exact list — shared here so codegen and completion cannot drift).
+pub const TRANSFORM_ATTR_KEYS: &[&str] = &[
     "rotate",
     "scale",
     "scale_x",
@@ -161,10 +183,15 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         // box/col/row/grid share one paint+behavior set (the codegen treats them identically); grid adds its track keys.
         "grid" => {
             let mut keys = with(CONTAINER_PAINT);
+            keys.extend_from_slice(TRANSFORM_ATTR_KEYS);
             keys.extend_from_slice(&["cols", "span", "row_span"]);
             keys
         }
-        "col" | "row" | "column" | "box" => with(CONTAINER_PAINT),
+        "col" | "row" | "box" => {
+            let mut keys = with(CONTAINER_PAINT);
+            keys.extend_from_slice(TRANSFORM_ATTR_KEYS);
+            keys
+        }
         "img" | "image" => with(&["src"]),
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
         "input" => with(&["value", "size", "color", "on_submit"]),
@@ -205,6 +232,21 @@ mod tests {
         assert!(tag_attr_keys("box").contains(&"transition"));
         assert!(tag_attr_keys("text").contains(&"transition"));
         assert!(tag_attr_keys("col").contains(&"transition"));
+        // Transform keys are appended from `TRANSFORM_ATTR_KEYS`, not inlined into `CONTAINER_PAINT`.
+        for tag in ["box", "col", "row", "grid"] {
+            for key in TRANSFORM_ATTR_KEYS {
+                assert!(tag_attr_keys(tag).contains(key), "{tag} missing {key}");
+            }
+        }
+    }
+
+    #[test]
+    fn color_keywords_match_keyword_color_rgba() {
+        assert_eq!(color_keywords(), &["white", "black", "transparent"]);
+        assert_eq!(keyword_color_rgba("white"), Some([255, 255, 255, 255]));
+        assert_eq!(keyword_color_rgba("black"), Some([0, 0, 0, 255]));
+        assert_eq!(keyword_color_rgba("transparent"), Some([0, 0, 0, 0]));
+        assert_eq!(keyword_color_rgba("cerulean"), None);
     }
 
     #[test]

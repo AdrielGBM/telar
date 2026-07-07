@@ -20,8 +20,8 @@ pub use discovery::{
 };
 pub use error::TranspileError;
 pub use registry::{
-    TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, is_builtin_tag,
-    is_control_flow_keyword, layout_attr_keys, tag_attr_keys,
+    TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, color_keywords, is_builtin_tag,
+    is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, tag_attr_keys,
 };
 pub use signal_scan::{SignalInfo, scan_signals};
 
@@ -156,19 +156,29 @@ col @card
     fn generates_counter() {
         let out = transpile_source_with_theme(COUNTER, "counter", None, None).unwrap();
         let code = out.rust_code;
-        assert!(code.contains("pub fn counter(ctx: &mut WidgetCtx)"));
+        assert!(code.contains("pub fn counter()"));
         // [style]-declared colors become local constants.
         assert!(code.contains("const COLOR_PRIMARY: Color = Color::rgba(61.0 / 255.0"));
         assert!(code.contains("fn style_card() -> LayoutStyle"));
         assert!(code.contains("move || format!(\"Count: {}\", { count.get() })"));
         // `button` is now a widget component call, not the removed `Button::new` builtin.
-        assert!(code.contains("button(ctx, ButtonProps {"));
+        assert!(code.contains("button(ButtonProps {"));
         assert!(code.contains("label: \"Increment\""));
         // Its `fill` is a reactive colour closure; with no theme it reads the [style] const.
         assert!(code.contains("fill: Box::new(move || COLOR_PRIMARY)"));
         assert!(code.contains("count.update(|n| *n += 1)"));
-        assert!(code.contains("Container::new(ctx, style_card(), children!["));
+        assert!(code.contains("Container::new(style_card(), children!["));
         assert!(code.contains("Ok(Box::new(__col_0))"));
+    }
+
+    // Regression for the F13 fix: a type-annotated `let count: RwSignal<i32> = signal(...)` was skipped by the old `let count =` prefix match, so the later `move` closure's clone was never emitted and it captured `count` by move instead — breaking any later use of `count` in the view.
+    #[test]
+    fn move_clone_emitted_for_type_annotated_signal() {
+        let src = "[logic]\nlet count: RwSignal<i32> = signal(0i32);\nlet doubled = memo(move || count.get() * 2);\n[view]\ntext \"hi\"\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = out.rust_code;
+        assert!(code.contains("let count_rsx_mv = count.clone();"));
+        assert!(code.contains("let doubled = memo(move || count_rsx_mv.get() * 2);"));
     }
 
     // `has_props` lets the app macro alias a nested component's `Props` type by its base name only when it actually has one.
@@ -284,12 +294,12 @@ col @card
         );
         // `section` is a slotted component call carrying its title...
         assert!(
-            code.contains("section(ctx, SectionProps { title: \"Cards\" }"),
+            code.contains("section(SectionProps { title: \"Cards\" }"),
             "expected section component call in:\n{code}"
         );
         // ...and `heading` a plain component call carrying its text.
         assert!(
-            code.contains("heading(ctx, HeadingProps { text: \"Subtitle\" })"),
+            code.contains("heading(HeadingProps { text: \"Subtitle\" })"),
             "expected heading component call in:\n{code}"
         );
     }
@@ -336,7 +346,7 @@ col @card
             "struct should be renamed CardProps"
         );
         assert!(
-            code.contains("pub fn card(ctx: &mut WidgetCtx, props: CardProps)"),
+            code.contains("pub fn card(props: CardProps)"),
             "fn signature must use CardProps"
         );
         // The struct must appear before the fn, not inside it.
@@ -429,7 +439,7 @@ col @card
         let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("my_widget(ctx, MyWidgetProps {"),
+            code.contains("my_widget(MyWidgetProps {"),
             "should call component fn with Props"
         );
         assert!(
@@ -446,14 +456,12 @@ col @card
         let code = &out.rust_code;
         // A dedicated build fn per preview (so prop-taking components can be previewed)...
         assert!(
-            code.contains(
-                "pub fn demo_preview_0(ctx: &mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError>"
-            ),
+            code.contains("pub fn demo_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError>"),
             "missing preview build fn:\n{code}"
         );
         // ...whose body builds the preview's markup (here a bare component call)...
         assert!(
-            code.contains("counter(ctx)?"),
+            code.contains("counter()?"),
             "preview body should call the component:\n{code}"
         );
         // ...and a PreviewEntry pointing at that fn, not the component fn.
@@ -1037,7 +1045,7 @@ col @card
             "draws a Path widget from the baked path data:\n{code}"
         );
         assert!(
-            code.contains("Canvas::new(ctx,"),
+            code.contains("Canvas::new("),
             "wrapped in a Canvas so it lays out:\n{code}"
         );
         assert!(

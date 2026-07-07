@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use super::super::config::{RsxConfig, read_package_manifest, split_android_flag};
-use super::{create_dir_or_exit, run_release_build, write_or_exit};
+use super::super::config::RsxConfig;
+use super::{create_dir_or_exit, dist_dir, run_bundler_tool, run_release_build, write_or_exit};
 
 fn nsis_script(name: &str, bin_path: &Path, installer_path: &Path) -> String {
     format!(
@@ -41,15 +41,11 @@ pub(crate) fn build_nsis(cargo_args: Vec<String>, config: RsxConfig) -> ! {
         );
         std::process::exit(2);
     }
-    let (_android, rest) = split_android_flag(cargo_args);
-    let manifest = read_package_manifest(&rest);
-    let version = manifest
-        .as_ref()
-        .and_then(|p| p.version.clone())
-        .unwrap_or_else(|| "0.1.0".to_string());
-    let (bin_path, workspace_root, package_name) = run_release_build(rest, config);
+    let (bin_path, resolved) = run_release_build(cargo_args, config);
+    let package_name = resolved.name();
+    let version = resolved.version();
 
-    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let dist_dir = dist_dir(&resolved.workspace_root);
     let staging = dist_dir.join("nsis-staging");
     let _ = std::fs::remove_dir_all(&staging);
     create_dir_or_exit(&staging);
@@ -60,27 +56,16 @@ pub(crate) fn build_nsis(cargo_args: Vec<String>, config: RsxConfig) -> ! {
         nsis_script(&package_name, &bin_path, &installer_path),
     );
 
-    let result = Command::new("makensis").arg(&script_path).status();
-    match result {
-        Ok(status) if status.success() => {
-            eprintln!(
-                "[cargo-rsx] Packaged installer at {}",
-                installer_path.display()
-            );
-            std::process::exit(0);
-        }
-        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            eprintln!(
-                "[cargo-rsx] `makensis` is required for --format nsis but was not found on PATH. Install NSIS (winget install NSIS.NSIS)."
-            );
-            std::process::exit(1);
-        }
-        Err(e) => {
-            eprintln!("[cargo-rsx] Failed to invoke makensis: {e}");
-            std::process::exit(1);
-        }
-    }
+    let mut cmd = Command::new("makensis");
+    cmd.arg(&script_path);
+    run_bundler_tool(
+        &mut cmd,
+        "installer",
+        &installer_path,
+        Some(
+            "[cargo-rsx] `makensis` is required for --format nsis but was not found on PATH. Install NSIS (winget install NSIS.NSIS).",
+        ),
+    )
 }
 
 #[cfg(test)]

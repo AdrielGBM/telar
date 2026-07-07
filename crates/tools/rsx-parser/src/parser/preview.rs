@@ -5,7 +5,7 @@ use super::view::read_quoted;
 use super::{Parser, split_once_colon};
 use crate::ast::*;
 use crate::error::ParseError;
-use crate::lexer::Section;
+use crate::lexer::{Section, strip_preview_header};
 
 impl Parser {
     pub(super) fn parse_previews(&mut self) -> Result<Vec<Preview>, ParseError> {
@@ -49,22 +49,10 @@ impl Parser {
 fn parse_preview_header(
     content: &str,
     line: usize,
-) -> Result<(String, Vec<(String, String)>), ParseError> {
-    let inner = content
-        .strip_prefix('[')
-        .and_then(|s| s.strip_suffix(']'))
-        .ok_or_else(|| ParseError {
-            message: "malformed preview header: expected `[preview \"name\" …]`".to_string(),
-            line,
-        })?;
-    let rest = inner
-        .trim()
-        .strip_prefix("preview")
-        .ok_or_else(|| ParseError {
-            message: "preview header must start with `preview`".to_string(),
-            line,
-        })?
-        .trim_start();
+) -> Result<(String, Vec<StyleProp>), ParseError> {
+    // The lexer only classifies a line as `Section::Preview` when `strip_preview_header` matches, so
+    // the bracket/`preview`-keyword shape is already guaranteed; only name + options remain to parse.
+    let rest = strip_preview_header(content).unwrap_or("");
 
     let chars: Vec<char> = rest.chars().collect();
     if chars.first() != Some(&'"') {
@@ -82,8 +70,15 @@ fn parse_preview_header(
     let mut options = Vec::new();
     for token in opts.split_whitespace() {
         match split_once_colon(token) {
-            Some((k, v)) => options.push((k.trim().to_string(), v.trim().to_string())),
-            None => options.push((token.to_string(), String::new())),
+            Some((k, v)) => options.push(StyleProp {
+                key: k.trim().to_string(),
+                value: v.trim().to_string(),
+            }),
+            // A bare flag carries an empty value.
+            None => options.push(StyleProp {
+                key: token.to_string(),
+                value: String::new(),
+            }),
         }
     }
     Ok((name, options))

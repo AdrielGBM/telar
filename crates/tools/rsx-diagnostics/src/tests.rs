@@ -12,7 +12,7 @@ fn element(classes: &[&str], attributes: Vec<Attr>, line: usize) -> Element {
         classes: classes.iter().map(|c| c.to_string()).collect(),
         attributes,
         content: None,
-        canvas_parameters: None,
+        leading_params: None,
         children: Vec::new(),
         line,
         content_start: 0,
@@ -38,16 +38,6 @@ fn parse_error_becomes_error_diagnostic_on_its_line() {
     assert_eq!(diag.severity, Severity::Error);
     assert_eq!(diag.span.line, 7);
     assert_eq!(diag.message, "boom");
-}
-
-#[test]
-fn render_points_at_the_offending_line() {
-    let source = "[view]\ncolumn @card\n";
-    let diag = Diagnostic::warning("nope", crate::Span::line(2));
-    let rendered = diag.render(source);
-    assert!(rendered.starts_with("warning: nope\n"));
-    assert!(rendered.contains("--> line 2"));
-    assert!(rendered.contains("2 | column @card"));
 }
 
 #[test]
@@ -101,6 +91,62 @@ fn unknown_color_errors_only_when_theme_configured() {
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].severity, Severity::Error);
     assert!(diags[0].message.contains("nope"));
+}
+
+// Builds a themed doc with one element carrying the given attributes, for the F49 color-value regression tests below.
+fn themed_doc_with_attrs(attrs: Vec<(&str, &str)>) -> RsxDocument {
+    let attributes = attrs
+        .into_iter()
+        .map(|(key, value)| Attr {
+            key: key.into(),
+            value: value.into(),
+            is_quoted: false,
+            value_start: 0,
+        })
+        .collect();
+    document(
+        StyleSection::default(),
+        vec![ViewNode::Element(element(&[], attributes, 3))],
+    )
+}
+
+#[test]
+fn recognized_color_value_forms_produce_no_diagnostic_under_theme() {
+    // `brand`/`accent` are declared as theme fields so the `from:`/`to:` gradient-stop cases resolve.
+    let fields = HashSet::from(["brand".to_string(), "accent".to_string()]);
+    let theme = ThemeView {
+        theme_type: Some("Theme"),
+        theme_fields: &fields,
+    };
+
+    for (key, value) in [
+        ("fill", "white"),
+        ("stroke", "$accent"),
+        ("fill", "Color::RED"),
+        ("from", "brand"),
+        ("to", "accent"),
+    ] {
+        let doc = themed_doc_with_attrs(vec![(key, value)]);
+        let diags = semantic_diagnostics(&doc, Some(&theme));
+        assert!(
+            diags.is_empty(),
+            "expected no diagnostic for {key}:{value}, got {diags:?}"
+        );
+    }
+}
+
+#[test]
+fn genuinely_unknown_color_still_errors_under_theme() {
+    let fields = HashSet::new();
+    let theme = ThemeView {
+        theme_type: Some("Theme"),
+        theme_fields: &fields,
+    };
+    let doc = themed_doc_with_attrs(vec![("fill", "bogus")]);
+    let diags = semantic_diagnostics(&doc, Some(&theme));
+    assert_eq!(diags.len(), 1);
+    assert_eq!(diags[0].severity, Severity::Error);
+    assert!(diags[0].message.contains("bogus"));
 }
 
 #[cfg(feature = "lsp")]

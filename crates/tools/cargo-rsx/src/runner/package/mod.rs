@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::config::{
-    RsxConfig, backend_as_str, find_package_dir, read_package_manifest, split_android_flag,
+    ResolvedPackage, RsxConfig, backend_as_str, resolve_package, split_android_flag,
 };
 
 mod appimage;
@@ -42,8 +42,54 @@ pub(crate) fn package_bin_path(
         .join(format!("{package_name}{}", std::env::consts::EXE_SUFFIX))
 }
 
-// Runs the shared release build for the desktop packaging formats (dir/deb/appimage) and returns the built binary path, the workspace root that hosts the dist bundle, and the package name.
-fn run_release_build(cargo_args: Vec<String>, config: RsxConfig) -> (PathBuf, PathBuf, String) {
+// Distribution bundles live under target/ (a build artifact next to the binary they package), so they inherit target's gitignore and are never confused with .rsx/ (which is generated source).
+pub(crate) fn dist_dir(workspace_root: &Path) -> PathBuf {
+    workspace_root.join("target").join("rsx-dist")
+}
+
+// The release/debug profile cargo emits into, mirroring build_cargo_args's `--release` handling.
+pub(crate) fn profile_of(args: &[String]) -> &'static str {
+    if args.contains(&"--release".to_string()) {
+        "release"
+    } else {
+        "debug"
+    }
+}
+
+// Runs a packaging tool as the terminal step: reports success, forwards the tool's exit code, or exits 1 with an optional install hint when the binary is missing. Diverges since every bundler ends here.
+fn run_bundler_tool(
+    cmd: &mut Command,
+    success_label: &str,
+    packaged_at: &Path,
+    missing_hint: Option<&str>,
+) -> ! {
+    match cmd.status() {
+        Ok(status) if status.success() => {
+            eprintln!(
+                "[cargo-rsx] Packaged {success_label} at {}",
+                packaged_at.display()
+            );
+            std::process::exit(0);
+        }
+        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound
+                && let Some(hint) = missing_hint
+            {
+                eprintln!("{hint}");
+            } else {
+                eprintln!(
+                    "[cargo-rsx] Failed to invoke {}: {e}",
+                    cmd.get_program().to_string_lossy()
+                );
+            }
+            std::process::exit(1);
+        }
+    }
+}
+
+// Runs the shared release build for the desktop packaging formats (dir/deb/appimage/dmg/nsis) and returns the built binary path alongside the resolved package (workspace root plus manifest fields the bundlers read).
+fn run_release_build(cargo_args: Vec<String>, config: RsxConfig) -> (PathBuf, ResolvedPackage) {
     let (_android, rest) = split_android_flag(cargo_args);
     let backend_value = backend_as_str(config.backend.unwrap_or_default());
 
@@ -62,13 +108,8 @@ fn run_release_build(cargo_args: Vec<String>, config: RsxConfig) -> (PathBuf, Pa
         std::process::exit(status.code().unwrap_or(1));
     }
 
-    let package_dir = find_package_dir(&rest);
-    let workspace_root =
-        rsx_workspace::find_workspace_root(&package_dir).unwrap_or(package_dir.clone());
-    let package_name = read_package_manifest(&rest)
-        .map(|p| p.name)
-        .unwrap_or_else(|| "app".to_string());
-    let bin_path = package_bin_path(&workspace_root, &package_name, "release");
+    let resolved = resolve_package(&rest);
+    let bin_path = package_bin_path(&resolved.workspace_root, &resolved.name(), "release");
     if !bin_path.exists() {
         eprintln!(
             "[cargo-rsx] Build succeeded but no binary was found at {}. Does this package produce a `[[bin]]`?",
@@ -76,17 +117,14 @@ fn run_release_build(cargo_args: Vec<String>, config: RsxConfig) -> (PathBuf, Pa
         );
         std::process::exit(1);
     }
-    (bin_path, workspace_root, package_name)
+    (bin_path, resolved)
 }
 
 pub(crate) fn build_desktop_dir(cargo_args: Vec<String>, config: RsxConfig) -> ! {
-    let (bin_path, workspace_root, package_name) = run_release_build(cargo_args, config);
+    let (bin_path, resolved) = run_release_build(cargo_args, config);
+    let package_name = resolved.name();
 
-    // Distribution bundle lives under target/ (a build artifact, next to the binary it packages), so it inherits target's gitignore and is not confused with .rsx/ (which is generated source).
-    let dist_dir = workspace_root
-        .join("target")
-        .join("rsx-dist")
-        .join(&package_name);
+    let dist_dir = dist_dir(&resolved.workspace_root).join(&package_name);
     if let Err(e) = std::fs::create_dir_all(&dist_dir) {
         eprintln!("[cargo-rsx] Failed to create {}: {e}", dist_dir.display());
         std::process::exit(1);

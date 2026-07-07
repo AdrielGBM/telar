@@ -90,7 +90,7 @@ fn collect_view_colors(nodes: &[ViewNode], source: &str, out: &mut Vec<ColorInfo
                 }
             }
             ViewNode::ForBlock(block) => collect_view_colors(&block.body, source, out),
-            ViewNode::LetStmt { .. } => {}
+            ViewNode::LetStmt(_) => {}
         }
     }
 }
@@ -107,18 +107,14 @@ fn literal_color(key: &str, value: &str) -> Option<Color> {
     None
 }
 
-/// The three keyword colors the transpiler recognizes (`color_expr`); other names are theme tokens.
+/// The keyword colors the transpiler recognizes (`color_expr`); other names are theme tokens.
 fn keyword_color(value: &str) -> Option<Color> {
-    match value {
-        "white" => Some(rgba(255, 255, 255, 255)),
-        "black" => Some(rgba(0, 0, 0, 255)),
-        "transparent" => Some(rgba(0, 0, 0, 0)),
-        _ => None,
-    }
+    let [r, g, b, a] = rsx_transpiler::keyword_color_rgba(value)?;
+    Some(rgba(r, g, b, a))
 }
 
 /// Parses `#rgb` / `#rrggbb` / `#rrggbbaa` (matching the transpiler's `hex_to_color_expr`).
-fn parse_hex(hex: &str) -> Option<Color> {
+pub(crate) fn parse_hex(hex: &str) -> Option<Color> {
     let h = hex.strip_prefix('#')?;
     if !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
@@ -141,7 +137,7 @@ fn parse_hex(hex: &str) -> Option<Color> {
     Some(rgba(r, g, b, a))
 }
 
-fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color {
+pub(crate) fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color {
     Color {
         red: r as f32 / 255.0,
         green: g as f32 / 255.0,
@@ -151,7 +147,7 @@ fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color {
 }
 
 /// Formats an LSP `Color` as `#rrggbb` (or `#rrggbbaa` when not fully opaque).
-fn hex_string(color: Color) -> String {
+pub(crate) fn hex_string(color: Color) -> String {
     let to_u8 = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
     let (r, g, b, a) = (
         to_u8(color.red),

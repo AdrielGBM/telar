@@ -1,8 +1,9 @@
 use std::process::Command;
 
-use super::super::config::{RsxConfig, read_package_manifest, split_android_flag};
+use super::super::config::RsxConfig;
 use super::{
-    create_dir_or_exit, desktop_entry_file, run_release_build, stage_binary, write_or_exit,
+    create_dir_or_exit, desktop_entry_file, dist_dir, run_bundler_tool, run_release_build,
+    stage_binary, write_or_exit,
 };
 
 // Maps Rust's target arch name to the Debian architecture label; unknown arches pass through unchanged.
@@ -21,18 +22,17 @@ fn deb_control_file(name: &str, version: &str, arch: &str, description: &str) ->
 }
 
 pub(crate) fn build_deb(cargo_args: Vec<String>, config: RsxConfig) -> ! {
-    let (_android, rest) = split_android_flag(cargo_args);
-    let manifest = read_package_manifest(&rest);
-    let version = manifest
+    let (bin_path, resolved) = run_release_build(cargo_args, config);
+    let package_name = resolved.name();
+    let version = resolved.version();
+    let description = resolved
+        .package
         .as_ref()
-        .and_then(|p| p.version.clone())
-        .unwrap_or_else(|| "0.1.0".to_string());
-    let description = manifest.and_then(|p| p.description);
-    let (bin_path, workspace_root, package_name) = run_release_build(rest, config);
-    let description = description.unwrap_or_else(|| format!("{package_name} (built with rsx)"));
+        .and_then(|p| p.description.clone())
+        .unwrap_or_else(|| format!("{package_name} (built with rsx)"));
     let arch = deb_architecture(std::env::consts::ARCH);
 
-    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let dist_dir = dist_dir(&resolved.workspace_root);
     let staging = dist_dir.join("deb-staging").join(&package_name);
     // Clear any previous staging so stale files never leak into the package.
     let _ = std::fs::remove_dir_all(&staging);
@@ -55,29 +55,19 @@ pub(crate) fn build_deb(cargo_args: Vec<String>, config: RsxConfig) -> ! {
     );
 
     let deb_path = dist_dir.join(format!("{package_name}_{version}_{arch}.deb"));
-    let result = Command::new("dpkg-deb")
-        .arg("--build")
+    let mut cmd = Command::new("dpkg-deb");
+    cmd.arg("--build")
         .arg("--root-owner-group")
         .arg(&staging)
-        .arg(&deb_path)
-        .status();
-    match result {
-        Ok(status) if status.success() => {
-            eprintln!("[cargo-rsx] Packaged deb at {}", deb_path.display());
-            std::process::exit(0);
-        }
-        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            eprintln!(
-                "[cargo-rsx] `dpkg-deb` is required for --format deb but was not found on PATH. On NixOS: `nix shell nixpkgs#dpkg`."
-            );
-            std::process::exit(1);
-        }
-        Err(e) => {
-            eprintln!("[cargo-rsx] Failed to invoke dpkg-deb: {e}");
-            std::process::exit(1);
-        }
-    }
+        .arg(&deb_path);
+    run_bundler_tool(
+        &mut cmd,
+        "deb",
+        &deb_path,
+        Some(
+            "[cargo-rsx] `dpkg-deb` is required for --format deb but was not found on PATH. On NixOS: `nix shell nixpkgs#dpkg`.",
+        ),
+    )
 }
 
 #[cfg(test)]

@@ -82,7 +82,6 @@ impl ViewGen<'_> {
             "{pad}let {var} = {{\n\
              {setup}\
              {pad}    Image::new(\n\
-             {pad}        ctx,\n\
              {pad}        {layout_style},\n\
              {pad}        {data_fn},\n\
              {pad}        move || {filter},\n\
@@ -114,7 +113,6 @@ impl ViewGen<'_> {
             "{pad}let {var} = {{\n\
              {setup}\
              {pad}    Svg::new(\n\
-             {pad}        ctx,\n\
              {pad}        {layout_style},\n\
              {pad}        {data_fn},\n\
              {pad}        {tint_fn},\n\

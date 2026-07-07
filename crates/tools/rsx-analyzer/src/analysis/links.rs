@@ -40,7 +40,7 @@ fn collect(nodes: &[ViewNode], source: &str, file_dir: &Path, out: &mut Vec<Docu
                 }
             }
             ViewNode::ForBlock(block) => collect(&block.body, source, file_dir, out),
-            ViewNode::LetStmt { .. } => {}
+            ViewNode::LetStmt(_) => {}
         }
     }
 }

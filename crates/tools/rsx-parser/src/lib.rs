@@ -242,6 +242,41 @@ col @card
     }
 
     #[test]
+    fn transition_swallowing_trailing_attribute_errors() {
+        // `transition:` runs to end of line, so a following `key:value` attribute would otherwise be
+        // silently absorbed into the transition value instead of parsed as its own attribute.
+        let err = parse("[view]\nbox transition:opacity 300ms align:center\n").unwrap_err();
+        assert_eq!(err.line, 2);
+        assert!(
+            err.message
+                .contains("transition: must be the last attribute on the line")
+        );
+    }
+
+    #[test]
+    fn transition_as_last_attribute_still_parses() {
+        let doc = parse("[view]\nbox transition:opacity 300ms ease-in-out\n").unwrap();
+        let ViewNode::Element(b) = &doc.view.nodes[0] else {
+            panic!();
+        };
+        let transition = b.attributes.iter().find(|a| a.key == "transition").unwrap();
+        assert_eq!(transition.value, "opacity 300ms ease-in-out");
+    }
+
+    #[test]
+    fn transition_paren_form_still_parses() {
+        let doc =
+            parse("[view]\nbox transition(opacity 300ms ease-in-out) align:center\n").unwrap();
+        let ViewNode::Element(b) = &doc.view.nodes[0] else {
+            panic!();
+        };
+        let transition = b.attributes.iter().find(|a| a.key == "transition").unwrap();
+        assert_eq!(transition.value, "opacity 300ms ease-in-out");
+        let align = b.attributes.iter().find(|a| a.key == "align").unwrap();
+        assert_eq!(align.value, "center");
+    }
+
+    #[test]
     fn parses_flag_attribute() {
         let doc = parse(SAMPLE).unwrap();
         let ViewNode::Element(col) = &doc.view.nodes[0] else {
@@ -338,10 +373,10 @@ col @card
         let ViewNode::Element(col) = &doc.view.nodes[0] else {
             panic!();
         };
-        let ViewNode::LetStmt { source, .. } = &col.children[0] else {
+        let ViewNode::LetStmt(stmt) = &col.children[0] else {
             panic!("expected let statement");
         };
-        assert_eq!(source, "let bar_w = (w - 16.0) / 2.0");
+        assert_eq!(stmt.source, "let bar_w = (w - 16.0) / 2.0");
     }
 
     #[test]
@@ -353,13 +388,26 @@ col @card
         };
         assert_eq!(canvas.tag, "canvas");
         assert_eq!(canvas.classes, vec!["chart".to_string()]);
-        assert_eq!(canvas.canvas_parameters.as_deref(), Some("w, h"));
+        assert_eq!(canvas.leading_params.as_deref(), Some("w, h"));
         // The `|w, h|` line is consumed, leaving the rect as the only child.
         assert_eq!(canvas.children.len(), 1);
         let ViewNode::Element(rect) = &canvas.children[0] else {
             panic!();
         };
         assert_eq!(rect.tag, "rect");
+    }
+
+    #[test]
+    fn leading_params_are_tag_agnostic() {
+        // The `|…|` leading-child rule is generic: any element (not just `canvas`) captures it.
+        let src = "[logic]\n[view]\nsurface @plot\n    |w, h|\n    rect\n";
+        let doc = parse(src).unwrap();
+        let ViewNode::Element(surface) = &doc.view.nodes[0] else {
+            panic!();
+        };
+        assert_eq!(surface.tag, "surface");
+        assert_eq!(surface.leading_params.as_deref(), Some("w, h"));
+        assert_eq!(surface.children.len(), 1);
     }
 
     #[test]
@@ -506,8 +554,14 @@ col @card
         assert_eq!(
             doc.previews[1].options,
             vec![
-                ("width".to_string(), "360".to_string()),
-                ("dark".to_string(), String::new()),
+                StyleProp {
+                    key: "width".to_string(),
+                    value: "360".to_string(),
+                },
+                StyleProp {
+                    key: "dark".to_string(),
+                    value: String::new(),
+                },
             ]
         );
         let ViewNode::Element(b) = &doc.previews[1].body[0] else {

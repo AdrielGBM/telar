@@ -2,8 +2,8 @@ use std::process::Command;
 
 use super::super::config::RsxConfig;
 use super::{
-    create_dir_or_exit, desktop_entry_file, run_release_build, set_executable, stage_binary,
-    write_or_exit,
+    create_dir_or_exit, desktop_entry_file, dist_dir, run_bundler_tool, run_release_build,
+    set_executable, stage_binary, write_or_exit,
 };
 
 // Minimal valid 1x1 transparent PNG; appimagetool requires an icon, and rsx apps carry their own assets so a real icon is unnecessary.
@@ -22,11 +22,12 @@ fn apprun_script(name: &str) -> String {
 }
 
 pub(crate) fn build_appimage(cargo_args: Vec<String>, config: RsxConfig) -> ! {
-    let (bin_path, workspace_root, package_name) = run_release_build(cargo_args, config);
+    let (bin_path, resolved) = run_release_build(cargo_args, config);
+    let package_name = resolved.name();
     // appimagetool wants the host arch label (x86_64/aarch64), which is exactly what Rust reports.
     let arch = std::env::consts::ARCH;
 
-    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let dist_dir = dist_dir(&resolved.workspace_root);
     let appdir = dist_dir.join(format!("{package_name}.AppDir"));
     // Clear any previous AppDir so stale files never leak into the image.
     let _ = std::fs::remove_dir_all(&appdir);
@@ -45,31 +46,16 @@ pub(crate) fn build_appimage(cargo_args: Vec<String>, config: RsxConfig) -> ! {
 
     let appimage_path = dist_dir.join(format!("{package_name}-{arch}.AppImage"));
     // The AppImage bundles only the binary (rsx embeds its assets) and relies on the host's wayland/vulkan libraries at runtime.
-    let result = Command::new("appimagetool")
-        .arg(&appdir)
-        .arg(&appimage_path)
-        .env("ARCH", arch)
-        .status();
-    match result {
-        Ok(status) if status.success() => {
-            eprintln!(
-                "[cargo-rsx] Packaged AppImage at {}",
-                appimage_path.display()
-            );
-            std::process::exit(0);
-        }
-        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            eprintln!(
-                "[cargo-rsx] `appimagetool` is required for --format appimage but was not found on PATH. Get it from https://github.com/AppImage/appimagetool/releases (on NixOS run it via `nix shell nixpkgs#appimage-run`)."
-            );
-            std::process::exit(1);
-        }
-        Err(e) => {
-            eprintln!("[cargo-rsx] Failed to invoke appimagetool: {e}");
-            std::process::exit(1);
-        }
-    }
+    let mut cmd = Command::new("appimagetool");
+    cmd.arg(&appdir).arg(&appimage_path).env("ARCH", arch);
+    run_bundler_tool(
+        &mut cmd,
+        "AppImage",
+        &appimage_path,
+        Some(
+            "[cargo-rsx] `appimagetool` is required for --format appimage but was not found on PATH. Get it from https://github.com/AppImage/appimagetool/releases (on NixOS run it via `nix shell nixpkgs#appimage-run`).",
+        ),
+    )
 }
 
 #[cfg(test)]

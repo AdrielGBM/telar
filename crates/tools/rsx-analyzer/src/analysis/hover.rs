@@ -1,9 +1,10 @@
+use crate::analysis::color::{hex_string, parse_hex, rgba};
 use crate::analysis::util::{attribute_key_before_colon, word_at_cursor};
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 use rsx_parser::{RsxDocument, StyleValue};
-use rsx_transpiler::color_attr_keys;
+use rsx_transpiler::{color_attr_keys, keyword_color_rgba};
 
 pub fn hover_info(
     doc: &RsxDocument,
@@ -55,6 +56,16 @@ fn hover_color(doc: &RsxDocument, value: &str, project: Option<&ProjectInfo>) ->
         let type_name = proj.theme_type.as_deref().unwrap_or("Theme");
         return Some(make_hover(format!("{type_name}.{value}")));
     }
+    // Keyword colors and raw hex literals: a swatch, matching the completion/`documentColor` surfaces.
+    if let Some([r, g, b, a]) = keyword_color_rgba(value) {
+        return Some(make_hover(format!(
+            "■ {} — {value}",
+            hex_string(rgba(r, g, b, a))
+        )));
+    }
+    if let Some(color) = parse_hex(value) {
+        return Some(make_hover(format!("■ {}", hex_string(color))));
+    }
     None
 }
 
@@ -78,5 +89,34 @@ fn make_hover(text: String) -> Hover {
             value: text,
         }),
         range: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rsx_parser::parse;
+
+    fn hover_text(src: &str, line: u32, character: u32) -> Option<String> {
+        let doc = parse(src).unwrap();
+        match hover_info(&doc, src, line, character, None)?.contents {
+            HoverContents::Markup(markup) => Some(markup.value),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn keyword_color_hovers_a_swatch() {
+        // `fill:white` is a completion candidate and a swatch, so it must hover consistently too.
+        let src = "[view]\nbox fill:white\n";
+        let text = hover_text(src, 1, 11).expect("hover over the `white` keyword");
+        assert_eq!(text, "■ #ffffff — white");
+    }
+
+    #[test]
+    fn hex_literal_hovers_a_normalized_swatch() {
+        let src = "[view]\nbox fill:#f0a\n";
+        let text = hover_text(src, 1, 11).expect("hover over the hex literal");
+        assert_eq!(text, "■ #ff00aa");
     }
 }

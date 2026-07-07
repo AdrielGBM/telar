@@ -123,10 +123,10 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "select",
             s(
-                &["selected", "options", "color", "on_change"],
+                &["selected", "options", "color", "on_select"],
                 false,
                 &["color"],
-                &["selected", "on_change"],
+                &["selected", "on_select"],
             ),
         ),
         (
@@ -410,16 +410,12 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     let has_slot = view_uses_slot(&doc.view.nodes);
     let ret = "Result<Box<dyn LayoutItem>, LayoutError>";
     let signature = match (has_props, has_slot) {
-        (true, true) => format!(
-            "pub fn {fn_name}(ctx: &mut WidgetCtx, props: {props_type}, mut __slots: Slots) -> {ret}"
-        ),
-        (true, false) => {
-            format!("pub fn {fn_name}(ctx: &mut WidgetCtx, props: {props_type}) -> {ret}")
+        (true, true) => {
+            format!("pub fn {fn_name}(props: {props_type}, mut __slots: Slots) -> {ret}")
         }
-        (false, true) => {
-            format!("pub fn {fn_name}(ctx: &mut WidgetCtx, mut __slots: Slots) -> {ret}")
-        }
-        (false, false) => format!("pub fn {fn_name}(ctx: &mut WidgetCtx) -> {ret}"),
+        (true, false) => format!("pub fn {fn_name}(props: {props_type}) -> {ret}"),
+        (false, true) => format!("pub fn {fn_name}(mut __slots: Slots) -> {ret}"),
+        (false, false) => format!("pub fn {fn_name}() -> {ret}"),
     };
 
     // 0-based `.rsx` line of `logic_source` line 0, used to map generated lines back to the source.
@@ -442,7 +438,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         None,
     );
     code.push("#[allow(unused_imports)] use rsx::*;\n", None);
-    // Each `.rsx` is wired as its own `mod` (so rust-analyzer treats it as a real module and offers completion); `use super::*` re-imports the sibling components the host re-exports, so cross-component calls like `feature_card(ctx)` resolve by bare name just as they did under the old `include!`.
+    // Each `.rsx` is wired as its own `mod` (so rust-analyzer treats it as a real module and offers completion); `use super::*` re-imports the sibling components the host re-exports, so cross-component calls like `feature_card()` resolve by bare name just as they did under the old `include!`.
     code.push("#[allow(unused_imports)] use super::*;\n", None);
     code.push("\n", None);
 
@@ -475,7 +471,6 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     if !logic.is_empty() {
         // Set by cargo-rsx for hot-reload builds (the transpiler runs inside the app's proc macro); keyed signals let the dev host snapshot/restore state across dylib swaps.
         let hot_build = std::env::var("RSX_HOT_RELOAD_BUILD").is_ok();
-        let mut declared: Vec<&str> = Vec::new();
         for (j, line) in logic.lines().enumerate() {
             let src = Some(logic_line_src(j));
             if line.is_empty() {
@@ -491,25 +486,20 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
                 emitted_line = rewritten;
             }
             if line.contains("move") {
-                for sig_name in &declared {
-                    if contains_ident(line, sig_name) {
-                        let mv_name = format!("{sig_name}_rsx_mv");
+                // `scan_signals` already recorded each signal's declaring line index, so "declared above this line" is a lookup, not a re-parse (and it no longer misses type-annotated `let name: T = signal(...)` bindings).
+                for sig in signals.iter().filter(|s| s.line_index < j) {
+                    if contains_ident(line, &sig.name) {
+                        let mv_name = format!("{}_rsx_mv", sig.name);
                         // Injected clone: no `.rsx` counterpart.
-                        code.push(&format!("    let {mv_name} = {sig_name}.clone();\n"), None);
-                        emitted_line = replace_whole_word(&emitted_line, sig_name, &mv_name);
+                        code.push(
+                            &format!("    let {mv_name} = {}.clone();\n", sig.name),
+                            None,
+                        );
+                        emitted_line = replace_whole_word(&emitted_line, &sig.name, &mv_name);
                     }
                 }
             }
             code.push(&format!("    {emitted_line}\n"), src);
-            for sig in &signals {
-                let decl_prefix = format!("let {} =", sig.name);
-                let decl_prefix_mut = format!("let mut {} =", sig.name);
-                if line.trim_start().starts_with(&decl_prefix)
-                    || line.trim_start().starts_with(&decl_prefix_mut)
-                {
-                    declared.push(&sig.name);
-                }
-            }
         }
         code.push("\n", None);
     }
@@ -550,9 +540,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             code.push("\n", None);
             code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
             code.push(
-                &format!(
-                    "pub fn {pfn}(ctx: &mut WidgetCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {{\n"
-                ),
+                &format!("pub fn {pfn}() -> Result<Box<dyn LayoutItem>, LayoutError> {{\n"),
                 None,
             );
             if pgen.uses_theme() {
@@ -618,7 +606,7 @@ fn node_uses_slot(node: &ViewNode) -> bool {
             view_uses_slot(&b.then_branch) || b.else_branch.as_deref().is_some_and(view_uses_slot)
         }
         ViewNode::ForBlock(b) => view_uses_slot(&b.body),
-        ViewNode::LetStmt { .. } => false,
+        ViewNode::LetStmt(_) => false,
     }
 }
 

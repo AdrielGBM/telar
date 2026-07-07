@@ -5,10 +5,9 @@ use std::fmt::Write;
 
 use rsx_parser::{Attr, Element};
 
-use crate::naming::contains_ident;
 use crate::style::{format_f32, layout_prop_call};
 
-use super::signals::{emit_transition_prelude, signal_idents, wrap_signal_clones};
+use super::signals::{captured_idents, emit_transition_prelude, wrap_signal_clones};
 use super::{ChildEmit, ViewGen};
 
 impl ViewGen<'_> {
@@ -69,7 +68,6 @@ impl ViewGen<'_> {
              {clones}\
              {prelude}\
              {pad}    {ctor}(\n\
-             {pad}        ctx,\n\
              {pad}        {content_fn},\n\
              {pad}        {layout_style},\n\
              {pad}        {style},\n\
@@ -79,7 +77,7 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended before the emitted children (e.g. a `section`'s heading). When any child is dynamic control flow, this builds a mutable `__children` vec and returns `__children`; otherwise it returns a `children![...]` literal. Used by `emit_container`/`emit_box`; `emit_scroll` differs and is intentionally excluded.
+    /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended before the emitted children (e.g. a `section`'s heading). When any child is dynamic control flow, this builds a mutable `__children` vec and returns `__children`; otherwise it returns a `children![...]` literal. Used by `emit_container`/`emit_box` and by `emit_scroll`'s dynamic branch; `emit_scroll`'s static branch instead collapses to a single content item (`wrap_as_single_content`).
     pub(super) fn emit_children_collection(
         &self,
         code: &mut String,
@@ -127,21 +125,8 @@ impl ViewGen<'_> {
 
     /// Emits `let name = name.clone();` for every signal (`$name`) referenced in the *raw* `snippets` — still carrying the `$` sigil, so captures are detected before substitution — plus any loop variable in scope they use. Indented under `pad + extra`.
     pub(super) fn clone_bindings(&self, snippets: &[&str], pad: &str, extra: &str) -> String {
-        let mut used: Vec<String> = Vec::new();
-        for s in snippets {
-            for ident in signal_idents(s) {
-                if !used.contains(&ident) {
-                    used.push(ident);
-                }
-            }
-        }
-        for var in &self.loop_variables {
-            if snippets.iter().any(|s| contains_ident(s, var)) && !used.contains(var) {
-                used.push(var.clone());
-            }
-        }
         let mut out = String::new();
-        for name in &used {
+        for name in captured_idents(snippets, &self.loop_variables) {
             let _ = writeln!(out, "{pad}{extra}let {name} = {name}.clone();");
         }
         out

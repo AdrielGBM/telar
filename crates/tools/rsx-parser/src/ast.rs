@@ -16,7 +16,7 @@ pub struct Preview {
     pub name: String,
     /// Header options (`width:360`, `bg:surface`, `group:"…"`, `dark`); parsed for forward
     /// compatibility but not yet consumed by the runtime. A bare flag carries an empty value.
-    pub options: Vec<(String, String)>,
+    pub options: Vec<StyleProp>,
     pub body: Vec<ViewNode>,
     /// 1-based `.rsx` line of the `[preview …]` header.
     pub line: usize,
@@ -79,11 +79,15 @@ pub enum ViewNode {
     Element(Element),
     IfBlock(IfBlock),
     ForBlock(ForBlock),
-    LetStmt {
-        source: String,
-        /// Byte offset in the source where `source` begins (verbatim Rust `let` statement).
-        source_start: usize,
-    },
+    LetStmt(LetStmt),
+}
+
+/// A verbatim `let` binding in the view, captured as raw Rust source.
+#[derive(Debug, Clone)]
+pub struct LetStmt {
+    pub source: String,
+    /// Byte offset in the source where `source` begins (verbatim Rust `let` statement).
+    pub source_start: usize,
 }
 
 /// A view element: a layout container or a leaf widget.
@@ -93,7 +97,10 @@ pub struct Element {
     pub classes: Vec<String>,
     pub attributes: Vec<Attr>,
     pub content: Option<String>,
-    pub canvas_parameters: Option<String>,
+    /// Leading `|params|` line declared on the first deeper-indented child (before the real children).
+    /// Vocabulary-neutral at the parser level; the transpiler interprets it (e.g. `canvas` drawing-area
+    /// dimensions `|w, h|`).
+    pub leading_params: Option<String>,
     pub children: Vec<ViewNode>,
     pub line: usize,
     /// Byte offset in the source where the (de-quoted) `content` begins, or the line start when the
@@ -147,9 +154,4 @@ pub struct ForBlock {
     pub body: Vec<ViewNode>,
     /// 1-based `.rsx` line of the `for` header, used to map generated code back to source.
     pub line: usize,
-    /// Byte offsets where `pattern` / `iterable` begin in the source. Best-effort only: the parser
-    /// re-tokenizes the `for` header (collapsing whitespace), so these are not guaranteed to be
-    /// verbatim substrings — the view-completion path emits no expression span for `for`.
-    pub pattern_start: usize,
-    pub iterable_start: usize,
 }

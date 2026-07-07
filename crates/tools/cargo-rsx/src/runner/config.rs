@@ -138,11 +138,52 @@ pub(crate) fn find_package_dir(args: &[String]) -> PathBuf {
     }
 }
 
-pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
-    let dir = find_package_dir(args);
+fn read_package_manifest_in(dir: &Path) -> Option<CargoPackage> {
     let content = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
     let manifest: CargoManifest = toml::from_str(&content).ok()?;
     manifest.package
+}
+
+pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
+    read_package_manifest_in(&find_package_dir(args))
+}
+
+pub(crate) struct ResolvedPackage {
+    pub(crate) workspace_root: PathBuf,
+    pub(crate) package: Option<CargoPackage>,
+}
+
+impl ResolvedPackage {
+    // Falls back to cargo's default "app" binary name when the manifest can't be read.
+    pub(crate) fn name(&self) -> String {
+        self.package
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "app".to_string())
+    }
+
+    pub(crate) fn version(&self) -> String {
+        self.package
+            .as_ref()
+            .and_then(|p| p.version.clone())
+            .unwrap_or_else(|| "0.1.0".to_string())
+    }
+}
+
+// Resolves the target package's workspace root and parsed manifest in a single pass so the packaging paths stop re-deriving them (and re-reading Cargo.toml) at each call site.
+pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
+    let dir = find_package_dir(args);
+    let workspace_root = rsx_workspace::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
+    let package = read_package_manifest_in(&dir);
+    ResolvedPackage {
+        workspace_root,
+        package,
+    }
+}
+
+// Default reverse-DNS app id for demo/tooling builds that set no vendor prefix; shared by the Android package id and macOS bundle id defaults, which are otherwise distinct.
+pub(crate) fn default_app_id(name: &str) -> String {
+    format!("com.example.{name}")
 }
 
 // Reads `[package.metadata.rsx]` from the package's Cargo.toml (the lowest-precedence file source).
@@ -156,6 +197,17 @@ fn read_manifest_config(dir: &Path) -> RsxConfig {
         .and_then(|p| p.metadata)
         .and_then(|m| m.rsx)
         .unwrap_or_default()
+}
+
+// Presence check for `[package.metadata.rsx]`; read_manifest_config erases the present/absent distinction via unwrap_or_default, so presence needs its own read.
+pub(crate) fn manifest_has_rsx(dir: &Path) -> bool {
+    std::fs::read_to_string(dir.join("Cargo.toml"))
+        .ok()
+        .and_then(|c| toml::from_str::<CargoManifest>(&c).ok())
+        .and_then(|m| m.package)
+        .and_then(|p| p.metadata)
+        .and_then(|m| m.rsx)
+        .is_some()
 }
 
 // Reads `[rsx]` from rsx.toml, which overrides the manifest metadata.

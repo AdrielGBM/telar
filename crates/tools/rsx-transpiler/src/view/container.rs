@@ -15,12 +15,23 @@ use super::{ChildEmit, ViewGen, forces_child_vec};
 
 impl ViewGen<'_> {
     pub(super) fn emit_container(&mut self, el: &Element) -> ChildEmit {
+        self.emit_styled_container(el, false)
+    }
+
+    pub(super) fn emit_box(&mut self, el: &Element) -> ChildEmit {
+        self.emit_styled_container(el, true)
+    }
+
+    /// Emits a `col`/`row`/`grid` or a `box` Container, collecting children and wiring declarative paint,
+    /// transform, hover and event closures. `box` (`always_style`) is always a StyledContainer so it can
+    /// carry a background; a `col`/`row` only upgrades from a plain Container when it carries paint (inline
+    /// or class-borne) or one of the styling attrs below.
+    fn emit_styled_container(&mut self, el: &Element, always_style: bool) -> ChildEmit {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
         let on_press = self.on_press_call(el);
 
-        // A `col`/`row` with paint (inline or from its class) or a `hover(...)` override upgrades to a StyledContainer so it can carry a background like `box`; otherwise it stays a plain Container.
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
         let transform_call = self.transform_call(el);
@@ -32,17 +43,12 @@ impl ViewGen<'_> {
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
-        // A transform or an event callback also upgrades a plain col/row to a StyledContainer (only it
-        // carries `with_transform`/`on_hover`/`on_key`/`on_drag`/`on_focus`/`on_long_press`).
-        let pieces = if has_paint(&pattrs)
-            || !hover_call.is_empty()
-            || !transform_call.is_empty()
-            || !on_hover.is_empty()
-            || !on_key.is_empty()
-            || !on_drag.is_empty()
-            || !on_focus.is_empty()
-            || !on_long_press.is_empty()
-        {
+
+        // These seven trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
+        let styling = format!(
+            "{hover_call}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
+        );
+        let pieces = if always_style || has_paint(&pattrs) || !styling.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
         } else {
             None
@@ -68,61 +74,16 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::new(ctx, {style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
+                    "{inner_pad}StyledContainer::new({style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
                 );
             }
             None => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}Container::new(ctx, {style}, {children})?{on_press}"
+                    "{inner_pad}Container::new({style}, {children})?{on_press}"
                 );
             }
         }
-
-        let _ = write!(code, "{pad}}};");
-        ChildEmit::Simple { name: var, code }
-    }
-
-    pub(super) fn emit_box(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_variable_name("box");
-        let pad = self.indent_str();
-        let layout_style = self.make_layout_style("box", &el.classes, &el.attributes);
-        let on_press = self.on_press_call(el);
-
-        // Paint merges inline attrs with the element's class (inline wins), so a `@card` class can carry fill/stroke/radius/etc. — not only inline `box` attributes. `box` is always styled.
-        let pattrs = self.paint_attrs(el);
-        let hover_call = self.hover_style_call(el, &pattrs);
-        let transform_call = self.transform_call(el);
-        let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
-        let on_key = self.closure_attr_call(el, "on_key", "on_key");
-        let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
-        let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
-        let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
-        let (specs, errors) = self.parse_transitions(el);
-        let transitions: HashMap<String, String> = specs.into_iter().collect();
-        let mut hoists: Vec<String> = Vec::new();
-        let (closure, opacity_call) = self.rect_style_pieces(&pattrs, &transitions, &mut hoists);
-
-        let has_dynamic = el.children.iter().any(forces_child_vec);
-
-        self.indent += 1;
-        let inner_pad = self.indent_str();
-        let mut child_emits = Vec::new();
-        for child in &el.children {
-            child_emits.push(self.emit_node(child));
-        }
-        self.indent -= 1;
-
-        let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = {{");
-
-        let children =
-            self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
-        emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
-        let _ = writeln!(
-            code,
-            "{inner_pad}StyledContainer::new(ctx, {layout_style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
-        );
 
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
@@ -149,18 +110,18 @@ impl ViewGen<'_> {
         let _ = writeln!(code, "{pad}let {var} = {{");
         let children =
             self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
-        let _ = writeln!(code, "{inner_pad}Overlay::new(ctx, {style}, {children})?");
+        let _ = writeln!(code, "{inner_pad}Overlay::new({style}, {children})?");
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Builds the trailing `.on_hover_style(...)` from a `hover(...)` attribute, or an empty string when
+    /// Builds the trailing `.on_hover_style(...)` from a `hover_style(...)` attribute, or an empty string when
     /// there is none. The parenthesized value is a mini list of paint props (`hover(fill:x stroke:y)`);
     /// they override the element's base paint for the hovered state, so `view()` swaps to them while the
     /// mouse is over the box. Reuses `rect_style_pieces`, so `$signal` colors are cloned into the closure
     /// just like the base style. Transitions are intentionally not applied to the hover variant.
     fn hover_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == "hover") else {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "hover_style") else {
             return String::new();
         };
         // Overrides first so `rect_style_pieces`' first-match `find` picks the hover value over the base.
@@ -178,6 +139,14 @@ impl ViewGen<'_> {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
+        format!(".{method}({})", self.emit_closure_value(attr))
+    }
+
+    /// Desugars a closure-valued attribute into a `move` closure: `$name` signals are cloned in, `$handle`
+    /// reads are rewritten to the bare handle, and a `$`-free closure keeps its source span (so LSP
+    /// completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component
+    /// closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
+    pub(super) fn emit_closure_value(&self, attr: &Attr) -> String {
         let closure = substitute_handles(&normalize_closure(&attr.value));
         // A `$` substitution breaks the byte-for-byte span, so only a `$`-free closure carries a marker.
         let marker = if attr.value.contains('$') {
@@ -185,8 +154,7 @@ impl ViewGen<'_> {
         } else {
             closure_marker(Some(attr))
         };
-        let call = wrap_signal_clones(&[attr.value.as_str()], format!("move {marker}{closure}"));
-        format!(".{method}({call})")
+        wrap_signal_clones(&[attr.value.as_str()], format!("move {marker}{closure}"))
     }
 
     fn on_press_call(&self, el: &Element) -> String {
@@ -199,15 +167,11 @@ impl ViewGen<'_> {
     /// reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure;
     /// every value is cast to `f32` so integer and float literals both type-check.
     fn transform_call(&self, el: &Element) -> String {
-        const KEYS: [&str; 6] = [
-            "rotate",
-            "scale",
-            "scale_x",
-            "scale_y",
-            "translate_x",
-            "translate_y",
-        ];
-        if !el.attributes.iter().any(|a| KEYS.contains(&a.key.as_str())) {
+        if !el
+            .attributes
+            .iter()
+            .any(|a| crate::registry::TRANSFORM_ATTR_KEYS.contains(&a.key.as_str()))
+        {
             return String::new();
         }
         let raw = |key: &str| {
@@ -274,10 +238,10 @@ impl ViewGen<'_> {
                 "Paint::Gradient(Gradient::linear(Point::new(r.x, r.y), Point::new(r.x + r.width, r.y + r.height), {stops}))"
             )),
             "radial" => {
-                // `gr:N` — explicit pixel radius; default is half the shorter side.
+                // `radial_radius:N` — explicit pixel radius; default is half the shorter side.
                 let radius_expr = attrs
                     .iter()
-                    .find(|a| a.key == "gr")
+                    .find(|a| a.key == "radial_radius")
                     .and_then(|a| a.value.parse::<f32>().ok())
                     .map(format_f32)
                     .unwrap_or_else(|| "r.width.min(r.height) * 0.5".to_string());

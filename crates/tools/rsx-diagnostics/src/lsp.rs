@@ -15,21 +15,14 @@ impl From<Severity> for DiagnosticSeverity {
 
 impl From<&Diagnostic> for LspDiagnostic {
     fn from(diag: &Diagnostic) -> Self {
-        // parser lines are 1-based; LSP lines are 0-based.
+        // parser lines are 1-based; LSP lines are 0-based. Diagnostics span the whole line.
         let line = diag.span.line.saturating_sub(1) as u32;
-        let (start_char, end_char) = match &diag.span.columns {
-            Some(cols) => (cols.start as u32, cols.end as u32),
-            None => (0, u32::MAX),
-        };
         LspDiagnostic {
             range: Range {
-                start: Position {
-                    line,
-                    character: start_char,
-                },
+                start: Position { line, character: 0 },
                 end: Position {
                     line,
-                    character: end_char,
+                    character: u32::MAX,
                 },
             },
             severity: Some(diag.severity.into()),

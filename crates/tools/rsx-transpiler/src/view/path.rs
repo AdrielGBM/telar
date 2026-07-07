@@ -67,7 +67,7 @@ impl ViewGen<'_> {
             "{pad}let {var} = {{\n\
              {err_line}\
              {pad}    let __path_data = std::sync::Arc::new({data_chain});\n\
-             {pad}    Canvas::new(ctx, {layout}, {draw_closure})?\n\
+             {pad}    Canvas::new({layout}, {draw_closure})?\n\
              {pad}}};"
         );
         ChildEmit::Simple { name: var, code }
@@ -87,7 +87,7 @@ impl ViewGen<'_> {
                 let width = el
                     .attributes
                     .iter()
-                    .find(|a| a.key == "stroke_width" || a.key == "stroke_w")
+                    .find(|a| a.key == "stroke_width")
                     .and_then(|a| a.value.trim().parse::<f32>().ok())
                     .unwrap_or(1.0);
                 format!("Some(Stroke::new({color}, {}))", format_f32(width))

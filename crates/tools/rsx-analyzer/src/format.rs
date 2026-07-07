@@ -240,8 +240,8 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
             out.push_str(&pad);
             out.push_str(&format_element_header(element));
             out.push('\n');
-            // `canvas` declares its drawing-area params on the first child line.
-            if let Some(params) = &element.canvas_parameters {
+            // Leading `|params|` line (e.g. `canvas` drawing-area dimensions) re-emitted before children.
+            if let Some(params) = &element.leading_params {
                 out.push_str(&INDENT.repeat(depth + 1));
                 out.push_str(&format!("|{params}|"));
                 out.push('\n');
@@ -277,9 +277,9 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
                 emit_node(child, depth + 1, out);
             }
         }
-        ViewNode::LetStmt { source, .. } => {
+        ViewNode::LetStmt(stmt) => {
             out.push_str(&pad);
-            out.push_str(source);
+            out.push_str(&stmt.source);
             out.push('\n');
         }
     }
@@ -337,11 +337,11 @@ fn format_attr(attr: &Attr) -> String {
 /// Re-emits a `[preview "Name" key:value flag …]` section: the header (name plus options) followed by its body, formatted like a `[view]` tree.
 fn format_preview_section(preview: &Preview) -> String {
     let mut header = format!("[preview \"{}\"", preview.name);
-    for (key, value) in &preview.options {
-        if value.is_empty() {
-            header.push_str(&format!(" {key}"));
+    for opt in &preview.options {
+        if opt.value.is_empty() {
+            header.push_str(&format!(" {}", opt.key));
         } else {
-            header.push_str(&format!(" {key}:{value}"));
+            header.push_str(&format!(" {}:{}", opt.key, opt.value));
         }
     }
     header.push(']');

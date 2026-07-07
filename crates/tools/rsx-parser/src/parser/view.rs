@@ -82,10 +82,10 @@ impl Parser {
             "let" => {
                 let source_start = self.lines[self.pos].content_start;
                 self.pos += 1;
-                Ok(ViewNode::LetStmt {
+                Ok(ViewNode::LetStmt(LetStmt {
                     source: content,
                     source_start,
-                })
+                }))
             }
             _ => self.parse_element(indent),
         }
@@ -127,10 +127,6 @@ impl Parser {
         let line = &self.lines[self.pos];
         let number = line.number;
         let after = &line.content["for".len()..];
-        // Start of the `<pattern> in <expr>` body in source; `split_for_in` re-tokenizes it, so the
-        // resulting pattern/iterable are not verbatim substrings and no expression span is emitted.
-        let rest_start =
-            line.content_start + "for".len() + (after.len() - after.trim_start().len());
         let rest = after.trim().to_string();
         self.pos += 1;
 
@@ -150,8 +146,6 @@ impl Parser {
             gap_expr,
             body,
             line: number,
-            pattern_start: rest_start,
-            iterable_start: rest_start,
         }))
     }
 
@@ -165,18 +159,18 @@ impl Parser {
 
         let mut element = parse_element_header(&content, number, content_start)?;
 
-        // `canvas` may declare drawing-area closure params (`|w, h|`) before its children.
-        if element.tag == "canvas" {
-            self.skip_blank_view_lines();
-            if let Some(next) = self.lines.get(self.pos)
-                && next.section == Section::View
-                && next.indent > indent
-                && next.content.starts_with('|')
-                && let Some(params) = parse_canvas_params(&next.content)
-            {
-                element.canvas_parameters = Some(params);
-                self.pos += 1;
-            }
+        // Any element whose first deeper-indented child is a `|…|` line declares leading closure
+        // params before its real children; the transpiler owns the interpretation (e.g. `canvas`
+        // drawing-area dimensions `|w, h|`).
+        self.skip_blank_view_lines();
+        if let Some(next) = self.lines.get(self.pos)
+            && next.section == Section::View
+            && next.indent > indent
+            && next.content.starts_with('|')
+            && let Some(params) = parse_leading_params(&next.content)
+        {
+            element.leading_params = Some(params);
+            self.pos += 1;
         }
 
         element.children = self.parse_children(indent)?;
@@ -244,8 +238,8 @@ fn split_for_in(rest: &str) -> Option<(String, String, Option<String>, Option<St
     Some((pattern, iterable, key_expr, gap_expr))
 }
 
-/// Extracts `w, h` from a `|w, h|` canvas closure-param line.
-fn parse_canvas_params(content: &str) -> Option<String> {
+/// Extracts the inner text from a leading `|params|` line (e.g. `w, h` from `|w, h|`).
+fn parse_leading_params(content: &str) -> Option<String> {
     let after = content.strip_prefix('|')?;
     let end = after.find('|')?;
     Some(after[..end].trim().to_string())
@@ -266,7 +260,7 @@ fn parse_element_header(
         classes: Vec::new(),
         attributes: Vec::new(),
         content: None,
-        canvas_parameters: None,
+        leading_params: None,
         children: Vec::new(),
         line,
         content_start,
@@ -364,6 +358,23 @@ fn parse_element_header(
             // A `transition:` value is a space-separated spec (`opacity 200ms ease-out`), optionally comma-separated for several properties, so — like a closure value — it runs verbatim to the end of the line.
             if key.trim() == "transition" {
                 let value: String = chars[val_start..].iter().collect();
+                // A real transition value never has a `:` at paren/bracket depth 0 (durations, easings,
+                // and `spring(...)`/`cubic-bezier(...)` keep their colons, if any, nested inside parens).
+                // A depth-0 `:` means a trailing attribute got swallowed by the run-to-EOL scan above.
+                let mut depth = 0i32;
+                for c in value.chars() {
+                    match c {
+                        '(' | '[' => depth += 1,
+                        ')' | ']' => depth -= 1,
+                        ':' if depth == 0 => {
+                            return Err(ParseError {
+                                message: "transition: must be the last attribute on the line; move the trailing attribute(s) before it, or wrap the value as transition(...)".to_string(),
+                                line,
+                            });
+                        }
+                        _ => {}
+                    }
+                }
                 element.attributes.push(Attr {
                     key: key.trim().to_string(),
                     value: value.trim().to_string(),

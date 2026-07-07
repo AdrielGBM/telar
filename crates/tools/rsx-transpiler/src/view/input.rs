@@ -72,9 +72,8 @@ impl ViewGen<'_> {
             Some(c) => format!(".on_submit({c})"),
             None => String::new(),
         };
-        let code = format!(
-            "{pad}let {var} = Input::new(ctx, {value_expr}, {layout_style}, {style})?{tail};"
-        );
+        let code =
+            format!("{pad}let {var} = Input::new({value_expr}, {layout_style}, {style})?{tail};");
         ChildEmit::Simple { name: var, code }
     }
 }

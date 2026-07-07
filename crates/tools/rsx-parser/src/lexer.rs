@@ -105,19 +105,27 @@ pub fn lex(source: &str) -> Vec<Line> {
     lines
 }
 
+/// Strips a `[preview …]` header down to its name+options remainder, or `None` when `trimmed` is not
+/// a bracketed `preview` header. `preview` must be a whole word, so `[previewish]` is rejected. This is
+/// the single home of the bracket/keyword rule: the lexer classifies via [`is_preview_header`] and the
+/// preview parser consumes the returned remainder, so the two can no longer drift apart.
+pub(crate) fn strip_preview_header(trimmed: &str) -> Option<&str> {
+    let inner = trimmed
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))?;
+    let rest = inner.trim().strip_prefix("preview")?;
+    if rest.is_empty() || rest.starts_with(char::is_whitespace) {
+        Some(rest.trim_start())
+    } else {
+        None
+    }
+}
+
 /// Whether `trimmed` is a `[preview …]` header. Parameterized (carries a name/options), so it is
 /// matched here rather than in [`header_section`]'s exact table. Public so tooling that walks sections
 /// (e.g. selection ranges) can treat a preview header as a section boundary like the fixed headers.
 pub fn is_preview_header(trimmed: &str) -> bool {
-    let Some(inner) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) else {
-        return false;
-    };
-    let inner = inner.trim_start();
-    // `preview` must be a whole word, so `[previewish]` is not a preview header.
-    inner == "preview"
-        || inner
-            .strip_prefix("preview")
-            .is_some_and(|rest| rest.starts_with(char::is_whitespace))
+    strip_preview_header(trimmed).is_some()
 }
 
 /// Counts leading whitespace columns; a tab is treated as a single column.

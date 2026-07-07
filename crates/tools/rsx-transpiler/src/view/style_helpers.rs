@@ -9,7 +9,7 @@ use crate::style::{format_f32, layout_prop_call};
 
 use super::ViewGen;
 use super::signals::{
-    build_rect_style, is_paint_key, signal_idents, substitute_reads, wrap_signal_clones,
+    build_rect_style, captured_idents, is_paint_key, substitute_reads, wrap_signal_clones,
 };
 
 impl ViewGen<'_> {
@@ -60,9 +60,9 @@ impl ViewGen<'_> {
         {
             stroke = Some(self.wrap_transition(curve, &s, hoists));
         }
-        let stroke_w = pattrs
+        let stroke_width = pattrs
             .iter()
-            .find(|a| a.key == "stroke_w")
+            .find(|a| a.key == "stroke_width")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(1.0);
         let radius = pattrs
@@ -72,7 +72,8 @@ impl ViewGen<'_> {
             .map(|r| format!("BorderRadius::all({})", format_f32(r)))
             .unwrap_or_else(|| "BorderRadius::zero()".to_string());
         let param = if gradient.is_some() { "r" } else { "_" };
-        let rect_style = build_rect_style(gradient, solid_fill, stroke, stroke_w, shadow, &radius);
+        let rect_style =
+            build_rect_style(gradient, solid_fill, stroke, stroke_width, shadow, &radius);
         let opacity_call = match pattrs.iter().find(|a| a.key == "opacity") {
             Some(a) => format!(
                 ".with_opacity({})",
@@ -106,15 +107,11 @@ impl ViewGen<'_> {
         } else {
             value.to_string()
         };
-        // Signals read by the closure are cloned into it so it owns 'static handles, independent of any sibling closure on the same widget.
-        let clone_prefix: String = if is_reactive {
-            signal_idents(value)
-                .iter()
-                .map(|s| format!("let {s} = {s}.clone(); "))
-                .collect()
-        } else {
-            String::new()
-        };
+        // Signals (and any in-scope loop variables) read by the closure are cloned into it so it owns 'static handles, independent of any sibling closure on the same widget. Deduped and loop-var-aware via the shared `captured_idents`; empty for a static/number value, whose branches emit no `move` closure.
+        let clone_prefix: String = captured_idents(&[value], &self.loop_variables)
+            .iter()
+            .map(|s| format!("let {s} = {s}.clone(); "))
+            .collect();
         if let Some(curve) = transitions.get("opacity") {
             let name = self.next_transition_name();
             hoists.push(format!(

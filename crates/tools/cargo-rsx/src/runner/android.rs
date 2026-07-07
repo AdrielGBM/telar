@@ -2,8 +2,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::config::{
-    RsxConfig, backend_as_str, find_package_dir, read_package_manifest, split_android_flag,
+    RsxConfig, backend_as_str, default_app_id, read_package_manifest, resolve_package,
+    split_android_flag,
 };
+use super::package::{dist_dir, profile_of};
 
 pub(crate) fn resolve_ndk_root() -> Option<String> {
     if let Ok(v) = std::env::var("ANDROID_NDK_ROOT") {
@@ -33,26 +35,18 @@ fn android_package_id(args: &[String]) -> String {
         return id.to_owned();
     }
     let crate_name = pkg.map(|p| p.name).unwrap_or_else(|| "app".to_string());
-    format!("com.example.{crate_name}")
+    default_app_id(&crate_name)
 }
 
 fn apk_path(args: &[String]) -> PathBuf {
-    let crate_dir = find_package_dir(args);
-    let workspace_root =
-        rsx_workspace::find_workspace_root(&crate_dir).unwrap_or(crate_dir.clone());
-    let profile = if args.contains(&"--release".to_string()) {
-        "release"
-    } else {
-        "debug"
-    };
-    let crate_name = read_package_manifest(args)
-        .map(|p| p.name)
-        .unwrap_or_else(|| "app".to_string());
-    workspace_root
+    let resolved = resolve_package(args);
+    let profile = profile_of(args);
+    resolved
+        .workspace_root
         .join("target")
         .join(profile)
         .join("apk")
-        .join(format!("{crate_name}.apk"))
+        .join(format!("{}.apk", resolved.name()))
 }
 
 fn load_dotenv(cmd: &mut Command) {
@@ -157,9 +151,8 @@ pub(crate) fn build_android_package(cargo_args: Vec<String>, config: RsxConfig) 
     }
 
     let apk = apk_path(&rest);
-    let package_dir = find_package_dir(&rest);
-    let workspace_root = rsx_workspace::find_workspace_root(&package_dir).unwrap_or(package_dir);
-    let dist_dir = workspace_root.join("target").join("rsx-dist");
+    let resolved = resolve_package(&rest);
+    let dist_dir = dist_dir(&resolved.workspace_root);
     let _ = std::fs::create_dir_all(&dist_dir);
     if !apk.exists() {
         eprintln!(

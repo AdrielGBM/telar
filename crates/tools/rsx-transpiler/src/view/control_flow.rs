@@ -49,12 +49,11 @@ impl ViewGen<'_> {
 
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = ReactiveList::new(");
-        let _ = writeln!(code, "{pad}    ctx,");
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
         let _ = writeln!(
             code,
-            "{pad}    move |ctx: &mut WidgetCtx, __cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+            "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
         let _ = writeln!(
             code,
@@ -73,7 +72,7 @@ impl ViewGen<'_> {
         let _ = writeln!(code, "{pad}        }}");
         let _ = writeln!(
             code,
-            "{pad}        Ok(box_item(Container::new(ctx, LayoutStyle::new().flex_column(), __children)?))"
+            "{pad}        Ok(box_item(Container::new(LayoutStyle::new().flex_column(), __children)?))"
         );
         let _ = writeln!(code, "{pad}    }},");
         let _ = write!(code, "{pad})?;");
@@ -147,14 +146,13 @@ impl ViewGen<'_> {
 
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = ReactiveList::{constructor}(");
-        let _ = writeln!(code, "{pad}    ctx,");
         let _ = writeln!(code, "{pad}    {source},");
         if let Some(key_expr) = key_expr {
             let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
         }
         let _ = writeln!(
             code,
-            "{pad}    move |ctx: &mut WidgetCtx, {pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+            "{pad}    move |{pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
         let _ = writeln!(
             code,
@@ -173,7 +171,7 @@ impl ViewGen<'_> {
 
         let _ = writeln!(
             code,
-            "{pad}        Ok(box_item(Container::new(ctx, LayoutStyle::new().flex_column(), __children)?))"
+            "{pad}        Ok(box_item(Container::new(LayoutStyle::new().flex_column(), __children)?))"
         );
         let _ = writeln!(code, "{pad}    }},");
         if let Some(gap_expr) = gap_expr {

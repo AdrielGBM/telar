@@ -8,6 +8,8 @@ pub struct SignalInfo {
     // All signal kinds currently read via `.get()`; kind is retained to drive future kind-specific codegen.
     #[allow(dead_code)]
     pub kind: SignalKind,
+    // 0-based index of the declaring line within `logic_source.lines()`, so callers can test "declared above line j" without re-parsing.
+    pub line_index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +26,7 @@ pub enum SignalKind {
 pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
     let mut signals = Vec::new();
 
-    for raw in logic_source.lines() {
+    for (line_index, raw) in logic_source.lines().enumerate() {
         let line = raw.trim();
         let Some(rest) = line.strip_prefix("let ") else {
             continue;
@@ -56,6 +58,7 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
             signals.push(SignalInfo {
                 name: name.to_string(),
                 kind,
+                line_index,
             });
         }
     }

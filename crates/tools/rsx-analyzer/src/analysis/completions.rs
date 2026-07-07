@@ -3,7 +3,7 @@ use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
 use lsp_types::{CompletionItem, CompletionItemKind};
 use rsx_parser::RsxDocument;
-use rsx_transpiler::{color_attr_keys, is_control_flow_keyword, tag_attr_keys};
+use rsx_transpiler::{color_attr_keys, color_keywords, is_control_flow_keyword, tag_attr_keys};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -127,9 +127,6 @@ pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
     attribute_items(&tag_attr_keys(tag))
 }
 
-/// The keyword colors the transpiler recognizes, offered alongside `[style]` constants and theme fields.
-const COLOR_KEYWORDS: &[&str] = &["white", "black", "transparent"];
-
 pub fn color_items(doc: &RsxDocument, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut items: Vec<CompletionItem> = Vec::new();
@@ -151,7 +148,8 @@ pub fn color_items(doc: &RsxDocument, project: Option<&ProjectInfo>) -> Vec<Comp
             push(field.clone(), &mut items, &mut seen);
         }
     }
-    for keyword in COLOR_KEYWORDS {
+    // Keyword colors (`white`/`black`/`transparent`), offered alongside `[style]` constants and theme fields.
+    for keyword in color_keywords() {
         push(keyword.to_string(), &mut items, &mut seen);
     }
 
