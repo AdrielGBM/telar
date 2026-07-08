@@ -5,7 +5,7 @@ pub mod theme;
 rsx::app!(
     theme::LandingTheme,
     {
-        rsx::set_theme_with_widgets(theme::LandingTheme::light());
+        rsx::set_theme(theme::LandingTheme::light());
     },
     rsx::AppConfig::default(),
     app::LandingRoot
@@ -17,7 +17,7 @@ mod layout_tests {
 
     // The root page must fill the available window width at any size so its full-bleed bands stretch instead of collapsing into a centered column.
     fn page_rect_at(window_width: f32) -> (f32, f32) {
-        rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
+        rsx::set_theme(crate::theme::LandingTheme::light());
         rsx::reset_layout_runtime();
         let page = crate::home().expect("home build");
         let node = page.layout_node();
@@ -133,7 +133,7 @@ mod layout_tests {
             AvailableSpace, LayoutItem, LayoutStyle, compute_layout, new_container, new_leaf,
             track_layout,
         };
-        rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
+        rsx::set_theme(crate::theme::LandingTheme::light());
         rsx::reset_layout_runtime();
         let bodies = [
             (
@@ -322,7 +322,7 @@ mod layout_tests {
     fn drawn_content_stays_within_page_height() {
         use rsx::{App, AvailableSpace, Event, LayoutItem, compute_layout, track_layout};
         let bottom = {
-            rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
+            rsx::set_theme(crate::theme::LandingTheme::light());
             let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
             tree.on_event(&Event::WindowResized {
                 width: 1000,
@@ -332,7 +332,7 @@ mod layout_tests {
             content_bottom_edge(&cmds)
         };
 
-        rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
+        rsx::set_theme(crate::theme::LandingTheme::light());
         rsx::reset_layout_runtime();
         let page = crate::home().unwrap();
         let node = page.layout_node();
@@ -384,7 +384,7 @@ mod layout_tests {
     fn no_content_hidden_behind_a_later_band() {
         use rsx::{App, DrawCommand::*, Event};
         for w in [560u32, 720, 900, 1100, 1280, 1440, 1920] {
-            rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
+            rsx::set_theme(crate::theme::LandingTheme::light());
             let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
             tree.on_event(&Event::WindowResized {
                 width: w,
@@ -437,7 +437,7 @@ mod layout_tests {
     fn section_bands_do_not_overlap() {
         use rsx::{App, Event};
         for w in [820u32, 900, 1000, 1100, 1180] {
-            rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
+            rsx::set_theme(crate::theme::LandingTheme::light());
             let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
             tree.on_event(&Event::WindowResized {
                 width: w,
@@ -463,7 +463,7 @@ mod layout_tests {
     #[test]
     fn drawn_content_follows_width() {
         use rsx::{App, Event};
-        rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
+        rsx::set_theme(crate::theme::LandingTheme::light());
         let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
 
         tree.on_event(&Event::WindowResized {
@@ -488,7 +488,7 @@ mod layout_tests {
     #[test]
     fn live_tree_relayouts_on_every_resize() {
         use rsx::{App, Event};
-        rsx::set_theme_with_widgets(crate::theme::LandingTheme::light());
+        rsx::set_theme(crate::theme::LandingTheme::light());
         let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
 
         let mut last_gen = None;

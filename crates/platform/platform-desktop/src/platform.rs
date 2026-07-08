@@ -10,14 +10,22 @@ use winit::window::{Fullscreen, WindowAttributes, WindowId, WindowLevel};
 
 use platform_winit::WinitWindow;
 
+// Winit user-event payloads injected from background threads (via EventLoopProxy) to wake the loop.
+enum UserEvent {
+    // The OS color-scheme flipped; carries the new dark (`true`) / light preference (Linux portal watch).
+    ColorScheme(bool),
+}
+
 pub struct WinitPlatform {
-    event_loop: EventLoop<()>,
+    event_loop: EventLoop<UserEvent>,
 }
 
 impl WinitPlatform {
     pub fn try_new() -> Result<Self, PlatformError> {
         Ok(Self {
-            event_loop: EventLoop::new().map_err(|e| PlatformError(e.to_string()))?,
+            event_loop: EventLoop::<UserEvent>::with_user_event()
+                .build()
+                .map_err(|e| PlatformError(e.to_string()))?,
         })
     }
 }
@@ -33,7 +41,18 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     timer_has_fired: bool,
 }
 
-impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
+impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner<H> {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::ColorScheme(dark) => {
+                if let Some(window) = &self.window {
+                    self.handler
+                        .on_event(Event::ColorSchemeChanged { dark }, window);
+                }
+            }
+        }
+    }
+
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
         self.timer_has_fired = matches!(cause, StartCause::ResumeTimeReached { .. });
         self.handler.new_events();
@@ -236,6 +255,14 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler for WinitRunner<H> {
                 };
                 self.handler.on_event(ev, window);
             }
+            WindowEvent::ThemeChanged(theme) => {
+                self.handler.on_event(
+                    Event::ColorSchemeChanged {
+                        dark: theme == winit::window::Theme::Dark,
+                    },
+                    window,
+                );
+            }
             _ => {}
         }
     }
@@ -258,6 +285,15 @@ impl Platform for WinitPlatform {
             modifiers: platform_core::ModifiersState::default(),
             timer_has_fired: false,
         };
+        // Live OS color-scheme changes: winit has no Linux integration, so a portal watch thread pushes them
+        // back through the loop via a proxy. Elsewhere winit delivers WindowEvent::ThemeChanged natively.
+        #[cfg(target_os = "linux")]
+        {
+            let proxy = self.event_loop.create_proxy();
+            platform_winit::spawn_color_scheme_watch(move |dark| {
+                let _ = proxy.send_event(UserEvent::ColorScheme(dark));
+            });
+        }
         self.event_loop
             .run_app(&mut runner)
             .map_err(|e| PlatformError(e.to_string()))

@@ -1,4 +1,7 @@
-use rsx::{Color, Theme, WidgetTheme, use_theme};
+use rsx::{Color, Theme, ThemeTokens, register_mode, set_theme, use_theme};
+
+/// Mode id applied on first launch (and the fallback when a restored/unknown id has no variant).
+pub const DEFAULT_MODE: &str = "modern";
 
 /// Semantic color tokens for the documentation app. Every `.rsx` color reference
 /// (`fill:primary`, `color:muted`, …) resolves to one of these fields via `use_theme`,
@@ -33,26 +36,26 @@ impl Theme for SandboxTheme {
     }
 }
 
-impl WidgetTheme for SandboxTheme {
-    fn widget_primary(&self) -> Color {
+impl ThemeTokens for SandboxTheme {
+    fn primary(&self) -> Color {
         self.primary
     }
-    fn widget_on_primary(&self) -> Color {
+    fn on_primary(&self) -> Color {
         self.on_primary
     }
-    fn widget_muted(&self) -> Color {
+    fn muted(&self) -> Color {
         self.muted
     }
-    fn widget_ink(&self) -> Color {
+    fn ink(&self) -> Color {
         self.ink
     }
-    fn widget_surface_alt(&self) -> Color {
+    fn surface_alt(&self) -> Color {
         self.surface_alt
     }
-    fn widget_border(&self) -> Color {
+    fn border(&self) -> Color {
         self.border
     }
-    fn widget_scrollbar(&self) -> Color {
+    fn scrollbar(&self) -> Color {
         Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.55)
     }
 }
@@ -124,6 +127,26 @@ impl SandboxTheme {
             code_bg: c("#0a0c12"),
             code_fg: c("#cfd6ea"),
         }
+    }
+}
+
+impl SandboxTheme {
+    /// Single source of truth mapping a mode id to its variant; shared by the mode registry and the
+    /// hot-reload bridge. Unknown ids fall back to the default so a stale restored id never panics.
+    pub fn by_mode(mode: &str) -> Self {
+        match mode {
+            "pastel" => Self::pastel(),
+            "midnight" => Self::midnight(),
+            _ => Self::modern(),
+        }
+    }
+}
+
+/// Registers every theme variant under its mode id. Called from the `app!` setup closure (and any test that
+/// switches themes via the sidebar buttons) so `set_mode("pastel")` installs the matching `SandboxTheme`.
+pub fn register_modes() {
+    for mode in ["modern", "pastel", "midnight"] {
+        register_mode(mode, move || set_theme(SandboxTheme::by_mode(mode)));
     }
 }
 

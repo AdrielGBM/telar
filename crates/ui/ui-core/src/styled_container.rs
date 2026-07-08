@@ -348,7 +348,7 @@ mod tests {
     use layout_core::AvailableSpace;
     use platform_core::{PointerButton, PointerSource};
     use renderer_core::{Color, ShapeStyle};
-    use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme};
+    use theme_core::{Theme, ThemeTokens, set_theme, use_theme};
 
     use super::*;
 
@@ -469,11 +469,11 @@ mod tests {
             self
         }
     }
-    impl WidgetTheme for TestTheme {
-        fn widget_primary(&self) -> Color {
+    impl ThemeTokens for TestTheme {
+        fn primary(&self) -> Color {
             self.0
         }
-        fn widget_on_primary(&self) -> Color {
+        fn on_primary(&self) -> Color {
             Color::WHITE
         }
     }
@@ -481,7 +481,7 @@ mod tests {
     // Clicking a theme button (which sets the global THEME) while a themed StyledContainer ancestor is on the dispatch stack must not re-enter that ancestor's render segment mid borrow_mut.
     #[test]
     fn theme_button_click_force_tick_no_panic() {
-        set_theme_with_widgets(TestTheme(Color::RED));
+        set_theme(TestTheme(Color::RED));
 
         reset_layout_runtime();
         // A pressable primitive stands in for the old high-level Button (now in ui-components).
@@ -491,7 +491,7 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_press(move || set_theme_with_widgets(TestTheme(Color::GREEN)));
+        .on_press(move || set_theme(TestTheme(Color::GREEN)));
         let btn_node = btn.layout_node();
         let inner = Container::new(
             LayoutStyle::new().flex_column().width(200.0).height(100.0),

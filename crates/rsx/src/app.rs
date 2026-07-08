@@ -76,4 +76,12 @@ pub trait App: 'static {
     fn dispatch_overlays(&self, event: &platform_core::Event) -> bool {
         ui_core::dispatch_overlays(event) == ui_core::EventResult::Handled
     }
+
+    /// Reports the OS light/dark preference into the app's theme runtime (drives `follow_system`). Only the
+    /// dylib-backed `HotApp` overrides this — the theme signal lives in the dylib's runtime, so the host must
+    /// write it across the FFI boundary rather than its own (empty) copy, exactly like `motion_tick`.
+    #[doc(hidden)]
+    fn set_system_dark(&self, dark: bool) {
+        theme_core::set_system_dark(dark);
+    }
 }

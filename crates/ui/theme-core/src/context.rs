@@ -9,29 +9,29 @@ pub trait Theme: 'static {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-// Opt-in contract that built-in widgets read through. A theme implements this so widgets can resolve semantic colors without knowing the concrete theme type. Only the two primary tokens are mandatory; muted/scrollbar carry defaults so a theme can omit them.
-pub trait WidgetTheme: 'static {
-    fn widget_primary(&self) -> Color;
-    fn widget_on_primary(&self) -> Color;
+// Opt-in semantic-token contract the built-in component catalogue reads through. A theme implements this so a component can resolve semantic colors without knowing the concrete theme type. Only the two primary tokens are mandatory; the rest carry defaults so a theme can omit them.
+pub trait ThemeTokens: 'static {
+    fn primary(&self) -> Color;
+    fn on_primary(&self) -> Color;
 
-    fn widget_muted(&self) -> Color {
+    fn muted(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
-    fn widget_scrollbar(&self) -> Color {
+    fn scrollbar(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
 
-    /// Primary text ink for widget labels/titles/values. Defaults to a near-black; a theme should override
-    /// it (e.g. a dark theme returns a light ink) so widget text stays legible on its surface.
-    fn widget_ink(&self) -> Color {
+    /// Primary text ink for component labels/titles/values. Defaults to a near-black; a theme should override
+    /// it (e.g. a dark theme returns a light ink) so component text stays legible on its surface.
+    fn ink(&self) -> Color {
         Color::rgba(0.15, 0.15, 0.2, 1.0)
     }
     /// A quiet, low-contrast surface tone for chip/tag backgrounds. Defaults to a faint neutral wash.
-    fn widget_surface_alt(&self) -> Color {
+    fn surface_alt(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.55, 0.1)
     }
     /// Hairline border/divider tone. Defaults to a faint neutral.
-    fn widget_border(&self) -> Color {
+    fn border(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.55, 0.35)
     }
 }
@@ -40,24 +40,24 @@ thread_local! {
     // ManuallyDrop suppresses RwSignal's Drop impl so no TLS destructor is registered. Cleanup happens via reset_runtime() which drops the entire Runtime (and its signals slab).
     static THEME: ManuallyDrop<RwSignal<Option<Rc<dyn Theme>>>> =
         ManuallyDrop::new(signal(None));
-    static WIDGET_THEME: ManuallyDrop<RwSignal<Option<Rc<dyn WidgetTheme>>>> =
+    static THEME_TOKENS: ManuallyDrop<RwSignal<Option<Rc<dyn ThemeTokens>>>> =
         ManuallyDrop::new(signal(None));
 }
 
-// Installs a theme that also drives built-in widgets. The same value is stored behind both trait objects so `use_theme` and `use_widget_theme` stay in sync.
-pub fn set_theme_with_widgets<T: Theme + WidgetTheme + Clone + 'static>(theme: T) {
+// Installs a theme that also drives the built-in component catalogue. The same value is stored behind both trait objects so `use_theme` and `use_theme_tokens` stay in sync.
+pub fn set_theme<T: Theme + ThemeTokens + Clone + 'static>(theme: T) {
     let theme = Rc::new(theme);
     let as_theme: Rc<dyn Theme> = theme.clone();
-    let as_widget: Rc<dyn WidgetTheme> = theme;
+    let as_tokens: Rc<dyn ThemeTokens> = theme;
     THEME.with(|s| s.set(Some(as_theme)));
-    WIDGET_THEME.with(|s| s.set(Some(as_widget)));
+    THEME_TOKENS.with(|s| s.set(Some(as_tokens)));
 }
 
 pub fn use_theme<T: Theme + Clone + 'static>() -> T {
     THEME.with(|s| {
         let theme = s.get().unwrap_or_else(|| {
             panic!(
-                "use_theme::<{}> called but no theme has been set; call set_theme_with_widgets first",
+                "use_theme::<{}> called but no theme has been set; call set_theme first",
                 std::any::type_name::<T>()
             )
         });
@@ -74,7 +74,7 @@ pub fn use_theme<T: Theme + Clone + 'static>() -> T {
     })
 }
 
-// Returns the widget theme so type-agnostic built-in widgets can read semantic colors. `None` when the installed theme does not implement `WidgetTheme`.
-pub fn use_widget_theme() -> Option<Rc<dyn WidgetTheme>> {
-    WIDGET_THEME.with(|s| s.get())
+// Returns the semantic tokens so type-agnostic built-in components can read theme colors. `None` when the installed theme does not implement `ThemeTokens`.
+pub fn use_theme_tokens() -> Option<Rc<dyn ThemeTokens>> {
+    THEME_TOKENS.with(|s| s.get())
 }

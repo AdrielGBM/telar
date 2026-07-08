@@ -3,7 +3,7 @@ use std::time::Duration;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use motion_core::{Easing, Keyframes, Repeat};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
@@ -60,8 +60,8 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         LayoutStyle::new().width(head_size).height(head_size),
         move |_r| {
             let fill = shared::resolve(color.as_ref(), || {
-                use_widget_theme()
-                    .map(|t| t.widget_primary())
+                use_theme_tokens()
+                    .map(|t| t.primary())
                     .unwrap_or(shared::DEFAULT_ACCENT)
             });
             RectStyle::default()
@@ -87,8 +87,8 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let track = StyledContainer::new(
         LayoutStyle::new().width(size).height(size),
         move |_r| {
-            let stroke = use_widget_theme()
-                .map(|t| t.widget_muted())
+            let stroke = use_theme_tokens()
+                .map(|t| t.muted())
                 .unwrap_or(shared::DEFAULT_TRACK);
             RectStyle::default()
                 .with_stroke(Stroke::new(stroke, size * TRACK_STROKE_FRACTION))

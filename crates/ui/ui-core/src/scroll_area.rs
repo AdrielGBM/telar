@@ -6,7 +6,7 @@ use layout_core::{AvailableSpace, LayoutError, LayoutStyle};
 use platform_core::{Event, ScrollDelta};
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use ui_tree::NodeVec;
@@ -25,8 +25,8 @@ pub struct ScrollbarStyle {
 
 impl Default for ScrollbarStyle {
     fn default() -> Self {
-        let color = use_widget_theme()
-            .map(|t| t.widget_scrollbar())
+        let color = use_theme_tokens()
+            .map(|t| t.scrollbar())
             .unwrap_or(Color::rgba(0.5, 0.5, 0.6, 0.6));
         Self {
             color,

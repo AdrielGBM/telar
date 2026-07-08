@@ -3,7 +3,7 @@ use std::rc::Rc;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
@@ -89,8 +89,8 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 fn tab_rect(active: bool, color: &dyn Fn() -> Color, hovered: bool) -> RectStyle {
     let radius = BorderRadius::all(RADIUS);
     let accent = shared::resolve(color, || {
-        use_widget_theme()
-            .map(|t| t.widget_primary())
+        use_theme_tokens()
+            .map(|t| t.primary())
             .unwrap_or(shared::DEFAULT_ACCENT)
     });
     if active {
@@ -108,8 +108,8 @@ fn tab_rect(active: bool, color: &dyn Fn() -> Color, hovered: bool) -> RectStyle
 /// The label ink: white on the active (filled) tab for contrast, muted on the rest.
 fn tab_ink(active: bool) -> Color {
     if active {
-        use_widget_theme()
-            .map(|t| t.widget_on_primary())
+        use_theme_tokens()
+            .map(|t| t.on_primary())
             .unwrap_or(Color::WHITE)
     } else {
         INK_MUTED

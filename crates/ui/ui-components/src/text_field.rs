@@ -1,7 +1,7 @@
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{Container, Input, LayoutItem, StyledContainer, Text, box_item};
 
 /// Fallback text colour ("ink") when `color` is unset, matching the button catalogue's ghost-variant text.
@@ -121,10 +121,10 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
 }
 
 /// The shared muted tone for the label caption and the placeholder text, re-read every frame so it tracks
-/// the active theme (falls back to `WidgetTheme::widget_muted`'s own default when no theme is installed).
+/// the active theme (falls back to `ThemeTokens::muted`'s own default when no theme is installed).
 fn muted_color() -> Color {
-    use_widget_theme()
-        .map(|t| t.widget_muted())
+    use_theme_tokens()
+        .map(|t| t.muted())
         .unwrap_or(Color::rgba(0.5, 0.5, 0.6, 0.6))
 }
 

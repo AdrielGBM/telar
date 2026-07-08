@@ -65,4 +65,4 @@ col gap:20
         card gap:8
             text "Because color:primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." size:13 color:muted
             text "Try the Modern / Pastel / Midnight buttons in the sidebar." size:13 color:primary
-        code_line code:"on_press:|| set_theme_with_widgets(SandboxTheme::midnight())"
+        code_line code:"on_press:|| set_mode(\"midnight\")"

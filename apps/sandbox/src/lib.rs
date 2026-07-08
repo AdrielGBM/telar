@@ -2,7 +2,10 @@
 rsx::app!(
     core::theme::SandboxTheme,
     {
-        rsx::set_theme_with_widgets(core::theme::SandboxTheme::modern());
+        core::theme::register_modes();
+        // Open following the OS light/dark preference (modern for light, midnight for dark); the sidebar
+        // buttons still override manually until the next OS change.
+        rsx::follow_system(core::theme::DEFAULT_MODE, "midnight");
     },
     rsx::AppConfig::default(),
     core::app::SandboxRoot
@@ -16,7 +19,7 @@ mod smoke {
     // must produce a tree — a regression guard over the two-pane shell and all `.rsx` sections.
     #[test]
     fn app_root_builds_and_lays_out() {
-        rsx::set_theme_with_widgets(crate::core::theme::SandboxTheme::modern());
+        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
         let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
         tree.on_event(&Event::WindowResized {
             width: 1200,
@@ -30,7 +33,7 @@ mod smoke {
     // mobile hamburger top bar, and back. A regression guard over the set_display collapse + drawer overlay.
     #[test]
     fn shell_survives_breakpoint_transition() {
-        rsx::set_theme_with_widgets(crate::core::theme::SandboxTheme::modern());
+        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
         let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
         for (width, height) in [(1200u32, 900u32), (380, 720), (1000, 800), (360, 640)] {
             tree.on_event(&Event::WindowResized { width, height });
@@ -43,7 +46,7 @@ mod smoke {
     #[test]
     fn nav_click_switches_section() {
         use platform_core::{PointerButton, PointerSource};
-        rsx::set_theme_with_widgets(crate::core::theme::SandboxTheme::modern());
+        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
         let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
         tree.on_event(&Event::WindowResized {
             width: 1200,
@@ -164,7 +167,9 @@ mod smoke {
                 source: PointerSource::Mouse,
             };
 
-            rsx::set_theme_with_widgets(crate::core::theme::SandboxTheme::modern());
+            rsx::set_theme(crate::core::theme::SandboxTheme::modern());
+            // The sidebar theme buttons now call `set_mode(id)`; register the appliers so a click installs the variant.
+            crate::core::theme::register_modes();
             let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
             feed(
                 &mut tree,
@@ -268,7 +273,7 @@ mod smoke {
             }
             ys
         }
-        rsx::set_theme_with_widgets(crate::core::theme::SandboxTheme::modern());
+        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
         let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
         tree.on_event(&Event::WindowResized {
             width: 1200,
@@ -323,7 +328,7 @@ mod smoke {
     // Canvas-free source should sit in the content region; the strays are gone.
     #[test]
     fn hidden_canvas_sections_do_not_bleed() {
-        rsx::set_theme_with_widgets(crate::core::theme::SandboxTheme::modern());
+        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
         let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
         tree.on_event(&Event::WindowResized {
             width: 1200,
@@ -383,7 +388,7 @@ mod smoke {
             crate::core::theme::SandboxTheme::pastel,
             crate::core::theme::SandboxTheme::midnight,
         ] {
-            rsx::set_theme_with_widgets(make());
+            rsx::set_theme(make());
             rsx::reset_layout_runtime();
             let content = crate::features_color().expect("color section builds");
             let node = rsx::LayoutItem::layout_node(content.as_ref());

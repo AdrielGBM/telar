@@ -94,6 +94,12 @@ pub enum Event {
     Scrolled {
         delta: ScrollDelta,
     },
+    // OS light/dark color-scheme preference changed (or was first reported at window creation). `dark` is
+    // true for a dark preference. On Linux this is surfaced only when the compositor exposes it (Wayland +
+    // xdg-desktop-portal); X11 sessions typically never emit it.
+    ColorSchemeChanged {
+        dark: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

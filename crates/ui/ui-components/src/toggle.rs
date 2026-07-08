@@ -1,7 +1,7 @@
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
@@ -75,8 +75,8 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move |_r| {
             let fill = if track_on.get() {
                 shared::resolve(color.as_ref(), || {
-                    use_widget_theme()
-                        .map(|t| t.widget_primary())
+                    use_theme_tokens()
+                        .map(|t| t.primary())
                         .unwrap_or(shared::DEFAULT_ACCENT)
                 })
             } else {

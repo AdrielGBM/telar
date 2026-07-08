@@ -6,7 +6,7 @@ use geometry_core::Rect;
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{
     Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item, track_layout,
 };
@@ -182,8 +182,8 @@ pub(crate) fn dropdown(
 
 fn trigger_rect_style(color: &dyn Fn() -> Color) -> RectStyle {
     let accent = shared::resolve(color, || {
-        use_widget_theme()
-            .map(|t| t.widget_primary())
+        use_theme_tokens()
+            .map(|t| t.primary())
             .unwrap_or(shared::DEFAULT_ACCENT)
     });
     RectStyle::default()
@@ -205,8 +205,8 @@ fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> RectStyle {
     let radius = BorderRadius::all(4.0);
     if is_selected {
         let accent = shared::resolve(color, || {
-            use_widget_theme()
-                .map(|t| t.widget_primary())
+            use_theme_tokens()
+                .map(|t| t.primary())
                 .unwrap_or(shared::DEFAULT_ACCENT)
         });
         RectStyle::default()
@@ -219,8 +219,8 @@ fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> RectStyle {
 
 fn option_row_hover_style(color: &dyn Fn() -> Color) -> RectStyle {
     let accent = shared::resolve(color, || {
-        use_widget_theme()
-            .map(|t| t.widget_primary())
+        use_theme_tokens()
+            .map(|t| t.primary())
             .unwrap_or(shared::DEFAULT_ACCENT)
     });
     RectStyle::default()

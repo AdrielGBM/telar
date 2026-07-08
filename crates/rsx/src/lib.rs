@@ -73,7 +73,10 @@ pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]
 pub use services_core::{Scope, provide, try_inject, with_service};
 #[cfg(feature = "runtime")]
-pub use theme_core::{Theme, WidgetTheme, set_theme_with_widgets, use_theme, use_widget_theme};
+pub use theme_core::{
+    Theme, ThemeTokens, follow_system, init_mode, is_dark, register_mode, set_dark, set_light_dark,
+    set_mode, set_system_dark, set_theme, toggle_dark, use_mode, use_theme, use_theme_tokens,
+};
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
 #[cfg(feature = "runtime")]

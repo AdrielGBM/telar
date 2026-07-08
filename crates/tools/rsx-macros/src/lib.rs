@@ -359,6 +359,12 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_dispatch_overlays(event: &::rsx::Event) -> bool {
                 ::rsx::dispatch_overlays(event)
             }
+            // Write the OS light/dark preference into the dylib's own theme runtime (where `follow_system`'s
+            // effect lives), across the same boundary the host cannot reach directly.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_set_system_dark(dark: bool) {
+                ::rsx::set_system_dark(dark);
+            }
         }
     } else {
         quote! {}

@@ -4,7 +4,7 @@ use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item, box_transform};
 
 use crate::shared;
@@ -91,8 +91,8 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new().absolute_fill(),
         move |_r| {
             let fill = shared::resolve(fill_color.as_ref(), || {
-                use_widget_theme()
-                    .map(|t| t.widget_primary())
+                use_theme_tokens()
+                    .map(|t| t.primary())
                     .unwrap_or(shared::DEFAULT_ACCENT)
             });
             RectStyle::default()
@@ -117,8 +117,8 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new().width(THUMB_SIZE).height(THUMB_SIZE),
         move |_r| {
             let fill = shared::resolve(thumb_color.as_ref(), || {
-                use_widget_theme()
-                    .map(|t| t.widget_primary())
+                use_theme_tokens()
+                    .map(|t| t.primary())
                     .unwrap_or(shared::DEFAULT_ACCENT)
             });
             RectStyle::default()
@@ -139,8 +139,8 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new().width(width).height(TRACK_HEIGHT),
         move |_r| {
             let fill = shared::resolve(track_color.as_ref(), || {
-                use_widget_theme()
-                    .map(|t| t.widget_muted())
+                use_theme_tokens()
+                    .map(|t| t.muted())
                     .unwrap_or(shared::DEFAULT_TRACK)
             });
             RectStyle::default()
@@ -181,8 +181,8 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 /// The muted label ink, re-read every frame so it tracks the active theme (mirrors `text_field`'s caption colour).
 fn label_color() -> Color {
-    use_widget_theme()
-        .map(|t| t.widget_muted())
+    use_theme_tokens()
+        .map(|t| t.muted())
         .unwrap_or(Color::rgba(0.5, 0.5, 0.6, 0.6))
 }
 

@@ -56,6 +56,11 @@ pub trait Window: HasWindowHandle + HasDisplayHandle {
     fn scale_factor(&self) -> f64 {
         1.0
     }
+    /// The OS light/dark preference, if the platform can report it: `Some(true)` = prefer dark. `None` when
+    /// undetectable (e.g. X11, or a compositor without the settings portal). Defaults to `None`.
+    fn prefers_dark(&self) -> Option<bool> {
+        None
+    }
 }
 
 pub trait EventHandler<W: Window> {

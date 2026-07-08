@@ -3,7 +3,7 @@ use std::rc::Rc;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::signal;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
@@ -132,8 +132,8 @@ fn variant_rect(
     if fill_c != Color::TRANSPARENT {
         return RectStyle::default().with_fill(fill_c).with_radius(radius);
     }
-    let primary = use_widget_theme()
-        .map(|t| t.widget_primary())
+    let primary = use_theme_tokens()
+        .map(|t| t.primary())
         .unwrap_or(shared::DEFAULT_ACCENT);
     let base = if hovered {
         primary.darken(0.15)
@@ -162,8 +162,8 @@ fn label_color(
     if fill() != Color::TRANSPARENT {
         return Color::WHITE;
     }
-    use_widget_theme()
-        .map(|t| t.widget_on_primary())
+    use_theme_tokens()
+        .map(|t| t.on_primary())
         .unwrap_or(Color::WHITE)
 }
 

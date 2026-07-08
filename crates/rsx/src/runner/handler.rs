@@ -148,6 +148,12 @@ where
             window.width() as f32 / sf,
             window.height() as f32 / sf,
         ));
+        // Apply the OS light/dark preference before the tree mounts, so its first layout uses the right theme
+        // (an app that opted into `follow_system` reads this). `None` (undetectable, e.g. X11) leaves the
+        // app's own default in place.
+        if let Some(dark) = window.prefers_dark() {
+            self.app.set_system_dark(dark);
+        }
         self.tree = Some(ComponentList::new(self.app.root()));
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
@@ -194,6 +200,15 @@ where
             if let Some(ref signals) = self.window_signals {
                 signals.update(*width as f32, *height as f32);
             }
+        }
+        if let Event::ColorSchemeChanged { dark } = &event {
+            // Drives the follow_system effect (which writes the theme signal); batch the app's runtime so the
+            // re-render flushes cleanly across the hot-reload boundary. No widget consumes this event.
+            self.app.begin_event_batch();
+            self.app.set_system_dark(*dark);
+            self.app.end_event_batch();
+            window.request_redraw();
+            return;
         }
         if let Event::KeyPressed { key, modifiers } = &event {
             match self.dev.on_key(key, *modifiers) {
@@ -290,6 +305,11 @@ where
                                 // Drop the old tree first so effect closures (which contain code from the old dylib) are destroyed while the old lib is still mapped. Only then replace self.app, which dlcloses the old dylib.
                                 self.tree = None;
                                 self.app = Box::new(new_app);
+                                // The reloaded dylib reset its OS-scheme signal to the default; re-push the
+                                // current preference so `follow_system` lands on the right mode after reload.
+                                if let Some(dark) = window.prefers_dark() {
+                                    self.app.set_system_dark(dark);
+                                }
                                 self.tree = Some(ComponentList::new(self.app.root()));
                                 // A successful reload clears any banner from the previous failed build.
                                 self.dev.set_build_error(None);

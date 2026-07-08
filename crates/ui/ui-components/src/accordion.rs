@@ -4,7 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, RectStyle, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{
     ClippedItem, Component, Container, EventResult, LayoutItem, RenderNode, Slots, StyledContainer,
     Text, box_item, mark_dirty, set_display,
@@ -72,8 +72,8 @@ pub fn accordion(
         LayoutStyle::new(),
         move || {
             let accent = shared::resolve(caret_color.as_ref(), || {
-                use_widget_theme()
-                    .map(|t| t.widget_primary())
+                use_theme_tokens()
+                    .map(|t| t.primary())
                     .unwrap_or(shared::DEFAULT_ACCENT)
             });
             TextStyle::new(CARET_SIZE, accent)

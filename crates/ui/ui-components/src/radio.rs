@@ -3,7 +3,7 @@ use std::rc::Rc;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
@@ -63,8 +63,8 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move |_r| {
             let fill = if dot_selected.get() == value {
                 shared::resolve(dot_color.as_ref(), || {
-                    use_widget_theme()
-                        .map(|t| t.widget_primary())
+                    use_theme_tokens()
+                        .map(|t| t.primary())
                         .unwrap_or(shared::DEFAULT_ACCENT)
                 })
             } else {
@@ -90,8 +90,8 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move |_r| {
             let stroke = if ring_selected.get() == value {
                 shared::resolve(ring_color.as_ref(), || {
-                    use_widget_theme()
-                        .map(|t| t.widget_primary())
+                    use_theme_tokens()
+                        .map(|t| t.primary())
                         .unwrap_or(shared::DEFAULT_ACCENT)
                 })
             } else {

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
@@ -141,8 +141,8 @@ fn stepper_button(
             .height(BUTTON_SIZE),
         move |_r| {
             let fill = shared::resolve(color.as_ref(), || {
-                use_widget_theme()
-                    .map(|t| t.widget_primary())
+                use_theme_tokens()
+                    .map(|t| t.primary())
                     .unwrap_or(shared::DEFAULT_ACCENT)
             });
             RectStyle::default()

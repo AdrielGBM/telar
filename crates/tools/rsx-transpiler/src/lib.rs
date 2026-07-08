@@ -112,7 +112,7 @@ col @card
     button label:"Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
 "#;
 
-    // COUNTER_THEMED has no [style] color declarations — colors flow through the live theme so they react to `set_theme_with_widgets(...)` calls at runtime.
+    // COUNTER_THEMED has no [style] color declarations — colors flow through the live theme so they react to `set_theme(...)` calls at runtime.
     const COUNTER_THEMED: &str = r#"[logic]
 let count = signal(0i32);
 

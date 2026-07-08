@@ -1,7 +1,7 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
@@ -76,8 +76,8 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
             let radius = BorderRadius::all(5.0);
             if box_checked.get() {
                 let fill = shared::resolve(color.as_ref(), || {
-                    use_widget_theme()
-                        .map(|t| t.widget_primary())
+                    use_theme_tokens()
+                        .map(|t| t.primary())
                         .unwrap_or(shared::DEFAULT_ACCENT)
                 });
                 RectStyle::default().with_fill(fill).with_radius(radius)

@@ -1,6 +1,6 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
@@ -15,7 +15,7 @@ const RADIUS: f32 = 10.0;
 /// `ui-components`, not the kernel, so an app can drop it or ship its own.
 pub struct BadgeProps {
     pub label: &'static str,
-    /// Fill colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `widget_primary()`. A
+    /// Fill colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `primary()`. A
     /// closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
     pub color: Box<dyn Fn() -> Color>,
 }
@@ -60,16 +60,16 @@ pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 /// The default pill fill when `color` is unset: the theme's primary accent, matching `button`'s own default.
 fn fill_default() -> Color {
-    use_widget_theme()
-        .map(|t| t.widget_primary())
+    use_theme_tokens()
+        .map(|t| t.primary())
         .unwrap_or(shared::DEFAULT_ACCENT)
 }
 
 /// The label's on-accent colour, re-read every frame so it tracks the active theme (mirrors `button`'s
-/// no-variant label default: the theme's `widget_on_primary()`, or white with no theme installed).
+/// no-variant label default: the theme's `on_primary()`, or white with no theme installed).
 fn on_accent_style() -> TextStyle {
-    let color = use_widget_theme()
-        .map(|t| t.widget_on_primary())
+    let color = use_theme_tokens()
+        .map(|t| t.on_primary())
         .unwrap_or(Color::WHITE);
     TextStyle::new(FONT_SIZE, color)
 }

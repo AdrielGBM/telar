@@ -1,4 +1,4 @@
-use rsx::{Color, Theme, WidgetTheme, use_theme};
+use rsx::{Color, Theme, ThemeTokens, use_theme};
 
 #[derive(Clone)]
 pub struct LandingTheme {
@@ -21,14 +21,14 @@ impl Theme for LandingTheme {
     }
 }
 
-impl WidgetTheme for LandingTheme {
-    fn widget_primary(&self) -> Color {
+impl ThemeTokens for LandingTheme {
+    fn primary(&self) -> Color {
         self.primary
     }
-    fn widget_on_primary(&self) -> Color {
+    fn on_primary(&self) -> Color {
         self.on_primary
     }
-    fn widget_muted(&self) -> Color {
+    fn muted(&self) -> Color {
         self.muted
     }
 }

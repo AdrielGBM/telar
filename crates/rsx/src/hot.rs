@@ -100,6 +100,17 @@ impl crate::app::App for HotApp {
         };
         unsafe { dispatch(event) }
     }
+
+    // Write the OS light/dark preference into the dylib's own theme runtime (separate from the host's), where
+    // the `follow_system` effect lives. Missing symbol (dylib built before this existed) degrades to a no-op.
+    fn set_system_dark(&self, dark: bool) {
+        if let Ok(set) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(bool)>(b"_rsx_hot_set_system_dark\0")
+        } {
+            unsafe { set(dark) }
+        }
+    }
 }
 
 #[cfg(feature = "dev")]

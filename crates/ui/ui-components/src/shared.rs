@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use renderer_core::{Color, TextStyle};
-use theme_core::use_widget_theme;
+use theme_core::use_theme_tokens;
 use ui_core::{Container, LayoutItem, Text, box_item};
 
 /// A reactive colour prop re-erased to a shareable handle: a `Box<dyn Fn>` isn't `Clone`, but widgets must hand the same colour closure to several style closures, so they re-erase to this `Rc`.
@@ -15,7 +15,7 @@ pub(crate) type ReactiveColor = Rc<dyn Fn() -> Color>;
 pub(crate) const DEFAULT_ACCENT: Color = Color::rgba(0.24, 0.47, 0.98, 1.0);
 /// Opaque white surface fallback shared by `modal` and `drawer` when their `color` is unset.
 pub(crate) const DEFAULT_SURFACE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
-/// Default text ink for the catalogue (labels, titles, values). `WidgetTheme` exposes no ink token, so
+/// Default text ink for the catalogue (labels, titles, values). `ThemeTokens` exposes no ink token, so
 /// this is the shared fallback for text that isn't an accent.
 pub(crate) const INK: Color = Color::rgba(0.15, 0.15, 0.2, 1.0);
 /// Muted rail/track fallback shared by `slider`/`progress`/`spinner` when their `track_color` is unset.
@@ -25,22 +25,20 @@ pub(crate) const SURFACE_ALT: Color = Color::rgba(0.5, 0.5, 0.55, 0.1);
 /// Hairline border fallback when no theme is active.
 pub(crate) const BORDER: Color = Color::rgba(0.5, 0.5, 0.55, 0.35);
 
-/// Theme-resolved text ink (`widget_ink`), falling back to [`INK`] when no theme is active. Call it
+/// Theme-resolved text ink (`ink`), falling back to [`INK`] when no theme is active. Call it
 /// INSIDE a style closure so widget text recolours when the theme switches (e.g. dark mode).
 pub(crate) fn ink() -> Color {
-    use_widget_theme().map(|t| t.widget_ink()).unwrap_or(INK)
+    use_theme_tokens().map(|t| t.ink()).unwrap_or(INK)
 }
-/// Theme-resolved quiet surface (`widget_surface_alt`), falling back to [`SURFACE_ALT`].
+/// Theme-resolved quiet surface (`surface_alt`), falling back to [`SURFACE_ALT`].
 pub(crate) fn surface_alt() -> Color {
-    use_widget_theme()
-        .map(|t| t.widget_surface_alt())
+    use_theme_tokens()
+        .map(|t| t.surface_alt())
         .unwrap_or(SURFACE_ALT)
 }
-/// Theme-resolved hairline border (`widget_border`), falling back to [`BORDER`].
+/// Theme-resolved hairline border (`border`), falling back to [`BORDER`].
 pub(crate) fn border() -> Color {
-    use_widget_theme()
-        .map(|t| t.widget_border())
-        .unwrap_or(BORDER)
+    use_theme_tokens().map(|t| t.border()).unwrap_or(BORDER)
 }
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`.

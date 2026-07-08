@@ -43,22 +43,37 @@ where
     sig
 }
 
+// Non-signal app state carried across a swap alongside the hot signals. Unlike a hot_signal (passively
+// consumed when its component remounts), this state lives in another crate's thread-local and is set during
+// `setup` — which the incoming dylib re-runs before restore — so it must be captured into the snapshot and
+// actively pushed back. The active theme mode is the first client; the route/locale of rsx-navigate/rsx-i18n
+// hook in the same way. Keys are `@rsx/`-namespaced so they never collide with a user's `[logic]` signal key.
+const THEME_MODE_KEY: &str = "@rsx/theme.mode";
+
 /// Serializes every registered hot signal into a JSON map. Runs inside the outgoing dylib via its
 /// `_rsx_hot_snapshot` export, while the old tree (and thus its signals) is still alive.
 pub fn hot_snapshot_json() -> String {
-    let map: HashMap<String, String> = REGISTRY.with(|r| {
+    let mut map: HashMap<String, String> = REGISTRY.with(|r| {
         r.borrow()
             .iter()
             .filter_map(|(key, read)| read().map(|value| (key.clone(), value)))
             .collect()
     });
+    if let Some(mode) = theme_core::active_mode() {
+        map.insert(THEME_MODE_KEY.to_string(), mode);
+    }
     serde_json::to_string(&map).unwrap_or_default()
 }
 
 /// Loads a snapshot produced by the previous dylib. Runs inside the incoming dylib via its
 /// `_rsx_hot_restore` export, before the new tree mounts.
 pub fn hot_restore_json(blob: &str) {
-    if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(blob) {
+    if let Ok(mut map) = serde_json::from_str::<HashMap<String, String>>(blob) {
+        // Re-apply immediately, overriding the default `init_mode` set during this dylib's `setup`, so the
+        // user's last selection survives the swap. Removed from the map so it never lingers in PENDING.
+        if let Some(mode) = map.remove(THEME_MODE_KEY) {
+            theme_core::set_mode(mode);
+        }
         PENDING.with(|p| p.borrow_mut().extend(map));
     }
 }
@@ -149,6 +164,21 @@ mod tests {
         assert_eq!(x.peek(), 7);
         let y = hot_signal("t2::y", 3i32);
         assert_eq!(y.peek(), 3);
+    }
+
+    #[test]
+    fn theme_mode_survives_snapshot_restore() {
+        // Outgoing dylib: user has picked "midnight".
+        theme_core::register_mode("midnight", || {});
+        theme_core::set_mode("midnight");
+        let blob = hot_snapshot_json();
+
+        // Incoming dylib: `setup` re-registered modes and `init_mode` applied the default "modern"...
+        theme_core::register_mode("modern", || {});
+        theme_core::set_mode("modern");
+        // ...then restore overrides it with the carried-over selection.
+        hot_restore_json(&blob);
+        assert_eq!(theme_core::active_mode().as_deref(), Some("midnight"));
     }
 
     #[test]
