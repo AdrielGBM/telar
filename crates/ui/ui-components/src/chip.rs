@@ -14,13 +14,6 @@ const FONT_SIZE: f32 = 13.0;
 const CLOSE_SIZE: f32 = 12.0;
 const DOT_SIZE: f32 = 6.0;
 
-/// Subtle outlined tone (fill + hairline border), matching the raw `box fill:surface_alt stroke:border`
-/// pattern documented on `text_field` — a chip is the same "quiet surface" look, just pill-shaped.
-const SURFACE_ALT: Color = Color::rgba(0.5, 0.5, 0.55, 0.10);
-const BORDER: Color = Color::rgba(0.5, 0.5, 0.55, 0.35);
-/// Muted tone for the `×` close affordance, matching `modal`'s Close.
-const CLOSE_INK: Color = Color::rgba(0.35, 0.35, 0.42, 1.0);
-
 /// A small outlined tag, quieter than `badge`'s solid fill: a bordered surface pill with normal ink text,
 /// an optional small accent dot when `color` is set, and an optional `×` affordance that fires `on_close`.
 /// Non-interactive unless `on_close` is set. High-level sugar over `StyledContainer`/`Container` + `Text`;
@@ -75,7 +68,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label_widget = Text::auto(
         move || label.to_string(),
         LayoutStyle::new(),
-        || TextStyle::new(FONT_SIZE, shared::INK),
+        || TextStyle::new(FONT_SIZE, shared::ink()),
     )?;
     children.push(box_item(label_widget));
 
@@ -83,7 +76,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let close_label = Text::auto(
             || "×".to_string(),
             LayoutStyle::new(),
-            || TextStyle::new(CLOSE_SIZE, CLOSE_INK),
+            || TextStyle::new(CLOSE_SIZE, shared::ink()),
         )?;
         let close = StyledContainer::new(
             LayoutStyle::new().flex_row(),
@@ -110,8 +103,8 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .padding_vertical(PAD_Y),
         |_r| {
             RectStyle::default()
-                .with_fill(SURFACE_ALT)
-                .with_stroke(Stroke::new(BORDER, 1.0))
+                .with_fill(shared::surface_alt())
+                .with_stroke(Stroke::new(shared::border(), 1.0))
                 .with_radius(BorderRadius::all(RADIUS))
         },
         vec![box_item(row)],

@@ -83,7 +83,7 @@ pub fn accordion(
     let title_widget = Text::auto(
         move || title.to_string(),
         LayoutStyle::new(),
-        || TextStyle::new(TITLE_SIZE, shared::INK),
+        || TextStyle::new(TITLE_SIZE, shared::ink()),
     )?;
 
     let toggle_open = open.clone();

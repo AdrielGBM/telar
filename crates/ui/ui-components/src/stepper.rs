@@ -105,7 +105,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             }
         },
         LayoutStyle::new(),
-        || TextStyle::new(VALUE_SIZE, shared::INK),
+        || TextStyle::new(VALUE_SIZE, shared::ink()),
     )?;
 
     let row = Container::new(

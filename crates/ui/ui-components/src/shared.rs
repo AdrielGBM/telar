@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use renderer_core::{Color, TextStyle};
+use theme_core::use_widget_theme;
 use ui_core::{Container, LayoutItem, Text, box_item};
 
 /// A reactive colour prop re-erased to a shareable handle: a `Box<dyn Fn>` isn't `Clone`, but widgets must hand the same colour closure to several style closures, so they re-erase to this `Rc`.
@@ -19,6 +20,28 @@ pub(crate) const DEFAULT_SURFACE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
 pub(crate) const INK: Color = Color::rgba(0.15, 0.15, 0.2, 1.0);
 /// Muted rail/track fallback shared by `slider`/`progress`/`spinner` when their `track_color` is unset.
 pub(crate) const DEFAULT_TRACK: Color = Color::rgba(0.5, 0.5, 0.6, 0.3);
+/// Quiet surface-alt fallback (chip/tag backgrounds) when no theme is active.
+pub(crate) const SURFACE_ALT: Color = Color::rgba(0.5, 0.5, 0.55, 0.1);
+/// Hairline border fallback when no theme is active.
+pub(crate) const BORDER: Color = Color::rgba(0.5, 0.5, 0.55, 0.35);
+
+/// Theme-resolved text ink (`widget_ink`), falling back to [`INK`] when no theme is active. Call it
+/// INSIDE a style closure so widget text recolours when the theme switches (e.g. dark mode).
+pub(crate) fn ink() -> Color {
+    use_widget_theme().map(|t| t.widget_ink()).unwrap_or(INK)
+}
+/// Theme-resolved quiet surface (`widget_surface_alt`), falling back to [`SURFACE_ALT`].
+pub(crate) fn surface_alt() -> Color {
+    use_widget_theme()
+        .map(|t| t.widget_surface_alt())
+        .unwrap_or(SURFACE_ALT)
+}
+/// Theme-resolved hairline border (`widget_border`), falling back to [`BORDER`].
+pub(crate) fn border() -> Color {
+    use_widget_theme()
+        .map(|t| t.widget_border())
+        .unwrap_or(BORDER)
+}
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`.
 /// `color()` is evaluated once. Collapses the per-widget accent/track/surface/bubble resolvers into one shape.
@@ -45,7 +68,7 @@ pub(crate) fn labelled_control(
         let text = Text::auto(
             move || label.clone(),
             LayoutStyle::new(),
-            || TextStyle::new(14.0, INK),
+            || TextStyle::new(14.0, ink()),
         )?;
         children.push(box_item(text));
     }

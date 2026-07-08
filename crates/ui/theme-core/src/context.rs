@@ -20,6 +20,20 @@ pub trait WidgetTheme: 'static {
     fn widget_scrollbar(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
+
+    /// Primary text ink for widget labels/titles/values. Defaults to a near-black; a theme should override
+    /// it (e.g. a dark theme returns a light ink) so widget text stays legible on its surface.
+    fn widget_ink(&self) -> Color {
+        Color::rgba(0.15, 0.15, 0.2, 1.0)
+    }
+    /// A quiet, low-contrast surface tone for chip/tag backgrounds. Defaults to a faint neutral wash.
+    fn widget_surface_alt(&self) -> Color {
+        Color::rgba(0.5, 0.5, 0.55, 0.1)
+    }
+    /// Hairline border/divider tone. Defaults to a faint neutral.
+    fn widget_border(&self) -> Color {
+        Color::rgba(0.5, 0.5, 0.55, 0.35)
+    }
 }
 
 thread_local! {
