@@ -4,6 +4,18 @@ pub trait AppPathsProvider: Send + Sync {
     fn config_dir(&self) -> Option<PathBuf>;
     fn data_dir(&self) -> Option<PathBuf>;
     fn cache_dir(&self) -> Option<PathBuf>;
+
+    /// OS system-font directory to scan for fallback family resolution. `None` on platforms where the
+    /// renderer's default font discovery suffices (desktop); the platform adapter overrides it where the OS
+    /// keeps fonts in a fixed location (Android → `/system/fonts`).
+    fn system_fonts_dir(&self) -> Option<PathBuf> {
+        None
+    }
+    /// Sans-serif family names to try in priority order, OS/OEM-specific. Empty when default discovery
+    /// suffices; the platform adapter overrides it (Android OEM font stacks).
+    fn sans_serif_candidates(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]

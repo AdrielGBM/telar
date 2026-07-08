@@ -25,4 +25,12 @@ impl AppPathsProvider for AndroidPathsProvider {
     fn cache_dir(&self) -> Option<PathBuf> {
         self.app.internal_data_path().map(|p| p.join("cache"))
     }
+
+    fn system_fonts_dir(&self) -> Option<PathBuf> {
+        Some(crate::fonts::system_fonts_dir())
+    }
+
+    fn sans_serif_candidates(&self) -> Vec<String> {
+        crate::fonts::sans_serif_candidates()
+    }
 }

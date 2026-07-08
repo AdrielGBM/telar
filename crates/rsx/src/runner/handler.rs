@@ -13,7 +13,7 @@ use crate::prefs::UserPrefs;
 use crate::window_signals::WindowSignals;
 
 use super::font_config::{
-    build_font_config, build_hardware_font_config, build_software_renderer_config,
+    SystemFonts, build_font_config, build_hardware_font_config, build_software_renderer_config,
     hardware_cache_path,
 };
 use super::hot_host::{HardwareFrameMsg, spawn_hardware_render_thread};
@@ -66,11 +66,12 @@ where
 {
     fn on_resume(&mut self, window: &W) -> bool {
         let android = cfg!(target_os = "android");
+        let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
         // Point the layout-time text measurer at the same fonts as the renderer, on this (the layout) thread, before any layout runs. Otherwise it falls back to system defaults and aborts on Android ("no default font found").
         renderer_text::set_measure_font_config(build_font_config(
             self.font_paths.clone(),
             self.font_data.clone(),
-            android,
+            &system_fonts,
         ));
         let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
         match self.backend {
@@ -78,7 +79,7 @@ where
                 let budget = build_software_renderer_config(
                     self.font_paths.clone(),
                     self.font_data.clone(),
-                    android,
+                    &system_fonts,
                 );
                 match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                     Ok(r) => {
@@ -94,7 +95,7 @@ where
                 let font_config = build_hardware_font_config(
                     self.font_paths.clone(),
                     self.font_data.clone(),
-                    android,
+                    &system_fonts,
                 );
                 // Reuse the renderer saved on suspend (keeps device/pipelines/caches warm); only the surface is rebound. Otherwise build a fresh one.
                 let hw_result = if let Some(mut existing) = self.hw_renderer.take() {
@@ -123,7 +124,7 @@ where
                         let budget = build_software_renderer_config(
                             self.font_paths.clone(),
                             self.font_data.clone(),
-                            android,
+                            &system_fonts,
                         );
                         match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                             Ok(r) => {
@@ -148,12 +149,6 @@ where
             window.width() as f32 / sf,
             window.height() as f32 / sf,
         ));
-        // Apply the OS light/dark preference before the tree mounts, so its first layout uses the right theme
-        // (an app that opted into `follow_system` reads this). `None` (undetectable, e.g. X11) leaves the
-        // app's own default in place.
-        if let Some(dark) = window.prefers_dark() {
-            self.app.set_system_dark(dark);
-        }
         self.tree = Some(ComponentList::new(self.app.root()));
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
@@ -235,9 +230,13 @@ where
                             let font_paths = self.font_paths.clone();
                             let font_data = self.font_data.clone();
                             let android = cfg!(target_os = "android");
+                            let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
                             let handle = std::thread::spawn(move || {
-                                let font_config =
-                                    build_hardware_font_config(font_paths, font_data, android);
+                                let font_config = build_hardware_font_config(
+                                    font_paths,
+                                    font_data,
+                                    &system_fonts,
+                                );
                                 HardwareRenderer::new(
                                     window_clone,
                                     cache_path.as_deref(),
@@ -305,11 +304,6 @@ where
                                 // Drop the old tree first so effect closures (which contain code from the old dylib) are destroyed while the old lib is still mapped. Only then replace self.app, which dlcloses the old dylib.
                                 self.tree = None;
                                 self.app = Box::new(new_app);
-                                // The reloaded dylib reset its OS-scheme signal to the default; re-push the
-                                // current preference so `follow_system` lands on the right mode after reload.
-                                if let Some(dark) = window.prefers_dark() {
-                                    self.app.set_system_dark(dark);
-                                }
                                 self.tree = Some(ComponentList::new(self.app.root()));
                                 // A successful reload clears any banner from the previous failed build.
                                 self.dev.set_build_error(None);
@@ -404,6 +398,7 @@ where
                 .unwrap_or_else(config::compile_time_backend);
             let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
             let android = cfg!(target_os = "android");
+            let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
             // Drop old renderer and render thread before creating new one to avoid peak memory overlap.
             drop(self.renderer.take());
             drop(self.render_tx.take());
@@ -419,7 +414,7 @@ where
                     let budget = build_software_renderer_config(
                         self.font_paths.clone(),
                         self.font_data.clone(),
-                        android,
+                        &system_fonts,
                     );
                     match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                         Ok(r) => {
@@ -433,7 +428,7 @@ where
                     let font_config = build_hardware_font_config(
                         self.font_paths.clone(),
                         self.font_data.clone(),
-                        android,
+                        &system_fonts,
                     );
                     match HardwareRenderer::new(
                         window.clone(),

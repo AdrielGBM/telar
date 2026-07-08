@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+mod color_scheme;
 mod paths;
 pub mod platform;
 

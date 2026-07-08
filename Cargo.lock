@@ -2952,6 +2952,7 @@ dependencies = [
  "services-core",
  "tracing",
  "winit",
+ "zbus",
 ]
 
 [[package]]
@@ -2961,7 +2962,6 @@ dependencies = [
  "platform-core",
  "raw-window-handle",
  "winit",
- "zbus",
 ]
 
 [[package]]

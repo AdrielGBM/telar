@@ -107,6 +107,12 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
         match event_loop.create_window(attributes) {
             Ok(w) => {
                 let window = WinitWindow(Arc::new(w));
+                // Deliver the OS light/dark preference before the tree mounts, so its first layout uses the
+                // right theme. winit reports it on Windows/macOS; on Linux fall back to the freedesktop portal.
+                if let Some(dark) = initial_prefers_dark(&window) {
+                    self.handler
+                        .on_event(Event::ColorSchemeChanged { dark }, &window);
+                }
                 if !self.handler.on_resume(&window) {
                     event_loop.exit();
                     return;
@@ -290,12 +296,26 @@ impl Platform for WinitPlatform {
         #[cfg(target_os = "linux")]
         {
             let proxy = self.event_loop.create_proxy();
-            platform_winit::spawn_color_scheme_watch(move |dark| {
+            crate::color_scheme::spawn_watch(move |dark| {
                 let _ = proxy.send_event(UserEvent::ColorScheme(dark));
             });
         }
         self.event_loop
             .run_app(&mut runner)
             .map_err(|e| PlatformError(e.to_string()))
+    }
+}
+
+// The initial OS light/dark preference at window creation: winit's native answer (Windows/macOS), falling
+// back to the freedesktop portal on Linux where winit always reports `None`.
+fn initial_prefers_dark(window: &WinitWindow) -> Option<bool> {
+    let winit = window.prefers_dark();
+    #[cfg(target_os = "linux")]
+    {
+        winit.or_else(crate::color_scheme::portal_prefers_dark)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        winit
     }
 }

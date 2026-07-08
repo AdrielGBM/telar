@@ -10,3 +10,6 @@ platform-winit.workspace = true
 services-core.workspace = true
 tracing.workspace = true
 winit.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5.17.0"
