@@ -278,6 +278,16 @@ impl ViewGen<'_> {
 
     pub(super) fn emit_widget_ref(&mut self, el: &Element) -> ChildEmit {
         let var = el.content.as_deref().unwrap_or("").trim().to_string();
+        // `widget "x"` splices `x` as a bare in-scope Rust binding; a non-identifier would emit
+        // syntactically broken code, so surface a clear compile error at this element instead. (Semantic
+        // "does the binding exist?" / go-to-def / rename remains a future analyzer follow-up — see TODO.)
+        if !is_ident(&var) {
+            let msg = format!("widget reference \"{var}\" is not a valid Rust identifier");
+            return ChildEmit::Simple {
+                name: format!("compile_error!({})", rust_str(&msg)),
+                code: String::new(),
+            };
+        }
         ChildEmit::Simple {
             name: var,
             code: String::new(),

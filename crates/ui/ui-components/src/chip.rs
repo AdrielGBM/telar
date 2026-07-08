@@ -1,0 +1,239 @@
+use std::rc::Rc;
+
+use layout_core::{AlignItems, LayoutError, LayoutStyle};
+use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
+
+use crate::shared;
+
+const PAD_X: f32 = 10.0;
+const PAD_Y: f32 = 4.0;
+const RADIUS: f32 = 12.0;
+const GAP: f32 = 6.0;
+const FONT_SIZE: f32 = 13.0;
+const CLOSE_SIZE: f32 = 12.0;
+const DOT_SIZE: f32 = 6.0;
+
+/// Subtle outlined tone (fill + hairline border), matching the raw `box fill:surface_alt stroke:border`
+/// pattern documented on `text_field` — a chip is the same "quiet surface" look, just pill-shaped.
+const SURFACE_ALT: Color = Color::rgba(0.5, 0.5, 0.55, 0.10);
+const BORDER: Color = Color::rgba(0.5, 0.5, 0.55, 0.35);
+/// Muted tone for the `×` close affordance, matching `modal`'s Close.
+const CLOSE_INK: Color = Color::rgba(0.35, 0.35, 0.42, 1.0);
+
+/// A small outlined tag, quieter than `badge`'s solid fill: a bordered surface pill with normal ink text,
+/// an optional small accent dot when `color` is set, and an optional `×` affordance that fires `on_close`.
+/// Non-interactive unless `on_close` is set. High-level sugar over `StyledContainer`/`Container` + `Text`;
+/// lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
+pub struct ChipProps {
+    pub label: &'static str,
+    /// Small leading accent dot colour. `Color::TRANSPARENT` (the default) means "unset": no dot is shown at
+    /// all (not just an invisible one) — see `chip`'s doc. A closure (re-read every frame) so a theme token
+    /// or `$signal` colour re-colours the dot live, like `button`'s `fill`.
+    pub color: Box<dyn Fn() -> Color>,
+    /// When `Some`, a small `×` press target renders on the right and calls it on tap. `None` (the default)
+    /// omits it entirely, leaving a non-interactive chip.
+    pub on_close: Option<Box<dyn Fn()>>,
+}
+
+impl Default for ChipProps {
+    fn default() -> Self {
+        Self {
+            label: "",
+            color: Box::new(|| Color::TRANSPARENT),
+            on_close: None,
+        }
+    }
+}
+
+pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let ChipProps {
+        label,
+        color,
+        on_close,
+    } = props;
+    // Erased to `Rc` so the same colour closure can feed both the dot's presence check (read once, below)
+    // and its per-frame fill style, like `button`'s `fill`/`outline`.
+    let color: shared::ReactiveColor = Rc::from(color);
+
+    let mut children: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(3);
+
+    // The dot's presence is decided once at build time (an unset colour means "no dot", not an invisible
+    // one); its shade is still re-read every frame so a live theme/signal colour tracks.
+    if (color.as_ref())() != Color::TRANSPARENT {
+        let dot_color = Rc::clone(&color);
+        let dot = StyledContainer::new(
+            LayoutStyle::new().width(DOT_SIZE).height(DOT_SIZE),
+            move |_r| dot_style(dot_color.as_ref()),
+            vec![],
+        )?;
+        children.push(box_item(dot));
+    }
+
+    // `auto` (measured leaf) so the label gets its intrinsic WIDTH in this row; a plain `Text::new` only
+    // stretches its cross-axis, leaving width 0 and the label invisible.
+    let label_widget = Text::auto(
+        move || label.to_string(),
+        LayoutStyle::new(),
+        || TextStyle::new(FONT_SIZE, shared::INK),
+    )?;
+    children.push(box_item(label_widget));
+
+    if let Some(cb) = on_close {
+        let close_label = Text::auto(
+            || "×".to_string(),
+            LayoutStyle::new(),
+            || TextStyle::new(CLOSE_SIZE, CLOSE_INK),
+        )?;
+        let close = StyledContainer::new(
+            LayoutStyle::new().flex_row(),
+            |_r| RectStyle::default(),
+            vec![box_item(close_label)],
+        )?
+        .on_press(cb);
+        children.push(box_item(close));
+    }
+
+    let row = Container::new(
+        LayoutStyle::new()
+            .flex_row()
+            .align_items(AlignItems::CENTER)
+            .gap(GAP),
+        children,
+    )?;
+
+    let pill = StyledContainer::new(
+        LayoutStyle::new()
+            .flex_row()
+            .align_items(AlignItems::CENTER)
+            .padding_horizontal(PAD_X)
+            .padding_vertical(PAD_Y),
+        |_r| {
+            RectStyle::default()
+                .with_fill(SURFACE_ALT)
+                .with_stroke(Stroke::new(BORDER, 1.0))
+                .with_radius(BorderRadius::all(RADIUS))
+        },
+        vec![box_item(row)],
+    )?;
+    Ok(box_item(pill))
+}
+
+fn dot_style(color: &dyn Fn() -> Color) -> RectStyle {
+    RectStyle::default()
+        .with_fill(color())
+        .with_radius(BorderRadius::all(DOT_SIZE / 2.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use layout_core::AvailableSpace;
+    use platform_core::{Event, PointerButton, PointerSource};
+    use renderer_core::DrawCommand;
+    use ui_core::reset_layout_runtime;
+    use ui_core::{ComponentList, compute_layout, new_container, track_layout};
+
+    use super::*;
+
+    fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
+        cmds.iter()
+            .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
+    }
+
+    // A labelled chip draws its label text.
+    #[test]
+    fn renders_label() {
+        reset_layout_runtime();
+        let chip = chip(ChipProps {
+            label: "Draft",
+            ..Default::default()
+        })
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_row().width(200.0).height(60.0),
+            &[chip.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(60.0),
+        )
+        .unwrap();
+        let tree = ComponentList::new(chip);
+        assert!(find_text(&tree.commands(), "Draft"));
+    }
+
+    // Building with `on_close: Some(...)` works and renders the × affordance; tapping it fires the callback.
+    #[test]
+    fn on_close_renders_and_fires_on_tap() {
+        reset_layout_runtime();
+        let flag = Rc::new(Cell::new(false));
+        let sink = flag.clone();
+        let mut chip = chip(ChipProps {
+            label: "Tag",
+            on_close: Some(Box::new(move || sink.set(true))),
+            ..Default::default()
+        })
+        .unwrap();
+        let node = chip.layout_node();
+        // Wrapped in a non-stretching root (like `checkbox`'s test helper) so the pill shrink-wraps to its
+        // content instead of filling the root's full width — the earlier edge-tap math otherwise missed
+        // the × entirely, landing in dead space to the right of a stretched pill.
+        let rect = track_layout(node).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_row().width(200.0).height(60.0),
+            &[node],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(60.0),
+        )
+        .unwrap();
+
+        let r = rect.get();
+        // Tap just inside the pill's right padding, where the × close target sits.
+        let (cx, cy) = (
+            (r.x + r.width - PAD_X - 3.0) as f64,
+            (r.y + r.height / 2.0) as f64,
+        );
+        chip.on_event(&Event::PointerPressed {
+            x: cx,
+            y: cy,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        chip.on_event(&Event::PointerReleased {
+            x: cx,
+            y: cy,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        assert!(flag.get(), "tapping the × fires on_close");
+    }
+
+    // An empty label still builds and lays out without panicking.
+    #[test]
+    fn empty_label_builds_without_panic() {
+        reset_layout_runtime();
+        let chip = chip(ChipProps::default()).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_row().width(200.0).height(60.0),
+            &[chip.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(60.0),
+        )
+        .unwrap();
+        let tree = ComponentList::new(chip);
+        let _ = tree.commands();
+    }
+}

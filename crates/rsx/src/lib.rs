@@ -89,10 +89,11 @@ pub use ui_core::{
 // (`button`/`ButtonProps`/…) by bare name through the `use rsx::*` every transpiled file emits.
 #[cfg(feature = "components")]
 pub use ui_components::{
-    ButtonProps, CheckboxProps, DrawerProps, HeadingProps, MenuProps, ModalProps, RadioProps,
-    SectionProps, SelectProps, SliderProps, TextFieldProps, ToggleProps, TooltipProps, button,
-    checkbox, drawer, heading, menu, modal, radio, section, select, slider, text_field, toggle,
-    tooltip,
+    AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, DrawerProps, HeadingProps,
+    MenuProps, ModalProps, ProgressProps, RadioProps, SectionProps, SelectProps, SliderProps,
+    SpinnerProps, StepperProps, TabsProps, TextFieldProps, ToggleProps, TooltipProps, accordion,
+    badge, button, checkbox, chip, drawer, heading, menu, modal, progress, radio, section, select,
+    slider, spinner, stepper, tabs, text_field, toggle, tooltip,
 };
 
 /// Consults this crate's overlay registry and reports whether an overlay consumed the pointer event. The

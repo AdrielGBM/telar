@@ -97,7 +97,17 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "slider",
             s(
-                &["value", "color", "track_color", "width", "on_change"],
+                &[
+                    "value",
+                    "color",
+                    "track_color",
+                    "width",
+                    "min",
+                    "max",
+                    "step",
+                    "label",
+                    "on_change",
+                ],
                 false,
                 &["color", "track_color"],
                 &["value", "on_change"],
@@ -157,6 +167,50 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
             ),
         ),
         ("tooltip", s(&["text", "color"], true, &["color"], &[])),
+        // Presentation & indicators.
+        (
+            "progress",
+            s(
+                &["value", "color", "track_color", "width", "height"],
+                false,
+                &["color", "track_color"],
+                &["value"],
+            ),
+        ),
+        ("spinner", s(&["color", "size"], false, &["color"], &[])),
+        ("badge", s(&["label", "color"], false, &["color"], &[])),
+        (
+            "chip",
+            s(
+                &["label", "color", "on_close"],
+                false,
+                &["color"],
+                &["on_close"],
+            ),
+        ),
+        // Navigation & disclosure.
+        (
+            "tabs",
+            s(
+                &["items", "selected", "color"],
+                false,
+                &["color"],
+                &["selected"],
+            ),
+        ),
+        (
+            "accordion",
+            s(&["title", "open", "color"], true, &["color"], &["open"]),
+        ),
+        (
+            "stepper",
+            s(
+                &["value", "min", "max", "step", "color", "on_change"],
+                false,
+                &["color"],
+                &["value", "on_change"],
+            ),
+        ),
     ]
 }
 
@@ -237,20 +291,90 @@ fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>, Vec<String>) {
     }
     let mut fields = Vec::new();
     let mut optional = Vec::new();
-    for chunk in logic[body_start..end].split(',') {
-        if let Some((name, is_optional)) = parse_field(chunk) {
-            if is_optional {
-                optional.push(name.clone());
+    let mut has_inline_default = false;
+    for chunk in split_top_level_commas(&logic[body_start..end]) {
+        if let Some(field) = parse_field(&chunk) {
+            if field.optional {
+                optional.push(field.name.clone());
             }
-            fields.push(name);
+            if field.default.is_some() {
+                has_inline_default = true;
+            }
+            fields.push(field.name);
         }
     }
-    (true, derives_default, fields, optional)
+    // Inline field defaults synthesize a `Default` impl (see `extract_props_struct`), so the struct is
+    // default-constructible even without `#[derive(Default)]` — callers may omit its props like a derived one.
+    (
+        true,
+        derives_default || has_inline_default,
+        fields,
+        optional,
+    )
 }
 
-/// Extracts the field name and whether its type is `Option<...>` from a `[pub] name: Type` struct-field
-/// chunk, skipping comment lines. An `Option<...>` field is `Some(...)`-wrapped at the call-site.
-fn parse_field(chunk: &str) -> Option<(String, bool)> {
+/// A parsed `Props` field: its name, its type, whether the type is `Option<...>` (→ the caller
+/// `Some(...)`-wraps its value), and any inline default expression (the `name: Type = expr` sugar).
+struct ParsedField {
+    name: String,
+    ty: String,
+    optional: bool,
+    default: Option<String>,
+}
+
+/// Finds the byte index of the top-level `=` that separates a field type from an inline default
+/// expression (`name: Type = expr`), or `None`. Skips `=` inside angle brackets and the
+/// `==`/`=>`/`<=`/`>=`/`!=` operators, and treats `->` as an arrow (not a generic close) so a type
+/// like `Box<dyn Fn() -> T>` keeps correct bracket depth.
+fn find_default_sep(s: &str) -> Option<usize> {
+    let b = s.as_bytes();
+    let mut depth = 0i32;
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'<' => depth += 1,
+            b'>' if i > 0 && b[i - 1] == b'-' => {}
+            b'>' => depth = (depth - 1).max(0),
+            b'=' if depth == 0 => {
+                let prev = if i > 0 { b[i - 1] } else { 0 };
+                let next = if i + 1 < b.len() { b[i + 1] } else { 0 };
+                if !matches!(prev, b'=' | b'<' | b'>' | b'!') && !matches!(next, b'=' | b'>') {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Splits a struct body into field chunks on top-level commas, so a comma inside a default expression
+/// (e.g. `= Color::rgba(1.0, 0.0, 0.0, 1.0)`) or a generic (`Vec<A, B>`) does not split a field.
+fn split_top_level_commas(body: &str) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    let b = body.as_bytes();
+    for (i, &c) in b.iter().enumerate() {
+        match c {
+            b'(' | b'[' | b'{' | b'<' => depth += 1,
+            b')' | b']' | b'}' => depth = (depth - 1).max(0),
+            b'>' if i > 0 && b[i - 1] == b'-' => {}
+            b'>' => depth = (depth - 1).max(0),
+            b',' if depth == 0 => {
+                chunks.push(body[start..i].to_string());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    chunks.push(body[start..].to_string());
+    chunks
+}
+
+/// Extracts a `Props` field from a `[pub] name: Type[ = default]` chunk, skipping comment lines.
+fn parse_field(chunk: &str) -> Option<ParsedField> {
     let cleaned = chunk
         .lines()
         .filter(|l| !l.trim_start().starts_with("//"))
@@ -263,9 +387,18 @@ fn parse_field(chunk: &str) -> Option<(String, bool)> {
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         return None;
     }
-    let ty = t[colon + 1..].trim_start();
+    let rest = t[colon + 1..].trim_start();
+    let (ty, default) = match find_default_sep(rest) {
+        Some(i) => (rest[..i].trim(), Some(rest[i + 1..].trim().to_string())),
+        None => (rest.trim(), None),
+    };
     let optional = ty.starts_with("Option<") || ty.starts_with("Option <");
-    Some((name.to_string(), optional))
+    Some(ParsedField {
+        name: name.to_string(),
+        ty: ty.to_string(),
+        optional,
+        default,
+    })
 }
 
 /// Input to a single transpilation: the parsed document plus the desired component function name (typically derived from the source file stem).
@@ -376,7 +509,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         ));
     }
 
-    let (props_struct, logic_no_props, struct_span) =
+    let (props_struct, props_default_impl, logic_no_props, struct_span) =
         extract_props_struct(&doc.logic.source, &fn_name);
     let has_props = props_struct.is_some();
     let props_type = if has_props {
@@ -448,6 +581,13 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             let src = Some(logic_start0 + (struct_start + k) as u32);
             code.push(line, src);
             code.push("\n", src);
+        }
+        // Synthesized from inline `field: Type = expr` defaults (no source span — it maps to no `.rsx` line).
+        if let Some(impl_code) = &props_default_impl {
+            for line in impl_code.lines() {
+                code.push(line, None);
+                code.push("\n", None);
+            }
         }
         code.push("\n", None);
     }
@@ -610,17 +750,25 @@ fn node_uses_slot(node: &ViewNode) -> bool {
     }
 }
 
-/// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone, renames it to `{PascalFnName}Props`, and returns the renamed struct code together with the logic zone with the struct removed.
-///
-/// Returns `(None, original_logic, None)` when no `struct Props` is found; otherwise the third element is the `[start, end]` (inclusive) line span of the struct within `logic`'s lines, so the caller can map the emitted struct back to the original source.
-fn extract_props_struct(
-    logic: &str,
-    fn_name: &str,
-) -> (Option<String>, String, Option<(usize, usize)>) {
+/// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone,
+/// renames it to `{PascalFnName}Props`, and returns `(struct_code, default_impl, logic_without_struct, span)`.
+/// `default_impl` is `Some` only when the struct uses inline `field: Type = expr` defaults (a synthesized
+/// `Default` impl); it is emitted after the struct with no source mapping. `span` is the struct's
+/// `[start, end]` (inclusive) line span within `logic`, so the caller can map the struct back to source.
+/// `(struct_code, default_impl, logic_without_struct, struct_line_span)` — the output of extracting a
+/// `Props` struct from a logic zone.
+type ExtractedProps = (
+    Option<String>,
+    Option<String>,
+    String,
+    Option<(usize, usize)>,
+);
+
+fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
     let lines: Vec<&str> = logic.lines().collect();
 
     let Some(struct_line) = lines.iter().position(|l| l.trim().contains("struct Props")) else {
-        return (None, logic.to_string(), None);
+        return (None, None, logic.to_string(), None);
     };
 
     // Include any preceding `#[…]` attribute lines (e.g. `#[derive(Props)]`).
@@ -653,7 +801,7 @@ fn extract_props_struct(
     }
 
     if !found_close {
-        return (None, logic.to_string(), None);
+        return (None, None, logic.to_string(), None);
     }
 
     let struct_code = lines[start..=end].join("\n");
@@ -661,11 +809,79 @@ fn extract_props_struct(
     // Only rename the struct declaration, not the `derive(Props)` attribute.
     let renamed = struct_code.replace("struct Props", &format!("struct {props_type}"));
 
-    let mut remaining_lines = lines[..start].to_vec();
-    remaining_lines.extend_from_slice(&lines[end + 1..]);
-    (
-        Some(renamed),
-        remaining_lines.join("\n"),
-        Some((start, end)),
-    )
+    let remaining = {
+        let mut remaining_lines = lines[..start].to_vec();
+        remaining_lines.extend_from_slice(&lines[end + 1..]);
+        remaining_lines.join("\n")
+    };
+    let span = Some((start, end));
+
+    // Inline `name: Type = expr` defaults: strip them from the emitted struct (Rust fields can't carry
+    // a default) and synthesize a `Default` impl instead. Absent any inline default, the struct is
+    // emitted verbatim (renamed) — byte-identical to the pre-sugar behaviour.
+    let (open_rel, close_rel) = match (renamed.find('{'), renamed.rfind('}')) {
+        (Some(o), Some(c)) if o < c => (o, c),
+        _ => return (Some(renamed), None, remaining, span),
+    };
+    let body = &renamed[open_rel + 1..close_rel];
+    let parsed: Vec<ParsedField> = split_top_level_commas(body)
+        .iter()
+        .filter_map(|c| parse_field(c))
+        .collect();
+    if !parsed.iter().any(|f| f.default.is_some()) {
+        return (Some(renamed), None, remaining, span);
+    }
+
+    // Rebuild the struct with defaults stripped, dropping `Default` from any `#[derive(...)]` (it would
+    // collide with the synthesized impl). Field-level comments are dropped in the generated output only.
+    let header = &renamed[..open_rel];
+    let mut struct_out = String::new();
+    for line in header.lines() {
+        if let Some(kept) = strip_default_from_derive(line) {
+            struct_out.push_str(&kept);
+            struct_out.push('\n');
+        }
+    }
+    let brace_line = struct_out.trim_end().to_string();
+    struct_out.clear();
+    struct_out.push_str(&brace_line);
+    struct_out.push_str(" {\n");
+    for f in &parsed {
+        struct_out.push_str(&format!("    pub {}: {},\n", f.name, f.ty));
+    }
+    struct_out.push('}');
+
+    let mut impl_body = String::new();
+    for f in &parsed {
+        let val = f
+            .default
+            .clone()
+            .unwrap_or_else(|| "Default::default()".to_string());
+        impl_body.push_str(&format!("            {}: {},\n", f.name, val));
+    }
+    let impl_code = format!(
+        "impl Default for {props_type} {{\n    fn default() -> Self {{\n        Self {{\n{impl_body}        }}\n    }}\n}}"
+    );
+
+    (Some(struct_out), Some(impl_code), remaining, span)
+}
+
+/// Removes `Default` from a `#[derive(...)]` attribute line (returning `None` if the derive becomes
+/// empty, so the caller drops the line); any non-derive line passes through unchanged.
+fn strip_default_from_derive(line: &str) -> Option<String> {
+    let t = line.trim();
+    if !t.starts_with("#[derive(") {
+        return Some(line.to_string());
+    }
+    let inner_start = t.find('(')? + 1;
+    let inner_end = t.rfind(')')?;
+    let items: Vec<&str> = t[inner_start..inner_end]
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty() && *s != "Default")
+        .collect();
+    if items.is_empty() {
+        return None;
+    }
+    Some(format!("#[derive({})]", items.join(", ")))
 }

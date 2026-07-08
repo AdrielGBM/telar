@@ -14,8 +14,11 @@ pub(crate) type ReactiveColor = Rc<dyn Fn() -> Color>;
 pub(crate) const DEFAULT_ACCENT: Color = Color::rgba(0.24, 0.47, 0.98, 1.0);
 /// Opaque white surface fallback shared by `modal` and `drawer` when their `color` is unset.
 pub(crate) const DEFAULT_SURFACE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
-/// The label ink shared by the labelled controls (checkbox/radio/toggle).
-const LABEL: Color = Color::rgba(0.15, 0.15, 0.2, 1.0);
+/// Default text ink for the catalogue (labels, titles, values). `WidgetTheme` exposes no ink token, so
+/// this is the shared fallback for text that isn't an accent.
+pub(crate) const INK: Color = Color::rgba(0.15, 0.15, 0.2, 1.0);
+/// Muted rail/track fallback shared by `slider`/`progress`/`spinner` when their `track_color` is unset.
+pub(crate) const DEFAULT_TRACK: Color = Color::rgba(0.5, 0.5, 0.6, 0.3);
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`.
 /// `color()` is evaluated once. Collapses the per-widget accent/track/surface/bubble resolvers into one shape.
@@ -42,7 +45,7 @@ pub(crate) fn labelled_control(
         let text = Text::auto(
             move || label.clone(),
             LayoutStyle::new(),
-            || TextStyle::new(14.0, LABEL),
+            || TextStyle::new(14.0, INK),
         )?;
         children.push(box_item(text));
     }

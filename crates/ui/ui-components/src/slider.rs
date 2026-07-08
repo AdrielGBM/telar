@@ -3,9 +3,9 @@ use std::rc::Rc;
 use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
+use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_widget_theme;
-use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
+use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item, box_transform};
 
 use crate::shared;
 
@@ -13,18 +13,19 @@ use crate::shared;
 const TRACK_HEIGHT: f32 = 8.0;
 /// Thumb diameter (px), bigger than the track so it stays easy to grab; it overhangs the rail on purpose.
 const THUMB_SIZE: f32 = 16.0;
-/// Fallback track fill when no theme is active — light enough that the accent fill/thumb still read clearly.
-const DEFAULT_TRACK: Color = Color::rgba(0.5, 0.5, 0.6, 0.3);
+/// Caption size/gap above the track, mirroring `text_field`'s label row.
+const LABEL_SIZE: f32 = 13.0;
+const LABEL_GAP: f32 = 6.0;
 
-/// A drag-driven 0.0..=1.0 control: a rounded track, an accent fill up to `value`, and a thumb positioned by
+/// A drag-driven `min..=max` control: a rounded track, an accent fill up to `value`, and a thumb positioned by
 /// it. This is the canonical demo of the `on_drag` primitive (see `StyledContainer::on_drag`): the widget just
 /// encapsulates the press/move -> value mapping (and the fill/thumb repaint) an app would otherwise wire up by
 /// hand. High-level sugar over the primitives; lives in `ui-components`, not the kernel, so an app can drop it.
 /// `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own
 /// signal), `Some` is caller-bound.
 pub struct SliderProps {
-    /// Bound value, normalized to 0.0..=1.0 (out-of-range inputs are clamped on every drag report, not here).
-    /// `None` (the default) is uncontrolled — the widget makes its own `signal(0.0)`.
+    /// Bound value, reported in `min..=max` (out-of-range inputs are clamped on every drag report, not here).
+    /// `None` (the default) is uncontrolled — the widget makes its own `signal(min)`.
     pub value: Option<RwSignal<f32>>,
     /// Fill/thumb accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     pub color: Box<dyn Fn() -> Color>,
@@ -32,7 +33,17 @@ pub struct SliderProps {
     pub track_color: Box<dyn Fn() -> Color>,
     /// Track width in px. `0.0` (the default) means "unset" — the slider uses `220.0`.
     pub width: f32,
-    /// Fires with the new 0.0..=1.0 value on every drag report (the press and each subsequent move).
+    /// Lower bound of the reported value. Default `0.0`.
+    pub min: f32,
+    /// Upper bound of the reported value. Default `1.0`. If `max <= min` (the degenerate/unset state), the
+    /// slider falls back to `min=0.0, max=1.0` rather than dividing by zero.
+    pub max: f32,
+    /// Quantization step applied to the reported value. `0.0` (the default) means "unset" — continuous, no
+    /// snapping, following the same `0.0 == unset` sentinel convention as `width`.
+    pub step: f32,
+    /// A small caption stacked above the track; omitted entirely (no extra row) when empty.
+    pub label: &'static str,
+    /// Fires with the new `min..=max` value on every drag report (the press and each subsequent move).
     pub on_change: Option<Box<dyn Fn(f32)>>,
 }
 
@@ -43,6 +54,10 @@ impl Default for SliderProps {
             color: Box::new(|| Color::TRANSPARENT),
             track_color: Box::new(|| Color::TRANSPARENT),
             width: 0.0,
+            min: 0.0,
+            max: 1.0,
+            step: 0.0,
+            label: "",
             on_change: None,
         }
     }
@@ -54,10 +69,16 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         color,
         track_color,
         width,
+        min,
+        max,
+        step,
+        label,
         on_change,
     } = props;
+    // Degenerate/unset bounds (max <= min) fall back to the historical 0.0..=1.0 range instead of dividing by zero below.
+    let (min, max) = if max <= min { (0.0, 1.0) } else { (min, max) };
     // Uncontrolled: own the value so the slider still works when the caller binds no signal.
-    let value = value.unwrap_or_else(|| signal(0.0));
+    let value = value.unwrap_or_else(|| signal(min));
     let width = if width > 0.0 { width } else { 220.0 };
     // Shared across the fill and thumb style closures (a `Box<dyn Fn>` is not `Clone`, an `Rc` handle is).
     let color: shared::ReactiveColor = Rc::from(color);
@@ -81,10 +102,10 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         vec![],
     )?
     .with_transform(move |r| {
-        let v = fill_value.get().clamp(0.0, 1.0);
+        let t = ((fill_value.get() - min) / (max - min)).clamp(0.0, 1.0);
         // `box_transform` only pivots scale on the rect centre; a progress bar needs the left edge pinned
         // (so it grows rightward from x=0), which needs the raw matrix instead.
-        Some(Transform::scale_around(v, 1.0, r.x, r.y + r.height / 2.0).to_array())
+        Some(Transform::scale_around(t, 1.0, r.x, r.y + r.height / 2.0).to_array())
     });
 
     // The thumb: a normal in-flow child (the only one, since the fill above is out of flow), so it lands at
@@ -108,8 +129,8 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         vec![],
     )?
     .with_transform(move |r| {
-        let v = thumb_value.get().clamp(0.0, 1.0);
-        let tx = v * (width - THUMB_SIZE);
+        let t = ((thumb_value.get() - min) / (max - min)).clamp(0.0, 1.0);
+        let tx = t * (width - THUMB_SIZE);
         let ty = (TRACK_HEIGHT - THUMB_SIZE) / 2.0;
         box_transform(r, 0.0, 1.0, 1.0, tx, ty)
     });
@@ -120,7 +141,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             let fill = shared::resolve(track_color.as_ref(), || {
                 use_widget_theme()
                     .map(|t| t.widget_muted())
-                    .unwrap_or(DEFAULT_TRACK)
+                    .unwrap_or(shared::DEFAULT_TRACK)
             });
             RectStyle::default()
                 .with_fill(fill)
@@ -130,13 +151,39 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?
     .on_drag(move |px, _py| {
         // `px` is already local to the track (`on_drag` reports widget-local coords), so no rect subtraction here.
-        let v = (px / width).clamp(0.0, 1.0);
+        let t = (px / width).clamp(0.0, 1.0);
+        let mut v = min + t * (max - min);
+        if step > 0.0 {
+            // Snap to the nearest step, then re-clamp — rounding can walk a boundary value just past min/max.
+            let steps = ((v - min) / step).round();
+            v = (min + steps * step).clamp(min, max);
+        }
         value.set(v);
         if let Some(cb) = &on_change {
             cb(v);
         }
     });
-    Ok(box_item(track))
+
+    if label.is_empty() {
+        return Ok(box_item(track));
+    }
+    let caption = Text::new(
+        move || label.to_string(),
+        LayoutStyle::new().height(LABEL_SIZE * 1.4),
+        || TextStyle::new(LABEL_SIZE, label_color()),
+    )?;
+    let col = Container::new(
+        LayoutStyle::new().flex_column().gap(LABEL_GAP).width(width),
+        vec![box_item(caption), box_item(track)],
+    )?;
+    Ok(box_item(col))
+}
+
+/// The muted label ink, re-read every frame so it tracks the active theme (mirrors `text_field`'s caption colour).
+fn label_color() -> Color {
+    use_widget_theme()
+        .map(|t| t.widget_muted())
+        .unwrap_or(Color::rgba(0.5, 0.5, 0.6, 0.6))
 }
 
 #[cfg(test)]
@@ -251,5 +298,64 @@ mod tests {
             "on_change should see the same mapped value, got {}",
             seen.get()
         );
+    }
+
+    // A custom min/max range reports the drag in that range, not normalized 0..1.
+    #[test]
+    fn custom_range_maps_midpoint_to_range_midpoint() {
+        reset_layout_runtime();
+        let value = signal(0.0f32);
+        let mut widget = slider(SliderProps {
+            value: Some(value.clone()),
+            width: 200.0,
+            min: 0.0,
+            max: 100.0,
+            ..Default::default()
+        })
+        .unwrap();
+        let rect = lay_out(widget.layout_node());
+
+        widget.on_event(&press((rect.x + 100.0) as f64, (rect.y + 4.0) as f64));
+        assert!(
+            (value.get() - 50.0).abs() < 1e-3,
+            "midpoint press over 0..100 should map to 50.0, got {}",
+            value.get()
+        );
+    }
+
+    // A non-zero `step` snaps the reported value to the nearest step, not the raw continuous mapping.
+    #[test]
+    fn step_snaps_value_to_nearest_step() {
+        reset_layout_runtime();
+        let value = signal(0.0f32);
+        let mut widget = slider(SliderProps {
+            value: Some(value.clone()),
+            width: 100.0,
+            min: 0.0,
+            max: 100.0,
+            step: 10.0,
+            ..Default::default()
+        })
+        .unwrap();
+        let rect = lay_out(widget.layout_node());
+
+        // px=23 -> raw 23.0 -> 2.3 steps, which rounds down to the 20.0 step.
+        widget.on_event(&press((rect.x + 23.0) as f64, (rect.y + 4.0) as f64));
+        assert!(
+            (value.get() - 20.0).abs() < 1e-4,
+            "a drag near 0.23 with step 10 should snap to 20.0, got {}",
+            value.get()
+        );
+    }
+
+    // A `label` wraps the track in a labelled column instead of panicking.
+    #[test]
+    fn label_builds_without_panicking() {
+        reset_layout_runtime();
+        let result = slider(SliderProps {
+            label: "Volume",
+            ..Default::default()
+        });
+        assert!(result.is_ok());
     }
 }

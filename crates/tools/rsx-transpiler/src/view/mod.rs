@@ -320,6 +320,65 @@ mod tests {
     }
 
     #[test]
+    fn widget_ref_invalid_identifier_errors() {
+        // A non-identifier `widget` reference emits a `compile_error!` instead of splicing broken code.
+        let src = "[logic]\n[view]\nwidget \"not an ident\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains("compile_error!"),
+            "invalid widget ref should emit compile_error!:\n{}",
+            out.rust_code
+        );
+    }
+
+    #[test]
+    fn inline_field_default_synthesizes_default_impl() {
+        // `field: Type = expr` sugar: the emitted struct drops the default (invalid Rust otherwise) and a
+        // synthesized `Default` impl carries it; the `#[derive(Default)]` is stripped to avoid a collision.
+        let src = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub gap: f32,\n    pub pad: f32 = 16.0,\n}\n[view]\ntext \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "card", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("pub pad: f32,"),
+            "field default not stripped:\n{code}"
+        );
+        assert!(
+            !code.contains("= 16.0"),
+            "inline default leaked into struct:\n{code}"
+        );
+        assert!(
+            code.contains("impl Default for CardProps"),
+            "missing synthesized Default impl:\n{code}"
+        );
+        assert!(
+            code.contains("pad: 16.0"),
+            "default value missing from impl:\n{code}"
+        );
+        assert!(
+            code.contains("gap: Default::default()"),
+            "non-defaulted field missing from impl:\n{code}"
+        );
+        assert!(
+            !code.contains("#[derive(Default)]"),
+            "derive(Default) should be stripped when an impl is synthesized:\n{code}"
+        );
+    }
+
+    #[test]
+    fn inline_default_makes_component_default_constructible() {
+        // A struct with an inline default is default-constructible even without `#[derive(Default)]`, so
+        // the registry lets callers omit its props (they fall through to `..Default::default()`).
+        let sig = crate::scan_component_sig(
+            "[logic]\npub struct Props {\n    pub pad: f32 = 16.0,\n}\n[view]\ntext \"x\"\n",
+        );
+        assert!(
+            sig.props_default,
+            "inline default should mark props as default-constructible"
+        );
+        assert!(sig.prop_fields.contains(&"pad".to_string()));
+    }
+
+    #[test]
     fn canvas_with_rect_and_text_children() {
         let src = "[logic]\n[view]\ncanvas width:100 height:50\n    rect fill:#3c77fa radius:8\n    text \"hi\" x:0 y:4 w:full h:42 size:12 color:white\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
