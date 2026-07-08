@@ -51,12 +51,7 @@ let result = Canvas::with_intrinsic_height(360.0, |rect| {
                     width: 52.0,
                     height: 52.0,
                 },
-                RectStyle {
-                    fill: Some(Paint::Solid(color)),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(6.0),
-                },
+                RectStyle::filled(color, 6.0),
             )],
         ));
     }
@@ -81,12 +76,7 @@ let result = Canvas::with_intrinsic_height(360.0, |rect| {
             m,
             [RenderNode::path(
                 Arc::new(arrow(cx, cy, 54.0)),
-                PathStyle {
-                    fill: Some(Paint::Solid(color)),
-                    stroke: None,
-                    shadow: None,
-                    fill_rule: FillRule::Winding,
-                },
+                PathStyle::default().with_fill(color),
             )],
         ));
     }
@@ -119,12 +109,7 @@ let result = Canvas::with_intrinsic_height(360.0, |rect| {
                     width: 52.0,
                     height: 52.0,
                 },
-                RectStyle {
-                    fill: Some(Paint::Solid(palette[i % palette.len()])),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(8.0),
-                },
+                RectStyle::filled(palette[i % palette.len()], 8.0),
             )],
         ));
     }
@@ -135,14 +120,12 @@ let result = Canvas::with_intrinsic_height(360.0, |rect| {
 
 [view]
 col gap:20
-    doc_header kicker:"12 · MEDIA" title:"Transforms" desc:"Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point."
-    col gap:8
-        text "Scale, rotate, and a composed rotate-then-scale" size:13 color:ink
+    doc_header kicker:"MEDIA" title:"Transforms" desc:"Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point."
+    example title:"Scale, rotate, and a composed rotate-then-scale"
         card
             widget "result"
         code_line code:"Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))"
-    col gap:8
-        text "Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)" size:13 color:ink
+    example title:"Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)"
         card
             row gap:24 justify:center pad_y:16
                 box fill:primary radius:8 width:56 height:56
@@ -151,8 +134,7 @@ col gap:20
                 box fill:danger radius:8 width:56 height:56 rotate:15 scale:0.85
                 box fill:ink radius:8 width:56 height:56 rotate:-12 translate_y:-8
         code_line code:"box fill:success rotate:20      box fill:danger rotate:15 scale:0.85"
-    col gap:8
-        text "The Transform API" size:13 color:ink
+    example title:"The Transform API"
         col gap:6
             prop_row name:"scale_around" values:"sx, sy, cx, cy" about:"Scale about a pivot point."
             prop_row name:"rotate_around" values:"deg, cx, cy" about:"Rotate about a pivot point."

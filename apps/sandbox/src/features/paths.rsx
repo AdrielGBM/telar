@@ -20,13 +20,7 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         Point::new(10.0, 120.0),
     ]));
     kids.push(
-        Path::static_data(triangle, move || PathStyle {
-            fill: Some(Paint::Solid(primary)),
-            stroke: None,
-            shadow: None,
-            fill_rule: FillRule::Winding,
-        })
-        .view(),
+        Path::static_data(triangle, move || PathStyle::default().with_fill(primary)).view(),
     );
     kids.push(RenderNode::text(
         rsx::static_rc_str!("polygon fill"),
@@ -51,11 +45,10 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         Arc::new(PathData::polygon(&pts))
     };
     kids.push(
-        Path::static_data(star, move || PathStyle {
-            fill: Some(Paint::Solid(warning)),
-            stroke: Some(Stroke::new(ink, 1.5)),
-            shadow: None,
-            fill_rule: FillRule::Winding,
+        Path::static_data(star, move || {
+            PathStyle::default()
+                .with_fill(warning)
+                .with_stroke(Stroke::new(ink, 1.5))
         })
         .view(),
     );
@@ -85,11 +78,10 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
             .close(),
     );
     kids.push(
-        Path::static_data(donut, move || PathStyle {
-            fill: Some(Paint::Solid(purple)),
-            stroke: None,
-            shadow: None,
-            fill_rule: FillRule::EvenOdd,
+        Path::static_data(donut, move || {
+            PathStyle::default()
+                .with_fill(purple)
+                .with_fill_rule(FillRule::EvenOdd)
         })
         .view(),
     );
@@ -111,11 +103,8 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
             .quad_to(Point::new(80.0, 180.0), Point::new(150.0, 250.0)),
     );
     kids.push(
-        Path::static_data(quad, move || PathStyle {
-            fill: None,
-            stroke: Some(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
-            shadow: None,
-            fill_rule: FillRule::Winding,
+        Path::static_data(quad, move || {
+            PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round))
         })
         .view(),
     );
@@ -136,11 +125,8 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         Point::new(260.0, 250.0),
     ));
     kids.push(
-        Path::static_data(cubic, move || PathStyle {
-            fill: None,
-            stroke: Some(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
-            shadow: None,
-            fill_rule: FillRule::Winding,
+        Path::static_data(cubic, move || {
+            PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round))
         })
         .view(),
     );
@@ -208,22 +194,19 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
 
 [view]
 col gap:20
-    doc_header kicker:"11 · MEDIA" title:"Paths" desc:"Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas."
-    col gap:8
-        text "Polygons, curves, fills and a path shadow" size:13 color:ink
+    doc_header kicker:"MEDIA" title:"Paths" desc:"Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas."
+    example title:"Polygons, curves, fills and a path shadow"
         card
             widget "result"
         code_line code:"PathData::new().move_to(p).cubic_to(a, b, c)   >   Path::static_data(d, style)"
-    col gap:8
-        text "Declarative paths in [view]" size:13 color:ink
+    example title:"Declarative paths in [view]"
         card
             row gap:28 align:center
                 path d:"M0,0 L100,0 L50,80 Z" fill:primary stroke:ink stroke_width:2 width:100 height:80
                 path d:"M6,42 L34,70 L74,14" stroke:success stroke_width:7 width:80 height:80
                 path d:"M40,2 L50,30 L80,30 L56,48 L64,78 L40,60 L16,78 L24,48 L0,30 L30,30 Z" fill:warning stroke:ink stroke_width:1 width:80 height:80
         code_line code:"path d:\"M0,0 L100,0 L50,80 Z\" fill:primary stroke:ink stroke_width:2 width:100 height:80"
-    col gap:8
-        text "The PathData API" size:13 color:ink
+    example title:"The PathData API"
         col gap:6
             prop_row name:"move_to / line_to" values:"Point" about:"Start a subpath, add a straight segment."
             prop_row name:"quad_to / cubic_to" values:"Points" about:"Quadratic and cubic Bézier curves."

@@ -7,7 +7,7 @@ pub struct Props {
 }
 
 [view]
-box fill:surface stroke:border radius:16 grow:1 min_width:170 pad:20 gap:8 direction:col
+box fill:surface stroke:border radius:16 grow:1 min_width:170 pad:20 gap:8
     text "{props.icon}" size:28
     text "{props.title}" size:16 color:ink
     text "{props.body}" size:13 color:muted

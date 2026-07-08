@@ -45,9 +45,8 @@ let pct = memo(move || (slider.get() * 100.0) as i32);
 
 [view]
 col gap:20
-    doc_header kicker:"14 · INTERACTION" title:"Reactivity" desc:"A signal is reactive state; a memo derives from it. Read one with {$signal} and only the widgets that touch it recompute — no virtual DOM, no diffing."
-    col gap:8
-        text "One signal, several derived readers" size:13 color:ink
+    doc_header kicker:"INTERACTION" title:"Reactivity" desc:"A signal is reactive state; a memo derives from it. Read one with {$signal} and only the widgets that touch it recompute — no virtual DOM, no diffing."
+    example title:"One signal, several derived readers"
         card gap:8
             text "count · {$count}" size:22 color:ink
             text "doubled memo · {$doubled}" size:14 color:muted
@@ -57,15 +56,13 @@ col gap:20
                 button label:"+" fill:primary on_press:|| $count.update(|n| *n = (*n + 1).min(10))
                 button label:"Reset" ghost on_press:|| $count.set(0)
         code_line code:"let count = signal(0);   let doubled = memo(move || count.get() * 2);"
-    col gap:8
-        text "A reactive property — the bar's opacity tracks the same signal" size:13 color:ink
+    example title:"A reactive property — the bar's opacity tracks the same signal"
         card gap:8
             box fill:primary radius:8 height:36 opacity:$level align:center justify:center
                 text "opacity = count / 10" size:13 color:on_primary
             text "Press + and this bar fades in — a signal wired straight into a style." size:12 color:muted
         code_line code:"box fill:primary opacity:$level      (level is a memo of count/10)"
-    col gap:8
-        text "Reactive list — for over a signal, keyed and reconciled (not rebuilt)" size:13 color:ink
+    example title:"Reactive list — for over a signal, keyed and reconciled (not rebuilt)"
         card gap:10
             row gap:8
                 button label:"Add" fill:primary on_press:|| $todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); })
@@ -76,8 +73,7 @@ col gap:20
                     box fill:primary radius:4 width:8 height:8
                     text "{todo.label}" size:14 color:ink
         code_line code:"for todo in $todos key todo.id   >   row …   (reused/moved/dropped by key)"
-    col gap:8
-        text "Reactive if/else — the shown branch swaps on a signal" size:13 color:ink
+    example title:"Reactive if/else — the shown branch swaps on a signal"
         card gap:10
             button label:"Toggle" fill:primary on_press:|| $show.toggle()
             if $show
@@ -87,8 +83,7 @@ col gap:20
             else
                 text "…now you don't" size:14 color:muted
         code_line code:"if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)"
-    col gap:8
-        text "input + focus — two editable fields; Tab moves focus, each binds a signal (wrap a box for the look)" size:13 color:ink
+    example title:"input + focus — two editable fields; Tab moves focus, each binds a signal (wrap a box for the look)"
         card gap:10
             box fill:surface_alt stroke:border radius:8 pad_x:12 pad_y:10 width:300
                 input value:$name size:15 color:ink
@@ -96,21 +91,18 @@ col gap:20
                 input value:$email size:15 color:ink
             text "Hello, {$name}! ({$email})" size:14 color:muted
         code_line code:"input value:$name      (tap or Tab to focus · type · ← → Home End ⌫ · Esc blurs)"
-    col gap:8
-        text "on_focus — any box can be focusable: it joins the Tab order and observes its own focus" size:13 color:ink
+    example title:"on_focus — any box can be focusable: it joins the Tab order and observes its own focus"
         card gap:10
             box fill:surface_alt radius:8 pad:16 on_focus:|f| $box_focused.set(f)
                 text "Tab to me — focused: {$box_focused}" size:14 color:ink
         code_line code:"box on_focus(|f| $box_focused.set(f))      (Tab-focusable; drive a focus ring)"
-    col gap:8
-        text "on_drag — the drag base primitive: press-and-move reports the pointer, mapped to a value" size:13 color:ink
+    example title:"on_drag — the drag base primitive: press-and-move reports the pointer, mapped to a value"
         card gap:10
             box fill:surface_alt radius:7 height:14 width:280 on_drag:|px, _py| $slider.set((px / 280.0).clamp(0.0, 1.0))
                 box fill:primary radius:7 width:14 height:14 translate_x:$thumb_x
             text "value · {$pct}%" size:14 color:muted
         code_line code:"box on_drag(|px, _| $slider.set(px / 280))      (keeps tracking even off the track)"
-    col gap:8
-        text "overlay — a top-layer portal (modal/dropdown/toast): draws above everything, escapes clipping" size:13 color:ink
+    example title:"overlay — a top-layer portal (modal/dropdown/toast): draws above everything, escapes clipping"
         card gap:10
             button label:"Open modal" fill:primary on_press:|| $show_modal.set(true)
         if $show_modal
@@ -121,8 +113,7 @@ col gap:20
                         text "Above the page and outside any clip. Click the dim area to dismiss." size:13 color:muted
                         button label:"Close" outline:primary on_press:|| $show_modal.set(false)
         code_line code:"if $open  >  overlay  >  box (scrim, on_press dismiss)  >  box (dialog)"
-    col gap:8
-        text "Primitives" size:13 color:ink
+    example title:"Primitives"
         col gap:6
             prop_row name:"signal(v)" values:"RwSignal<T>" about:"Reactive state. .get() .set() .update() .peek()."
             prop_row name:"memo(f)" values:"Memo<T>" about:"Cached value that recomputes when its deps change."

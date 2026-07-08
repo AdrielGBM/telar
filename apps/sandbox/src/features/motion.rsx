@@ -3,32 +3,9 @@ use crate::core::theme::theme;
 
 let big = signal(false);
 
-// Spring-driven scale. The canvas gets its own clone so `scale` stays free for the button's retarget.
+// Spring-driven scale, read reactively by the declarative `box scale:$scale` below — no Canvas needed
+// for a box that only scales, since `scale:` accepts a `$signal` and `Animated` is signal-backed.
 let scale = motion::Animated::<f32>::new(1.0, motion::spring(170.0, 12.0));
-let scale_canvas = scale.clone();
-let spring_box = Canvas::new(LayoutStyle::new().width(100.0).height(100.0), move |rect| {
-    let s = scale_canvas.get();
-    let cx = rect.x + 50.0;
-    let cy = rect.y + 50.0;
-    let m = Transform::scale_around(s, s, cx, cy).to_array();
-    RenderNode::transform_with(
-        m,
-        [RenderNode::rect(
-            Rect {
-                x: cx - 30.0,
-                y: cy - 30.0,
-                width: 60.0,
-                height: 60.0,
-            },
-            RectStyle {
-                fill: Some(Paint::Solid(theme().primary)),
-                stroke: None,
-                shadow: None,
-                radius: BorderRadius::all(12.0),
-            },
-        )],
-    )
-})?;
 
 // Six PingPong keyframe loops, each delayed a bit more by hold() so the wave enters left-to-right.
 let bars: Vec<motion::Keyframes<f32>> = (0..6u64)
@@ -60,12 +37,7 @@ let equalizer = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), move |
                     width: bar_w,
                     height: h,
                 },
-                RectStyle {
-                    fill: Some(Paint::Solid(palette[i % palette.len()])),
-                    stroke: None,
-                    shadow: None,
-                    radius: BorderRadius::all(4.0),
-                },
+                RectStyle::filled(palette[i % palette.len()], 4.0),
             )
         })
         .collect();
@@ -87,14 +59,7 @@ let progress_bar = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), mov
     RenderNode::group([
         RenderNode::rect(
             rect,
-            RectStyle {
-                fill: Some(Paint::Solid(Color::rgba(
-                    t.muted.r, t.muted.g, t.muted.b, 0.25,
-                ))),
-                stroke: None,
-                shadow: None,
-                radius: BorderRadius::all(7.0),
-            },
+            RectStyle::filled(Color::rgba(t.muted.r, t.muted.g, t.muted.b, 0.25), 7.0),
         ),
         RenderNode::rect(
             Rect {
@@ -103,33 +68,26 @@ let progress_bar = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), mov
                 width: rect.width * pct,
                 height: rect.height,
             },
-            RectStyle {
-                fill: Some(Paint::Solid(t.primary)),
-                stroke: None,
-                shadow: None,
-                radius: BorderRadius::all(7.0),
-            },
+            RectStyle::filled(t.primary, 7.0),
         ),
     ])
 })?;
 
 [view]
 col gap:20
-    doc_header kicker:"16 · INTERACTION" title:"Motion" desc:"Beyond transitions, the motion kernel gives you springs and keyframe timelines driven from Rust — velocity-preserving bounces, staggered loops, and one-shot playback."
-    col gap:8
-        text "Spring — retarget a value and it settles with a natural bounce" size:13 color:ink
+    doc_header kicker:"INTERACTION" title:"Motion" desc:"Beyond transitions, the motion kernel gives you springs and keyframe timelines driven from Rust — velocity-preserving bounces, staggered loops, and one-shot playback."
+    example title:"Spring — retarget a value and it settles with a natural bounce"
         card gap:12
             row gap:20 align:center
-                widget "spring_box"
-                button label:"Bounce" fill:primary on_press:|| { let b = $big.peek(); $big.set(!b); $scale.retarget(if b { 0.6 } else { 1.3 }) }
-        code_line code:"let scale = motion::Animated::new(1.0, spring(170, 12));   scale.retarget(1.3)"
-    col gap:8
-        text "Staggered keyframes — six PingPong loops offset by hold()" size:13 color:ink
+                box width:100 height:100 align:center justify:center
+                    box fill:primary radius:12 width:60 height:60 scale:$scale
+                button label:"Bounce" fill:primary on_press:|| { $big.toggle(); $scale.retarget(if $big.get() { 1.3 } else { 0.6 }) }
+        code_line code:"box fill:primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)"
+    example title:"Staggered keyframes — six PingPong loops offset by hold()"
         card
             widget "equalizer"
         code_line code:"Keyframes::new(8.0).hold(i·110ms).then(48.0, 300ms, EaseInOut).start(Repeat::PingPong)"
-    col gap:8
-        text "One-shot timeline — Replay restarts the same handle" size:13 color:ink
+    example title:"One-shot timeline — Replay restarts the same handle"
         card gap:12
             row gap:12 align:center
                 widget "progress_bar"
