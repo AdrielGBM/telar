@@ -162,3 +162,51 @@ fn lsp_conversion_maps_severity_and_zero_based_line() {
     assert_eq!(lsp.range.start.character, 0);
     assert_eq!(lsp.range.end.character, u32::MAX);
 }
+
+fn widget_element(name: &str, line: usize) -> Element {
+    Element {
+        tag: "widget".into(),
+        classes: Vec::new(),
+        attributes: Vec::new(),
+        content: Some(name.to_string()),
+        leading_params: None,
+        children: Vec::new(),
+        line,
+        content_start: 0,
+    }
+}
+
+fn document_with_logic(logic_src: &str, nodes: Vec<ViewNode>) -> RsxDocument {
+    RsxDocument {
+        logic: rsx_parser::LogicZone {
+            source: logic_src.to_string(),
+            ..Default::default()
+        },
+        style: StyleSection::default(),
+        view: ViewSection { nodes },
+        previews: Vec::new(),
+    }
+}
+
+#[test]
+fn widget_ref_to_defined_binding_is_ok() {
+    let doc = document_with_logic(
+        "let spring_box = Canvas::new(style, draw)?;",
+        vec![ViewNode::Element(widget_element("spring_box", 4))],
+    );
+    assert!(semantic_diagnostics(&doc, None).is_empty());
+}
+
+#[test]
+fn widget_ref_to_unknown_binding_warns() {
+    // The binding was renamed/typo'd, so the reference resolves to nothing in [logic].
+    let doc = document_with_logic(
+        "let spring_box = Canvas::new(style, draw)?;",
+        vec![ViewNode::Element(widget_element("sprng_box", 4))],
+    );
+    let diags = semantic_diagnostics(&doc, None);
+    assert_eq!(diags.len(), 1);
+    assert_eq!(diags[0].severity, Severity::Warning);
+    assert_eq!(diags[0].span.line, 4);
+    assert!(diags[0].message.contains("sprng_box"));
+}

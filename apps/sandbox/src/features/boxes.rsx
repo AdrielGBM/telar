@@ -3,6 +3,11 @@
     align: center
     justify: center
 
+@tile
+    fill: surface_alt
+    stroke: border
+    radius: 10
+
 [view]
 col gap:20
     doc_header kicker:"SURFACES" title:"Boxes & borders" desc:"A box is a styled container: give it a fill, a stroke, and a corner radius. Those same paint attributes work on any row or col too."
@@ -10,23 +15,23 @@ col gap:20
         card
             row gap:14 wrap
                 box @center fill:primary radius:10 width:150 height:70
-                    text "fill" size:13 color:on_primary
+                    text "fill" size:13 color:on_primary align:center
                 box @center stroke:primary stroke_width:2 radius:10 width:150 height:70
-                    text "stroke" size:13 color:primary
+                    text "stroke" size:13 color:primary align:center
                 box @center fill:surface_alt stroke:primary stroke_width:2 radius:10 width:150 height:70
-                    text "fill + stroke" size:13 color:ink
+                    text "fill + stroke" size:13 color:ink align:center
         code_line code:"box fill:primary radius:10      box stroke:primary stroke_width:2"
     example title:"Corner radius — from sharp to a full pill"
         card
             row gap:14 wrap align:center
                 box @center fill:purple radius:0 width:110 height:64
-                    text "0" size:13 color:on_primary
+                    text "0" size:13 color:on_primary align:center
                 box @center fill:purple radius:8 width:110 height:64
-                    text "8" size:13 color:on_primary
+                    text "8" size:13 color:on_primary align:center
                 box @center fill:purple radius:20 width:110 height:64
-                    text "20" size:13 color:on_primary
+                    text "20" size:13 color:on_primary align:center
                 box @center fill:purple radius:40 width:130 height:56
-                    text "pill" size:13 color:on_primary
+                    text "pill" size:13 color:on_primary align:center
         code_line code:"box radius:0   ·   radius:8   ·   radius:20   ·   radius:40"
     example title:"Stroke width — a plain box makes a hairline or a heavy border"
         card
@@ -38,8 +43,14 @@ col gap:20
     example title:"Content alignment inside a box"
         card
             box @center fill:surface_alt radius:10 width:100% height:96
-                text "align:center justify:center" size:13 color:ink
+                text "align:center justify:center" size:13 color:ink align:center
         code_line code:"box align:center justify:center   (a box is a flex column)"
+    example title:"Class composition — a layout class and a paint recipe on one element"
+        card
+            row gap:14 wrap
+                box @center @tile width:150 height:70
+                    text "@center @tile" size:13 color:ink align:center
+        code_line code:"box @center @tile   ([style] classes compose: last wins, inline still overrides)"
     example title:"Attributes"
         col gap:6
             prop_row name:"fill" values:"token · #hex · $signal" about:"Solid background color."

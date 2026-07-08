@@ -26,6 +26,11 @@ pub fn semantic_diagnostics(doc: &RsxDocument, theme: Option<&ThemeView>) -> Vec
         .iter()
         .map(|c| c.name.as_str())
         .collect();
+    // Every identifier token that appears in `[logic]`. A `widget "x"` splices the in-scope binding `x`,
+    // so a name absent from this set is a typo or a renamed binding — flagged below. Membership (not a
+    // `let`-binding parse) keeps it conservative: destructured/patterned bindings still appear here, so a
+    // real binding is never a false positive; at worst a stray match suppresses a diagnostic (safe).
+    let logic_idents = collect_idents(&doc.logic.source);
 
     let theme_configured = theme.map(|t| t.theme_type.is_some()).unwrap_or(false);
 
@@ -33,6 +38,7 @@ pub fn semantic_diagnostics(doc: &RsxDocument, theme: Option<&ThemeView>) -> Vec
         &doc.view.nodes,
         &defined_classes,
         &local_constants,
+        &logic_idents,
         theme,
         theme_configured,
         &mut diagnostics,
@@ -41,10 +47,38 @@ pub fn semantic_diagnostics(doc: &RsxDocument, theme: Option<&ThemeView>) -> Vec
     diagnostics
 }
 
+/// Collects every identifier-shaped token in `src` (start `_`/letter, rest `_`/alphanumeric).
+fn collect_idents(src: &str) -> HashSet<&str> {
+    let bytes = src.as_bytes();
+    let mut set = HashSet::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'_' || bytes[i].is_ascii_alphabetic() {
+            let start = i;
+            while i < bytes.len() && (bytes[i] == b'_' || bytes[i].is_ascii_alphanumeric()) {
+                i += 1;
+            }
+            set.insert(&src[start..i]);
+        } else {
+            i += 1;
+        }
+    }
+    set
+}
+
+/// Whether `s` is a valid Rust identifier.
+fn is_ident(s: &str) -> bool {
+    let mut chars = s.chars();
+    matches!(chars.next(), Some(c) if c == '_' || c.is_ascii_alphabetic())
+        && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
+}
+
+#[allow(clippy::too_many_arguments)]
 fn check_nodes(
     nodes: &[ViewNode],
     defined_classes: &HashSet<&str>,
     local_constants: &HashSet<&str>,
+    logic_idents: &HashSet<&str>,
     theme: Option<&ThemeView>,
     theme_configured: bool,
     diagnostics: &mut Vec<Diagnostic>,
@@ -55,6 +89,7 @@ fn check_nodes(
                 el,
                 defined_classes,
                 local_constants,
+                logic_idents,
                 theme,
                 theme_configured,
                 diagnostics,
@@ -64,6 +99,7 @@ fn check_nodes(
                     &b.then_branch,
                     defined_classes,
                     local_constants,
+                    logic_idents,
                     theme,
                     theme_configured,
                     diagnostics,
@@ -73,6 +109,7 @@ fn check_nodes(
                         else_b,
                         defined_classes,
                         local_constants,
+                        logic_idents,
                         theme,
                         theme_configured,
                         diagnostics,
@@ -84,6 +121,7 @@ fn check_nodes(
                     &b.body,
                     defined_classes,
                     local_constants,
+                    logic_idents,
                     theme,
                     theme_configured,
                     diagnostics,
@@ -94,10 +132,12 @@ fn check_nodes(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn check_element(
     el: &Element,
     defined_classes: &HashSet<&str>,
     local_constants: &HashSet<&str>,
+    logic_idents: &HashSet<&str>,
     theme: Option<&ThemeView>,
     theme_configured: bool,
     diagnostics: &mut Vec<Diagnostic>,
@@ -111,6 +151,22 @@ fn check_element(
                 span.clone(),
             ));
         }
+    }
+
+    // `widget "x"` splices the in-scope `[logic]` binding `x`; flag a reference to a name that appears
+    // nowhere in [logic] (a typo or a binding renamed out from under it) at edit time, before rustc reports
+    // it against the generated code. Only for identifier-shaped names — a non-identifier is already a hard
+    // transpile error (`compile_error!`), so no diagnostic is needed here.
+    if el.tag == "widget"
+        && let Some(name) = el.content.as_deref().map(str::trim)
+        && !name.is_empty()
+        && is_ident(name)
+        && !logic_idents.contains(name)
+    {
+        diagnostics.push(Diagnostic::warning(
+            format!("`widget \"{name}\"` references `{name}`, which is not defined in [logic]"),
+            span.clone(),
+        ));
     }
 
     if theme_configured {
@@ -144,6 +200,7 @@ fn check_element(
         &el.children,
         defined_classes,
         local_constants,
+        logic_idents,
         theme,
         theme_configured,
         diagnostics,

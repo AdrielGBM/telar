@@ -13,20 +13,23 @@ use super::signals::{
 };
 
 impl ViewGen<'_> {
-    /// The effective paint attributes for an element: its inline attrs followed by the paint props of its first class. Inline wins because the paint helpers take the first `.find()` match.
+    /// The effective paint attributes for an element: its inline attrs followed by the paint props of its
+    /// classes. Inline wins (the paint helpers take the first `.find()` match, and inline attrs come first);
+    /// among multiple classes a later one overrides an earlier one, so classes are appended in REVERSE order
+    /// (the last class's props land ahead of the first's and win the `.find()`).
     pub(super) fn paint_attrs(&self, el: &Element) -> Vec<Attr> {
         let mut attrs = el.attributes.clone();
-        if let Some(name) = el.classes.first()
-            && let Some(class) = self.classes.iter().find(|c| &c.name == name)
-        {
-            for prop in &class.props {
-                if is_paint_key(&prop.key) {
-                    attrs.push(Attr {
-                        key: prop.key.clone(),
-                        value: prop.value.clone(),
-                        is_quoted: false,
-                        value_start: 0,
-                    });
+        for name in el.classes.iter().rev() {
+            if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
+                for prop in &class.props {
+                    if is_paint_key(&prop.key) {
+                        attrs.push(Attr {
+                            key: prop.key.clone(),
+                            value: prop.value.clone(),
+                            is_quoted: false,
+                            value_start: 0,
+                        });
+                    }
                 }
             }
         }
@@ -187,14 +190,28 @@ impl ViewGen<'_> {
         classes: &[String],
         attrs: &[Attr],
     ) -> String {
-        let mut expr = if let Some(first) = classes.first() {
-            // The first class provides the base style; further classes cannot currently compose, so only the first is applied.
+        let mut expr = if let Some((first, rest)) = classes.split_first() {
+            // The first class provides the base style (from its generated `style_*()` fn); further classes
+            // compose on top by inlining their layout props as chained calls, so a later class overrides an
+            // earlier one. A single class is byte-identical to before (the `rest` loop is empty).
             let mut base = format!("{}()", style_function_name(first));
-            // Apply the tag's flex direction only when no class declares one, so a styled `row .card` still lays out horizontally.
-            if !self.class_has_direction(first) {
+            for name in rest {
+                if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
+                    for prop in &class.props {
+                        if let Some(call) = layout_prop_call(&prop.key, &prop.value) {
+                            base.push_str(&call);
+                        }
+                    }
+                }
+            }
+            // Apply the tag's flex direction only when NO class declares one, so a styled `row @card` still
+            // lays out horizontally. `box` is included (like the no-class branch): a `LayoutStyle::new()`
+            // class fn defaults to `display:block`, where `align`/`justify` are no-ops, so a classed `box`
+            // needs `.flex_column()` to be a flex container and actually centre its children.
+            if !classes.iter().any(|c| self.class_has_direction(c)) {
                 match tag {
                     "row" | "grid" => base.push_str(".flex_row()"),
-                    "col" | "overlay" => base.push_str(".flex_column()"),
+                    "col" | "box" | "overlay" => base.push_str(".flex_column()"),
                     _ => {}
                 }
             }

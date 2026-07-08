@@ -439,6 +439,38 @@ mod tests {
     }
 
     #[test]
+    fn multiple_classes_compose_layout_and_paint() {
+        // `box @a @b`: the first class is the base (its `style_*()` fn), the second's layout props are chained
+        // on top (so it overrides), and a later class's paint still reaches the RectStyle.
+        let src = "[style]\n@a\n    align: center\n@b\n    align: start\n    fill: #ff0000\n[view]\nbox @a @b\n    text \"hi\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        // First class as base fn, second class's align chained directly after it (later wins at runtime).
+        assert!(
+            code.contains("style_a().align_items(AlignItems::START)"),
+            "second class's layout should compose on top of the first:\n{code}"
+        );
+        // The later class's fill reaches the RectStyle (paint composes too).
+        assert!(
+            code.contains("with_fill"),
+            "a class's fill should reach the RectStyle:\n{code}"
+        );
+    }
+
+    #[test]
+    fn classed_box_is_a_flex_container() {
+        // A `style_*()` class fn is `LayoutStyle::new()` = display:block, where align/justify are no-ops.
+        // A classed `box` must still get `.flex_column()` (like a plain box) so its children actually centre.
+        let src = "[style]\n@center\n    align: center\n    justify: center\n[view]\nbox @center width:100 height:60\n    text \"hi\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains("style_center().flex_column()"),
+            "a classed box must be a flex container so align/justify apply:\n{}",
+            out.rust_code
+        );
+    }
+
+    #[test]
     fn container_on_press_emits_click_handler() {
         // A painted `box` (StyledContainer) and a plain `col` (Container) both wire `.on_press`.
         let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press:|| $n.update(|v| *v += 1)\n    col on_press:|| $n.set(0)\n        text \"x\"\n";

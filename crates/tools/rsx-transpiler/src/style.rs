@@ -56,6 +56,10 @@ fn generate_constant(c: &StyleConstant) -> String {
 
 fn generate_class_function(class: &StyleClass) -> String {
     let mut out = String::new();
+    // A paint-only class (or one only ever used as a non-first, composed class) never has its layout fn
+    // called — its paint reaches the RectStyle and its layout props are inlined at the call site — so the
+    // generated fn can be dead. It's machine-generated, so silence the lint rather than special-casing it.
+    out.push_str("#[allow(dead_code)]\n");
     let _ = writeln!(
         out,
         "fn {}() -> LayoutStyle {{",
