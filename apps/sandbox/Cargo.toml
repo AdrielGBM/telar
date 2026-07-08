@@ -24,3 +24,8 @@ build_targets = ["aarch64-linux-android"]
 [package.metadata.android.sdk]
 min_sdk_version = 33
 target_sdk_version = 36
+
+[package.metadata.android.application.activity]
+# uiMode added so an OS dark/light change is handled in-process instead of recreating the NativeActivity,
+# which tears down the wgpu surface and hangs. The other three match cargo-apk's default configChanges.
+config_changes = "orientation|keyboardHidden|screenSize|uiMode"
