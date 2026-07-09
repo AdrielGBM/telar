@@ -135,7 +135,7 @@ pub use runner::run_with_platform;
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
 pub use runner::{run_app_with_name, run_multi_app_with_name};
 
-pub use rsx_macros::app;
+pub use rsx_macros::{app, rsx_modules};
 
 #[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]
 pub use preview_runner::make_hot_preview_app;
