@@ -5,23 +5,9 @@
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
-};
+use platform_headless::HeadlessWindow;
 use renderer_core::{Color, DrawCommand, RenderBackend, TextStyle};
 use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
-
-struct Fake;
-impl HasDisplayHandle for Fake {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
-impl HasWindowHandle for Fake {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
 
 #[test]
 fn visual_check_png() {
@@ -31,8 +17,11 @@ fn visual_check_png() {
     };
 
     let (w, h) = (520u32, 420u32);
-    let mut r =
-        SoftwareRenderer::<Fake, Fake>::new_headless(w, h, SoftwareRendererConfig::default());
+    let mut r = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
 
     let ink = Color::from_rgb_u8(230, 232, 240);
     let muted = Color::from_rgb_u8(150, 155, 168);

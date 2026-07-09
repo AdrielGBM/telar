@@ -3,29 +3,14 @@
 //! hoists it), and (2) a tap at the center reaches the scrim and is blocked from the background behind it
 //! (priority pointer routing). Runs in CI without an env var; pass `RSX_VISUAL_OUT` to also dump a PNG.
 
-use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
-};
-
 use layout_core::{AvailableSpace, LayoutStyle};
 use platform_core::{Event, PointerButton, PointerSource};
+use platform_headless::HeadlessWindow;
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, RenderBackend, ShapeStyle};
 use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use ui_core::{LayoutItem, Overlay, StyledContainer, compute_layout, reset_layout_runtime};
 use ui_tree::ComponentList;
-
-struct Fake;
-impl HasDisplayHandle for Fake {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
-impl HasWindowHandle for Fake {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
 
 fn filled(rgb: (u8, u8, u8), flag: RwSignal<bool>) -> StyledContainer {
     let fill = Color::from_rgb_u8(rgb.0, rgb.1, rgb.2);
@@ -84,8 +69,11 @@ fn overlay_draws_on_top_and_captures_the_tap() {
     let mut tree = ComponentList::new(root);
 
     // Render the composed tree headless.
-    let mut renderer =
-        SoftwareRenderer::<Fake, Fake>::new_headless(w, h, SoftwareRendererConfig::default());
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
     renderer.begin_frame(w, h, 1.0, 0).unwrap();
     renderer
         .render_frame(&tree.commands(), Some(Color::BLACK))

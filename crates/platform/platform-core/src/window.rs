@@ -61,6 +61,12 @@ pub trait Window: HasWindowHandle + HasDisplayHandle {
     fn prefers_dark(&self) -> Option<bool> {
         None
     }
+    /// Whether this window renders to an offscreen target with no on-screen surface (its raw handles are
+    /// unavailable). A handler must build a windowless renderer for it — a windowed renderer would fail to
+    /// create a surface. Defaults to `false` (an on-screen window).
+    fn is_offscreen(&self) -> bool {
+        false
+    }
 }
 
 pub trait EventHandler<W: Window> {
@@ -72,6 +78,12 @@ pub trait EventHandler<W: Window> {
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
         None
     }
+    /// The most recently rendered frame as premultiplied RGBA8888, if this handler renders to an offscreen
+    /// target. Windowed handlers present to the screen and return `None`; an offscreen backend (e.g.
+    /// [`Platform`] running headless) uses this to capture pixels after driving frames. Defaults to `None`.
+    fn last_frame_rgba(&self) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 pub trait Platform {
@@ -81,4 +93,34 @@ pub trait Platform {
         config: WindowConfig,
         handler: H,
     ) -> Result<(), PlatformError>;
+}
+
+/// Identifies one surface within a [`MultiSurfacePlatform`] run. Assigned by the platform (e.g. one per
+/// monitor for a desktop shell). Opaque and cheap to copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SurfaceId(pub u64);
+
+/// A platform that drives **N** independent surfaces from a single run, each with its own
+/// [`EventHandler`] — the seam a multi-window app or a desktop shell (a bar/OSD/notification per monitor)
+/// needs. It is separate from [`Platform`] so the single-surface contract and every existing single-window
+/// entry point stay exactly as they are.
+///
+/// The handler for each surface is produced by a `factory`, not moved in: this is the *handler-factory* shape.
+/// Each handler therefore gets its own reactive/UI tree, and a backend that runs each surface on its own
+/// thread (the natural model for headless and out-of-tree Wayland backends) gets a fully isolated reactive/
+/// theme/overlay/focus world per surface for free — no cross-talk. Because the factory is invoked once per
+/// surface (potentially on that surface's own thread), it is `Fn(SurfaceId) -> H` and must be `Send + Sync`;
+/// the produced handler `H` never has to cross a thread boundary itself.
+pub trait MultiSurfacePlatform {
+    type Window: Window;
+    /// Runs every surface in `surfaces` (each an `(id, config)` pair), building its handler via
+    /// `factory(id)`. Blocks until all surfaces have closed.
+    fn run_surfaces<H, F>(
+        self,
+        surfaces: Vec<(SurfaceId, WindowConfig)>,
+        factory: F,
+    ) -> Result<(), PlatformError>
+    where
+        H: EventHandler<Self::Window>,
+        F: Fn(SurfaceId) -> H + Send + Sync + 'static;
 }

@@ -11,11 +11,11 @@ name = "sandbox"
 path = "src/main.rs"
 
 [dependencies]
-rsx = { workspace = true, features = ["runtime", "dynamic-svg", "components"] }
+rsx = { workspace = true, features = ["dynamic-svg", "components"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [dev-dependencies]
-platform-core.workspace = true
+platform-core = { workspace = true }
 
 [package.metadata.android]
 package = "com.example.rsx.sandbox"

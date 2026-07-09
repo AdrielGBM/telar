@@ -54,7 +54,15 @@ pub use motion_core as motion;
 pub use platform_core::{
     Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowConfig, WindowPosition,
 };
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
+// Backend-author API: an out-of-tree `Platform` (e.g. a Wayland layer-shell backend) implements `Platform`
+// and `Window` against these, driving a full rsx app via `run_with_platform` without depending on
+// `platform-core` directly.
+#[cfg(feature = "runtime")]
+pub use platform_core::{
+    EventHandler, ModifiersState, MultiSurfacePlatform, Platform, PlatformError, PointerButton,
+    PointerSource, SurfaceId, Window,
+};
+#[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
 pub use platform_desktop::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
@@ -118,10 +126,14 @@ pub use hot_state::{hot_restore_json, hot_signal, hot_snapshot_json, probe};
 pub use platform_android::AndroidApp;
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use runner::run_android_app_with_name;
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub use runner::run_app_with_name;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 pub use runner::run_hot_reload_host;
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub use runner::run_multi_with_platform;
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub use runner::run_with_platform;
+#[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
+pub use runner::{run_app_with_name, run_multi_app_with_name};
 
 pub use rsx_macros::app;
 

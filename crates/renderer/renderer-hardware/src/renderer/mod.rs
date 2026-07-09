@@ -142,26 +142,6 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     _window: Option<std::sync::Arc<W>>,
 }
 
-/// A zero-sized window marker used as the type parameter for headless renderers built with [`HardwareRenderer::new_headless`]. Its handles are never requested (headless never creates a surface), so both accessors report `Unavailable`.
-#[derive(Debug, Clone, Copy)]
-pub struct HeadlessWindow;
-
-impl HasWindowHandle for HeadlessWindow {
-    fn window_handle(
-        &self,
-    ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
-        Err(raw_window_handle::HandleError::Unavailable)
-    }
-}
-
-impl HasDisplayHandle for HeadlessWindow {
-    fn display_handle(
-        &self,
-    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
-        Err(raw_window_handle::HandleError::Unavailable)
-    }
-}
-
 // Headless render target: RENDER_ATTACHMENT for the final draw/resolve-blit, COPY_SRC for read_rgba, COPY_DST for the msaa_samples==1 copy-to-target path.
 fn create_offscreen_texture(
     device: &wgpu::Device,
@@ -944,7 +924,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 }
 
-impl HardwareRenderer<HeadlessWindow> {
+// Headless needs no window, so `W` is a pure phantom (`_window` is `None`) — kept generic so the caller picks
+// any window type (e.g. the canonical `platform_headless::HeadlessWindow`) without this crate depending on it.
+impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
     /// Build a windowless renderer that draws into an offscreen texture instead of a swapchain surface. Read the rendered frame back with [`HardwareRenderer::read_rgba`]. Same font/cache/config parameters as [`HardwareRenderer::new_async`] minus the window; `width`/`height` are the initial physical target size and are re-derived from `begin_frame` on the first frame.
     pub async fn new_headless(
         width: u32,

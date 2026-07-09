@@ -2,11 +2,8 @@
 //! states and renders them to a PNG for eyeballing. Runs in CI (asserts it renders with content); pass
 //! RSX_WIDGETS_OUT=/path.png to also dump the image.
 
-use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
-};
-
 use layout_core::{AvailableSpace, LayoutStyle};
+use platform_headless::HeadlessWindow;
 use reactive_core::signal;
 use renderer_core::TextStyle;
 use renderer_core::{Color, RenderBackend};
@@ -21,18 +18,6 @@ use ui_core::{
     reset_layout_runtime,
 };
 use ui_tree::ComponentList;
-
-struct Fake;
-impl HasDisplayHandle for Fake {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
-impl HasWindowHandle for Fake {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
 
 #[test]
 fn form_widgets_render() {
@@ -116,8 +101,11 @@ fn form_widgets_render() {
     .unwrap();
 
     let tree = ComponentList::new(col);
-    let mut renderer =
-        SoftwareRenderer::<Fake, Fake>::new_headless(w, h, SoftwareRendererConfig::default());
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
     renderer.begin_frame(w, h, 1.0, 0).unwrap();
     renderer
         .render_frame(&tree.commands(), Some(Color::from_rgb_u8(244, 245, 248)))
@@ -181,8 +169,11 @@ fn modal_renders_over_a_page() {
     open.set(true);
     relayout_if_dirty();
 
-    let mut renderer =
-        SoftwareRenderer::<Fake, Fake>::new_headless(w, h, SoftwareRendererConfig::default());
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
     renderer.begin_frame(w, h, 1.0, 0).unwrap();
     // Clear to a "page" colour so the translucent scrim + opaque dialog are visible.
     renderer
@@ -261,8 +252,11 @@ fn select_open_renders() {
     }
     relayout_if_dirty();
 
-    let mut renderer =
-        SoftwareRenderer::<Fake, Fake>::new_headless(w, h, SoftwareRendererConfig::default());
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
     renderer.begin_frame(w, h, 1.0, 0).unwrap();
     renderer
         .render_frame(&tree.commands(), Some(Color::from_rgb_u8(244, 245, 248)))

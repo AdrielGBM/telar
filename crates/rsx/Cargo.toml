@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["runtime"]
-dev = ["runtime", "dep:rsx-devtools", "dep:libloading", "dep:serde_json"]
+default = ["runtime", "desktop"]
 runtime = [
     "dep:platform-core",
     "dep:renderer-core",
@@ -22,22 +21,23 @@ runtime = [
     "dep:devtools-core",
     "dep:toml",
     "dep:tracing",
-    "dep:platform-desktop",
     "dep:platform-android",
     "dep:libc",
 ]
-preview = ["runtime"]
-# First-party high-level component catalogue (`button`/`heading`/`section`), resolved as component calls.
-# Opt-in: the kernel ships only the primitive tags, and an app that wants these enables `components`.
+desktop = ["runtime", "dep:platform-desktop"]
+dev = [
+    "runtime",
+    "desktop",
+    "dep:rsx-devtools",
+    "dep:libloading",
+    "dep:serde_json",
+]
+preview = ["runtime", "desktop"]
+
 components = ["runtime", "dep:ui-components"]
-# Dependency-injection scope/registry, re-exported from services-core. Opt-in; no runtime path wires it yet.
 di = ["services-core/di"]
-# Both ui-core and renderer-assets are optional deps of this crate, so use `?/` to only forward the feature if `runtime` already pulled them in.
-# SVG widget capability plus the baked `SvgData`/`SvgError` re-exports; does NOT pull usvg, so build-time static baking works with just this.
 svg = ["ui-core?/svg"]
-# Adds runtime SVG parsing (`SvgData::from_str` via usvg); implies `svg`.
 dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
-# Runtime image decoding via the `image` crate (`renderer_assets::decode`).
 dynamic-image = ["renderer-assets?/dynamic-image"]
 
 [dependencies]
@@ -81,3 +81,6 @@ unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(rsx_hot_reload)',
     'cfg(rsx_preview)',
 ] }
+
+[dev-dependencies]
+platform-headless = { workspace = true }

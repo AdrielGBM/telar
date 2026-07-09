@@ -1,32 +1,20 @@
 use std::sync::Arc;
 
 use geometry_core::{Point, Rect};
-use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
-};
+use platform_headless::HeadlessWindow;
 use renderer_core::{
     BorderRadius, Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
     ShapeStyle, Stroke, TextStyle,
 };
 use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
-// Never used: headless rendering does not touch window handles. Only satisfies the D/W type parameters.
-struct Fake;
-impl HasDisplayHandle for Fake {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
-impl HasWindowHandle for Fake {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
-
 #[test]
 fn headless_renders_visible_pixels() {
-    let mut renderer =
-        SoftwareRenderer::<Fake, Fake>::new_headless(64, 48, SoftwareRendererConfig::default());
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        64,
+        48,
+        SoftwareRendererConfig::default(),
+    );
 
     let cmds = vec![
         DrawCommand::Rect {
@@ -58,8 +46,11 @@ fn headless_renders_visible_pixels() {
 #[test]
 fn headless_present_is_noop_without_surface() {
     // A second frame with unchanged commands exercises the skip-if-unchanged path, which calls the present no-op.
-    let mut renderer =
-        SoftwareRenderer::<Fake, Fake>::new_headless(32, 32, SoftwareRendererConfig::default());
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        32,
+        32,
+        SoftwareRendererConfig::default(),
+    );
     let cmds = vec![DrawCommand::Rect {
         rect: Rect::new(0.0, 0.0, 32.0, 32.0),
         style: Arc::new(RectStyle::default().with_fill(Color::BLUE)),
@@ -244,7 +235,7 @@ fn fold_bytes(bytes: &[u8]) -> u64 {
 fn render_frame_pixel_golden() {
     const EXPECTED: u64 = 0x165a_2776_436b_d755;
 
-    let mut renderer = SoftwareRenderer::<Fake, Fake>::new_headless(
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
         GOLDEN_WIDTH,
         GOLDEN_HEIGHT,
         SoftwareRendererConfig::default(),
@@ -289,8 +280,11 @@ fn render_frame_pixel_golden() {
 // so a fill covering the whole window only survives inside that transformed box.
 #[test]
 fn clip_composes_with_active_matrix() {
-    let mut renderer =
-        SoftwareRenderer::<Fake, Fake>::new_headless(200, 160, SoftwareRendererConfig::default());
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        200,
+        160,
+        SoftwareRendererConfig::default(),
+    );
     let red = Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(220, 40, 40)));
     let cmds = vec![
         DrawCommand::PushMatrix {

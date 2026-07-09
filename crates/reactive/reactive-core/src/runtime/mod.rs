@@ -98,6 +98,67 @@ thread_local! {
     ));
 }
 
+/// An owned, inactive reactive runtime for a single surface/tree, isolated from the thread's default runtime
+/// and from every other surface's runtime. A multi-surface backend that multiplexes several surfaces on **one
+/// thread** activates a surface's runtime with [`SurfaceRuntime::enter`] around that surface's event/render
+/// callbacks, so its signals, effects, and memos resolve against this runtime rather than the shared one —
+/// giving each surface an isolated reactive world without a separate OS thread. (A backend that runs each
+/// surface on its own thread gets the same isolation for free, since the runtime is thread-local.)
+///
+/// Not `Send`: it is a handle into thread-local runtime storage and must stay on the thread that created it.
+pub struct SurfaceRuntime {
+    ptr: *mut RefCell<Runtime>,
+}
+
+impl SurfaceRuntime {
+    /// Allocates a fresh, empty runtime. It is inactive until [`enter`](Self::enter) is called.
+    pub fn new() -> Self {
+        Self {
+            ptr: Box::into_raw(Box::new(RefCell::new(Runtime::new()))),
+        }
+    }
+
+    /// Makes this the current thread's active runtime for as long as the returned [`RuntimeGuard`] lives; the
+    /// previously-active runtime is restored when the guard drops. Nest by keeping guards in scope; drop them
+    /// in reverse order (a plain `let _guard = rt.enter();` does this naturally).
+    pub fn enter(&self) -> RuntimeGuard {
+        let prev = RUNTIME.with(|cell| {
+            let prev = cell.0.get();
+            cell.0.set(self.ptr);
+            prev
+        });
+        RuntimeGuard { prev }
+    }
+}
+
+impl Default for SurfaceRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for SurfaceRuntime {
+    fn drop(&mut self) {
+        // A matching guard restores the previous runtime before this drops, so `ptr` is never the active
+        // pointer here — freeing it cannot pull the rug out from an in-progress access.
+        if !self.ptr.is_null() {
+            unsafe { drop(Box::from_raw(self.ptr)) };
+        }
+    }
+}
+
+/// Restores the runtime that was active before the matching [`SurfaceRuntime::enter`] when dropped.
+#[must_use = "the runtime is only active while this guard is alive"]
+pub struct RuntimeGuard {
+    prev: *mut RefCell<Runtime>,
+}
+
+impl Drop for RuntimeGuard {
+    fn drop(&mut self) {
+        RUNTIME.with(|cell| cell.0.set(self.prev));
+    }
+}
+
 pub struct FlushNotifyHandle {
     id: u64,
 }

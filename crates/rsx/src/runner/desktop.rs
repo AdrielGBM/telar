@@ -1,25 +1,10 @@
-#[cfg(not(target_os = "android"))]
 use devtools_core::DevPlugin;
-#[cfg(not(target_os = "android"))]
-use platform_core::Platform;
-#[cfg(not(target_os = "android"))]
-use platform_desktop::{WinitPlatform, WinitWindow};
-#[cfg(not(target_os = "android"))]
+use platform_core::{PlatformError, SurfaceId};
+use platform_desktop::{DesktopPathsProvider, WinitPlatform};
 use services_core::AppPathsProvider;
 
-#[cfg(not(target_os = "android"))]
 use crate::app::App;
-#[cfg(not(target_os = "android"))]
 use crate::app_config::AppConfig;
-#[cfg(not(target_os = "android"))]
-use crate::config;
-#[cfg(not(target_os = "android"))]
-use crate::prefs::UserPrefs;
-#[cfg(not(target_os = "android"))]
-use platform_desktop::DesktopPathsProvider;
-
-#[cfg(not(target_os = "android"))]
-use super::handler::AppHandler;
 
 #[cfg(rsx_hot_reload)]
 pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
@@ -69,12 +54,8 @@ fn parse_dev_window_position(value: &str) -> platform_core::WindowPosition {
     platform_core::WindowPosition::Centered
 }
 
-#[cfg(not(target_os = "android"))]
 fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
     let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
-    let prefs = UserPrefs::load(app_name, paths.as_ref());
-    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
-
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,
         Err(e) => {
@@ -84,52 +65,27 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
         }
     };
     let AppConfig {
-        mut window,
+        window,
         font_paths,
         font_data,
     } = config;
     #[cfg(rsx_hot_reload)]
-    apply_dev_window_overrides(&mut window);
-    if let Some(custom) = app.window_config() {
-        window = custom;
-    }
-    if let Err(e) = platform.run(
+    let window = {
+        let mut window = window;
+        apply_dev_window_overrides(&mut window);
+        window
+    };
+    let config = AppConfig {
         window,
-        AppHandler::<WinitWindow, D> {
-            app: Box::new(app),
-            tree: None,
-            renderer: None,
-            renderer_is_hardware: false,
-            backend,
-            prefs,
-            pending_restart: false,
-            pending_renderer: None,
-            _flush_notify: None,
-            scale_factor: 1.0,
-            scale_scratch: renderer_core::ScaleScratch::new(),
-            window_signals: None,
-            app_name: app_name.to_owned(),
-            last_frame: std::time::Instant::now(),
-            dev: D::default(),
-            paths,
-            font_paths,
-            font_data,
-            _window: std::marker::PhantomData,
-            render_tx: None,
-            render_ret_rx: None,
-            command_buf_pool: Vec::new(),
-            render_join: None,
-            hw_renderer: None,
-            #[cfg(all(feature = "dev", not(target_os = "android")))]
-            hot_reload_rx: None,
-        },
-    ) {
+        font_paths,
+        font_data,
+    };
+    if let Err(e) = super::run_with_platform::<_, A, D>(platform, config, paths, app, app_name) {
         tracing::error!("Event loop exited with error: {e}");
         std::process::exit(1);
     }
 }
 
-#[cfg(not(target_os = "android"))]
 pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     #[cfg(feature = "dev")]
     {
@@ -142,4 +98,28 @@ pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     }
     #[cfg(not(feature = "dev"))]
     run_desktop_with_plugin::<A, ()>(config, app, app_name);
+}
+
+/// Open several native windows at once on the winit backend — the desktop counterpart to
+/// [`crate::run_app_with_name`], and the multi-window entry a bar-per-monitor shell (or any multi-window app)
+/// uses on a normal desktop. Each surface `(id, config)` gets a fresh app from `app_factory(id)` running on
+/// **its own thread**, so it has a fully isolated reactive/theme/overlay/focus world. Returns once every window
+/// has closed.
+pub fn run_multi_app_with_name<A, AF>(
+    surfaces: Vec<(SurfaceId, AppConfig)>,
+    app_factory: AF,
+    app_name: &str,
+) -> Result<(), PlatformError>
+where
+    A: App,
+    AF: Fn(SurfaceId) -> A + Send + Sync + 'static,
+{
+    let platform = WinitPlatform::try_new()?;
+    super::run_multi_with_platform(
+        platform,
+        surfaces,
+        |_id| Box::new(DesktopPathsProvider) as Box<dyn AppPathsProvider>,
+        app_factory,
+        app_name,
+    )
 }

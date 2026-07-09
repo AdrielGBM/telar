@@ -17,6 +17,7 @@ rustc-hash = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.8.2"
+platform-headless = { workspace = true }
 
 [[bench]]
 name = "render_frame"

@@ -5,6 +5,7 @@ members = [
     "crates/platform/platform-winit",
     "crates/platform/platform-desktop",
     "crates/platform/platform-android",
+    "crates/platform/platform-headless",
     "crates/renderer/renderer-core",
     "crates/renderer/renderer-assets",
     "crates/renderer/renderer-software",
@@ -37,6 +38,7 @@ members = [
 default-members = [
     "crates/platform/platform-core",
     "crates/platform/platform-winit",
+    "crates/platform/platform-headless",
     "crates/renderer/renderer-core",
     "crates/renderer/renderer-assets",
     "crates/renderer/renderer-software",
@@ -92,6 +94,7 @@ platform-core = { path = "crates/platform/platform-core" }
 platform-winit = { path = "crates/platform/platform-winit" }
 platform-desktop = { path = "crates/platform/platform-desktop" }
 platform-android = { path = "crates/platform/platform-android" }
+platform-headless = { path = "crates/platform/platform-headless" }
 renderer-core = { path = "crates/renderer/renderer-core" }
 renderer-assets = { path = "crates/renderer/renderer-assets" }
 renderer-software = { path = "crates/renderer/renderer-software" }
@@ -107,7 +110,7 @@ theme-core = { path = "crates/ui/theme-core" }
 ui-core = { path = "crates/ui/ui-core" }
 ui-tree = { path = "crates/ui/ui-tree" }
 ui-components = { path = "crates/ui/ui-components" }
-rsx = { path = "crates/rsx", default-features = false }
+rsx = { path = "crates/rsx" }
 devtools-core = { path = "crates/tools/devtools-core" }
 rsx-devtools = { path = "crates/tools/rsx-devtools" }
 rsx-diagnostics = { path = "crates/tools/rsx-diagnostics" }

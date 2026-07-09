@@ -2956,6 +2956,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "platform-headless"
+version = "0.1.0"
+dependencies = [
+ "platform-core",
+ "raw-window-handle",
+]
+
+[[package]]
 name = "platform-winit"
 version = "0.1.0"
 dependencies = [
@@ -4129,6 +4137,7 @@ dependencies = [
  "criterion",
  "geometry-core",
  "lyon",
+ "platform-headless",
  "pollster",
  "raw-window-handle",
  "renderer-core",
@@ -4150,6 +4159,7 @@ dependencies = [
  "lru",
  "ndk",
  "platform-core",
+ "platform-headless",
  "raw-window-handle",
  "rayon",
  "reactive-core",
@@ -4249,6 +4259,7 @@ dependencies = [
  "platform-android",
  "platform-core",
  "platform-desktop",
+ "platform-headless",
  "reactive-core",
  "renderer-assets",
  "renderer-core",

@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use geometry_core::{Point, Rect};
+use platform_headless::HeadlessWindow;
 use renderer_core::{
     Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow, ShapeStyle,
     TextStyle,
@@ -18,7 +19,7 @@ fn headless_renders_non_empty_frame() {
     let w = 64u32;
     let h = 48u32;
 
-    let mut renderer = match pollster::block_on(HardwareRenderer::new_headless(
+    let mut renderer = match pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
         w,
         h,
         None,
@@ -111,7 +112,7 @@ fn damage_prime_matches_full_repaint() {
     let scene_b = grid_scene(Some(3 * 10 + 4)); // an interior cell, well away from the edges
 
     let make = || {
-        pollster::block_on(HardwareRenderer::new_headless(
+        pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
             W,
             H,
             None,
@@ -201,7 +202,7 @@ fn damage_confines_translucent_layer_composite() {
     let scene_b = translucent_panel_scene(Color::from_rgb_u8(240, 200, 60));
 
     let make = || {
-        pollster::block_on(HardwareRenderer::new_headless(
+        pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
             W,
             H,
             None,
@@ -286,7 +287,7 @@ fn damage_confines_opacity_layer() {
     let scene_b = opacity_layer_scene(Color::from_rgb_u8(240, 200, 60));
 
     let make = || {
-        pollster::block_on(HardwareRenderer::new_headless(
+        pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
             W,
             H,
             None,
@@ -463,7 +464,7 @@ fn render_frame_pixel_golden() {
     // Baked from the pre-decomposition renderer on this machine's GPU; must not change post-split.
     const EXPECTED: u64 = 0x3507_0457_a257_bc16;
 
-    let mut renderer = match pollster::block_on(HardwareRenderer::new_headless(
+    let mut renderer = match pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
         WIDTH,
         HEIGHT,
         None,

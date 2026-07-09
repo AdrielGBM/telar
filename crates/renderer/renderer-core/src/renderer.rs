@@ -15,4 +15,10 @@ pub trait RenderBackend {
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<(), RendererError>;
+    /// The most recently rendered frame as premultiplied RGBA8888 (`[R, G, B, A]` per pixel, row-major), if
+    /// this backend renders to an offscreen target. Windowed/on-screen backends present directly and return
+    /// `None`. Used to read back pixels from a headless render pass.
+    fn read_rgba(&self) -> Option<Vec<u8>> {
+        None
+    }
 }

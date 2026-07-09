@@ -6,4 +6,4 @@ mod primitives;
 pub(crate) mod renderer;
 
 pub use config::HardwareRendererConfig;
-pub use renderer::{HardwareRenderer, HeadlessWindow};
+pub use renderer::HardwareRenderer;

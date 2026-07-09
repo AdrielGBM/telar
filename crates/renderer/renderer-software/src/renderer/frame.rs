@@ -656,6 +656,12 @@ where
         Ok(())
     }
 
+    // Only the headless (windowless) renderer keeps a CPU-side pixmap to hand back; the windowed path presents
+    // to its softbuffer surface and holds no readable pixmap, so it returns `None`.
+    fn read_rgba(&self) -> Option<Vec<u8>> {
+        self.pixmap.as_ref().map(|p| p.data().to_vec())
+    }
+
     fn render_frame(
         &mut self,
         commands: &[DrawCommand],

@@ -11,7 +11,8 @@ mod signal;
 pub use effect::{Effect, effect};
 pub use memo::{Memo, memo};
 pub use runtime::{
-    FlushNotifyHandle, batch, begin_batch, end_batch, reset_runtime, set_flush_notify,
+    FlushNotifyHandle, RuntimeGuard, SurfaceRuntime, batch, begin_batch, end_batch, reset_runtime,
+    set_flush_notify,
 };
 pub use signal::{ReadSignal, RwSignal, signal};
 
@@ -28,6 +29,38 @@ mod tests {
         assert_eq!(count.get(), 0);
         count.set(42);
         assert_eq!(count.get(), 42);
+    }
+
+    // The multi-surface isolation primitive (Sprint C): two SurfaceRuntimes activated on the same thread keep
+    // fully independent signal worlds, and dropping a guard restores the previously-active runtime.
+    #[test]
+    fn surface_runtimes_isolate_signal_worlds() {
+        let a = SurfaceRuntime::new();
+        let b = SurfaceRuntime::new();
+
+        // A signal created and mutated inside runtime `a`.
+        let sa = {
+            let _g = a.enter();
+            let s = signal(1i32);
+            s.set(10);
+            assert_eq!(s.get(), 10);
+            s
+        };
+
+        // Runtime `b` is an independent world: its own signal is unaffected by `a`.
+        {
+            let _g = b.enter();
+            let sb = signal(100i32);
+            assert_eq!(sb.get(), 100);
+            sb.set(200);
+            assert_eq!(sb.get(), 200);
+        }
+
+        // Re-entering `a` still sees `sa` exactly as it was left — no cross-talk from `b`.
+        {
+            let _g = a.enter();
+            assert_eq!(sa.get(), 10);
+        }
     }
 
     #[test]

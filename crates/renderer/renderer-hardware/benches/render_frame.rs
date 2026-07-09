@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use geometry_core::{Point, Rect};
+use platform_headless::HeadlessWindow;
 use renderer_core::{
     Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow, ShapeStyle,
     TextStyle,
@@ -100,7 +101,7 @@ fn dense_ui() -> Vec<DrawCommand> {
 }
 
 fn bench_render_frame(c: &mut Criterion) {
-    let mut renderer = match pollster::block_on(HardwareRenderer::new_headless(
+    let mut renderer = match pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
         WIDTH,
         HEIGHT,
         None,

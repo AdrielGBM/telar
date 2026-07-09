@@ -59,27 +59,71 @@ where
     pub(super) frame_start: std::time::Instant,
 }
 
-impl<W, D> EventHandler<W> for AppHandler<W, D>
+// Assembles an `AppHandler` from its ready inputs — the one place the large field literal lives, shared by the
+// single-surface `run_with_platform` and the per-surface handler factory in `run_multi_with_platform`. Builds
+// no renderer and touches no thread-local state, so it is safe to call on whatever thread will later drive the
+// handler (e.g. a per-surface worker thread).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_app_handler<W, D>(
+    app: Box<dyn App>,
+    paths: Box<dyn AppPathsProvider>,
+    font_paths: Vec<std::path::PathBuf>,
+    font_data: Vec<Vec<u8>>,
+    backend: crate::config::RendererBackend,
+    prefs: UserPrefs,
+    app_name: String,
+) -> AppHandler<W, D>
 where
     W: Window + Clone + Send + Sync + 'static,
     D: DevPlugin,
 {
-    fn on_resume(&mut self, window: &W) -> bool {
+    AppHandler::<W, D> {
+        app,
+        tree: None,
+        renderer: None,
+        renderer_is_hardware: false,
+        backend,
+        prefs,
+        pending_restart: false,
+        pending_renderer: None,
+        _flush_notify: None,
+        scale_factor: 1.0,
+        scale_scratch: renderer_core::ScaleScratch::new(),
+        window_signals: None,
+        app_name,
+        last_frame: std::time::Instant::now(),
+        dev: D::default(),
+        paths,
+        font_paths,
+        font_data,
+        _window: std::marker::PhantomData,
+        render_tx: None,
+        render_ret_rx: None,
+        command_buf_pool: Vec::new(),
+        render_join: None,
+        hw_renderer: None,
+        #[cfg(all(feature = "dev", not(target_os = "android")))]
+        hot_reload_rx: None,
+    }
+}
+
+impl<W, D> AppHandler<W, D>
+where
+    W: Window + Clone + Send + Sync + 'static,
+    D: DevPlugin,
+{
+    // Builds the configured on-screen renderer (software, or hardware with an auto→software fallback) and wires
+    // up the render thread for the hardware path. Returns false if renderer creation failed. Split out of
+    // on_resume so the offscreen/headless path (which needs no surface) can bypass it entirely.
+    fn init_windowed_renderer(&mut self, window: &W, system_fonts: &SystemFonts) -> bool {
         let android = cfg!(target_os = "android");
-        let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-        // Point the layout-time text measurer at the same fonts as the renderer, on this (the layout) thread, before any layout runs. Otherwise it falls back to system defaults and aborts on Android ("no default font found").
-        renderer_text::set_measure_font_config(build_font_config(
-            self.font_paths.clone(),
-            self.font_data.clone(),
-            &system_fonts,
-        ));
         let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
         match self.backend {
             RendererBackend::Software => {
                 let budget = build_software_renderer_config(
                     self.font_paths.clone(),
                     self.font_data.clone(),
-                    &system_fonts,
+                    system_fonts,
                 );
                 match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                     Ok(r) => {
@@ -95,7 +139,7 @@ where
                 let font_config = build_hardware_font_config(
                     self.font_paths.clone(),
                     self.font_data.clone(),
-                    &system_fonts,
+                    system_fonts,
                 );
                 // Reuse the renderer saved on suspend (keeps device/pipelines/caches warm); only the surface is rebound. Otherwise build a fresh one.
                 let hw_result = if let Some(mut existing) = self.hw_renderer.take() {
@@ -124,7 +168,7 @@ where
                         let budget = build_software_renderer_config(
                             self.font_paths.clone(),
                             self.font_data.clone(),
-                            &system_fonts,
+                            system_fonts,
                         );
                         match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                             Ok(r) => {
@@ -142,6 +186,44 @@ where
                     }
                 }
             }
+        }
+        true
+    }
+}
+
+impl<W, D> EventHandler<W> for AppHandler<W, D>
+where
+    W: Window + Clone + Send + Sync + 'static,
+    D: DevPlugin,
+{
+    fn on_resume(&mut self, window: &W) -> bool {
+        let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
+        // Point the layout-time text measurer at the same fonts as the renderer, on this (the layout) thread, before any layout runs. Otherwise it falls back to system defaults and aborts on Android ("no default font found").
+        renderer_text::set_measure_font_config(build_font_config(
+            self.font_paths.clone(),
+            self.font_data.clone(),
+            &system_fonts,
+        ));
+        // Offscreen/headless windows have no surface, so a windowed renderer can't create one: rasterize into a
+        // CPU pixmap (read back via `last_frame_rgba`), forced regardless of the configured backend so the
+        // headless path needs no GPU adapter. On-screen windows build the configured renderer.
+        let renderer_ok = if window.is_offscreen() {
+            let budget = build_software_renderer_config(
+                self.font_paths.clone(),
+                self.font_data.clone(),
+                &system_fonts,
+            );
+            self.renderer = Some(Box::new(SoftwareRenderer::<W, W>::new_headless(
+                window.width(),
+                window.height(),
+                budget,
+            )));
+            true
+        } else {
+            self.init_windowed_renderer(window, &system_fonts)
+        };
+        if !renderer_ok {
+            return false;
         }
         let sf = window.scale_factor() as f32;
         self.scale_factor = sf;
@@ -634,5 +716,11 @@ where
                 None
             }
         }
+    }
+
+    // Hands back the offscreen renderer's last frame so a headless platform can read pixels. Only the
+    // windowless software renderer holds a readable pixmap; the HW/windowed paths present and return None.
+    fn last_frame_rgba(&self) -> Option<Vec<u8>> {
+        self.renderer.as_ref().and_then(|r| r.read_rgba())
     }
 }

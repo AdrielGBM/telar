@@ -11,7 +11,7 @@ name = "landing"
 path = "src/main.rs"
 
 [dependencies]
-rsx = { workspace = true, features = ["runtime", "components"] }
+rsx = { workspace = true, features = ["components"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [package.metadata.android]

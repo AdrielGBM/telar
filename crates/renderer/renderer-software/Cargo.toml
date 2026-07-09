@@ -22,14 +22,15 @@ ndk = { version = "0.9", features = ["nativewindow"] }
 
 [dev-dependencies]
 criterion = "0.8.2"
-geometry-core.workspace = true
+geometry-core = { workspace = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-layout-core.workspace = true
-platform-core.workspace = true
-reactive-core.workspace = true
-ui-components.workspace = true
-ui-core.workspace = true
-ui-tree.workspace = true
+layout-core = { workspace = true }
+platform-core = { workspace = true }
+platform-headless = { workspace = true }
+reactive-core = { workspace = true }
+ui-components = { workspace = true }
+ui-core = { workspace = true }
+ui-tree = { workspace = true }
 
 [[bench]]
 name = "render_frame"

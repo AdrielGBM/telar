@@ -3,12 +3,9 @@
 //! No-op without the env var (so it never gates CI). Run:
 //!   RSX_VISUAL_OUT=/tmp/input.png cargo test -p renderer-software --test input_visual -- --nocapture
 
-use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
-};
-
 use layout_core::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle};
 use platform_core::{Event, PointerButton, PointerSource};
+use platform_headless::HeadlessWindow;
 use reactive_core::signal;
 use renderer_core::{BorderRadius, Color, RectStyle, RenderBackend, ShapeStyle, Stroke, TextStyle};
 use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
@@ -17,18 +14,6 @@ use ui_core::{
     compute_layout, new_container, reset_layout_runtime,
 };
 use ui_tree::ComponentList;
-
-struct Fake;
-impl HasDisplayHandle for Fake {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
-impl HasWindowHandle for Fake {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
 
 #[test]
 fn input_visual_png() {
@@ -104,8 +89,11 @@ fn input_visual_png() {
     list.on_event(&tap(70.0, 60.0, false));
 
     let cmds = list.commands();
-    let mut r =
-        SoftwareRenderer::<Fake, Fake>::new_headless(w, h, SoftwareRendererConfig::default());
+    let mut r = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
     r.begin_frame(w, h, 1.0, 0).unwrap();
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();
@@ -166,8 +154,11 @@ fn slider_visual_png() {
 
     let list = ComponentList::new(RootHolder { field: track });
     let cmds = list.commands();
-    let mut r =
-        SoftwareRenderer::<Fake, Fake>::new_headless(w, h, SoftwareRendererConfig::default());
+    let mut r = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
     r.begin_frame(w, h, 1.0, 0).unwrap();
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();
@@ -253,8 +244,11 @@ fn overlay_visual_png() {
 
     let list = ComponentList::new(OverlayRoot { wrapper, overlay });
     let cmds = list.commands();
-    let mut r =
-        SoftwareRenderer::<Fake, Fake>::new_headless(w, h, SoftwareRendererConfig::default());
+    let mut r = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
     r.begin_frame(w, h, 1.0, 0).unwrap();
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();

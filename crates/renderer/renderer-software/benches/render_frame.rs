@@ -7,9 +7,7 @@ use std::sync::Arc;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use geometry_core::{Point, Rect};
-use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
-};
+use platform_headless::HeadlessWindow;
 use renderer_core::{
     BorderRadius, Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
     ShapeStyle, Stroke, TextStyle,
@@ -18,19 +16,6 @@ use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;
-
-// Headless rendering never touches window handles; `Fake` exists only to satisfy the `D`/`W` type parameters and always reports the handle as unavailable.
-struct Fake;
-impl HasDisplayHandle for Fake {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
-impl HasWindowHandle for Fake {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
-    }
-}
 
 /// A dense widget-tree frame: a grid of panels (fill + stroke border + shadow), labels, path icons
 /// and separators, wrapped in a few opacity layers and a scroll-style clip. A handful of style/path
@@ -178,7 +163,7 @@ fn dense_ui() -> Vec<DrawCommand> {
 
 fn bench_render_frame(c: &mut Criterion) {
     let cmds = dense_ui();
-    let mut renderer = SoftwareRenderer::<Fake, Fake>::new_headless(
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
         WIDTH,
         HEIGHT,
         SoftwareRendererConfig::default(),
