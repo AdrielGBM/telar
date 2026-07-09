@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-geometry-core.workspace = true
-layout-core.workspace = true
-motion-core.workspace = true
-platform-core.workspace = true
-reactive-core.workspace = true
-renderer-core.workspace = true
-theme-core.workspace = true
-ui-core.workspace = true
+geometry-core = { workspace = true }
+layout-core = { workspace = true }
+motion-core = { workspace = true }
+platform-core = { workspace = true }
+reactive-core = { workspace = true }
+renderer-core = { workspace = true }
+theme-core = { workspace = true }
+ui-core = { workspace = true }

@@ -59,7 +59,7 @@ pub(crate) struct CargoPackage {
     pub(crate) metadata: Option<CargoPackageMetadata>,
 }
 
-// `version` may be a plain string or a workspace-inherited table (`version.workspace = true`); accept either shape and keep only a concrete string so parsing never fails.
+// `version` may be a plain string or a workspace-inherited table (`version = { workspace = true }`); accept either shape and keep only a concrete string so parsing never fails.
 fn deserialize_inheritable_version<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -338,9 +338,9 @@ mod tests {
 
     #[test]
     fn workspace_inherited_version_deserializes_to_none() {
-        // `version.workspace = true` must not fail parsing; it yields no concrete string.
+        // `version = { workspace = true }` must not fail parsing; it yields no concrete string.
         let manifest: CargoManifest = toml::from_str(
-            "[package]\nname = \"demo\"\nversion.workspace = true\ndescription = \"hi\"\n",
+            "[package]\nname = \"demo\"\nversion = { workspace = true }\ndescription = \"hi\"\n",
         )
         .expect("workspace-inherited version should parse");
         let pkg = manifest.package.expect("package section");

@@ -17,5 +17,5 @@ android-activity = { version = "0.6", features = ["native-activity"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 paranoid-android = "0.2.2"
-platform-winit.workspace = true
+platform-winit = { workspace = true }
 libc = "0.2.186"

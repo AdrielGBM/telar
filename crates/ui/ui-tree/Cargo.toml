@@ -12,7 +12,7 @@ rustc-hash = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.8.2"
-motion-core.workspace = true
+motion-core = { workspace = true }
 
 [[bench]]
 name = "tree_flatten"
