@@ -62,6 +62,31 @@ fn headless_present_is_noop_without_surface() {
     assert!(renderer.read_rgba().unwrap().iter().any(|&b| b != 0));
 }
 
+// A transparent app clears to a translucent color; the readback must keep that alpha (premultiplied) rather
+// than forcing the surface opaque. This is the same pixmap→bytes path the Wayland ARGB8888 present reads, so
+// it verifies transparency preservation end to end for the software backend without a compositor.
+#[test]
+fn headless_preserves_translucent_clear_alpha() {
+    let config = SoftwareRendererConfig {
+        transparent: true,
+        ..Default::default()
+    };
+    let mut renderer =
+        SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(16, 16, config);
+    renderer.begin_frame(16, 16, 1.0, 0).unwrap();
+    // The dim scrim the drawer uses: black at ~35% alpha.
+    renderer
+        .render_frame(&[], Some(Color::from_rgba_u8(0, 0, 0, 90)))
+        .unwrap();
+    let rgba = renderer.read_rgba().expect("pixmap exists after a frame");
+    // Every pixel is the premultiplied scrim: RGB 0, alpha 90 — the alpha is NOT clamped to opaque.
+    assert!(
+        rgba.chunks_exact(4).all(|px| px == [0, 0, 0, 90]),
+        "translucent clear must preserve alpha; got first px {:?}",
+        &rgba[0..4]
+    );
+}
+
 const GOLDEN_WIDTH: u32 = 1280;
 const GOLDEN_HEIGHT: u32 = 800;
 

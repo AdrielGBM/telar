@@ -331,11 +331,19 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 .copied()
                 .unwrap_or(wgpu::PresentMode::Fifo)
         };
-        // Prefer Opaque for a non-transparent app; Inherit as fallback so the window system decides.
-        let alpha_mode = surface_caps
-            .alpha_modes
+        // A transparent app needs the compositor to blend its surface (premultiplied alpha); a normal app prefers Opaque. Pick the first mode the surface actually offers from the preference order, falling back to whatever it has.
+        let preferred: &[wgpu::CompositeAlphaMode] = if config.transparent {
+            &[
+                wgpu::CompositeAlphaMode::PreMultiplied,
+                wgpu::CompositeAlphaMode::PostMultiplied,
+                wgpu::CompositeAlphaMode::Inherit,
+            ]
+        } else {
+            &[wgpu::CompositeAlphaMode::Opaque]
+        };
+        let alpha_mode = preferred
             .iter()
-            .find(|&&m| m == wgpu::CompositeAlphaMode::Opaque)
+            .find(|m| surface_caps.alpha_modes.contains(m))
             .copied()
             .unwrap_or_else(|| {
                 surface_caps

@@ -112,6 +112,14 @@ where
     W: Window + Clone + Send + Sync + 'static,
     D: DevPlugin,
 {
+    /// Whether the app asked for a transparent surface (`WindowConfig::is_transparent`). Read at each renderer creation so hardware picks a premultiplied-alpha composite mode and software presents an alpha-preserving buffer.
+    fn is_transparent(&self) -> bool {
+        self.app
+            .window_config()
+            .map(|c| c.is_transparent)
+            .unwrap_or(false)
+    }
+
     // Builds the configured on-screen renderer (software, or hardware with an auto→software fallback) and wires
     // up the render thread for the hardware path. Returns false if renderer creation failed. Split out of
     // on_resume so the offscreen/headless path (which needs no surface) can bypass it entirely.
@@ -124,6 +132,7 @@ where
                     self.font_paths.clone(),
                     self.font_data.clone(),
                     system_fonts,
+                    self.is_transparent(),
                 );
                 match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                     Ok(r) => {
@@ -152,7 +161,10 @@ where
                         cache_path.as_deref(),
                         android,
                         font_config,
-                        HardwareRendererConfig::default(),
+                        HardwareRendererConfig {
+                            transparent: self.is_transparent(),
+                            ..HardwareRendererConfig::default()
+                        },
                     )
                 };
                 match hw_result {
@@ -169,6 +181,7 @@ where
                             self.font_paths.clone(),
                             self.font_data.clone(),
                             system_fonts,
+                            self.is_transparent(),
                         );
                         match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                             Ok(r) => {
@@ -212,6 +225,7 @@ where
                 self.font_paths.clone(),
                 self.font_data.clone(),
                 &system_fonts,
+                self.is_transparent(),
             );
             self.renderer = Some(Box::new(SoftwareRenderer::<W, W>::new_headless(
                 window.width(),
@@ -313,6 +327,8 @@ where
                             let font_data = self.font_data.clone();
                             let android = cfg!(target_os = "android");
                             let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
+                            // Computed before the closure: `self` is not `Send`, so its transparency must be captured by value, not read across the spawn.
+                            let transparent = self.is_transparent();
                             let handle = std::thread::spawn(move || {
                                 let font_config = build_hardware_font_config(
                                     font_paths,
@@ -324,7 +340,10 @@ where
                                     cache_path.as_deref(),
                                     android,
                                     font_config,
-                                    HardwareRendererConfig::default(),
+                                    HardwareRendererConfig {
+                                        transparent,
+                                        ..HardwareRendererConfig::default()
+                                    },
                                 )
                             });
                             self.pending_renderer = Some(handle);
@@ -497,6 +516,7 @@ where
                         self.font_paths.clone(),
                         self.font_data.clone(),
                         &system_fonts,
+                        self.is_transparent(),
                     );
                     match SoftwareRenderer::new(window.clone(), window.clone(), budget) {
                         Ok(r) => {
@@ -517,7 +537,10 @@ where
                         cache_path.as_deref(),
                         android,
                         font_config,
-                        HardwareRendererConfig::default(),
+                        HardwareRendererConfig {
+                            transparent: self.is_transparent(),
+                            ..HardwareRendererConfig::default()
+                        },
                     ) {
                         Ok(hw) => {
                             let (tx, ret_rx, join) = spawn_hardware_render_thread(hw);

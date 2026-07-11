@@ -11,6 +11,8 @@ pub struct SoftwareRendererConfig {
     pub text_pixmap_cache_entries: usize,
     pub text_shadow_cache_bytes: usize,
     pub font: renderer_core::FontConfig,
+    /// The app wants a transparent surface. On Wayland this switches presentation from softbuffer (opaque XRGB) to an own `wl_shm` ARGB8888 buffer that preserves alpha; elsewhere it is currently a no-op (softbuffer stays opaque).
+    pub transparent: bool,
 }
 
 impl Default for SoftwareRendererConfig {
@@ -25,6 +27,7 @@ impl Default for SoftwareRendererConfig {
             text_pixmap_cache_entries: TEXT_PIXMAP_CACHE_MAX_ENTRIES,
             text_shadow_cache_bytes: TEXT_SHADOW_CACHE_BUDGET_BYTES,
             font: renderer_core::FontConfig::default(),
+            transparent: false,
         }
     }
 }

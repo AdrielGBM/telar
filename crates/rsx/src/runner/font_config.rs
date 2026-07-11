@@ -54,9 +54,11 @@ pub(super) fn build_software_renderer_config(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     fonts: &SystemFonts,
+    transparent: bool,
 ) -> SoftwareRendererConfig {
     SoftwareRendererConfig {
         font: build_font_config(font_paths, font_data, fonts),
+        transparent,
         ..SoftwareRendererConfig::default()
     }
 }

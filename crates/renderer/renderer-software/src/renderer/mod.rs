@@ -1,6 +1,8 @@
 mod frame;
 mod pixels;
 mod present;
+#[cfg(target_os = "linux")]
+mod wayland_alpha;
 
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
@@ -68,6 +70,12 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     // Android only: a direct handle to the surface's ANativeWindow, used to present without softbuffer's swizzle+copy. softbuffer still owns surface creation and buffer-geometry; this is a second acquired reference used only at present time.
     #[cfg(target_os = "android")]
     native_window: Option<ndk::native_window::NativeWindow>,
+    // Linux only: when the app asked for a transparent surface, present via an own `wl_shm` ARGB8888 buffer, since softbuffer is opaque. `None` means the opaque softbuffer path is in use.
+    #[cfg(target_os = "linux")]
+    alpha: Option<wayland_alpha::WaylandAlphaPresenter>,
+    // Keeps the display/window alive so the alpha presenter's borrowed `wl_display`/`wl_surface` pointers stay valid for the renderer's lifetime.
+    #[cfg(target_os = "linux")]
+    _alpha_handles: Option<(D, W)>,
 }
 
 impl<D, W> SoftwareRenderer<D, W>
@@ -80,14 +88,63 @@ where
         window: W,
         config: crate::SoftwareRendererConfig,
     ) -> Result<Self, RendererError> {
-        let context = Context::new(display).map_err(|e| {
-            RendererError::Backend(format!("softbuffer context creation failed: {}", e))
-        })?;
-        // Acquire a direct ANativeWindow reference before `window` is moved into softbuffer; used to present without softbuffer's intermediate buffer.
+        // A transparent Wayland surface can't use softbuffer (it presents opaque XRGB): drive it through an own ARGB8888 `wl_shm` buffer that preserves alpha. Every other case uses softbuffer as before.
+        #[cfg(target_os = "linux")]
+        let alpha = if config.transparent {
+            wayland_alpha::WaylandAlphaPresenter::try_new(&display, &window)
+        } else {
+            None
+        };
+        #[cfg(target_os = "linux")]
+        let use_alpha = alpha.is_some();
+        #[cfg(not(target_os = "linux"))]
+        let use_alpha = false;
+
+        let context;
+        let surface;
+        #[cfg(target_os = "linux")]
+        let alpha_handles;
         #[cfg(target_os = "android")]
-        let native_window = extract_native_window(&window);
-        let surface =
-            Surface::new(&context, window).map_err(|e| RendererError::Surface(e.to_string()))?;
+        let native_window;
+
+        if use_alpha {
+            context = None;
+            surface = None;
+            #[cfg(target_os = "linux")]
+            {
+                alpha_handles = Some((display, window));
+            }
+            #[cfg(target_os = "android")]
+            {
+                native_window = None;
+            }
+        } else {
+            let ctx = Context::new(display).map_err(|e| {
+                RendererError::Backend(format!("softbuffer context creation failed: {}", e))
+            })?;
+            // Acquire a direct ANativeWindow reference before `window` is moved into softbuffer; used to present without softbuffer's intermediate buffer.
+            #[cfg(target_os = "android")]
+            {
+                native_window = extract_native_window(&window);
+            }
+            surface = Some(
+                Surface::new(&ctx, window).map_err(|e| RendererError::Surface(e.to_string()))?,
+            );
+            context = Some(ctx);
+            #[cfg(target_os = "linux")]
+            {
+                alpha_handles = None;
+            }
+        }
+
+        // A transparent surface the software backend can't honor here (softbuffer is opaque on every platform; only the Linux/Wayland `wl_shm` ARGB path bypasses it) renders opaque. Surface it instead of failing silently — the hardware backend gives transparency on every platform.
+        // TODO: extend software transparency beyond Linux/Wayland — each OS needs its own softbuffer bypass, addable only when that platform is available to test: Windows (WS_EX_LAYERED + UpdateLayeredWindow, premultiplied ARGB DIB), macOS (non-opaque NSWindow + CALayer alpha), Linux/X11 (32-bit ARGB visual + compositor), Android (RGBA8888 ANativeWindow instead of RGBX).
+        if config.transparent && !use_alpha {
+            tracing::warn!(
+                "software renderer: transparent surfaces are only supported on Linux/Wayland; this surface will be opaque. Use the hardware backend for transparency on this platform."
+            );
+        }
+
         let mut text_shaper = TextShaper::with_config(TextShaperConfig {
             pixel_cache_budget_bytes: config.text_pixel_cache_bytes,
             alpha_cache_budget_bytes: config.text_alpha_cache_bytes,
@@ -96,8 +153,8 @@ where
         });
         let font_metrics = text_shaper.font_metrics();
         Ok(Self {
-            _context: Some(context),
-            surface: Some(surface),
+            _context: context,
+            surface,
             width: 0,
             height: 0,
             pixmap: None,
@@ -131,6 +188,10 @@ where
             present_history: std::collections::VecDeque::with_capacity(8),
             #[cfg(target_os = "android")]
             native_window,
+            #[cfg(target_os = "linux")]
+            alpha,
+            #[cfg(target_os = "linux")]
+            _alpha_handles: alpha_handles,
         })
     }
 
@@ -180,6 +241,10 @@ where
             present_history: std::collections::VecDeque::with_capacity(8),
             #[cfg(target_os = "android")]
             native_window: None,
+            #[cfg(target_os = "linux")]
+            alpha: None,
+            #[cfg(target_os = "linux")]
+            _alpha_handles: None,
         }
     }
 
@@ -243,6 +308,13 @@ where
         #[cfg(target_os = "android")]
         if let Some(nw) = &self.native_window {
             return present_to_native_window(nw, pixmap);
+        }
+
+        // Transparent Wayland surface: present the premultiplied-RGBA frame as ARGB8888, keeping alpha (softbuffer can't).
+        #[cfg(target_os = "linux")]
+        if let Some(alpha) = &mut self.alpha {
+            alpha.present(pixmap.data(), self.width, self.height);
+            return Ok(());
         }
 
         // Headless: no surface to blit to; the frame already lives in `self.pixmap`, so presenting is a no-op.

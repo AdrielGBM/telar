@@ -4157,6 +4157,7 @@ dependencies = [
  "image",
  "layout-core",
  "lru",
+ "memmap2",
  "ndk",
  "platform-core",
  "platform-headless",
@@ -4166,12 +4167,15 @@ dependencies = [
  "renderer-core",
  "renderer-text",
  "rustc-hash 2.1.2",
+ "rustix 0.38.44",
  "smallvec",
  "softbuffer",
  "tiny-skia 0.12.0",
+ "tracing",
  "ui-components",
  "ui-core",
  "ui-tree",
+ "wayland-client",
  "wide",
 ]
 
