@@ -437,6 +437,96 @@ mod tests {
         assert!((y(frag[0]) - y(s0)).abs() < 0.01 && (y(s1) - y(frag[2])).abs() < 0.01);
     }
 
+    // A press on a fragment chip that was added AFTER the initial layout (the shell case: workspace chips
+    // built when the compositor socket answers, well after the bar first laid out) must still fire its
+    // handler. Mirrors the transpiled workspaces module exactly: a root-level `if/else` wrapper
+    // (`Container::column`) > `row align:center` (`from_slots`) > `for … gap:8` (`fragment_gap`) > chip
+    // wrapper `Container` > `StyledContainer(24×24).on_press`.
+    #[test]
+    fn pressing_a_fragment_chip_added_after_layout_fires_its_handler() {
+        use crate::context::{new_container, relayout_if_dirty};
+        use crate::styled_container::StyledContainer;
+        use layout_core::{AlignItems, JustifyContent};
+        use platform_core::{Event, PointerButton, PointerSource};
+        use renderer_core::RectStyle;
+
+        reset_layout_runtime();
+        let fired = Rc::new(std::cell::Cell::new(0i32));
+        let ids = signal(Vec::<i32>::new()); // empty at first, like the snapshot before the socket answers
+        let src = ids.clone();
+        let sink = fired.clone();
+
+        let row = Container::from_slots(
+            LayoutStyle::new()
+                .flex_row()
+                .align_items(AlignItems::CENTER),
+            vec![fragment_gap(
+                move || src.get(),
+                |id: &i32| *id as u64,
+                move |id| {
+                    let sink = sink.clone();
+                    let chip = StyledContainer::new(
+                        LayoutStyle::new()
+                            .flex_column()
+                            .width(24.0)
+                            .height(24.0)
+                            .align_items(AlignItems::CENTER)
+                            .justify_content(JustifyContent::CENTER),
+                        move |_| RectStyle::default(),
+                        vec![],
+                    )?
+                    .on_press(move || sink.set(id));
+                    Ok(Box::new(Container::new(
+                        LayoutStyle::new().flex_column(),
+                        vec![Box::new(chip)],
+                    )?) as Box<dyn LayoutItem>)
+                },
+                8.0,
+            )],
+        )
+        .unwrap();
+
+        // The `if/else` root wrapper `generate_root` emits, then the window root.
+        let mut wrapper = Container::column(vec![Box::new(row)]).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_row().width(200.0).height(24.0),
+            &[wrapper.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(24.0),
+        )
+        .unwrap();
+
+        // Data arrives after layout: the fragment reconciles (builds 3 chips) and the runtime relayouts them.
+        ids.set(vec![7, 8, 9]);
+        relayout_if_dirty();
+
+        // Click the first chip: no leading gap, so it sits at x∈[0,24), y∈[0,24). Press then release inside it.
+        let press = |x: f64, y: f64| Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        };
+        let release = |x: f64, y: f64| Event::PointerReleased {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        };
+        wrapper.on_event(&press(12.0, 12.0));
+        wrapper.on_event(&release(12.0, 12.0));
+
+        assert_eq!(
+            fired.get(),
+            7,
+            "clicking the first workspace-style chip should fire its on_press"
+        );
+    }
+
     // `for … gap:N` inside a `row` stays transparent AND spaced: the items flow horizontally, `gap` apart,
     // carried as a per-item leading margin (no box of its own). 10px leaves + 8px gap → x 0, 18, 36.
     #[test]
