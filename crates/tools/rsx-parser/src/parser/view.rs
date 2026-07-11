@@ -403,7 +403,21 @@ fn parse_element_header(
                 i = next;
                 continue;
             }
-            while k < len && !chars[k].is_whitespace() {
+            // A colon value runs to the next whitespace, but not one nested inside `(...)`/`[...]`: so a
+            // computed value like `fill:chip_fill($snap, id)` (spaces inside the call) is read whole, while a
+            // following attribute on the same line still starts after the depth-0 space. Unbalanced parens
+            // read to end of line, leaving the malformed expression for the emitter/rustc to reject.
+            let mut depth = 0i32;
+            while k < len {
+                let c = chars[k];
+                if c.is_whitespace() && depth == 0 {
+                    break;
+                }
+                match c {
+                    '(' | '[' => depth += 1,
+                    ')' | ']' => depth -= 1,
+                    _ => {}
+                }
                 k += 1;
             }
             let value: String = chars[val_start..k].iter().collect();

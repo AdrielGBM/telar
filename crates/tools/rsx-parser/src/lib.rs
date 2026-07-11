@@ -242,6 +242,30 @@ col @card
     }
 
     #[test]
+    fn colon_value_keeps_spaces_inside_parens() {
+        // A computed colon value balances parens: `fill:chip_fill($snap, id)` is read whole (the space after
+        // the comma is nested inside `(...)`), and a following attribute on the same line still parses.
+        let doc = parse(
+            "[view]\nbox fill:chip_fill($snap, id) radius:6\n    text \"x\" color:text_color($snap, id) size:13\n",
+        )
+        .unwrap();
+        let ViewNode::Element(b) = &doc.view.nodes[0] else {
+            panic!("root should be an element");
+        };
+        let fill = b.attributes.iter().find(|a| a.key == "fill").unwrap();
+        assert_eq!(fill.value, "chip_fill($snap, id)");
+        let radius = b.attributes.iter().find(|a| a.key == "radius").unwrap();
+        assert_eq!(radius.value, "6", "the trailing attribute still parses");
+        let ViewNode::Element(t) = &b.children[0] else {
+            panic!("child should be a text element");
+        };
+        let color = t.attributes.iter().find(|a| a.key == "color").unwrap();
+        assert_eq!(color.value, "text_color($snap, id)");
+        let size = t.attributes.iter().find(|a| a.key == "size").unwrap();
+        assert_eq!(size.value, "13");
+    }
+
+    #[test]
     fn transition_swallowing_trailing_attribute_errors() {
         // `transition:` runs to end of line, so a following `key:value` attribute would otherwise be
         // silently absorbed into the transition value instead of parsed as its own attribute.
