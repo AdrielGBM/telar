@@ -72,22 +72,38 @@ pub fn assets_root(package_root: &Path) -> PathBuf {
     package_root.join(configured)
 }
 
-/// Emits `pub mod` declarations mirroring the `src_dir` tree for every hand-written `.rs` module, so
-/// an app can rely on filesystem module discovery instead of hand-written `mod.rs`/`mod` statements.
-/// Skips the crate roots (`lib.rs`, `main.rs`) and directories with no `.rs` under them (asset- or
-/// markup-only dirs). A directory that has its own `mod.rs` is declared but not descended into, so it
-/// stays hand-managed — the escape hatch for opting a subtree out of discovery. Each leaf module
-/// carries an absolute `#[path]` so rust-analyzer resolves it from the macro expansion (a plain
-/// file-based `mod` from a proc macro is not reliably linked to its file by the analyzer).
-pub fn discover_rust_modules(src_dir: &Path) -> String {
+/// Declares `pub mod` for every hand-written `.rs` module mirroring the `src_dir` tree, so an app can rely
+/// on filesystem module discovery instead of hand-written `mod.rs`/`mod` statements. Returns the top-level
+/// declarations and, for each discovered subdirectory, writes a generated file under `modtree_dir` holding
+/// that directory's children. Skips the crate roots (`lib.rs`, `main.rs`) and directories with no `.rs` under
+/// them (asset- or markup-only dirs). A directory that has its own `mod.rs` is declared but not descended
+/// into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.
+///
+/// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based*
+/// `#[path] pub mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline
+/// `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline
+/// block produced by a proc macro, string-joining the inline module's name onto the child's already-absolute
+/// path (`core//abs/core/app.rs`) and failing to find it (E0583). rustc joins those pieces with real path
+/// semantics, so the absolute child path wins and it compiles — which is why the two disagreed. Routing every
+/// directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside
+/// that file) keeps the analyzer and the compiler in step.
+pub fn discover_rust_modules(src_dir: &Path, modtree_dir: &Path) -> std::io::Result<String> {
     let mut out = String::new();
-    emit_dir_modules(src_dir, &mut out);
-    out
+    emit_children(src_dir, "", modtree_dir, &mut out)?;
+    Ok(out)
 }
 
-fn emit_dir_modules(dir: &Path, out: &mut String) {
+/// Appends the `#[path] pub mod` declarations for the direct children of `dir` to `out`. A subdirectory's own
+/// children are written to a generated file under `modtree_dir` (named by the flattened module path, e.g.
+/// `core__widgets.rs`, so sibling directories never collide) that the emitted `pub mod` then points at.
+fn emit_children(
+    dir: &Path,
+    flat_prefix: &str,
+    modtree_dir: &Path,
+    out: &mut String,
+) -> std::io::Result<()> {
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
+        return Ok(());
     };
     let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
     paths.sort();
@@ -107,14 +123,33 @@ fn emit_dir_modules(dir: &Path, out: &mut String) {
             if mod_rs.exists() {
                 out.push_str(&mod_decl(name, &mod_rs));
             } else if dir_has_rust_module(&path) {
-                out.push_str(&format!("pub mod {name} {{\n"));
-                emit_dir_modules(&path, out);
-                out.push_str("}\n");
+                let flat = if flat_prefix.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{flat_prefix}__{name}")
+                };
+                let mut body = String::new();
+                emit_children(&path, &flat, modtree_dir, &mut body)?;
+                let gen_file = modtree_dir.join(format!("{flat}.rs"));
+                write_if_changed(&gen_file, &body)?;
+                out.push_str(&mod_decl(name, &gen_file));
             }
         } else if is_rust_module_file(&path) {
             out.push_str(&mod_decl(name, &path));
         }
     }
+    Ok(())
+}
+
+/// Writes `content` to `path` only when it differs, to avoid retriggering recompilation on unchanged output.
+fn write_if_changed(path: &Path, content: &str) -> std::io::Result<()> {
+    let stale = std::fs::read_to_string(path)
+        .map(|existing| existing != content)
+        .unwrap_or(true);
+    if stale {
+        std::fs::write(path, content)?;
+    }
+    Ok(())
 }
 
 /// A `pub mod` declaration pinned to `file` via an absolute `#[path]`. `{:?}` renders the path as an escaped Rust string literal.
@@ -198,24 +233,37 @@ mod tests {
             std::fs::write(root.join(p), body).unwrap();
         }
 
-        let out = discover_rust_modules(&root);
+        let modtree = root.join("__modules");
+        std::fs::create_dir_all(&modtree).unwrap();
+        let out = discover_rust_modules(&root, &modtree).unwrap();
+        let core_rs = std::fs::read_to_string(modtree.join("core.rs")).unwrap_or_default();
+        let shared_rs = std::fs::read_to_string(modtree.join("shared.rs")).unwrap_or_default();
         let _ = std::fs::remove_dir_all(&root);
 
+        // Every module is a file-based `#[path] pub mod` — never an inline `mod dir { … }` block (which breaks rust-analyzer's `#[path]` resolution).
+        assert!(!out.contains('{'), "no inline module blocks:\n{out}");
         assert!(out.contains("pub mod util;"), "{out}");
-        assert!(out.contains("pub mod core {"), "{out}");
-        assert!(out.contains("pub mod app;"), "{out}");
-        assert!(out.contains("pub mod theme;"), "{out}");
-        assert!(out.contains("pub mod shared {"), "{out}");
-        assert!(out.contains("pub mod demo;"), "{out}");
+        // A subdirectory is a file-based module pointing at its generated tree file; its children live inside that file.
+        assert!(out.contains("pub mod core;"), "{out}");
+        assert!(core_rs.contains("pub mod app;"), "{core_rs}");
+        assert!(core_rs.contains("pub mod theme;"), "{core_rs}");
+        assert!(out.contains("pub mod shared;"), "{out}");
+        assert!(shared_rs.contains("pub mod demo;"), "{shared_rs}");
         // Hand-managed dir (has mod.rs) is declared but not descended into.
         assert!(out.contains("pub mod hand;"), "{out}");
-        assert!(!out.contains("nested") && !out.contains("inner"), "{out}");
-        // Markup/asset-only trees and crate roots produce nothing.
         assert!(
-            !out.contains("features") && !out.contains("components"),
+            !out.contains("nested") && !out.contains("inner") && !core_rs.contains("nested"),
             "{out}"
         );
-        assert!(!out.contains("home") && !out.contains("sidebar"), "{out}");
+        // Markup/asset-only trees and crate roots produce nothing.
+        assert!(
+            !out.contains("features") && !core_rs.contains("components"),
+            "{out}\n---\n{core_rs}"
+        );
+        assert!(
+            !out.contains("home") && !core_rs.contains("sidebar"),
+            "{out}"
+        );
         assert!(
             !out.contains("pub mod lib") && !out.contains("pub mod main"),
             "{out}"

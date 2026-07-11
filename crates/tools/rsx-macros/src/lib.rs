@@ -402,7 +402,20 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_toml_str); });
     }
     if rsx_transpiler::auto_modules_enabled(&manifest_dir) {
-        let modules_src = rsx_transpiler::discover_rust_modules(&src_dir);
+        // The discovered tree is split across real generated files (one per directory) so every module is a
+        // file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
+        let modtree_dir = generated_dir.join("__modules");
+        if let Err(e) = std::fs::create_dir_all(&modtree_dir) {
+            let msg = format!("Failed to create .rsx/build/__modules/: {e}");
+            return Err(quote! { compile_error!(#msg) });
+        }
+        let modules_src = match rsx_transpiler::discover_rust_modules(&src_dir, &modtree_dir) {
+            Ok(s) => s,
+            Err(e) => {
+                let msg = format!("Failed to write the auto-discovered module tree: {e}");
+                return Err(quote! { compile_error!(#msg) });
+            }
+        };
         match modules_src.parse::<TokenStream2>() {
             Ok(tokens) => include_stmts.extend(tokens),
             Err(e) => {
