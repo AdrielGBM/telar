@@ -58,9 +58,12 @@ impl ReactiveList {
         K: Fn(&Item) -> Key + 'static,
         B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        Self::build(source, build, 0.0, move |item: &Item, _idx: usize| {
-            hash_key(&key(item))
-        })
+        Self::build(
+            LayoutStyle::new().flex_column(),
+            source,
+            build,
+            move |item: &Item, _idx: usize| hash_key(&key(item)),
+        )
     }
 
     /// Same as `new`, but with a `gap` (px) laid out between item containers — `for … key … gap:N` in `.rsx`.
@@ -77,9 +80,36 @@ impl ReactiveList {
         K: Fn(&Item) -> Key + 'static,
         B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        Self::build(source, build, gap, move |item: &Item, _idx: usize| {
-            hash_key(&key(item))
-        })
+        Self::build(
+            LayoutStyle::new().flex_column().gap(gap),
+            source,
+            build,
+            move |item: &Item, _idx: usize| hash_key(&key(item)),
+        )
+    }
+
+    /// Keyed like [`new`](Self::new)/[`with_gap`](Self::with_gap), but the caller supplies the container's
+    /// [`LayoutStyle`] — flex direction, gap, alignment. Use it for a horizontal reactive row (e.g. a bar's
+    /// workspace chips), which the column-oriented constructors can't express.
+    pub fn with_style<Item, Key, S, K, B>(
+        container_style: LayoutStyle,
+        source: S,
+        key: K,
+        build: B,
+    ) -> Result<Self, LayoutError>
+    where
+        Key: Hash + 'static,
+        Item: 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        K: Fn(&Item) -> Key + 'static,
+        B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    {
+        Self::build(
+            container_style,
+            source,
+            build,
+            move |item: &Item, _idx: usize| hash_key(&key(item)),
+        )
     }
 
     /// A keyless reactive list: `for item in $items` with no `key` clause. Reconciles by POSITION — the
@@ -92,7 +122,12 @@ impl ReactiveList {
         S: Fn() -> Vec<Item> + 'static,
         B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        Self::build(source, build, 0.0, |_item: &Item, idx: usize| idx as u64)
+        Self::build(
+            LayoutStyle::new().flex_column(),
+            source,
+            build,
+            |_item: &Item, idx: usize| idx as u64,
+        )
     }
 
     /// `positional` with an item gap — `for item in $items gap:N` (no `key`).
@@ -106,15 +141,20 @@ impl ReactiveList {
         S: Fn() -> Vec<Item> + 'static,
         B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        Self::build(source, build, gap, |_item: &Item, idx: usize| idx as u64)
+        Self::build(
+            LayoutStyle::new().flex_column().gap(gap),
+            source,
+            build,
+            |_item: &Item, idx: usize| idx as u64,
+        )
     }
 
     /// Shared constructor: `keyer` erases both reconciliation modes (hashed key, or plain index) to a
     /// `u64` so `reconcile` doesn't need to know which mode produced it.
     fn build<Item, S, B, KeyFn>(
+        container_style: LayoutStyle,
         source: S,
         build: B,
-        gap: f32,
         keyer: KeyFn,
     ) -> Result<Self, LayoutError>
     where
@@ -123,7 +163,7 @@ impl ReactiveList {
         B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
         KeyFn: Fn(&Item, usize) -> u64 + 'static,
     {
-        let node = new_container(LayoutStyle::new().flex_column().gap(gap), &[])?;
+        let node = new_container(container_style, &[])?;
         let rect = track_layout(node).expect("list container is registered");
         let state = Rc::new(RefCell::new(ListState {
             node,

@@ -52,20 +52,32 @@ impl ViewGen<'_> {
         }
     }
 
-    /// Resolves a color reference: an inline hex value, a `$signal` read, a CSS keyword, a `Color::*` literal, a `[style]`-declared local constant, or a theme field.
+    /// Resolves a color reference: an inline hex value, a `$signal` read, a computed reactive expression, a CSS keyword, a `Color::*` literal, a `[style]`-declared local constant, or a theme field.
     ///
     /// Lookup order:
-    /// 1. Inline hex / `Color::*` / CSS keyword → static expression.
-    /// 2. `$ident` → `ident.get()`, a reactive read of a `RwSignal<Color>` (or compatible) in scope; the caller is responsible for cloning the signal into any `move` closure that embeds this expression (see `wrap_signal_clones`).
-    /// 3. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
-    /// 4. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
+    /// 1. Inline hex → static expression.
+    /// 2. A bare `$ident` → `ident.get()`, a reactive read of a `RwSignal<Color>` (or compatible) in scope.
+    /// 3. A computed expression — a call, method chain, or arithmetic that yields a `Color`, recognized by a `(` or an embedded `$` beyond a bare handle (e.g. `chip_fill($snapshot, id)` for state-driven paint). `$signal` reads are made reactive via `substitute_reads`; the rest is emitted verbatim. For (2) and (3) the caller clones any captured signal into the enclosing `move` paint closure (see `wrap_signal_clones`), so the color re-reads and the outer handle stays usable.
+    /// 4. `Color::*` literal / CSS keyword → static expression.
+    /// 5. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
+    /// 6. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
     pub(super) fn color_expr(&self, value: &str) -> String {
         let v = value.trim();
         if v.starts_with('#') {
             return hex_to_color_expr(v);
         }
-        if let Some(ident) = v.strip_prefix('$') {
+        // A lone `$ident` is a direct signal read; anything more complex falls through to the expression arm.
+        if let Some(ident) = v.strip_prefix('$')
+            && is_ident(ident)
+        {
             return format!("{ident}.get()");
+        }
+        // A computed color expression (call / method chain / arithmetic) yielding a `Color`, with `$signal`
+        // reads made reactive. Comes before the `Color::`/keyword/theme arms so a state-driven paint like
+        // `chip_fill($snapshot, id)` — or a verbatim `Color::from_rgb_u8(..)` — is emitted whole, not treated
+        // as a token. A theme token (`primary`, `ink`) has no `(`/`$`, so it still reaches the theme arm.
+        if v.contains('(') || v.contains('$') {
+            return substitute_reads(v);
         }
         if v.starts_with("Color::") {
             return v.to_string();

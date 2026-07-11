@@ -1,4 +1,5 @@
 mod canvas;
+mod child_host;
 mod container;
 mod context;
 mod drag;
@@ -22,6 +23,9 @@ mod svg;
 mod text;
 
 pub use canvas::Canvas;
+pub use child_host::{
+    ChildSlot, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
+};
 pub use container::Container;
 pub use context::{
     NodeId, absolute_rect, compute_layout, compute_layout_root, mark_dirty, new_container,

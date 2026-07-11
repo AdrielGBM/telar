@@ -89,11 +89,12 @@ pub use theme_core::{
 pub use ui_core::Svg;
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Canvas, ClippedItem, Component, ComponentList, Container, EventResult, Image, Input,
+    Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, EventResult, Image, Input,
     LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle,
     RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, box_item, box_transform,
-    compute_layout, focus, mark_dirty, new_container, new_leaf, relayout_if_dirty,
-    reset_layout_runtime, set_display, set_overlay_host, track_layout,
+    compute_layout, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
+    mark_dirty, new_container, new_leaf, relayout_if_dirty, reset_layout_runtime, set_display,
+    set_overlay_host, track_layout,
 };
 
 // Opt-in component catalogue. Re-exported at the prelude root so generated component calls resolve them

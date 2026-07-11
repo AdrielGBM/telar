@@ -5,6 +5,8 @@ use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::RectStyle;
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::child_host::{ChildSlot, DynHost};
+use crate::context::{new_container, track_layout};
 use crate::drag::DragGesture;
 use crate::focus::{self, FocusId};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
@@ -23,6 +25,9 @@ pub struct StyledContainer {
     // Resolved per `view()` (like `opacity`) so a `$signal`-driven transform re-reads its current value. Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity (no wrapping node).
     transform: Box<dyn Fn(Rect) -> Option<[f32; 6]>>,
     children: TrackedChildren,
+    // Set when the box holds a reactive fragment: static + dynamic children route through the host so
+    // they interleave in this node (see `child_host`). `children` is empty in that case.
+    dyn_host: Option<DynHost>,
     // Optional tap gesture so a styled box can itself be pressable (a clickable card); children still hit-test first.
     press: PressGesture,
     // Optional drag gesture (slider/reorder/resize): reports the pointer position on press and each move.
@@ -55,6 +60,7 @@ impl StyledContainer {
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
             children,
+            dyn_host: None,
             press: PressGesture::default(),
             drag: DragGesture::default(),
             on_hover: None,
@@ -62,6 +68,43 @@ impl StyledContainer {
             focus_id: None,
             _focus_effect: None,
         })
+    }
+
+    /// A styled box whose children are a mix of static widgets and reactive fragments (`ChildSlot`s),
+    /// reconciled into this box's own node so they inherit its flex direction/gap — the transparent
+    /// `box`-with-a-`for` path (see [`Container::from_slots`](crate::Container::from_slots)).
+    pub fn from_slots(
+        layout_style: LayoutStyle,
+        style: impl Fn(Rect) -> RectStyle + 'static,
+        slots: Vec<ChildSlot>,
+    ) -> Result<Self, LayoutError> {
+        let node = new_container(layout_style, &[])?;
+        let rect = track_layout(node).expect("new_container always registers a signal");
+        let dyn_host = DynHost::build(node, slots)?;
+        Ok(Self {
+            node,
+            rect,
+            style: Box::new(style),
+            hover_style: None,
+            is_hovered: signal(false),
+            opacity: Box::new(|| 1.0),
+            transform: Box::new(|_| None),
+            children: Vec::new(),
+            dyn_host: Some(dyn_host),
+            press: PressGesture::default(),
+            drag: DragGesture::default(),
+            on_hover: None,
+            on_key: None,
+            focus_id: None,
+            _focus_effect: None,
+        })
+    }
+
+    fn dispatch_children(&mut self, event: &Event) -> EventResult {
+        match &self.dyn_host {
+            Some(host) => host.dispatch(event),
+            None => dispatch_container_event(&mut self.children, event),
+        }
     }
 
     pub fn with_opacity(mut self, opacity: impl Fn() -> f32 + 'static) -> Self {
@@ -166,9 +209,15 @@ impl Component for StyledContainer {
             },
             style(r),
         );
-        let content = RenderNode::group(
-            std::iter::once(background).chain(self.children.iter().map(|c| c.segment.boundary())),
-        );
+        let content = match &self.dyn_host {
+            Some(host) => {
+                RenderNode::group(std::iter::once(background).chain(host.child_boundaries()))
+            }
+            None => RenderNode::group(
+                std::iter::once(background)
+                    .chain(self.children.iter().map(|c| c.segment.boundary())),
+            ),
+        };
         let opacity = (self.opacity)();
         let composed = if opacity < 1.0 {
             RenderNode::layer(opacity, 0.0, [content])
@@ -190,7 +239,7 @@ impl Component for StyledContainer {
             && self.on_key.is_none()
             && self.focus_id.is_none()
         {
-            return dispatch_container_event(&mut self.children, event);
+            return self.dispatch_children(event);
         }
         let rect = self.rect.get();
         match event {
@@ -200,7 +249,7 @@ impl Component for StyledContainer {
             Event::PointerMoved { x, y, source } => {
                 self.press.track_move(event);
                 let dragged = self.drag.moved(event, rect) == EventResult::Handled;
-                let child = dispatch_container_event(&mut self.children, event);
+                let child = self.dispatch_children(event);
                 let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
                 if tracks_hover && matches!(source, PointerSource::Mouse) {
                     let inside = rect.contains(*x as f32, *y as f32);
@@ -221,7 +270,7 @@ impl Component for StyledContainer {
                 button: PointerButton::Primary,
                 ..
             } => {
-                if dispatch_container_event(&mut self.children, event) == EventResult::Handled {
+                if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
                     self.drag.end();
                     return EventResult::Handled;
@@ -248,7 +297,7 @@ impl Component for StyledContainer {
                 button: PointerButton::Primary,
                 ..
             } => {
-                if dispatch_container_event(&mut self.children, event) == EventResult::Handled {
+                if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
                     self.drag.end();
                     return EventResult::Handled;
@@ -272,7 +321,7 @@ impl Component for StyledContainer {
                         cb(false);
                     }
                 }
-                dispatch_container_event(&mut self.children, event)
+                self.dispatch_children(event)
             }
             // Broadcast (no pointer position): fire the global key handler, then keep routing to children.
             Event::KeyPressed { key, modifiers } => {
@@ -291,9 +340,9 @@ impl Component for StyledContainer {
                 if let Some(cb) = &self.on_key {
                     cb(key);
                 }
-                dispatch_container_event(&mut self.children, event)
+                self.dispatch_children(event)
             }
-            _ => dispatch_container_event(&mut self.children, event),
+            _ => self.dispatch_children(event),
         }
     }
 

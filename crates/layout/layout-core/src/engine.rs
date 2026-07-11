@@ -111,6 +111,37 @@ impl LayoutEngine {
         }
     }
 
+    /// Whether the node lays its children along the main (horizontal) axis — a flex row. A column, or any
+    /// non-row node (missing / errored), is `false`. A transparent fragment reads its host's axis to know
+    /// which margin edge a per-item gap sits on.
+    pub fn is_row(&self, node: NodeId) -> bool {
+        self.tree
+            .style(node)
+            .map(|s| {
+                matches!(
+                    s.flex_direction,
+                    taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse
+                )
+            })
+            .unwrap_or(false)
+    }
+
+    /// Sets the node's leading margin on the host's main axis (`left` for a row, `top` for a column) to `px`,
+    /// leaving the other three edges untouched. A transparent `for … gap:N` uses this to space its items by a
+    /// gap without a container of its own: the item cell carries the gap as a margin instead.
+    pub fn set_leading_margin(&mut self, node: NodeId, is_row: bool, px: f32) {
+        if let Ok(s) = self.tree.style(node) {
+            let mut style = s.clone();
+            let m = taffy::LengthPercentageAuto::length(px);
+            if is_row {
+                style.margin.left = m;
+            } else {
+                style.margin.top = m;
+            }
+            let _ = self.tree.set_style(node, style);
+        }
+    }
+
     /// Toggles a node in or out of layout flow. A hidden node (`Display::None`) takes no space and lays out none of its subtree; a visible node is `Display::Flex`. Used for responsive show/hide (e.g. collapsing a sidebar on narrow windows).
     pub fn set_display(&mut self, node: NodeId, visible: bool) {
         if let Ok(s) = self.tree.style(node) {

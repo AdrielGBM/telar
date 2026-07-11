@@ -181,6 +181,25 @@ col @card
         assert!(code.contains("let doubled = memo(move || count_rsx_mv.get() * 2);"));
     }
 
+    // A `move` closure that is a call argument on a continuation line (inside an unclosed `(`) must have its
+    // signal clone wrapped in a block, NOT injected as a preceding `let` — that would land inside the argument
+    // list and be invalid Rust (regression from the hyprshell `watch(..)` migration).
+    #[test]
+    fn move_clone_in_call_arg_closure_is_block_wrapped() {
+        let src = "[logic]\nlet s = signal(0i32);\nsetup(\n    move || s.set(1),\n);\n[view]\ntext \"x\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("{ let s_rsx_mv = s.clone(); move || s_rsx_mv.set(1) }"),
+            "a call-arg closure's clone must be block-wrapped, not a preceding let:\n{code}"
+        );
+        assert!(
+            !code.contains("\n    let s_rsx_mv = s.clone();\n    move"),
+            "the clone must not be emitted as a preceding statement inside the call args:\n{code}"
+        );
+    }
+
     // `has_props` lets the app macro alias a nested component's `Props` type by its base name only when it actually has one.
     #[test]
     fn scan_component_sig_detects_default_fields_and_slot() {
@@ -959,16 +978,17 @@ col @card
         );
     }
 
-    // `for … key … gap:N` threads the gap through to the `with_gap` constructor as a trailing `f32` arg.
+    // `for … key … gap:N` inside a container is a transparent gap fragment (spacing via a per-item margin),
+    // not a boxed list — the gap is threaded to `fragment_gap` as a trailing `f32` arg.
     #[test]
-    fn reactive_for_key_and_gap_emits_with_gap_constructor() {
+    fn reactive_for_key_and_gap_is_transparent_gap_fragment() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n gap:8\n        text \"x\"\n";
         let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("ReactiveList::with_gap("),
-            "a keyed `for … gap:N` should build via with_gap:\n{code}"
+            code.contains("fragment_gap(") && !code.contains("ReactiveList"),
+            "a keyed `for … gap:N` in a slot host is a transparent gap fragment, not a boxed list:\n{code}"
         );
         assert!(code.contains("|n| *n"), "key closure preserved:\n{code}");
         assert!(
@@ -978,6 +998,7 @@ col @card
     }
 
     // A keyless reactive `for` (no `key` clause) compiles by reconciling positionally instead of erroring.
+    // Inside a container with no `gap:`, it is a transparent fragment (`fragment_positional`).
     #[test]
     fn reactive_for_without_key_compiles_positionally() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items\n        text \"x\"\n";
@@ -985,7 +1006,7 @@ col @card
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("ReactiveList::positional("),
+            code.contains("fragment_positional("),
             "a keyless reactive for should build via positional:\n{code}"
         );
         assert!(
@@ -994,20 +1015,44 @@ col @card
         );
     }
 
-    // A keyless reactive `for` with a `gap:N` clause builds via `positional_with_gap`.
+    // A keyless reactive `for` with a `gap:N` clause inside a container is a transparent positional gap fragment.
     #[test]
-    fn reactive_for_without_key_with_gap_uses_positional_with_gap() {
+    fn reactive_for_without_key_with_gap_is_transparent_positional_gap_fragment() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items gap:8\n        text \"x\"\n";
         let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("ReactiveList::positional_with_gap("),
-            "a keyless `for … gap:N` should build via positional_with_gap:\n{code}"
+            code.contains("fragment_positional_gap(") && !code.contains("ReactiveList"),
+            "a keyless `for … gap:N` in a slot host is a transparent positional gap fragment:\n{code}"
         );
         assert!(
             code.contains("(8) as f32,"),
             "the gap clause is threaded through as the trailing f32 arg:\n{code}"
+        );
+    }
+
+    // Outside a slot host — here inside an `overlay`, which takes a plain child vec — a reactive `for … gap:N`
+    // can't attach as a transparent fragment, so it falls back to the boxed `ReactiveList` that carries the gap
+    // on its own node (`with_gap` keyed, `positional_with_gap` keyless). This keeps the boxed gap path covered.
+    #[test]
+    fn reactive_for_gap_outside_slot_host_falls_back_to_boxed_with_gap() {
+        let keyed = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\noverlay\n    for n in $items key *n gap:8\n        text \"x\"\n";
+        let code = transpile_source_with_theme(keyed, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("ReactiveList::with_gap(") && code.contains("(8) as f32,"),
+            "a keyed `for … gap` in an overlay falls back to the boxed with_gap list:\n{code}"
+        );
+
+        let keyless = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\noverlay\n    for n in $items gap:8\n        text \"x\"\n";
+        let code = transpile_source_with_theme(keyless, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("ReactiveList::positional_with_gap(") && code.contains("(8) as f32,"),
+            "a keyless `for … gap` in an overlay falls back to the boxed positional_with_gap list:\n{code}"
         );
     }
 

@@ -11,7 +11,7 @@ use super::signals::{
     build_gradient_stops, closure_marker, emit_transition_prelude, has_paint, normalize_closure,
     substitute_handles, substitute_reads, wrap_signal_clones,
 };
-use super::{ChildEmit, ViewGen, forces_child_vec};
+use super::{ChildEmit, ChildMode, ViewGen, forces_child_vec};
 
 impl ViewGen<'_> {
     pub(super) fn emit_container(&mut self, el: &Element) -> ChildEmit {
@@ -54,33 +54,39 @@ impl ViewGen<'_> {
             None
         };
 
-        let has_dynamic = el.children.iter().any(forces_child_vec);
+        let mode = Self::child_mode(&el.children);
 
         self.indent += 1;
         let inner_pad = self.indent_str();
-        let mut child_emits = Vec::new();
-        for child in &el.children {
-            child_emits.push(self.emit_node(child));
-        }
+        let child_emits: Vec<ChildEmit> = self.with_child_sink(mode, |g| {
+            el.children.iter().map(|child| g.emit_node(child)).collect()
+        });
         self.indent -= 1;
 
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
 
         let children =
-            self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
+            self.emit_children_collection(&mut code, &child_emits, &inner_pad, mode, &[]);
+        // A reactive fragment among the children routes them all through `from_slots`, so they interleave in
+        // this container's node and inherit its flex direction (transparent `for`/`if`).
+        let ctor = if mode == ChildMode::Slots {
+            "from_slots"
+        } else {
+            "new"
+        };
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
         match pieces {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::new({style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
+                    "{inner_pad}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
                 );
             }
             None => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}Container::new({style}, {children})?{on_press}"
+                    "{inner_pad}Container::{ctor}({style}, {children})?{on_press}"
                 );
             }
         }
@@ -97,19 +103,24 @@ impl ViewGen<'_> {
         let pad = self.indent_str();
         let style = self.make_layout_style("overlay", &el.classes, &el.attributes);
 
-        let has_dynamic = el.children.iter().any(forces_child_vec);
+        // `Overlay::new` takes a plain child vec (no `from_slots`), so a reactive `for`/`if` here stays a
+        // boxed `ReactiveList` rather than a transparent fragment: cap the mode at `Vec`, never `Slots`.
+        let mode = if el.children.iter().any(forces_child_vec) {
+            ChildMode::Vec
+        } else {
+            ChildMode::Literal
+        };
         self.indent += 1;
         let inner_pad = self.indent_str();
-        let mut child_emits = Vec::new();
-        for child in &el.children {
-            child_emits.push(self.emit_node(child));
-        }
+        let child_emits: Vec<ChildEmit> = self.with_child_sink(mode, |g| {
+            el.children.iter().map(|child| g.emit_node(child)).collect()
+        });
         self.indent -= 1;
 
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
         let children =
-            self.emit_children_collection(&mut code, &child_emits, &inner_pad, has_dynamic, &[]);
+            self.emit_children_collection(&mut code, &child_emits, &inner_pad, mode, &[]);
         let _ = writeln!(code, "{inner_pad}Overlay::new({style}, {children})?");
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }

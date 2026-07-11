@@ -4,6 +4,8 @@ use platform_core::{Event, PointerButton};
 use reactive_core::RwSignal;
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::child_host::{ChildSlot, DynHost};
+use crate::context::{new_container, track_layout};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 use crate::press::PressGesture;
@@ -11,7 +13,10 @@ use crate::press::PressGesture;
 pub struct Container {
     node: NodeId,
     rect: RwSignal<Rect>,
+    // Static children; empty when `dyn_host` is set (a container holding a reactive fragment routes all
+    // children — static and dynamic — through the host so they interleave in the layout node).
     children: TrackedChildren,
+    dyn_host: Option<DynHost>,
     // Optional tap gesture so a plain row/col can be pressable; children still hit-test first.
     press: PressGesture,
 }
@@ -26,12 +31,39 @@ impl Container {
             node,
             rect,
             children,
+            dyn_host: None,
+            press: PressGesture::default(),
+        })
+    }
+
+    /// A container whose children are a mix of static widgets and reactive fragments (`ChildSlot`s). The
+    /// fragments reconcile into this container's own node, so their items are real siblings of the static
+    /// children and inherit this container's flex direction/gap — the transparent `for`/`if` path.
+    pub fn from_slots(
+        layout_style: LayoutStyle,
+        slots: Vec<ChildSlot>,
+    ) -> Result<Self, LayoutError> {
+        let node = new_container(layout_style, &[])?;
+        let rect = track_layout(node).expect("new_container always registers a signal");
+        let dyn_host = DynHost::build(node, slots)?;
+        Ok(Container {
+            node,
+            rect,
+            children: Vec::new(),
+            dyn_host: Some(dyn_host),
             press: PressGesture::default(),
         })
     }
 
     pub fn rect(&self) -> RwSignal<Rect> {
         self.rect.clone()
+    }
+
+    fn dispatch_children(&mut self, event: &Event) -> EventResult {
+        match &self.dyn_host {
+            Some(host) => host.dispatch(event),
+            None => dispatch_container_event(&mut self.children, event),
+        }
     }
 
     /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it;
@@ -55,25 +87,28 @@ impl LayoutItem for Container {
 impl Component for Container {
     fn view(&self) -> RenderNode {
         // Each child is its own segment: referencing it is a cheap Rc clone, so this view() does not re-run children and is not subscribed to their signals.
-        RenderNode::group(self.children.iter().map(|c| c.segment.boundary()))
+        match &self.dyn_host {
+            Some(host) => RenderNode::group(host.child_boundaries()),
+            None => RenderNode::group(self.children.iter().map(|c| c.segment.boundary())),
+        }
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         // No tap handler: behave exactly as before (pure child routing).
         if !self.press.is_set() {
-            return dispatch_container_event(&mut self.children, event);
+            return self.dispatch_children(event);
         }
         let rect = self.rect.get();
         match event {
             Event::PointerMoved { .. } => {
                 self.press.track_move(event);
-                dispatch_container_event(&mut self.children, event)
+                self.dispatch_children(event)
             }
             Event::PointerPressed {
                 button: PointerButton::Primary,
                 ..
             } => {
-                if dispatch_container_event(&mut self.children, event) == EventResult::Handled {
+                if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
                     return EventResult::Handled;
                 }
@@ -83,7 +118,7 @@ impl Component for Container {
                 button: PointerButton::Primary,
                 ..
             } => {
-                if dispatch_container_event(&mut self.children, event) == EventResult::Handled {
+                if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
                     return EventResult::Handled;
                 }
@@ -91,9 +126,9 @@ impl Component for Container {
             }
             Event::CursorLeft => {
                 self.press.cancel();
-                dispatch_container_event(&mut self.children, event)
+                self.dispatch_children(event)
             }
-            _ => dispatch_container_event(&mut self.children, event),
+            _ => self.dispatch_children(event),
         }
     }
 

@@ -8,7 +8,7 @@ use crate::naming::{is_ident, to_pascal_case, to_snake_case};
 use crate::style::{format_f32, hex_to_color_expr};
 
 use super::signals::{rust_str, wrap_signal_clones};
-use super::{ChildEmit, ViewGen, expr_marker};
+use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
     /// Emits an unknown tag as a component function call. A no-attr, no-child tag generates `name()?`;
@@ -156,46 +156,56 @@ impl ViewGen<'_> {
             code,
             "{pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
         );
-        for child in children {
-            let slot_name = match child {
-                ViewNode::Element(el) => el
-                    .attributes
-                    .iter()
-                    .find(|a| a.key == "slot")
-                    .map(|a| a.value.clone()),
-                _ => None,
-            };
-            // Strip the `slot` attr before emitting a named child, so a component child doesn't receive it
-            // as a prop and a builtin doesn't see a stray attribute.
-            let emit = match (child, &slot_name) {
-                (ViewNode::Element(el), Some(_)) => {
-                    let mut stripped = el.clone();
-                    stripped.attributes.retain(|a| a.key != "slot");
-                    self.emit_node(&ViewNode::Element(stripped))
-                }
-                _ => self.emit_node(child),
-            };
-            match emit {
-                ChildEmit::Simple { name, code: c } => {
-                    let _ = writeln!(code, "{c}");
-                    match &slot_name {
-                        Some(n) => {
-                            let _ = writeln!(
-                                code,
-                                "{pad}__slots.push(Some({}), box_item({name}));",
-                                rust_str(n)
-                            );
-                        }
-                        None => {
-                            let _ = writeln!(code, "{pad}__children.push(box_item({name}));");
+        // Component call-site children flow into a `Slots` (then the component's own `children` placeholder),
+        // so there is no container here to host a transparent fragment: a `Vec` sink named `__children`
+        // keeps a reactive `for`/`if` on the boxed path and any nested static control flow pushing there.
+        self.with_child_sink(ChildMode::Vec, |g| {
+            for child in children {
+                let slot_name = match child {
+                    ViewNode::Element(el) => el
+                        .attributes
+                        .iter()
+                        .find(|a| a.key == "slot")
+                        .map(|a| a.value.clone()),
+                    _ => None,
+                };
+                // Strip the `slot` attr before emitting a named child, so a component child doesn't receive
+                // it as a prop and a builtin doesn't see a stray attribute.
+                let emit = match (child, &slot_name) {
+                    (ViewNode::Element(el), Some(_)) => {
+                        let mut stripped = el.clone();
+                        stripped.attributes.retain(|a| a.key != "slot");
+                        g.emit_node(&ViewNode::Element(stripped))
+                    }
+                    _ => g.emit_node(child),
+                };
+                match emit {
+                    ChildEmit::Simple { name, code: c } => {
+                        let _ = writeln!(code, "{c}");
+                        match &slot_name {
+                            Some(n) => {
+                                let _ = writeln!(
+                                    code,
+                                    "{pad}__slots.push(Some({}), box_item({name}));",
+                                    rust_str(n)
+                                );
+                            }
+                            None => {
+                                let _ = writeln!(code, "{pad}__children.push(box_item({name}));");
+                            }
                         }
                     }
-                }
-                ChildEmit::Dynamic { code: c } => {
-                    let _ = writeln!(code, "{c}");
+                    ChildEmit::Dynamic { code: c } => {
+                        let _ = writeln!(code, "{c}");
+                    }
+                    // Shielded above (`Vec` sink), so a reactive region here is a boxed `ReactiveList`
+                    // (a `Simple`), never a fragment.
+                    ChildEmit::Fragment { .. } => {
+                        unreachable!("component-slot children never enter a slot host")
+                    }
                 }
             }
-        }
+        });
         let _ = writeln!(
             code,
             "{pad}for __c in __children {{ __slots.push(None, __c); }}"

@@ -112,6 +112,18 @@ pub fn set_display(node: NodeId, visible: bool) {
     with_runtime(|rt| rt.set_display(node, visible))
 }
 
+/// Whether `node` is a flex row (main axis horizontal). A transparent `for … gap:N` fragment reads its host
+/// container's axis to know which edge the per-item gap margin sits on.
+pub fn container_is_row(node: NodeId) -> bool {
+    with_runtime(|rt| rt.engine.is_row(node))
+}
+
+/// Sets `node`'s leading main-axis margin (`left` for a row host, `top` for a column) to `px` — the primitive
+/// a transparent `for … gap:N` uses to space its items without a container of its own. Marks the node dirty.
+pub fn set_leading_margin(node: NodeId, is_row: bool, px: f32) {
+    with_runtime(|rt| rt.engine.set_leading_margin(node, is_row, px))
+}
+
 /// Replaces `parent`'s children with `children`, in order, marking `parent` dirty. Operates on the
 /// thread-local runtime; `parent` must be a container already registered in the runtime.
 pub fn set_children(parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {

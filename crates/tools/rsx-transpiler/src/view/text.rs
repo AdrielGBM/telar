@@ -8,7 +8,7 @@ use rsx_parser::{Attr, Element};
 use crate::style::{format_f32, layout_prop_call};
 
 use super::signals::{captured_idents, emit_transition_prelude, wrap_signal_clones};
-use super::{ChildEmit, ViewGen};
+use super::{ChildEmit, ChildMode, ViewGen};
 
 impl ViewGen<'_> {
     pub(super) fn emit_text(&mut self, el: &Element) -> ChildEmit {
@@ -77,49 +77,93 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended before the emitted children (e.g. a `section`'s heading). When any child is dynamic control flow, this builds a mutable `__children` vec and returns `__children`; otherwise it returns a `children![...]` literal. Used by `emit_container`/`emit_box` and by `emit_scroll`'s dynamic branch; `emit_scroll`'s static branch instead collapses to a single content item (`wrap_as_single_content`).
+    /// Emits the children of a container-like element into `code` and returns the expression to pass as the
+    /// constructor's children argument. `seed` names are prepended (e.g. a `section`'s heading). The `mode`
+    /// (from [`ViewGen::child_mode`]) picks the shape: [`ChildMode::Slots`] builds a `Vec<ChildSlot>`
+    /// (`__slots`, for `from_slots`) when a reactive fragment is present, [`ChildMode::Vec`] a
+    /// `Vec<Box<dyn LayoutItem>>` (`__children`, for `new`) for static control flow, and
+    /// [`ChildMode::Literal`] a `children![...]`. The caller must have wrapped child emission in the
+    /// matching [`ViewGen::with_child_sink`] so any `if`/`for` bodies pushed the same shape.
     pub(super) fn emit_children_collection(
         &self,
         code: &mut String,
         child_emits: &[ChildEmit],
         inner_pad: &str,
-        has_dynamic: bool,
+        mode: ChildMode,
         seed: &[String],
     ) -> String {
-        if has_dynamic {
-            let _ = writeln!(
-                code,
-                "{inner_pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
-            );
-            for name in seed {
-                let _ = writeln!(code, "{inner_pad}__children.push(box_item({name}));");
-            }
-            for emit in child_emits {
-                match emit {
-                    ChildEmit::Simple { name, code: c } => {
-                        let _ = writeln!(code, "{c}");
-                        let _ = writeln!(code, "{inner_pad}__children.push(box_item({name}));");
-                    }
-                    ChildEmit::Dynamic { code: c } => {
-                        let _ = writeln!(code, "{c}");
+        match mode {
+            ChildMode::Slots => {
+                let _ = writeln!(
+                    code,
+                    "{inner_pad}let mut __slots: Vec<ChildSlot> = Vec::new();"
+                );
+                for name in seed {
+                    let _ = writeln!(
+                        code,
+                        "{inner_pad}__slots.push(ChildSlot::stat(box_item({name})));"
+                    );
+                }
+                for emit in child_emits {
+                    match emit {
+                        ChildEmit::Simple { name, code: c } => {
+                            let _ = writeln!(code, "{c}");
+                            let _ = writeln!(
+                                code,
+                                "{inner_pad}__slots.push(ChildSlot::stat(box_item({name})));"
+                            );
+                        }
+                        ChildEmit::Fragment { name, code: c } => {
+                            let _ = writeln!(code, "{c}");
+                            let _ = writeln!(code, "{inner_pad}__slots.push({name});");
+                        }
+                        ChildEmit::Dynamic { code: c } => {
+                            let _ = writeln!(code, "{c}");
+                        }
                     }
                 }
+                "__slots".to_string()
             }
-            "__children".to_string()
-        } else {
-            let mut names: Vec<String> = seed.to_vec();
-            for emit in child_emits {
-                match emit {
-                    ChildEmit::Simple { name, code: c } => {
-                        let _ = writeln!(code, "{c}");
-                        names.push(name.clone());
-                    }
-                    ChildEmit::Dynamic { code: c } => {
-                        let _ = writeln!(code, "{c}");
+            ChildMode::Vec => {
+                let _ = writeln!(
+                    code,
+                    "{inner_pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
+                );
+                for name in seed {
+                    let _ = writeln!(code, "{inner_pad}__children.push(box_item({name}));");
+                }
+                for emit in child_emits {
+                    match emit {
+                        ChildEmit::Simple { name, code: c } => {
+                            let _ = writeln!(code, "{c}");
+                            let _ = writeln!(code, "{inner_pad}__children.push(box_item({name}));");
+                        }
+                        ChildEmit::Dynamic { code: c } => {
+                            let _ = writeln!(code, "{c}");
+                        }
+                        // A reactive fragment forces `ChildMode::Slots`, so it never reaches vec mode.
+                        ChildEmit::Fragment { code: c, .. } => {
+                            let _ = writeln!(code, "{c}");
+                        }
                     }
                 }
+                "__children".to_string()
             }
-            format!("children![{}]", names.join(", "))
+            ChildMode::Literal => {
+                let mut names: Vec<String> = seed.to_vec();
+                for emit in child_emits {
+                    match emit {
+                        ChildEmit::Simple { name, code: c } => {
+                            let _ = writeln!(code, "{c}");
+                            names.push(name.clone());
+                        }
+                        ChildEmit::Dynamic { code: c } | ChildEmit::Fragment { code: c, .. } => {
+                            let _ = writeln!(code, "{c}");
+                        }
+                    }
+                }
+                format!("children![{}]", names.join(", "))
+            }
         }
     }
 

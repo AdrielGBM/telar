@@ -42,6 +42,10 @@ fn wrap_source_markers(emit: ChildEmit, line: usize) -> ChildEmit {
             code: wrap(code),
         },
         ChildEmit::Dynamic { code } => ChildEmit::Dynamic { code: wrap(code) },
+        ChildEmit::Fragment { name, code } => ChildEmit::Fragment {
+            name,
+            code: wrap(code),
+        },
     }
 }
 
@@ -101,12 +105,45 @@ fn strip_expr_markers(line: &str, base: usize) -> (String, Vec<(usize, u32, u32)
     (out, spans)
 }
 
+/// How a container collects its children: a `children![...]` literal (all static, no control flow), a
+/// `Vec<Box<dyn LayoutItem>>` mutated by static control flow, or a `Vec<ChildSlot>` when a reactive
+/// fragment is among the siblings (so it and the statics reconcile into the same node — the transparent
+/// `for`/`if`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChildMode {
+    Literal,
+    Vec,
+    Slots,
+}
+
+/// The child accumulator currently in scope: the `Vec` variable that `if`/`for` bodies push into, and
+/// whether it holds `ChildSlot`s (slot mode) vs `Box<dyn LayoutItem>` (vec mode).
+pub(crate) struct ChildSink {
+    var: &'static str,
+    slots: bool,
+}
+
+/// Whether a node forces its parent into slot mode: a *reactive* `for`/`if` (a `$`-driven source) becomes
+/// a transparent fragment, which only the `ChildSlot`/`from_slots` path can host. A static `for`/`if` does
+/// not — it pushes its widgets directly, so a `Vec` accumulator suffices.
+pub(crate) fn forces_fragment(node: &ViewNode) -> bool {
+    match node {
+        ViewNode::ForBlock(block) => block.iterable.trim_start().starts_with('$'),
+        ViewNode::IfBlock(block) => block.condition.contains('$'),
+        _ => false,
+    }
+}
+
 /// A piece of generated child code together with how it contributes to a parent's child collection.
 pub(crate) enum ChildEmit {
     /// A simple widget bound to `name`, pushable directly.
     Simple { name: String, code: String },
     /// Control flow (`if`/`for`) that mutates a child vector in place.
     Dynamic { code: String },
+    /// A reactive `for`/`if` region bound to `name` as a `ChildSlot::Dynamic` (a transparent fragment that
+    /// reconciles into the host container's node). Forces the parent to collect `ChildSlot`s and build via
+    /// `from_slots`, so the region's items are real siblings of the static children.
+    Fragment { name: String, code: String },
 }
 
 /// Collapses a set of already-bound widget `names` into a single content expression: an empty column
@@ -141,6 +178,9 @@ pub struct ViewGen<'a> {
     baked_asset_count: usize,
     /// Signatures of every component in the workspace, so `emit_component_call` emits optional props and the slot argument correctly. `None` falls back to the per-file heuristic.
     registry: Option<&'a crate::codegen::ComponentRegistry>,
+    /// Stack of child accumulators (see [`ChildSink`]); the top is the one an emitted `if`/`for` body
+    /// pushes into. Pushed before a container's children are emitted, popped after.
+    child_sinks: Vec<ChildSink>,
 }
 
 impl<'a> ViewGen<'a> {
@@ -161,6 +201,71 @@ impl<'a> ViewGen<'a> {
             base_dir: base_dir.map(Path::to_path_buf),
             baked_asset_count: 0,
             registry: None,
+            child_sinks: Vec::new(),
+        }
+    }
+
+    /// Runs `emit` with a child-accumulator context in scope, so `if`/`for` bodies emitted inside push into
+    /// the right `Vec` in the right shape. No sink is pushed for [`ChildMode::Literal`] (nothing pushes).
+    fn with_child_sink<R>(&mut self, mode: ChildMode, emit: impl FnOnce(&mut Self) -> R) -> R {
+        let pushed = mode != ChildMode::Literal;
+        if pushed {
+            self.child_sinks.push(ChildSink {
+                var: if mode == ChildMode::Slots {
+                    "__slots"
+                } else {
+                    "__children"
+                },
+                slots: mode == ChildMode::Slots,
+            });
+        }
+        let result = emit(self);
+        if pushed {
+            self.child_sinks.pop();
+        }
+        result
+    }
+
+    /// Emits a push of static widget `name` into the current child accumulator, in its shape (a bare
+    /// `box_item` for a vec sink, wrapped in `ChildSlot::stat` for a slot sink).
+    fn push_static_child(&self, code: &mut String, pad: &str, name: &str) {
+        match self.child_sinks.last() {
+            Some(sink) if sink.slots => {
+                let _ = writeln!(
+                    code,
+                    "{pad}{}.push(ChildSlot::stat(box_item({name})));",
+                    sink.var
+                );
+            }
+            Some(sink) => {
+                let _ = writeln!(code, "{pad}{}.push(box_item({name}));", sink.var);
+            }
+            None => {}
+        }
+    }
+
+    /// Emits a push of a reactive fragment `name` (a `ChildSlot::Dynamic`) into the current slot sink.
+    fn push_fragment_child(&self, code: &mut String, pad: &str, name: &str) {
+        if let Some(sink) = self.child_sinks.last() {
+            let _ = writeln!(code, "{pad}{}.push({name});", sink.var);
+        }
+    }
+
+    /// Whether the child accumulator in scope hosts `ChildSlot`s — i.e. a reactive `for`/`if` here can be a
+    /// transparent fragment. Outside a slot host (component-slot children, a bare root, overlay/scroll) it
+    /// must fall back to a boxed `ReactiveList`.
+    fn in_slot_host(&self) -> bool {
+        self.child_sinks.last().is_some_and(|sink| sink.slots)
+    }
+
+    /// The child-collection mode a container/branch with these AST children needs.
+    fn child_mode(children: &[ViewNode]) -> ChildMode {
+        if children.iter().any(forces_fragment) {
+            ChildMode::Slots
+        } else if children.iter().any(forces_child_vec) {
+            ChildMode::Vec
+        } else {
+            ChildMode::Literal
         }
     }
 
@@ -200,8 +305,26 @@ impl<'a> ViewGen<'a> {
     /// Generates the full view body and returns the final `Ok(Box::new(...))` expression.
     pub fn generate_root(&mut self, nodes: &[ViewNode]) -> String {
         let mut out = String::new();
-        let mut roots = Vec::new();
+        let mode = Self::child_mode(nodes);
 
+        // A reactive fragment (or static control flow) at the root has no explicit container to attach to,
+        // so wrap the roots in one flex-column container built the matching way (`from_slots` for a
+        // fragment, `column` otherwise).
+        if mode != ChildMode::Literal {
+            let child_emits: Vec<ChildEmit> =
+                self.with_child_sink(mode, |g| nodes.iter().map(|n| g.emit_node(n)).collect());
+            let pad = self.indent_str();
+            let expr = self.emit_children_collection(&mut out, &child_emits, &pad, mode, &[]);
+            let content = if mode == ChildMode::Slots {
+                format!("Container::from_slots(LayoutStyle::new().flex_column(), {expr})?")
+            } else {
+                format!("Container::column({expr})?")
+            };
+            let _ = write!(out, "{pad}Ok(Box::new({content}))");
+            return out;
+        }
+
+        let mut roots = Vec::new();
         for node in nodes {
             match self.emit_node(node) {
                 ChildEmit::Simple { name, code } => {
@@ -209,8 +332,7 @@ impl<'a> ViewGen<'a> {
                     out.push('\n');
                     roots.push(name);
                 }
-                ChildEmit::Dynamic { code } => {
-                    // A bare control-flow node at the root has no container to attach to; emit it verbatim for completeness.
+                ChildEmit::Dynamic { code } | ChildEmit::Fragment { code, .. } => {
                     out.push_str(&code);
                     out.push('\n');
                 }
@@ -888,7 +1010,8 @@ mod tests {
         assert!(code.contains(".on_submit("), "wires on_submit:\n{code}");
     }
 
-    // A `$`-source `for` with a `key` clause emits a ReactiveList (source read, key closure, item builder).
+    // A `$`-source `for` with a `key` clause inside a container emits a transparent fragment (source read,
+    // key closure, item builder) that reconciles into the parent's node — no boxed `ReactiveList`.
     #[test]
     fn reactive_for_emits_reactive_list() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n\n        text \"x\"\n";
@@ -896,8 +1019,12 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("ReactiveList::new("),
-            "reactive for should build a ReactiveList:\n{code}"
+            code.contains("fragment(") && !code.contains("ReactiveList"),
+            "a reactive for in a container should be a transparent fragment, not a boxed list:\n{code}"
+        );
+        assert!(
+            code.contains("Container::from_slots("),
+            "the host container collects slots:\n{code}"
         );
         assert!(
             code.contains("move || items.get()"),
@@ -910,8 +1037,7 @@ mod tests {
         assert!(code.contains("move |n|"), "item builder closure:\n{code}");
     }
 
-    // A reactive `for` without a `key` clause reconciles by position instead of erroring (no per-item
-    // identity, but append/truncate reuse the surviving nodes cheaply).
+    // A reactive `for` without a `key` clause reconciles by position (keyless transparent fragment).
     #[test]
     fn reactive_for_without_key_uses_positional_reconciliation() {
         let src = "[view]\ncol\n    for n in $items\n        text \"x\"\n";
@@ -919,12 +1045,71 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("ReactiveList::positional("),
+            code.contains("fragment_positional("),
             "a keyless reactive for should reconcile by position:\n{code}"
         );
         assert!(
             !code.contains("compile_error!"),
             "a keyless reactive for must compile, not error:\n{code}"
+        );
+    }
+
+    // The canonical bar case: a reactive `for` between static siblings inside a `row` is transparent — the
+    // host `row` collects slots (`from_slots` with its own `flex_row`), the statics become `ChildSlot::stat`,
+    // and the fragment is pushed between them, so its items lay out horizontally as real row siblings.
+    #[test]
+    fn reactive_for_in_row_is_transparent_between_static_siblings() {
+        let src = "[logic]\nlet ws = signal(vec![1i32, 2]);\n[view]\nrow\n    text \"L\"\n    for w in $ws key *w\n        text \"x\"\n    text \"R\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("Container::from_slots(") && code.contains("flex_row"),
+            "the row hosts slots and keeps its row axis:\n{code}"
+        );
+        assert!(
+            code.contains("fragment(") && !code.contains("ReactiveList"),
+            "the reactive for is a transparent fragment, not a boxed list:\n{code}"
+        );
+        assert!(
+            code.contains("ChildSlot::stat(") && code.contains("__slots.push("),
+            "static siblings and the fragment share the row's slot collection:\n{code}"
+        );
+    }
+
+    // A reactive `for … gap:N` in a `row` stays transparent: it emits a gap-carrying fragment (spaced by a
+    // per-item margin, resolved against the host's axis at runtime), not a boxed `ReactiveList` that would
+    // impose its own column. The `row` still hosts slots and keeps its row axis, so the items flow horizontally.
+    #[test]
+    fn reactive_for_with_gap_in_row_is_transparent_gap_fragment() {
+        let src = "[logic]\nlet ws = signal(vec![1i32, 2]);\n[view]\nrow\n    for w in $ws key *w gap:6\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("fragment_gap(") && !code.contains("ReactiveList"),
+            "a reactive for with gap in a slot host is a transparent gap fragment, not a boxed list:\n{code}"
+        );
+        assert!(
+            code.contains("(6) as f32"),
+            "the gap value is passed to fragment_gap:\n{code}"
+        );
+        assert!(
+            code.contains("Container::from_slots(") && code.contains("flex_row"),
+            "the host row keeps its row axis and hosts slots:\n{code}"
+        );
+    }
+
+    // A keyless reactive `for … gap:N` in a slot host uses the positional gap fragment.
+    #[test]
+    fn reactive_for_with_gap_keyless_uses_positional_gap_fragment() {
+        let src = "[view]\nrow\n    for w in $ws gap:4\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("fragment_positional_gap(") && code.contains("(4) as f32"),
+            "a keyless reactive for with gap is a positional gap fragment:\n{code}"
         );
     }
 
@@ -945,8 +1130,9 @@ mod tests {
         );
     }
 
-    // An `if` whose condition reads a signal (`$`) becomes a reactive conditional: a single-item
-    // ReactiveList keyed on the bool, whose builder holds the then/else branches.
+    // An `if` whose condition reads a signal (`$`) inside a container becomes a transparent fragment keyed
+    // on the bool, whose builder holds the then/else branches — the shown branch's nodes are siblings of the
+    // surrounding children, not wrapped in a boxed list.
     #[test]
     fn reactive_if_emits_reactive_list() {
         let src = "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"yes\"\n    else\n        text \"no\"\n";
@@ -954,8 +1140,8 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("ReactiveList::new("),
-            "reactive if builds a ReactiveList:\n{code}"
+            code.contains("fragment(") && !code.contains("ReactiveList"),
+            "a reactive if in a container should be a transparent fragment:\n{code}"
         );
         assert!(
             code.contains("move || vec![show.get()]"),
@@ -1107,6 +1293,57 @@ mod tests {
             out.rust_code.contains("my_card()?"),
             "without a registry a no-attr call stays flat:\n{}",
             out.rust_code
+        );
+    }
+
+    // A box `fill(expr)` computes a reactive Color from state: `$signal` reads become reactive `.get()`
+    // calls, the signal is cloned into the paint closure (so the outer handle stays usable), and a loop var
+    // and helper call are emitted verbatim. This is the state-driven paint a stateful chip/pill needs.
+    #[test]
+    fn box_fill_computed_expression_is_reactive() {
+        let src = "[logic]\nlet snap = signal(0i32);\nlet ids = signal(vec![1i32]);\n[view]\nrow\n    for id in $ids key id\n        box fill(chip_fill($snap, id)) radius:6\n            text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("chip_fill(snap.get(), id)"),
+            "the fill expr reads the signal reactively and keeps the loop var verbatim:\n{code}"
+        );
+        assert!(
+            code.contains("let snap = snap.clone();"),
+            "the captured signal is cloned into the paint closure:\n{code}"
+        );
+    }
+
+    // A text `color(expr)` is reactive the same way: `$signal` → reactive read, cloned into the style closure.
+    #[test]
+    fn text_color_computed_expression_is_reactive() {
+        let src =
+            "[logic]\nlet snap = signal(0i32);\n[view]\ntext \"hi\" color(text_color($snap))\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("text_color(snap.get())"),
+            "the color expr reads the signal reactively:\n{code}"
+        );
+        assert!(
+            code.contains("let snap = snap.clone();"),
+            "the captured signal is cloned into the style closure:\n{code}"
+        );
+    }
+
+    // A bare color token (no `(`/`$`) must still resolve through the theme, not be swept into the expression
+    // arm — guards the computed-expression detection from misfiring on ordinary tokens.
+    #[test]
+    fn bare_color_token_still_resolves_via_theme() {
+        let src = "[view]\nbox fill:primary\n    text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", Some("MyTheme"), None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("use_theme::<MyTheme>().primary"),
+            "a bare token resolves via the theme:\n{code}"
         );
     }
 
