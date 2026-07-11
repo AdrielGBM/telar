@@ -266,13 +266,27 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
         }
         ViewNode::ForBlock(block) => {
             out.push_str(&pad);
-            match &block.key_expr {
-                Some(key) => out.push_str(&format!(
-                    "for {} in {} key {}\n",
-                    block.pattern, block.iterable, key
-                )),
-                None => out.push_str(&format!("for {} in {}\n", block.pattern, block.iterable)),
+            out.push_str(&format!("for {} in {}", block.pattern, block.iterable));
+            // Both clauses are optional and must survive a round-trip: dropping `gap:N` silently changes a
+            // reactive row's spacing (and, since the transpiler keys the transparent gap fragment off it, its
+            // whole layout path) on the next save.
+            if let Some(key) = block
+                .key_expr
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                out.push_str(&format!(" key {key}"));
             }
+            if let Some(gap) = block
+                .gap_expr
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                out.push_str(&format!(" gap:{gap}"));
+            }
+            out.push('\n');
             for child in &block.body {
                 emit_node(child, depth + 1, out);
             }
@@ -536,6 +550,26 @@ mod tests {
         assert!(
             out.contains("for todo in $todos key todo.id"),
             "the key clause must survive formatting:\n{out}"
+        );
+    }
+
+    #[test]
+    fn preserves_reactive_for_gap_clause() {
+        // Dropping `gap:N` on format silently changes a reactive row's spacing and layout path — it must
+        // round-trip alongside `key`.
+        let src = "[view]\nrow\n    for id in $ids key *id gap:6\n        text \"{id}\"\n";
+        let out = format_document(src).unwrap();
+        assert!(
+            out.contains("for id in $ids key *id gap:6"),
+            "the gap clause must survive formatting:\n{out}"
+        );
+        // A gap without a key clause also round-trips.
+        let keyless =
+            format_document("[view]\nrow\n    for id in $ids gap:4\n        text \"{id}\"\n")
+                .unwrap();
+        assert!(
+            keyless.contains("for id in $ids gap:4"),
+            "a keyless gap clause must survive:\n{keyless}"
         );
     }
 
