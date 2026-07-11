@@ -595,7 +595,7 @@ mod tests {
     #[test]
     fn container_on_press_emits_click_handler() {
         // A painted `box` (StyledContainer) and a plain `col` (Container) both wire `.on_press`.
-        let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press:|| $n.update(|v| *v += 1)\n    col on_press:|| $n.set(0)\n        text \"x\"\n";
+        let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press(|| $n.update(|v| *v += 1))\n    col on_press(|| $n.set(0))\n        text \"x\"\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -616,7 +616,7 @@ mod tests {
 
     #[test]
     fn compound_assign_sugar_rewrites_to_update() {
-        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:|| $count += 1\n    button on_press:|| $count -= 2\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    button on_press(|| $count += 1)\n    button on_press(|| $count -= 2)\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -632,7 +632,7 @@ mod tests {
     #[test]
     fn toggle_and_update_closures_pass_through() {
         // `.toggle()` (a real RwSignal<bool> method) and an explicit `.update(...)` are left untouched.
-        let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:|| $flag.toggle()\n    button on_press:|| $count.update(|n| *n += 1)\n";
+        let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press(|| $flag.toggle())\n    button on_press(|| $count.update(|n| *n += 1))\n";
         let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -991,7 +991,7 @@ mod tests {
     // wires an optional `on_submit`.
     #[test]
     fn input_binds_value_style_and_submit() {
-        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name size:16 color:primary width:200 on_submit:|| $name.set(String::new())\n";
+        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name size:16 color:primary width:200 on_submit(|| $name.set(String::new()))\n";
         let code = crate::transpile_source_with_theme(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
@@ -1241,7 +1241,7 @@ mod tests {
     // An event callback upgrades a plain col/row to a StyledContainer (only it carries the callbacks).
     #[test]
     fn on_hover_promotes_plain_container() {
-        let src = "[view]\ncol\n    col on_hover:|_h| ()\n        text \"x\"\n";
+        let src = "[view]\ncol\n    col on_hover(|_h| ())\n        text \"x\"\n";
         let code = crate::transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;

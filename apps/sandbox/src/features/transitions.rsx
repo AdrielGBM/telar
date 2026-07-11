@@ -17,14 +17,14 @@ col gap:20
                 col gap:6 align:center
                     box width:72 height:72 fill:$accent radius:14 transition:fill spring(170, 16)
                     text "spring(170, 16)" size:11 color:muted
-                button label:"Toggle" fill:primary on_press:|| { $alt.toggle(); $accent.set(if $alt.get() { theme().purple } else { theme().primary }) }
+                button label:"Toggle" fill:primary on_press(|| { $alt.toggle(); $accent.set(if $alt.get() { theme().purple } else { theme().primary }) })
         code_line code:"box fill:$accent transition:fill 250ms ease-out"
     example title:"Opacity — the same signal, animated"
         card
             row gap:14 align:center wrap
                 box width:130 height:64 fill:primary radius:12 opacity:$fade align:center justify:center transition:opacity 300ms ease-in-out
                     text "fade" size:13 color:on_primary
-                button label:"Toggle" fill:primary on_press:|| { let v = $fade.peek(); $fade.set(if v > 0.5 { 0.15 } else { 1.0 }) }
+                button label:"Toggle" fill:primary on_press(|| { let v = $fade.peek(); $fade.set(if v > 0.5 { 0.15 } else { 1.0 }) })
         code_line code:"box opacity:$fade transition:opacity 300ms ease-in-out"
     example title:"Notes"
         col gap:6

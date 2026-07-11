@@ -344,15 +344,14 @@ fn parse_element_header(
             let is_closure_value = chars.get(val_start) == Some(&'|');
 
             if is_closure_value {
-                // The closure value runs to the end of the line, verbatim, starting at `val_start`.
-                let value: String = chars[val_start..].iter().collect();
-                element.attributes.push(Attr {
-                    key: key.trim().to_string(),
-                    value: value.trim().to_string(),
-                    is_quoted: false,
-                    value_start: content_start + byte_at(&chars, val_start),
+                // Closures take the parenthesized form only: `on_press(|| …)`, never `on_press:|| …`. The colon form ran to end of line and silently swallowed any attribute after it, so it is rejected — styles/values keep the colon form (`fill:red`), closures do not.
+                let key = key.trim();
+                return Err(ParseError {
+                    message: format!(
+                        "closure attribute `{key}` must use the parenthesized form `{key}(|…| …)`, not `{key}:|…| …` (the colon form runs to end of line and would swallow the attributes after it)"
+                    ),
+                    line,
                 });
-                break;
             }
 
             // A `transition:` value is a space-separated spec (`opacity 200ms ease-out`), optionally comma-separated for several properties, so — like a closure value — it runs verbatim to the end of the line.

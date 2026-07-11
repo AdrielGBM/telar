@@ -81,7 +81,7 @@ col gap:20
             row gap:20 align:center
                 box width:100 height:100 align:center justify:center
                     box fill:primary radius:12 width:60 height:60 scale:$scale
-                button label:"Bounce" fill:primary on_press:|| { $big.toggle(); $scale.retarget(if $big.get() { 1.3 } else { 0.6 }) }
+                button label:"Bounce" fill:primary on_press(|| { $big.toggle(); $scale.retarget(if $big.get() { 1.3 } else { 0.6 }) })
         code_line code:"box fill:primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)"
     example title:"Staggered keyframes — six PingPong loops offset by hold()"
         card
@@ -92,5 +92,5 @@ col gap:20
             row gap:12 align:center
                 widget "progress_bar"
                 text "{$progress.round()}%" size:12 color:muted
-                button label:"Replay" fill:primary on_press:|| { $progress.restart() }
+                button label:"Replay" fill:primary on_press(|| { $progress.restart() })
         code_line code:"Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)"

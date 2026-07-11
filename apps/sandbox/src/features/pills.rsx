@@ -17,7 +17,7 @@ col gap:20
             row gap:8 align:center
                 chip label:"design"
                 chip label:"rust"
-                chip label:"removable" on_close:|| { $tags.update(|n| if *n > 0 { *n -= 1 }) }
+                chip label:"removable" on_close(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) })
             text "chips · {$tags}" size:13 color:muted
         code_line code:"chip label:'removable' on_close:|| remove()"
     example title:"Attributes"

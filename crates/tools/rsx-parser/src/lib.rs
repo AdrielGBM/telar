@@ -56,9 +56,9 @@ col @card
     text "Count: {count}"   size:14  color:dark
     text "Double: {double}" size:12  color:muted
     row  gap:8
-        btn "Increment"  fill:primary   on_press:|| count.update(|n| *n += 1)
-        btn "Decrement"  outline:danger  on_press:|| count.update(|n| *n -= 1)
-        btn "Reset"      ghost           on_press:|| reset()
+        btn "Increment"  fill:primary   on_press(|| count.update(|n| *n += 1))
+        btn "Decrement"  outline:danger  on_press(|| count.update(|n| *n -= 1))
+        btn "Reset"      ghost           on_press(|| reset())
 "#;
 
     #[test]
@@ -69,6 +69,19 @@ col @card
         assert!(doc.logic.source.contains("#[derive(Props)]"));
         // The section header must not leak into the logic zone.
         assert!(!doc.logic.source.contains("[style]"));
+    }
+
+    #[test]
+    fn closure_attribute_requires_parenthesized_form() {
+        // The colon form (`on_press:|| …`) ran to end of line and swallowed the attributes after it, so it is rejected outright.
+        let err = parse("[view]\nbtn \"x\" on_press:|| f() foo:bar\n").unwrap_err();
+        assert!(
+            err.message.contains("parenthesized form"),
+            "{}",
+            err.message
+        );
+        // The parenthesized form is delimited, so a trailing attribute can follow it on the same line.
+        assert!(parse("[view]\nbtn \"x\" on_press(|| f()) foo:bar\n").is_ok());
     }
 
     #[test]
@@ -436,7 +449,7 @@ col @card
 
     #[test]
     fn parses_named_closure_param_attribute() {
-        let src = "[logic]\n[view]\nbtn \"x\" on_press:|ev| handle(ev)\n";
+        let src = "[logic]\n[view]\nbtn \"x\" on_press(|ev| handle(ev))\n";
         let doc = parse(src).unwrap();
         let ViewNode::Element(btn) = &doc.view.nodes[0] else {
             panic!();

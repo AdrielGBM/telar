@@ -24,13 +24,13 @@ col gap:20
         card gap:12
             text "Clicks · {$clicks}" size:18 color:ink
             row gap:10
-                button label:"+1" fill:primary on_press:|| $clicks += 1
-                button label:"+10" fill:primary on_press:|| $clicks += 10
-                button label:"Reset" ghost on_press:|| $clicks.set(0)
+                button label:"+1" fill:primary on_press(|| $clicks += 1)
+                button label:"+10" fill:primary on_press(|| $clicks += 10)
+                button label:"Reset" ghost on_press(|| $clicks.set(0))
         code_line code:"button label:'+1' fill:primary on_press:|| $clicks += 1      ($x += n desugars to .update)"
     example title:"A whole box is clickable — on_press works on any container, not just buttons"
         card gap:10
-            box @center fill:surface_alt radius:10 pad:20 on_press:|| $clicks += 1
+            box @center fill:surface_alt radius:10 pad:20 on_press(|| $clicks += 1)
                 text "Tap anywhere in this card · {$clicks}" size:14 color:ink
             text "The card itself takes on_press; a child button would still win its own taps." size:12 color:muted
         code_line code:"box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)"
@@ -45,9 +45,9 @@ col gap:20
         code_line code:"box fill:surface_alt hover_style(fill:primary)      (swap style while hovered)"
     example title:"Event callbacks — on_hover (a bool) and on_key (global shortcut)"
         card gap:10
-            box fill:surface_alt radius:10 pad:16 on_hover:|h| $hovering.set(h)
+            box fill:surface_alt radius:10 pad:16 on_hover(|h| $hovering.set(h))
                 text "hover me — hovering: {$hovering}" size:14 color:ink
-            col on_key:|_k| $keys += 1
+            col on_key(|_k| $keys += 1)
                 text "keys pressed anywhere: {$keys}" size:14 color:muted
             text "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key." size:12 color:muted
         code_line code:"box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)"

@@ -61,7 +61,7 @@ mod tests {
     fn source_map_points_generated_view_back_to_rsx() {
         // rsx lines (1-based): 1 [view], 2 col, 3 text, 4 row, 5 button (with closure).
         let src =
-            "[view]\ncol\n    text \"hi\"\n    row\n        button on_press:|| missing.set(1)\n";
+            "[view]\ncol\n    text \"hi\"\n    row\n        button on_press(|| missing.set(1))\n";
         let result = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let lines: Vec<&str> = result.rust_code.lines().collect();
         assert_eq!(lines.len(), result.source_map.len());
@@ -109,7 +109,7 @@ dark: #141424
 [view]
 col @card
     text "Count: {$count}" size:14 color:dark
-    button label:"Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
+    button label:"Increment" fill:primary on_press(|| $count.update(|n| *n += 1))
 "#;
 
     // COUNTER_THEMED has no [style] color declarations — colors flow through the live theme so they react to `set_theme(...)` calls at runtime.
@@ -127,7 +127,7 @@ let count = signal(0i32);
 [view]
 col @card
     text "Count: {$count}" size:14 color:dark
-    button label:"Increment" fill:primary on_press:|| $count.update(|n| *n += 1)
+    button label:"Increment" fill:primary on_press(|| $count.update(|n| *n += 1))
 "#;
 
     #[test]
@@ -494,7 +494,7 @@ col @card
 
     #[test]
     fn dollar_marks_reactive_reads_and_clones_closure_captures() {
-        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    button on_press:|| $count.update(|n| *n += 1)\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    button on_press(|| $count.update(|n| *n += 1))\n";
         let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         // `$count` in interpolation is a read.

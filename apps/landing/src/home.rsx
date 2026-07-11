@@ -61,7 +61,7 @@ col @page
                 text "Features" size:14 color:muted
                 text "Gallery" size:14 color:muted
                 text "Pricing" size:14 color:muted
-                button label:"Get started" fill:primary on_press:|| $signups.update(|n| *n += 1)
+                button label:"Get started" fill:primary on_press(|| $signups.update(|n| *n += 1))
     box @band fill:surface
         col @wrap
             row gap:48 wrap align:center
@@ -69,7 +69,7 @@ col @page
                     text "Native UIs in Rust, without the boilerplate" size:40 color:dark
                     text "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android." size:18 color:muted
                     row gap:12 wrap
-                        button label:"Get started" fill:primary on_press:|| $signups.update(|n| *n += 1)
+                        button label:"Get started" fill:primary on_press(|| $signups.update(|n| *n += 1))
                         button label:"Read the docs" outline:primary
                     text "{$spots_left} of 200 early-access seats left" size:13 color:accent
                 col grow:1 min_width:320
@@ -129,7 +129,7 @@ col @page
             text "Join the private beta" size:30 color:on_primary
             text "{$spots_left} of 200 seats remaining" size:16 color:on_primary
             row gap:12 align:center wrap
-                button label:"Reserve a seat" fill:accent on_press:|| $signups.update(|n| *n += 1)
+                button label:"Reserve a seat" fill:accent on_press(|| $signups.update(|n| *n += 1))
                 text "{$signups} developers reserved" size:14 color:on_primary
     box @footband fill:dark
         row @footwrap

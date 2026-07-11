@@ -13,7 +13,7 @@ col gap:22
         text "THEME" size:11 color:muted
         col gap:6
             row gap:6 wrap
-                button label:"Modern" fill:primary on_press:|| set_mode("modern")
-                button label:"Pastel" fill:primary on_press:|| set_mode("pastel")
-                button label:"Midnight" fill:primary on_press:|| set_mode("midnight")
+                button label:"Modern" fill:primary on_press(|| set_mode("modern"))
+                button label:"Pastel" fill:primary on_press(|| set_mode("pastel"))
+                button label:"Midnight" fill:primary on_press(|| set_mode("midnight"))
             text "Active · {$theme_name}" size:12 color:muted

@@ -13,7 +13,7 @@ col gap:20
         code_line code:"select selected:$picked options:vec!['Small','Medium','Large']"
     example title:"menu — a click-triggered list of one-shot actions"
         card gap:10
-            menu label:"Actions" items:vec!["Rename","Duplicate","Delete"] on_select:|i| $action.set(i)
+            menu label:"Actions" items:vec!["Rename","Duplicate","Delete"] on_select(|i| $action.set(i))
             text "Last action index · {$action}" size:14 color:muted
         code_line code:"menu label:'Actions' items:vec!['Rename','Duplicate','Delete'] on_select:|i| …"
     example title:"Attributes"

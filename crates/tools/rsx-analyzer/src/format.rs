@@ -341,6 +341,9 @@ fn format_attr(attr: &Attr) -> String {
     } else if attr.value.is_empty() {
         // Bare flag attribute, e.g. `ghost`.
         attr.key.clone()
+    } else if attr.value.starts_with('|') {
+        // A closure value uses the parenthesized form `key(|…| …)` — the colon form is gone, since it ran to end of line and swallowed any following attributes.
+        format!("{}({})", attr.key, attr.value)
     } else {
         format!("{}:{}", attr.key, attr.value)
     }
@@ -518,9 +521,9 @@ mod tests {
 
     #[test]
     fn normalizes_view_indentation_and_token_order() {
-        let src = "[view]\ncol @card\n        text \"Hi\" size:14 color:dark\n        row gap:8\n                btn \"+\" fill:primary on_press:|| count.update(|n| *n += 1)\n";
+        let src = "[view]\ncol @card\n        text \"Hi\" size:14 color:dark\n        row gap:8\n                btn \"+\" fill:primary on_press(|| count.update(|n| *n += 1))\n";
         let out = format_document(src).unwrap();
-        let expected = "[view]\ncol @card\n    text \"Hi\" size:14 color:dark\n    row gap:8\n        btn \"+\" fill:primary on_press:|| count.update(|n| *n += 1)\n";
+        let expected = "[view]\ncol @card\n    text \"Hi\" size:14 color:dark\n    row gap:8\n        btn \"+\" fill:primary on_press(|| count.update(|n| *n += 1))\n";
         assert_eq!(out, expected);
     }
 
@@ -593,9 +596,9 @@ mod tests {
 
     #[test]
     fn preserves_quoted_and_flag_attrs() {
-        let src = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press:|| reset()\n";
+        let src = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press(|| reset())\n";
         let out = format_document(src).unwrap();
-        let expected = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press:|| reset()\n";
+        let expected = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press(|| reset())\n";
         assert_eq!(out, expected);
     }
 
