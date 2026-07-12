@@ -85,3 +85,46 @@ pub trait App: 'static {
         theme_core::set_system_dark(dark);
     }
 }
+
+/// Lets [`crate::run_multi_with_platform`] (monomorphic over one `A: App`) drive surfaces of different app types via `Box<dyn App>`.
+impl<A: App + ?Sized> App for Box<A> {
+    fn root(&self) -> Box<dyn Component> {
+        (**self).root()
+    }
+    fn clear_color(&self) -> Option<Color> {
+        (**self).clear_color()
+    }
+    fn window_config(&self) -> Option<WindowConfig> {
+        (**self).window_config()
+    }
+    fn on_frame(&mut self, ctx: &mut AppCtx) {
+        (**self).on_frame(ctx)
+    }
+    fn hot_snapshot(&self) -> Option<String> {
+        (**self).hot_snapshot()
+    }
+    fn hot_restore(&self, blob: &str) {
+        (**self).hot_restore(blob)
+    }
+    fn motion_tick(&self, now: std::time::Instant) {
+        (**self).motion_tick(now)
+    }
+    fn motion_has_active(&self) -> bool {
+        (**self).motion_has_active()
+    }
+    fn relayout(&self) {
+        (**self).relayout()
+    }
+    fn begin_event_batch(&self) {
+        (**self).begin_event_batch()
+    }
+    fn end_event_batch(&self) {
+        (**self).end_event_batch()
+    }
+    fn dispatch_overlays(&self, event: &platform_core::Event) -> bool {
+        (**self).dispatch_overlays(event)
+    }
+    fn set_system_dark(&self, dark: bool) {
+        (**self).set_system_dark(dark)
+    }
+}
