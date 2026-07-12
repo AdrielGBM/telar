@@ -98,13 +98,15 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         None => ([0.0f32; 4], [0.0f32; 2], 0.0f32, 0.0f32),
     };
 
+    // The rect.wgsl SDF degenerates past radius = min(w, h) / 2, so clamp there to match the software renderer and keep an oversized ("pill") radius identical on both backends.
+    let max_r = (rect.width.min(rect.height) * 0.5).max(0.0);
     RectInstance {
         rect: [rect.x, rect.y, rect.width, rect.height],
         radii: [
-            style.radius.top_left,
-            style.radius.top_right,
-            style.radius.bottom_right,
-            style.radius.bottom_left,
+            style.radius.top_left.min(max_r),
+            style.radius.top_right.min(max_r),
+            style.radius.bottom_right.min(max_r),
+            style.radius.bottom_left.min(max_r),
         ],
         fill_type: encoded.fill_type,
         _pad_ft: [0; 3],
