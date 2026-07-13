@@ -200,6 +200,44 @@ col @card
         );
     }
 
+    // Regression (hyprshell battery module): a `move` closure whose line contains a signal's name ONLY
+    // inside a string literal must not trip the `[logic]` clone pass — no spurious clone (which would
+    // borrow a value already moved into an earlier closure), and the string left byte-for-byte intact
+    // (the old textual rewrite corrupted `"battery-charging"` into `"battery-charging_rsx_mv"`).
+    #[test]
+    fn logic_clone_pass_ignores_signal_names_inside_string_literals() {
+        let src = "[logic]\nlet charging = signal(false);\nlet view = charging.read_only();\nlet glyph = memo(move || if view.get() { \"battery-charging\" } else { \"battery\" });\n[view]\ntext \"{$glyph}\" size:12\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("\"battery-charging\""),
+            "the string literal must survive intact:\n{code}"
+        );
+        assert!(
+            !code.contains("charging_rsx_mv"),
+            "a name appearing only inside a string must not be cloned/rewritten:\n{code}"
+        );
+    }
+
+    // `self:center|start|end|stretch` maps to the matching per-child cross-axis override, so a fixed-size
+    // child (e.g. a square icon chip) can stay centered instead of stretching to the parent's cross size.
+    #[test]
+    fn self_alignment_maps_to_align_self() {
+        let src = "[view]\ncol\n    box self:center width:20 height:20\n    box self:stretch\n    text \"x\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".align_self_center()"),
+            "self:center should emit align_self_center:\n{code}"
+        );
+        assert!(
+            code.contains(".align_self_stretch()"),
+            "self:stretch should still emit align_self_stretch:\n{code}"
+        );
+    }
+
     // `has_props` lets the app macro alias a nested component's `Props` type by its base name only when it actually has one.
     #[test]
     fn scan_component_sig_detects_default_fields_and_slot() {
@@ -621,6 +659,54 @@ col @card
         assert!(
             spans.contains(&"icon"),
             "svg src value should map back to `icon`; got spans {spans:?}"
+        );
+    }
+
+    #[test]
+    fn svg_tint_token_resolves_through_theme() {
+        // `tint:accent` must resolve the bare token through `use_theme` exactly like `color:`/`fill:`, so
+        // an icon tints from a theme token without a verbose `use_theme::<T>()` expression — and re-reads
+        // it each frame so a runtime theme switch recolors the glyph.
+        let src = "[view]\ncol\n    svg src:props.icon tint:accent width:18 height:18\n";
+        let code = transpile_source_with_theme(src, "demo", Some("NordTheme"), None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("move || Some(use_theme::<NordTheme>().accent),"),
+            "tint token should resolve through use_theme:\n{code}"
+        );
+    }
+
+    #[test]
+    fn svg_src_signal_is_reactive_and_clones_the_handle() {
+        // `src:$glyph` must re-read the signal on every `view()` so an adaptive icon swaps its glyph when
+        // the bound state changes — not freeze the handle captured at construction (`let __src = …`).
+        let src = "[logic]\nlet glyph = signal(props.icon.clone());\n[view]\ncol\n    svg src:$glyph tint:accent width:18 height:18\n";
+        let code = transpile_source_with_theme(src, "demo", Some("NordTheme"), None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("{ let glyph = glyph.clone(); move || glyph.get() }"),
+            "reactive src should clone + read the signal each view:\n{code}"
+        );
+        assert!(
+            !code.contains("let __src = glyph"),
+            "reactive src must not freeze the handle at construction:\n{code}"
+        );
+    }
+
+    #[test]
+    fn svg_src_constant_expr_is_still_captured_once() {
+        // Regression: a `$`-free `src:expr` (a constant handle like `icon("bell")`) keeps the
+        // capture-once path so a plain asset is not needlessly re-read.
+        let src = "[view]\ncol\n    svg src:icon(\"bell\") width:18 height:18\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("let __src = icon(\"bell\").clone();")
+                && code.contains("move || __src.clone(),"),
+            "constant src should be captured once:\n{code}"
         );
     }
 

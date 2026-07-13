@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-use rsx_parser::{Element, StyleClass, StyleConstant, ViewNode};
+use rsx_parser::{Element, IfBlock, StyleClass, StyleConstant, ViewNode};
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
 const SRC_PUSH: &str = "//@RSX@PUSH:";
@@ -304,6 +304,15 @@ impl<'a> ViewGen<'a> {
 
     /// Generates the full view body and returns the final `Ok(Box::new(...))` expression.
     pub fn generate_root(&mut self, nodes: &[ViewNode]) -> String {
+        // A single static `if`/`if-else` root returns its branch directly, so the branch element becomes the
+        // component root with no injected column that would trap a `row align:stretch` at content height. A
+        // reactive (`$`) condition keeps the fragment-swap path below.
+        if let [ViewNode::IfBlock(block)] = nodes
+            && !block.condition.contains('$')
+        {
+            return self.generate_root_if(block);
+        }
+
         let mut out = String::new();
         let mode = Self::child_mode(nodes);
 
@@ -343,6 +352,40 @@ impl<'a> ViewGen<'a> {
         let content = wrap_as_single_content(&roots);
         let _ = write!(out, "{pad}Ok(Box::new({content}))");
 
+        out
+    }
+
+    /// Generates the body for a view that is a single static `if`/`if-else`: each branch returns its content
+    /// directly (via [`Self::emit_content_cell`]), so the chosen branch is the component root with no wrapping
+    /// column. A missing `else` returns an empty column. Source markers/spans are preserved for cursor mapping.
+    fn generate_root_if(&mut self, block: &IfBlock) -> String {
+        let mut out = String::new();
+        let pad = self.indent_str();
+        let cond = block.condition.trim();
+        let marker = expr_marker(block.condition_start, cond.len());
+        let src0 = block.line.saturating_sub(1);
+        let _ = writeln!(out, "{SRC_PUSH}{src0}");
+        let _ = writeln!(out, "{pad}if {marker}{cond} {{");
+        self.indent += 1;
+        let then_cell = self.emit_content_cell(&block.then_branch, &mut out);
+        let ipad = self.indent_str();
+        let _ = writeln!(out, "{ipad}Ok(Box::new({then_cell}))");
+        self.indent -= 1;
+        let _ = writeln!(out, "{pad}}} else {{");
+        self.indent += 1;
+        let ipad = self.indent_str();
+        match &block.else_branch {
+            Some(else_branch) => {
+                let else_cell = self.emit_content_cell(else_branch, &mut out);
+                let _ = writeln!(out, "{ipad}Ok(Box::new({else_cell}))");
+            }
+            None => {
+                let _ = writeln!(out, "{ipad}Ok(Box::new(Container::column(children![])?))");
+            }
+        }
+        self.indent -= 1;
+        let _ = writeln!(out, "{pad}}}");
+        let _ = write!(out, "{SRC_POP}");
         out
     }
 
@@ -736,6 +779,31 @@ mod tests {
         assert!(
             code.contains(".on_hover_style("),
             "and wire on_hover_style:\n{code}"
+        );
+    }
+
+    // A `box` with an `active_style(...)` override wires `.on_active_style(...)` — the pressed-state swap,
+    // symmetric with `hover_style`.
+    #[test]
+    fn box_active_style_emits_on_active_style() {
+        let src = "[view]\nbox fill:#101010 active_style(fill:#303030) radius:10\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains(".on_active_style("),
+            "active_style(...) should wire on_active_style:\n{}",
+            out.rust_code
+        );
+    }
+
+    // A plain `col` with only an `active_style` must still upgrade to a StyledContainer (needs a background).
+    #[test]
+    fn plain_col_with_active_style_upgrades_to_styled_container() {
+        let src = "[view]\ncol active_style(fill:#303030)\n    text \"x\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("StyledContainer::new(") && code.contains(".on_active_style("),
+            "a col with only active_style should become a StyledContainer and wire it:\n{code}"
         );
     }
 
@@ -1168,6 +1236,48 @@ mod tests {
         assert!(
             code.contains("some_flag"),
             "condition emitted verbatim:\n{code}"
+        );
+    }
+
+    // A view that is exactly one static `if`/`if-else` returns its chosen branch directly, so the branch's
+    // element becomes the component root. An injected `Container::column` wrapper would trap a `row
+    // align:stretch` root at content height on the column's main axis, so it must not appear — the branch
+    // element is boxed straight as the return value.
+    #[test]
+    fn root_static_if_returns_branch_directly_without_wrapper() {
+        let src =
+            "[view]\nif vertical\n    col\n        text \"a\"\nelse\n    row\n        text \"b\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("Container::column(children![__"),
+            "a single-if root must not wrap its branch in an injected column:\n{code}"
+        );
+        assert!(
+            code.contains("Ok(Box::new(__col_0))") && code.contains("Ok(Box::new(__row_0))"),
+            "each branch's element is returned directly as the component root:\n{code}"
+        );
+        assert!(
+            code.contains("if vertical {") && code.contains("} else {"),
+            "the conditional drives which branch becomes the root:\n{code}"
+        );
+    }
+
+    // A reactive `for` whose body is a single widget yields it bare, not wrapped in a per-item flex-column that would collapse a stretch chip to its text height.
+    #[test]
+    fn reactive_for_single_child_item_is_not_wrapped() {
+        let src = "[logic]\nlet items = signal(vec![1i32, 2]);\n[view]\nrow align:stretch\n    for n in $items key *n\n        box fill:primary\n            text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("Ok(box_item(Container::new(LayoutStyle::new().flex_column()"),
+            "a single-widget for item must not be wrapped in a collapsing flex-column cell:\n{code}"
+        );
+        assert!(
+            code.contains("Ok(box_item(__sbox_0))"),
+            "the item's styled box is returned bare so the row can stretch it:\n{code}"
         );
     }
 

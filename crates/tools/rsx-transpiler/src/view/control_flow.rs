@@ -5,7 +5,7 @@ use std::fmt::Write;
 use rsx_parser::{ForBlock, IfBlock, ViewNode};
 
 use super::signals::{pattern_idents, substitute_reads, wrap_signal_clones};
-use super::{ChildEmit, ChildMode, ViewGen, expr_marker, forces_fragment};
+use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
     pub(super) fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {
@@ -34,10 +34,9 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// A reactive `if $cond { … } else { … }`. Inside a slot host it is a transparent fragment — the shown
-    /// branch's nodes are real siblings of the surrounding children (inheriting the parent's flex direction),
-    /// exactly like a reactive `for`. Outside one it falls back to a boxed single-item `ReactiveList`
-    /// ([`Self::emit_reactive_if_boxed`]).
+    /// A reactive `if $cond`. Inside a slot host it is a transparent fragment (the shown branch's nodes are
+    /// real siblings inheriting the parent's flex direction); outside one it falls back to a boxed
+    /// `ReactiveList` ([`Self::emit_reactive_if_boxed`]).
     fn emit_reactive_if(&mut self, block: &IfBlock) -> ChildEmit {
         if !self.in_slot_host() {
             return self.emit_reactive_if_boxed(block);
@@ -58,9 +57,7 @@ impl ViewGen<'_> {
             "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
         self.indent += 2;
-        let cell = self.emit_branch_cell(block, &mut code);
-        let pad2 = self.indent_str();
-        let _ = writeln!(code, "{pad2}Ok(box_item({cell}))");
+        self.emit_branch_returns(block, &mut code);
         self.indent -= 2;
         let _ = writeln!(code, "{pad}    }},");
         let _ = write!(code, "{pad});");
@@ -85,75 +82,38 @@ impl ViewGen<'_> {
             code,
             "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
-        let _ = writeln!(
-            code,
-            "{pad}        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
-        );
-        // A local `__children`: push the branches into it, not into any surrounding slot host.
-        self.with_child_sink(ChildMode::Vec, |g| {
-            let _ = writeln!(code, "{pad}        if __cond {{");
-            g.indent += 3;
-            g.emit_branch_into_children(&block.then_branch, &mut code);
-            g.indent -= 3;
-            let _ = writeln!(code, "{pad}        }} else {{");
-            if let Some(else_branch) = &block.else_branch {
-                g.indent += 3;
-                g.emit_branch_into_children(else_branch, &mut code);
-                g.indent -= 3;
-            }
-            let _ = writeln!(code, "{pad}        }}");
-        });
-        let _ = writeln!(
-            code,
-            "{pad}        Ok(box_item(Container::new(LayoutStyle::new().flex_column(), __children)?))"
-        );
+        self.indent += 2;
+        self.emit_branch_returns(block, &mut code);
+        self.indent -= 2;
         let _ = writeln!(code, "{pad}    }},");
         let _ = write!(code, "{pad})?;");
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits a reactive `if`'s branches into one accumulator (`if __cond { … } else { … }`) and returns the
-    /// `Container::{new|from_slots}(flex_column, …)?` cell expression. Slot mode (a `ChildSlot` accumulator)
-    /// when either branch holds a reactive fragment; otherwise a `Box<dyn LayoutItem>` vec.
-    fn emit_branch_cell(&mut self, block: &IfBlock, code: &mut String) -> String {
+    /// Emits a reactive `if`'s branches as per-branch returns, each collapsed by [`Self::emit_content_cell`].
+    /// A missing `else` yields an empty column.
+    fn emit_branch_returns(&mut self, block: &IfBlock, code: &mut String) {
         let pad = self.indent_str();
-        let slots = block.then_branch.iter().any(forces_fragment)
-            || block
-                .else_branch
-                .as_ref()
-                .is_some_and(|e| e.iter().any(forces_fragment));
-        let mode = if slots {
-            ChildMode::Slots
-        } else {
-            ChildMode::Vec
-        };
-        if slots {
-            let _ = writeln!(code, "{pad}let mut __slots: Vec<ChildSlot> = Vec::new();");
-        } else {
-            let _ = writeln!(
-                code,
-                "{pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
-            );
-        }
-        self.with_child_sink(mode, |g| {
-            let _ = writeln!(code, "{pad}if __cond {{");
-            g.indent += 1;
-            g.emit_branch_into_children(&block.then_branch, code);
-            g.indent -= 1;
-            let _ = writeln!(code, "{pad}}} else {{");
-            if let Some(else_branch) = &block.else_branch {
-                g.indent += 1;
-                g.emit_branch_into_children(else_branch, code);
-                g.indent -= 1;
+        let _ = writeln!(code, "{pad}if __cond {{");
+        self.indent += 1;
+        let then_cell = self.emit_content_cell(&block.then_branch, code);
+        let ipad = self.indent_str();
+        let _ = writeln!(code, "{ipad}Ok(box_item({then_cell}))");
+        self.indent -= 1;
+        let _ = writeln!(code, "{pad}}} else {{");
+        self.indent += 1;
+        let ipad = self.indent_str();
+        match &block.else_branch {
+            Some(else_branch) => {
+                let else_cell = self.emit_content_cell(else_branch, code);
+                let _ = writeln!(code, "{ipad}Ok(box_item({else_cell}))");
             }
-            let _ = writeln!(code, "{pad}}}");
-        });
-        let (expr, ctor) = if slots {
-            ("__slots", "from_slots")
-        } else {
-            ("__children", "new")
-        };
-        format!("Container::{ctor}(LayoutStyle::new().flex_column(), {expr})?")
+            None => {
+                let _ = writeln!(code, "{ipad}Ok(box_item(Container::column(children![])?))");
+            }
+        }
+        self.indent -= 1;
+        let _ = writeln!(code, "{pad}}}");
     }
 
     pub(super) fn emit_for(&mut self, block: &ForBlock) -> ChildEmit {
@@ -188,12 +148,8 @@ impl ViewGen<'_> {
     }
 
     /// A reactive `for x in $items [key <expr>] [gap:N]`. Inside a slot host it is a transparent fragment: its
-    /// items reconcile straight into the host container's node, so they are real siblings of the static
-    /// children and flow in the host's flex direction — a `for` in a `row` is horizontal. A `gap:` keeps that
-    /// transparency, laid out as a per-item main-axis margin rather than a wrapper's container gap
-    /// (`fragment_gap`/`fragment_positional_gap`). A non-host context (component slot / root / overlay /
-    /// scroll) falls back to a boxed `ReactiveList` ([`Self::emit_reactive_for_boxed`]), which carries the gap
-    /// on its own node.
+    /// items reconcile into the host's node as real siblings, flowing in its flex direction (a `for` in a `row`
+    /// is horizontal), with `gap:` as a per-item margin. Elsewhere it falls back to a boxed `ReactiveList`.
     fn emit_reactive_for(&mut self, block: &ForBlock) -> ChildEmit {
         if !self.in_slot_host() {
             return self.emit_reactive_for_boxed(block);
@@ -237,7 +193,7 @@ impl ViewGen<'_> {
         let idents = pattern_idents(pattern);
         let added = idents.len();
         self.loop_variables.extend(idents);
-        let cell = self.emit_item_cell(&block.body, &mut code);
+        let cell = self.emit_content_cell(&block.body, &mut code);
         self.loop_variables
             .truncate(self.loop_variables.len() - added);
         let pad2 = self.indent_str();
@@ -292,25 +248,16 @@ impl ViewGen<'_> {
             code,
             "{pad}    move |{pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
-        let _ = writeln!(
-            code,
-            "{pad}        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();"
-        );
         self.indent += 2;
         let idents = pattern_idents(pattern);
         let added = idents.len();
         self.loop_variables.extend(idents);
-        self.with_child_sink(ChildMode::Vec, |g| {
-            g.emit_branch_into_children(&block.body, &mut code);
-        });
+        let cell = self.emit_content_cell(&block.body, &mut code);
         self.loop_variables
             .truncate(self.loop_variables.len() - added);
+        let ipad = self.indent_str();
+        let _ = writeln!(code, "{ipad}Ok(box_item({cell}))");
         self.indent -= 2;
-
-        let _ = writeln!(
-            code,
-            "{pad}        Ok(box_item(Container::new(LayoutStyle::new().flex_column(), __children)?))"
-        );
         let _ = writeln!(code, "{pad}    }},");
         if let Some(gap_expr) = gap_expr {
             let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
@@ -319,14 +266,18 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits one reconciled item's body as a flex-column cell, returning the `Container::{new|from_slots}(…)?`
-    /// expression (`from_slots` when the body nests its own reactive fragment). Writes any accumulator
-    /// decl/pushes into `code`. Loop variables must already be in scope.
-    fn emit_item_cell(&mut self, body: &[ViewNode], code: &mut String) -> String {
+    /// Emits `body` as one content item. A single plain widget is returned bare so its parent (not an
+    /// injected `flex_column`, which would trap it at content size on the main axis) decides how it fills;
+    /// otherwise the children are grouped in a flex-column cell. Loop variables must already be in scope.
+    pub(super) fn emit_content_cell(&mut self, body: &[ViewNode], code: &mut String) -> String {
         let pad = self.indent_str();
         let mode = Self::child_mode(body);
         let emits: Vec<ChildEmit> =
             self.with_child_sink(mode, |g| body.iter().map(|n| g.emit_node(n)).collect());
+        if let [ChildEmit::Simple { name, code: c }] = emits.as_slice() {
+            let _ = writeln!(code, "{c}");
+            return name.clone();
+        }
         let expr = self.emit_children_collection(code, &emits, &pad, mode, &[]);
         let ctor = if mode == ChildMode::Slots {
             "from_slots"

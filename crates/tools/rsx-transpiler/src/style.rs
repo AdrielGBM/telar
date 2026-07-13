@@ -86,14 +86,19 @@ pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
         "max_width" => format!(".max_width({})", dimension(value)),
         "max_height" => format!(".max_height({})", dimension(value)),
         "basis" | "flex_basis" => format!(".flex_basis({})", dimension(value)),
+        "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value)),
         // `wrap` is a flag (no value) or `wrap`/`true`; anything else is ignored.
         "wrap" => match value {
             "" | "wrap" | "true" => ".flex_wrap()".to_string(),
             _ => return None,
         },
-        // Per-child cross-axis stretch, e.g. `self:stretch` to override a parent `align:center`.
+        // Per-child cross-axis alignment override, e.g. `self:stretch` over a parent `align:center`, or
+        // `self:center` to keep a fixed-size child centered instead of stretched.
         "self" => match value {
             "stretch" => ".align_self_stretch()".to_string(),
+            "center" => ".align_self_center()".to_string(),
+            "start" => ".align_self_start()".to_string(),
+            "end" => ".align_self_end()".to_string(),
             _ => return None,
         },
         "padding" | "pad" => format!(".padding_all({})", format_number(value)),
@@ -200,7 +205,8 @@ fn format_number(value: &str) -> String {
     }
 }
 
-/// Renders a sizing value for `width`/`height`/`min-*`/`max-*`/`basis`. A `%` suffix becomes `SizeDimension::Percent` (where `100%` == `1.0`); a bare number stays an `f32` literal (coerced to `Px` via `Into<SizeDimension>`), and anything else is forwarded verbatim (e.g. a `[style]` constant name).
+/// Renders a sizing value: `%` becomes `SizeDimension::Percent` (`100%` == `1.0`), a bare number stays an
+/// `f32` literal (coerced to `Px`), and anything else is forwarded verbatim (e.g. a `[style]` constant name).
 fn dimension(value: &str) -> String {
     let v = value.trim();
     if let Some(pct) = v.strip_suffix('%') {
@@ -265,5 +271,17 @@ mod tests {
     #[test]
     fn radius_is_ignored() {
         assert!(layout_prop_call("radius", "6").is_none());
+    }
+
+    #[test]
+    fn aspect_maps_to_aspect_ratio() {
+        assert_eq!(
+            layout_prop_call("aspect", "1").as_deref(),
+            Some(".aspect_ratio(1.0)")
+        );
+        assert_eq!(
+            layout_prop_call("aspect_ratio", "1.5").as_deref(),
+            Some(".aspect_ratio(1.5)")
+        );
     }
 }
