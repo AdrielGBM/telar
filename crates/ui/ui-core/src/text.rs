@@ -14,6 +14,9 @@ use crate::layout_leaf::LayoutLeaf;
 pub struct Text {
     content: Rc<dyn Fn() -> String>,
     cached_content: RefCell<(String, Arc<str>)>,
+    // Ink bounds memo for optical vertical centering: (text, width_bits) -> (ink_top, ink_height).
+    // Recomputed only when the text or its resolved width changes, so a static label costs no per-frame shaping.
+    cached_ink: RefCell<Option<(String, u32, f32, f32)>>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
 }
@@ -29,6 +32,7 @@ impl Text {
         Ok(Self {
             content: Rc::new(content_fn),
             cached_content: RefCell::new((String::new(), Arc::from(""))),
+            cached_ink: RefCell::new(None),
             style: Rc::new(style_fn),
             leaf,
         })
@@ -57,6 +61,7 @@ impl Text {
         Ok(Self {
             content: content_fn,
             cached_content: RefCell::new((String::new(), Arc::from(""))),
+            cached_ink: RefCell::new(None),
             style,
             leaf: LayoutLeaf { node, rect },
         })
@@ -85,15 +90,40 @@ impl Component for Text {
                 Arc::clone(&cache.1)
             }
         };
+        let style = (self.style)();
+        // Optically center the text's INK within the leaf. A text leaf stretches to fill its parent's cross
+        // axis (`align_self_stretch`), and the font's line box reserves ascent room for accents/descenders
+        // that a short run ("72%") leaves empty — so line-box-centered text sits visibly high next to an
+        // icon. Centering the actual drawn glyph extent lines the two up. Memoized per (text, width).
+        let (ink_top, ink_height) = {
+            let width_bits = r.width.to_bits();
+            let mut cache = self.cached_ink.borrow_mut();
+            match cache.as_ref() {
+                Some((t, w, top, h)) if *t == *text && *w == width_bits => (*top, *h),
+                _ => {
+                    let (top, h) = renderer_text::measure_ink_bounds(&text, r.width, &style);
+                    *cache = Some((text.to_string(), width_bits, top, h));
+                    (top, h)
+                }
+            }
+        };
+        // Render the full line box (so nothing clips), offset so the ink's own center lands on the leaf's
+        // center. When there is no ink (empty run) fall back to a top-aligned box.
+        let (_, line_height) = renderer_text::measure_text(&text, r.width, &style);
+        let y = if ink_height > 0.0 {
+            r.height / 2.0 - ink_top - ink_height / 2.0
+        } else {
+            0.0
+        };
         self.leaf.at_layout_position(RenderNode::text(
             text,
             Rect {
                 x: 0.0,
-                y: 0.0,
+                y,
                 width: r.width,
-                height: r.height,
+                height: line_height,
             },
-            (self.style)(),
+            style,
         ))
     }
 

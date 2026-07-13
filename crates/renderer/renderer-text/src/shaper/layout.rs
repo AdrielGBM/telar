@@ -233,4 +233,55 @@ impl TextShaper {
         self.measure_cache.put(cache_key, result);
         result
     }
+
+    /// The text's ink bounding box measured from the top of a `[0, max_width] × [0, ∞]` layout rect, at
+    /// scale 1.0: `(ink_top, ink_height)`. Unlike [`measure_text`](Self::measure_text) (which returns the
+    /// full line-box height) this is the actual drawn glyph extent, so a caller can *optically* center
+    /// text — the font's line box reserves ascent room for accents/descenders that short runs like "72%"
+    /// leave empty, which makes line-box-centered text sit visibly high next to an icon. Empty text or a
+    /// run with no inked glyphs returns `(0.0, 0.0)`.
+    pub fn measure_ink_bounds(
+        &mut self,
+        text: &str,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> (f32, f32) {
+        if text.is_empty() || max_width.ceil() as u32 == 0 {
+            return (0.0, 0.0);
+        }
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: max_width,
+            height: 100000.0,
+        };
+        let buffer = make_buffer(&mut self.font_system, text, rect, style);
+        // Collect (cache_key, baseline_y) first so the immutable `layout_runs` borrow ends before the
+        // mutable `swash_cache` lookups below.
+        let mut glyphs: Vec<(CacheKey, i32)> = Vec::new();
+        for run in buffer.layout_runs() {
+            for glyph in run.glyphs.iter() {
+                let p = glyph.physical((0.0, run.line_y), 1.0);
+                glyphs.push((p.cache_key, p.y));
+            }
+        }
+        drop(buffer);
+
+        let mut min_top = f32::INFINITY;
+        let mut max_bottom = f32::NEG_INFINITY;
+        for (cache_key, baseline_y) in glyphs {
+            if let Some(img) = self.swash_cache.get_image(&mut self.font_system, cache_key) {
+                if img.placement.width == 0 || img.placement.height == 0 {
+                    continue;
+                }
+                let top = baseline_y as f32 - img.placement.top as f32;
+                min_top = min_top.min(top);
+                max_bottom = max_bottom.max(top + img.placement.height as f32);
+            }
+        }
+        if !min_top.is_finite() || max_bottom <= min_top {
+            return (0.0, 0.0);
+        }
+        (min_top, max_bottom - min_top)
+    }
 }

@@ -33,6 +33,17 @@ pub fn measure_text(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32)
     })
 }
 
+/// The text's ink bounding box `(ink_top, ink_height)` from the top of its layout rect — the actual drawn
+/// glyph extent, not the full line box (see [`TextShaper::measure_ink_bounds`]). Lets a widget optically
+/// center text vertically so a short run doesn't sit high next to an icon.
+pub fn measure_ink_bounds(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
+    MEASURE_SHAPER.with(|s| {
+        let mut slot = s.borrow_mut();
+        let shaper = slot.get_or_insert_with(build_measure_shaper);
+        shaper.measure_ink_bounds(text, max_width, style)
+    })
+}
+
 fn build_measure_shaper() -> TextShaper {
     let font = MEASURE_FONT_CONFIG
         .with(|c| c.borrow().clone())
