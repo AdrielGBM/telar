@@ -263,6 +263,25 @@ impl LayoutStyle {
         self
     }
 
+    /// Overrides the parent's `align_items` for this child, centering it on the cross axis instead of
+    /// stretching — so a fixed-size child (e.g. a square icon chip) keeps its size and stays centered.
+    pub fn align_self_center(mut self) -> Self {
+        self.inner.align_self = Some(taffy::AlignSelf::CENTER);
+        self
+    }
+
+    /// Aligns this child to the start of the cross axis, overriding the parent's `align_items`.
+    pub fn align_self_start(mut self) -> Self {
+        self.inner.align_self = Some(taffy::AlignSelf::FLEX_START);
+        self
+    }
+
+    /// Aligns this child to the end of the cross axis, overriding the parent's `align_items`.
+    pub fn align_self_end(mut self) -> Self {
+        self.inner.align_self = Some(taffy::AlignSelf::FLEX_END);
+        self
+    }
+
     pub fn justify_content(mut self, value: JustifyContent) -> Self {
         self.inner.justify_content = Some(value);
         self
