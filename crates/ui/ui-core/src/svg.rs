@@ -226,6 +226,119 @@ mod tests {
         );
     }
 
+    // `data_fn` must likewise be invoked fresh on every `view()`, so a reactive `svg src:icon($glyph)`
+    // (the transpiler now wires a re-reading data closure) swaps the glyph live when its signal changes.
+    #[test]
+    fn data_closure_is_re_read_each_view_and_swaps_the_glyph() {
+        reset_layout_runtime();
+        // Two glyphs distinguishable by shape count: one rect vs two.
+        let one = Arc::new(
+            SvgData::from_str(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="4" height="4" fill="#f00"/></svg>"##,
+            )
+            .unwrap(),
+        );
+        let two = Arc::new(
+            SvgData::from_str(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="4" height="4" fill="#f00"/><rect x="5" y="5" width="4" height="4" fill="#0f0"/></svg>"##,
+            )
+            .unwrap(),
+        );
+        let pick_two = Rc::new(Cell::new(false));
+        let (pick, a, b) = (pick_two.clone(), one.clone(), two.clone());
+        let svg = Svg::new(
+            LayoutStyle::new().width(20.0).height(20.0),
+            move || Arc::clone(if pick.get() { &b } else { &a }),
+            || None,
+            || ObjectFit::Contain,
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().width(20.0).height(20.0),
+            &[svg.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(20.0),
+            AvailableSpace::Definite(20.0),
+        )
+        .unwrap();
+
+        assert_eq!(count_paths(&svg.view()), 1, "first glyph has one shape");
+        pick_two.set(true);
+        assert_eq!(
+            count_paths(&svg.view()),
+            2,
+            "data closure must be re-read on the second view(), swapping to the two-shape glyph"
+        );
+    }
+
+    // Reactive swap through the FULL pipeline (signal + ComponentList), mirroring a bar's adaptive icon
+    // whose glyph flips on a live update. The second frame must contain ONLY the new glyph's paths — a
+    // leftover from the first would be the "icon after the icon" duplicate seen live.
+    #[test]
+    fn reactive_svg_swap_through_component_list_replaces() {
+        use reactive_core::signal;
+        reset_layout_runtime();
+        let one = Arc::new(
+            SvgData::from_str(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="4" height="4" fill="#f00"/></svg>"##,
+            )
+            .unwrap(),
+        );
+        let two = Arc::new(
+            SvgData::from_str(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="4" height="4" fill="#f00"/><rect x="5" y="5" width="4" height="4" fill="#0f0"/></svg>"##,
+            )
+            .unwrap(),
+        );
+        let pick_two = signal(false);
+        let (pick, a, b) = (pick_two.clone(), one.clone(), two.clone());
+        let svg = Svg::new(
+            LayoutStyle::new().width(20.0).height(20.0),
+            move || Arc::clone(if pick.get() { &b } else { &a }),
+            || None,
+            || ObjectFit::Contain,
+        )
+        .unwrap();
+        let node = svg.layout_node();
+        let root = new_container(LayoutStyle::new().width(20.0).height(20.0), &[node]).unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(20.0),
+            AvailableSpace::Definite(20.0),
+        )
+        .unwrap();
+
+        let tree = crate::ComponentList::new(svg);
+        let count = |cmds: &[DrawCommand]| {
+            cmds.iter()
+                .filter(|c| matches!(c, DrawCommand::Path { .. }))
+                .count()
+        };
+        assert_eq!(count(&tree.commands()), 1, "first frame: one-shape glyph");
+        pick_two.set(true);
+        assert_eq!(
+            count(&tree.commands()),
+            2,
+            "second frame must be ONLY the two-shape glyph, not stacked on the first"
+        );
+    }
+
+    fn count_paths(view: &RenderNode) -> usize {
+        let RenderNode::Transform { children, .. } = view else {
+            panic!("expected Transform")
+        };
+        let RenderNode::Group { children: inner } = &children[0] else {
+            panic!("expected Group inside Transform")
+        };
+        inner
+            .iter()
+            .filter(|n| matches!(n, RenderNode::Primitive(DrawCommand::Path { .. })))
+            .count()
+    }
+
     fn path_fill(view: &RenderNode) -> Paint {
         let RenderNode::Transform { children, .. } = view else {
             panic!("expected Transform")

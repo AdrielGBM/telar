@@ -2,7 +2,7 @@
 
 use rsx_parser::{Attr, Element};
 
-use super::signals::{rust_str, wrap_signal_clones};
+use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ViewGen, expr_marker};
 
 /// Parses the shared `fit:` attribute (CSS `object-fit`) for `img`/`svg` into a reactive `ObjectFit` closure. Absent or unrecognized values default to `Contain` (preserve aspect ratio, letterbox), matching the widget defaults.
@@ -124,38 +124,42 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Resolves `tint:` into a `move || Option<Color>` closure. A bare `$ident` is a reactive signal read: it shares `color_expr`'s `$ident -> ident.get()` resolution (so it stays consistent with `fill`/`stroke`) and the signal is cloned into the closure via `wrap_signal_clones`, mirroring `box fill:$sig`. Any other value keeps the pre-existing verbatim-Rust-expression passthrough (with its `expr_marker` span) since `tint` has always accepted arbitrary color expressions beyond what `color_expr` understands, e.g. a user-defined `theme().primary` call — routing those through `color_expr` would misparse them.
+    /// Resolves `tint:` into a `move || Option<Color>` closure, sharing `fill`/`stroke`/`color`'s
+    /// [`color_expr`](ViewGen::color_expr) resolution: a bare theme token (`tint:accent`), a `$signal`
+    /// read, an inline `#hex`, a CSS keyword, and an arbitrary color expression (`tint:theme().primary`,
+    /// recognized by its `(`) all resolve identically — so an icon tints from a theme token the same way
+    /// text takes `color:`. A token re-reads `use_theme` on every `view()`, so a runtime theme switch
+    /// recolors the glyph; any `$signal` referenced is cloned into the closure via `wrap_signal_clones`
+    /// so the outer handle stays usable, mirroring `box fill:$sig`. Missing or empty `tint` keeps the
+    /// SVG's own colors (`None`).
     fn svg_tint_closure(&self, tint_attr: Option<&Attr>) -> String {
         let Some(a) = tint_attr else {
             return "|| None".to_string();
         };
-        let trimmed = a.value.trim();
-        if trimmed.starts_with('$') {
-            let expr = self.color_expr(trimmed);
-            return wrap_signal_clones(&[trimmed], format!("move || Some({expr})"));
+        let v = a.value.trim();
+        if v.is_empty() {
+            return "|| None".to_string();
         }
-        let expr = if !a.is_quoted && !trimmed.is_empty() {
-            let lead = a.value.len() - a.value.trim_start().len();
-            format!(
-                "{}{trimmed}",
-                expr_marker(a.value_start + lead, trimmed.len())
-            )
-        } else {
-            a.value.clone()
-        };
-        format!("move || Some({expr})")
+        let expr = self.color_expr(v);
+        wrap_signal_clones(&[v], format!("move || Some({expr})"))
     }
 
     /// Resolves a media widget's `src` attribute into `(setup, data_fn)` fragments that slot into its construction block.
     ///
     /// - Quoted, non-empty `src:"path"` is a static asset baked at build time: `setup` declares a `static LazyLock<Arc<Data>>` built once, `data_fn` clones the shared `Arc` per reactive call.
-    /// - Non-quoted, non-empty `src:expr` is a dynamic `Arc<Data>` expression: `setup` hoists it into `__src` and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
+    /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). Signals are cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `svg tint:$sig` / `box fill:$sig`.
+    /// - Non-quoted, `$`-free `src:expr` is a constant `Arc<Data>` handle: `setup` hoists it into `__src` once and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
     /// - Missing or empty `src` falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
     fn media_src_binding(&mut self, src_attr: Option<&Attr>, kind: MediaKind) -> (String, String) {
         let pad = self.indent_str();
         match src_attr {
             Some(a) if a.is_quoted && !a.value.trim().is_empty() => {
                 self.bake_asset_binding(a.value.trim(), kind, &pad)
+            }
+            Some(a) if !a.is_quoted && a.value.contains('$') && !a.value.trim().is_empty() => {
+                let v = a.value.trim();
+                let data_fn = wrap_signal_clones(&[v], format!("move || {}", substitute_reads(v)));
+                (String::new(), data_fn)
             }
             Some(a) if !a.is_quoted && !a.value.trim().is_empty() => {
                 let v = a.value.trim();
