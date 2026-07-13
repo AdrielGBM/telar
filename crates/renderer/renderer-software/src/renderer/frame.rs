@@ -191,28 +191,38 @@ where
     }
 
     // Clear phase: fill either the given on-screen regions or the whole pixmap with the clear color.
+    // A transparent surface (`clear_color == None`) still clears its dirty regions to FULLY TRANSPARENT
+    // rather than skipping the clear — otherwise, when content shifts (e.g. adding/removing a bar module
+    // re-lays-out its neighbours), the pixels it vacated keep the previous frame and leave a ghost. The
+    // `Source` blend overwrites those pixels instead of compositing the new frame on top of the stale one.
     fn clear_pixmap(
         &mut self,
         clear_color: Option<Color>,
         skip_rect: &Option<SmallVec<[Rect; 8]>>,
     ) {
-        if let (Some(color), Some(pixmap)) = (clear_color, &mut self.pixmap) {
-            if let Some(rects) = skip_rect {
-                for sr in rects.iter() {
-                    let skia_rect = tiny_skia::Rect::from_xywh(sr.x, sr.y, sr.width, sr.height);
-                    if let Some(r) = skia_rect {
+        let Some(pixmap) = &mut self.pixmap else {
+            return;
+        };
+        let color = clear_color
+            .map(crate::primitives::to_skia_color)
+            .unwrap_or(tiny_skia::Color::TRANSPARENT);
+        if let Some(rects) = skip_rect {
+            for sr in rects.iter() {
+                match tiny_skia::Rect::from_xywh(sr.x, sr.y, sr.width, sr.height) {
+                    Some(r) => {
                         let mut paint = tiny_skia::Paint::default();
-                        paint.set_color(crate::primitives::to_skia_color(color));
+                        paint.set_color(color);
                         paint.blend_mode = tiny_skia::BlendMode::Source;
                         pixmap.fill_rect(r, &paint, tiny_skia::Transform::identity(), None);
-                    } else {
-                        pixmap.fill(crate::primitives::to_skia_color(color));
+                    }
+                    None => {
+                        pixmap.fill(color);
                         break;
                     }
                 }
-            } else {
-                pixmap.fill(crate::primitives::to_skia_color(color));
             }
+        } else {
+            pixmap.fill(color);
         }
     }
 
