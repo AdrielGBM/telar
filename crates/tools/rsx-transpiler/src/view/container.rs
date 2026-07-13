@@ -34,6 +34,7 @@ impl ViewGen<'_> {
 
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
+        let active_call = self.active_style_call(el, &pattrs);
         let transform_call = self.transform_call(el);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
@@ -44,9 +45,9 @@ impl ViewGen<'_> {
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
 
-        // These seven trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
+        // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
         let styling = format!(
-            "{hover_call}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
+            "{hover_call}{active_call}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
         );
         let pieces = if always_style || has_paint(&pattrs) || !styling.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
@@ -80,7 +81,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
+                    "{inner_pad}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
                 );
             }
             None => {
@@ -141,6 +142,21 @@ impl ViewGen<'_> {
         let mut hoists: Vec<String> = Vec::new();
         let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
         format!(".on_hover_style({closure})")
+    }
+
+    /// Builds the trailing `.on_active_style(...)` from an `active_style(...)` attribute — the pressed /
+    /// CSS `:active` paint swap, symmetric with [`hover_style_call`](Self::hover_style_call): a
+    /// whitespace-separated list of paint props (`active_style(fill:x stroke:y)`) that override the base
+    /// paint while a primary pointer is held down inside the box, taking precedence over the hover style.
+    fn active_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "active_style") else {
+            return String::new();
+        };
+        let mut merged = parse_inline_paint_attrs(&attr.value);
+        merged.extend(base_pattrs.iter().cloned());
+        let mut hoists: Vec<String> = Vec::new();
+        let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
+        format!(".on_active_style({closure})")
     }
 
     /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`/

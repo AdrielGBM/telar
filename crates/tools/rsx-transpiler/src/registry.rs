@@ -142,6 +142,7 @@ const CONTAINER_PAINT: &[&str] = &[
     "on_drag",
     "on_focus",
     "hover_style",
+    "active_style",
     "transition",
 ];
 

@@ -20,6 +20,10 @@ pub struct StyledContainer {
     // Swapped in while the pointer is over the box (mouse only), mirroring `Button`'s rect/rect_hover.
     hover_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     is_hovered: RwSignal<bool>,
+    // Swapped in while a primary pointer is held down inside the box (the pressed / CSS `:active` state),
+    // taking precedence over `hover_style`. Mouse and touch; cleared on release, leave, or drag-off.
+    active_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    is_active: RwSignal<bool>,
     // A closure (not a plain f32) so `view()` re-reads it every run: a reactive opacity or a `transition:opacity` animation resolves to its current value on each re-render.
     opacity: Box<dyn Fn() -> f32>,
     // Resolved per `view()` (like `opacity`) so a `$signal`-driven transform re-reads its current value. Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity (no wrapping node).
@@ -57,6 +61,8 @@ impl StyledContainer {
             style: Box::new(style),
             hover_style: None,
             is_hovered: signal(false),
+            active_style: None,
+            is_active: signal(false),
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
             children,
@@ -87,6 +93,8 @@ impl StyledContainer {
             style: Box::new(style),
             hover_style: None,
             is_hovered: signal(false),
+            active_style: None,
+            is_active: signal(false),
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
             children: Vec::new(),
@@ -127,6 +135,22 @@ impl StyledContainer {
     pub fn on_hover_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         self.hover_style = Some(Box::new(f));
         self
+    }
+
+    /// Paint the box with `f` while a primary pointer is held down inside it — the pressed / CSS `:active`
+    /// state, which takes precedence over `on_hover_style`. Unlike hover it tracks touch as well as mouse,
+    /// and it clears on release, on leaving the box, or once the press drags off, so it never sticks.
+    pub fn on_active_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+        self.active_style = Some(Box::new(f));
+        self
+    }
+
+    /// Whether the box is currently pressed (a primary pointer is held down inside it). Set only when an
+    /// `active_style` is present; drives its paint swap and clears on release/leave/drag-off.
+    fn set_active(&self, active: bool) {
+        if self.active_style.is_some() && self.is_active.get() != active {
+            self.is_active.set(active);
+        }
     }
 
     /// Make the box itself pressable. The callback fires on a tap (release, not press) inside the box;
@@ -195,10 +219,18 @@ impl LayoutItem for StyledContainer {
 impl Component for StyledContainer {
     fn view(&self) -> RenderNode {
         let r = self.rect.get();
-        // Only subscribe to `is_hovered` when a hover style exists, so a plain box's view() stays inert.
-        let style = match &self.hover_style {
-            Some(hover) if self.is_hovered.get() => hover,
-            _ => &self.style,
+        // Pressed wins over hover wins over base. Each `is_*` signal is only read when its style exists, so
+        // a plain box's view() stays inert and subscribes to neither.
+        let style = if let Some(active) = &self.active_style
+            && self.is_active.get()
+        {
+            active
+        } else if let Some(hover) = &self.hover_style
+            && self.is_hovered.get()
+        {
+            hover
+        } else {
+            &self.style
         };
         let background = RenderNode::rect(
             Rect {
@@ -235,6 +267,7 @@ impl Component for StyledContainer {
         if !self.press.is_set()
             && !self.drag.is_set()
             && self.hover_style.is_none()
+            && self.active_style.is_none()
             && self.on_hover.is_none()
             && self.on_key.is_none()
             && self.focus_id.is_none()
@@ -250,16 +283,21 @@ impl Component for StyledContainer {
                 self.press.track_move(event);
                 let dragged = self.drag.moved(event, rect) == EventResult::Handled;
                 let child = self.dispatch_children(event);
+                let inside = rect.contains(*x as f32, *y as f32);
+                // Pressed clears once the pointer drags off the box (mouse or touch) so it never sticks.
+                if !inside {
+                    self.set_active(false);
+                }
                 let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
-                if tracks_hover && matches!(source, PointerSource::Mouse) {
-                    let inside = rect.contains(*x as f32, *y as f32);
-                    if inside != self.is_hovered.get() {
-                        self.is_hovered.set(inside);
-                        if let Some(cb) = &self.on_hover {
-                            cb(inside);
-                        }
-                        return EventResult::Handled;
+                if tracks_hover
+                    && matches!(source, PointerSource::Mouse)
+                    && inside != self.is_hovered.get()
+                {
+                    self.is_hovered.set(inside);
+                    if let Some(cb) = &self.on_hover {
+                        cb(inside);
                     }
+                    return EventResult::Handled;
                 }
                 if dragged { EventResult::Handled } else { child }
             }
@@ -274,6 +312,10 @@ impl Component for StyledContainer {
                     self.press.cancel();
                     self.drag.end();
                     return EventResult::Handled;
+                }
+                // A primary press inside the box enters the pressed state (purely visual; independent of on_press).
+                if rect.contains(*x as f32, *y as f32) {
+                    self.set_active(true);
                 }
                 // A tap inside a focusable box takes focus (and consumes the press so focus sticks).
                 let focused = match self.focus_id {
@@ -297,6 +339,8 @@ impl Component for StyledContainer {
                 button: PointerButton::Primary,
                 ..
             } => {
+                // A release always ends the pressed state, wherever it lands.
+                self.set_active(false);
                 if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
                     self.drag.end();
@@ -314,6 +358,7 @@ impl Component for StyledContainer {
             Event::CursorLeft => {
                 self.press.cancel();
                 self.drag.end();
+                self.set_active(false);
                 if (self.hover_style.is_some() || self.on_hover.is_some()) && self.is_hovered.get()
                 {
                     self.is_hovered.set(false);
@@ -770,6 +815,118 @@ mod tests {
             fill_color(&card.view()),
             normal,
             "a touch move must not trigger hover"
+        );
+    }
+
+    // A press inside swaps to the active (pressed) fill; the release restores the base fill.
+    #[test]
+    fn active_style_swaps_on_press_and_clears_on_release() {
+        reset_layout_runtime();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
+            vec![],
+        )
+        .unwrap()
+        .on_active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.5, 0.5, 0.5, 1.0)));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let normal = fill_color(&card.view());
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        assert_ne!(
+            normal,
+            fill_color(&card.view()),
+            "press swaps to the active fill"
+        );
+        card.on_event(&release(100.0, 50.0, PointerSource::Mouse));
+        assert_eq!(
+            fill_color(&card.view()),
+            normal,
+            "release restores the base fill"
+        );
+    }
+
+    // Pressed wins over hover: pressing while hovering shows the active fill, and releasing (still inside)
+    // falls back to the hover fill.
+    #[test]
+    fn active_style_takes_precedence_over_hover() {
+        reset_layout_runtime();
+        let hover = Color::rgba(0.9, 0.9, 0.9, 1.0);
+        let active = Color::rgba(0.4, 0.4, 0.4, 1.0);
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
+            vec![],
+        )
+        .unwrap()
+        .on_hover_style(move |_r| RectStyle::default().with_fill(hover))
+        .on_active_style(move |_r| RectStyle::default().with_fill(active));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        card.on_event(&Event::PointerMoved {
+            x: 100.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(
+            fill_color(&card.view()),
+            hover,
+            "hovering shows the hover fill"
+        );
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        assert_eq!(
+            fill_color(&card.view()),
+            active,
+            "pressing while hovered shows the active fill (precedence)"
+        );
+        card.on_event(&release(100.0, 50.0, PointerSource::Mouse));
+        assert_eq!(
+            fill_color(&card.view()),
+            hover,
+            "releasing inside falls back to the hover fill"
+        );
+    }
+
+    // Dragging the press off the box clears the pressed state, so it never sticks.
+    #[test]
+    fn active_style_clears_when_press_drags_off() {
+        reset_layout_runtime();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
+            vec![],
+        )
+        .unwrap()
+        .on_active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.5, 0.5, 0.5, 1.0)));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let normal = fill_color(&card.view());
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        assert_ne!(normal, fill_color(&card.view()), "press activates");
+        card.on_event(&Event::PointerMoved {
+            x: 9999.0,
+            y: 9999.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(
+            fill_color(&card.view()),
+            normal,
+            "dragging off the box clears the pressed state"
         );
     }
 
