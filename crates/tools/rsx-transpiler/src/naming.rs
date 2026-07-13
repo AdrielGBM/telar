@@ -87,18 +87,52 @@ pub(crate) fn is_ident(s: &str) -> bool {
     chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
 
+/// If `bytes[i]` opens a string/char literal or a `//` line comment, returns the index just past it, so an
+/// identifier scan skips its contents — a name embedded in `"text"` or `// note` is not a real reference to
+/// it. A `'a` lifetime tick (no closing quote) is left alone; escaped char literals (`'\n'`) are handled.
+/// Shared by [`contains_ident`] and [`crate::naming::replace_whole_word`] so both agree on what is code.
+pub(crate) fn literal_or_comment_end(bytes: &[u8], i: usize) -> Option<usize> {
+    match bytes[i] {
+        b'/' if bytes.get(i + 1) == Some(&b'/') => Some(bytes.len()),
+        b'"' => {
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j] != b'"' {
+                j += if bytes[j] == b'\\' { 2 } else { 1 };
+            }
+            Some((j + 1).min(bytes.len()))
+        }
+        b'\'' if bytes.get(i + 1) == Some(&b'\\') => {
+            let mut j = i + 2;
+            while j < bytes.len() && bytes[j] != b'\'' {
+                j += 1;
+            }
+            Some((j + 1).min(bytes.len()))
+        }
+        b'\'' if bytes.get(i + 2) == Some(&b'\'') => Some(i + 3),
+        _ => None,
+    }
+}
+
+/// Whether `code` references `ident` as a whole-word identifier, skipping string/char literals and line
+/// comments (a name that appears only inside `"..."` or after `//` is not a reference).
 pub(crate) fn contains_ident(code: &str, ident: &str) -> bool {
     let bytes = code.as_bytes();
-    let mut start = 0;
-    while let Some(pos) = code[start..].find(ident) {
-        let abs = start + pos;
-        let before_ok = abs == 0 || !is_ident_byte(bytes[abs - 1]);
-        let after = abs + ident.len();
-        let after_ok = after >= bytes.len() || !is_ident_byte(bytes[after]);
-        if before_ok && after_ok {
+    let mut i = 0;
+    while i < bytes.len() {
+        if let Some(end) = literal_or_comment_end(bytes, i) {
+            i = end;
+            continue;
+        }
+        if code[i..].starts_with(ident)
+            && (i == 0 || !is_ident_byte(bytes[i - 1]))
+            && bytes
+                .get(i + ident.len())
+                .is_none_or(|&b| !is_ident_byte(b))
+        {
             return true;
         }
-        start = abs + ident.len();
+        let ch = code[i..].chars().next().unwrap();
+        i += ch.len_utf8();
     }
     false
 }
@@ -188,26 +222,78 @@ mod tests {
         assert_eq!(to_pascal_case("primary"), "Primary");
         assert_eq!(to_pascal_case("card"), "Card");
     }
+
+    #[test]
+    fn contains_ident_skips_literals_and_comments() {
+        assert!(contains_ident("charging.get()", "charging"));
+        assert!(
+            !contains_ident("charging_glyph.get()", "charging"),
+            "prefix is not a whole word"
+        );
+        // The reported bug: a signal name embedded in a string literal is not a reference.
+        assert!(!contains_ident(
+            "if c { \"battery-charging\" } else { \"x\" }",
+            "charging"
+        ));
+        assert!(
+            !contains_ident("x + 1 // reset charging", "charging"),
+            "comment is not code"
+        );
+        // A char literal must not hide a real following reference.
+        assert!(contains_ident(
+            "if c == 'x' { charging.set(true) }",
+            "charging"
+        ));
+    }
+
+    #[test]
+    fn replace_whole_word_leaves_literals_and_comments_intact() {
+        assert_eq!(
+            replace_whole_word("charging.get()", "charging", "c2"),
+            "c2.get()"
+        );
+        // The string literal keeps its `charging`; only the real identifier is renamed.
+        assert_eq!(
+            replace_whole_word("charging = \"battery-charging\"", "charging", "c2"),
+            "c2 = \"battery-charging\""
+        );
+        assert_eq!(
+            replace_whole_word("charging.set(0) // charging", "charging", "c2"),
+            "c2.set(0) // charging"
+        );
+        // A prefix must not be renamed.
+        assert_eq!(
+            replace_whole_word("charging_glyph", "charging", "c2"),
+            "charging_glyph"
+        );
+    }
 }
 
+/// Replaces every whole-word occurrence of identifier `from` with `to`, leaving string/char literals and
+/// line comments untouched (a `from` inside `"..."` or after `//` is not an identifier, so rewriting it
+/// would corrupt the text). Skipping the same regions as [`contains_ident`] keeps detection and rewrite in
+/// agreement.
 pub(crate) fn replace_whole_word(s: &str, from: &str, to: &str) -> String {
-    let mut result = String::with_capacity(s.len());
     let bytes = s.as_bytes();
-    let mut start = 0;
-    while let Some(pos) = s[start..].find(from) {
-        let abs = start + pos;
-        let before_ok = abs == 0 || !is_ident_byte(bytes[abs - 1]);
-        let after = abs + from.len();
-        let after_ok = after >= bytes.len() || !is_ident_byte(bytes[after]);
-        if before_ok && after_ok {
-            result.push_str(&s[start..abs]);
+    let mut result = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if let Some(end) = literal_or_comment_end(bytes, i) {
+            result.push_str(&s[i..end]);
+            i = end;
+            continue;
+        }
+        if s[i..].starts_with(from)
+            && (i == 0 || !is_ident_byte(bytes[i - 1]))
+            && bytes.get(i + from.len()).is_none_or(|&b| !is_ident_byte(b))
+        {
             result.push_str(to);
-            start = after;
+            i += from.len();
         } else {
-            result.push_str(&s[start..abs + 1]);
-            start = abs + 1;
+            let ch = s[i..].chars().next().unwrap();
+            result.push(ch);
+            i += ch.len_utf8();
         }
     }
-    result.push_str(&s[start..]);
     result
 }
