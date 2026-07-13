@@ -154,6 +154,36 @@ impl Color {
         }
     }
 
+    /// WCAG 2.x relative luminance in `[0, 1]` (0 = black, 1 = white): the linearized sRGB channels weighted
+    /// by human luminance sensitivity. Alpha is ignored — compose over a background first if it matters.
+    pub fn relative_luminance(self) -> f32 {
+        let r = Self::srgb_to_linear(self.r);
+        let g = Self::srgb_to_linear(self.g);
+        let b = Self::srgb_to_linear(self.b);
+        0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    /// WCAG 2.x contrast ratio between two colors, from `1.0` (identical) to `21.0` (black vs white).
+    /// Order-independent. Use it to pick a legible foreground: `>= 4.5` passes AA for body text, `>= 3.0`
+    /// for large text.
+    pub fn contrast_ratio(self, other: Color) -> f32 {
+        let a = self.relative_luminance();
+        let b = other.relative_luminance();
+        let (hi, lo) = if a >= b { (a, b) } else { (b, a) };
+        (hi + 0.05) / (lo + 0.05)
+    }
+
+    /// Picks the most legible foreground for this color (treated as a background): the candidate with the
+    /// highest [`contrast_ratio`](Self::contrast_ratio) against `self`. Returns `self` if `candidates` is
+    /// empty. This is the "auto-contrast" pick — e.g. a filled chip choosing text vs base over its accent.
+    pub fn most_readable(self, candidates: &[Color]) -> Color {
+        candidates
+            .iter()
+            .copied()
+            .max_by(|a, b| self.contrast_ratio(*a).total_cmp(&self.contrast_ratio(*b)))
+            .unwrap_or(self)
+    }
+
     #[inline]
     pub fn to_array(self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
@@ -529,6 +559,33 @@ mod tests {
     fn to_oklcha_gray_is_achromatic() {
         let (_, c, _, _) = Color::rgb(0.5, 0.5, 0.5).to_oklcha();
         assert!(c < 1e-4, "expected near-zero chroma, got {c}");
+    }
+
+    #[test]
+    fn relative_luminance_black_and_white() {
+        assert!(Color::BLACK.relative_luminance().abs() < 1e-6);
+        assert!((Color::WHITE.relative_luminance() - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn contrast_ratio_extremes_and_identity() {
+        // WCAG max contrast is 21:1 (black vs white); a color against itself is 1:1.
+        assert!((Color::WHITE.contrast_ratio(Color::BLACK) - 21.0).abs() < 1e-3);
+        assert!((Color::BLACK.contrast_ratio(Color::WHITE) - 21.0).abs() < 1e-3);
+        assert!((Color::RED.contrast_ratio(Color::RED) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn most_readable_picks_the_higher_contrast_foreground() {
+        let ink = Color::from_rgb_u8(20, 20, 25);
+        let paper = Color::from_rgb_u8(240, 240, 245);
+        // On a light background, the dark ink is more legible; on a dark one, the light paper.
+        let light_bg = Color::from_rgb_u8(230, 220, 180);
+        let dark_bg = Color::from_rgb_u8(40, 50, 70);
+        assert_eq!(light_bg.most_readable(&[ink, paper]), ink);
+        assert_eq!(dark_bg.most_readable(&[ink, paper]), paper);
+        // Empty candidates fall back to self.
+        assert_eq!(light_bg.most_readable(&[]), light_bg);
     }
 
     #[test]
