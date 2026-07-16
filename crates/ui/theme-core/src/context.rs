@@ -34,6 +34,32 @@ pub trait ThemeTokens: 'static {
     fn border(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.55, 0.35)
     }
+
+    /// Semantic status colours. Defaults are conventional hues; a theme should override to match its palette.
+    fn success(&self) -> Color {
+        Color::rgba(0.4, 0.7, 0.4, 1.0)
+    }
+    fn warning(&self) -> Color {
+        Color::rgba(0.9, 0.75, 0.4, 1.0)
+    }
+    fn error(&self) -> Color {
+        Color::rgba(0.8, 0.35, 0.4, 1.0)
+    }
+    fn info(&self) -> Color {
+        Color::rgba(0.4, 0.6, 0.8, 1.0)
+    }
+
+    /// Three progressively stronger highlight/elevation tints for hover, selection, and pressed states.
+    /// Defaults to faint neutral washes a theme can override with palette-specific tones.
+    fn highlight_low(&self) -> Color {
+        Color::rgba(0.5, 0.5, 0.55, 0.06)
+    }
+    fn highlight_med(&self) -> Color {
+        Color::rgba(0.5, 0.5, 0.55, 0.12)
+    }
+    fn highlight_high(&self) -> Color {
+        Color::rgba(0.5, 0.5, 0.55, 0.20)
+    }
 }
 
 thread_local! {
@@ -44,7 +70,6 @@ thread_local! {
         ManuallyDrop::new(signal(None));
 }
 
-// Installs a theme that also drives the built-in component catalogue. The same value is stored behind both trait objects so `use_theme` and `use_theme_tokens` stay in sync.
 pub fn set_theme<T: Theme + ThemeTokens + Clone + 'static>(theme: T) {
     let theme = Rc::new(theme);
     let as_theme: Rc<dyn Theme> = theme.clone();
@@ -74,7 +99,6 @@ pub fn use_theme<T: Theme + Clone + 'static>() -> T {
     })
 }
 
-// Returns the semantic tokens so type-agnostic built-in components can read theme colors. `None` when the installed theme does not implement `ThemeTokens`.
 pub fn use_theme_tokens() -> Option<Rc<dyn ThemeTokens>> {
     THEME_TOKENS.with(|s| s.get())
 }
