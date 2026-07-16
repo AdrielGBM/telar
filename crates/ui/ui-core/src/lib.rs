@@ -18,6 +18,7 @@ mod rect;
 mod scroll_area;
 mod slots;
 mod styled_container;
+mod surface;
 #[cfg(feature = "svg")]
 mod svg;
 mod text;
@@ -44,6 +45,10 @@ pub use rect::Rectangle;
 pub use scroll_area::{LayoutScrollArea, ScrollbarStyle};
 pub use slots::Slots;
 pub use styled_container::{StyledContainer, box_transform};
+pub use surface::{
+    DEFAULT_SCRIM, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole,
+    SurfaceRoot, SurfaceScaffold, SurfaceSize, surface_frame,
+};
 #[cfg(feature = "svg")]
 pub use svg::Svg;
 pub use text::Text;

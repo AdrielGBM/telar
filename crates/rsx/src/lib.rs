@@ -19,6 +19,8 @@ pub mod hot;
 pub mod hot_state;
 #[cfg(feature = "runtime")]
 pub mod runner;
+#[cfg(feature = "runtime")]
+pub mod surface;
 
 pub use config::RendererBackend;
 
@@ -81,6 +83,11 @@ pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]
 pub use services_core::{Scope, provide, try_inject, with_service};
 #[cfg(feature = "runtime")]
+pub use surface::{
+    SurfaceContent, SurfaceControl, SurfaceHost, SurfaceToken, has_surface_host, open_surface,
+    set_surface_host,
+};
+#[cfg(feature = "runtime")]
 pub use theme_core::{
     Theme, ThemeTokens, follow_system, init_mode, is_dark, register_mode, set_dark, set_light_dark,
     set_mode, set_system_dark, set_theme, toggle_dark, use_mode, use_theme, use_theme_tokens,
@@ -89,28 +96,25 @@ pub use theme_core::{
 pub use ui_core::Svg;
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, EventResult, Image, Input,
-    LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle,
-    RenderNode, ScrollbarStyle, Slots, StyledContainer, Text, box_item, box_transform,
-    compute_layout, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
-    mark_dirty, new_container, new_leaf, relayout_if_dirty, reset_layout_runtime, set_display,
-    set_overlay_host, track_layout,
+    Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
+    EventResult, Image, Input, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path,
+    ReactiveList, Rectangle, RenderNode, ScrollbarStyle, Slots, StyledContainer, SurfaceAlign,
+    SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold,
+    SurfaceSize, Text, box_item, box_transform, compute_layout, focus, fragment, fragment_gap,
+    fragment_positional, fragment_positional_gap, mark_dirty, new_container, new_leaf,
+    relayout_if_dirty, reset_layout_runtime, set_display, set_overlay_host, surface_frame,
+    track_layout,
 };
 
-// Opt-in component catalogue. Re-exported at the prelude root so generated component calls resolve them
-// (`button`/`ButtonProps`/…) by bare name through the `use rsx::*` every transpiled file emits.
 #[cfg(feature = "components")]
 pub use ui_components::{
     AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, DrawerProps, HeadingProps,
     MenuProps, ModalProps, ProgressProps, RadioProps, SectionProps, SelectProps, SliderProps,
     SpinnerProps, StepperProps, TabsProps, TextFieldProps, ToggleProps, TooltipProps, accordion,
-    badge, button, checkbox, chip, drawer, heading, menu, modal, progress, radio, section, select,
-    slider, spinner, stepper, tabs, text_field, toggle, tooltip,
+    badge, button, checkbox, chip, drawer, heading, hover_reveal, menu, modal, progress, radio,
+    section, select, slider, spinner, stepper, tabs, text_field, toggle, tooltip,
 };
 
-/// Consults this crate's overlay registry and reports whether an overlay consumed the pointer event. The
-/// hot-reload dylib exports this (as `_rsx_hot_dispatch_overlays`) so the host can route modal events into
-/// the dylib's registry across the FFI boundary; the runner calls it via [`App::dispatch_overlays`].
 #[cfg(feature = "runtime")]
 pub fn dispatch_overlays(event: &Event) -> bool {
     ui_core::dispatch_overlays(event) == EventResult::Handled

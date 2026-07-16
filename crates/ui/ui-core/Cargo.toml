@@ -14,6 +14,7 @@ renderer-assets = { workspace = true }
 renderer-text = { workspace = true }
 theme-core = { workspace = true }
 ui-tree = { workspace = true }
+motion-core.workspace = true
 
 [features]
 # Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.
