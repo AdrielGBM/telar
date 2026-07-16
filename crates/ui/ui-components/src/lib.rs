@@ -1,8 +1,4 @@
-//! First-party catalogue of high-level, fully-customizable widgets built on the rsx kernel primitives
-//! (`box`/`text`/`on_press`/`hover`/`input`/`on_drag`/`overlay`). These are NOT part of the base language:
-//! they resolve as ordinary component calls and are opt-in via the `rsx` crate's `components` feature, so an
-//! app can drop them or ship its own. Third-party widget libraries follow the same shape (a `fn` + `Props`
-//! per component). Keep the sigs in `rsx-transpiler`'s `external_component_sigs()` in sync with these.
+//! First-party catalogue of high-level, fully-customizable widgets built on the rsx kernel primitives, opt-in via the `components` feature. Keep sigs in `rsx-transpiler`'s `external_component_sigs()` in sync.
 
 mod accordion;
 mod badge;
@@ -12,6 +8,7 @@ mod chip;
 mod drawer;
 mod dropdown;
 mod heading;
+mod hover_reveal;
 mod menu;
 mod modal;
 mod progress;
@@ -35,6 +32,7 @@ pub use checkbox::{CheckboxProps, checkbox};
 pub use chip::{ChipProps, chip};
 pub use drawer::{DrawerProps, drawer};
 pub use heading::{HeadingProps, heading};
+pub use hover_reveal::hover_reveal;
 pub use menu::{MenuProps, menu};
 pub use modal::{ModalProps, modal};
 pub use progress::{ProgressProps, progress};
