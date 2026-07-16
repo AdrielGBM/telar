@@ -21,3 +21,5 @@ motion-core.workspace = true
 svg = []
 # Adds runtime SVG parsing (`SvgData::from_str` via usvg); required to compile the widget's from_str-based tests.
 dynamic-svg = ["svg", "renderer-assets/dynamic-svg"]
+# The transport-agnostic reactive asset seam (`AssetState`/`AssetSource`); pure reactive glue over existing deps, no transport.
+async-assets = []

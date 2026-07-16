@@ -94,6 +94,8 @@ pub use theme_core::{
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
+#[cfg(feature = "async-assets")]
+pub use ui_core::{AssetSource, AssetState};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,

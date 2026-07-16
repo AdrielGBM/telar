@@ -39,6 +39,7 @@ di = ["services-core/di"]
 svg = ["ui-core?/svg"]
 dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
 dynamic-image = ["renderer-assets?/dynamic-image"]
+async-assets = ["ui-core?/async-assets"]
 
 [dependencies]
 serde = { workspace = true }

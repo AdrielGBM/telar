@@ -1,3 +1,5 @@
+#[cfg(feature = "async-assets")]
+mod async_asset;
 mod canvas;
 mod child_host;
 mod container;
@@ -23,6 +25,8 @@ mod surface;
 mod svg;
 mod text;
 
+#[cfg(feature = "async-assets")]
+pub use async_asset::{AssetSource, AssetState};
 pub use canvas::Canvas;
 pub use child_host::{
     ChildSlot, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
