@@ -13,6 +13,7 @@ pub(super) fn convert_group(
     group: &usvg::Group,
     fit_ts: SkiaTransform,
     tint: Option<Color>,
+    stroke_override: Option<f32>,
     out: &mut Vec<DrawCommand>,
 ) -> Result<(), Unsupported> {
     // Compositing we cannot express as a plain opacity layer forces the whole SVG to the raster fallback.
@@ -35,10 +36,12 @@ pub(super) fn convert_group(
 
     for node in group.children() {
         match node {
-            usvg::Node::Group(g) => convert_group(g, fit_ts, tint, out)?,
-            usvg::Node::Path(p) => convert_path(p, fit_ts, tint, out)?,
+            usvg::Node::Group(g) => convert_group(g, fit_ts, tint, stroke_override, out)?,
+            usvg::Node::Path(p) => convert_path(p, fit_ts, tint, stroke_override, out)?,
             // usvg flattens <text> to a group of paths (default `text` feature).
-            usvg::Node::Text(t) => convert_group(t.flattened(), fit_ts, tint, out)?,
+            usvg::Node::Text(t) => {
+                convert_group(t.flattened(), fit_ts, tint, stroke_override, out)?
+            }
             usvg::Node::Image(_) => return Err(Unsupported),
         }
     }
@@ -53,6 +56,7 @@ fn convert_path(
     path: &usvg::Path,
     fit_ts: SkiaTransform,
     tint: Option<Color>,
+    stroke_override: Option<f32>,
     out: &mut Vec<DrawCommand>,
 ) -> Result<(), Unsupported> {
     if !path.is_visible() {
@@ -98,9 +102,11 @@ fn convert_path(
             return Err(Unsupported);
         }
         let paint = convert_paint(stroke.paint(), stroke.opacity().get(), &total, tint, false)?;
+        // A theme icon-stroke token overrides the glyph's own stroke width in userspace units (e.g. Lucide's 2), so it still scales into widget space by the same fit `scale`.
+        let width = stroke_override.unwrap_or_else(|| stroke.width().get());
         style.stroke = Some(Stroke {
             paint,
-            width: stroke.width().get() * scale,
+            width: width * scale,
             cap: map_cap(stroke.linecap()),
             join: map_join(stroke.linejoin()),
         });

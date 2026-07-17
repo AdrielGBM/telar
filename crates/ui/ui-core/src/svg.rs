@@ -13,6 +13,7 @@ use crate::layout_leaf::LayoutLeaf;
 pub struct Svg {
     data: Box<dyn Fn() -> Arc<SvgData>>,
     tint: Box<dyn Fn() -> Option<Color>>,
+    stroke: Box<dyn Fn() -> Option<f32>>,
     fit: Box<dyn Fn() -> ObjectFit>,
     leaf: LayoutLeaf,
 }
@@ -32,9 +33,16 @@ impl Svg {
         Ok(Self {
             data: Box::new(data_fn),
             tint: Box::new(tint_fn),
+            stroke: Box::new(|| None),
             fit: Box::new(fit_fn),
             leaf,
         })
+    }
+
+    /// Overrides every stroked path's width (SVG userspace units, e.g. Lucide's `2`) — the theme's icon-stroke token. Reactive like `tint`: re-read on every `view()`, so a live theme change restrokes the glyph. `None` keeps the SVG's own widths.
+    pub fn with_stroke(mut self, stroke_fn: impl Fn() -> Option<f32> + 'static) -> Self {
+        self.stroke = Box::new(stroke_fn);
+        self
     }
 }
 
@@ -42,7 +50,8 @@ impl Component for Svg {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
         let fit = (self.fit)();
-        let commands = (self.data)().commands_for(r.width, r.height, (self.tint)(), fit);
+        let commands =
+            (self.data)().commands_for(r.width, r.height, (self.tint)(), (self.stroke)(), fit);
         let children = NodeVec::collect(commands.iter().cloned().map(RenderNode::Primitive));
         let group = RenderNode::Group { children };
         // Cover scales the paths past the box; clip the overflow to the widget's local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll.

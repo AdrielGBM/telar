@@ -20,7 +20,7 @@ pub(crate) fn bake(content: &str) -> Result<((f32, f32), BakedSvg), SvgError> {
 
     let mut out = Vec::new();
     // Identity fit: baking stays in intrinsic viewBox space; the runtime re-fit applies the letterbox.
-    match convert_group(tree.root(), SkiaTransform::identity(), None, &mut out) {
+    match convert_group(tree.root(), SkiaTransform::identity(), None, None, &mut out) {
         Ok(()) => Ok((intrinsic, BakedSvg::Vector(out))),
         Err(Unsupported) => {
             let (image, raster_size) = rasterize(&tree, intrinsic)?;

@@ -28,8 +28,8 @@ pub use bake::bake_to_source;
 #[error("failed to parse SVG: {0}")]
 pub struct SvgError(String);
 
-// Memo key: (width bits, height bits, tint as packed rgba bits or None, object-fit discriminant). f32 goes through `to_bits` so it is Eq/Hash.
-type MemoKey = (u32, u32, Option<[u32; 4]>, u8);
+// Memo key: (width bits, height bits, tint as packed rgba bits or None, stroke-width override bits or None, object-fit discriminant). f32 goes through `to_bits` so it is Eq/Hash.
+type MemoKey = (u32, u32, Option<[u32; 4]>, Option<u32>, u8);
 
 /// An SVG document that converts to the renderer's `DrawCommand`s.
 ///
@@ -126,25 +126,29 @@ impl SvgData {
         self.size
     }
 
-    /// Display list in the widget's LOCAL space (`0,0..width,height`), memoized per `(width, height, tint, fit)`.
+    /// Display list in the widget's LOCAL space (`0,0..width,height`), memoized per `(width, height, tint, stroke, fit)`.
+    ///
+    /// `stroke` overrides every stroked path's width (in SVG userspace units, e.g. Lucide's `2`) — the theme's icon-stroke token. It applies to the runtime-parsed (`dynamic-svg`) path only; a baked display list keeps its baked widths.
     pub fn commands_for(
         &self,
         width: f32,
         height: f32,
         tint: Option<Color>,
+        stroke: Option<f32>,
         fit: ObjectFit,
     ) -> Arc<Vec<DrawCommand>> {
         let key: MemoKey = (
             width.to_bits(),
             height.to_bits(),
             tint.map(|c| [c.r.to_bits(), c.g.to_bits(), c.b.to_bits(), c.a.to_bits()]),
+            stroke.map(f32::to_bits),
             fit as u8,
         );
         let mut memo = self.memo.lock().unwrap();
         if let Some(cached) = memo.get(&key) {
             return Arc::clone(cached);
         }
-        let commands = Arc::new(self.build_commands(width, height, tint, fit));
+        let commands = Arc::new(self.build_commands(width, height, tint, stroke, fit));
         // Simple bound: drop the whole cache rather than track an LRU; these display lists are cheap to rebuild.
         if memo.len() >= 16 {
             memo.clear();
@@ -153,11 +157,14 @@ impl SvgData {
         commands
     }
 
+    // `stroke` overrides widths only on the parsed path, so it is unused when `dynamic-svg` is off.
+    #[cfg_attr(not(feature = "dynamic-svg"), allow(unused_variables))]
     fn build_commands(
         &self,
         width: f32,
         height: f32,
         tint: Option<Color>,
+        stroke: Option<f32>,
         fit: ObjectFit,
     ) -> Vec<DrawCommand> {
         let (vb_w, vb_h) = self.size;
@@ -174,7 +181,7 @@ impl SvgData {
             SvgSource::Parsed(tree) => {
                 let fit_ts = SkiaTransform::from_row(sx, 0.0, 0.0, sy, offset_x, offset_y);
                 let mut out = Vec::new();
-                match convert_group(tree.root(), fit_ts, tint, &mut out) {
+                match convert_group(tree.root(), fit_ts, tint, stroke, &mut out) {
                     Ok(()) => out,
                     Err(Unsupported) => raster::raster_fallback(
                         tree, self.size, fitted_w, fitted_h, offset_x, offset_y, tint,
