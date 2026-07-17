@@ -66,8 +66,9 @@ pub struct SurfacePlacement {
     pub anchor: SurfaceAnchor,
     pub align: SurfaceAlign,
     pub size: SurfaceSize,
-    /// Gap from the anchored screen edge(s), as `(top, right, bottom, left)`. A full-screen scrim scaffold
-    /// applies it as padding; a directly-anchored surface applies it as the compositor margin.
+    /// Gap from the screen edges, as `(top, right, bottom, left)`. A full-screen scrim scaffold applies the
+    /// whole tuple as padding (so the panel floats off every edge, not just the anchored one); a
+    /// directly-anchored surface applies it as the compositor margin.
     pub margin: (i32, i32, i32, i32),
     /// Dim (and, with `dismiss_on_outside`, capture) the area behind the panel.
     pub scrim: bool,
@@ -264,30 +265,33 @@ impl SurfaceScaffold {
     ) -> Result<Self, LayoutError> {
         let panel_node = content.layout_node();
         let (mt, mr, mb, ml) = placement.margin;
+        let cross = cross_align(placement.align);
+        // The full margin becomes padding so the panel floats off every screen edge, not just the anchored one;
+        // the per-anchor direction/justify then pins it to its edge within that padded box.
         let base = LayoutStyle::new()
             .width(SizeDimension::Percent(1.0))
-            .height(SizeDimension::Percent(1.0));
+            .height(SizeDimension::Percent(1.0))
+            .padding_top(mt as f32)
+            .padding_right(mr as f32)
+            .padding_bottom(mb as f32)
+            .padding_left(ml as f32);
         let style = match placement.anchor {
             SurfaceAnchor::Top => base
                 .flex_column()
                 .justify_content(JustifyContent::START)
-                .align_items(cross_align(placement.align))
-                .padding_top(mt as f32),
+                .align_items(cross),
             SurfaceAnchor::Bottom => base
                 .flex_column()
                 .justify_content(JustifyContent::END)
-                .align_items(cross_align(placement.align))
-                .padding_bottom(mb as f32),
+                .align_items(cross),
             SurfaceAnchor::Left => base
                 .flex_row()
                 .justify_content(JustifyContent::START)
-                .align_items(cross_align(placement.align))
-                .padding_left(ml as f32),
+                .align_items(cross),
             SurfaceAnchor::Right => base
                 .flex_row()
                 .justify_content(JustifyContent::END)
-                .align_items(cross_align(placement.align))
-                .padding_right(mr as f32),
+                .align_items(cross),
             SurfaceAnchor::Center => base
                 .flex_column()
                 .justify_content(JustifyContent::CENTER)
@@ -586,6 +590,42 @@ mod tests {
         assert_eq!(fired.get(), 0, "a press inside the panel must not dismiss");
         scaffold.on_event(&press(10.0, 190.0));
         assert_eq!(fired.get(), 1, "a press outside the panel dismisses");
+    }
+
+    #[test]
+    fn cross_axis_margin_insets_the_panel_from_the_side_edges() {
+        reset_layout_runtime();
+        let fired = Rc::new(Cell::new(0u32));
+        let f = fired.clone();
+        // Start-aligned top drawer, floated 10px off every edge: the 100-wide panel sits at x in [10, 110].
+        let placement = SurfacePlacement::drawer(SurfaceAnchor::Top)
+            .align(SurfaceAlign::Start)
+            .margin((30, 10, 10, 10));
+        let mut scaffold = SurfaceScaffold::new(
+            &placement,
+            panel(),
+            Some(Rc::new(move || f.set(f.get() + 1))),
+        )
+        .unwrap();
+        scaffold.on_event(&Event::WindowResized {
+            width: 200,
+            height: 200,
+        });
+
+        scaffold.on_event(&press(50.0, 40.0));
+        assert_eq!(
+            fired.get(),
+            0,
+            "a press on the inset panel must not dismiss"
+        );
+        scaffold.on_event(&press(4.0, 40.0));
+        assert_eq!(
+            fired.get(),
+            1,
+            "a press in the left gap (before the inset) dismisses"
+        );
+        scaffold.on_event(&press(150.0, 40.0));
+        assert_eq!(fired.get(), 2, "a press in the right gap dismisses");
     }
 
     #[test]
