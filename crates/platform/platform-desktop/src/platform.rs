@@ -108,7 +108,10 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             &mut self.modifiers,
             event,
         );
-        if matches!(outcome, WindowEventOutcome::CloseRequested) {
+        // A custom title-bar close button sets the handler's exit request during dispatch; honor it alongside
+        // the OS close (window manager X / Alt-F4).
+        if matches!(outcome, WindowEventOutcome::CloseRequested) || self.handler.take_exit_request()
+        {
             event_loop.exit();
         }
     }
@@ -456,6 +459,12 @@ fn run_surface_worker<H: EventHandler<WinitWindow>>(
         }
         // Render (gated internally by tree-dirty / keepalive) after any event or pacing tick.
         handler.on_redraw(&window);
+        // A custom title-bar close button on this surface: leave the loop so the window (its only strong ref is
+        // this thread) is dropped and closed. Note: the main runner still holds this surface's WorkerHandle, so
+        // process-level "exit when the last window closes" is refined in the tabbed-host phase.
+        if handler.take_exit_request() {
+            break;
+        }
         pace = handler.about_to_wait();
     }
     handler.on_suspend();

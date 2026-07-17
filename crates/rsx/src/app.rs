@@ -77,6 +77,16 @@ pub trait App: 'static {
         ui_core::dispatch_overlays(event) == ui_core::EventResult::Handled
     }
 
+    /// Drains window-management commands (drag/minimize/maximize/close/set-title) that UI closures enqueued
+    /// during event dispatch, so the runner can apply them to the OS window. Only the dylib-backed `HotApp`
+    /// overrides this — the command queue is a thread-local that lives in the dylib (where a title bar's
+    /// `on_press` pushes to it), so the host must drain it across the FFI boundary rather than its own (empty)
+    /// copy, exactly like `dispatch_overlays`.
+    #[doc(hidden)]
+    fn drain_window_commands(&self) -> Vec<platform_core::WindowCommand> {
+        platform_core::take_window_commands()
+    }
+
     /// Reports the OS light/dark preference into the app's theme runtime (drives `follow_system`). Only the
     /// dylib-backed `HotApp` overrides this — the theme signal lives in the dylib's runtime, so the host must
     /// write it across the FFI boundary rather than its own (empty) copy, exactly like `motion_tick`.
@@ -123,6 +133,9 @@ impl<A: App + ?Sized> App for Box<A> {
     }
     fn dispatch_overlays(&self, event: &platform_core::Event) -> bool {
         (**self).dispatch_overlays(event)
+    }
+    fn drain_window_commands(&self) -> Vec<platform_core::WindowCommand> {
+        (**self).drain_window_commands()
     }
     fn set_system_dark(&self, dark: bool) {
         (**self).set_system_dark(dark)

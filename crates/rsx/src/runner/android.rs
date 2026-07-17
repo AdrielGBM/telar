@@ -96,6 +96,8 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             pending_renderer: None,
             _flush_notify: None,
             scale_factor: 1.0,
+            exit_requested: false,
+            redraw_waker: None,
             scale_scratch: renderer_core::ScaleScratch::new(),
             window_signals: None,
             app_name: app_name.to_owned(),

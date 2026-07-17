@@ -1,5 +1,5 @@
 use devtools_core::{DevAction, DevPlugin};
-use platform_core::{Event, EventHandler, Window};
+use platform_core::{Event, EventHandler, Window, WindowCommand};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};
 use renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
@@ -35,6 +35,12 @@ where
         Option<std::thread::JoinHandle<Result<HardwareRenderer<W>, RendererError>>>,
     pub(super) _flush_notify: Option<FlushNotifyHandle>,
     pub(super) scale_factor: f32,
+    // Set when the app pushed WindowCommand::Close (a custom title-bar close button); polled by the platform
+    // via take_exit_request to leave the run loop.
+    pub(super) exit_requested: bool,
+    // A Send/Sync handle that wakes this window's loop, built from the window at resume and handed to app code
+    // via AppCtx so background threads can request a redraw when their results are ready.
+    pub(super) redraw_waker: Option<crate::app_context::RedrawWaker>,
     // Reused across frames so the SW/HiDPI command scaling allocates neither a fresh Vec nor redundant per-command style Arcs.
     pub(super) scale_scratch: renderer_core::ScaleScratch,
     pub(super) window_signals: Option<WindowSignals>,
@@ -88,6 +94,8 @@ where
         pending_renderer: None,
         _flush_notify: None,
         scale_factor: 1.0,
+        exit_requested: false,
+        redraw_waker: None,
         scale_scratch: renderer_core::ScaleScratch::new(),
         window_signals: None,
         app_name,
@@ -245,6 +253,11 @@ where
             window.width() as f32 / sf,
             window.height() as f32 / sf,
         ));
+        // winit's request_redraw is thread-safe, so a window clone is a valid cross-thread wake handle.
+        self.redraw_waker = Some(crate::app_context::RedrawWaker::new({
+            let window = window.clone();
+            move || window.request_redraw()
+        }));
         self.tree = Some(ComponentList::new(self.app.root()));
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
@@ -378,7 +391,22 @@ where
                 .unwrap_or(EventResult::Ignored)
         };
         self.app.end_event_batch();
-        if handled == EventResult::Handled {
+        // Apply any window-management commands a handler enqueued this dispatch (custom title-bar controls).
+        // Drag must run inside the pointer-press dispatch it originated from, so this sits right after the
+        // walk. Routed through the App bridge so the dylib-backed HotApp drains the dylib's own queue.
+        let mut window_command_applied = false;
+        for cmd in self.app.drain_window_commands() {
+            window_command_applied = true;
+            match cmd {
+                WindowCommand::Drag => window.drag_window(),
+                WindowCommand::Minimize => window.set_minimized(true),
+                WindowCommand::ToggleMaximize => window.set_maximized(!window.is_maximized()),
+                WindowCommand::SetMaximized(v) => window.set_maximized(v),
+                WindowCommand::SetTitle(title) => window.set_title(&title),
+                WindowCommand::Close => self.exit_requested = true,
+            }
+        }
+        if handled == EventResult::Handled || window_command_applied {
             #[cfg(feature = "dev")]
             if let Some(tree) = &self.tree {
                 tree.bump_force_ticks();
@@ -452,6 +480,7 @@ where
                 pending_restart: &mut self.pending_restart,
                 redraw_requested: &mut redraw_requested,
                 window_signals: self.window_signals.as_ref(),
+                redraw_waker: self.redraw_waker.as_ref(),
             };
             self.app.on_frame(&mut ctx);
         }
@@ -715,6 +744,10 @@ where
 
     fn new_events(&mut self) {
         begin_batch();
+    }
+
+    fn take_exit_request(&mut self) -> bool {
+        std::mem::take(&mut self.exit_requested)
     }
 
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {

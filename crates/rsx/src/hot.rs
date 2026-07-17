@@ -101,6 +101,22 @@ impl crate::app::App for HotApp {
         unsafe { dispatch(event) }
     }
 
+    // Drain window commands from the dylib's own thread-local queue (separate from the host's): a title bar's
+    // `on_press` pushes into the dylib's platform-core copy, so the host must drain it across this boundary to
+    // apply drag/minimize/maximize/close. Missing symbol (dylib built before this existed) degrades to an
+    // empty vec — window controls are simply inert until the dylib is rebuilt.
+    fn drain_window_commands(&self) -> Vec<platform_core::WindowCommand> {
+        let Ok(drain) = (unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn() -> Vec<platform_core::WindowCommand>>(
+                    b"_rsx_hot_drain_window_commands\0",
+                )
+        }) else {
+            return Vec::new();
+        };
+        unsafe { drain() }
+    }
+
     // Write the OS light/dark preference into the dylib's own theme runtime (separate from the host's), where
     // the `follow_system` effect lives. Missing symbol (dylib built before this existed) degrades to a no-op.
     fn set_system_dark(&self, dark: bool) {

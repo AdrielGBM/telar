@@ -56,6 +56,20 @@ pub trait Window: HasWindowHandle + HasDisplayHandle {
     fn scale_factor(&self) -> f64 {
         1.0
     }
+    /// Begins an OS-driven interactive move (drag the window by a custom title bar). Must be called while the
+    /// pointer button that started the drag is still pressed. No-op on backends without a movable top-level
+    /// window (layer-shell surfaces, headless).
+    fn drag_window(&self) {}
+    /// Minimizes (`true`) or restores (`false`) the window. No-op where unsupported.
+    fn set_minimized(&self, _minimized: bool) {}
+    /// Maximizes (`true`) or restores (`false`) the window. No-op where unsupported.
+    fn set_maximized(&self, _maximized: bool) {}
+    /// Whether the window is currently maximized. Defaults to `false` where unsupported.
+    fn is_maximized(&self) -> bool {
+        false
+    }
+    /// Updates the OS window title. No-op where unsupported.
+    fn set_title(&self, _title: &str) {}
     /// The OS light/dark preference, if the platform can report it: `Some(true)` = prefer dark. `None` when
     /// undetectable (e.g. X11, or a compositor without the settings portal). Defaults to `None`.
     fn prefers_dark(&self) -> Option<bool> {
@@ -77,6 +91,12 @@ pub trait EventHandler<W: Window> {
     fn new_events(&mut self) {}
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
         None
+    }
+    /// Whether the handler asked to close this window (e.g. a custom title-bar close button pushed
+    /// [`crate::WindowCommand::Close`]). The platform polls this after each dispatch; `true` exits the
+    /// window's run loop. Implementations clear the request when returning `true`. Defaults to `false`.
+    fn take_exit_request(&mut self) -> bool {
+        false
     }
     /// The most recently rendered frame as premultiplied RGBA8888, if this handler renders to an offscreen
     /// target. Windowed handlers present to the screen and return `None`; an offscreen backend (e.g.

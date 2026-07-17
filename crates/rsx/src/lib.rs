@@ -21,6 +21,8 @@ pub mod hot_state;
 pub mod runner;
 #[cfg(feature = "runtime")]
 pub mod surface;
+#[cfg(feature = "runtime")]
+pub mod window;
 
 pub use config::RendererBackend;
 
@@ -33,7 +35,7 @@ pub use preview_runner::PreviewEntry;
 #[cfg(feature = "runtime")]
 pub use app_config::AppConfig;
 #[cfg(feature = "runtime")]
-pub use app_context::AppCtx;
+pub use app_context::{AppCtx, RedrawWaker};
 #[cfg(feature = "runtime")]
 pub use prefs::UserPrefs;
 #[cfg(feature = "runtime")]
@@ -54,7 +56,8 @@ pub use layout_core::{
 pub use motion_core as motion;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowConfig, WindowPosition,
+    Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand, WindowConfig, WindowPosition,
+    push_window_command, take_window_commands,
 };
 // Backend-author API: an out-of-tree `Platform` (e.g. a Wayland layer-shell backend) implements `Platform`
 // and `Window` against these, driving a full rsx app via `run_with_platform` without depending on
@@ -102,10 +105,10 @@ pub use ui_core::{
     EventResult, Image, Input, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path,
     ReactiveList, Rectangle, RenderNode, ScrollbarStyle, Slots, StyledContainer, SurfaceAlign,
     SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold,
-    SurfaceSize, Text, box_item, box_transform, compute_layout, focus, fragment, fragment_gap,
-    fragment_positional, fragment_positional_gap, mark_dirty, new_container, new_leaf,
-    relayout_if_dirty, reset_layout_runtime, set_display, set_overlay_host, surface_frame,
-    track_layout,
+    SurfaceSize, Text, TextArea, box_item, box_transform, compute_layout, focus, fragment,
+    fragment_gap, fragment_positional, fragment_positional_gap, mark_dirty, new_container,
+    new_leaf, relayout_if_dirty, reset_layout_runtime, set_display, set_overlay_host,
+    surface_frame, track_layout,
 };
 
 #[cfg(feature = "components")]

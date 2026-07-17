@@ -188,6 +188,14 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_set_system_dark(dark: bool) {
                 ::rsx::set_system_dark(dark);
             }
+            // Drain the dylib's own window-command queue: a title bar's `on_press` pushes into this dylib's
+            // thread-local, so the host must drain it across this boundary to apply drag/minimize/maximize/
+            // close — its own copy is empty.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_drain_window_commands()
+            -> ::std::vec::Vec<::rsx::WindowCommand> {
+                ::rsx::take_window_commands()
+            }
         }
     } else {
         quote! {}

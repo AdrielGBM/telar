@@ -43,4 +43,24 @@ impl PlatformWindow for WinitWindow {
         // color-scheme integration there) — the desktop adapter supplies the freedesktop-portal fallback.
         self.0.theme().map(|t| t == winit::window::Theme::Dark)
     }
+
+    fn drag_window(&self) {
+        let _ = self.0.drag_window();
+    }
+
+    fn set_minimized(&self, minimized: bool) {
+        self.0.set_minimized(minimized);
+    }
+
+    fn set_maximized(&self, maximized: bool) {
+        self.0.set_maximized(maximized);
+    }
+
+    fn is_maximized(&self) -> bool {
+        self.0.is_maximized()
+    }
+
+    fn set_title(&self, title: &str) {
+        self.0.set_title(title);
+    }
 }

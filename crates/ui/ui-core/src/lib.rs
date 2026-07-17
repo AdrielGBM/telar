@@ -24,6 +24,7 @@ mod surface;
 #[cfg(feature = "svg")]
 mod svg;
 mod text;
+mod text_area;
 
 #[cfg(feature = "async-assets")]
 pub use async_asset::{AssetSource, AssetState};
@@ -56,4 +57,5 @@ pub use surface::{
 #[cfg(feature = "svg")]
 pub use svg::Svg;
 pub use text::Text;
+pub use text_area::TextArea;
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode, dispatch_overlays};
