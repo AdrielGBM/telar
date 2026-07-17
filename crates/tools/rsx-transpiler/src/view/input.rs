@@ -2,7 +2,7 @@
 
 use rsx_parser::Element;
 
-use crate::style::{format_f32, layout_prop_call};
+use crate::style::{format_number, layout_prop_call};
 
 use super::signals::{normalize_closure, substitute_handles, wrap_signal_clones};
 use super::{ChildEmit, ViewGen};
@@ -27,8 +27,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "size")
-            .and_then(|a| a.value.parse::<f32>().ok())
-            .map(format_f32)
+            .map(|a| format_number(&a.value))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = el.attributes.iter().find(|a| a.key == "color");
         let color = color_attr

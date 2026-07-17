@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use rsx_parser::{Attr, Element, ViewNode};
 
-use crate::style::format_f32;
+use crate::style::{format_f32, format_number};
 
 use super::signals::{
     build_gradient_stops, build_rect_style, canvas_param_bindings, rust_str, wrap_signal_clones,
@@ -296,8 +296,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "size")
-            .and_then(|a| a.value.parse::<f32>().ok())
-            .map(format_f32)
+            .map(|a| format_number(&a.value))
             .unwrap_or_else(|| "14.0".to_string());
 
         let color = el

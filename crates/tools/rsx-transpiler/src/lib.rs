@@ -905,6 +905,36 @@ col @card
     }
 
     #[test]
+    fn dynamic_radius_forwards_the_expression_not_zero() {
+        // A variable radius must reach the RectStyle (like fill/pad do), not silently collapse to zero.
+        let code = transpile_source_with_theme(
+            "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent radius:rad\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(
+            code.contains("with_radius(BorderRadius::all(rad))"),
+            "a variable radius should forward verbatim:\n{code}"
+        );
+        // A numeric literal still renders as a float.
+        let lit = transpile_source_with_theme(
+            "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent radius:8\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(
+            lit.contains("with_radius(BorderRadius::all(8.0))"),
+            "a literal radius still works:\n{lit}"
+        );
+    }
+
+    #[test]
     fn transition_color_on_text_wraps_text_style() {
         let src = "[view]\ntext \"hi\" color:primary transition:color 120ms\n";
         let code = transpile_source_with_theme(src, "demo", Some("SandboxTheme"), None)

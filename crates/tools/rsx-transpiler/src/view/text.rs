@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use rsx_parser::{Attr, Element};
 
-use crate::style::{format_f32, layout_prop_call};
+use crate::style::{format_f32, format_number, layout_prop_call};
 
 use super::signals::{captured_idents, emit_transition_prelude, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen};
@@ -185,8 +185,7 @@ impl ViewGen<'_> {
         let size = attrs
             .iter()
             .find(|a| a.key == "size")
-            .and_then(|a| a.value.parse::<f32>().ok())
-            .map(format_f32)
+            .map(|a| format_number(&a.value))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = attrs.iter().find(|a| a.key == "color");
         let mut color = color_attr

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use rsx_parser::{Attr, Element};
 
 use crate::naming::style_function_name;
-use crate::style::{format_f32, layout_prop_call};
+use crate::style::{format_f32, format_number, layout_prop_call};
 
 use super::ViewGen;
 use super::signals::{
@@ -68,11 +68,12 @@ impl ViewGen<'_> {
             .find(|a| a.key == "stroke_width")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(1.0);
+        // `format_number` keeps a numeric literal (`radius:8`) but forwards a variable/const (`radius:rad`)
+        // verbatim, so a dynamic radius works like `fill`/`pad` do — not silently dropped to zero.
         let radius = pattrs
             .iter()
             .find(|a| a.key == "radius")
-            .and_then(|a| a.value.parse::<f32>().ok())
-            .map(|r| format!("BorderRadius::all({})", format_f32(r)))
+            .map(|a| format!("BorderRadius::all({})", format_number(&a.value)))
             .unwrap_or_else(|| "BorderRadius::zero()".to_string());
         let param = if gradient.is_some() { "r" } else { "_" };
         let rect_style =

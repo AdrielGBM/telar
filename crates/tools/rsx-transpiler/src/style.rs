@@ -198,7 +198,7 @@ fn parse_track_token(s: &str) -> Option<String> {
 }
 
 /// Renders a numeric literal as a float suffix-free Rust expression. Non-numeric values are passed through verbatim (e.g. references to other constants).
-fn format_number(value: &str) -> String {
+pub fn format_number(value: &str) -> String {
     match value.parse::<f32>() {
         Ok(n) => format_f32(n),
         Err(_) => value.to_string(),
