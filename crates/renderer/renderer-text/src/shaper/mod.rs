@@ -172,22 +172,10 @@ impl TextShaper {
                 || !font.extra_font_paths.is_empty()
                 || !font.font_data.is_empty();
 
-            if needs_custom_db {
+            let mut font_system = if needs_custom_db {
                 let mut db = fontdb::Database::new();
                 if let Some(ref dir) = font.system_fonts_dir {
                     db.load_fonts_dir(dir);
-                    for name in &font.sans_serif_family_candidates {
-                        if db
-                            .query(&fontdb::Query {
-                                families: &[fontdb::Family::Name(name)],
-                                ..fontdb::Query::default()
-                            })
-                            .is_some()
-                        {
-                            db.set_sans_serif_family(name.as_str());
-                            break;
-                        }
-                    }
                 } else {
                     db.load_system_fonts();
                 }
@@ -201,7 +189,22 @@ impl TextShaper {
                 FontSystem::new_with_locale_and_db(locale, db)
             } else {
                 FontSystem::new()
+            };
+            // Route the default (`Family::SansSerif`) face to the first configured candidate that resolves — the theme's chosen font family, or an OEM stack. Applied to whichever db built the system (custom dir or default system fonts), so a plain-desktop app still honors the family.
+            let db = font_system.db_mut();
+            for name in &font.sans_serif_family_candidates {
+                if db
+                    .query(&fontdb::Query {
+                        families: &[fontdb::Family::Name(name)],
+                        ..fontdb::Query::default()
+                    })
+                    .is_some()
+                {
+                    db.set_sans_serif_family(name.as_str());
+                    break;
+                }
             }
+            font_system
         };
         Self {
             font_system,

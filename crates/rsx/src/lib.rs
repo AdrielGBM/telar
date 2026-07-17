@@ -142,6 +142,7 @@ pub use runner::run_hot_reload_host;
 pub use runner::run_multi_with_platform;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::run_with_platform;
+pub use runner::set_default_font_family;
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
 pub use runner::{run_app_with_name, run_multi_app_with_name};
 

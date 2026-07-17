@@ -2,6 +2,7 @@ mod android;
 #[cfg(all(feature = "desktop", not(target_os = "android")))]
 mod desktop;
 mod font_config;
+pub use font_config::set_default_font_family;
 #[cfg(not(target_os = "android"))]
 mod generic;
 mod handler;
