@@ -23,7 +23,7 @@ pub struct RadioProps {
     pub selected: Option<RwSignal<u32>>,
     /// This button's value: it is selected when `selected` equals it, and a tap sets `selected` to it.
     pub value: u32,
-    pub label: &'static str,
+    pub label: Box<dyn Fn() -> String>,
     /// Accent (the selected dot and border). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     pub color: Box<dyn Fn() -> Color>,
     /// Fires with this button's `value` when it becomes selected.
@@ -35,7 +35,7 @@ impl Default for RadioProps {
         Self {
             selected: None,
             value: 0,
-            label: "",
+            label: Box::new(String::new),
             color: Box::new(|| Color::TRANSPARENT),
             on_select: None,
         }
@@ -170,7 +170,7 @@ mod tests {
         let mut widget = radio(RadioProps {
             selected: Some(selected.clone()),
             value: 2,
-            label: "Large",
+            label: Box::new(|| "Large".to_string()),
             ..Default::default()
         })
         .unwrap();

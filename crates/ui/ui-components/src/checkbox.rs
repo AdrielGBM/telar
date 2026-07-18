@@ -18,7 +18,7 @@ const BORDER: Color = Color::rgba(0.75, 0.77, 0.80, 1.0);
 pub struct CheckboxProps {
     /// Bound checked state. `None` (the default) is uncontrolled — the widget makes its own `signal(false)`.
     pub checked: Option<RwSignal<bool>>,
-    pub label: &'static str,
+    pub label: Box<dyn Fn() -> String>,
     /// Accent (the checked fill). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     pub color: Box<dyn Fn() -> Color>,
     /// Fires with the new state on every toggle.
@@ -29,7 +29,7 @@ impl Default for CheckboxProps {
     fn default() -> Self {
         Self {
             checked: None,
-            label: "",
+            label: Box::new(String::new),
             color: Box::new(|| Color::TRANSPARENT),
             on_toggle: None,
         }
@@ -156,7 +156,7 @@ mod tests {
         let checked = signal(false);
         let mut widget = checkbox(CheckboxProps {
             checked: Some(checked.clone()),
-            label: "Agree",
+            label: Box::new(|| "Agree".to_string()),
             ..Default::default()
         })
         .unwrap();

@@ -5,15 +5,22 @@ use ui_core::{LayoutItem, Text, box_item};
 
 /// A section title: 20px, semibold, coloured from the theme's accent (`primary`). High-level
 /// sugar over `text`; lives in `ui-components`, not the kernel.
-#[derive(Default)]
 pub struct HeadingProps {
-    pub text: &'static str,
+    pub text: Box<dyn Fn() -> String>,
+}
+
+impl Default for HeadingProps {
+    fn default() -> Self {
+        Self {
+            text: Box::new(String::new),
+        }
+    }
 }
 
 pub fn heading(props: HeadingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let label = props.text;
+    let text = props.text;
     let t = Text::new(
-        move || label.to_string(),
+        move || text(),
         LayoutStyle::new().height(20.0 * 1.4),
         heading_style,
     )?;

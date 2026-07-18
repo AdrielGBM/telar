@@ -938,6 +938,7 @@ mod tests {
             prop_fields: fields.iter().map(|s| s.to_string()).collect(),
             has_slot,
             color_fields: Vec::new(),
+            text_fields: Vec::new(),
             optional_fields: Vec::new(),
         }
     }
@@ -1370,7 +1371,9 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("heading(HeadingProps { text: \"Title\" })"),
+            code.contains(
+                "heading(HeadingProps { text: Box::new(move || \"Title\".to_string()) })"
+            ),
             "heading is a component call carrying its text:\n{code}"
         );
     }

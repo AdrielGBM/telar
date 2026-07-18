@@ -19,7 +19,7 @@ const KNOB_TRAVEL: f32 = 18.0;
 pub struct ToggleProps {
     /// Bound on/off state. `None` (the default) is uncontrolled — the widget makes its own `signal(false)`.
     pub checked: Option<RwSignal<bool>>,
-    pub label: &'static str,
+    pub label: Box<dyn Fn() -> String>,
     /// Accent (the on-track fill). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     pub color: Box<dyn Fn() -> Color>,
     /// Fires with the new state on every toggle.
@@ -30,7 +30,7 @@ impl Default for ToggleProps {
     fn default() -> Self {
         Self {
             checked: None,
-            label: "",
+            label: Box::new(String::new),
             color: Box::new(|| Color::TRANSPARENT),
             on_toggle: None,
         }
@@ -154,7 +154,7 @@ mod tests {
         let on = signal(false);
         let mut widget = toggle(ToggleProps {
             checked: Some(on.clone()),
-            label: "Notifications",
+            label: Box::new(|| "Notifications".to_string()),
             ..Default::default()
         })
         .unwrap();

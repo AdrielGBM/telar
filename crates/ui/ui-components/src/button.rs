@@ -21,7 +21,7 @@ const RADIUS: f32 = 4.0;
 /// drop it or ship its own. `fill`/`outline` are reactive colour closures (re-read every frame) so a
 /// button styled from a theme token re-colours when the theme switches.
 pub struct ButtonProps {
-    pub label: &'static str,
+    pub label: Box<dyn Fn() -> String>,
     /// Filled variant colour. `Color::TRANSPARENT` (the default) means "unset" — the button keeps its
     /// theme-driven default fill. A closure so a theme token re-reads on every render.
     pub fill: Box<dyn Fn() -> Color>,
@@ -34,7 +34,7 @@ pub struct ButtonProps {
 impl Default for ButtonProps {
     fn default() -> Self {
         Self {
-            label: "",
+            label: Box::new(String::new),
             fill: Box::new(|| Color::TRANSPARENT),
             outline: Box::new(|| Color::TRANSPARENT),
             ghost: false,
@@ -65,7 +65,7 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let (label_fill, label_outline, label_hover) =
         (Rc::clone(&fill), Rc::clone(&outline), hovered.clone());
     let label_widget = Text::auto(
-        move || label.to_string(),
+        move || label(),
         LayoutStyle::new(),
         move || {
             TextStyle::new(
@@ -186,7 +186,7 @@ mod tests {
         let sink = flag.clone();
         reset_layout_runtime();
         let mut btn = button(ButtonProps {
-            label: "OK",
+            label: Box::new(|| "OK".to_string()),
             fill: Box::new(|| Color::rgba(0.2, 0.4, 0.9, 1.0)),
             on_press: Box::new(move || sink.set(true)),
             ..Default::default()

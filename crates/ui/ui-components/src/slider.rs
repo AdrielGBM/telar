@@ -42,7 +42,7 @@ pub struct SliderProps {
     /// snapping, following the same `0.0 == unset` sentinel convention as `width`.
     pub step: f32,
     /// A small caption stacked above the track; omitted entirely (no extra row) when empty.
-    pub label: &'static str,
+    pub label: Box<dyn Fn() -> String>,
     /// Fires with the new `min..=max` value on every drag report (the press and each subsequent move).
     pub on_change: Option<Box<dyn Fn(f32)>>,
 }
@@ -57,7 +57,7 @@ impl Default for SliderProps {
             min: 0.0,
             max: 1.0,
             step: 0.0,
-            label: "",
+            label: Box::new(String::new),
             on_change: None,
         }
     }
@@ -164,11 +164,11 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         }
     });
 
-    if label.is_empty() {
+    if label().is_empty() {
         return Ok(box_item(track));
     }
     let caption = Text::new(
-        move || label.to_string(),
+        move || label(),
         LayoutStyle::new().height(LABEL_SIZE * 1.4),
         || TextStyle::new(LABEL_SIZE, label_color()),
     )?;
@@ -353,7 +353,7 @@ mod tests {
     fn label_builds_without_panicking() {
         reset_layout_runtime();
         let result = slider(SliderProps {
-            label: "Volume",
+            label: Box::new(|| "Volume".to_string()),
             ..Default::default()
         });
         assert!(result.is_ok());

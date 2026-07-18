@@ -5,15 +5,22 @@ use crate::heading::heading_style;
 
 /// A titled column: a `heading` above its slot children in a small-gap `flex_column`. High-level sugar;
 /// lives in `ui-components`, not the kernel.
-#[derive(Default)]
 pub struct SectionProps {
-    pub title: &'static str,
+    pub title: Box<dyn Fn() -> String>,
+}
+
+impl Default for SectionProps {
+    fn default() -> Self {
+        Self {
+            title: Box::new(String::new),
+        }
+    }
 }
 
 pub fn section(props: SectionProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let title = props.title;
     let heading = Text::new(
-        move || title.to_string(),
+        move || title(),
         LayoutStyle::new().height(20.0 * 1.4),
         heading_style,
     )?;

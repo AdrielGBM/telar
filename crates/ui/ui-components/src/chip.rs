@@ -19,7 +19,7 @@ const DOT_SIZE: f32 = 6.0;
 /// Non-interactive unless `on_close` is set. High-level sugar over `StyledContainer`/`Container` + `Text`;
 /// lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
 pub struct ChipProps {
-    pub label: &'static str,
+    pub label: Box<dyn Fn() -> String>,
     /// Small leading accent dot colour. `Color::TRANSPARENT` (the default) means "unset": no dot is shown at
     /// all (not just an invisible one) — see `chip`'s doc. A closure (re-read every frame) so a theme token
     /// or `$signal` colour re-colours the dot live, like `button`'s `fill`.
@@ -32,7 +32,7 @@ pub struct ChipProps {
 impl Default for ChipProps {
     fn default() -> Self {
         Self {
-            label: "",
+            label: Box::new(String::new),
             color: Box::new(|| Color::TRANSPARENT),
             on_close: None,
         }
@@ -66,7 +66,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // `auto` (measured leaf) so the label gets its intrinsic WIDTH in this row; a plain `Text::new` only
     // stretches its cross-axis, leaving width 0 and the label invisible.
     let label_widget = Text::auto(
-        move || label.to_string(),
+        move || label(),
         LayoutStyle::new(),
         || TextStyle::new(FONT_SIZE, shared::ink()),
     )?;
@@ -141,7 +141,7 @@ mod tests {
     fn renders_label() {
         reset_layout_runtime();
         let chip = chip(ChipProps {
-            label: "Draft",
+            label: Box::new(|| "Draft".to_string()),
             ..Default::default()
         })
         .unwrap();
@@ -167,7 +167,7 @@ mod tests {
         let flag = Rc::new(Cell::new(false));
         let sink = flag.clone();
         let mut chip = chip(ChipProps {
-            label: "Tag",
+            label: Box::new(|| "Tag".to_string()),
             on_close: Some(Box::new(move || sink.set(true))),
             ..Default::default()
         })

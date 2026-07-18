@@ -30,7 +30,7 @@ const CARET_OPEN: &str = "\u{25BE}"; // ▾
 /// following siblings back up, and expanding it pushes them down again.
 pub struct AccordionProps {
     /// Header label.
-    pub title: &'static str,
+    pub title: Box<dyn Fn() -> String>,
     /// Bound open/closed state. `None` (the default) is uncontrolled — the widget owns its own `signal(false)`.
     pub open: Option<RwSignal<bool>>,
     /// Accent (the caret). `Color::TRANSPARENT` (the default) means "unset": falls back to the theme accent.
@@ -40,7 +40,7 @@ pub struct AccordionProps {
 impl Default for AccordionProps {
     fn default() -> Self {
         Self {
-            title: "",
+            title: Box::new(String::new),
             open: None,
             color: Box::new(|| Color::TRANSPARENT),
         }
@@ -81,7 +81,7 @@ pub fn accordion(
     )?;
 
     let title_widget = Text::auto(
-        move || title.to_string(),
+        move || title(),
         LayoutStyle::new(),
         || TextStyle::new(TITLE_SIZE, shared::ink()),
     )?;
@@ -195,7 +195,7 @@ mod tests {
         let open = signal(false);
         let mut item = accordion(
             AccordionProps {
-                title: "Details",
+                title: Box::new(|| "Details".to_string()),
                 open: Some(open.clone()),
                 ..Default::default()
             },
@@ -234,7 +234,7 @@ mod tests {
         let open = signal(false);
         let item = accordion(
             AccordionProps {
-                title: "Details",
+                title: Box::new(|| "Details".to_string()),
                 open: Some(open.clone()),
                 ..Default::default()
             },
@@ -278,7 +278,7 @@ mod tests {
         reset_layout_runtime();
         let item = accordion(
             AccordionProps {
-                title: "Details",
+                title: Box::new(|| "Details".to_string()),
                 ..Default::default()
             },
             slot_with_body("Body"),

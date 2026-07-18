@@ -30,12 +30,26 @@ pub struct ComponentSig {
     /// closure (re-read each frame) instead of a resolved `Color`, so a theme token or `$signal` colour
     /// re-colours live. Empty for scanned `.rsx` components; set only for the built-in component catalogue.
     pub color_fields: Vec<String>,
+    /// Prop fields whose value is a reactive string: the caller emits them as a `Box<dyn Fn() -> String>`
+    /// closure (re-read each frame) instead of a `&'static str`, so a `t"key"` translation or `$signal`
+    /// string re-renders live on a locale/state change. Mirrors [`Self::color_fields`]; scanned from a
+    /// `.rsx`'s `Box<dyn Fn() -> String>` fields and listed explicitly for the built-in component catalogue.
+    pub text_fields: Vec<String>,
     /// Prop fields the callee declares `Option<...>` (so `Default` yields `None`): the caller wraps a
     /// provided value in `Some(...)` and lets an omitted one fall to `..Default::default()`. Lets a widget
     /// expose a `RwSignal<T>` or a required `Box<dyn Fn(..)>` field — neither of which is `Default` — while
     /// still deriving `Default` for its other props. Scanned from a `.rsx`'s `Option<...>` fields; listed
     /// explicitly for the built-in component catalogue.
     pub optional_fields: Vec<String>,
+}
+
+impl ComponentSig {
+    /// Marks `fields` as reactive string props (`Box<dyn Fn() -> String>`), used when declaring the built-in
+    /// component catalogue.
+    fn with_text(mut self, fields: &[&str]) -> Self {
+        self.text_fields = fields.iter().map(|f| f.to_string()).collect();
+        self
+    }
 }
 
 /// Signatures for the built-in component catalogue (`ui-components`, opt-in via the `components` feature). These
@@ -51,6 +65,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         prop_fields: fields.iter().map(|f| f.to_string()).collect(),
         has_slot,
         color_fields: color.iter().map(|f| f.to_string()).collect(),
+        text_fields: Vec::new(),
         optional_fields: optional.iter().map(|f| f.to_string()).collect(),
     };
     vec![
@@ -61,10 +76,17 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 false,
                 &["fill", "outline"],
                 &[],
-            ),
+            )
+            .with_text(&["label"]),
         ),
-        ("heading", s(&["text"], false, &[], &[])),
-        ("section", s(&["title"], true, &[], &[])),
+        (
+            "heading",
+            s(&["text"], false, &[], &[]).with_text(&["text"]),
+        ),
+        (
+            "section",
+            s(&["title"], true, &[], &[]).with_text(&["title"]),
+        ),
         // Form controls (built on box/text/on_press/on_drag/input). A bound `RwSignal` field is `Option`
         // (so `Props` derives `Default`): `None` = uncontrolled, `Some` = caller-bound.
         (
@@ -74,7 +96,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 false,
                 &["color"],
                 &["checked", "on_toggle"],
-            ),
+            )
+            .with_text(&["label"]),
         ),
         (
             "toggle",
@@ -83,7 +106,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 false,
                 &["color"],
                 &["checked", "on_toggle"],
-            ),
+            )
+            .with_text(&["label"]),
         ),
         (
             "radio",
@@ -92,7 +116,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 false,
                 &["color"],
                 &["selected", "on_select"],
-            ),
+            )
+            .with_text(&["label"]),
         ),
         (
             "slider",
@@ -111,7 +136,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 false,
                 &["color", "track_color"],
                 &["value", "on_change"],
-            ),
+            )
+            .with_text(&["label"]),
         ),
         (
             "text_field",
@@ -127,7 +153,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 false,
                 &["color"],
                 &["value", "on_submit"],
-            ),
+            )
+            .with_text(&["placeholder", "label"]),
         ),
         // Overlay-backed (built on the `overlay` portal + anchor).
         (
@@ -146,7 +173,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 false,
                 &["color"],
                 &["on_select"],
-            ),
+            )
+            .with_text(&["label"]),
         ),
         (
             "modal",
@@ -155,7 +183,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 true,
                 &["color"],
                 &["open", "on_close"],
-            ),
+            )
+            .with_text(&["title"]),
         ),
         (
             "drawer",
@@ -166,7 +195,10 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 &["open", "on_close"],
             ),
         ),
-        ("tooltip", s(&["text", "color"], true, &["color"], &[])),
+        (
+            "tooltip",
+            s(&["text", "color"], true, &["color"], &[]).with_text(&["text"]),
+        ),
         // Presentation & indicators.
         (
             "progress",
@@ -178,7 +210,10 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
             ),
         ),
         ("spinner", s(&["color", "size"], false, &["color"], &[])),
-        ("badge", s(&["label", "color"], false, &["color"], &[])),
+        (
+            "badge",
+            s(&["label", "color"], false, &["color"], &[]).with_text(&["label"]),
+        ),
         (
             "chip",
             s(
@@ -186,7 +221,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 false,
                 &["color"],
                 &["on_close"],
-            ),
+            )
+            .with_text(&["label"]),
         ),
         // Navigation & disclosure.
         (
@@ -200,7 +236,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         ),
         (
             "accordion",
-            s(&["title", "open", "color"], true, &["color"], &["open"]),
+            s(&["title", "open", "color"], true, &["color"], &["open"]).with_text(&["title"]),
         ),
         (
             "stepper",
@@ -231,8 +267,10 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
         props_default,
         prop_fields,
         has_slot: view_uses_slot(&doc.view.nodes),
-        // Scanned `.rsx` components declare no reactive colour props; only the built-in component catalogue does.
+        // Scanned `.rsx` components declare no reactive colour/text props; only the built-in catalogue does, so
+        // a local component's `&'static str` label stays a literal.
         color_fields: Vec::new(),
+        text_fields: Vec::new(),
         optional_fields,
     }
 }

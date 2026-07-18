@@ -7,7 +7,7 @@ use rsx_parser::{Attr, Element, ViewNode};
 use crate::naming::{is_ident, to_pascal_case, to_snake_case};
 use crate::style::{format_f32, hex_to_color_expr};
 
-use super::signals::{rust_str, wrap_signal_clones};
+use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
@@ -81,6 +81,7 @@ impl ViewGen<'_> {
         let props_default = sig.is_some_and(|s| s.props_default);
         let field_count = sig.map(|s| s.prop_fields.len());
         let color_fields: &[String] = sig.map_or(&[], |s| s.color_fields.as_slice());
+        let text_fields: &[String] = sig.map_or(&[], |s| s.text_fields.as_slice());
         let optional_fields: &[String] = sig.map_or(&[], |s| s.optional_fields.as_slice());
         // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
         // `use super::*` glob at crate root) or in a component library re-exported through `use rsx::*`.
@@ -91,6 +92,8 @@ impl ViewGen<'_> {
                 .map(|attr| {
                     let value = if color_fields.iter().any(|f| f == &attr.key) {
                         self.component_color_attr_expr(attr)
+                    } else if text_fields.iter().any(|f| f == &attr.key) {
+                        self.component_text_attr_expr(attr)
                     } else {
                         self.component_attr_expr(attr)
                     };
@@ -139,6 +142,23 @@ impl ViewGen<'_> {
     fn component_color_attr_expr(&self, attr: &Attr) -> String {
         let color = self.color_expr(&attr.value);
         let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {color}"));
+        format!("Box::new({wrapped})")
+    }
+
+    /// A reactive string prop (e.g. a button's `label`): a `move ||` closure re-read every frame, so a
+    /// `t"key"` translation re-renders on a locale switch and a `$signal` string re-renders on state change.
+    /// Mirrors [`Self::component_color_attr_expr`]; the Props field is expected to be `Box<dyn Fn() -> String>`.
+    /// A `t"key"` value becomes a catalog lookup, a plain `"literal"` a static string, and a `$signal`/expr a
+    /// reactive read.
+    fn component_text_attr_expr(&self, attr: &Attr) -> String {
+        let body = if attr.i18n {
+            self.i18n_lookup(&attr.value)
+        } else if attr.is_quoted {
+            format!("{}.to_string()", rust_str(&attr.value))
+        } else {
+            substitute_reads(attr.value.trim())
+        };
+        let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {body}"));
         format!("Box::new({wrapped})")
     }
 

@@ -24,7 +24,7 @@ const BUBBLE_TEXT_SIZE: f32 = 12.0;
 /// portalled to the top layer and translated to the trigger's rect, so it escapes clipping and only itself
 /// blocks). High-level sugar; lives in `ui-components`, not the kernel.
 pub struct TooltipProps {
-    pub text: &'static str,
+    pub text: Box<dyn Fn() -> String>,
     /// Bubble surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `DEFAULT_BUBBLE`. A closure
     /// (re-read every frame) so a theme token or `$signal` colour re-colours live.
     pub color: Box<dyn Fn() -> Color>,
@@ -33,7 +33,7 @@ pub struct TooltipProps {
 impl Default for TooltipProps {
     fn default() -> Self {
         Self {
-            text: "",
+            text: Box::new(String::new),
             color: Box::new(|| Color::TRANSPARENT),
         }
     }
@@ -58,7 +58,9 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
     let trigger_rect = track_layout(trigger_node).expect("trigger container is registered");
 
     // The bubble is a fresh `text` each hover (rebuildable — no slot children to preserve), so no take-once
-    // cell here; keying on `hovered` mounts/disposes the anchored overlay like a reactive `if`.
+    // cell here; keying on `hovered` mounts/disposes the anchored overlay like a reactive `if`. Both `text`
+    // and `color` are re-erased to `Rc` so each remount can clone them into a fresh bubble.
+    let text: shared::ReactiveText = Rc::from(text);
     let color: shared::ReactiveColor = Rc::from(color);
     let key_hovered = hovered.clone();
     let bubble = ReactiveList::new(
@@ -71,7 +73,12 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
                     vec![],
                 )?));
             }
-            build_bubble(text, color.clone(), trigger_node, trigger_rect.clone())
+            build_bubble(
+                text.clone(),
+                color.clone(),
+                trigger_node,
+                trigger_rect.clone(),
+            )
         },
     )?;
 
@@ -86,7 +93,7 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
 /// below the trigger (via `absolute_rect`, so it works even when the trigger is in a separately-computed
 /// sub-root) inside a NON-blocking overlay (a tooltip must not eat clicks on the page).
 fn build_bubble(
-    text: &'static str,
+    text: shared::ReactiveText,
     color: shared::ReactiveColor,
     trigger_node: ui_core::NodeId,
     trigger_rect: reactive_core::RwSignal<geometry_core::Rect>,
@@ -96,7 +103,7 @@ fn build_bubble(
     // `auto` (measured) so the bubble text gets its intrinsic WIDTH in the row chip; a plain `Text::new`
     // only stretches its cross-axis (height in a row), leaving width 0 and the tooltip empty.
     let label = Text::auto(
-        move || text.to_string(),
+        move || text(),
         LayoutStyle::new(),
         || TextStyle::new(BUBBLE_TEXT_SIZE, BUBBLE_INK),
     )?;
@@ -160,7 +167,7 @@ mod tests {
         let slots = slot_with_trigger();
         let tooltip = tooltip(
             TooltipProps {
-                text: "Helpful hint",
+                text: Box::new(|| "Helpful hint".to_string()),
                 ..Default::default()
             },
             slots,

@@ -62,6 +62,32 @@ mod tests {
     }
 
     #[test]
+    fn i18n_component_label_emits_reactive_lookup() {
+        // A built-in component's text prop written as `t"key"` becomes a reactive catalog lookup inside the
+        // `Box<dyn Fn() -> String>` the prop now takes; a plain quoted label becomes a static string closure.
+        let out =
+            transpile_source_with_theme("[view]\nbutton label:t\"btn.save\"\n", "demo", None, None)
+                .unwrap();
+        assert!(
+            out.rust_code
+                .contains("label: Box::new(move || rsx::i18n::translate"),
+            "{}",
+            out.rust_code
+        );
+        assert!(out.rust_code.contains("\"btn.save\""), "{}", out.rust_code);
+        let plain =
+            transpile_source_with_theme("[view]\nbutton label:\"Save\"\n", "demo", None, None)
+                .unwrap();
+        assert!(
+            plain
+                .rust_code
+                .contains("label: Box::new(move || \"Save\".to_string())"),
+            "{}",
+            plain.rust_code
+        );
+    }
+
+    #[test]
     fn source_map_points_generated_logic_back_to_rsx() {
         // rsx lines (1-based): 1 [logic], 2 derive, 3 struct, 4 body field, 5 close, 6 let, 8 [view], 9 col.
         let src = "[logic]\n#[derive(Props)]\npub struct Props {\n    pub body: &'static st,\n}\nlet count = signal(0i32);\n\n[view]\ncol\n";
@@ -194,7 +220,7 @@ col @card
         assert!(code.contains("move || format!(\"Count: {}\", { count.get() })"));
         // `button` is now a widget component call, not the removed `Button::new` builtin.
         assert!(code.contains("button(ButtonProps {"));
-        assert!(code.contains("label: \"Increment\""));
+        assert!(code.contains("label: Box::new(move || \"Increment\".to_string())"));
         // Its `fill` is a reactive colour closure; with no theme it reads the [style] const.
         assert!(code.contains("fill: Box::new(move || COLOR_PRIMARY)"));
         assert!(code.contains("count.update(|n| *n += 1)"));
@@ -382,12 +408,16 @@ col @card
         );
         // `section` is a slotted component call carrying its title...
         assert!(
-            code.contains("section(SectionProps { title: \"Cards\" }"),
+            code.contains(
+                "section(SectionProps { title: Box::new(move || \"Cards\".to_string()) }"
+            ),
             "expected section component call in:\n{code}"
         );
         // ...and `heading` a plain component call carrying its text.
         assert!(
-            code.contains("heading(HeadingProps { text: \"Subtitle\" })"),
+            code.contains(
+                "heading(HeadingProps { text: Box::new(move || \"Subtitle\".to_string()) })"
+            ),
             "expected heading component call in:\n{code}"
         );
     }

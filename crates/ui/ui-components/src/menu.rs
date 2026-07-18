@@ -15,7 +15,7 @@ use ui_core::track_layout;
 /// lives in `ui-components`, not the kernel.
 pub struct MenuProps {
     /// The trigger button's label.
-    pub label: &'static str,
+    pub label: Box<dyn Fn() -> String>,
     /// The action items, listed in the panel in order.
     pub items: Vec<&'static str>,
     /// Fired with the index of the chosen item when it is picked.
@@ -28,7 +28,7 @@ pub struct MenuProps {
 impl Default for MenuProps {
     fn default() -> Self {
         Self {
-            label: "",
+            label: Box::new(String::new),
             items: Vec::new(),
             on_select: None,
             color: Box::new(|| Color::TRANSPARENT),
@@ -37,16 +37,9 @@ impl Default for MenuProps {
 }
 
 // A menu carries no bound selection (`selected: None`), so its rows are one-shot actions: no index is written
-// back and no row is highlighted. The label is static, hence the `move || label.to_string()` trigger closure.
+// back and no row is highlighted. The reactive `label` closure is handed straight to the dropdown trigger.
 pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let label = props.label;
-    dropdown::dropdown(
-        move || label.to_string(),
-        props.items,
-        props.color,
-        props.on_select,
-        None,
-    )
+    dropdown::dropdown(props.label, props.items, props.color, props.on_select, None)
 }
 
 #[cfg(test)]
@@ -93,7 +86,7 @@ mod tests {
     fn builds_and_lays_out() {
         reset_layout_runtime();
         let item = menu(MenuProps {
-            label: "Actions",
+            label: Box::new(|| "Actions".to_string()),
             items: vec!["Rename", "Duplicate", "Delete"],
             ..Default::default()
         })
@@ -122,7 +115,7 @@ mod tests {
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         let item = menu(MenuProps {
-            label: "Actions",
+            label: Box::new(|| "Actions".to_string()),
             items: vec!["Rename", "Duplicate", "Delete"],
             on_select: Some(Box::new(move |i| sink.set(Some(i)))),
             ..Default::default()

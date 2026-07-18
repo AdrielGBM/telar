@@ -24,9 +24,9 @@ pub struct TextFieldProps {
     pub value: Option<RwSignal<String>>,
     /// Muted text shown in the box in place of the `Input` while `value` is empty — see the module's
     /// `text_field` doc for the swap's focus limitation.
-    pub placeholder: &'static str,
+    pub placeholder: Box<dyn Fn() -> String>,
     /// A small caption stacked above the box; omitted entirely (no extra row) when empty.
-    pub label: &'static str,
+    pub label: Box<dyn Fn() -> String>,
     /// Box width in logical px. `0.0` (the default) means "unset" and resolves to `DEFAULT_WIDTH`.
     pub width: f32,
     /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset" -> `DEFAULT_INK`. A
@@ -41,8 +41,8 @@ impl Default for TextFieldProps {
     fn default() -> Self {
         Self {
             value: None,
-            placeholder: "",
-            label: "",
+            placeholder: Box::new(String::new),
+            label: Box::new(String::new),
             width: 0.0,
             color: Box::new(|| Color::TRANSPARENT),
             on_submit: None,
@@ -84,7 +84,7 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
             )
         },
     )?
-    .placeholder(placeholder);
+    .placeholder(placeholder());
     if let Some(cb) = on_submit {
         input = input.on_submit(move || cb());
     }
@@ -105,11 +105,11 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         vec![box_item(field)],
     )?;
 
-    if label.is_empty() {
+    if label().is_empty() {
         return Ok(box_item(box_));
     }
     let caption = Text::new(
-        move || label.to_string(),
+        move || label(),
         LayoutStyle::new().height(LABEL_SIZE * 1.4),
         || TextStyle::new(LABEL_SIZE, muted_color()),
     )?;
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn empty_value_renders_placeholder() {
         let (field, _) = laid_out_field(TextFieldProps {
-            placeholder: "Search…",
+            placeholder: Box::new(|| "Search…".to_string()),
             ..Default::default()
         });
         let tree = ComponentList::new(field);
@@ -253,8 +253,8 @@ mod tests {
     #[test]
     fn label_adds_a_caption_row_above_the_box() {
         let (field, _) = laid_out_field(TextFieldProps {
-            label: "Name",
-            placeholder: "Type your name",
+            label: Box::new(|| "Name".to_string()),
+            placeholder: Box::new(|| "Type your name".to_string()),
             ..Default::default()
         });
         let tree = ComponentList::new(field);

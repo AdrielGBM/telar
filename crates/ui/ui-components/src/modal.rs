@@ -22,7 +22,7 @@ const CLOSE_SIZE: f32 = 13.0;
 pub struct ModalProps {
     /// Bound open/close state. `None` (the default) never opens (no signal to read); `Some` drives the modal.
     pub open: Option<RwSignal<bool>>,
-    pub title: &'static str,
+    pub title: Box<dyn Fn() -> String>,
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.
     pub on_close: Option<Box<dyn Fn()>>,
     /// Dialog surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `shared::DEFAULT_SURFACE`. A closure
@@ -34,7 +34,7 @@ impl Default for ModalProps {
     fn default() -> Self {
         Self {
             open: None,
-            title: "",
+            title: Box::new(String::new),
             on_close: None,
             color: Box::new(|| Color::TRANSPARENT),
         }
@@ -58,14 +58,14 @@ pub fn modal(props: ModalProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>,
 /// Builds the scrim + centred opaque card for the open state: scrim (dims + dismisses) > centred card (title
 /// row with Close, then the body). The card swallows its own taps so a click inside it never dismisses.
 fn build_open_modal(
-    title: &'static str,
+    title: Box<dyn Fn() -> String>,
     body: Vec<Box<dyn LayoutItem>>,
     color: Box<dyn Fn() -> Color>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // `auto` (measured) so the title/Close get their intrinsic WIDTH in the header row; a plain `Text::new`
     // only stretches its cross-axis (height in a row), leaving width 0 and the text invisible.
-    let heading = Text::auto(move || title.to_string(), LayoutStyle::new(), heading_style)?;
+    let heading = Text::auto(move || title(), LayoutStyle::new(), heading_style)?;
 
     let close_label = Text::auto(
         || "Close".to_string(),
@@ -165,7 +165,7 @@ mod tests {
         let modal = modal(
             ModalProps {
                 open: Some(open.clone()),
-                title: "Confirm",
+                title: Box::new(|| "Confirm".to_string()),
                 ..Default::default()
             },
             slots,
@@ -231,7 +231,7 @@ mod tests {
         let slots = slot_with_body("Body");
         let modal = modal(
             ModalProps {
-                title: "Confirm",
+                title: Box::new(|| "Confirm".to_string()),
                 ..Default::default()
             },
             slots,
