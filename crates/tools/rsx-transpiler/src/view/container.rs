@@ -293,6 +293,7 @@ fn parse_inline_paint_attrs(value: &str) -> Vec<Attr> {
                 key: key.to_string(),
                 value: val.to_string(),
                 is_quoted: false,
+                i18n: false,
                 value_start: 0,
             })
         })

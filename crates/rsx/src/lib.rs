@@ -54,6 +54,11 @@ pub use layout_core::{
 };
 // Always-on, no feature gate (D2 in docs/animations.md): kernel functionality, not an opt-in module. The transpiler emits `motion::Animated`/`motion::tween`/`motion::spring`/`motion::Easing` paths against this re-export.
 pub use motion_core as motion;
+// Always-on for the same reason as `motion`: the transpiler emits `i18n::translate` paths and the baked
+// `crate::__rsx_i18n` catalog module references `i18n::{Catalog, Message, Part, Entry}`, so the facade must
+// always expose them. Inert unless the app has a `locales/` catalog — nothing is baked or linked otherwise.
+pub use i18n_core as i18n;
+pub use i18n_core::{current_locale, detect_system_locale, init_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand, WindowConfig, WindowPosition,
@@ -105,10 +110,11 @@ pub use ui_core::{
     EventResult, Image, Input, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path,
     ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport, ScrollbarStyle, Slots,
     StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole,
-    SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item, box_transform,
-    compute_layout, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
-    interactive_rects, mark_dirty, new_container, new_leaf, relayout_if_dirty, reset_layout_runtime,
-    set_display, set_overlay_host, surface_frame, track_layout,
+    SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item,
+    box_transform, compute_layout, focus, fragment, fragment_gap, fragment_positional,
+    fragment_positional_gap, interactive_rects, mark_dirty, new_container, new_leaf,
+    relayout_if_dirty, reset_layout_runtime, set_display, set_overlay_host, surface_frame,
+    track_layout,
 };
 
 #[cfg(feature = "components")]
@@ -146,7 +152,7 @@ pub use runner::set_default_font_family;
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
 pub use runner::{run_app_with_name, run_multi_app_with_name};
 
-pub use rsx_macros::{app, rsx_modules};
+pub use rsx_macros::{app, rsx_modules, t};
 
 #[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]
 pub use preview_runner::make_hot_preview_app;

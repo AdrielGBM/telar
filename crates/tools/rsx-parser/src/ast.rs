@@ -106,6 +106,9 @@ pub struct Element {
     /// Byte offset in the source where the (de-quoted) `content` begins, or the line start when the
     /// element has no quoted content. Used to map `{…}` interpolation expressions back to source.
     pub content_start: usize,
+    /// `true` when the content was written as an i18n key (`text t"nav.title"`): the transpiler emits a
+    /// catalog lookup instead of a literal string.
+    pub content_i18n: bool,
 }
 
 /// A `key: value` attribute on an element. The value is kept raw (closures included).
@@ -116,6 +119,9 @@ pub struct Attr {
     pub key: String,
     pub value: String,
     pub is_quoted: bool,
+    /// `true` when the value was written as an i18n key (`label:t"buttons.save"`): the transpiler emits a
+    /// catalog lookup instead of a literal string. Implies `is_quoted`.
+    pub i18n: bool,
     /// Byte offset in the source where `value` begins. Lets the transpiler map a closure / pass-through
     /// attribute value back to source; excluded from `PartialEq` so it stays positional metadata.
     pub value_start: usize,
@@ -125,7 +131,10 @@ pub struct Attr {
 // `Attr` literals with `value_start: 0` and still match a parsed attribute.
 impl PartialEq for Attr {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.value == other.value && self.is_quoted == other.is_quoted
+        self.key == other.key
+            && self.value == other.value
+            && self.is_quoted == other.is_quoted
+            && self.i18n == other.i18n
     }
 }
 

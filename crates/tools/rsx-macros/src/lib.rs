@@ -4,7 +4,21 @@ use quote::{ToTokens, quote};
 use std::path::PathBuf;
 
 mod app_input;
+mod t_macro;
 use app_input::{AppInput, preview_const_ident};
+
+/// Translates a catalog key to a `String`, substituting named arguments: `t!("battery.remaining", time = t)`.
+///
+/// The key and its arguments are validated against the on-disk `locales/` catalog at compile time (an unknown
+/// key or wrong argument is a `compile_error!`). At runtime it reads the active locale reactively, so calling it
+/// inside a widget's content closure makes that widget re-render on a language switch.
+#[proc_macro]
+pub fn t(input: TokenStream) -> TokenStream {
+    match syn::parse::<t_macro::TInput>(input) {
+        Ok(parsed) => t_macro::expand(parsed).into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
 
 #[proc_macro]
 pub fn app(input: TokenStream) -> TokenStream {
@@ -431,6 +445,37 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
                 return Err(quote! { compile_error!(#msg) });
             }
         }
+    }
+
+    // Bake the i18n catalog when a `locales/` directory exists: parse every `locales/<tag>.toml` into one
+    // generated module wired at the crate root, so `t!`/markup call sites reference `crate::__rsx_i18n::CATALOG`.
+    // Inert (nothing generated) when there is no catalog, mirroring how svg baking only fires for `svg` elements.
+    match rsx_transpiler::parse_catalog(&manifest_dir) {
+        Ok(Some(catalog)) => {
+            let src = rsx_transpiler::bake_catalog_to_source(&catalog);
+            let out_path = generated_dir.join("__i18n.rs");
+            let needs_write = std::fs::read_to_string(&out_path)
+                .map(|existing| existing != src)
+                .unwrap_or(true);
+            if needs_write && let Err(e) = std::fs::write(&out_path, &src) {
+                let msg = format!("Failed to write {}: {e}", out_path.display());
+                return Err(quote! { compile_error!(#msg) });
+            }
+            let out_path_str = out_path.to_string_lossy().to_string();
+            let mod_ident = Ident::new(rsx_transpiler::I18N_MODULE, Span::call_site());
+            include_stmts.extend(quote! {
+                #[path = #out_path_str]
+                #[allow(dead_code)]
+                pub mod #mod_ident;
+            });
+            // Re-bake when any locale file changes, like a `.rsx` edit.
+            for file in rsx_transpiler::catalog_files(&manifest_dir) {
+                let path_str = file.to_string_lossy().to_string();
+                rerun_stmts.extend(quote! { const _: &str = include_str!(#path_str); });
+            }
+        }
+        Ok(None) => {}
+        Err(msg) => return Err(quote! { compile_error!(#msg) }),
     }
 
     Ok(TranspileOutput {

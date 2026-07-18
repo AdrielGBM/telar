@@ -264,6 +264,7 @@ fn parse_element_header(
         children: Vec::new(),
         line,
         content_start,
+        content_i18n: false,
     };
 
     let chars: Vec<char> = content.chars().collect();
@@ -279,14 +280,15 @@ fn parse_element_header(
             break;
         }
 
-        if chars[i] == '"' || (chars[i] == 'r' && chars.get(i + 1) == Some(&'"')) {
+        if let Some((str_at, is_key)) = string_start(&chars, i) {
             let (text, next, content_at) =
-                read_string_value(&chars, i).ok_or_else(|| ParseError {
+                read_string_value(&chars, str_at).ok_or_else(|| ParseError {
                     message: "unterminated string literal".to_string(),
                     line,
                 })?;
             element.content = Some(text);
             element.content_start = content_start + byte_at(&chars, content_at);
+            element.content_i18n = is_key;
             i = next;
             continue;
         }
@@ -332,6 +334,7 @@ fn parse_element_header(
                 key: key.trim().to_string(),
                 value: value.trim().to_string(),
                 is_quoted: false,
+                i18n: false,
                 value_start: content_start + byte_at(&chars, vs),
             });
             i = next;
@@ -378,18 +381,17 @@ fn parse_element_header(
                     key: key.trim().to_string(),
                     value: value.trim().to_string(),
                     is_quoted: false,
+                    i18n: false,
                     value_start: content_start + byte_at(&chars, val_start),
                 });
                 break;
             }
 
             let mut k = val_start;
-            // Allow quoted attribute values, escaped (`"…"`) or raw (`r"…"`).
-            if chars.get(k) == Some(&'"')
-                || (chars.get(k) == Some(&'r') && chars.get(k + 1) == Some(&'"'))
-            {
+            // Allow quoted attribute values, escaped (`"…"`), raw (`r"…"`), or an i18n key (`t"…"`).
+            if let Some((str_at, is_key)) = string_start(&chars, k) {
                 let (text, next, content_at) =
-                    read_string_value(&chars, k).ok_or_else(|| ParseError {
+                    read_string_value(&chars, str_at).ok_or_else(|| ParseError {
                         message: "unterminated string literal in attribute value".to_string(),
                         line,
                     })?;
@@ -397,6 +399,7 @@ fn parse_element_header(
                     key: key.trim().to_string(),
                     value: text,
                     is_quoted: true,
+                    i18n: is_key,
                     value_start: content_start + byte_at(&chars, content_at),
                 });
                 i = next;
@@ -425,6 +428,7 @@ fn parse_element_header(
                 key: key.trim().to_string(),
                 value,
                 is_quoted: false,
+                i18n: false,
                 value_start: content_start + byte_at(&chars, val_start),
             });
             i = k;
@@ -449,6 +453,7 @@ fn parse_element_header(
                 key: token,
                 value: String::new(),
                 is_quoted: false,
+                i18n: false,
                 value_start: content_start + byte_at(&chars, token_start),
             });
         }
@@ -525,6 +530,23 @@ pub(super) fn read_raw_quoted(chars: &[char], start: usize) -> Option<(String, u
         i += 1;
     }
     None
+}
+
+/// Detects a string value starting at `i`: a plain `"…"`, raw `r"…"`, or an i18n key `t"…"`. Returns the index
+/// [`read_string_value`] should read from (past any `t` prefix) and whether it is an i18n key. `None` when no
+/// string begins at `i`. Only `t` *immediately* followed by a quote is a key marker, so a tag/token like `text`
+/// is never mistaken for one.
+pub(super) fn string_start(chars: &[char], i: usize) -> Option<(usize, bool)> {
+    let is_str = |k: usize| {
+        chars.get(k) == Some(&'"') || (chars.get(k) == Some(&'r') && chars.get(k + 1) == Some(&'"'))
+    };
+    if is_str(i) {
+        Some((i, false))
+    } else if chars.get(i) == Some(&'t') && is_str(i + 1) {
+        Some((i + 1, true))
+    } else {
+        None
+    }
 }
 
 /// Reads a string value at `k` — an escaped `"…"` or a raw `r"…"`. Returns `(content, index past it, char

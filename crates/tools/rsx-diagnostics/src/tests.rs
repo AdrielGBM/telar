@@ -16,6 +16,7 @@ fn element(classes: &[&str], attributes: Vec<Attr>, line: usize) -> Element {
         children: Vec::new(),
         line,
         content_start: 0,
+        content_i18n: false,
     }
 }
 
@@ -71,6 +72,7 @@ fn unknown_color_errors_only_when_theme_configured() {
         key: "color".into(),
         value: "nope".into(),
         is_quoted: false,
+        i18n: false,
         value_start: 0,
     };
     let doc = document(
@@ -101,6 +103,7 @@ fn themed_doc_with_attrs(attrs: Vec<(&str, &str)>) -> RsxDocument {
             key: key.into(),
             value: value.into(),
             is_quoted: false,
+            i18n: false,
             value_start: 0,
         })
         .collect();
@@ -173,6 +176,7 @@ fn widget_element(name: &str, line: usize) -> Element {
         children: Vec::new(),
         line,
         content_start: 0,
+        content_i18n: false,
     }
 }
 

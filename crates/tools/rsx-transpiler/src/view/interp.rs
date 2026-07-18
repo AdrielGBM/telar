@@ -33,6 +33,17 @@ impl ViewGen<'_> {
         format!("move || format!({}, {args_joined})", rust_str(&fmt))
     }
 
+    /// The runtime catalog-lookup expression for an i18n key written in markup (`t"key"`). Reads the active
+    /// locale reactively, so wrapping it in a `move ||` content/label closure makes the widget live-switch on a
+    /// language change. Markup keys take no arguments (parameterized strings use the Rust `t!` macro).
+    pub(super) fn i18n_lookup(&self, key: &str) -> String {
+        format!(
+            "rsx::i18n::translate(&{}, {}, &[])",
+            crate::I18N_CATALOG_PATH,
+            rust_str(key)
+        )
+    }
+
     /// Renders an interpolation expression: a `$ident` reactive read becomes `ident.get()`; a `$`-free expression is emitted verbatim (a plain value). `raw_start` is the source byte offset of the raw (untrimmed) expression text; an [`expr_marker`] is emitted right before a verbatim (`$`-free) expression so the analyzer can complete inside it.
     fn render_interp_expr(&self, expr: &str, raw_start: usize) -> String {
         let trimmed = expr.trim();

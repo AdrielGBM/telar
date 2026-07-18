@@ -15,7 +15,11 @@ impl ViewGen<'_> {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
-        let content_fn = self.interpolate_content(content, el.content_start);
+        let content_fn = if el.content_i18n {
+            format!("move || {}", self.i18n_lookup(content))
+        } else {
+            self.interpolate_content(content, el.content_start)
+        };
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();

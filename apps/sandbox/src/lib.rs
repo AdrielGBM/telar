@@ -12,6 +12,25 @@ rsx::app!(
 );
 
 #[cfg(test)]
+mod i18n_smoke {
+    // Exercises the whole i18n pipeline end to end: the build-time baker turned `locales/*.toml` into
+    // `crate::__rsx_i18n::CATALOG`, `t!` validated its keys/args at compile time, and `translate` renders the
+    // active locale — switching the locale changes the output.
+    #[test]
+    fn catalog_translates_and_switches() {
+        rsx::set_locale("en");
+        assert_eq!(rsx::t!("greeting", name = "Ada"), "Hello, Ada!");
+        assert_eq!(rsx::t!("nav.overview"), "Overview");
+        rsx::set_locale("es");
+        assert_eq!(rsx::t!("greeting", name = "Ada"), "Hola, Ada!");
+        assert_eq!(rsx::t!("nav.overview"), "Resumen");
+        // An unknown locale falls back to the default (en).
+        rsx::set_locale("fr");
+        assert_eq!(rsx::t!("nav.overview"), "Overview");
+    }
+}
+
+#[cfg(test)]
 mod smoke {
     use rsx::{App, AvailableSpace, Event, compute_layout};
 

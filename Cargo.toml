@@ -32,7 +32,7 @@ members = [
     "crates/tools/rsx-workspace",
     "apps/sandbox",
     "apps/landing",
-    "crates/ui/ui-components",
+    "crates/ui/ui-components", "crates/i18n/i18n-core",
 ]
 
 default-members = [
@@ -107,6 +107,7 @@ motion-core = { path = "crates/motion/motion-core" }
 layout-core = { path = "crates/layout/layout-core" }
 layout-reactive = { path = "crates/layout/layout-reactive" }
 theme-core = { path = "crates/ui/theme-core" }
+i18n-core = { path = "crates/i18n/i18n-core" }
 ui-core = { path = "crates/ui/ui-core" }
 ui-tree = { path = "crates/ui/ui-tree" }
 ui-components = { path = "crates/ui/ui-components" }

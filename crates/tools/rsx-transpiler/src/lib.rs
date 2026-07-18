@@ -3,6 +3,7 @@
 mod codegen;
 mod discovery;
 mod error;
+mod i18n;
 pub mod naming;
 mod registry;
 mod signal_scan;
@@ -19,6 +20,10 @@ pub use discovery::{
     relative_output_path, relative_stem,
 };
 pub use error::TranspileError;
+pub use i18n::{
+    CatalogModel, I18N_CATALOG_PATH, I18N_MODULE, MessageModel, PartModel, catalog_files,
+    parse_catalog, parse_message, to_source as bake_catalog_to_source,
+};
 pub use registry::{
     TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, color_keywords, is_builtin_tag,
     is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, tag_attr_keys,
@@ -29,6 +34,32 @@ pub use signal_scan::{SignalInfo, scan_signals};
 mod tests {
     use super::*;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn i18n_markup_text_emits_catalog_lookup() {
+        // A `t"key"` text node compiles to a reactive catalog lookup, not a literal string.
+        let out = transpile_source_with_theme("[view]\ntext t\"nav.title\"\n", "demo", None, None)
+            .unwrap();
+        assert!(
+            out.rust_code.contains("rsx::i18n::translate"),
+            "expected a catalog lookup:\n{}",
+            out.rust_code
+        );
+        assert!(
+            out.rust_code.contains("crate::__rsx_i18n::CATALOG"),
+            "{}",
+            out.rust_code
+        );
+        assert!(out.rust_code.contains("\"nav.title\""), "{}", out.rust_code);
+        // A plain (non-`t`) text node stays a literal, unaffected.
+        let plain =
+            transpile_source_with_theme("[view]\ntext \"Hi\"\n", "demo", None, None).unwrap();
+        assert!(
+            !plain.rust_code.contains("i18n::translate"),
+            "{}",
+            plain.rust_code
+        );
+    }
 
     #[test]
     fn source_map_points_generated_logic_back_to_rsx() {
@@ -499,9 +530,10 @@ col @card
             code.contains("my_widget(MyWidgetProps {"),
             "should call component fn with Props"
         );
+        // `my_widget` is unregistered (no sig), so its `label` is not a known text prop and stays a literal.
         assert!(
             code.contains("label: \"hello\""),
-            "quoted attr must become string literal"
+            "an unknown component's quoted attr stays a string literal"
         );
         assert!(code.contains("size: 16.0"), "numeric attr must become f32");
     }

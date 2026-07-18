@@ -178,6 +178,7 @@ col @card
                 key: "size".into(),
                 value: "14".into(),
                 is_quoted: false,
+                i18n: false,
                 value_start: 0
             }
         );
@@ -187,6 +188,7 @@ col @card
                 key: "color".into(),
                 value: "dark".into(),
                 is_quoted: false,
+                i18n: false,
                 value_start: 0
             }
         );
@@ -201,6 +203,7 @@ col @card
                 key: "gap".into(),
                 value: "8".into(),
                 is_quoted: false,
+                i18n: false,
                 value_start: 0
             }
         );
@@ -228,6 +231,7 @@ col @card
                 key: "fill".into(),
                 value: "primary".into(),
                 is_quoted: false,
+                i18n: false,
                 value_start: 0
             }
         );

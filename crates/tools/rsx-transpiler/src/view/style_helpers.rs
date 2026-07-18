@@ -27,6 +27,7 @@ impl ViewGen<'_> {
                             key: prop.key.clone(),
                             value: prop.value.clone(),
                             is_quoted: false,
+                            i18n: false,
                             value_start: 0,
                         });
                     }
