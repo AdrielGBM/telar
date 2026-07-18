@@ -157,6 +157,7 @@ impl StyledContainer {
     /// a child widget that handles the press wins, and a scroll gesture started on the box does not fire it.
     pub fn on_press(mut self, f: impl Fn() + 'static) -> Self {
         self.press.set(f);
+        self.mark_interactive();
         self
     }
 
@@ -166,6 +167,7 @@ impl StyledContainer {
     /// late, never at exactly 500ms, and a release before that next check-in is a normal tap.
     pub fn on_long_press(mut self, f: impl Fn() + 'static) -> Self {
         self.press.set_long_press(f);
+        self.mark_interactive();
         self
     }
 
@@ -174,7 +176,15 @@ impl StyledContainer {
     /// coordinate to a value (slider) or an offset (reorder/resize).
     pub fn on_drag(mut self, f: impl Fn(f32, f32) + 'static) -> Self {
         self.drag.set(f);
+        self.mark_interactive();
         self
+    }
+
+    /// Records this box as a pointer target in the per-surface interactive registry, so a surface that carves
+    /// its input region from its content (a click-through overlay) receives input over it. See
+    /// [`crate::interactive_rects`].
+    fn mark_interactive(&self) {
+        crate::input_region::register_interactive(self.node, self.rect.read_only());
     }
 
     /// Fire `f(true)` when the mouse enters the box and `f(false)` when it leaves (mouse only). Independent
@@ -403,6 +413,7 @@ impl Drop for StyledContainer {
         if let Some(id) = self.focus_id {
             focus::unregister(id);
         }
+        crate::input_region::unregister_interactive(self.node);
     }
 }
 
@@ -1087,6 +1098,47 @@ mod tests {
             *seen.borrow(),
             vec![true, false],
             "on_focus fires true on gain then false on loss"
+        );
+    }
+
+    // A pressable box publishes its laid-out rect to the interactive registry (so a carved-input-region surface
+    // receives input over it), and withdraws it on drop.
+    #[test]
+    fn pressable_publishes_rect_to_interactive_registry_and_withdraws_on_drop() {
+        use crate::interactive_rects;
+        reset_layout_runtime();
+        let baseline = interactive_rects().len();
+        let card = StyledContainer::new(
+            LayoutStyle::new().width(120.0).height(40.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(|| {});
+        let node = card.layout_node();
+        // Zero-sized before layout, so it contributes nothing yet.
+        assert_eq!(
+            interactive_rects().len(),
+            baseline,
+            "an unlaid-out pressable contributes no rect"
+        );
+        compute_layout(
+            node,
+            AvailableSpace::Definite(120.0),
+            AvailableSpace::Definite(40.0),
+        )
+        .unwrap();
+        let rects = interactive_rects();
+        assert_eq!(rects.len(), baseline + 1);
+        assert!(
+            rects.iter().any(|r| r.width == 120.0 && r.height == 40.0),
+            "a laid-out pressable reports its rect"
+        );
+        drop(card);
+        assert_eq!(
+            interactive_rects().len(),
+            baseline,
+            "dropping the pressable withdraws its rect"
         );
     }
 }

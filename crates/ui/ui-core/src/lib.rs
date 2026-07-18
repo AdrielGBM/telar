@@ -8,6 +8,7 @@ mod drag;
 pub mod focus;
 mod image;
 mod input;
+mod input_region;
 mod layout_item;
 mod layout_leaf;
 mod line;
@@ -40,6 +41,7 @@ pub use context::{
 };
 pub use image::Image;
 pub use input::Input;
+pub use input_region::{interactive_rects, register_interactive, unregister_interactive};
 pub use layout_item::{ClippedItem, LayoutItem, box_item};
 pub use layout_leaf::LayoutLeaf;
 pub use line::Line;

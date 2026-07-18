@@ -107,8 +107,8 @@ pub use ui_core::{
     SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot,
     SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item, box_transform,
     compute_layout, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
-    mark_dirty, new_container, new_leaf, relayout_if_dirty, reset_layout_runtime, set_display,
-    set_overlay_host, surface_frame, track_layout,
+    interactive_rects, mark_dirty, new_container, new_leaf, relayout_if_dirty, reset_layout_runtime,
+    set_display, set_overlay_host, surface_frame, track_layout,
 };
 
 #[cfg(feature = "components")]
