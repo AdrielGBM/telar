@@ -261,4 +261,18 @@ mod tests {
         assert_eq!(*c.borrow(), 3);
         assert_eq!(*b.borrow(), 1);
     }
+
+    // A signal whose value owns other signal handles must drop cleanly: dropping the outer signal removes its
+    // storage and then drops the value, which re-enters `drop_signal` for the inner handles. If the value were
+    // dropped while the runtime borrow was still held, that re-entry would abort during teardown.
+    #[test]
+    fn dropping_a_signal_whose_value_holds_signals_does_not_double_borrow() {
+        let inner = signal(1i32);
+        let outer = signal(vec![inner.clone()]);
+        drop(inner);
+        drop(outer);
+        // Reaching here without aborting is the assertion; the runtime is still usable afterwards.
+        let after = signal(5i32);
+        assert_eq!(after.get(), 5);
+    }
 }

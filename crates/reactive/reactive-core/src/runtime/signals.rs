@@ -27,16 +27,22 @@ pub(crate) fn clone_signal(id: SignalId) {
 }
 
 pub(crate) fn drop_signal(id: SignalId) {
-    RUNTIME.with(|rt| {
+    // Take the storage out under the borrow, but drop it (and its value) only AFTER the borrow is released.
+    // A signal whose value itself owns signal handles re-enters `drop_signal` as that value drops; dropping it
+    // while still holding the borrow here would double-borrow the runtime and abort during teardown.
+    let removed = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         if !rt.signals.contains(id) {
-            return;
+            return None;
         }
         rt.signals[id].ref_count -= 1;
         if rt.signals[id].ref_count == 0 {
-            rt.signals.remove(id);
+            Some(rt.signals.remove(id))
+        } else {
+            None
         }
     });
+    drop(removed);
 }
 
 pub(crate) fn with_signal_value<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> R {
