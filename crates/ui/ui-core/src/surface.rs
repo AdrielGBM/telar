@@ -78,6 +78,10 @@ pub struct SurfacePlacement {
     pub timeout: Option<Duration>,
     /// The surface passes pointer input through to whatever is beneath it (a click-through OSD).
     pub input_transparent: bool,
+    /// The surface hosts editable text and must be able to take keyboard focus. A backend maps this to
+    /// its own focus model (e.g. layer-shell `on-demand` keyboard interactivity); left off, a panel is
+    /// display-only and never steals the keyboard. Default `false`.
+    pub wants_keyboard: bool,
     /// The monitor to place the surface on by name; `None` = the active/default output.
     pub output: Option<String>,
 }
@@ -94,6 +98,7 @@ impl SurfacePlacement {
             dismiss_on_outside: false,
             timeout: None,
             input_transparent: false,
+            wants_keyboard: false,
             output: None,
         }
     }
@@ -161,6 +166,13 @@ impl SurfacePlacement {
 
     pub fn input_transparent(mut self, transparent: bool) -> Self {
         self.input_transparent = transparent;
+        self
+    }
+
+    /// Opt the surface into keyboard focus, for panels that host editable text (a search box, a note
+    /// title). A backend maps this to its focus model; the default is display-only.
+    pub fn keyboard(mut self, wants_keyboard: bool) -> Self {
+        self.wants_keyboard = wants_keyboard;
         self
     }
 

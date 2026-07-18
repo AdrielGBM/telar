@@ -43,11 +43,11 @@ pub use input::Input;
 pub use layout_item::{ClippedItem, LayoutItem, box_item};
 pub use layout_leaf::LayoutLeaf;
 pub use line::Line;
-pub use overlay::{Overlay, Placement};
+pub use overlay::{Overlay, Placement, anchor_rect};
 pub use path::Path;
 pub use reactive_list::ReactiveList;
 pub use rect::Rectangle;
-pub use scroll_area::{LayoutScrollArea, ScrollbarStyle};
+pub use scroll_area::{LayoutScrollArea, ScrollViewport, ScrollbarStyle};
 pub use slots::Slots;
 pub use styled_container::{StyledContainer, box_transform};
 pub use surface::{

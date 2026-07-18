@@ -2,9 +2,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use geometry_core::Rect;
-use layout_core::{AvailableSpace, LayoutError, LayoutStyle};
+use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, ScrollDelta};
-use reactive_core::{Effect, RwSignal, effect, signal};
+use reactive_core::{Effect, Memo, ReadSignal, RwSignal, effect, memo, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
@@ -156,13 +156,20 @@ pub(crate) struct ScrollCore {
 const SCROLL_TAP_SLOP: f32 = 8.0;
 
 impl ScrollCore {
-    fn new(content_rect_signal: RwSignal<Rect>, content: Box<dyn LayoutItem>) -> Self {
+    /// Adopts externally-created scroll offset signals, so a caller can hand those same signals to the
+    /// content it builds (see [`LayoutScrollArea::new_with`]). Fresh signals give an independent scroll.
+    fn with_offsets(
+        content_rect_signal: RwSignal<Rect>,
+        content: Box<dyn LayoutItem>,
+        scroll_x: RwSignal<f32>,
+        scroll_y: RwSignal<f32>,
+    ) -> Self {
         let content = Rc::new(RefCell::new(content));
         let content_segment = mount_item_segment(Rc::clone(&content));
         Self {
             content_rect_signal,
-            scroll_x: signal(0.0),
-            scroll_y: signal(0.0),
+            scroll_x,
+            scroll_y,
             content,
             content_segment,
             scrollbar_style: ScrollbarStyle::default(),
@@ -279,7 +286,7 @@ impl ScrollArea {
             track_layout(content.layout_node()).expect("content node not registered in ctx");
         Self {
             viewport: Box::new(viewport),
-            core: ScrollCore::new(content_rect_signal, content),
+            core: ScrollCore::with_offsets(content_rect_signal, content, signal(0.0), signal(0.0)),
         }
     }
 }
@@ -292,6 +299,50 @@ impl Component for ScrollArea {
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         self.core.on_event(event, (self.viewport)())
+    }
+}
+
+/// A handle to the enclosing scroll area's live viewport, handed to the content builder by
+/// [`LayoutScrollArea::new_with`]. Because a scroll area lays its content out as its OWN layout root,
+/// every descendant's tracked rect is already in the same content-local space the scroll offset
+/// indexes into — so [`visible`](Self::visible) is a plain rect overlap, no scroll-transform math.
+#[derive(Clone)]
+pub struct ScrollViewport {
+    offset_x: ReadSignal<f32>,
+    offset_y: ReadSignal<f32>,
+    rect: ReadSignal<Rect>,
+}
+
+impl ScrollViewport {
+    /// The live scroll offset `(x, y)` in content-local px.
+    pub fn offset(&self) -> (ReadSignal<f32>, ReadSignal<f32>) {
+        (self.offset_x.clone(), self.offset_y.clone())
+    }
+
+    /// The live viewport rect; its `width`/`height` are the visible window's size.
+    pub fn rect(&self) -> ReadSignal<Rect> {
+        self.rect.clone()
+    }
+
+    /// A reactive flag for whether `item` currently intersects the visible window, grown by `margin` px
+    /// on every side (a prefetch band, so work can start just before the item scrolls into view). `item`
+    /// must be a node inside this scroll's content, so its tracked rect shares the content-local space
+    /// the offset indexes into.
+    pub fn visible(&self, item: NodeId, margin: f32) -> Memo<bool> {
+        let item_rect = track_layout(item).expect("item node not registered in ctx");
+        let offset_x = self.offset_x.clone();
+        let offset_y = self.offset_y.clone();
+        let rect = self.rect.clone();
+        memo(move || {
+            let vp = rect.get();
+            let window = Rect::new(
+                offset_x.get() - margin,
+                offset_y.get() - margin,
+                vp.width + 2.0 * margin,
+                vp.height + 2.0 * margin,
+            );
+            item_rect.get().overlaps(window)
+        })
     }
 }
 
@@ -310,10 +361,29 @@ impl LayoutScrollArea {
         layout_style: LayoutStyle,
         content: Box<dyn LayoutItem>,
     ) -> Result<Self, LayoutError> {
+        Self::new_with(layout_style, move |_| Ok(content))
+    }
+
+    /// Like [`new`](Self::new), but the content is built with access to this scroll's live
+    /// [`ScrollViewport`], so descendants can gate work (e.g. lazy asset loading) on whether they are
+    /// currently on screen. The offset/viewport signals are created BEFORE `build` runs, so the content
+    /// it returns can capture them — resolving the ordering bind where the scroll is built from its own
+    /// content yet the content needs the scroll's signals.
+    pub fn new_with<F>(layout_style: LayoutStyle, build: F) -> Result<Self, LayoutError>
+    where
+        F: FnOnce(ScrollViewport) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    {
+        let leaf = LayoutLeaf::register(layout_style)?;
+        let scroll_x = signal(0.0f32);
+        let scroll_y = signal(0.0f32);
+        let content = build(ScrollViewport {
+            offset_x: scroll_x.read_only(),
+            offset_y: scroll_y.read_only(),
+            rect: leaf.rect.read_only(),
+        })?;
         let content_node = content.layout_node();
         let content_rect_signal =
             track_layout(content_node).expect("content node not registered in ctx");
-        let leaf = LayoutLeaf::register(layout_style)?;
 
         // Re-lay out the content at the viewport width (unbounded height, so it can overflow and scroll)
         // each time the viewport resizes. The viewport rect is set by the surrounding layout; this effect
@@ -333,9 +403,18 @@ impl LayoutScrollArea {
 
         Ok(Self {
             leaf,
-            core: ScrollCore::new(content_rect_signal, content),
+            core: ScrollCore::with_offsets(content_rect_signal, content, scroll_x, scroll_y),
             _layout_effect: layout_effect,
         })
+    }
+
+    /// The live scroll offset `(x, y)` signals, for a caller that constructed the scroll via
+    /// [`new`](Self::new) and wants to read the offset after the fact.
+    pub fn scroll_offset(&self) -> (ReadSignal<f32>, ReadSignal<f32>) {
+        (
+            self.core.scroll_x.read_only(),
+            self.core.scroll_y.read_only(),
+        )
     }
 
     pub fn scrollbar_style(mut self, style: ScrollbarStyle) -> Self {

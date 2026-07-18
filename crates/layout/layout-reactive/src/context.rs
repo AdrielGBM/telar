@@ -172,11 +172,13 @@ pub fn attach_overlay(node: NodeId) -> bool {
 /// afterwards with [`remove_node`]. A no-op if the host is gone.
 pub fn detach_overlay(node: NodeId) {
     with_runtime(|rt| {
-        if let Some(host) = rt.overlay_host {
+        // Remove from the host the overlay actually attached to (recorded in `parents` at attach), NOT the
+        // current `overlay_host`: auto-detection may have moved the host to another root (e.g. a nested
+        // scroll's content root) since attach, and taffy panics if `node` is not a child of the node removed.
+        if let Some(host) = rt.parents.remove(&node) {
             rt.engine.remove_child(host, node).ok();
             rt.engine.mark_dirty(host).ok();
         }
-        rt.parents.remove(&node);
     });
 }
 
@@ -286,8 +288,14 @@ impl LayoutRuntime {
     ) -> Result<Vec<(RwSignal<Rect>, Rect)>, LayoutError> {
         // A top-level root (no parent) computed against the window is the overlay host: overlays attach
         // their content here so a portal fills the viewport wherever it is declared. Refreshed each compute
-        // so it stays current across a hot-reload rebuild (which mints a new root node).
-        if !self.host_pinned && !self.parents.contains_key(&root) {
+        // so it stays current across a hot-reload rebuild (which mints a new root node). A definite height
+        // marks the surface/window root; a detached sub-root laid out for its intrinsic height (a scroll's
+        // content, computed with `MaxContent`) must NOT become the host, or a portal declared inside a scroll
+        // would attach to that scroll and be torn down (and mis-detached) with it.
+        if !self.host_pinned
+            && !self.parents.contains_key(&root)
+            && matches!(height, AvailableSpace::Definite(_))
+        {
             self.overlay_host = Some(root);
         }
         // A changed available space (window resize) must re-run layout even when the node is clean: dirty the root so the cached size from the previous space is discarded. Skip only when both the node is clean and the space is unchanged.

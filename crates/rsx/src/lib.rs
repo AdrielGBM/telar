@@ -103,12 +103,12 @@ pub use ui_core::{AssetSource, AssetState};
 pub use ui_core::{
     Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
     EventResult, Image, Input, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path,
-    ReactiveList, Rectangle, RenderNode, ScrollbarStyle, Slots, StyledContainer, SurfaceAlign,
-    SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold,
-    SurfaceSize, Text, TextArea, box_item, box_transform, compute_layout, focus, fragment,
-    fragment_gap, fragment_positional, fragment_positional_gap, mark_dirty, new_container,
-    new_leaf, relayout_if_dirty, reset_layout_runtime, set_display, set_overlay_host,
-    surface_frame, track_layout,
+    ReactiveList, Rectangle, RenderNode, ScrollViewport, ScrollbarStyle, Slots, StyledContainer,
+    SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot,
+    SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item, box_transform,
+    compute_layout, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
+    mark_dirty, new_container, new_leaf, relayout_if_dirty, reset_layout_runtime, set_display,
+    set_overlay_host, surface_frame, track_layout,
 };
 
 #[cfg(feature = "components")]
