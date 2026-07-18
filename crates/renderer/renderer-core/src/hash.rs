@@ -27,6 +27,20 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 rect.height.to_bits().hash(h);
                 hash_text_style(style).hash(h);
             }
+            DrawCommand::RichText { runs, rect, base } => {
+                10u8.hash(h);
+                for run in runs.iter() {
+                    run.text.as_bytes().hash(h);
+                    run.weight.hash(h);
+                    run.italic.hash(h);
+                    run.color.to_rgba8().hash(h);
+                }
+                rect.x.to_bits().hash(h);
+                rect.y.to_bits().hash(h);
+                rect.width.to_bits().hash(h);
+                rect.height.to_bits().hash(h);
+                hash_text_style(base).hash(h);
+            }
             DrawCommand::Image { data, rect, filter } => {
                 2u8.hash(h);
                 data.id.hash(h);

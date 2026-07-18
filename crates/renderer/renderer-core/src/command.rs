@@ -3,8 +3,19 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 
 use crate::{
-    BorderRadius, ImageData, ImageFilter, PathData, PathStyle, RectStyle, Stroke, TextStyle,
+    BorderRadius, Color, ImageData, ImageFilter, PathData, PathStyle, RectStyle, Stroke, TextStyle,
 };
+
+/// One inline run of a rich-text paragraph: a slice of text with its own weight, slant, and colour. Paragraph
+/// metrics (font size, line height, wrapping, alignment) live on the [`DrawCommand::RichText`] `base` style,
+/// so a run overrides only what varies inline (bold, italic, a link's colour).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextRun {
+    pub text: Arc<str>,
+    pub weight: u16,
+    pub italic: bool,
+    pub color: Color,
+}
 
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
@@ -16,6 +27,13 @@ pub enum DrawCommand {
         text: Arc<str>,
         rect: Rect,
         style: Arc<TextStyle>,
+    },
+    /// A paragraph of mixed-style runs shaped and wrapped as one (freedesktop notification body markup, etc.).
+    /// `base` supplies the shared metrics; each run carries its own weight/italic/colour.
+    RichText {
+        runs: Arc<[TextRun]>,
+        rect: Rect,
+        base: Arc<TextStyle>,
     },
     Image {
         data: Arc<ImageData>,
@@ -72,6 +90,18 @@ impl PartialEq for DrawCommand {
                     style: s2,
                 },
             ) => *t1 == *t2 && r1 == r2 && s1 == s2,
+            (
+                DrawCommand::RichText {
+                    runs: u1,
+                    rect: r1,
+                    base: b1,
+                },
+                DrawCommand::RichText {
+                    runs: u2,
+                    rect: r2,
+                    base: b2,
+                },
+            ) => (Arc::ptr_eq(u1, u2) || u1 == u2) && r1 == r2 && b1 == b2,
             (
                 DrawCommand::Image {
                     data: d1,

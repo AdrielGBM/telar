@@ -169,3 +169,22 @@ pub(crate) fn prepare_text(
         color: g.color,
     }));
 }
+
+pub(crate) fn prepare_rich_text(
+    shaper: &mut renderer_text::TextShaper,
+    runs: &[renderer_core::TextRun],
+    rect: Rect,
+    base: &TextStyle,
+    scale_factor: f32,
+    out: &mut Vec<TextInstance>,
+    glyph_scratch: &mut Vec<renderer_text::GlyphInfo>,
+) {
+    glyph_scratch.clear();
+    shaper.layout_glyphs_rich(runs, rect, base, scale_factor, glyph_scratch);
+    out.extend(glyph_scratch.iter().map(|g| TextInstance {
+        dest_rect: g.dest_rect,
+        uv_min: g.uv_min,
+        uv_max: g.uv_max,
+        color: g.color,
+    }));
+}

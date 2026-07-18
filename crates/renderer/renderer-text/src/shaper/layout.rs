@@ -1,9 +1,9 @@
 use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
-use super::{effective_line_height, make_buffer};
+use super::{effective_line_height, from_cosmic_color, make_buffer, make_buffer_rich};
 use cosmic_text::{CacheKey, SwashContent};
-use geometry_core::Rect;
-use renderer_core::TextStyle;
+use geometry_core::{Color, Rect};
+use renderer_core::{TextRun, TextStyle};
 
 use super::atlas::GlyphInfo;
 
@@ -26,9 +26,6 @@ impl TextShaper {
         if width == 0 || height == 0 || text.is_empty() {
             return;
         }
-
-        let tint = color.to_array();
-        let identity_tint = [1.0, 1.0, 1.0, 1.0];
 
         let shaping_key = ShapingCacheKey {
             text_hash: hash_text(text),
@@ -59,134 +56,233 @@ impl TextShaper {
         };
 
         out.reserve(positions.len());
-
         for &(cache_key, px, py) in positions.iter() {
-            if let Some(entry) = self.atlas.fetch(&cache_key) {
-                // px/py and placement offsets are in physical pixels; divide by scale_factor to get logical pixel screen coordinates expected by the viewport shader.
-                let screen_x = rect.x + (px as f32 + entry.placement_left as f32) / scale_factor;
-                let screen_y = rect.y + (py as f32 - entry.placement_top as f32) / scale_factor;
-                let glyph_color = if entry.is_color_glyph {
-                    identity_tint
-                } else {
-                    tint
-                };
-                out.push(GlyphInfo {
-                    dest_rect: [
-                        screen_x,
-                        screen_y,
-                        entry.glyph_width as f32 / scale_factor,
-                        entry.glyph_height as f32 / scale_factor,
-                    ],
-                    uv_min: entry.uv_min,
-                    uv_max: entry.uv_max,
-                    color: glyph_color,
-                });
-                continue;
+            self.emit_glyph(cache_key, px, py, rect, font_size, scale_factor, color, out);
+        }
+    }
+
+    /// Lays out a rich-text paragraph — styled `runs` — into `rect`, colouring each glyph by its run's own
+    /// colour (bold/italic fall out of cosmic-text's shaping). `base.max_lines` clamps by visual line. No
+    /// shaping cache: rich paragraphs are few and short, and the glyph atlas still caches every raster.
+    pub fn layout_glyphs_rich(
+        &mut self,
+        runs: &[TextRun],
+        rect: Rect,
+        base: &TextStyle,
+        scale_factor: f32,
+        out: &mut Vec<GlyphInfo>,
+    ) {
+        out.clear();
+        let width = rect.width.ceil() as u32;
+        let height = rect.height.ceil() as u32;
+        if width == 0 || height == 0 || runs.iter().all(|r| r.text.is_empty()) {
+            return;
+        }
+        let base_color = base.paint.solid_color();
+        let max_lines = base.max_lines.map(usize::from).filter(|&n| n > 0);
+        let buffer = make_buffer_rich(&mut self.font_system, runs, rect, base);
+        let mut glyphs: Vec<(CacheKey, i32, i32, Color)> = Vec::new();
+        for (line, run) in buffer.layout_runs().enumerate() {
+            if max_lines.is_some_and(|max| line >= max) {
+                break;
             }
-
-            if self.blank_glyphs.contains(&cache_key) {
-                continue;
+            for glyph in run.glyphs.iter() {
+                let physical = glyph.physical((0., run.line_y * scale_factor), scale_factor);
+                let color = glyph.color_opt.map(from_cosmic_color).unwrap_or(base_color);
+                glyphs.push((physical.cache_key, physical.x, physical.y, color));
             }
+        }
+        drop(buffer);
+        out.reserve(glyphs.len());
+        for (cache_key, px, py, color) in glyphs {
+            self.emit_glyph(
+                cache_key,
+                px,
+                py,
+                rect,
+                base.font_size,
+                scale_factor,
+                color,
+                out,
+            );
+        }
+    }
 
-            // swash returns a usable bitmap for normal and color (e.g. CBDT) glyphs; for COLR v1 glyphs it returns None or an empty placement, in which case we rasterize with skrifa.
-            let raster: Option<(u32, u32, i32, i32, Vec<u8>, bool)> = {
-                let img_opt = self.swash_cache.get_image(&mut self.font_system, cache_key);
-                match img_opt {
-                    Some(img) if img.placement.width != 0 && img.placement.height != 0 => {
-                        let w = img.placement.width;
-                        let h = img.placement.height;
-                        let pl = img.placement.left;
-                        let pt = img.placement.top;
-                        let (pixels, is_color_glyph) = match img.content {
-                            SwashContent::Mask => {
-                                let mut out = vec![0u8; (w * h * 4) as usize];
-                                for (i, &mask) in img.data.iter().enumerate() {
-                                    out[i * 4] = 255;
-                                    out[i * 4 + 1] = 255;
-                                    out[i * 4 + 2] = 255;
-                                    out[i * 4 + 3] = mask;
-                                }
-                                (out, false)
-                            }
-                            SwashContent::SubpixelMask => {
-                                let mut out = vec![0u8; (w * h * 4) as usize];
-                                for (i, chunk) in img.data.chunks_exact(3).enumerate() {
-                                    // KNOWN LIMITATION: Subpixel anti-aliasing (LCD rendering) requires per-channel alpha compositing in the renderer to preserve per-color subpixel masks. Currently, we average the RGB channels to grayscale, losing the color-specific AA information. This produces visually inferior text on LCD screens. Supporting proper subpixel AA would require renderer-level per-channel compositing, which is not yet implemented.
-                                    let mask =
-                                        ((chunk[0] as u32 + chunk[1] as u32 + chunk[2] as u32) / 3)
-                                            as u8;
-                                    out[i * 4] = 255;
-                                    out[i * 4 + 1] = 255;
-                                    out[i * 4 + 2] = 255;
-                                    out[i * 4 + 3] = mask;
-                                }
-                                (out, false)
-                            }
-                            SwashContent::Color => (img.data.to_vec(), true),
-                        };
-                        Some((w, h, pl, pt, pixels, is_color_glyph))
-                    }
-                    _ => None,
-                }
-            };
+    /// Measures a rich paragraph wrapped to `max_width`, clamped to `base.max_lines` visual lines — the rich
+    /// counterpart of [`measure_text`](Self::measure_text), so a rich-text leaf reserves the height its runs
+    /// actually need.
+    pub fn measure_rich_text(
+        &mut self,
+        runs: &[TextRun],
+        max_width: f32,
+        base: &TextStyle,
+    ) -> (f32, f32) {
+        if runs.iter().all(|r| r.text.is_empty()) || max_width.ceil() as u32 == 0 {
+            return (0.0, 0.0);
+        }
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: max_width,
+            height: 100000.0,
+        };
+        let buffer = make_buffer_rich(&mut self.font_system, runs, rect, base);
+        let line_height = effective_line_height(base);
+        let max_lines = base.max_lines.map(usize::from).filter(|&n| n > 0);
+        let mut width: f32 = 0.0;
+        let mut height: f32 = 0.0;
+        for (line, run) in buffer.layout_runs().enumerate() {
+            if max_lines.is_some_and(|max| line >= max) {
+                break;
+            }
+            height = (run.line_y + line_height) as f32;
+            width = width.max(run.line_w);
+        }
+        (width.ceil(), height)
+    }
 
-            let (w, h, pl, pt, pixels, is_color_glyph) = match raster {
-                Some(r) => r,
-                None => match self.rasterize_colr_atlas_glyph(
-                    cache_key,
-                    font_size * scale_factor,
-                    color.to_rgba8(),
-                ) {
-                    Some(r) => r,
-                    None => {
-                        self.blank_glyphs.insert(cache_key);
-                        continue;
-                    }
-                },
-            };
+    /// Fetches (rasterizing and atlas-caching on a miss) one shaped glyph and appends its quad to `out`, tinted
+    /// `color`. The atlas stores mask glyphs white and the tint is applied here — the seam that lets a rich
+    /// paragraph colour each run differently while sharing one glyph cache.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_glyph(
+        &mut self,
+        cache_key: CacheKey,
+        px: i32,
+        py: i32,
+        rect: Rect,
+        font_size: f32,
+        scale_factor: f32,
+        color: Color,
+        out: &mut Vec<GlyphInfo>,
+    ) {
+        let tint = color.to_array();
+        let identity_tint = [1.0, 1.0, 1.0, 1.0];
 
-            let entry = if let Some(e) =
-                self.atlas
-                    .insert(cache_key, &pixels, w, h, pl, pt, is_color_glyph)
-            {
-                e
+        if let Some(entry) = self.atlas.fetch(&cache_key) {
+            // px/py and placement offsets are in physical pixels; divide by scale_factor to get logical pixel screen coordinates expected by the viewport shader.
+            let screen_x = rect.x + (px as f32 + entry.placement_left as f32) / scale_factor;
+            let screen_y = rect.y + (py as f32 - entry.placement_top as f32) / scale_factor;
+            let glyph_color = if entry.is_color_glyph {
+                identity_tint
             } else {
-                let mut inserted = None;
-                loop {
-                    if let Some(evicted_key) = self.atlas.evict_lru() {
-                        self.swash_cache.image_cache.remove(&evicted_key);
-                        if let Some(e) =
-                            self.atlas
-                                .insert(cache_key, &pixels, w, h, pl, pt, is_color_glyph)
-                        {
-                            inserted = Some(e);
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                match inserted {
-                    Some(e) => e,
-                    None => continue,
-                }
+                tint
             };
-
-            let screen_x = rect.x + (px as f32 + pl as f32) / scale_factor;
-            let screen_y = rect.y + (py as f32 - pt as f32) / scale_factor;
-            let glyph_color = if is_color_glyph { identity_tint } else { tint };
             out.push(GlyphInfo {
                 dest_rect: [
                     screen_x,
                     screen_y,
-                    w as f32 / scale_factor,
-                    h as f32 / scale_factor,
+                    entry.glyph_width as f32 / scale_factor,
+                    entry.glyph_height as f32 / scale_factor,
                 ],
                 uv_min: entry.uv_min,
                 uv_max: entry.uv_max,
                 color: glyph_color,
             });
+            return;
         }
+
+        if self.blank_glyphs.contains(&cache_key) {
+            return;
+        }
+
+        // swash returns a usable bitmap for normal and color (e.g. CBDT) glyphs; for COLR v1 glyphs it returns None or an empty placement, in which case we rasterize with skrifa.
+        let raster: Option<(u32, u32, i32, i32, Vec<u8>, bool)> = {
+            let img_opt = self.swash_cache.get_image(&mut self.font_system, cache_key);
+            match img_opt {
+                Some(img) if img.placement.width != 0 && img.placement.height != 0 => {
+                    let w = img.placement.width;
+                    let h = img.placement.height;
+                    let pl = img.placement.left;
+                    let pt = img.placement.top;
+                    let (pixels, is_color_glyph) = match img.content {
+                        SwashContent::Mask => {
+                            let mut out = vec![0u8; (w * h * 4) as usize];
+                            for (i, &mask) in img.data.iter().enumerate() {
+                                out[i * 4] = 255;
+                                out[i * 4 + 1] = 255;
+                                out[i * 4 + 2] = 255;
+                                out[i * 4 + 3] = mask;
+                            }
+                            (out, false)
+                        }
+                        SwashContent::SubpixelMask => {
+                            let mut out = vec![0u8; (w * h * 4) as usize];
+                            for (i, chunk) in img.data.chunks_exact(3).enumerate() {
+                                // KNOWN LIMITATION: Subpixel anti-aliasing (LCD rendering) requires per-channel alpha compositing in the renderer to preserve per-color subpixel masks. Currently, we average the RGB channels to grayscale, losing the color-specific AA information. This produces visually inferior text on LCD screens. Supporting proper subpixel AA would require renderer-level per-channel compositing, which is not yet implemented.
+                                let mask = ((chunk[0] as u32 + chunk[1] as u32 + chunk[2] as u32)
+                                    / 3) as u8;
+                                out[i * 4] = 255;
+                                out[i * 4 + 1] = 255;
+                                out[i * 4 + 2] = 255;
+                                out[i * 4 + 3] = mask;
+                            }
+                            (out, false)
+                        }
+                        SwashContent::Color => (img.data.to_vec(), true),
+                    };
+                    Some((w, h, pl, pt, pixels, is_color_glyph))
+                }
+                _ => None,
+            }
+        };
+
+        let (w, h, pl, pt, pixels, is_color_glyph) = match raster {
+            Some(r) => r,
+            None => match self.rasterize_colr_atlas_glyph(
+                cache_key,
+                font_size * scale_factor,
+                color.to_rgba8(),
+            ) {
+                Some(r) => r,
+                None => {
+                    self.blank_glyphs.insert(cache_key);
+                    return;
+                }
+            },
+        };
+
+        let entry = if let Some(e) =
+            self.atlas
+                .insert(cache_key, &pixels, w, h, pl, pt, is_color_glyph)
+        {
+            e
+        } else {
+            let mut inserted = None;
+            loop {
+                if let Some(evicted_key) = self.atlas.evict_lru() {
+                    self.swash_cache.image_cache.remove(&evicted_key);
+                    if let Some(e) =
+                        self.atlas
+                            .insert(cache_key, &pixels, w, h, pl, pt, is_color_glyph)
+                    {
+                        inserted = Some(e);
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            match inserted {
+                Some(e) => e,
+                None => return,
+            }
+        };
+
+        let screen_x = rect.x + (px as f32 + pl as f32) / scale_factor;
+        let screen_y = rect.y + (py as f32 - pt as f32) / scale_factor;
+        let glyph_color = if is_color_glyph { identity_tint } else { tint };
+        out.push(GlyphInfo {
+            dest_rect: [
+                screen_x,
+                screen_y,
+                w as f32 / scale_factor,
+                h as f32 / scale_factor,
+            ],
+            uv_min: entry.uv_min,
+            uv_max: entry.uv_max,
+            color: glyph_color,
+        });
     }
 
     pub fn measure_text(&mut self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {

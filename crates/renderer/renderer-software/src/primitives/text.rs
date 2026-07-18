@@ -326,6 +326,51 @@ pub(crate) fn draw_text(
     draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
 }
 
+/// Draws a rich-text paragraph: rasterizes the styled runs to one colour block (each run in its own colour)
+/// and blits it. No shadow or block cache — the rich path serves dynamic notification bodies, not hot UI text.
+pub(crate) fn draw_rich_text(
+    pixmap: &mut tiny_skia::Pixmap,
+    shaper: &mut renderer_text::TextShaper,
+    runs: &[renderer_core::TextRun],
+    rect: Rect,
+    base: &TextStyle,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+    current_clip_rect: Option<Rect>,
+) {
+    if !renderer_core::culling::overlaps(
+        rect.x + transform.tx,
+        rect.y + transform.ty,
+        rect.width,
+        rect.height,
+        current_clip_rect,
+    ) {
+        return;
+    }
+    let (pixels_arc, w, h) = shaper.rasterize_rich(runs, rect, base);
+    if w == 0 || h == 0 {
+        return;
+    }
+    let Some(size) = tiny_skia::IntSize::from_wh(w, h) else {
+        return;
+    };
+    let Some(src) = tiny_skia::Pixmap::from_vec(pixels_arc.to_vec(), size) else {
+        return;
+    };
+    let paint = tiny_skia::PixmapPaint {
+        blend_mode: tiny_skia::BlendMode::SourceOver,
+        ..Default::default()
+    };
+    pixmap.draw_pixmap(
+        rect.x as i32,
+        rect.y as i32,
+        src.as_ref(),
+        &paint,
+        transform,
+        clip,
+    );
+}
+
 /// Renders COLR v1 color glyphs that swash cannot rasterize. swash returns `None` for these glyphs,
 /// so `Buffer::draw` omits them; we re-rasterize via skrifa + tiny-skia and blit them on top.
 fn draw_colr_fallback(

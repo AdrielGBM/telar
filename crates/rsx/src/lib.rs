@@ -80,7 +80,7 @@ pub use renderer_assets::{SvgData, SvgError};
 pub use renderer_core::{
     BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint, PathData, PathStyle, PathVerb,
-    RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextAlign, TextStyle,
+    RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextAlign, TextRun, TextStyle,
 };
 pub use services_core::AppPathsProvider;
 #[cfg(feature = "di")]
@@ -103,9 +103,9 @@ pub use ui_core::{AssetSource, AssetState};
 pub use ui_core::{
     Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
     EventResult, Image, Input, LayoutItem, LayoutScrollArea, Line, NodeId, NodeVec, Overlay, Path,
-    ReactiveList, Rectangle, RenderNode, ScrollViewport, ScrollbarStyle, Slots, StyledContainer,
-    SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot,
-    SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item, box_transform,
+    ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport, ScrollbarStyle, Slots,
+    StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole,
+    SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item, box_transform,
     compute_layout, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
     interactive_rects, mark_dirty, new_container, new_leaf, relayout_if_dirty, reset_layout_runtime,
     set_display, set_overlay_host, surface_frame, track_layout,

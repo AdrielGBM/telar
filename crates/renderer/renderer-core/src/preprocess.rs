@@ -97,6 +97,11 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             rect: rect.scale(sf),
             style: Arc::new((**style).scale(sf)),
         },
+        DrawCommand::RichText { runs, rect, base } => DrawCommand::RichText {
+            runs: runs.clone(),
+            rect: rect.scale(sf),
+            base: Arc::new((**base).scale(sf)),
+        },
         DrawCommand::Image { data, rect, filter } => DrawCommand::Image {
             data: data.clone(),
             rect: rect.scale(sf),

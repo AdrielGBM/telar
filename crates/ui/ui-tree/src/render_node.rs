@@ -2,7 +2,9 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use renderer_core::{BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, TextStyle};
+use renderer_core::{
+    BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, TextRun, TextStyle,
+};
 
 thread_local! {
     static NODE_VEC_POOL: RefCell<Vec<Vec<RenderNode>>> = const { RefCell::new(Vec::new()) };
@@ -101,6 +103,14 @@ impl RenderNode {
             text: text.into(),
             rect,
             style: Arc::new(style),
+        })
+    }
+
+    pub fn rich_text(runs: Arc<[TextRun]>, rect: Rect, base: TextStyle) -> Self {
+        Self::Primitive(DrawCommand::RichText {
+            runs,
+            rect,
+            base: Arc::new(base),
         })
     }
 

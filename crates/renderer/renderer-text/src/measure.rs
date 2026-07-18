@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use renderer_core::{FontConfig, TextStyle};
+use renderer_core::{FontConfig, TextRun, TextStyle};
 
 use crate::{TextShaper, TextShaperConfig};
 
@@ -30,6 +30,16 @@ pub fn measure_text(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32)
         let mut slot = s.borrow_mut();
         let shaper = slot.get_or_insert_with(build_measure_shaper);
         shaper.measure_text(text, max_width, style)
+    })
+}
+
+/// Measures a rich paragraph (styled runs) wrapped to `max_width` for layout-time sizing, so a rich-text node
+/// reserves the height its runs need. The rich counterpart of [`measure_text`].
+pub fn measure_rich_text(runs: &[TextRun], max_width: f32, base: &TextStyle) -> (f32, f32) {
+    MEASURE_SHAPER.with(|s| {
+        let mut slot = s.borrow_mut();
+        let shaper = slot.get_or_insert_with(build_measure_shaper);
+        shaper.measure_rich_text(runs, max_width, base)
     })
 }
 

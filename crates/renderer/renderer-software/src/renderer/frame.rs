@@ -364,6 +364,43 @@ where
                         &mut self.pending_text_shadows,
                     );
                 }
+                DrawCommand::RichText { runs, rect, base } => {
+                    let rect = *rect;
+                    let base = **base;
+                    if let Some(vr) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cumulative_matrix,
+                        &self.font_metrics,
+                    ) {
+                        if cull_bounds(vr, self.draw_state.current_clip()) {
+                            continue;
+                        }
+                    }
+                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
+                        top
+                    } else {
+                        self.pixmap.as_mut().unwrap()
+                    };
+                    let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
+                        self.clip_mask_buffer.as_ref()
+                    } else {
+                        None
+                    };
+                    crate::primitives::text::draw_rich_text(
+                        pixmap,
+                        &mut self.text_shaper,
+                        runs,
+                        rect,
+                        &base,
+                        transform,
+                        clip,
+                        if inside_layer {
+                            None
+                        } else {
+                            self.draw_state.current_clip()
+                        },
+                    );
+                }
                 DrawCommand::Image { data, rect, filter } => {
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
                         cmd,

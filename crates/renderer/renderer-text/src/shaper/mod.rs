@@ -1,9 +1,10 @@
 use cosmic_text::{
-    Align, Attrs, Buffer, CacheKey, FontSystem, Metrics, Shaping, Style, SwashCache, Weight,
+    Align, Attrs, Buffer, CacheKey, Color as CosmicColor, FontSystem, Metrics, Shaping, Style,
+    SwashCache, Weight,
 };
-use geometry_core::Rect;
+use geometry_core::{Color, Rect};
 use lru::LruCache;
-use renderer_core::{TextAlign, TextStyle};
+use renderer_core::{TextAlign, TextRun, TextStyle};
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -158,6 +159,56 @@ fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Tex
             end -= 1;
         }
     }
+}
+
+/// Shapes a rich-text paragraph (`runs`) into `rect` using the base metrics, giving each run its own weight,
+/// slant, and colour via a per-span `Attrs`. `max_lines`/`ellipsis` are not applied here — cosmic-text has no
+/// cross-run truncation, so the caller clamps by visual line instead.
+pub(crate) fn make_buffer_rich(
+    font_system: &mut FontSystem,
+    runs: &[TextRun],
+    rect: Rect,
+    base: &TextStyle,
+) -> Buffer {
+    let metrics = Metrics::new(base.font_size, effective_line_height(base));
+    let mut buffer = Buffer::new(font_system, metrics);
+    buffer.set_size(Some(rect.width), Some(rect.height));
+    let spans = runs.iter().map(|run| {
+        let mut attrs = Attrs::new()
+            .weight(Weight(run.weight))
+            .style(if run.italic {
+                Style::Italic
+            } else {
+                Style::Normal
+            })
+            .color(to_cosmic_color(run.color));
+        if base.letter_spacing != 0.0 {
+            attrs = attrs.letter_spacing(base.letter_spacing);
+        }
+        (run.text.as_ref(), attrs)
+    });
+    buffer.set_rich_text(
+        spans,
+        &Attrs::new(),
+        Shaping::Advanced,
+        cosmic_align(base.align),
+    );
+    buffer.shape_until_scroll(font_system, false);
+    buffer
+}
+
+fn to_cosmic_color(color: Color) -> CosmicColor {
+    let [r, g, b, a] = color.to_rgba8();
+    CosmicColor::rgba(r, g, b, a)
+}
+
+pub(crate) fn from_cosmic_color(color: CosmicColor) -> Color {
+    Color::rgba(
+        color.r() as f32 / 255.0,
+        color.g() as f32 / 255.0,
+        color.b() as f32 / 255.0,
+        color.a() as f32 / 255.0,
+    )
 }
 
 impl TextShaper {

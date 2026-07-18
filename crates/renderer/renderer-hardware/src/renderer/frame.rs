@@ -588,6 +588,42 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         &mut self.glyph_scratch,
                     );
                 }
+                DrawCommand::RichText { runs, rect, base } => {
+                    let rect = *rect;
+                    let base = **base;
+                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        self.draw_state.cumulative_matrix,
+                        &self.font_metrics,
+                    ) {
+                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
+                            continue;
+                        }
+                        if let Some(accum) = layer_accum_stack.last_mut() {
+                            accum.extend(bounds);
+                        }
+                    }
+                    self.flush_rect();
+                    self.flush_line();
+                    self.flush_image();
+                    let (tx, ty) = self.draw_state.apply_point(rect.x, rect.y);
+                    let (tx2, ty2) = self
+                        .draw_state
+                        .apply_point(rect.x + rect.width, rect.y + rect.height);
+                    let translated = Rect::new(tx, ty, (tx2 - tx).abs(), (ty2 - ty).abs());
+                    if self.batch_text_start.is_none() {
+                        self.batch_text_start = Some(self.pending_text_instances.len() as u32);
+                    }
+                    crate::primitives::text::prepare_rich_text(
+                        &mut self.text_shaper,
+                        runs,
+                        translated,
+                        &base,
+                        self.scale_factor,
+                        &mut self.pending_text_instances,
+                        &mut self.glyph_scratch,
+                    );
+                }
                 DrawCommand::Image { data, rect, filter } => {
                     if let Some(bounds) = renderer_core::culling::command_visual_rect(
                         cmd,
