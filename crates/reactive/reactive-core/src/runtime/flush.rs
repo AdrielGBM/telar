@@ -13,8 +13,20 @@ pub(crate) fn flush() {
         rt.flush_epoch += 1;
     });
 
-    let should_panic = {
+    // With the runtime shared across surfaces, a panic mid-effect must not leave `flushing` stuck true —
+    // that would wedge every surface's scheduling (schedule() early-returns while flushing). The guard
+    // clears it on any exit: normal return, the overflow panic below, or an unwind out of run_effect.
+    struct FlushGuard;
+    impl Drop for FlushGuard {
+        fn drop(&mut self) {
+            RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
+        }
+    }
+
+    let (did_work, overflowed) = {
+        let _flush_guard = FlushGuard;
         let mut did_work = false;
+        let mut overflowed = true;
         for _ in 0..MAX_FLUSH_ITERATIONS {
             // Drain memo_pending first (pure computations), then user effects. Pop minimum height first so producers run before consumers (topological order).
             let memo_batch: Vec<EffectId> = RUNTIME.with(|rt| {
@@ -36,20 +48,8 @@ pub(crate) fn flush() {
             };
 
             if memo_batch.is_empty() && pending_batch.is_empty() {
-                RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
-                if did_work {
-                    let cbs: smallvec::SmallVec<[Rc<dyn Fn()>; 2]> = RUNTIME.with(|rt| {
-                        rt.borrow()
-                            .flush_callbacks
-                            .iter()
-                            .map(|(_, cb)| Rc::clone(cb))
-                            .collect()
-                    });
-                    for cb in cbs {
-                        cb();
-                    }
-                }
-                return;
+                overflowed = false;
+                break;
             }
             did_work = true;
             for id in memo_batch {
@@ -59,25 +59,51 @@ pub(crate) fn flush() {
                 run_effect(id);
             }
         }
-        true
+        (did_work, overflowed)
     };
 
-    RUNTIME.with(|rt| rt.borrow_mut().flushing = false);
-
-    if should_panic {
+    if overflowed {
         panic!(
             "reactive flush exceeded {MAX_FLUSH_ITERATIONS} iterations — \
              likely an effect is writing to a signal it depends on"
         );
     }
+
+    // Notify flush observers (e.g. the runner's redraw waker) after `flushing` is cleared, so a callback
+    // that writes a signal can schedule and drive a fresh flush.
+    if did_work {
+        let cbs: smallvec::SmallVec<[Rc<dyn Fn()>; 2]> = RUNTIME.with(|rt| {
+            rt.borrow()
+                .flush_callbacks
+                .iter()
+                .map(|(_, cb)| Rc::clone(cb))
+                .collect()
+        });
+        for cb in cbs {
+            cb();
+        }
+    }
 }
 
 pub fn batch<R>(f: impl FnOnce() -> R) -> R {
+    // A panic inside `f` must not leave `batch_depth` unbalanced (it would suppress every future flush on
+    // the shared runtime). The guard decrements on any exit, including an unwind.
+    struct DepthGuard;
+    impl Drop for DepthGuard {
+        fn drop(&mut self) {
+            RUNTIME.with(|rt| {
+                let mut rt = rt.borrow_mut();
+                rt.batch_depth = rt.batch_depth.saturating_sub(1);
+            });
+        }
+    }
     RUNTIME.with(|rt| rt.borrow_mut().batch_depth += 1);
-    let result = f();
+    let result = {
+        let _depth_guard = DepthGuard;
+        f()
+    };
     let should_flush = RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        rt.batch_depth -= 1;
+        let rt = rt.borrow();
         rt.batch_depth == 0 && (!rt.pending.is_empty() || !rt.memo_pending.is_empty())
     });
     if should_flush {

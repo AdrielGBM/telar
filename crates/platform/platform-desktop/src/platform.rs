@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 
 use platform_core::{
     Event, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, PlatformError,
@@ -385,211 +384,320 @@ fn initial_prefers_dark(window: &WinitWindow) -> Option<bool> {
 
 // ---- Multi-surface (multi-window) backend --------------------------------------------------------------
 //
-// winit windows are main-thread-bound, but their handles (`WinitWindow` = `Arc<winit::Window>`) are `Send`
-// and already used across threads (the hardware render thread). So each surface runs its `EventHandler` — the
-// whole reactive/theme/overlay/focus world — on its OWN worker thread, getting a fresh set of thread-locals
-// and therefore full isolation with no cross-talk. The winit main thread only creates the windows, pumps OS
-// events, and forwards each event to the owning surface's worker over a channel.
+// M3: every surface shares this one UI thread and one reactive runtime. winit already creates windows and
+// pumps their events on the main thread; each surface's `EventHandler` — built here by the factory, carrying
+// its own `Surface` world — runs directly on the main thread too. The handler activates its surface around
+// every lifecycle call, so the surfaces stay isolated without a thread apiece, and a signal shared between
+// them re-runs each surface's effects under its own context. The hardware backend still presents on its own
+// per-surface render thread (as in single-window).
 //
-// Caveat: this path is not GUI-verified in CI (needs a display). On Linux/Wayland/X11 (the shell target)
-// building the renderer/surface on the worker thread is fine; macOS would need surface creation on the main
-// thread. The hardware backend presents on its own render thread (as in single-window); the software backend
-// presents from the worker thread.
+// Each dispatch is bracketed by the handler's own `new_events`/`about_to_wait` (begin/end of the reactive
+// batch), so batch_depth always returns to 0 within one callback — no cross-callback bookkeeping, and a
+// surface created in `resumed` (after the iteration's `new_events`) can never leave the batch unbalanced.
 
-// Forwarded from the winit main thread to a surface's worker thread.
-enum WorkerMsg {
-    // A translated platform input/lifecycle event to dispatch.
-    Event(Event),
-    // winit asked this window to repaint (`RedrawRequested`).
-    Redraw,
-    // The OS light/dark preference changed.
-    ColorScheme(bool),
-    // The window is closing; tear down and exit the worker.
-    Close,
+// A dynamically-opened surface (`open_surface`) awaiting creation by the running runner. Enqueued from app
+// code deep inside an event handler — where `&ActiveEventLoop` (needed to create a winit window) is not
+// available — and drained by the runner on its next `about_to_wait`.
+struct DynamicRequest {
+    config: WindowConfig,
+    handler: Box<dyn EventHandler<WinitWindow>>,
+    close: Arc<std::sync::atomic::AtomicBool>,
 }
 
-// The event → reactive → layout → render loop for one surface, run on its own thread. Mirrors the single-
-// window runner's iteration shape (`new_events` → dispatch → `on_redraw` → `about_to_wait`) but sourced from
-// forwarded messages, and self-paces frames via `recv_timeout` so animations advance without OS events.
-fn run_surface_worker<H: EventHandler<WinitWindow>>(
-    mut handler: H,
+thread_local! {
+    static DYNAMIC_QUEUE: std::cell::RefCell<Vec<DynamicRequest>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Requests a new top-level window rendering `handler`, created on the next event-loop iteration by the
+/// running multi-surface runner (which shares this thread and the one reactive runtime). Returns a flag the
+/// caller flips to close the surface. rsx's winit `SurfaceHost` uses this to implement `open_surface` without
+/// a per-surface thread. If no multi-surface runner is running, the request simply sits undrained.
+pub fn request_dynamic_surface(
+    config: WindowConfig,
+    handler: Box<dyn EventHandler<WinitWindow>>,
+) -> Arc<std::sync::atomic::AtomicBool> {
+    let close = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    DYNAMIC_QUEUE.with(|q| {
+        q.borrow_mut().push(DynamicRequest {
+            config,
+            handler,
+            close: Arc::clone(&close),
+        })
+    });
+    close
+}
+
+fn drain_dynamic_requests() -> Vec<DynamicRequest> {
+    DYNAMIC_QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+// Per-surface main-thread state: the handler plus that surface's input state (needed to translate winit
+// events), its last frame-pacing deadline, and — for a dynamically-opened surface — the flag its
+// `SurfaceControl` flips to request close.
+struct SurfaceRunner {
+    handler: Box<dyn EventHandler<WinitWindow>>,
     window: WinitWindow,
-    rx: Receiver<WorkerMsg>,
-) {
-    // Deliver the OS light/dark preference before the tree mounts (mirrors the single-window path).
-    if let Some(dark) = initial_prefers_dark(&window) {
-        handler.new_events();
-        handler.on_event(Event::ColorSchemeChanged { dark }, &window);
-        handler.about_to_wait();
-    }
-    handler.new_events();
-    let resumed = handler.on_resume(&window);
-    handler.about_to_wait();
-    if !resumed {
-        tracing::error!("surface worker on_resume failed; window will stay blank");
-        return;
-    }
-
-    let mut pace: Option<std::time::Duration> = None;
-    loop {
-        // Block for the next forwarded message, waking on the frame-pacing deadline to drive animations.
-        let msg = match pace {
-            Some(d) => match rx.recv_timeout(d) {
-                Ok(m) => Some(m),
-                Err(RecvTimeoutError::Timeout) => None,
-                Err(RecvTimeoutError::Disconnected) => break,
-            },
-            None => match rx.recv() {
-                Ok(m) => Some(m),
-                Err(_) => break,
-            },
-        };
-        handler.new_events();
-        match msg {
-            Some(WorkerMsg::Event(e)) => handler.on_event(e, &window),
-            Some(WorkerMsg::ColorScheme(dark)) => {
-                handler.on_event(Event::ColorSchemeChanged { dark }, &window)
-            }
-            // Redraw and the pacing tick just fall through to on_redraw below.
-            Some(WorkerMsg::Redraw) | None => {}
-            Some(WorkerMsg::Close) => {
-                handler.about_to_wait();
-                break;
-            }
-        }
-        // Render (gated internally by tree-dirty / keepalive) after any event or pacing tick.
-        handler.on_redraw(&window);
-        // A custom title-bar close button on this surface: leave the loop so the window (its only strong ref is
-        // this thread) is dropped and closed. Note: the main runner still holds this surface's WorkerHandle, so
-        // process-level "exit when the last window closes" is refined in the tabbed-host phase.
-        if handler.take_exit_request() {
-            break;
-        }
-        pace = handler.about_to_wait();
-    }
-    handler.on_suspend();
-}
-
-// Main-thread bookkeeping for one surface: the channel to its worker plus that surface's own input state
-// (needed to translate winit events, which the worker never sees raw).
-struct WorkerHandle {
-    tx: Sender<WorkerMsg>,
-    join: std::thread::JoinHandle<()>,
     cursor_position: (f64, f64),
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
+    pace: Option<std::time::Duration>,
+    // `None` for a statically-declared surface; `Some` for one opened via `open_surface`.
+    close_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
+    // A dynamically-opened window defers on_resume until its first event, when the compositor has given it
+    // its real size (a tiling WM may override the requested size); rendering before that would size the
+    // surface and the layout differently. `false` until resumed.
+    resumed: bool,
 }
 
-struct WinitMultiRunner<H, F>
-where
-    H: EventHandler<WinitWindow>,
-    F: Fn(SurfaceId) -> H + Send + Sync + 'static,
-{
-    factory: Arc<F>,
+// Brings a surface up: build under a panic guard (T-4.2), so a build that fails/panics returns `false` and
+// the caller drops it without disturbing the others. Reads the window's *current* size, so calling it once
+// the compositor has configured the window keeps the layout and the render surface the same size.
+fn resume_surface(surface: &mut SurfaceRunner) -> bool {
+    let window = surface.window.clone();
+    surface.handler.new_events();
+    let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(dark) = initial_prefers_dark(&window) {
+            surface
+                .handler
+                .on_event(Event::ColorSchemeChanged { dark }, &window);
+        }
+        surface.handler.on_resume(&window)
+    }));
+    surface.pace = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        surface.handler.about_to_wait()
+    }))
+    .unwrap_or(None);
+    matches!(built, Ok(true))
+}
+
+// The runner is non-generic over the handler type: both the statically-declared surfaces (boxed from the
+// factory) and the dynamically-opened ones share one `Box<dyn EventHandler<WinitWindow>>` map.
+type BoxedFactory = Box<dyn Fn(SurfaceId) -> Box<dyn EventHandler<WinitWindow>>>;
+
+struct WinitMultiRunner {
+    factory: BoxedFactory,
     pending: Vec<(SurfaceId, WindowConfig)>,
-    workers: HashMap<WindowId, WorkerHandle>,
+    surfaces: HashMap<WindowId, SurfaceRunner>,
     created: bool,
-    _handler: std::marker::PhantomData<fn() -> H>,
+    // True only on WaitUntil timer expiry; gates keepalive request_redraw so it fires only on timer ticks.
+    timer_has_fired: bool,
 }
 
-impl<H, F> ApplicationHandler<UserEvent> for WinitMultiRunner<H, F>
-where
-    H: EventHandler<WinitWindow>,
-    F: Fn(SurfaceId) -> H + Send + Sync + 'static,
-{
+impl WinitMultiRunner {
+    // Creates a window for `handler` and inserts it into the live surface map. `resume_now` brings it up
+    // immediately (the initial surfaces, created in `resumed`, whose window winit has already configured);
+    // a dynamically-opened surface passes `false` and is resumed on its first event instead (see
+    // `window_event`), once the compositor has given it its real size.
+    fn spawn_surface(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        config: WindowConfig,
+        handler: Box<dyn EventHandler<WinitWindow>>,
+        close_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
+        resume_now: bool,
+    ) {
+        // Creating the window creates its `wl_surface`; hold the GPU lifecycle lock so it can't race another
+        // window's render thread present/acquire on the shared Wayland/driver connection. Scoped tightly so
+        // `resume_surface` below (which builds the renderer under its own lifecycle lock) isn't nested under it.
+        let Some(window) = ({
+            let _gpu = renderer_core::gpu_sync::lifecycle_guard();
+            create_window_from_config(event_loop, &config)
+        }) else {
+            return;
+        };
+        let window_id = window.0.id();
+        let mut surface = SurfaceRunner {
+            handler,
+            window,
+            cursor_position: (0.0, 0.0),
+            scale_factor: 1.0,
+            modifiers: platform_core::ModifiersState::default(),
+            pace: None,
+            close_flag,
+            resumed: false,
+        };
+        if resume_now {
+            if !resume_surface(&mut surface) {
+                tracing::error!("surface on_resume failed or panicked; skipping it");
+                return;
+            }
+            surface.window.request_redraw();
+            surface.resumed = true;
+        }
+        self.surfaces.insert(window_id, surface);
+    }
+}
+
+impl ApplicationHandler<UserEvent> for WinitMultiRunner {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::ColorScheme(dark) => {
-                for worker in self.workers.values() {
-                    let _ = worker.tx.send(WorkerMsg::ColorScheme(dark));
+                // Bracket each surface's write on its own (this callback is not inside a shared batch bracket).
+                for surface in self.surfaces.values_mut() {
+                    surface.handler.new_events();
+                    surface
+                        .handler
+                        .on_event(Event::ColorSchemeChanged { dark }, &surface.window);
+                    surface.pace = surface.handler.about_to_wait();
                 }
             }
         }
     }
 
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
+        // Only gate keepalive redraws on a real timer expiry (not every event-queue drain).
+        self.timer_has_fired = matches!(cause, StartCause::ResumeTimeReached { .. });
+    }
+
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        // The workers self-pace and render on their own threads; the main loop only needs to wake for OS
-        // events or a worker's request_redraw, both of which interrupt Wait.
-        event_loop.set_control_flow(ControlFlow::Wait);
+        // Bring up any surfaces opened via `open_surface` since the last iteration, and tear down any whose
+        // SurfaceControl flag was flipped — both are cheap and immediate on this one thread (no polling).
+        for req in drain_dynamic_requests() {
+            self.spawn_surface(event_loop, req.config, req.handler, Some(req.close), false);
+        }
+        let to_close: Vec<WindowId> = self
+            .surfaces
+            .iter()
+            .filter(|(_, s)| {
+                s.close_flag
+                    .as_ref()
+                    .is_some_and(|f| f.load(std::sync::atomic::Ordering::Relaxed))
+            })
+            .map(|(&id, _)| id)
+            .collect();
+        for id in to_close {
+            if let Some(mut removed) = self.surfaces.remove(&id) {
+                removed.handler.on_suspend();
+                // Renderer + window teardown, serialized against sibling render threads (see the close path in
+                // window_event and renderer_core::gpu_sync).
+                let _gpu = renderer_core::gpu_sync::lifecycle_guard();
+                drop(removed);
+            }
+        }
+        if self.created && self.surfaces.is_empty() {
+            event_loop.exit();
+            return;
+        }
+
+        // Aggregate the soonest frame-pacing deadline across surfaces; wake each animating surface for its own
+        // frame on a timer tick (reactive changes call request_redraw themselves via flush_notify).
+        let mut next_wake: Option<std::time::Duration> = None;
+        for surface in self.surfaces.values() {
+            if let Some(d) = surface.pace {
+                if self.timer_has_fired {
+                    surface.window.request_redraw();
+                }
+                next_wake = Some(next_wake.map_or(d, |cur| cur.min(d)));
+            }
+        }
+        match next_wake {
+            Some(d) => {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(std::time::Instant::now() + d))
+            }
+            None => event_loop.set_control_flow(ControlFlow::Wait),
+        }
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // Create every surface once. winit can emit `resumed` more than once on some platforms; the guard
-        // keeps us from spawning duplicate windows/workers.
+        // Create every static surface once. winit can emit `resumed` more than once on some platforms; the
+        // guard keeps us from spawning duplicate windows.
         if self.created {
             return;
         }
         self.created = true;
         for (id, config) in std::mem::take(&mut self.pending) {
-            let Some(window) = create_window_from_config(event_loop, &config) else {
-                continue;
-            };
-            let window_id = window.0.id();
-            let (tx, rx) = channel::<WorkerMsg>();
-            let factory = Arc::clone(&self.factory);
-            let worker_window = window.clone();
-            let join = std::thread::Builder::new()
-                .name(format!("rsx-surface-{}", id.0))
-                .spawn(move || {
-                    // The handler is built here, ON the worker thread, so its reactive/theme/overlay/focus
-                    // world lives in this thread's thread-locals — isolated from every other surface.
-                    let handler = (factory)(id);
-                    run_surface_worker(handler, worker_window, rx);
-                })
-                .expect("failed to spawn surface worker thread");
-            self.workers.insert(
-                window_id,
-                WorkerHandle {
-                    tx,
-                    join,
-                    cursor_position: (0.0, 0.0),
-                    scale_factor: 1.0,
-                    modifiers: platform_core::ModifiersState::default(),
-                },
-            );
+            // The factory gives each handler its own `Surface` world, activated around each lifecycle call.
+            let handler = (self.factory)(id);
+            self.spawn_surface(event_loop, config, handler, None, true);
         }
-        if self.workers.is_empty() {
+        if self.surfaces.is_empty() {
             event_loop.exit();
         }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
-        let Some(worker) = self.workers.get_mut(&id) else {
+    fn window_event(&mut self, _event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        let Some(surface) = self.surfaces.get_mut(&id) else {
             return;
         };
-        let intent = map_window_event(
-            event,
-            &mut worker.cursor_position,
-            &mut worker.scale_factor,
-            &mut worker.modifiers,
-        );
-        let close = match intent {
-            SurfaceIntent::Event(e) | SurfaceIntent::Resized(e) => {
-                let _ = worker.tx.send(WorkerMsg::Event(e));
-                false
+        if !surface.resumed {
+            // Bring a dynamically-opened window up only on its first non-empty `Resized` — the compositor's
+            // configure, when the window has its real size (a tiling WM overrides the requested one). Ignore
+            // earlier events (e.g. a pre-configure `RedrawRequested`), which would resume at the requested
+            // size and overflow the smaller surface.
+            let configured =
+                matches!(&event, WindowEvent::Resized(s) if s.width > 0 && s.height > 0);
+            if !configured {
+                return;
             }
-            SurfaceIntent::Redraw => {
-                let _ = worker.tx.send(WorkerMsg::Redraw);
-                false
+            if resume_surface(surface) {
+                surface.resumed = true;
+                // Fall through to dispatch this Resized: it carries the authoritative size, which relays the
+                // layout out to match the surface even if `window.inner_size()` (read in on_resume) lagged it.
+            } else {
+                // Exiting the whole loop is `about_to_wait`'s job (it runs after pending `open_surface`
+                // requests are spawned), so a just-removed last surface can't kill a window being born.
+                if let Some(removed) = self.surfaces.remove(&id) {
+                    let _gpu = renderer_core::gpu_sync::lifecycle_guard();
+                    drop(removed);
+                }
+                return;
             }
-            SurfaceIntent::Close(e) => {
-                let _ = worker.tx.send(WorkerMsg::Event(e));
-                let _ = worker.tx.send(WorkerMsg::Close);
-                true
+        }
+        // Clone (a cheap Arc bump) so the window borrow doesn't conflict with the mutable handler/input borrows.
+        let window = surface.window.clone();
+        surface.handler.new_events();
+        // Dispatch under a panic guard (T-4.2): a widget handler / render / effect panic unmounts just this
+        // surface. about_to_wait (end_batch) is guarded separately so it always runs, keeping the reactive
+        // batch balanced (T-1.3 leaves the shared runtime consistent after the unwind). Under panic=unwind
+        // only; a panic=abort release build aborts instead.
+        let dispatched = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dispatch_window_event(
+                &mut surface.handler,
+                &window,
+                &mut surface.cursor_position,
+                &mut surface.scale_factor,
+                &mut surface.modifiers,
+                event,
+            )
+        }));
+        let paced = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            surface.handler.about_to_wait()
+        }));
+        surface.pace = paced.as_ref().copied().unwrap_or(None);
+        let panicked = dispatched.is_err() || paced.is_err();
+        let close = matches!(dispatched, Ok(WindowEventOutcome::CloseRequested));
+        // A panicked handler is in an unknown state; don't poll it, just unmount.
+        let exit_requested = !panicked && surface.handler.take_exit_request();
+        if panicked {
+            tracing::error!(?id, "surface panicked; unmounting it");
+        }
+        // OS close (WM X / Alt-F4), a custom title-bar close button, or a panic: tear down just this surface.
+        if panicked || close || exit_requested {
+            if let Some(mut removed) = self.surfaces.remove(&id) {
+                // on_suspend joins THIS surface's render thread (which needs the render guard to finish its
+                // last frame), so it must run before we take the lifecycle lock — otherwise we'd deadlock.
+                if !panicked {
+                    removed.handler.on_suspend();
+                }
+                // Destroying this window's swapchain/surface and its winit window (wl_surface) must not race a
+                // sibling window's render thread; the lock waits for every in-flight frame and blocks new ones
+                // for the duration of the drop (see renderer_core::gpu_sync). The GPU device/instance is shared
+                // process-wide, so this drops only a swapchain — never a device — which is what makes it safe.
+                let _gpu = renderer_core::gpu_sync::lifecycle_guard();
+                drop(removed);
             }
-            SurfaceIntent::Ignore => false,
-        };
-        if close {
-            // Drop the sender (also unblocks the worker's recv) and join so its on_suspend — which tears down
-            // the render thread — finishes before the window is dropped. Closing one window drops just that
-            // surface; the loop exits when the last one is gone.
-            if let Some(worker) = self.workers.remove(&id) {
-                drop(worker.tx);
-                let _ = worker.join.join();
-            }
-            if self.workers.is_empty() {
-                event_loop.exit();
-            }
+            tracing::debug!(
+                ?id,
+                close,
+                exit_requested,
+                panicked,
+                remaining = self.surfaces.len(),
+                "surface closed"
+            );
+            // The whole-loop exit is decided in `about_to_wait`, after the same iteration's queued
+            // `open_surface`/`open_window` requests are spawned — so detaching the last tab (which closes the
+            // host and opens a new window at once) doesn't exit before the new window exists.
         }
     }
 }
@@ -603,17 +711,20 @@ impl MultiSurfacePlatform for WinitPlatform {
         factory: F,
     ) -> Result<(), PlatformError>
     where
-        H: EventHandler<WinitWindow>,
-        F: Fn(SurfaceId) -> H + Send + Sync + 'static,
+        H: EventHandler<WinitWindow> + 'static,
+        F: Fn(SurfaceId) -> H + 'static,
     {
+        // Box the factory output so static and dynamic surfaces share one handler type in the runner's map.
+        let factory: BoxedFactory =
+            Box::new(move |id| Box::new(factory(id)) as Box<dyn EventHandler<WinitWindow>>);
         let mut runner = WinitMultiRunner {
-            factory: Arc::new(factory),
+            factory,
             pending: surfaces,
-            workers: HashMap::new(),
+            surfaces: HashMap::new(),
             created: false,
-            _handler: std::marker::PhantomData,
+            timer_has_fired: false,
         };
-        // Live OS color-scheme changes, delivered to every surface's worker (see the single-window `run`).
+        // Live OS color-scheme changes, delivered to every surface (see the single-window `run`).
         #[cfg(target_os = "linux")]
         {
             let proxy = self.event_loop.create_proxy();

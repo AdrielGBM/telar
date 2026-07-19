@@ -2956,6 +2956,7 @@ dependencies = [
  "dirs",
  "platform-core",
  "platform-winit",
+ "renderer-core",
  "services-core",
  "tracing",
  "winit",
@@ -5384,6 +5385,7 @@ dependencies = [
  "renderer-assets",
  "renderer-core",
  "renderer-text",
+ "services-core",
  "theme-core",
  "ui-tree",
 ]

@@ -1,14 +1,26 @@
 use std::any::Any;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use crate::registry::ServiceRegistry;
 
 thread_local! {
-    static STACK: RefCell<Vec<ServiceRegistry>> = RefCell::new(vec![ServiceRegistry::new()]);
+    // The active service stack sits behind a swappable pointer (the same idiom as platform-core's
+    // `WindowCommandContext`): the cell holds a raw pointer and has no Drop, so no TLS destructor runs on
+    // thread exit. A surface activates its own stack via `ServiceContext::enter`; single-window apps run
+    // against the leaked ambient stack unchanged. The base box is leaked on purpose.
+    static STACK: Cell<*mut RefCell<Vec<ServiceRegistry>>> =
+        Cell::new(Box::into_raw(Box::new(RefCell::new(vec![ServiceRegistry::new()]))));
+}
+
+fn with_stack<R>(f: impl FnOnce(&RefCell<Vec<ServiceRegistry>>) -> R) -> R {
+    // SAFETY: the pointer always addresses a live `RefCell<Vec<ServiceRegistry>>` (the leaked ambient stack, or
+    // a `ServiceContext` box that outlives every guard pointing the cell at it); the borrow is released before
+    // the closure returns.
+    STACK.with(|cell| unsafe { f(&*cell.get()) })
 }
 
 pub fn provide<T: Any + 'static>(service: T) -> Result<(), crate::registry::ServiceError> {
-    STACK.with(|stack| {
+    with_stack(|stack| {
         stack
             .borrow_mut()
             .last_mut()
@@ -18,7 +30,7 @@ pub fn provide<T: Any + 'static>(service: T) -> Result<(), crate::registry::Serv
 }
 
 pub fn try_inject<T: Any + Clone + 'static>() -> Option<T> {
-    STACK.with(|stack| {
+    with_stack(|stack| {
         stack
             .borrow()
             .last()
@@ -28,7 +40,7 @@ pub fn try_inject<T: Any + Clone + 'static>() -> Option<T> {
 }
 
 pub fn with_service<T: Any + 'static, R>(f: impl FnOnce(&T) -> R) -> Option<R> {
-    STACK.with(|stack| {
+    with_stack(|stack| {
         let stack = stack.borrow();
         stack.last().and_then(|scope| scope.get::<T>()).map(f)
     })
@@ -38,7 +50,7 @@ pub struct Scope(());
 
 impl Scope {
     pub fn with<R>(f: impl FnOnce() -> R) -> R {
-        STACK.with(|stack| {
+        with_stack(|stack| {
             let mut stack = stack.borrow_mut();
             let mut new_scope = ServiceRegistry::new();
             if let Some(parent) = stack.last() {
@@ -49,7 +61,7 @@ impl Scope {
         struct PopGuard;
         impl Drop for PopGuard {
             fn drop(&mut self) {
-                STACK.with(|stack| {
+                with_stack(|stack| {
                     let mut stack = stack.borrow_mut();
                     if stack.len() > 1 {
                         stack.pop();
@@ -59,5 +71,51 @@ impl Scope {
         }
         let _guard = PopGuard;
         f()
+    }
+}
+
+/// A per-surface service stack. Under M3 many surfaces share one UI thread, so each surface owns its own
+/// stack; the runner activates it with [`ServiceContext::enter`] around the surface's build/event/frame (and
+/// the reactive flush re-enters it for that surface's effects), so `provide`/`try_inject` resolve against the
+/// surface whose context is active — the generic per-surface context primitive (theme/locale/config/DI).
+pub struct ServiceContext {
+    ptr: *mut RefCell<Vec<ServiceRegistry>>,
+}
+
+impl ServiceContext {
+    pub fn new() -> Self {
+        Self {
+            ptr: Box::into_raw(Box::new(RefCell::new(vec![ServiceRegistry::new()]))),
+        }
+    }
+
+    #[must_use = "the surface's services are only active while this guard is alive"]
+    pub fn enter(&self) -> ServiceGuard {
+        let prev = STACK.with(|cell| cell.replace(self.ptr));
+        ServiceGuard { prev }
+    }
+}
+
+impl Default for ServiceContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for ServiceContext {
+    fn drop(&mut self) {
+        // A matching guard has restored the previous stack, so this box is not the live pointer.
+        unsafe { drop(Box::from_raw(self.ptr)) };
+    }
+}
+
+#[must_use = "the surface's services are only active while this guard is alive"]
+pub struct ServiceGuard {
+    prev: *mut RefCell<Vec<ServiceRegistry>>,
+}
+
+impl Drop for ServiceGuard {
+    fn drop(&mut self) {
+        STACK.with(|cell| cell.set(self.prev));
     }
 }

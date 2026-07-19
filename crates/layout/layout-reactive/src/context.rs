@@ -1,23 +1,21 @@
-use std::cell::RefCell;
-
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, MeasureFn, NodeId};
 use reactive_core::{RwSignal, batch, signal};
 use rustc_hash::FxHashMap;
 
-thread_local! {
-    // The layout tree is a per-thread singleton so nodes can be created and laid out from anywhere —
-    // including reactive effects (reactive lists) that fire from an effect body. Every public constructor
-    // operates on this runtime directly; `reset_layout_runtime` starts a fresh tree (one live tree per thread).
-    static RUNTIME: RefCell<LayoutRuntime> = RefCell::new(LayoutRuntime::new());
+reactive_core::surface_local! {
+    /// A per-surface layout tree: the taffy engine plus the node→rect-signal registry. The layout tree is
+    /// a per-surface world so nodes can be created and laid out from anywhere — including reactive effects
+    /// (reactive lists) that fire from an effect body. Under M3 several surfaces share one UI thread, so the
+    /// runner activates each surface's [`LayoutContext`] around its build/event/frame; app code just calls
+    /// the free functions, which operate on whichever surface is currently active.
+    slot LAYOUT_RUNTIME: LayoutRuntime = LayoutRuntime::new();
+    access with_runtime, with_runtime_ref;
+    context LayoutContext, LayoutGuard;
 }
 
-fn with_runtime<R>(f: impl FnOnce(&mut LayoutRuntime) -> R) -> R {
-    RUNTIME.with(|rt| f(&mut rt.borrow_mut()))
-}
-
-/// Resets the thread-local layout runtime to a fresh, empty tree. Call it once before building a new
-/// widget tree (one live tree per thread); the app/preview harness does this at construction.
+/// Resets the active surface's layout runtime to a fresh, empty tree. The single-window app/preview harness
+/// calls this at construction; a multi-surface runner instead gives each surface its own [`LayoutContext`].
 pub fn reset_layout_runtime() {
     with_runtime(|rt| *rt = LayoutRuntime::new());
 }

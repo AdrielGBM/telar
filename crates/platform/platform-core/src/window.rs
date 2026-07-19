@@ -70,6 +70,9 @@ pub trait Window: HasWindowHandle + HasDisplayHandle {
     }
     /// Updates the OS window title. No-op where unsupported.
     fn set_title(&self, _title: &str) {}
+    /// Brings the window to the front and requests input focus. No-op where unsupported or where the window
+    /// manager forbids programmatic activation (e.g. some Wayland compositors).
+    fn focus_window(&self) {}
     /// The OS light/dark preference, if the platform can report it: `Some(true)` = prefer dark. `None` when
     /// undetectable (e.g. X11, or a compositor without the settings portal). Defaults to `None`.
     fn prefers_dark(&self) -> Option<bool> {
@@ -106,6 +109,36 @@ pub trait EventHandler<W: Window> {
     }
 }
 
+// Lets a multi-surface runner hold heterogeneous handlers in one map — the statically-declared surfaces and
+// the dynamically-opened ones (`open_surface`) built by higher layers — behind one `Box<dyn EventHandler>`
+// type, without the low-level runner naming the concrete handler type.
+impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
+    fn on_resume(&mut self, window: &W) -> bool {
+        (**self).on_resume(window)
+    }
+    fn on_event(&mut self, event: Event, window: &W) {
+        (**self).on_event(event, window)
+    }
+    fn on_redraw(&mut self, window: &W) {
+        (**self).on_redraw(window)
+    }
+    fn on_suspend(&mut self) {
+        (**self).on_suspend()
+    }
+    fn new_events(&mut self) {
+        (**self).new_events()
+    }
+    fn about_to_wait(&mut self) -> Option<std::time::Duration> {
+        (**self).about_to_wait()
+    }
+    fn take_exit_request(&mut self) -> bool {
+        (**self).take_exit_request()
+    }
+    fn last_frame_rgba(&self) -> Option<Vec<u8>> {
+        (**self).last_frame_rgba()
+    }
+}
+
 pub trait Platform {
     type Window: Window;
     fn run<H: EventHandler<Self::Window>>(
@@ -125,12 +158,11 @@ pub struct SurfaceId(pub u64);
 /// needs. It is separate from [`Platform`] so the single-surface contract and every existing single-window
 /// entry point stay exactly as they are.
 ///
-/// The handler for each surface is produced by a `factory`, not moved in: this is the *handler-factory* shape.
-/// Each handler therefore gets its own reactive/UI tree, and a backend that runs each surface on its own
-/// thread (the natural model for headless and out-of-tree Wayland backends) gets a fully isolated reactive/
-/// theme/overlay/focus world per surface for free — no cross-talk. Because the factory is invoked once per
-/// surface (potentially on that surface's own thread), it is `Fn(SurfaceId) -> H` and must be `Send + Sync`;
-/// the produced handler `H` never has to cross a thread boundary itself.
+/// The handler for each surface is produced by a `factory`, not moved in: this is the *handler-factory* shape,
+/// so a factory that builds several surfaces need not clone one app. Under M3 every surface shares one UI
+/// thread and one reactive runtime (per-surface isolation comes from `ui_core::Surface`), so the factory runs
+/// on the UI thread and neither it nor the handler `H` must be `Send`/`Sync` — which lets a `!Send` app (one
+/// holding `Rc` state) be produced by the factory.
 pub trait MultiSurfacePlatform {
     type Window: Window;
     /// Runs every surface in `surfaces` (each an `(id, config)` pair), building its handler via
@@ -141,6 +173,6 @@ pub trait MultiSurfacePlatform {
         factory: F,
     ) -> Result<(), PlatformError>
     where
-        H: EventHandler<Self::Window>,
-        F: Fn(SurfaceId) -> H + Send + Sync + 'static;
+        H: EventHandler<Self::Window> + 'static,
+        F: Fn(SurfaceId) -> H + 'static;
 }

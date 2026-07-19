@@ -24,6 +24,14 @@ where
     W: Window + Clone + Send + Sync + 'static,
 {
     pub(super) app: Box<dyn App>,
+    // This handler's surface world, activated around every lifecycle call so its build/event/frame resolve
+    // layout/overlay/focus against the right surface. `None` for a single-window app: its ambient thread-local
+    // world IS its one surface, and entering it is a no-op. The multi-surface runner injects `Some` per window.
+    pub(super) surface: Option<std::rc::Rc<ui_core::Surface>>,
+    // This window's OS command queue (Close/Drag/SetTitle/…), entered alongside `surface` so a title-bar
+    // action pushed by one window's widgets targets that window — never a sibling sharing the M3 UI thread.
+    // Only entered when `surface` is `Some`; a single-window app keeps using the ambient thread-local queue.
+    pub(super) window_commands: platform_core::WindowCommandContext,
     pub(super) tree: Option<ComponentList>,
     pub(super) renderer: Option<Box<dyn RenderBackend>>,
     pub(super) renderer_is_hardware: bool,
@@ -85,6 +93,8 @@ where
 {
     AppHandler::<W, D> {
         app,
+        surface: None,
+        window_commands: platform_core::WindowCommandContext::new(),
         tree: None,
         renderer: None,
         renderer_is_hardware: false,
@@ -115,11 +125,51 @@ where
     }
 }
 
+// Holds a surface's reactive/layout world and its OS command queue active together for one lifecycle call.
+// Dropped fields restore the previous surface and queue; the two restores are independent, so drop order is
+// irrelevant.
+struct LifecycleGuard {
+    _surface: ui_core::SurfaceGuard,
+    _commands: platform_core::WindowCommandGuard,
+}
+
 impl<W, D> AppHandler<W, D>
 where
     W: Window + Clone + Send + Sync + 'static,
     D: DevPlugin,
 {
+    /// Enters this handler's surface world for the duration of a lifecycle call, so its build/event/frame
+    /// resolve layout/overlay/focus (and the reactive current-surface) against the right surface. Returns
+    /// `None` for a single-window app — its ambient world is its one surface — making this a zero-cost no-op.
+    /// The returned guard owns the restore state and does not borrow `self`, so callers can mutate `self`
+    /// while it is held (`let _surface = self.enter_surface();`).
+    // Drains and applies the window-management commands a handler enqueued — from a title-bar control during
+    // event dispatch, or from `on_frame` (e.g. raising this window on a routed handoff). Returns whether any
+    // applied. Routed through the App bridge so the dylib-backed `HotApp` drains the dylib's own queue.
+    fn apply_window_commands(&mut self, window: &W) -> bool {
+        let mut applied = false;
+        for cmd in self.app.drain_window_commands() {
+            applied = true;
+            match cmd {
+                WindowCommand::Drag => window.drag_window(),
+                WindowCommand::Minimize => window.set_minimized(true),
+                WindowCommand::ToggleMaximize => window.set_maximized(!window.is_maximized()),
+                WindowCommand::SetMaximized(v) => window.set_maximized(v),
+                WindowCommand::SetTitle(title) => window.set_title(&title),
+                WindowCommand::Focus => window.focus_window(),
+                WindowCommand::Close => self.exit_requested = true,
+            }
+        }
+        applied
+    }
+
+    fn enter_surface(&self) -> Option<LifecycleGuard> {
+        self.surface.as_ref().map(|s| LifecycleGuard {
+            _surface: s.enter(),
+            _commands: self.window_commands.enter(),
+        })
+    }
+
     /// Whether the app asked for a transparent surface (`WindowConfig::is_transparent`). Read at each renderer creation so hardware picks a premultiplied-alpha composite mode and software presents an alpha-preserving buffer.
     fn is_transparent(&self) -> bool {
         self.app
@@ -218,6 +268,7 @@ where
     D: DevPlugin,
 {
     fn on_resume(&mut self, window: &W) -> bool {
+        let _surface = self.enter_surface();
         let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
         // Point the layout-time text measurer at the same fonts as the renderer, on this (the layout) thread, before any layout runs. Otherwise it falls back to system defaults and aborts on Android ("no default font found").
         renderer_text::set_measure_font_config(build_font_config(
@@ -297,6 +348,7 @@ where
     }
 
     fn on_event(&mut self, event: Event, window: &W) {
+        let _surface = self.enter_surface();
         if let Event::ScaleFactorChanged { scale_factor } = &event {
             self.scale_factor = *scale_factor as f32;
         }
@@ -392,20 +444,8 @@ where
         };
         self.app.end_event_batch();
         // Apply any window-management commands a handler enqueued this dispatch (custom title-bar controls).
-        // Drag must run inside the pointer-press dispatch it originated from, so this sits right after the
-        // walk. Routed through the App bridge so the dylib-backed HotApp drains the dylib's own queue.
-        let mut window_command_applied = false;
-        for cmd in self.app.drain_window_commands() {
-            window_command_applied = true;
-            match cmd {
-                WindowCommand::Drag => window.drag_window(),
-                WindowCommand::Minimize => window.set_minimized(true),
-                WindowCommand::ToggleMaximize => window.set_maximized(!window.is_maximized()),
-                WindowCommand::SetMaximized(v) => window.set_maximized(v),
-                WindowCommand::SetTitle(title) => window.set_title(&title),
-                WindowCommand::Close => self.exit_requested = true,
-            }
-        }
+        // Drag must run inside the pointer-press dispatch it originated from, so this sits right after the walk.
+        let window_command_applied = self.apply_window_commands(window);
         if handled == EventResult::Handled || window_command_applied {
             #[cfg(feature = "dev")]
             if let Some(tree) = &self.tree {
@@ -419,6 +459,7 @@ where
     }
 
     fn on_redraw(&mut self, window: &W) {
+        let _surface = self.enter_surface();
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = &self.hot_reload_rx {
             if let Ok(event) = rx.try_recv() {
@@ -484,6 +525,9 @@ where
             };
             self.app.on_frame(&mut ctx);
         }
+        // Apply commands enqueued during on_frame (e.g. raising this window on a routed handoff): on_event's
+        // drain only runs on input events, so a frame-driven command would otherwise wait for the next one.
+        self.apply_window_commands(window);
         if redraw_requested {
             window.request_redraw();
         }
@@ -723,6 +767,7 @@ where
     }
 
     fn on_suspend(&mut self) {
+        let _surface = self.enter_surface();
         // Drop the sender to signal the render thread to exit, then wait for it to finish.
         drop(self.render_tx.take());
         if let Some(join) = self.render_join.take() {

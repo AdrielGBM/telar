@@ -1,6 +1,7 @@
 use std::cmp::Reverse;
 
 use super::flush::flush;
+use super::surface::current_surface;
 use super::{EffectEntry, EffectId, RUNTIME, SignalId};
 
 pub(crate) fn current_observer() -> Option<EffectId> {
@@ -12,6 +13,7 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
         let mut rt = rt.borrow_mut();
         let id = rt.effects.insert(EffectEntry {
             callback: f,
+            surface: current_surface(),
             is_pure: false,
             last_run_epoch: 0,
             sources: Vec::new(),
@@ -29,6 +31,7 @@ pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
         let mut rt = rt.borrow_mut();
         let id = rt.effects.insert(EffectEntry {
             callback: f,
+            surface: current_surface(),
             is_pure: true,
             last_run_epoch: 0,
             sources: Vec::new(),
@@ -169,9 +172,10 @@ pub(crate) fn run_effect(id: EffectId) {
 
         // SAFETY: The slab owns this Box. No effect closure in this codebase captures its own Effect handle, so deregistration cannot happen during execution.
         let ptr: *const dyn Fn() = &*rt.effects[id].callback;
-        Some(ptr) // Don't push observer_stack yet; clean_effect must run first
+        let surface = rt.effects[id].surface;
+        Some((ptr, surface)) // Don't push observer_stack yet; clean_effect must run first
     });
-    if let Some(ptr) = ptr {
+    if let Some((ptr, surface)) = ptr {
         // Clean stale subscriptions before re-running so fresh subscriptions are tracked (Finding 1.7). clean_effect acquires the runtime borrow internally (safe: we released it above).
         clean_effect(id);
         // Push observer_stack only after cleanup so clean_effect doesn't accidentally re-register.
@@ -183,7 +187,14 @@ pub(crate) fn run_effect(id: EffectId) {
             }
         }
         let _guard = PopGuard;
-        unsafe { (*ptr)() };
+        // Owner scope: re-enter this effect's surface so its layout/overlay/focus resolve against the
+        // surface that built it, even when the write that scheduled it came from another surface. The
+        // guard is intentionally outside the RUNTIME borrow above (which was already released) and inert
+        // for single-surface apps (surface == current surface → no-op).
+        {
+            let _surface_guard = surface.enter();
+            unsafe { (*ptr)() };
+        }
         drop(_guard);
         RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();

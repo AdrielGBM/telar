@@ -85,6 +85,28 @@ impl App for FillApp {
     }
 }
 
+/// A fill app that can be told to panic during build, to exercise the multi-surface panic quarantine
+/// (T-4.2): a surface whose build panics must unmount without tumbling the other surfaces.
+pub struct MaybePanicApp {
+    pub color: Color,
+    pub panic_on_build: bool,
+}
+
+impl App for MaybePanicApp {
+    fn root(&self) -> Box<dyn Component> {
+        assert!(
+            !self.panic_on_build,
+            "MaybePanicApp: intentional build panic"
+        );
+        reset_layout_runtime();
+        Box::new(FillRoot::new(self.color))
+    }
+
+    fn clear_color(&self) -> Option<Color> {
+        Some(Color::rgba(0.0, 0.0, 0.0, 1.0))
+    }
+}
+
 /// Assert the center pixel of a `w`×`h` premultiplied-RGBA8 buffer matches `expected` (R, G, B) within a small
 /// tolerance, and is not the black clear color.
 pub fn assert_center_rgb(pixels: &[u8], w: u32, h: u32, expected: [u8; 3], label: &str) {

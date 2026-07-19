@@ -63,4 +63,8 @@ impl PlatformWindow for WinitWindow {
     fn set_title(&self, title: &str) {
         self.0.set_title(title);
     }
+
+    fn focus_window(&self) {
+        self.0.focus_window();
+    }
 }

@@ -175,11 +175,94 @@ unsafe impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Send
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for HardwareRenderer<W> {
     fn drop(&mut self) {
+        // The caller tearing a window down holds renderer_core::gpu_sync::lifecycle_guard() across the whole
+        // renderer+window drop, serializing it against sibling render threads.
         // Release cached layer textures before the device so the driver can free their GPU memory.
         self.layer_resolved_cache.clear();
-        // Block on pending GPU work before the device is destroyed; otherwise wgpu defers cleanup to a later maintenance cycle, keeping GPU memory allocated beyond this drop.
-        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+        // Destroy this window's surface (its VkSurfaceKHR) *before* polling. With a process-shared device wgpu
+        // defers surface teardown to the next maintenance on that device; this window's own render thread is
+        // already gone, so polling with the surface still alive frees nothing, and the VkSurfaceKHR — which
+        // keeps the wl_surface alive — would linger on screen until some *other* window's teardown polls the
+        // shared device. Dropping the surface (its `_window` Arc still outlives this body, so the raw handle
+        // stays valid) then polling flushes the destruction now. On a lost device `poll` is a fatal wgpu error
+        // (a panic); if this Drop runs while unwinding from an earlier render panic that second panic would
+        // abort — so catch it and let teardown finish cleanly.
+        self.surface = None;
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+        }));
     }
+}
+
+// One GPU instance/adapter/device/queue shared by every window in the process; per-window renderers each own
+// only a `Surface` and hold cloned (Arc) handles to these. Sharing is REQUIRED for multi-window: a separate
+// VkInstance/VkDevice per window, destroyed when its window closes, corrupts the shared driver state and
+// segfaults a sibling window's in-flight `vkAcquireNextImageKHR` (reproduced on the NVIDIA driver). With a
+// shared device, closing a window drops only its swapchain — never a device — which the driver handles fine.
+struct SharedGpu {
+    instance: wgpu::Instance,
+    adapter: wgpu::Adapter,
+    device: Device,
+    queue: Queue,
+}
+
+static SHARED_GPU: std::sync::OnceLock<SharedGpu> = std::sync::OnceLock::new();
+
+async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, RendererError> {
+    if let Some(gpu) = SHARED_GPU.get() {
+        return Ok(gpu);
+    }
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    // No `compatible_surface`: the shared adapter serves every window. On a normal single-compositor desktop
+    // any window's surface is presentable by the HighPerformance adapter.
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })
+        .await
+        .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
+
+    const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<BlurParams>() as u32;
+    let pipeline_cache_feature = if adapter.features().contains(wgpu::Features::PIPELINE_CACHE) {
+        wgpu::Features::PIPELINE_CACHE
+    } else {
+        wgpu::Features::empty()
+    };
+    let supports_immediates = adapter.features().contains(wgpu::Features::IMMEDIATES)
+        && adapter.limits().max_immediate_size >= BLUR_PARAMS_SIZE;
+    let immediates_feature = if supports_immediates {
+        wgpu::Features::IMMEDIATES
+    } else {
+        wgpu::Features::empty()
+    };
+    let mut required_limits = wgpu::Limits::default();
+    if supports_immediates {
+        required_limits.max_immediate_size = BLUR_PARAMS_SIZE;
+    }
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("rsx-hardware-renderer"),
+            required_features: pipeline_cache_feature | immediates_feature,
+            required_limits,
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| RendererError::Backend(format!("GPU device request failed: {}", e)))?;
+
+    // A concurrent initializer may have won the race; keep whichever landed first (dropping the loser's
+    // handles is safe — no surface is bound to them).
+    let _ = SHARED_GPU.set(SharedGpu {
+        instance,
+        adapter,
+        device,
+        queue,
+    });
+    Ok(SHARED_GPU.get().expect("shared GPU just set"))
 }
 
 // Hardware scroll-blit-with-clear: seed the offscreen with the previous frame shifted by the scroll delta so a cleared scrolling frame only redraws the exposed band. On by default for the MSAA (desktop) path; set RSX_HW_SCROLL_BLIT=0 to fall back to a full re-render.
@@ -265,6 +348,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         font_config: renderer_text::TextShaperConfig,
         config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
+        // Exclusive against every render thread: creating a Vulkan device/surface must not overlap another
+        // window's in-flight acquire/present (see renderer_core::gpu_sync).
+        let _gpu = renderer_core::gpu_sync::lifecycle_guard();
         pollster::block_on(Self::new_async(
             window,
             cache_path,
@@ -288,23 +374,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             wgpu::Backends::all()
         };
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends,
-            ..wgpu::InstanceDescriptor::new_without_display_handle()
-        });
+        // Share the process-wide instance/adapter/device (see SharedGpu); this window owns only its surface.
+        let gpu = shared_gpu(backends).await?;
+        let instance = gpu.instance.clone();
+        let adapter = gpu.adapter.clone();
 
         let surface = instance
             .create_surface(window.clone())
             .map_err(|e| RendererError::Surface(e.to_string()))?;
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = preferred_format(&surface_caps);
@@ -365,6 +442,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         Self::from_parts(
             instance,
             adapter,
+            gpu.device.clone(),
+            gpu.queue.clone(),
             Some(surface),
             Some(window),
             surface_format,
@@ -382,6 +461,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     async fn from_parts(
         instance: wgpu::Instance,
         adapter: wgpu::Adapter,
+        device: Device,
+        queue: Queue,
         surface: Option<Surface<'static>>,
         window: Option<std::sync::Arc<W>>,
         surface_format: wgpu::TextureFormat,
@@ -392,35 +473,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         font_config: renderer_text::TextShaperConfig,
         config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
-        let pipeline_cache_feature = if adapter.features().contains(wgpu::Features::PIPELINE_CACHE)
-        {
-            wgpu::Features::PIPELINE_CACHE
-        } else {
-            wgpu::Features::empty()
-        };
+        // device/queue are shared process-wide (see SharedGpu) and created there with the IMMEDIATES feature
+        // when the adapter supports it; recompute the flag here for the blur pipeline's push-constant path.
         const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<BlurParams>() as u32;
         let supports_immediates = adapter.features().contains(wgpu::Features::IMMEDIATES)
             && adapter.limits().max_immediate_size >= BLUR_PARAMS_SIZE;
-        let immediates_feature = if supports_immediates {
-            wgpu::Features::IMMEDIATES
-        } else {
-            wgpu::Features::empty()
-        };
-
-        let mut required_limits = wgpu::Limits::default();
-        if supports_immediates {
-            required_limits.max_immediate_size = BLUR_PARAMS_SIZE;
-        }
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: Some("rsx-hardware-renderer"),
-                required_features: pipeline_cache_feature | immediates_feature,
-                required_limits,
-                ..Default::default()
-            })
-            .await
-            .map_err(|e| RendererError::Backend(format!("GPU device request failed: {}", e)))?;
 
         // Returns None on non-Vulkan backends where pipeline caching is unsupported.
         let (pipeline_cache, cache_file_path) = {
@@ -949,19 +1006,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             wgpu::Backends::all()
         };
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends,
-            ..wgpu::InstanceDescriptor::new_without_display_handle()
-        });
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: None,
-                force_fallback_adapter: false,
-            })
-            .await
-            .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
+        // Share the process-wide instance/adapter/device (see SharedGpu); headless renders offscreen (no surface).
+        let gpu = shared_gpu(backends).await?;
+        let instance = gpu.instance.clone();
+        let adapter = gpu.adapter.clone();
 
         // No surface to query, so pick the format the windowed path prefers (pool::preferred_format's first choice). Rgba8Unorm is a mandatory renderable format, so read_rgba yields straight R,G,B,A bytes.
         let surface_format = wgpu::TextureFormat::Rgba8Unorm;
@@ -988,6 +1036,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let mut renderer = Self::from_parts(
             instance,
             adapter,
+            gpu.device.clone(),
+            gpu.queue.clone(),
             None,
             None,
             surface_format,

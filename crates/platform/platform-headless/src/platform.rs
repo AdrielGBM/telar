@@ -155,51 +155,70 @@ impl MultiSurfacePlatform for HeadlessPlatform {
         factory: F,
     ) -> Result<(), PlatformError>
     where
-        H: EventHandler<HeadlessWindow>,
-        F: Fn(SurfaceId) -> H + Send + Sync + 'static,
+        H: EventHandler<HeadlessWindow> + 'static,
+        F: Fn(SurfaceId) -> H + 'static,
     {
-        // Each surface runs on its own thread, so it gets a fresh thread-local reactive/theme/overlay/focus
-        // world — full isolation with no cross-talk, and no runtime-activation juggling. The handler `H` is
-        // built by the factory *inside* its thread and never crosses a thread boundary, so it need not be Send.
+        // M3 single-thread multi-surface: every surface shares this thread and one reactive runtime. The
+        // handler factory (see `run_multi_with_platform`) gives each handler its own `Surface` world, which
+        // the handler activates around every lifecycle call — so the surfaces stay isolated without a thread
+        // apiece, and a signal shared between them re-runs each surface's effects under its own context.
         let frames = self.frames.max(1);
-        let factory = Arc::new(factory);
         let sink = self.surface_sink.clone();
 
-        let mut joins = Vec::with_capacity(surfaces.len());
+        // Build every handler and window up front, on this thread.
+        let mut states: Vec<(SurfaceId, HeadlessWindow, H)> = Vec::with_capacity(surfaces.len());
         for (id, config) in surfaces {
-            let factory = Arc::clone(&factory);
-            let sink = sink.clone();
-            let join = std::thread::Builder::new()
-                .name(format!("rsx-headless-surface-{}", id.0))
-                .spawn(move || {
-                    let window = HeadlessWindow::new(config.width, config.height);
-                    let mut handler = factory(id);
-                    handler.new_events();
-                    let resumed = handler.on_resume(&window);
-                    handler.about_to_wait();
-                    if !resumed {
-                        return;
-                    }
-                    for _ in 0..frames {
-                        handler.new_events();
-                        std::thread::sleep(FRAME_BUDGET);
-                        handler.on_redraw(&window);
-                        handler.about_to_wait();
-                    }
-                    if let Some(sink) = &sink
-                        && let Some(pixels) = handler.last_frame_rgba()
-                    {
-                        sink.lock().unwrap().insert(id, pixels);
-                    }
-                    handler.on_suspend();
-                })
-                .map_err(|e| PlatformError(format!("failed to spawn surface thread: {e}")))?;
-            joins.push(join);
+            let window = HeadlessWindow::new(config.width, config.height);
+            states.push((id, window, factory(id)));
         }
 
-        for join in joins {
-            join.join()
-                .map_err(|_| PlatformError("a surface thread panicked".to_string()))?;
+        // Resume each surface; a surface whose renderer fails or whose build panics is dropped, not fatal to
+        // the run (T-4.2 quarantine). The new_events/about_to_wait bracket keeps the reactive batch balanced —
+        // and stays balanced even if the build panics, because about_to_wait's end_batch runs regardless (the
+        // panic is caught) and T-1.3 leaves the shared runtime consistent. Only effective under panic=unwind.
+        states.retain_mut(|(id, window, handler)| {
+            handler.new_events();
+            let resumed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                handler.on_resume(window)
+            }));
+            let _ =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler.about_to_wait()));
+            if resumed.is_err() {
+                eprintln!("surface {} panicked during build; unmounting it", id.0);
+            }
+            matches!(resumed, Ok(true))
+        });
+
+        // Drive the scripted frame count: pace once per round (so every surface's frame budget has elapsed and
+        // its redraw actually rasterizes), then redraw every surface. A surface that panics mid-frame is
+        // unmounted so the rest keep rendering.
+        for _ in 0..frames {
+            std::thread::sleep(FRAME_BUDGET);
+            states.retain_mut(|(id, window, handler)| {
+                handler.new_events();
+                let drawn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handler.on_redraw(window)
+                }));
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handler.about_to_wait()
+                }));
+                if drawn.is_err() {
+                    eprintln!("surface {} panicked during redraw; unmounting it", id.0);
+                }
+                drawn.is_ok()
+            });
+        }
+
+        if let Some(sink) = &sink {
+            for (id, _, handler) in &mut states {
+                if let Some(pixels) = handler.last_frame_rgba() {
+                    sink.lock().unwrap().insert(*id, pixels);
+                }
+            }
+        }
+
+        for (_, _, handler) in &mut states {
+            handler.on_suspend();
         }
         Ok(())
     }

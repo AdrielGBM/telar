@@ -19,7 +19,7 @@ use crate::prefs::UserPrefs;
 use platform_desktop::DesktopPathsProvider;
 
 #[cfg(all(feature = "dev", not(target_os = "android")))]
-use super::handler::AppHandler;
+use super::handler::build_app_handler;
 
 pub(super) struct HardwareFrameMsg {
     pub(super) width: u32,
@@ -63,16 +63,25 @@ where
                 }
                 #[cfg(target_os = "android")]
                 let frame_start = std::time::Instant::now();
-                if renderer
-                    .begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation)
-                    .is_err()
-                {
+                // begin_frame reconfigures the swapchain and recreates size-dependent textures; a wgpu fatal
+                // error there (e.g. a lost device after a compositor resize storm) is a panic, not an `Err`, so
+                // catch it as render_frame does below and drop the frame instead of unwinding into an abort.
+                let began = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    renderer.begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation)
+                }));
+                if !matches!(began, Ok(Ok(()))) {
                     let _ = ret_tx.send(msg.commands);
                     continue;
                 }
                 current_width = msg.width;
                 current_height = msg.height;
-                let _ = renderer.render_frame(&msg.commands, msg.clear);
+                // A wgpu validation error (e.g. a transient scissor/surface-size mismatch while a compositor
+                // resizes a just-opened window) is fatal by default and would abort the whole process from
+                // this render thread. Catch it and drop the frame so the app survives and recovers on the
+                // next, correctly-sized frame. (Under panic=unwind only; a panic=abort release build aborts.)
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    renderer.render_frame(&msg.commands, msg.clear)
+                }));
                 #[cfg(target_os = "android")]
                 if let Some(session) = &hint_session {
                     let duration_ns = frame_start.elapsed().as_nanos() as i64;
@@ -128,38 +137,19 @@ pub fn run_hot_reload_host(
     if let Some(custom) = initial_app.window_config() {
         window = custom;
     }
-    if let Err(e) = platform.run(
-        window,
-        AppHandler::<WinitWindow, rsx_devtools::DevTools> {
-            app: Box::new(initial_app),
-            tree: None,
-            renderer: None,
-            renderer_is_hardware: false,
-            backend,
-            prefs,
-            pending_restart: false,
-            pending_renderer: None,
-            _flush_notify: None,
-            scale_factor: 1.0,
-            exit_requested: false,
-            redraw_waker: None,
-            scale_scratch: renderer_core::ScaleScratch::new(),
-            window_signals: None,
-            app_name: app_name.to_owned(),
-            last_frame: std::time::Instant::now(),
-            dev: rsx_devtools::DevTools::default(),
-            paths,
-            font_paths,
-            font_data,
-            _window: std::marker::PhantomData,
-            render_tx: None,
-            render_ret_rx: None,
-            command_buf_pool: Vec::new(),
-            render_join: None,
-            hw_renderer: None,
-            hot_reload_rx: Some(hot_rx),
-        },
-    ) {
+    // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload
+    // receiver differs from a normal single-window handler.
+    let mut handler = build_app_handler::<WinitWindow, rsx_devtools::DevTools>(
+        Box::new(initial_app),
+        paths,
+        font_paths,
+        font_data,
+        backend,
+        prefs,
+        app_name.to_owned(),
+    );
+    handler.hot_reload_rx = Some(hot_rx);
+    if let Err(e) = platform.run(window, handler) {
         tracing::error!("Event loop error: {e}");
         std::process::exit(1);
     }

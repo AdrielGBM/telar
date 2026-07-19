@@ -88,7 +88,8 @@ pub use renderer_core::{
     RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextAlign, TextRun, TextStyle,
 };
 pub use services_core::AppPathsProvider;
-#[cfg(feature = "di")]
+// Always available now: `ui_core::Surface` composes the per-surface service scope, so the DI/context feature is
+// wired into every GUI build (via ui-core → services-core/di), not opt-in.
 pub use services_core::{Scope, provide, try_inject, with_service};
 #[cfg(feature = "runtime")]
 pub use surface::{
@@ -113,8 +114,8 @@ pub use ui_core::{
     SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item,
     box_transform, compute_layout, focus, fragment, fragment_gap, fragment_positional,
     fragment_positional_gap, interactive_rects, mark_dirty, new_container, new_leaf,
-    relayout_if_dirty, reset_layout_runtime, set_display, set_overlay_host, surface_frame,
-    track_layout,
+    relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_display,
+    set_overlay_host, surface_frame, track_layout,
 };
 
 #[cfg(feature = "components")]
@@ -140,6 +141,7 @@ pub use preview::run_preview_window;
 pub use hot_state::{hot_restore_json, hot_signal, hot_snapshot_json, probe};
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use platform_android::AndroidApp;
+pub use runner::build_surface_handler;
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use runner::run_android_app_with_name;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
@@ -150,7 +152,7 @@ pub use runner::run_multi_with_platform;
 pub use runner::run_with_platform;
 pub use runner::set_default_font_family;
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
-pub use runner::{run_app_with_name, run_multi_app_with_name};
+pub use runner::{open_window, run_app_windowed, run_app_with_name, run_multi_app_with_name};
 
 pub use rsx_macros::{app, rsx_modules, t};
 

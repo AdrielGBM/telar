@@ -1,14 +1,15 @@
-//! Integration test for the multi-surface contract (Sprint C): drive N real rsx apps in one run through
-//! `run_multi_with_platform` + `HeadlessPlatform`. Each surface runs on its own thread with its own reactive
-//! tree, renders a distinct color, and its pixels are captured by SurfaceId — proving N isolated surfaces
-//! render correctly in a single run with no cross-talk.
+//! Integration test for the M3 multi-surface contract: drive N real rsx apps in one run through
+//! `run_multi_with_platform` + `HeadlessPlatform`. All surfaces share **one** thread and one reactive
+//! runtime, each with its own `Surface` world; each renders a distinct color at a distinct size and its
+//! pixels are captured by SurfaceId — proving N surfaces render isolated on a single shared-runtime thread
+//! with no cross-talk (T-8.1).
 
 mod common;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use common::{FillApp, NullPaths, assert_center_rgb};
+use common::{FillApp, MaybePanicApp, NullPaths, assert_center_rgb};
 use platform_headless::{HeadlessPlatform, SurfaceFrameSink};
 use rsx::{AppConfig, AppPathsProvider, Color, SurfaceId, WindowConfig, run_multi_with_platform};
 
@@ -65,4 +66,52 @@ fn headless_multi_surface_renders_isolated_trees() {
             .unwrap_or_else(|| panic!("surface {id:?} produced no frame"));
         assert_center_rgb(pixels, *w, *h, *rgb, &format!("surface {id:?}"));
     }
+}
+
+// T-4.2 quarantine: when one surface's app panics during build, it must be unmounted while the other surface
+// still renders — proving a panic in one surface on the shared UI thread does not tumble the rest. (Effective
+// only under panic=unwind, as tests run; a panic=abort release build aborts instead of catching.)
+#[test]
+fn headless_multi_surface_quarantines_a_panicking_surface() {
+    let good = SurfaceId(0);
+    let bad = SurfaceId(1);
+    let (w, h) = (24u32, 24u32);
+    let make = |id: SurfaceId| {
+        (
+            id,
+            AppConfig::from(WindowConfig {
+                width: w,
+                height: h,
+                ..WindowConfig::default()
+            }),
+        )
+    };
+
+    let results: SurfaceFrameSink = Arc::new(Mutex::new(HashMap::new()));
+    let platform = HeadlessPlatform::new(1, 1)
+        .with_frames(2)
+        .capture_surfaces_into(results.clone());
+
+    run_multi_with_platform(
+        platform,
+        vec![make(good), make(bad)],
+        |_id| Box::new(NullPaths) as Box<dyn AppPathsProvider>,
+        move |id| MaybePanicApp {
+            color: Color::from_rgb_u8(40, 200, 40),
+            panic_on_build: id == bad,
+        },
+        "rsx-headless-quarantine",
+    )
+    .expect("the run must complete even though one surface panicked");
+
+    let out = results.lock().unwrap();
+    assert!(
+        out.contains_key(&good),
+        "the healthy surface must still render"
+    );
+    assert!(
+        !out.contains_key(&bad),
+        "the panicking surface must be unmounted (no frame)"
+    );
+    assert_center_rgb(&out[&good], w, h, [40, 200, 40], "healthy surface");
 }

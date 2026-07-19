@@ -87,6 +87,8 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
         window,
         AppHandler::<AndroidWindow, D> {
             app: Box::new(app),
+            surface: None,
+            window_commands: platform_core::WindowCommandContext::new(),
             tree: None,
             renderer: None,
             renderer_is_hardware: false,

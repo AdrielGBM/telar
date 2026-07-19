@@ -79,6 +79,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         scale_factor: f32,
         generation: u64,
     ) -> Result<(), RendererError> {
+        // Shared with other render threads, exclusive against surface lifecycle: reconfigure (swapchain
+        // recreation) must not overlap another window's surface teardown (see renderer_core::gpu_sync).
+        let _gpu = renderer_core::gpu_sync::render_guard();
         self.scale_factor = scale_factor;
         self.incoming_generation = generation;
         if width != self.width || height != self.height || self.config.is_none() {
@@ -126,6 +129,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
+        // Shared with other render threads, exclusive against surface lifecycle: the acquire / present in this
+        // frame must not overlap another window's surface teardown, which corrupts the shared driver and
+        // segfaults inside vkAcquireNextImageKHR (see renderer_core::gpu_sync).
+        let _gpu = renderer_core::gpu_sync::render_guard();
         tracing::debug!(
             "hw render_frame: {} commands, clear={}",
             commands.len(),

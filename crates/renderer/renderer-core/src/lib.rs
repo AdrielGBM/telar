@@ -4,6 +4,7 @@ pub mod dirty;
 mod draw_state;
 mod error;
 pub mod font_config;
+pub mod gpu_sync;
 mod hash;
 mod image;
 mod path;

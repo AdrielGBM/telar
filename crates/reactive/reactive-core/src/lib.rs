@@ -7,12 +7,14 @@ mod effect;
 mod memo;
 mod runtime;
 mod signal;
+#[macro_use]
+mod surface_local;
 
 pub use effect::{Effect, effect};
 pub use memo::{Memo, memo};
 pub use runtime::{
-    FlushNotifyHandle, RuntimeGuard, SurfaceRuntime, batch, begin_batch, end_batch, reset_runtime,
-    set_flush_notify,
+    FlushNotifyHandle, SurfaceEnterGuard, SurfaceHandle, batch, begin_batch, current_surface,
+    end_batch, reset_runtime, set_current_surface, set_flush_notify, set_surface_enter_hook,
 };
 pub use signal::{ReadSignal, RwSignal, signal};
 
@@ -31,36 +33,80 @@ mod tests {
         assert_eq!(count.get(), 42);
     }
 
-    // The multi-surface isolation primitive (Sprint C): two SurfaceRuntimes activated on the same thread keep
-    // fully independent signal worlds, and dropping a guard restores the previously-active runtime.
+    // M3 owner-scope: the shared runtime stamps each effect with the surface active at registration, and the
+    // flush re-enters that surface before running the effect — even when the write that scheduled it happened
+    // under a different active surface. Here the enter hook records which surface each run resolved against.
     #[test]
-    fn surface_runtimes_isolate_signal_worlds() {
-        let a = SurfaceRuntime::new();
-        let b = SurfaceRuntime::new();
+    fn effect_runs_under_its_own_surface_context() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
 
-        // A signal created and mutated inside runtime `a`.
-        let sa = {
-            let _g = a.enter();
-            let s = signal(1i32);
-            s.set(10);
-            assert_eq!(s.get(), 10);
-            s
-        };
+        let entered: Rc<RefCell<Vec<u64>>> = Rc::new(RefCell::new(Vec::new()));
+        let entered_hook = Rc::clone(&entered);
+        set_surface_enter_hook(move |handle| {
+            let prev = set_current_surface(handle);
+            entered_hook.borrow_mut().push(handle.0);
+            SurfaceEnterGuard::new(move || {
+                set_current_surface(prev);
+            })
+        });
 
-        // Runtime `b` is an independent world: its own signal is unaffected by `a`.
-        {
-            let _g = b.enter();
-            let sb = signal(100i32);
-            assert_eq!(sb.get(), 100);
-            sb.set(200);
-            assert_eq!(sb.get(), 200);
-        }
+        // Build an effect "owned by" surface A: A is active while it registers, so it captures A.
+        let trigger = signal(0i32);
+        let read = trigger.read_only();
+        let _guard_a = SurfaceHandle(1).enter();
+        let _e = effect(move || {
+            read.get();
+        });
+        drop(_guard_a);
 
-        // Re-entering `a` still sees `sa` exactly as it was left — no cross-talk from `b`.
-        {
-            let _g = a.enter();
-            assert_eq!(sa.get(), 10);
-        }
+        // Back on the ambient surface, no A entry has been recorded beyond the build itself; clear the log so
+        // we observe only what the *flush-triggered* run enters.
+        entered.borrow_mut().clear();
+
+        // Write the signal while surface B is active. The scheduled effect belongs to A, so the flush must
+        // enter A (1), not B (2), before running it.
+        let _guard_b = SurfaceHandle(2).enter();
+        trigger.set(1);
+        drop(_guard_b);
+
+        assert!(
+            entered.borrow().contains(&1),
+            "flush must re-enter the effect's own surface (A=1): {:?}",
+            entered.borrow()
+        );
+    }
+
+    // A panic inside `batch` must leave the shared runtime consistent (batch_depth/flushing reset), so a
+    // later write still schedules and flushes effects. Without the RAII guards this would wedge the runtime.
+    #[test]
+    fn runtime_recovers_after_panic_in_batch() {
+        use std::cell::RefCell;
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        use std::rc::Rc;
+
+        let count = signal(0i32);
+        let read = count.read_only();
+        let seen: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+        let seen_c = Rc::clone(&seen);
+        let _e = effect(move || {
+            seen_c.borrow_mut().push(read.get());
+        });
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            batch(|| {
+                count.set(1);
+                panic!("boom");
+            });
+        }));
+        assert!(result.is_err(), "the batch closure should have panicked");
+
+        count.set(2);
+        assert!(
+            seen.borrow().contains(&2),
+            "runtime wedged after panic-in-batch; effect never re-ran: {:?}",
+            seen.borrow()
+        );
     }
 
     #[test]

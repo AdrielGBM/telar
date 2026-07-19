@@ -23,7 +23,6 @@
 //! to it regardless of where the pointer travels (a drag started in an overlay keeps tracking after the
 //! pointer leaves the overlay's box), until the release.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use geometry_core::Rect;
@@ -48,8 +47,12 @@ pub trait OverlaySink {
     }
 }
 
-thread_local! {
-    static OVERLAYS: RefCell<OverlayRegistry> = RefCell::new(OverlayRegistry::new());
+reactive_core::surface_local! {
+    /// A per-surface overlay registry: the modals/toasts/tooltips registered for priority pointer routing
+    /// on this surface. The runner activates each surface's [`OverlayContext`] around its build/event/frame.
+    slot OVERLAYS: OverlayRegistry = OverlayRegistry::new();
+    access with_overlays, with_overlays_ref;
+    context OverlayContext, OverlayGuard;
 }
 
 struct OverlayRegistry {
@@ -73,8 +76,7 @@ impl OverlayRegistry {
 /// Registers an overlay for priority pointer routing; returns an id to pass to [`unregister_overlay`] on
 /// drop. Newly registered overlays sit on top of earlier ones.
 pub fn register_overlay(sink: Rc<dyn OverlaySink>) -> u64 {
-    OVERLAYS.with(|r| {
-        let mut r = r.borrow_mut();
+    with_overlays(|r| {
         let id = r.next_id;
         r.next_id += 1;
         r.entries.push((id, sink));
@@ -85,8 +87,7 @@ pub fn register_overlay(sink: Rc<dyn OverlaySink>) -> u64 {
 /// Removes an overlay from the registry (call from the widget's `Drop`). Also releases the pointer capture
 /// if this overlay held it, so a modal dismissed mid-gesture does not leave a dangling capture.
 pub fn unregister_overlay(id: u64) {
-    OVERLAYS.with(|r| {
-        let mut r = r.borrow_mut();
+    with_overlays(|r| {
         r.entries.retain(|(entry_id, _)| *entry_id != id);
         if r.captured == Some(id) {
             r.captured = None;
@@ -111,10 +112,7 @@ fn pointer_pos(event: &Event) -> Option<(f32, f32)> {
 pub fn dispatch_overlays(event: &Event) -> EventResult {
     // Snapshot the registry (cheap `Rc` clones) and drop the borrow before dispatching: a handler may
     // write signals whose deferred flush registers/unregisters an overlay, which would re-enter the borrow.
-    let (entries, captured) = OVERLAYS.with(|r| {
-        let r = r.borrow();
-        (r.entries.clone(), r.captured)
-    });
+    let (entries, captured) = with_overlays_ref(|r| (r.entries.clone(), r.captured));
     if entries.is_empty() {
         return EventResult::Ignored;
     }
@@ -128,7 +126,7 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
                     // it — otherwise the loop continues to the overlays below and ultimately the tree.
                     if sink.blocking() || handled {
                         // Capture the gesture so following moves/releases route here wherever the pointer goes.
-                        OVERLAYS.with(|r| r.borrow_mut().captured = Some(*id));
+                        with_overlays(|r| r.captured = Some(*id));
                         return EventResult::Handled;
                     }
                 }
@@ -141,12 +139,12 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
                 if let Some((_, sink)) = entries.iter().find(|(id, _)| *id == cap_id) {
                     sink.dispatch(event);
                     if is_release {
-                        OVERLAYS.with(|r| r.borrow_mut().captured = None);
+                        with_overlays(|r| r.captured = None);
                     }
                     return EventResult::Handled;
                 }
                 // The capturing overlay is gone (dismissed mid-gesture); drop the stale capture.
-                OVERLAYS.with(|r| r.borrow_mut().captured = None);
+                with_overlays(|r| r.captured = None);
             }
             let (x, y) = pointer_pos(event).unwrap();
             for (_, sink) in entries.iter().rev() {
@@ -167,7 +165,7 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
 
 #[cfg(test)]
 fn reset() {
-    OVERLAYS.with(|r| *r.borrow_mut() = OverlayRegistry::new());
+    with_overlays(|r| *r = OverlayRegistry::new());
 }
 
 #[cfg(test)]

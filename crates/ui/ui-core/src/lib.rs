@@ -23,6 +23,7 @@ mod scroll_area;
 mod slots;
 mod styled_container;
 mod surface;
+mod surface_context;
 #[cfg(feature = "svg")]
 mod svg;
 mod text;
@@ -58,6 +59,7 @@ pub use surface::{
     DEFAULT_SCRIM, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole,
     SurfaceRoot, SurfaceScaffold, SurfaceSize, surface_frame,
 };
+pub use surface_context::{Surface, SurfaceGuard};
 #[cfg(feature = "svg")]
 pub use svg::Svg;
 pub use text::Text;

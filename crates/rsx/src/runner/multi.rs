@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use platform_core::{MultiSurfacePlatform, PlatformError, SurfaceId};
+use platform_core::{EventHandler, MultiSurfacePlatform, PlatformError, SurfaceId, Window};
 use services_core::AppPathsProvider;
 
 use crate::app::App;
@@ -31,9 +31,9 @@ pub fn run_multi_with_platform<P, A, PF, AF>(
 where
     P: MultiSurfacePlatform,
     P::Window: Clone + Send + Sync + 'static,
-    A: App,
-    PF: Fn(SurfaceId) -> Box<dyn AppPathsProvider> + Send + Sync + 'static,
-    AF: Fn(SurfaceId) -> A + Send + Sync + 'static,
+    A: App + 'static,
+    PF: Fn(SurfaceId) -> Box<dyn AppPathsProvider> + 'static,
+    AF: Fn(SurfaceId) -> A + 'static,
 {
     // Split each surface's AppConfig into the WindowConfig the platform needs and the fonts the handler factory
     // needs (keyed by SurfaceId, shared read-only across the surface threads).
@@ -57,7 +57,7 @@ where
         let prefs = UserPrefs::load(&app_name, paths.as_ref());
         let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
         let (font_paths, font_data) = fonts.get(&id).cloned().unwrap_or_default();
-        build_app_handler::<P::Window, ()>(
+        let mut handler = build_app_handler::<P::Window, ()>(
             Box::new(app),
             paths,
             font_paths,
@@ -65,6 +65,40 @@ where
             backend,
             prefs,
             app_name.clone(),
-        )
+        );
+        // Single-thread multi-surface (M3): every surface shares this UI thread and the one reactive runtime,
+        // so each needs its own `Surface` world (layout/overlay/focus/...). The handler activates it around
+        // each lifecycle call (`AppHandler::enter_surface`). Built here, on the thread that drives the handler.
+        handler.surface = Some(ui_core::Surface::new());
+        handler
     })
+}
+
+/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`App`], boxed so a multi-surface
+/// backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s
+/// factory produces — a handler carrying its own `ui_core::Surface` world — but for surfaces opened at runtime
+/// (via a `SurfaceHost`), so the backend can enqueue the handler into its single UI-thread loop instead of
+/// spawning a thread. Builds no renderer and touches no thread-local reactive state; the loop drives it.
+pub fn build_surface_handler<W, A>(
+    app: A,
+    paths: Box<dyn AppPathsProvider>,
+    app_name: &str,
+) -> Box<dyn EventHandler<W>>
+where
+    W: Window + Clone + Send + Sync + 'static,
+    A: App + 'static,
+{
+    let prefs = UserPrefs::load(app_name, paths.as_ref());
+    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
+    let mut handler = build_app_handler::<W, ()>(
+        Box::new(app),
+        paths,
+        Vec::new(),
+        Vec::new(),
+        backend,
+        prefs,
+        app_name.to_string(),
+    );
+    handler.surface = Some(ui_core::Surface::new());
+    Box::new(handler)
 }

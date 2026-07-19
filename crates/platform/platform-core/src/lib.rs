@@ -9,4 +9,7 @@ pub use window::{
     EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, SurfaceId, Window, WindowConfig,
     WindowPosition,
 };
-pub use window_command::{WindowCommand, push_window_command, take_window_commands};
+pub use window_command::{
+    WindowCommand, WindowCommandContext, WindowCommandGuard, push_window_command,
+    take_window_commands,
+};

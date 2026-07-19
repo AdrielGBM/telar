@@ -1,10 +1,17 @@
+use std::cell::RefCell;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use devtools_core::DevPlugin;
-use platform_core::{PlatformError, SurfaceId};
-use platform_desktop::{DesktopPathsProvider, WinitPlatform};
+use platform_core::{EventHandler, PlatformError, SurfaceId, WindowConfig};
+use platform_desktop::{DesktopPathsProvider, WinitPlatform, WinitWindow, request_dynamic_surface};
+use renderer_core::Color;
 use services_core::AppPathsProvider;
+use ui_core::{Component, Surface, SurfacePlacement, SurfaceRoot, SurfaceScaffold, SurfaceSize};
 
 use crate::app::App;
 use crate::app_config::AppConfig;
+use crate::surface::{SurfaceContent, SurfaceControl, SurfaceHost, SurfaceToken, set_surface_host};
 
 #[cfg(rsx_hot_reload)]
 pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
@@ -122,4 +129,177 @@ where
         app_factory,
         app_name,
     )
+}
+
+// ---- Dynamic secondary surfaces (`open_surface`) on the winit backend --------------------------------
+
+// Derives a winit `WindowConfig` from a backend-agnostic `SurfacePlacement`. winit has no compositor
+// anchoring, so a placement becomes a borderless, transparent top-level window at its content size; a
+// `needs_scaffold` placement (drawer/modal) relies on `SurfaceScaffold` to position the panel in-window.
+fn window_config_for(placement: &SurfacePlacement) -> WindowConfig {
+    let (width, height) = match placement.size {
+        SurfaceSize::Fixed(w, h) => (w, h),
+        SurfaceSize::Auto => (900, 660),
+    };
+    WindowConfig {
+        title: "Surface".to_string(),
+        width,
+        height,
+        has_decorations: false,
+        is_transparent: true,
+        ..Default::default()
+    }
+}
+
+// Wraps an `open_surface` content closure as an `App` (mirrors hyprshell's `HostedSurfaceApp`). No
+// `reset_layout_runtime`: the handler's own `Surface` supplies a fresh, isolated layout world.
+struct HostedSurfaceApp {
+    placement: SurfacePlacement,
+    content: RefCell<Option<SurfaceContent>>,
+}
+
+impl App for HostedSurfaceApp {
+    fn root(&self) -> Box<dyn Component> {
+        let content = self
+            .content
+            .borrow_mut()
+            .take()
+            .expect("surface content built once")();
+        if self.placement.needs_scaffold() {
+            Box::new(
+                SurfaceScaffold::new(&self.placement, content, None)
+                    .expect("surface scaffold build failed")
+                    .animate_in(),
+            )
+        } else {
+            Box::new(
+                SurfaceRoot::new(content)
+                    .expect("surface root build failed")
+                    .animate_in(),
+            )
+        }
+    }
+
+    fn clear_color(&self) -> Option<Color> {
+        None
+    }
+
+    fn window_config(&self) -> Option<WindowConfig> {
+        Some(window_config_for(&self.placement))
+    }
+}
+
+// The winit `SurfaceHost`: `open_surface` builds a content-hosting handler (with its own `Surface`) and
+// enqueues it as a new top-level window on the running runner — same thread, same reactive runtime as the
+// parent, so the child shares the parent's signal graph.
+struct WinitSurfaceHost;
+
+impl SurfaceHost for WinitSurfaceHost {
+    fn open(&self, placement: SurfacePlacement, content: SurfaceContent) -> SurfaceToken {
+        let window_config = window_config_for(&placement);
+        let app = HostedSurfaceApp {
+            placement,
+            content: RefCell::new(Some(content)),
+        };
+        let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
+        let prefs = crate::prefs::UserPrefs::load("rsx-surface", paths.as_ref());
+        // Same backend convention as every other window: the resolved preference, else the compile-time
+        // default (`Auto` = hardware with a software fallback). The tiling-WM resize race that once forced
+        // software here is handled by deferring on_resume to the surface's first real `Resized` (see the
+        // multi-surface runner), so secondary surfaces are first-class and render like the primary one.
+        let backend = prefs
+            .backend
+            .unwrap_or_else(crate::config::compile_time_backend);
+        // Fonts default to the system set; the layout-time text shaper is shared across surfaces (T-3.1), so
+        // it already carries the parent's fonts.
+        let mut handler = super::handler::build_app_handler::<WinitWindow, ()>(
+            Box::new(app),
+            paths,
+            Vec::new(),
+            Vec::new(),
+            backend,
+            prefs,
+            "rsx-surface".to_string(),
+        );
+        handler.surface = Some(Surface::new());
+        let boxed: Box<dyn EventHandler<WinitWindow>> = Box::new(handler);
+        let close = request_dynamic_surface(window_config, boxed);
+        SurfaceToken::new(Box::new(WinitSurfaceControl { close }))
+    }
+}
+
+struct WinitSurfaceControl {
+    close: Arc<AtomicBool>,
+}
+
+impl SurfaceControl for WinitSurfaceControl {
+    fn close(&self) {
+        self.close.store(true, Ordering::Relaxed);
+    }
+    fn is_closing(&self) -> bool {
+        self.close.load(Ordering::Relaxed)
+    }
+}
+
+/// Opens a **full `App`** in its own top-level window on the already-running single-thread multi-surface
+/// runner — the app is moved in (so it may be `!Send`, e.g. hold `Rc` state), keeps the one shared reactive
+/// runtime, and gets its own `Surface` world and `on_frame` driven. Unlike `open_surface` (which hosts a
+/// content closure), this hosts a real `App`, so a caller can move a live sub-app (a detached tab, with its
+/// state and background work) into a window. Returns a token; dropping it, or the window's own close, tears
+/// the window down. Only meaningful while `run_app_windowed`/the multi-surface runner is running.
+pub fn open_window<A: App>(app: A) -> SurfaceToken {
+    let window_config = app.window_config().unwrap_or_default();
+    let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
+    let prefs = crate::prefs::UserPrefs::load("rsx-window", paths.as_ref());
+    // Same backend convention as the primary window (resolved preference, else the compile-time default —
+    // `Auto` = hardware with a software fallback): a secondary window is a first-class window.
+    let backend = prefs
+        .backend
+        .unwrap_or_else(crate::config::compile_time_backend);
+    let mut handler = super::handler::build_app_handler::<WinitWindow, ()>(
+        Box::new(app),
+        paths,
+        Vec::new(),
+        Vec::new(),
+        backend,
+        prefs,
+        "rsx-window".to_string(),
+    );
+    handler.surface = Some(Surface::new());
+    let boxed: Box<dyn EventHandler<WinitWindow>> = Box::new(handler);
+    let close = request_dynamic_surface(window_config, boxed);
+    SurfaceToken::new(Box::new(WinitSurfaceControl { close }))
+}
+
+/// Runs one app in a native window (like [`run_app_with_name`]) but under the single-thread multi-surface
+/// runner with a real [`SurfaceHost`] installed — so the app can call `rsx::open_surface` to spawn further
+/// top-level windows that share its one reactive runtime (e.g. a detached tab). The app may be `!Send`.
+pub fn run_app_windowed<A: App>(config: AppConfig, app: A, app_name: &str) {
+    set_surface_host(Box::new(WinitSurfaceHost));
+    let platform = match WinitPlatform::try_new() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to create event loop: {e}");
+            std::process::exit(1);
+        }
+    };
+    // The app's own window_config (title/size/decorations) wins over the AppConfig default.
+    let window = app.window_config().unwrap_or_else(|| config.window.clone());
+    let config = AppConfig { window, ..config };
+    let app = RefCell::new(Some(app));
+    let result = super::run_multi_with_platform(
+        platform,
+        vec![(SurfaceId(0), config)],
+        |_id| Box::new(DesktopPathsProvider) as Box<dyn AppPathsProvider>,
+        move |_id| {
+            app.borrow_mut()
+                .take()
+                .expect("windowed app factory is called once")
+        },
+        app_name,
+    );
+    if let Err(e) = result {
+        tracing::error!("Event loop exited with error: {e}");
+        std::process::exit(1);
+    }
 }

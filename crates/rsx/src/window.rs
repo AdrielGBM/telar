@@ -35,3 +35,9 @@ pub fn close() {
 pub fn set_title(title: impl Into<String>) {
     push_window_command(WindowCommand::SetTitle(title.into()));
 }
+
+/// Bring this window to the front and give it input focus. Applied by the runner after the current event or
+/// frame; some Wayland compositors forbid programmatic activation, where it is a no-op.
+pub fn focus() {
+    push_window_command(WindowCommand::Focus);
+}
