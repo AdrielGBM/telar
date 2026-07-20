@@ -4273,6 +4273,7 @@ dependencies = [
  "platform-core",
  "platform-desktop",
  "platform-headless",
+ "raw-window-handle",
  "reactive-core",
  "renderer-assets",
  "renderer-core",

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use services_core::AppPathsProvider;
 
 use crate::config::RendererBackend;
@@ -33,6 +34,10 @@ pub struct AppCtx<'a> {
     pub(crate) redraw_requested: &'a mut bool,
     pub(crate) window_signals: Option<&'a WindowSignals>,
     pub(crate) redraw_waker: Option<&'a RedrawWaker>,
+    // This window's raw OS handles, for app code doing native platform integration (Wayland/X11 drag-and-drop,
+    // IME, a custom GPU surface). `None` on backends that can't report them. Standard, backend-agnostic types.
+    pub(crate) raw_window_handle: Option<RawWindowHandle>,
+    pub(crate) raw_display_handle: Option<RawDisplayHandle>,
 }
 
 impl<'a> AppCtx<'a> {
@@ -48,6 +53,19 @@ impl<'a> AppCtx<'a> {
     /// (e.g. on the first frame) and hand clones to worker threads so their results are picked up promptly.
     pub fn redraw_waker(&self) -> Option<RedrawWaker> {
         self.redraw_waker.cloned()
+    }
+
+    /// This window's raw OS window handle (e.g. a Wayland `wl_surface`, an X11 window id), for app code that
+    /// needs native platform integration the framework doesn't wrap — client-side drag-and-drop, IME, a custom
+    /// GPU surface. `None` on backends that can't report it (headless, or before the surface exists).
+    pub fn raw_window_handle(&self) -> Option<RawWindowHandle> {
+        self.raw_window_handle
+    }
+
+    /// This window's raw OS display handle (e.g. the Wayland `wl_display`, the X11 `Display`). Pairs with
+    /// [`raw_window_handle`](Self::raw_window_handle) for native platform integration. `None` where unavailable.
+    pub fn raw_display_handle(&self) -> Option<RawDisplayHandle> {
+        self.raw_display_handle
     }
 
     pub fn restart_required(&self) -> bool {

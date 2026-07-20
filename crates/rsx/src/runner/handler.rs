@@ -522,6 +522,12 @@ where
                 redraw_requested: &mut redraw_requested,
                 window_signals: self.window_signals.as_ref(),
                 redraw_waker: self.redraw_waker.as_ref(),
+                raw_window_handle: raw_window_handle::HasWindowHandle::window_handle(window)
+                    .ok()
+                    .map(|h| h.as_raw()),
+                raw_display_handle: raw_window_handle::HasDisplayHandle::display_handle(window)
+                    .ok()
+                    .map(|h| h.as_raw()),
             };
             self.app.on_frame(&mut ctx);
         }
