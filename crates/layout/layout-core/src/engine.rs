@@ -111,6 +111,17 @@ impl LayoutEngine {
         }
     }
 
+    /// Sets the node's minimum height to a definite length, or clears it (`auto`) when `None`. Lets a
+    /// content-measured leaf (e.g. a code editor's text area) fill a viewport it would otherwise underflow.
+    pub fn set_min_height(&mut self, node: NodeId, height: Option<f32>) {
+        if let Ok(s) = self.tree.style(node) {
+            let mut style = s.clone();
+            style.min_size.height =
+                height.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
+            let _ = self.tree.set_style(node, style);
+        }
+    }
+
     /// Whether the node lays its children along the main (horizontal) axis — a flex row. A column, or any
     /// non-row node (missing / errored), is `false`. A transparent fragment reads its host's axis to know
     /// which margin edge a per-item gap sits on.

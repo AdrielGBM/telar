@@ -87,6 +87,23 @@ impl TextArea {
         self
     }
 
+    /// Gives keyboard focus to this area (as a tap would), leaving the caret where it was. For programmatic
+    /// focus — e.g. a container autofocusing the editor when its tab or window becomes active.
+    pub fn request_focus(&self) {
+        focus::request(self.id);
+    }
+
+    /// Whether this area currently holds keyboard focus.
+    pub fn focused(&self) -> bool {
+        focus::is_focused(self.id)
+    }
+
+    /// A `Copy` [`focus::FocusHandle`] to this area, so a caller that has moved it into a container can still
+    /// focus it later (e.g. autofocus on tab activation) without keeping a reference to the area itself.
+    pub fn focus_handle(&self) -> focus::FocusHandle {
+        focus::handle(self.id)
+    }
+
     fn line_height(&self) -> f32 {
         (self.style)().font_size * renderer_text::LINE_HEIGHT_FACTOR
     }
@@ -251,7 +268,8 @@ impl Component for TextArea {
                     let local_x = (*x as f32 - rect.x).max(0.0);
                     let last = text.matches('\n').count();
                     let line = ((local_y / line_h).floor() as usize).min(last);
-                    self.caret.set(offset_at_line_x(&text, &style, line, local_x));
+                    self.caret
+                        .set(offset_at_line_x(&text, &style, line, local_x));
                     EventResult::Handled
                 } else {
                     EventResult::Ignored
@@ -303,7 +321,10 @@ fn nth_line_bounds(text: &str, n: usize) -> (usize, usize) {
             None => return (text.len(), text.len()),
         }
     }
-    let end = text[start..].find('\n').map(|i| start + i).unwrap_or(text.len());
+    let end = text[start..]
+        .find('\n')
+        .map(|i| start + i)
+        .unwrap_or(text.len());
     (start, end)
 }
 
@@ -376,11 +397,9 @@ mod tests {
     fn focused(initial: &str) -> (TextArea, RwSignal<String>) {
         reset_layout_runtime();
         let value = signal(initial.to_string());
-        let area = TextArea::new(
-            value.clone(),
-            LayoutStyle::new().width(400.0),
-            || TextStyle::new(14.0, Color::BLACK),
-        )
+        let area = TextArea::new(value.clone(), LayoutStyle::new().width(400.0), || {
+            TextStyle::new(14.0, Color::BLACK)
+        })
         .unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
@@ -440,7 +459,10 @@ mod tests {
             source: PointerSource::Mouse,
         });
         assert_eq!(handled, EventResult::Handled);
-        assert!(focus::is_focused(area.id), "a press inside focuses the area");
+        assert!(
+            focus::is_focused(area.id),
+            "a press inside focuses the area"
+        );
     }
 
     #[test]

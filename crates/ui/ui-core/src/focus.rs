@@ -13,6 +13,34 @@ use reactive_core::{RwSignal, signal};
 /// An opaque focus identity, one per focusable widget. Allocate with [`next_id`].
 pub type FocusId = u64;
 
+/// A cheap, `Copy` handle to a focusable widget's identity, so a caller that has moved the widget into a
+/// container (and no longer holds a reference to it) can still drive its focus — e.g. autofocus a hosted
+/// editor when its tab activates. Obtain one from the widget (see [`crate::TextArea::focus_handle`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FocusHandle(FocusId);
+
+impl FocusHandle {
+    /// Gives focus to the handle's widget.
+    pub fn request(self) {
+        request(self.0);
+    }
+
+    /// Removes focus from the handle's widget, only if it currently holds it.
+    pub fn release(self) {
+        release(self.0);
+    }
+
+    /// Whether the handle's widget currently holds focus.
+    pub fn is_focused(self) -> bool {
+        is_focused(self.0)
+    }
+}
+
+/// Wraps a raw [`FocusId`] in a [`FocusHandle`]. A focusable widget hands out a handle to its own id.
+pub fn handle(id: FocusId) -> FocusHandle {
+    FocusHandle(id)
+}
+
 /// Per-surface keyboard-focus state: the id allocator, the focused-widget signal, and the tab order.
 struct FocusState {
     next_id: FocusId,

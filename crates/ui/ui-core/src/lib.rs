@@ -12,6 +12,7 @@ mod input_region;
 mod layout_item;
 mod layout_leaf;
 mod line;
+mod line_gutter;
 pub mod overlay;
 mod path;
 mod pointer;
@@ -39,7 +40,7 @@ pub use container::Container;
 pub use context::{
     NodeId, absolute_rect, compute_layout, compute_layout_root, mark_dirty, new_container,
     new_leaf, relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_display,
-    set_overlay_host, track_layout,
+    set_min_height, set_overlay_host, track_layout,
 };
 pub use image::Image;
 pub use input::Input;
@@ -47,6 +48,7 @@ pub use input_region::{interactive_rects, register_interactive, unregister_inter
 pub use layout_item::{ClippedItem, LayoutItem, box_item};
 pub use layout_leaf::LayoutLeaf;
 pub use line::Line;
+pub use line_gutter::LineGutter;
 pub use overlay::{Overlay, Placement, anchor_rect};
 pub use path::Path;
 pub use reactive_list::ReactiveList;

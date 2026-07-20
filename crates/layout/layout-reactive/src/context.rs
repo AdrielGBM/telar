@@ -122,6 +122,13 @@ pub fn set_leading_margin(node: NodeId, is_row: bool, px: f32) {
     with_runtime(|rt| rt.engine.set_leading_margin(node, is_row, px))
 }
 
+/// Sets `node`'s minimum height to `px` after the initial layout (dirtying it, which propagates up), so a
+/// content-measured leaf grows to at least `px` even when its content is shorter. A scrolling editor uses it
+/// to fill its viewport so a click anywhere in the empty area — not just over the text — lands on the leaf.
+pub fn set_min_height(node: NodeId, px: f32) {
+    with_runtime(|rt| rt.engine.set_min_height(node, Some(px)))
+}
+
 /// Replaces `parent`'s children with `children`, in order, marking `parent` dirty. Operates on the
 /// thread-local runtime; `parent` must be a container already registered in the runtime.
 pub fn set_children(parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
@@ -784,6 +791,51 @@ mod tests {
             inner_rect.get().x.abs() < 1.0,
             "no margin when full: {}",
             inner_rect.get().x
+        );
+    }
+
+    // set_min_height grows a content-measured leaf to fill a viewport it would otherwise underflow (the
+    // notebook editor's fill-the-viewport trick); a leaf whose content already exceeds the floor is untouched.
+    #[test]
+    fn set_min_height_grows_short_measured_leaf() {
+        reset_layout_runtime();
+        // A measured leaf reporting a fixed 20px content height, like a one-line text area.
+        let (leaf, rect) = new_measured_leaf(
+            LayoutStyle::new().width(SizeDimension::Percent(1.0)),
+            Box::new(|_w| (0.0, 20.0)),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0)),
+            &[leaf],
+        )
+        .unwrap();
+        let space = (AvailableSpace::Definite(300.0), AvailableSpace::MaxContent);
+        compute_layout(root, space.0, space.1).unwrap();
+        assert!(
+            (rect.get().height - 20.0).abs() < 0.5,
+            "starts at its content height: {:?}",
+            rect.get()
+        );
+
+        // Grown to 200: the leaf now fills that height even though its content is only 20px tall.
+        set_min_height(leaf, 200.0);
+        compute_layout(root, space.0, space.1).unwrap();
+        assert!(
+            (rect.get().height - 200.0).abs() < 0.5,
+            "min_height fills the short leaf: {:?}",
+            rect.get()
+        );
+
+        // Cleared back to auto: the leaf collapses to its content height again.
+        set_min_height(leaf, 0.0);
+        compute_layout(root, space.0, space.1).unwrap();
+        assert!(
+            (rect.get().height - 20.0).abs() < 0.5,
+            "a zero floor restores the content height: {:?}",
+            rect.get()
         );
     }
 
