@@ -32,7 +32,7 @@ members = [
     "crates/tools/rsx-workspace",
     "apps/sandbox",
     "apps/landing",
-    "crates/ui/ui-components", "crates/i18n/i18n-core",
+    "crates/ui/ui-components", "crates/i18n/i18n-core", "crates/navigate/navigate-core",
 ]
 
 default-members = [
@@ -111,6 +111,7 @@ i18n-core = { path = "crates/i18n/i18n-core" }
 ui-core = { path = "crates/ui/ui-core" }
 ui-tree = { path = "crates/ui/ui-tree" }
 ui-components = { path = "crates/ui/ui-components" }
+navigate-core = { path = "crates/navigate/navigate-core" }
 rsx = { path = "crates/rsx" }
 devtools-core = { path = "crates/tools/devtools-core" }
 rsx-devtools = { path = "crates/tools/rsx-devtools" }

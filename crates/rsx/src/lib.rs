@@ -119,6 +119,9 @@ pub use ui_core::{
     set_min_height, set_overlay_host, surface_frame, track_layout,
 };
 
+#[cfg(feature = "navigate")]
+pub use navigate_core::{NavHost, NavPage, NavTransition, Navigator, SimplePage};
+
 #[cfg(feature = "components")]
 pub use ui_components::{
     AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, DrawerProps, HeadingProps,
