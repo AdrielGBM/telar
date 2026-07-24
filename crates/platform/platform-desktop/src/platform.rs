@@ -17,6 +17,9 @@ use platform_winit::WinitWindow;
 enum UserEvent {
     // The OS color-scheme flipped; carries the new dark (`true`) / light preference (Linux portal watch).
     ColorScheme(bool),
+    // A background thread asked to wake the UI (via the app redraw waker); redraw every live surface so each
+    // one's `on_frame` runs and drains its channels — wherever the waking app's content currently lives.
+    Wake,
 }
 
 pub struct WinitPlatform {
@@ -51,6 +54,11 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
                 if let Some(window) = &self.window {
                     self.handler
                         .on_event(Event::ColorSchemeChanged { dark }, window);
+                }
+            }
+            UserEvent::Wake => {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
         }
@@ -353,6 +361,12 @@ impl Platform for WinitPlatform {
             modifiers: platform_core::ModifiersState::default(),
             timer_has_fired: false,
         };
+        // The app-facing redraw waker (handed to background threads) wakes the loop through this proxy, not by
+        // holding a window — so caching it can't pin a window open.
+        let wake_proxy = self.event_loop.create_proxy();
+        platform_core::set_loop_waker(std::sync::Arc::new(move || {
+            let _ = wake_proxy.send_event(UserEvent::Wake);
+        }));
         // Live OS color-scheme changes: winit has no Linux integration, so a portal watch thread pushes them
         // back through the loop via a proxy. Elsewhere winit delivers WindowEvent::ThemeChanged natively.
         #[cfg(target_os = "linux")]
@@ -542,6 +556,13 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                     surface.pace = surface.handler.about_to_wait();
                 }
             }
+            UserEvent::Wake => {
+                // Redraw every surface so each one's `on_frame` runs — the waking app's content may now live in
+                // any of them (a tabbed host can move it between windows), so we don't assume which.
+                for surface in self.surfaces.values() {
+                    surface.window.request_redraw();
+                }
+            }
         }
     }
 
@@ -724,6 +745,13 @@ impl MultiSurfacePlatform for WinitPlatform {
             created: false,
             timer_has_fired: false,
         };
+        // The app-facing redraw waker wakes the loop through this proxy (which redraws every surface), not by
+        // holding a window — so an app can cache it and, if its content is later moved to another window, the
+        // original still closes and background wakeups still reach it wherever it now lives.
+        let wake_proxy = self.event_loop.create_proxy();
+        platform_core::set_loop_waker(std::sync::Arc::new(move || {
+            let _ = wake_proxy.send_event(UserEvent::Wake);
+        }));
         // Live OS color-scheme changes, delivered to every surface (see the single-window `run`).
         #[cfg(target_os = "linux")]
         {

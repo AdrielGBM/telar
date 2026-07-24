@@ -304,11 +304,17 @@ where
             window.width() as f32 / sf,
             window.height() as f32 / sf,
         ));
-        // winit's request_redraw is thread-safe, so a window clone is a valid cross-thread wake handle.
-        self.redraw_waker = Some(crate::app_context::RedrawWaker::new({
-            let window = window.clone();
-            move || window.request_redraw()
-        }));
+        // Prefer the process-global loop wake (installed by the platform): it wakes the loop — redrawing every
+        // surface — without holding any window, so an app can cache this waker or hand it to a worker thread
+        // and, if its content is later moved to another window, the original still closes and wakeups still
+        // reach it. Fall back to a window-cloning wake on backends that install no loop waker.
+        self.redraw_waker = Some(match platform_core::loop_waker() {
+            Some(wake) => crate::app_context::RedrawWaker::new(move || wake()),
+            None => {
+                let window = window.clone();
+                crate::app_context::RedrawWaker::new(move || window.request_redraw())
+            }
+        });
         self.tree = Some(ComponentList::new(self.app.root()));
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
