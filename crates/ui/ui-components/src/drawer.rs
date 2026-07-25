@@ -22,6 +22,9 @@ const PANEL_GAP: f32 = 12.0;
 pub struct DrawerProps {
     /// Bound open/close state. `None` (the default) never opens; `Some` drives the drawer.
     pub open: Option<RwSignal<bool>>,
+    /// Names this drawer, so anything can open it with `open_overlay(id)` without holding its signal. `""`
+    /// (the default) leaves it unnamed. Ignored when `open` is bound.
+    pub id: &'static str,
     /// Which edge the panel is pinned to: `"left"` (the default) or `"right"`.
     pub side: &'static str,
     /// Panel width in logical px. `0.0` (the default) means "unset" -> `DEFAULT_WIDTH`.
@@ -37,6 +40,7 @@ impl Default for DrawerProps {
     fn default() -> Self {
         Self {
             open: None,
+            id: "",
             side: "left",
             width: 0.0,
             on_close: None,
@@ -48,12 +52,14 @@ impl Default for DrawerProps {
 pub fn drawer(props: DrawerProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let DrawerProps {
         open,
+        id,
         side,
         width,
         on_close,
         color,
     } = props;
     let body = slots.take_default();
+    let open = shared::resolve_open(open, id);
     let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
     // "right" pins the panel to the trailing edge; anything else (incl. the default "left") to the leading edge.
     let justify = if side == "right" {

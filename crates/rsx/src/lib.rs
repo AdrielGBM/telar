@@ -126,11 +126,12 @@ pub use ui_core::{
     NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport,
     ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,
     SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea,
-    anchor_rect, box_item, box_transform, compute_layout, dismiss_depth, dismiss_top, focus,
-    fragment, fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects,
-    mark_dirty, new_container, new_leaf, relayout_if_dirty, remove_node, reset_layout_runtime,
-    set_children, set_display, set_min_height, set_overlay_host, surface_frame, track_layout,
-    use_dismiss_depth,
+    anchor_rect, box_item, box_transform, close_overlay, compute_layout, dismiss_depth,
+    dismiss_top, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
+    interactive_rects, mark_dirty, named_overlay, new_container, new_leaf, open_overlay,
+    overlay_open, overlay_state, relayout_if_dirty, remove_node, reset_layout_runtime,
+    set_children, set_display, set_min_height, set_overlay_host, surface_frame, toggle_overlay,
+    track_layout, use_dismiss_depth, use_overlay_open,
 };
 
 #[cfg(feature = "navigate")]

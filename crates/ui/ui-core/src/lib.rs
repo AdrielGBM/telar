@@ -15,6 +15,7 @@ mod layout_leaf;
 mod lazy;
 mod line;
 mod line_gutter;
+pub mod named_overlay;
 pub mod overlay;
 mod path;
 mod pointer;
@@ -53,6 +54,10 @@ pub use layout_leaf::LayoutLeaf;
 pub use lazy::Lazy;
 pub use line::Line;
 pub use line_gutter::LineGutter;
+pub use named_overlay::{
+    close as close_overlay, is_open as use_overlay_open, open as open_overlay,
+    peek_open as overlay_open, state as overlay_state, toggle as toggle_overlay,
+};
 pub use overlay::{Overlay, Placement, anchor_rect};
 pub use path::Path;
 pub use reactive_list::ReactiveList;

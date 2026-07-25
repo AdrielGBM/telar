@@ -179,7 +179,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "modal",
             s(
-                &["open", "title", "on_close", "color"],
+                &["open", "id", "title", "on_close", "color"],
                 true,
                 &["color"],
                 &["open", "on_close"],
@@ -189,7 +189,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "drawer",
             s(
-                &["open", "side", "width", "on_close", "color"],
+                &["open", "id", "side", "width", "on_close", "color"],
                 true,
                 &["color"],
                 &["open", "on_close"],

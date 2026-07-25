@@ -22,6 +22,10 @@ const CLOSE_SIZE: f32 = 13.0;
 pub struct ModalProps {
     /// Bound open/close state. `None` (the default) never opens (no signal to read); `Some` drives the modal.
     pub open: Option<RwSignal<bool>>,
+    /// Names this dialog, so anything can open it with `open_overlay(id)` without holding its signal. `""`
+    /// (the default) leaves it unnamed. Ignored when `open` is bound — an explicit signal wins, so the two
+    /// forms never disagree about which state is authoritative.
+    pub id: &'static str,
     pub title: Box<dyn Fn() -> String>,
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.
     pub on_close: Option<Box<dyn Fn()>>,
@@ -34,6 +38,7 @@ impl Default for ModalProps {
     fn default() -> Self {
         Self {
             open: None,
+            id: "",
             title: Box::new(String::new),
             on_close: None,
             color: Box::new(|| Color::TRANSPARENT),
@@ -44,11 +49,13 @@ impl Default for ModalProps {
 pub fn modal(props: ModalProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ModalProps {
         open,
+        id,
         title,
         on_close,
         color,
     } = props;
     let body = slots.take_default();
+    let open = shared::resolve_open(open, id);
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {
         build_open_modal(title, body, color, dismiss)
@@ -283,6 +290,71 @@ mod tests {
             before,
             "a self-close withdraws its entry"
         );
+    }
+
+    // A named modal is opened by name, with nothing holding its state — the point of `id:`. Opening it *before* it is built must still bring it up, since the name resolves to one shared signal either way.
+    #[test]
+    fn a_named_modal_opens_from_anywhere_even_before_it_is_built() {
+        reset_layout_runtime();
+        ui_core::close_overlay("confirm-test");
+        ui_core::open_overlay("confirm-test");
+
+        let modal = modal(
+            ModalProps {
+                id: "confirm-test",
+                title: Box::new(|| "Confirm".to_string()),
+                ..Default::default()
+            },
+            slot_with_body("Body"),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[modal.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let tree = ComponentList::new(modal);
+        relayout_if_dirty();
+        assert!(
+            find_text(&tree.commands(), "Confirm"),
+            "the dialog came up open, from a name opened before it existed"
+        );
+
+        // And a dismissal still drives it, so Escape and `Navigator::back()` work with no extra wiring.
+        assert!(ui_core::dismiss_top());
+        relayout_if_dirty();
+        assert!(!ui_core::overlay_open("confirm-test"));
+        assert!(!find_text(&tree.commands(), "Confirm"));
+    }
+
+    // Given both, the explicitly bound signal is authoritative — otherwise the two states would race.
+    #[test]
+    fn an_explicit_open_signal_wins_over_a_name() {
+        reset_layout_runtime();
+        ui_core::open_overlay("ignored-name");
+        let open = signal(false);
+        let modal = modal(
+            ModalProps {
+                open: Some(open.clone()),
+                id: "ignored-name",
+                title: Box::new(|| "Confirm".to_string()),
+                ..Default::default()
+            },
+            slot_with_body("Body"),
+        )
+        .unwrap();
+        let tree = ComponentList::new(modal);
+        assert!(
+            !find_text(&tree.commands(), "Confirm"),
+            "the bound signal says closed, so the open name is ignored"
+        );
+        ui_core::close_overlay("ignored-name");
     }
 
     // An unbound modal (no `open` signal) builds a 0-size node and never portals anything.
