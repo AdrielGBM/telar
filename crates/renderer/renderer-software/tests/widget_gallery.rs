@@ -27,13 +27,13 @@ fn form_widgets_render() {
     // Each widget in a clearly-visible state so the PNG shows selected/checked/filled looks.
     let cb = checkbox(CheckboxProps {
         checked: Some(signal(true)),
-        label: "I agree to the terms",
+        label: Box::new(|| "I agree to the terms".to_string()),
         ..Default::default()
     })
     .unwrap();
     let tg = toggle(ToggleProps {
         checked: Some(signal(true)),
-        label: "Notifications on",
+        label: Box::new(|| "Notifications on".to_string()),
         ..Default::default()
     })
     .unwrap();
@@ -41,14 +41,14 @@ fn form_widgets_render() {
     let r0 = radio(RadioProps {
         selected: Some(choice.clone()),
         value: 0,
-        label: "Small",
+        label: Box::new(|| "Small".to_string()),
         ..Default::default()
     })
     .unwrap();
     let r1 = radio(RadioProps {
         selected: Some(choice.clone()),
         value: 1,
-        label: "Medium (selected)",
+        label: Box::new(|| "Medium (selected)".to_string()),
         ..Default::default()
     })
     .unwrap();
@@ -60,7 +60,7 @@ fn form_widgets_render() {
     .unwrap();
     let tf = text_field(TextFieldProps {
         value: Some(signal("Ada".to_string())),
-        label: "Name",
+        label: Box::new(|| "Name".to_string()),
         width: 260.0,
         ..Default::default()
     })
@@ -68,7 +68,7 @@ fn form_widgets_render() {
     // A SECOND field (like the demo's two): placeholder-only, its own signal. Both must render.
     let tf2 = text_field(TextFieldProps {
         value: Some(signal(String::new())),
-        placeholder: "Search…",
+        placeholder: Box::new(|| "Search…".to_string()),
         width: 260.0,
         ..Default::default()
     })
@@ -142,7 +142,7 @@ fn modal_renders_over_a_page() {
     let dialog = modal(
         ModalProps {
             open: Some(open.clone()),
-            title: "Confirm action",
+            title: Box::new(|| "Confirm action".to_string()),
             ..Default::default()
         },
         slots,
