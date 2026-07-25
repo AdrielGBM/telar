@@ -224,6 +224,67 @@ mod tests {
         );
     }
 
+    // A real modal must track the dismiss stack through the whole open/dismiss/reopen cycle, so Escape and a
+    // Back gesture close it. This is the seam the raw-stack unit tests cannot reach: the registration effect is
+    // created inside the `ReactiveList` build closure — an effect nested in a running effect.
+    #[test]
+    fn open_registers_on_the_dismiss_stack_and_dismissing_closes_it() {
+        reset_layout_runtime();
+        let open = signal(false);
+        let modal = modal(
+            ModalProps {
+                open: Some(open.clone()),
+                title: Box::new(|| "Confirm".to_string()),
+                ..Default::default()
+            },
+            slot_with_body("Body"),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[modal.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let _tree = ComponentList::new(modal);
+        let before = ui_core::dismiss_depth();
+
+        open.set(true);
+        relayout_if_dirty();
+        assert_eq!(
+            ui_core::dismiss_depth(),
+            before + 1,
+            "an open modal is on the dismiss stack"
+        );
+
+        // What Escape/Back ultimately call: it must drive the modal's own `open` back to false.
+        assert!(ui_core::dismiss_top());
+        relayout_if_dirty();
+        assert!(!open.get(), "dismissing closed the modal");
+        assert_eq!(
+            ui_core::dismiss_depth(),
+            before,
+            "closing withdrew the registration"
+        );
+
+        // Closing by its own affordance must withdraw too, not leave a stale entry a later Escape would hit.
+        open.set(true);
+        relayout_if_dirty();
+        assert_eq!(ui_core::dismiss_depth(), before + 1);
+        open.set(false);
+        relayout_if_dirty();
+        assert_eq!(
+            ui_core::dismiss_depth(),
+            before,
+            "a self-close withdraws its entry"
+        );
+    }
+
     // An unbound modal (no `open` signal) builds a 0-size node and never portals anything.
     #[test]
     fn unbound_modal_renders_nothing() {
