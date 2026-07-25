@@ -312,12 +312,52 @@ pub struct ScrollViewport {
     offset_x: ReadSignal<f32>,
     offset_y: ReadSignal<f32>,
     rect: ReadSignal<Rect>,
+    // The writable side of the same offsets, so `reveal` can move the view. Kept private: callers should say
+    // *what they want visible*, not compute a scroll position.
+    set_x: RwSignal<f32>,
+    set_y: RwSignal<f32>,
 }
 
 impl ScrollViewport {
     /// The live scroll offset `(x, y)` in content-local px.
     pub fn offset(&self) -> (ReadSignal<f32>, ReadSignal<f32>) {
         (self.offset_x.clone(), self.offset_y.clone())
+    }
+
+    /// Scrolls the minimum distance needed to bring `item` fully into view, leaving `margin` px of breathing
+    /// room at whichever edge it entered from. A no-op when the item is already visible.
+    ///
+    /// This is what keyboard navigation needs and what a scroll offset alone cannot express: moving a selection
+    /// down a list should follow it, without yanking the view when the item was on screen all along. `item` must
+    /// be a node inside this scroll's content, so its tracked rect shares the content-local space the offset
+    /// indexes into.
+    pub fn reveal(&self, item: NodeId, margin: f32) {
+        let Some(item_rect) = track_layout(item) else {
+            return;
+        };
+        let item = item_rect.get();
+        let viewport = self.rect.get();
+
+        let reveal_axis = |offset: f32, span: f32, start: f32, size: f32| -> f32 {
+            if start - margin < offset {
+                // Entered from the near edge: put its leading edge at the top/left of the window.
+                (start - margin).max(0.0)
+            } else if start + size + margin > offset + span {
+                // Entered from the far edge: put its trailing edge at the bottom/right.
+                (start + size + margin - span).max(0.0)
+            } else {
+                offset
+            }
+        };
+
+        let y = reveal_axis(self.set_y.get(), viewport.height, item.y, item.height);
+        if y != self.set_y.get() {
+            self.set_y.set(y);
+        }
+        let x = reveal_axis(self.set_x.get(), viewport.width, item.x, item.width);
+        if x != self.set_x.get() {
+            self.set_x.set(x);
+        }
     }
 
     /// The live viewport rect; its `width`/`height` are the visible window's size.
@@ -383,6 +423,8 @@ impl LayoutScrollArea {
             offset_x: scroll_x.read_only(),
             offset_y: scroll_y.read_only(),
             rect: leaf.rect.read_only(),
+            set_x: scroll_x.clone(),
+            set_y: scroll_y.clone(),
         })?;
         let content_node = content.layout_node();
         let content_rect_signal =
