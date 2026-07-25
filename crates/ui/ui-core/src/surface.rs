@@ -29,6 +29,28 @@ pub enum SurfaceRole {
     Osd,
     /// A free-floating window with its own title/close affordances.
     Float,
+    /// A modal that owns the screen while it is up: a launcher, a command palette, a session menu. Unlike a
+    /// [`Drawer`](Self::Drawer) it isn't anchored to an edge, and unlike a [`Float`](Self::Float) it expects to
+    /// take the keyboard outright — the user is typing into it, not at whatever is behind it.
+    Overlay,
+}
+
+/// How much of the keyboard a surface needs.
+///
+/// The distinction matters because it decides who receives a keystroke *before* any click. A panel with a text
+/// field can wait to be clicked into ([`OnDemand`](Self::OnDemand)); a launcher cannot — it opens on a keybind
+/// and the next keystroke is already its first search character, so it has to hold the keyboard from the moment
+/// it maps ([`Exclusive`](Self::Exclusive)). Asking for more than is needed is not free: a surface holding the
+/// keyboard takes it from the focused window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KeyboardMode {
+    /// Display-only; never takes keyboard focus.
+    #[default]
+    None,
+    /// May be given focus on interaction, e.g. a click into a text field.
+    OnDemand,
+    /// Holds the keyboard for as long as it is mapped.
+    Exclusive,
 }
 
 /// The screen edge (or centre) a surface hugs. The cross axis is aligned by [`SurfaceAlign`].
@@ -78,10 +100,10 @@ pub struct SurfacePlacement {
     pub timeout: Option<Duration>,
     /// The surface passes pointer input through to whatever is beneath it (a click-through OSD).
     pub input_transparent: bool,
-    /// The surface hosts editable text and must be able to take keyboard focus. A backend maps this to
-    /// its own focus model (e.g. layer-shell `on-demand` keyboard interactivity); left off, a panel is
-    /// display-only and never steals the keyboard. Default `false`.
-    pub wants_keyboard: bool,
+    /// How much of the keyboard the surface needs; a backend maps this to its own focus model (e.g. layer-shell
+    /// keyboard interactivity). Defaults to [`KeyboardMode::None`], so a panel is display-only and never steals
+    /// the keyboard.
+    pub keyboard: KeyboardMode,
     /// The monitor to place the surface on by name; `None` = the active/default output.
     pub output: Option<String>,
 }
@@ -98,8 +120,19 @@ impl SurfacePlacement {
             dismiss_on_outside: false,
             timeout: None,
             input_transparent: false,
-            wants_keyboard: false,
+            keyboard: KeyboardMode::None,
             output: None,
+        }
+    }
+
+    /// A modal that owns the screen: centred, scrimmed, dismissed by a press outside, and holding the keyboard
+    /// from the moment it maps so the first keystroke after the keybind is already typed into it.
+    pub fn overlay() -> Self {
+        Self {
+            scrim: true,
+            dismiss_on_outside: true,
+            keyboard: KeyboardMode::Exclusive,
+            ..Self::new(SurfaceRole::Overlay, SurfaceAnchor::Center)
         }
     }
 
@@ -169,11 +202,27 @@ impl SurfacePlacement {
         self
     }
 
-    /// Opt the surface into keyboard focus, for panels that host editable text (a search box, a note
-    /// title). A backend maps this to its focus model; the default is display-only.
+    /// Opt the surface into focus-on-interaction, for panels that host editable text (a search box, a note
+    /// title). Sugar for [`keyboard_mode`](Self::keyboard_mode) with
+    /// [`OnDemand`](KeyboardMode::OnDemand)/[`None`](KeyboardMode::None).
     pub fn keyboard(mut self, wants_keyboard: bool) -> Self {
-        self.wants_keyboard = wants_keyboard;
+        self.keyboard = if wants_keyboard {
+            KeyboardMode::OnDemand
+        } else {
+            KeyboardMode::None
+        };
         self
+    }
+
+    /// Sets exactly how much of the keyboard the surface takes.
+    pub fn keyboard_mode(mut self, mode: KeyboardMode) -> Self {
+        self.keyboard = mode;
+        self
+    }
+
+    /// Whether the surface takes keyboard focus at all.
+    pub fn wants_keyboard(&self) -> bool {
+        self.keyboard != KeyboardMode::None
     }
 
     pub fn output(mut self, output: Option<String>) -> Self {

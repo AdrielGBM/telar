@@ -122,8 +122,8 @@ pub use ui_core::{AssetSource, AssetState};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
-    EventResult, Image, Input, LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter, NodeId,
-    NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport,
+    EventResult, Image, Input, KeyboardMode, LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter,
+    NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport,
     ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,
     SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea,
     anchor_rect, box_item, box_transform, close_overlay, compute_layout, dismiss_depth,
