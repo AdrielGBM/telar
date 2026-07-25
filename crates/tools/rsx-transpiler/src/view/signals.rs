@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use rsx_parser::Attr;
+use rsx_parser::{Attr, ViewNode};
 
 use crate::naming::contains_ident;
 use crate::style::format_f32;
@@ -277,6 +277,65 @@ pub(super) fn wrap_signal_clones(raw_values: &[&str], closure_expr: String) -> S
         .map(|s| format!("let {s} = {s}.clone(); "))
         .collect();
     format!("{{ {prefix}{closure_expr} }}")
+}
+
+/// Every raw source snippet a subtree contains, still carrying its `$` sigils — attribute values, text content, control-flow conditions and verbatim `let`s.
+///
+/// Collected so a `move` closure wrapping that subtree ([`clone_block_multiline`]) can clone the signals it will reference instead of moving them out of the surrounding view. Every emitter that puts view markup inside a `move` closure needs this: a reactive `if`/`for` branch and a `lazy` block alike.
+pub(super) fn subtree_snippets(nodes: &[ViewNode]) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_snippets(nodes, &mut out);
+    out
+}
+
+fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
+    for node in nodes {
+        match node {
+            ViewNode::Element(el) => {
+                if let Some(content) = &el.content {
+                    out.push(content.clone());
+                }
+                if let Some(params) = &el.leading_params {
+                    out.push(params.clone());
+                }
+                for attr in &el.attributes {
+                    out.push(attr.value.clone());
+                }
+                collect_snippets(&el.children, out);
+            }
+            ViewNode::IfBlock(block) => {
+                out.push(block.condition.clone());
+                collect_snippets(&block.then_branch, out);
+                if let Some(else_branch) = &block.else_branch {
+                    collect_snippets(else_branch, out);
+                }
+            }
+            ViewNode::ForBlock(block) => {
+                out.push(block.iterable.clone());
+                if let Some(key) = &block.key_expr {
+                    out.push(key.clone());
+                }
+                if let Some(gap) = &block.gap_expr {
+                    out.push(gap.clone());
+                }
+                collect_snippets(&block.body, out);
+            }
+            ViewNode::LetStmt(stmt) => out.push(stmt.source.clone()),
+        }
+    }
+}
+
+/// [`wrap_signal_clones`] for a closure whose body spans lines: the clones go on their own line above it, so the generated code stays readable and the source map keeps pointing at the right `.rsx` lines. A no-op when `idents` is empty, which keeps the common signal-free closure unwrapped.
+pub(super) fn clone_block_multiline(idents: &[String], closure: String, pad: &str) -> String {
+    if idents.is_empty() {
+        return closure;
+    }
+    let mut out = format!("{pad}{{\n");
+    for name in idents {
+        let _ = writeln!(out, "{pad}    let {name} = {name}.clone();");
+    }
+    let _ = write!(out, "{closure}\n{pad}}}");
+    out
 }
 
 /// Assembles a `&[(pos, color)]` gradient stops expression from the resolved `from`, `to`, and optional `mid`/`mid_pos` values.

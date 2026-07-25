@@ -86,7 +86,7 @@ col gap:20
             if $show
                 row gap:8 align:center pad_y:4
                     box fill:primary radius:4 width:8 height:8
-                    text "Now you see me" size:14 color:ink
+                    text "Now you see me — and the count above is {$count}" size:14 color:ink
             else
                 text "…now you don't" size:14 color:muted
         code_line code:"if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)"

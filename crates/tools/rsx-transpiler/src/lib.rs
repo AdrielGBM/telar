@@ -723,6 +723,74 @@ col @card
         );
     }
 
+    // A signal read INSIDE a reactive branch used to be moved into the branch closure, so the same signal stopped being usable in the rest of the view — a move error in generated code the author never wrote.
+    #[test]
+    fn a_reactive_if_clones_the_signals_its_branches_read() {
+        let src = "[logic]\nlet show = signal(true);\nlet count = signal(0i32);\n[view]\ncol\n    if $show\n        text \"in branch {$count}\"\n    text \"outside {$count}\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("compile_error!"), "{code}");
+        assert!(
+            code.contains("let count = count.clone();"),
+            "the branch closure must clone the signal it reads, not move it:\n{code}"
+        );
+        // The condition keeps its own clone in the source closure; the two must not be conflated.
+        assert!(
+            code.contains("{ let show = show.clone(); move || vec![show.get()] }"),
+            "the condition still clones separately:\n{code}"
+        );
+    }
+
+    #[test]
+    fn a_reactive_for_clones_the_signals_its_body_reads() {
+        let src = "[logic]\nlet items = signal(vec![1i32, 2]);\nlet scale = signal(2i32);\n[view]\ncol\n    for n in $items\n        text \"{$scale}\"\n    text \"outside {$scale}\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("compile_error!"), "{code}");
+        assert!(
+            code.contains("let scale = scale.clone();"),
+            "the item builder must clone the signal its body reads:\n{code}"
+        );
+    }
+
+    // The loop variable is the closure's own parameter, so it must never appear in the prelude above it — that would name a binding which does not exist in the enclosing scope.
+    #[test]
+    fn a_reactive_for_never_clones_its_own_loop_variable() {
+        let src = "[logic]\nlet items = signal(vec![1i32, 2]);\n[view]\ncol\n    for n in $items\n        text \"{n}\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        // Only the line directly above the builder matters: `let n = n.clone();` *inside* it is the leaf emitter cloning the parameter into its own reactive closure, which is correct and long-standing.
+        let lines: Vec<&str> = code.lines().collect();
+        let builder = lines
+            .iter()
+            .position(|l| l.contains("move |n| ->"))
+            .expect("item builder closure");
+        assert!(
+            !lines[builder - 1].contains("let n = n.clone();"),
+            "the loop variable must not be cloned above its own closure:\n{code}"
+        );
+    }
+
+    // A branch reading no signal needs no prelude at all, so the common case stays unwrapped.
+    #[test]
+    fn a_signal_free_reactive_branch_gets_no_clone_prelude() {
+        let src = "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"static\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("move |__cond: bool|"),
+            "missing branch closure:\n{code}"
+        );
+        assert!(
+            !code.contains("let show = show.clone();\n        move |__cond"),
+            "a branch that reads nothing must not be wrapped:\n{code}"
+        );
+    }
+
     #[test]
     fn lazy_without_a_condition_is_a_compile_error() {
         let src = "[view]\ncol\n    lazy\n        text \"hi\"\n";

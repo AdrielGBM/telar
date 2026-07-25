@@ -4,10 +4,27 @@ use std::fmt::Write;
 
 use rsx_parser::{ForBlock, IfBlock, ViewNode};
 
-use super::signals::{pattern_idents, substitute_reads, wrap_signal_clones};
+use super::signals::{
+    captured_idents, clone_block_multiline, pattern_idents, substitute_reads, subtree_snippets,
+    wrap_signal_clones,
+};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
+    /// The clone prelude a `move` closure holding `body` needs: one `let x = x.clone();` per `$signal` (and
+    /// per in-scope loop variable) the subtree reads.
+    ///
+    /// Without it the closure *moves* those bindings, so a signal read inside a reactive branch stops being
+    /// available to the rest of the view — a trap the author never wrote and cannot see in their `.rsx`.
+    /// Computed before this block's own pattern idents enter `loop_variables`, since those are the closure's
+    /// parameters and exist only inside it.
+    fn wrap_branch_closure(&self, body: &[ViewNode], closure: String, pad: &str) -> String {
+        let raw = subtree_snippets(body);
+        let raw_refs: Vec<&str> = raw.iter().map(String::as_str).collect();
+        let idents = captured_idents(&raw_refs, &self.loop_variables);
+        clone_block_multiline(&idents, closure, pad)
+    }
+
     pub(super) fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {
         // A `$`-signal in the condition makes this a reactive conditional: the shown branch swaps when the
         // condition changes. A plain condition stays a one-shot construction `if` (branch chosen at build).
@@ -48,18 +65,23 @@ impl ViewGen<'_> {
         let source =
             wrap_signal_clones(&[cond], format!("move || vec![{}]", substitute_reads(cond)));
 
+        let mut body = String::new();
+        let _ = writeln!(
+            body,
+            "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+        );
+        self.indent += 2;
+        self.emit_branch_returns(block, &mut body);
+        self.indent -= 2;
+        let _ = write!(body, "{pad}    }}");
+        let branches =
+            self.wrap_branch_closure(&Self::branch_nodes(block), body, &format!("{pad}    "));
+
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = fragment(");
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
-        let _ = writeln!(
-            code,
-            "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
-        );
-        self.indent += 2;
-        self.emit_branch_returns(block, &mut code);
-        self.indent -= 2;
-        let _ = writeln!(code, "{pad}    }},");
+        let _ = writeln!(code, "{branches},");
         let _ = write!(code, "{pad});");
         ChildEmit::Fragment { name: var, code }
     }
@@ -74,20 +96,36 @@ impl ViewGen<'_> {
         let source =
             wrap_signal_clones(&[cond], format!("move || vec![{}]", substitute_reads(cond)));
 
+        let mut body = String::new();
+        let _ = writeln!(
+            body,
+            "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+        );
+        self.indent += 2;
+        self.emit_branch_returns(block, &mut body);
+        self.indent -= 2;
+        let _ = write!(body, "{pad}    }}");
+        let branches =
+            self.wrap_branch_closure(&Self::branch_nodes(block), body, &format!("{pad}    "));
+
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = ReactiveList::new(");
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
-        let _ = writeln!(
-            code,
-            "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
-        );
-        self.indent += 2;
-        self.emit_branch_returns(block, &mut code);
-        self.indent -= 2;
-        let _ = writeln!(code, "{pad}    }},");
+        let _ = writeln!(code, "{branches},");
         let _ = write!(code, "{pad})?;");
         ChildEmit::Simple { name: var, code }
+    }
+
+    /// Both branches of an `if` as one node list — what the branch closure actually contains, and so what its
+    /// clone prelude has to be computed from. The condition is deliberately excluded: it lives in the source
+    /// closure, which clones it separately.
+    fn branch_nodes(block: &IfBlock) -> Vec<ViewNode> {
+        let mut nodes = block.then_branch.clone();
+        if let Some(else_branch) = &block.else_branch {
+            nodes.extend(else_branch.iter().cloned());
+        }
+        nodes
     }
 
     /// Emits a reactive `if`'s branches as per-branch returns, each collapsed by [`Self::emit_content_cell`].
@@ -179,27 +217,33 @@ impl ViewGen<'_> {
             (false, true) => "fragment_positional_gap",
         };
 
-        let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = {ctor}(");
-        let _ = writeln!(code, "{pad}    {source},");
-        if let Some(key_expr) = key_expr {
-            let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
-        }
+        // Computed before this loop's own pattern idents go into scope: those are the closure's parameters, so cloning them above it would name bindings that do not exist there.
+        let prelude_pad = format!("{pad}    ");
+        let mut body = String::new();
         let _ = writeln!(
-            code,
+            body,
             "{pad}    move |{pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
         self.indent += 2;
         let idents = pattern_idents(pattern);
         let added = idents.len();
         self.loop_variables.extend(idents);
-        let cell = self.emit_content_cell(&block.body, &mut code);
+        let cell = self.emit_content_cell(&block.body, &mut body);
         self.loop_variables
             .truncate(self.loop_variables.len() - added);
         let pad2 = self.indent_str();
-        let _ = writeln!(code, "{pad2}Ok(box_item({cell}))");
+        let _ = writeln!(body, "{pad2}Ok(box_item({cell}))");
         self.indent -= 2;
-        let _ = writeln!(code, "{pad}    }},");
+        let _ = write!(body, "{pad}    }}");
+        let item_builder = self.wrap_branch_closure(&block.body, body, &prelude_pad);
+
+        let mut code = String::new();
+        let _ = writeln!(code, "{pad}let {var} = {ctor}(");
+        let _ = writeln!(code, "{pad}    {source},");
+        if let Some(key_expr) = key_expr {
+            let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
+        }
+        let _ = writeln!(code, "{item_builder},");
         if let Some(gap_expr) = gap_expr {
             let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
         }
@@ -238,27 +282,32 @@ impl ViewGen<'_> {
             format!("move || {}", substitute_reads(iterable)),
         );
 
-        let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = ReactiveList::{constructor}(");
-        let _ = writeln!(code, "{pad}    {source},");
-        if let Some(key_expr) = key_expr {
-            let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
-        }
+        let prelude_pad = format!("{pad}    ");
+        let mut body = String::new();
         let _ = writeln!(
-            code,
+            body,
             "{pad}    move |{pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
         self.indent += 2;
         let idents = pattern_idents(pattern);
         let added = idents.len();
         self.loop_variables.extend(idents);
-        let cell = self.emit_content_cell(&block.body, &mut code);
+        let cell = self.emit_content_cell(&block.body, &mut body);
         self.loop_variables
             .truncate(self.loop_variables.len() - added);
         let ipad = self.indent_str();
-        let _ = writeln!(code, "{ipad}Ok(box_item({cell}))");
+        let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
         self.indent -= 2;
-        let _ = writeln!(code, "{pad}    }},");
+        let _ = write!(body, "{pad}    }}");
+        let item_builder = self.wrap_branch_closure(&block.body, body, &prelude_pad);
+
+        let mut code = String::new();
+        let _ = writeln!(code, "{pad}let {var} = ReactiveList::{constructor}(");
+        let _ = writeln!(code, "{pad}    {source},");
+        if let Some(key_expr) = key_expr {
+            let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
+        }
+        let _ = writeln!(code, "{item_builder},");
         if let Some(gap_expr) = gap_expr {
             let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
         }

@@ -2,9 +2,12 @@
 
 use std::fmt::Write;
 
-use rsx_parser::{Element, ViewNode};
+use rsx_parser::Element;
 
-use super::signals::{captured_idents, rust_str, substitute_reads};
+use super::signals::{
+    captured_idents, clone_block_multiline, rust_str, substitute_reads, subtree_snippets,
+    wrap_signal_clones,
+};
 use super::{ChildEmit, ChildMode, ViewGen, forces_child_vec};
 
 impl ViewGen<'_> {
@@ -33,7 +36,7 @@ impl ViewGen<'_> {
         let visible = match cond {
             Some(attr) => {
                 let raw = attr.value.trim();
-                clone_block(&[raw], format!("move || {}", substitute_reads(raw)))
+                wrap_signal_clones(&[raw], format!("move || {}", substitute_reads(raw)))
             }
             // Without a condition there is nothing to defer *until*, which is almost certainly a mistake rather than a request to build immediately.
             None => format!(
@@ -48,7 +51,7 @@ impl ViewGen<'_> {
         let mut body = String::new();
         let _ = writeln!(
             body,
-            "{pad}    move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {{"
+            "{pad}        move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {{"
         );
         let children =
             self.emit_children_collection(&mut body, &child_emits, &inner_pad, mode, &[]);
@@ -57,88 +60,15 @@ impl ViewGen<'_> {
 
         let raw = subtree_snippets(&el.children);
         let raw_refs: Vec<&str> = raw.iter().map(String::as_str).collect();
-        let build = self.clone_block_multiline(&raw_refs, body, &format!("{pad}    "));
+        let idents = captured_idents(&raw_refs, &self.loop_variables);
+        let build = clone_block_multiline(&idents, body, &format!("{pad}        "));
 
         let _ = writeln!(code, "{pad}    Lazy::new(");
         let _ = writeln!(code, "{pad}        {style},");
         let _ = writeln!(code, "{pad}        {visible},");
-        let _ = writeln!(code, "{pad}        {build},");
+        let _ = writeln!(code, "{build},");
         let _ = writeln!(code, "{pad}    )?");
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
-    }
-
-    /// [`clone_block`] for a closure whose body spans lines: the clones go on their own line above it, so the
-    /// generated code stays readable and the source map keeps pointing at the right `.rsx` lines.
-    fn clone_block_multiline(&self, raw_values: &[&str], closure: String, pad: &str) -> String {
-        let idents = captured_idents(raw_values, &self.loop_variables);
-        if idents.is_empty() {
-            return closure;
-        }
-        let mut out = String::from("{\n");
-        for name in idents {
-            let _ = writeln!(out, "{pad}    let {name} = {name}.clone();");
-        }
-        let _ = write!(out, "{closure}\n{pad}}}");
-        out
-    }
-}
-
-/// Wraps a single-line `move` closure in a block that clones every `$name` it references first.
-fn clone_block(raw_values: &[&str], closure: String) -> String {
-    let idents = captured_idents(raw_values, &[]);
-    if idents.is_empty() {
-        return closure;
-    }
-    let prefix: String = idents
-        .iter()
-        .map(|s| format!("let {s} = {s}.clone(); "))
-        .collect();
-    format!("{{ {prefix}{closure} }}")
-}
-
-/// Every raw source snippet a subtree contains, still carrying its `$` sigils — attribute values, text
-/// content, control-flow conditions and verbatim `let`s. Collected so a `move` closure wrapping that subtree
-/// can clone the signals it will reference instead of moving them out of the surrounding view.
-fn subtree_snippets(nodes: &[ViewNode]) -> Vec<String> {
-    let mut out = Vec::new();
-    collect_snippets(nodes, &mut out);
-    out
-}
-
-fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
-    for node in nodes {
-        match node {
-            ViewNode::Element(el) => {
-                if let Some(content) = &el.content {
-                    out.push(content.clone());
-                }
-                if let Some(params) = &el.leading_params {
-                    out.push(params.clone());
-                }
-                for attr in &el.attributes {
-                    out.push(attr.value.clone());
-                }
-                collect_snippets(&el.children, out);
-            }
-            ViewNode::IfBlock(block) => {
-                out.push(block.condition.clone());
-                collect_snippets(&block.then_branch, out);
-                if let Some(else_branch) = &block.else_branch {
-                    collect_snippets(else_branch, out);
-                }
-            }
-            ViewNode::ForBlock(block) => {
-                out.push(block.iterable.clone());
-                if let Some(key) = &block.key_expr {
-                    out.push(key.clone());
-                }
-                if let Some(gap) = &block.gap_expr {
-                    out.push(gap.clone());
-                }
-                collect_snippets(&block.body, out);
-            }
-            ViewNode::LetStmt(stmt) => out.push(stmt.source.clone()),
-        }
     }
 }
