@@ -162,6 +162,55 @@ pub fn app(input: TokenStream) -> TokenStream {
         quote! {}
     };
 
+    // Tree-ownership symbols: the dylib mounts and owns the segment tree, so its view effects are created in the
+    // same reactive runtime as the signals they read. Mounting it on the host's side instead leaves every
+    // subscription unestablished, which is what the force-tick workaround exists to paper over — see `rsx::tree`.
+    let hot_tree_symbols = if is_hot_reload {
+        quote! {
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_mount(
+                app: &dyn ::rsx::App,
+            ) -> *mut ::rsx::HotTree {
+                ::rsx::HotTree::mount(app)
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_release(tree: *mut ::rsx::HotTree) {
+                unsafe { ::rsx::HotTree::release(tree) }
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_on_event(
+                tree: *mut ::rsx::HotTree,
+                event: &::rsx::Event,
+            ) -> bool {
+                unsafe { ::rsx::HotTree::on_event(tree, event) }
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_paint(
+                tree: *mut ::rsx::HotTree,
+            ) -> ::std::vec::Vec<::rsx::DrawCommand> {
+                unsafe { ::rsx::HotTree::paint(tree) }
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_dirty(tree: *mut ::rsx::HotTree) -> bool {
+                unsafe { ::rsx::HotTree::is_dirty(tree) }
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_generation(
+                tree: *mut ::rsx::HotTree,
+            ) -> u64 {
+                unsafe { ::rsx::HotTree::generation(tree) }
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_walk(
+                tree: *mut ::rsx::HotTree,
+            ) -> ::std::vec::Vec<::rsx::SegmentNodeInfo> {
+                unsafe { ::rsx::HotTree::walk(tree) }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     // Motion-tick symbols: host and dylib link separate copies of motion-core, each with its own registry; the `Animated` values live in the dylib's, so the host must call across this boundary instead of ticking its own (empty) copy.
     let hot_motion_symbols = if is_hot_reload {
         quote! {
@@ -238,6 +287,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         #hot_export
         #hot_cleanup
         #hot_state_symbols
+        #hot_tree_symbols
         #hot_motion_symbols
     }
     .into()

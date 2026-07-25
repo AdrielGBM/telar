@@ -15,8 +15,13 @@ rsx = { workspace = true, features = ["dynamic-svg", "components", "navigate"] }
 serde.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
+[features]
+# Mirrors the feature `cargo rsx dev` injects, so the hot-reload integration test can gate on it.
+dev = ["rsx/dev"]
+
 [dev-dependencies]
 platform-core = { workspace = true }
+platform-headless.workspace = true
 
 [package.metadata.android]
 package = "com.example.rsx.sandbox"

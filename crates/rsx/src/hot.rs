@@ -5,10 +5,98 @@ pub struct HotApp {
     _lib: libloading::Library,
 }
 
+/// The host's handle on a tree the dylib mounted and owns: an opaque pointer plus the shims to drive it. The
+/// function pointers are copied out of the library once (plain `fn` pointers, not borrowed `Symbol`s) so this
+/// handle carries no lifetime; it is valid for as long as the library stays mapped, which the runner guarantees
+/// by dropping the tree before it replaces the app.
+#[cfg(feature = "dev")]
+struct HotTreeHandle {
+    ptr: *mut crate::tree::HotTree,
+    on_event: unsafe extern "Rust" fn(*mut crate::tree::HotTree, &platform_core::Event) -> bool,
+    paint: unsafe extern "Rust" fn(*mut crate::tree::HotTree) -> Vec<renderer_core::DrawCommand>,
+    is_dirty: unsafe extern "Rust" fn(*mut crate::tree::HotTree) -> bool,
+    generation: unsafe extern "Rust" fn(*mut crate::tree::HotTree) -> u64,
+    walk: unsafe extern "Rust" fn(*mut crate::tree::HotTree) -> Vec<ui_tree::SegmentNodeInfo>,
+    release: unsafe extern "Rust" fn(*mut crate::tree::HotTree),
+}
+
+#[cfg(feature = "dev")]
+impl HotTreeHandle {
+    /// Resolves every shim up front and mounts the tree inside the dylib. `None` when any symbol is missing (a
+    /// dylib built before app-side mounting existed), so the caller can fall back to mounting on the host side.
+    fn mount(lib: &libloading::Library, app: &dyn crate::app::App) -> Option<Self> {
+        unsafe {
+            let mount: libloading::Symbol<
+                unsafe extern "Rust" fn(&dyn crate::app::App) -> *mut crate::tree::HotTree,
+            > = lib.get(b"_rsx_hot_tree_mount\0").ok()?;
+            let handle = Self {
+                ptr: mount(app),
+                on_event: *lib.get(b"_rsx_hot_tree_on_event\0").ok()?,
+                paint: *lib.get(b"_rsx_hot_tree_paint\0").ok()?,
+                is_dirty: *lib.get(b"_rsx_hot_tree_dirty\0").ok()?,
+                generation: *lib.get(b"_rsx_hot_tree_generation\0").ok()?,
+                walk: *lib.get(b"_rsx_hot_tree_walk\0").ok()?,
+                release: *lib.get(b"_rsx_hot_tree_release\0").ok()?,
+            };
+            Some(handle)
+        }
+    }
+}
+
+#[cfg(feature = "dev")]
+impl crate::tree::UiTree for HotTreeHandle {
+    fn on_event(&mut self, event: &platform_core::Event) -> ui_core::EventResult {
+        if unsafe { (self.on_event)(self.ptr, event) } {
+            ui_core::EventResult::Handled
+        } else {
+            ui_core::EventResult::Ignored
+        }
+    }
+
+    fn frame(&self) -> crate::tree::Frame<'_> {
+        crate::tree::Frame::Owned(unsafe { (self.paint)(self.ptr) })
+    }
+
+    fn is_dirty(&self) -> bool {
+        unsafe { (self.is_dirty)(self.ptr) }
+    }
+
+    fn generation(&self) -> u64 {
+        unsafe { (self.generation)(self.ptr) }
+    }
+
+    fn walk(&self, out: &mut Vec<ui_tree::SegmentNodeInfo>) {
+        out.extend(unsafe { (self.walk)(self.ptr) });
+    }
+}
+
+#[cfg(feature = "dev")]
+impl Drop for HotTreeHandle {
+    fn drop(&mut self) {
+        unsafe { (self.release)(self.ptr) };
+    }
+}
+
 #[cfg(feature = "dev")]
 impl crate::app::App for HotApp {
     fn root(&self) -> Box<dyn ui_core::Component> {
         self.inner.root()
+    }
+
+    // Mount inside the dylib, where the app's signals live: a tree mounted out here would register its segment
+    // effects in the host's reactive runtime and never subscribe to anything the app writes (see `crate::tree`).
+    // A dylib built before these shims existed falls back to the old host-side mount, which still runs — driven
+    // by the force-tick workaround — rather than failing to start.
+    fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
+        match HotTreeHandle::mount(&self._lib, self.inner.as_ref()) {
+            Some(handle) => Box::new(handle),
+            None => {
+                tracing::warn!(
+                    "dylib exports no app-side tree mount; falling back to host-side mounting (rebuild it)"
+                );
+                Box::new(crate::tree::LocalTree::new(self.inner.root()))
+            }
+        }
     }
 
     fn clear_color(&self) -> Option<renderer_core::Color> {

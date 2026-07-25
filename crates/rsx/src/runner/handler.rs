@@ -5,7 +5,7 @@ use renderer_core::{RenderBackend, RendererError};
 use renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
 use renderer_software::SoftwareRenderer;
 use services_core::AppPathsProvider;
-use ui_core::{ComponentList, EventResult};
+use ui_core::EventResult;
 
 use crate::app::App;
 use crate::config::{self, RendererBackend};
@@ -32,7 +32,9 @@ where
     // action pushed by one window's widgets targets that window — never a sibling sharing the M3 UI thread.
     // Only entered when `surface` is `Some`; a single-window app keeps using the ambient thread-local queue.
     pub(super) window_commands: platform_core::WindowCommandContext,
-    pub(super) tree: Option<ComponentList>,
+    // The app's mounted UI — obtained from the app rather than built here, because under hot reload the tree has
+    // to live in the dylib's runtime for its segments to subscribe to anything (see `crate::tree`).
+    pub(super) tree: Option<Box<dyn crate::tree::UiTree>>,
     pub(super) renderer: Option<Box<dyn RenderBackend>>,
     pub(super) renderer_is_hardware: bool,
     pub(super) backend: RendererBackend,
@@ -315,7 +317,7 @@ where
                 crate::app_context::RedrawWaker::new(move || window.request_redraw())
             }
         });
-        self.tree = Some(ComponentList::new(self.app.root()));
+        self.tree = Some(self.app.mount());
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
             let (relay_tx, relay_rx) = std::sync::mpsc::channel::<crate::hot::HotEvent>();
@@ -480,7 +482,7 @@ where
                                 // Drop the old tree first so effect closures (which contain code from the old dylib) are destroyed while the old lib is still mapped. Only then replace self.app, which dlcloses the old dylib.
                                 self.tree = None;
                                 self.app = Box::new(new_app);
-                                self.tree = Some(ComponentList::new(self.app.root()));
+                                self.tree = Some(self.app.mount());
                                 // A successful reload clears any banner from the previous failed build.
                                 self.dev.set_build_error(None);
                                 // Synthesize WindowResized so the new tree's layout starts with the correct logical dimensions instead of its 0×0 defaults.
@@ -506,7 +508,7 @@ where
                 }
             }
         }
-        // Drive the motion engine before tree_dirty is read below: tick()'s .set() calls only enqueue effects while a batch is open (new_events already opened one), so force a flush here to re-run any segment reading an animated value now, not on the next cycle. This is what makes an animation-only frame (no user event, tree otherwise clean) observe interpolated values in this same frame's tree.commands().
+        // Drive the motion engine before tree_dirty is read below: tick()'s .set() calls only enqueue effects while a batch is open (new_events already opened one), so force a flush here to re-run any segment reading an animated value now, not on the next cycle. This is what makes an animation-only frame (no user event, tree otherwise clean) observe interpolated values in this same frame's tree.commands(). The tree is mounted in the app's own runtime (`crate::tree`), so those values reach the segments that read them even under hot reload — a host-mounted tree would instead re-send the commands composed for the animation's first value (a page stuck at opacity 0) until some event forced a re-render.
         self.app.motion_tick(std::time::Instant::now());
         end_batch();
         // Runtime-driven relayout: a reactive change (e.g. a reactive list adding/removing items) mutated
@@ -681,11 +683,10 @@ where
             }
             let build_start = renderer_core::perf::now_if_enabled();
             let clear = self.app.clear_color();
-            let commands_ref = self.tree.as_ref().map(|t| t.commands());
-            let base_slice: &[renderer_core::DrawCommand] =
-                commands_ref.as_deref().map(|r| r.as_slice()).unwrap_or(&[]);
+            let commands_ref = self.tree.as_ref().map(|t| t.frame());
+            let base_slice: &[renderer_core::DrawCommand] = commands_ref.as_deref().unwrap_or(&[]);
             if let Some(tree) = &self.tree {
-                self.dev.on_tree(tree);
+                self.dev.on_tree(&crate::tree::TreeView(tree.as_ref()));
             }
             let logical_w = w as f32 / self.scale_factor;
             let logical_h = h as f32 / self.scale_factor;
@@ -746,11 +747,10 @@ where
         renderer_core::perf::tick();
         let build_start = renderer_core::perf::now_if_enabled();
         let clear = self.app.clear_color();
-        let commands_ref = self.tree.as_ref().map(|t| t.commands());
-        let base_slice: &[renderer_core::DrawCommand] =
-            commands_ref.as_deref().map(|r| r.as_slice()).unwrap_or(&[]);
+        let commands_ref = self.tree.as_ref().map(|t| t.frame());
+        let base_slice: &[renderer_core::DrawCommand] = commands_ref.as_deref().unwrap_or(&[]);
         if let Some(tree) = &self.tree {
-            self.dev.on_tree(tree);
+            self.dev.on_tree(&crate::tree::TreeView(tree.as_ref()));
         }
         let logical_w = w as f32 / self.scale_factor;
         let logical_h = h as f32 / self.scale_factor;

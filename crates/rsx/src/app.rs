@@ -7,6 +7,17 @@ use crate::app_context::AppCtx;
 pub trait App: 'static {
     fn root(&self) -> Box<dyn Component>;
 
+    /// Mounts this app's UI and hands the runner the tree it will drive.
+    ///
+    /// Mounting belongs to the app because the tree's segment effects must be created in the same reactive
+    /// runtime as the signals its `view()` reads. In a normal build there is one runtime and the default is all
+    /// there is to it; the dylib-backed `HotApp` overrides this so the tree is mounted *inside* the dylib
+    /// instead of on the host's side of the boundary (see [`crate::tree`]).
+    #[doc(hidden)]
+    fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
+        Box::new(crate::tree::LocalTree::new(self.root()))
+    }
+
     fn clear_color(&self) -> Option<Color> {
         None
     }
@@ -100,6 +111,9 @@ pub trait App: 'static {
 impl<A: App + ?Sized> App for Box<A> {
     fn root(&self) -> Box<dyn Component> {
         (**self).root()
+    }
+    fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
+        (**self).mount()
     }
     fn clear_color(&self) -> Option<Color> {
         (**self).clear_color()

@@ -24,6 +24,8 @@ pub mod runner;
 #[cfg(feature = "runtime")]
 pub mod surface;
 #[cfg(feature = "runtime")]
+pub mod tree;
+#[cfg(feature = "runtime")]
 pub mod window;
 
 pub use config::RendererBackend;
@@ -57,6 +59,11 @@ pub use layout_core::{
 };
 #[cfg(feature = "plugin")]
 pub use plugin::EmbeddedApp;
+#[cfg(feature = "runtime")]
+pub use tree::{Frame, HotTree, LocalTree, UiTree};
+// Named in the tree shims the `app!` macro exports, so it has to be reachable through the facade.
+#[cfg(feature = "runtime")]
+pub use ui_tree::SegmentNodeInfo;
 // Always-on, no feature gate (D2 in docs/animations.md): kernel functionality, not an opt-in module. The transpiler emits `motion::Animated`/`motion::tween`/`motion::spring`/`motion::Easing` paths against this re-export.
 pub use motion_core as motion;
 // Always-on for the same reason as `motion`: the transpiler emits `i18n::translate` paths and the baked
@@ -93,8 +100,10 @@ pub use renderer_core::{
     RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextAlign, TextRun, TextStyle,
 };
 pub use services_core::AppPathsProvider;
-// Always available now: `ui_core::Surface` composes the per-surface service scope, so the DI/context feature is
-// wired into every GUI build (via ui-core → services-core/di), not opt-in.
+// Available in every GUI build, not opt-in: `ui_core::Surface` composes the per-surface service scope, so
+// `runtime` pulls in ui-core which turns on services-core/di. A non-GUI build (the `cargo-rsx` tool depends on
+// `rsx` with default-features off) has no ui-core, hence no `di`, hence nothing to re-export.
+#[cfg(feature = "runtime")]
 pub use services_core::{Scope, provide, try_inject, with_service};
 #[cfg(feature = "runtime")]
 pub use surface::{
@@ -117,14 +126,14 @@ pub use ui_core::{
     Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport, ScrollbarStyle,
     Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement,
     SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item,
-    box_transform, compute_layout, focus, fragment, fragment_gap, fragment_positional,
-    fragment_positional_gap, interactive_rects, mark_dirty, new_container, new_leaf,
-    relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_display,
-    set_min_height, set_overlay_host, surface_frame, track_layout,
+    box_transform, compute_layout, dismiss_depth, dismiss_top, focus, fragment, fragment_gap,
+    fragment_positional, fragment_positional_gap, interactive_rects, mark_dirty, new_container,
+    new_leaf, relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_display,
+    set_min_height, set_overlay_host, surface_frame, track_layout, use_dismiss_depth,
 };
 
 #[cfg(feature = "navigate")]
-pub use navigate_core::{NavHost, NavPage, NavTransition, Navigator, SimplePage};
+pub use navigate_core::{NavHost, NavPage, NavTransition, Navigator, PagePolicy, SimplePage};
 
 #[cfg(feature = "components")]
 pub use ui_components::{
@@ -147,8 +156,21 @@ pub use preview::run_preview_window;
 
 #[cfg(feature = "dev")]
 pub use hot_state::{hot_restore_json, hot_signal, hot_snapshot_json, probe};
+
+/// Without `dev` there is no dylib swap to survive, so the key is inert and this degrades to a plain signal.
+/// The bounds match the `dev` build's so a type that compiles here cannot fail once hot-reload is on — letting
+/// hand-written app state (a navigation stack, an active locale) be declared once instead of behind a `cfg`.
+#[cfg(all(feature = "runtime", not(feature = "dev")))]
+pub fn hot_signal<T>(key: &str, init: T) -> reactive_core::RwSignal<T>
+where
+    T: Clone + serde::Serialize + serde::de::DeserializeOwned + 'static,
+{
+    let _ = key;
+    reactive_core::signal(init)
+}
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use platform_android::AndroidApp;
+#[cfg(feature = "runtime")]
 pub use runner::build_surface_handler;
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use runner::run_android_app_with_name;
@@ -158,6 +180,7 @@ pub use runner::run_hot_reload_host;
 pub use runner::run_multi_with_platform;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::run_with_platform;
+#[cfg(feature = "runtime")]
 pub use runner::set_default_font_family;
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
 pub use runner::{open_window, run_app_windowed, run_app_with_name, run_multi_app_with_name};
