@@ -9,9 +9,10 @@ use ui_tree::{
     Component, EventResult, OverlaySink, RenderNode, register_overlay, unregister_overlay,
 };
 
-use crate::context::{absolute_rect, attach_overlay, detach_overlay, remove_node};
+use crate::context::{attach_overlay, detach_overlay, remove_node};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::{dispatch_container_event, offset_pointer};
+use crate::scroll_region::visible_rect;
 
 /// Where an anchored overlay's content sits relative to its trigger widget. Maps to the `.rsx` `placement`
 /// attribute. Only vertical placements are provided today; horizontal ones would follow the same pattern.
@@ -24,8 +25,12 @@ pub enum Placement {
 }
 
 /// The world-vs-local anchor fallback shared by the anchored menu/select/tooltip panels.
+///
+/// Uses the trigger's *on-screen* rect, not its laid-out one: a trigger inside a scrolled viewport is drawn
+/// somewhere other than where it was laid out, and a panel placed at the laid-out spot lands off by the
+/// scroll offset.
 pub fn anchor_rect(node: NodeId, fallback: &RwSignal<Rect>) -> Rect {
-    absolute_rect(node).unwrap_or_else(|| fallback.peek())
+    visible_rect(node).unwrap_or_else(|| fallback.peek())
 }
 
 /// Anchors an overlay's content to a trigger widget. `trigger` is the trigger's laid-out rect (what

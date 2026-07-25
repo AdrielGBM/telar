@@ -16,6 +16,7 @@ use crate::impl_leaf_widget;
 use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, offset_pointer};
+use crate::scroll_region::{ScrollRegionId, register_scroll_region, unregister_scroll_region};
 
 pub struct ScrollbarStyle {
     pub color: Color,
@@ -350,6 +351,8 @@ impl ScrollViewport {
 pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
     core: ScrollCore,
+    // Publishes this viewport's offset so anything positioning against a node inside it (an anchored dropdown's trigger) can ask where that node is drawn rather than where it was laid out.
+    scroll_region: ScrollRegionId,
     // Lays the detached content subtree out against the viewport width whenever the viewport is (re)sized,
     // so a `scroll` element works on its own — its content is not a taffy child of the viewport leaf, so
     // nothing else would lay it out (the app shell computes only its OWN top-level scroll by hand).
@@ -401,9 +404,14 @@ impl LayoutScrollArea {
             }
         });
 
+        // Registered on the CONTENT node, not the viewport leaf: the content is laid out as its own root (see the effect above), so the leaf is never its ancestor and a subtree test against it would miss.
+        let scroll_region =
+            register_scroll_region(content_node, scroll_x.clone(), scroll_y.clone());
+
         Ok(Self {
             leaf,
             core: ScrollCore::with_offsets(content_rect_signal, content, scroll_x, scroll_y),
+            scroll_region,
             _layout_effect: layout_effect,
         })
     }
@@ -433,6 +441,12 @@ impl LayoutScrollArea {
 
     pub fn viewport_rect(&self) -> Rect {
         self.leaf.rect.get()
+    }
+}
+
+impl Drop for LayoutScrollArea {
+    fn drop(&mut self) {
+        unregister_scroll_region(self.scroll_region);
     }
 }
 
@@ -493,6 +507,60 @@ mod tests {
         assert!(
             content_rect.height > 0.0,
             "scroll must lay out its content, got {content_rect:?}"
+        );
+    }
+
+    // The end-to-end shape of the anchored-overlay bug: a trigger deep inside a real scroll area, scrolled away from where it was laid out. Exercises the two things the unit tests cannot: that the area registers its content (not its viewport leaf, which is never the content's ancestor), and that the subtree test reaches into the separately-computed content root.
+    #[test]
+    fn a_trigger_scrolled_inside_a_scroll_area_anchors_where_it_is_drawn() {
+        reset_layout_runtime();
+        let spacer = Canvas::new(LayoutStyle::new().width(400.0).height(600.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let trigger = Canvas::new(LayoutStyle::new().width(80.0).height(24.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let trigger_node = trigger.layout_node();
+        let content = crate::container::Container::new(
+            LayoutStyle::new().flex_column(),
+            vec![Box::new(spacer) as Box<dyn LayoutItem>, Box::new(trigger)],
+        )
+        .unwrap();
+        let scroll = LayoutScrollArea::new(
+            LayoutStyle::new().width(300.0).height(200.0),
+            Box::new(content),
+        )
+        .unwrap();
+        compute_layout(
+            scroll.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+
+        let laid_out = crate::context::absolute_rect(trigger_node).unwrap();
+        assert!(laid_out.y > 200.0, "the trigger starts below the fold");
+        assert_eq!(
+            crate::scroll_region::visible_rect(trigger_node),
+            Some(laid_out),
+            "unscrolled, drawn position and laid-out position agree"
+        );
+
+        scroll.core.scroll_y.set(150.0);
+        let drawn = crate::scroll_region::visible_rect(trigger_node).unwrap();
+        assert_eq!(
+            drawn.y,
+            laid_out.y - 150.0,
+            "scrolling down draws the trigger higher, and that is where a panel must anchor"
+        );
+
+        // Dropping the area withdraws its registration, so a later query is not shifted by a dead viewport.
+        drop(scroll);
+        assert_eq!(
+            crate::scroll_region::visible_rect(trigger_node),
+            Some(laid_out)
         );
     }
 

@@ -90,15 +90,23 @@ pub fn track_layout(node: NodeId) -> Option<RwSignal<Rect>> {
 /// The node's WINDOW-absolute rect (top-left from the top-level walk, size from its layout), or `None` if it
 /// has not been laid out under a window root yet. Unlike `track_layout`, this is correct even for a node in a
 /// sub-root computed separately (whose rect signal is root-local) — use it to anchor a portaled overlay to a
-/// trigger, since the portal hoists out of ancestor transforms and needs absolute coordinates. Note: it is
-/// the trigger's laid-out (un-scrolled) position; a scrolled-away trigger's on-screen spot also needs the
-/// scroll offset, which the layout runtime does not track (a follow-up).
+/// trigger, since the portal hoists out of ancestor transforms and needs absolute coordinates.
+///
+/// This is the trigger's *laid-out* position. Scrolling moves content by a render transform, not by relaying
+/// it out, so a node inside a scrolled viewport appears somewhere else on screen — `ui_core::visible_rect`
+/// applies the offsets on top of this, which is what an anchored overlay wants.
 pub fn absolute_rect(node: NodeId) -> Option<Rect> {
     with_runtime(|rt| {
         let &(x, y) = rt.abs_pos.get(&node)?;
         let size = rt.registry.get(&node).map(|s| s.peek()).unwrap_or_default();
         Some(Rect::new(x, y, size.width, size.height))
     })
+}
+
+/// Whether `node` is `ancestor` or sits anywhere beneath it. Follows the parent links the runtime records, so
+/// it crosses into a separately-computed sub-root (a scroll's content) the way the layout tree does.
+pub fn is_descendant_of(node: NodeId, ancestor: NodeId) -> bool {
+    with_runtime(|rt| rt.is_in_subtree(node, ancestor))
 }
 
 pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {

@@ -24,6 +24,7 @@ mod reactive_list;
 mod rect;
 mod rich_text;
 mod scroll_area;
+pub mod scroll_region;
 mod slots;
 mod styled_container;
 mod surface;
@@ -64,6 +65,7 @@ pub use reactive_list::ReactiveList;
 pub use rect::Rectangle;
 pub use rich_text::RichText;
 pub use scroll_area::{LayoutScrollArea, ScrollViewport, ScrollbarStyle};
+pub use scroll_region::visible_rect;
 pub use slots::Slots;
 pub use styled_container::{StyledContainer, box_transform};
 pub use surface::{
