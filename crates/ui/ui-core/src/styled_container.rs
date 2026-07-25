@@ -1,6 +1,6 @@
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::{Event, Key, NamedKey, PointerButton, PointerSource};
+use platform_core::{Event, Key, NamedKey, PointerButton, PointerSource, ScrollDelta};
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::RectStyle;
 use ui_tree::{Component, EventResult, RenderNode};
@@ -38,6 +38,8 @@ pub struct StyledContainer {
     drag: DragGesture,
     // Fires with `true`/`false` as the mouse enters/leaves the box (mouse only, like the hover style).
     on_hover: Option<Box<dyn Fn(bool)>>,
+    // Fires with the wheel delta while the pointer is over the box. Scroll events carry no position, so the box's own hover state is what targets them — setting this therefore turns hover tracking on.
+    on_scroll: Option<Box<dyn Fn(f32, f32)>>,
     // Fires on every key press. Key events carry no pointer position, so they are broadcast to every widget
     // — this is a GLOBAL shortcut handler (there is no per-widget focus), not focused text input.
     on_key: Option<Box<dyn Fn(&Key)>>,
@@ -70,6 +72,7 @@ impl StyledContainer {
             press: PressGesture::default(),
             drag: DragGesture::default(),
             on_hover: None,
+            on_scroll: None,
             on_key: None,
             focus_id: None,
             _focus_effect: None,
@@ -102,6 +105,7 @@ impl StyledContainer {
             press: PressGesture::default(),
             drag: DragGesture::default(),
             on_hover: None,
+            on_scroll: None,
             on_key: None,
             focus_id: None,
             _focus_effect: None,
@@ -194,6 +198,19 @@ impl StyledContainer {
         self
     }
 
+    /// Fire `f(dx, dy)` with the wheel delta while the mouse is over the box — scroll-to-adjust on a control
+    /// (a volume or brightness chip, a stepper). Deltas are normalised to pixels, matching
+    /// [`ScrollArea`](crate::ScrollArea): a line delta counts as 20px, so one wheel notch is roughly ±60.
+    ///
+    /// Scroll events carry no pointer position, so the box's hover state is what targets them; this enables
+    /// hover tracking on its own, without needing an `on_hover_style`. A scrollable child (a scroll area
+    /// inside the box) hit-tests first and keeps the event.
+    pub fn on_scroll(mut self, f: impl Fn(f32, f32) + 'static) -> Self {
+        self.on_scroll = Some(Box::new(f));
+        self.mark_interactive();
+        self
+    }
+
     /// Fire `f(&key)` on every key press. This is a GLOBAL handler (key events reach every widget; there is
     /// no per-widget focus), so it suits app-level shortcuts, not focused text entry.
     pub fn on_key(mut self, f: impl Fn(&Key) + 'static) -> Self {
@@ -279,6 +296,7 @@ impl Component for StyledContainer {
             && self.hover_style.is_none()
             && self.active_style.is_none()
             && self.on_hover.is_none()
+            && self.on_scroll.is_none()
             && self.on_key.is_none()
             && self.focus_id.is_none()
         {
@@ -298,7 +316,9 @@ impl Component for StyledContainer {
                 if !inside {
                     self.set_active(false);
                 }
-                let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
+                let tracks_hover = self.hover_style.is_some()
+                    || self.on_hover.is_some()
+                    || self.on_scroll.is_some();
                 if tracks_hover
                     && matches!(source, PointerSource::Mouse)
                     && inside != self.is_hovered.get()
@@ -369,14 +389,34 @@ impl Component for StyledContainer {
                 self.press.cancel();
                 self.drag.end();
                 self.set_active(false);
-                if (self.hover_style.is_some() || self.on_hover.is_some()) && self.is_hovered.get()
-                {
+                let tracks_hover = self.hover_style.is_some()
+                    || self.on_hover.is_some()
+                    || self.on_scroll.is_some();
+                if tracks_hover && self.is_hovered.get() {
                     self.is_hovered.set(false);
                     if let Some(cb) = &self.on_hover {
                         cb(false);
                     }
                 }
                 self.dispatch_children(event)
+            }
+            // Scroll carries no position, so the box's hover state targets it. Children (e.g. a nested scroll area) get first refusal; only then does an `on_scroll` box consume the wheel.
+            Event::Scrolled { delta } => {
+                if self.dispatch_children(event) == EventResult::Handled {
+                    return EventResult::Handled;
+                }
+                let Some(cb) = &self.on_scroll else {
+                    return EventResult::Ignored;
+                };
+                if !self.is_hovered.get() {
+                    return EventResult::Ignored;
+                }
+                let (dx, dy) = match delta {
+                    ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
+                    ScrollDelta::Pixels { x, y } => (*x, *y),
+                };
+                cb(dx, dy);
+                EventResult::Handled
             }
             // Broadcast (no pointer position): fire the global key handler, then keep routing to children.
             Event::KeyPressed { key, modifiers } => {
@@ -545,6 +585,69 @@ mod tests {
         assert_eq!(seen.get(), Some(true), "entering fires on_hover(true)");
         card.on_event(&Event::CursorLeft);
         assert_eq!(seen.get(), Some(false), "leaving fires on_hover(false)");
+    }
+
+    #[test]
+    fn on_scroll_fires_only_while_hovered_and_normalises_lines() {
+        let seen: Rc<Cell<(f32, f32)>> = Rc::new(Cell::new((0.0, 0.0)));
+        let sink = seen.clone();
+        reset_layout_runtime();
+        let inner = Container::new(LayoutStyle::new().width(100.0).height(100.0), vec![]).unwrap();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![Box::new(inner)],
+        )
+        .unwrap()
+        .on_scroll(move |dx, dy| sink.set((dx, dy)));
+        let node = card.layout_node();
+        compute_layout(
+            node,
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        // The pointer has never entered, so the wheel is not ours to consume.
+        assert_eq!(
+            card.on_event(&Event::Scrolled {
+                delta: ScrollDelta::Pixels { x: 0.0, y: -30.0 },
+            }),
+            EventResult::Ignored,
+            "a wheel event outside the box is ignored"
+        );
+        assert_eq!(seen.get(), (0.0, 0.0));
+
+        card.on_event(&Event::PointerMoved {
+            x: 50.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(
+            card.on_event(&Event::Scrolled {
+                delta: ScrollDelta::Pixels { x: 0.0, y: -30.0 },
+            }),
+            EventResult::Handled,
+            "hovering makes the wheel ours"
+        );
+        assert_eq!(seen.get(), (0.0, -30.0));
+
+        // Line deltas are normalised to pixels the same way ScrollArea does it.
+        card.on_event(&Event::Scrolled {
+            delta: ScrollDelta::Lines { x: 0.0, y: 3.0 },
+        });
+        assert_eq!(seen.get(), (0.0, 60.0));
+
+        // Leaving clears hover, so the wheel stops reaching the handler.
+        card.on_event(&Event::CursorLeft);
+        assert_eq!(
+            card.on_event(&Event::Scrolled {
+                delta: ScrollDelta::Pixels { x: 0.0, y: -10.0 },
+            }),
+            EventResult::Ignored,
+            "the wheel is released once the pointer leaves"
+        );
+        assert_eq!(seen.get(), (0.0, 60.0), "the handler did not fire again");
     }
 
     #[test]
