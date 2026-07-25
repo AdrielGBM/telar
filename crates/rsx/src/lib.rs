@@ -17,6 +17,8 @@ pub mod app;
 pub mod hot;
 #[cfg(feature = "dev")]
 pub mod hot_state;
+#[cfg(feature = "plugin")]
+pub mod plugin;
 #[cfg(feature = "runtime")]
 pub mod runner;
 #[cfg(feature = "runtime")]
@@ -53,6 +55,8 @@ pub use layout_core::{
     AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
     TemplateTrack,
 };
+#[cfg(feature = "plugin")]
+pub use plugin::EmbeddedApp;
 // Always-on, no feature gate (D2 in docs/animations.md): kernel functionality, not an opt-in module. The transpiler emits `motion::Animated`/`motion::tween`/`motion::spring`/`motion::Easing` paths against this re-export.
 pub use motion_core as motion;
 // Always-on for the same reason as `motion`: the transpiler emits `i18n::translate` paths and the baked

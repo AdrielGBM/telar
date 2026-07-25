@@ -34,6 +34,11 @@ dev = [
 ]
 preview = ["runtime", "desktop"]
 
+# Dynamic plugins (production, distinct from dev hot-reload). `plugin` builds the dylib-side driver + the
+# `plugin!` export macro; `plugin-host` adds the host-side loader (pulls libloading, like `dev`).
+plugin = ["runtime"]
+plugin-host = ["plugin", "dep:libloading"]
+
 components = ["runtime", "dep:ui-components"]
 navigate = ["runtime", "dep:navigate-core"]
 di = ["services-core/di"]
