@@ -28,6 +28,18 @@ impl<R: Clone + 'static> Navigator<R> {
         }
     }
 
+    /// Adopts an externally owned stack signal, seeding it with `root` when it is empty.
+    ///
+    /// Lets the stack come from somewhere the navigator itself cannot reach — notably `rsx::hot_signal`, so
+    /// the history survives a hot-reload dylib swap. The `root` seed also repairs a restored snapshot that
+    /// deserialized to an empty vector, upholding the never-empty invariant [`current`](Self::current) relies on.
+    pub fn from_signal(stack: RwSignal<Vec<R>>, root: R) -> Self {
+        if stack.with(|s| s.is_empty()) {
+            stack.update(|s| s.push(root));
+        }
+        Self { stack }
+    }
+
     /// Pushes a page onto the stack, making it the new current page (adds a history entry).
     pub fn push(&self, route: R) {
         self.stack.update(|s| s.push(route));
@@ -45,6 +57,16 @@ impl<R: Clone + 'static> Navigator<R> {
             s.pop();
         });
         true
+    }
+
+    /// One "back" as the user means it: closes the frontmost open dialog or drawer if there is one, otherwise
+    /// pops a page. Reports whether anything happened, so a caller wiring a hardware/gesture back can let the
+    /// gesture fall through to the OS (exiting the app) when this returns `false` at the root with nothing open.
+    ///
+    /// Prefer this over [`pop`](Self::pop) for any general back affordance: popping directly would tear the
+    /// page out from under an open dialog instead of closing the dialog the user is looking at.
+    pub fn back(&self) -> bool {
+        ui_core::dismiss::dismiss_top() || self.pop()
     }
 
     /// Pops every page above the root in one step.
@@ -76,6 +98,12 @@ impl<R: Clone + 'static> Navigator<R> {
             .with(|s| s.last().expect("navigator stack is never empty").clone())
     }
 
+    /// Non-subscribing read of the current (top) page, for use inside an event handler.
+    pub fn peek_current(&self) -> R {
+        self.stack
+            .peek_with(|s| s.last().expect("navigator stack is never empty").clone())
+    }
+
     /// Reactive read of the stack depth (`1` at the root).
     pub fn depth(&self) -> usize {
         self.stack.with(|s| s.len())
@@ -89,6 +117,11 @@ impl<R: Clone + 'static> Navigator<R> {
     /// Reactive read of the whole stack, root-first — for a breadcrumb or custom back logic.
     pub fn with_stack<T>(&self, f: impl FnOnce(&[R]) -> T) -> T {
         self.stack.with(|s| f(s))
+    }
+
+    /// Non-subscribing read of the whole stack, root-first.
+    pub fn peek_stack<T>(&self, f: impl FnOnce(&[R]) -> T) -> T {
+        self.stack.peek_with(|s| f(s))
     }
 
     /// The backing signal, for callers that need to observe or drive the stack directly.
@@ -163,6 +196,56 @@ mod tests {
         nav.reset(Route::Detail);
         assert_eq!(nav.current(), Route::Detail);
         assert_eq!(nav.depth(), 1);
+    }
+
+    #[test]
+    fn back_closes_an_open_overlay_before_popping_a_page() {
+        let nav = Navigator::new(Route::Home);
+        nav.push(Route::Settings);
+        let closed = std::rc::Rc::new(std::cell::Cell::new(false));
+        let id = {
+            let closed = closed.clone();
+            ui_core::dismiss::register_dismiss(std::rc::Rc::new(move || closed.set(true)))
+        };
+
+        assert!(nav.back(), "the open overlay consumed the back");
+        assert!(closed.get(), "the overlay was dismissed");
+        assert_eq!(
+            nav.current(),
+            Route::Settings,
+            "the page stack was left alone while a dialog was up"
+        );
+
+        assert!(nav.back(), "with nothing open, back pops the page");
+        assert_eq!(nav.current(), Route::Home);
+
+        assert!(
+            !nav.back(),
+            "at the root with nothing open, back is unhandled so the OS gesture can take it"
+        );
+        ui_core::dismiss::unregister_dismiss(id);
+    }
+
+    #[test]
+    fn from_signal_adopts_an_existing_stack() {
+        let stack = signal(vec![Route::Home, Route::Settings]);
+        let nav = Navigator::from_signal(stack.clone(), Route::Home);
+        assert_eq!(nav.current(), Route::Settings, "the restored top is kept");
+        assert_eq!(nav.depth(), 2);
+        nav.push(Route::Detail);
+        assert_eq!(
+            stack.with(|s| s.len()),
+            3,
+            "the navigator drives the adopted signal"
+        );
+    }
+
+    #[test]
+    fn from_signal_seeds_an_empty_stack_with_the_root() {
+        let nav = Navigator::from_signal(signal(Vec::new()), Route::Home);
+        assert_eq!(nav.current(), Route::Home);
+        assert_eq!(nav.depth(), 1);
+        assert!(!nav.can_pop());
     }
 
     #[test]
