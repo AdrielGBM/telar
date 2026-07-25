@@ -15,5 +15,5 @@ mod transition;
 
 pub use host::NavHost;
 pub use navigator::Navigator;
-pub use page::{NavPage, SimplePage};
+pub use page::{NavPage, PagePolicy, SimplePage};
 pub use transition::NavTransition;

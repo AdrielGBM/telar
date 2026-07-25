@@ -17,6 +17,25 @@ pub trait NavPage: LayoutItem {
     fn on_relayout(&mut self) {}
 }
 
+/// What a page's identity and lifetime are tied to — declared per destination via
+/// [`NavHost::with_policy_for`](crate::NavHost::with_policy_for), because one host commonly serves both kinds:
+/// a fixed set of persistent destinations (a rail, a tab bar) plus screens pushed as a stack on top of them.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum PagePolicy {
+    /// Identity is the **route**: one page per route for the life of the host. Revisiting reuses that subtree
+    /// and everything in it — scroll position, form state, in-flight work — at the cost of never releasing a
+    /// screen the user left, and of a route that appears twice on the stack sharing one page between both
+    /// positions. Right for a small fixed set of destinations, wrong for an unbounded stack.
+    #[default]
+    KeepAlive,
+    /// Identity is the **stack entry**: pushing builds a page, popping releases it, and the same route pushed at
+    /// two depths gets two independent pages — the semantics of a native page stack, which pushes instances
+    /// rather than routes. Going back still finds the screen you left as you left it, because its entry never
+    /// went away. Releasing the page drops its widgets, and with them their signals and effects, which is the
+    /// framework's only cascading teardown.
+    Transient,
+}
+
 /// Wraps a plain [`LayoutItem`] as a hook-less [`NavPage`], for screens that need no enter/relayout behavior.
 pub struct SimplePage(pub Box<dyn LayoutItem>);
 
