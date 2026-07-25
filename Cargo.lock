@@ -4543,7 +4543,9 @@ name = "sandbox"
 version = "0.1.0"
 dependencies = [
  "platform-core",
+ "platform-headless",
  "rsx",
+ "serde",
  "tracing-subscriber",
 ]
 
