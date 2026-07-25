@@ -698,6 +698,44 @@ col @card
     }
 
     #[test]
+    fn lazy_defers_its_subtree_behind_a_when_condition() {
+        let src = "[logic]\nlet show = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    lazy when:$show\n        text \"count {$count}\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("compile_error!"), "{code}");
+        assert!(
+            code.contains("Lazy::new("),
+            "no Lazy widget emitted:\n{code}"
+        );
+        assert!(
+            code.contains("{ let show = show.clone(); move || show.get() }"),
+            "the condition must read the signal through its own clone:\n{code}"
+        );
+        // The build closure is `move`, so every signal its subtree reads has to be cloned in above it or the outer binding would be moved out of the rest of the view.
+        assert!(
+            code.contains("let count = count.clone();"),
+            "the deferred subtree's signals must be cloned into the build closure:\n{code}"
+        );
+        assert!(
+            code.contains("move || -> Result<Vec<Box<dyn LayoutItem>>, LayoutError>"),
+            "missing deferred build closure:\n{code}"
+        );
+    }
+
+    #[test]
+    fn lazy_without_a_condition_is_a_compile_error() {
+        let src = "[view]\ncol\n    lazy\n        text \"hi\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!(\"lazy: needs a `when:` condition"),
+            "a `lazy` with nothing to defer until must not silently build eagerly:\n{code}"
+        );
+    }
+
+    #[test]
     fn svg_missing_src_falls_back_to_undefined_placeholder() {
         // No `src` attr: falls back to an undefined `__svg_data` identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map — the same diagnostic strategy `img` uses for a missing `src`.
         let src = "[view]\ncol\n    svg width:24 height:24\n";

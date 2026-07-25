@@ -27,6 +27,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("scroll", "LayoutScrollArea::new"),
         ("canvas", "Canvas::new"),
         ("overlay", "Overlay::new"),
+        ("lazy", "Lazy::new"),
         ("widget", TAG_REFERENCES_VARIABLE),
         ("children", TAG_SLOT_PLACEHOLDER),
     ]

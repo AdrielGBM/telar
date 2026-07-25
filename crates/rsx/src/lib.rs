@@ -122,14 +122,15 @@ pub use ui_core::{AssetSource, AssetState};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
-    EventResult, Image, Input, LayoutItem, LayoutScrollArea, Line, LineGutter, NodeId, NodeVec,
-    Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport, ScrollbarStyle,
-    Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement,
-    SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea, anchor_rect, box_item,
-    box_transform, compute_layout, dismiss_depth, dismiss_top, focus, fragment, fragment_gap,
-    fragment_positional, fragment_positional_gap, interactive_rects, mark_dirty, new_container,
-    new_leaf, relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_display,
-    set_min_height, set_overlay_host, surface_frame, track_layout, use_dismiss_depth,
+    EventResult, Image, Input, LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter, NodeId,
+    NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport,
+    ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,
+    SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea,
+    anchor_rect, box_item, box_transform, compute_layout, dismiss_depth, dismiss_top, focus,
+    fragment, fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects,
+    mark_dirty, new_container, new_leaf, relayout_if_dirty, remove_node, reset_layout_runtime,
+    set_children, set_display, set_min_height, set_overlay_host, surface_frame, track_layout,
+    use_dismiss_depth,
 };
 
 #[cfg(feature = "navigate")]

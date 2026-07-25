@@ -29,6 +29,13 @@ let todos = signal(vec![
 // A reactive conditional: `if $show { … } else { … }` swaps the visible branch when this flips.
 let show = signal(true);
 
+// Drives a `lazy` block: its subtree is not built until this first turns true, and is kept from then on.
+let show_panel = signal(false);
+// Typed into the panel below — still there after closing and reopening it, which is the whole difference.
+let panel_note = signal(String::new());
+// Bumped by a `let` inside the lazy block, which runs when that subtree is CONSTRUCTED. Read only from inside the panel, so it counts builds of exactly that subtree: it must reach 1 and stay there.
+let panel_builds = signal(0i32);
+
 // Text signals driven by `input` primitives (Tab moves focus between the two fields).
 let name = signal(String::new());
 let email = signal(String::new());
@@ -83,6 +90,17 @@ col gap:20
             else
                 text "…now you don't" size:14 color:muted
         code_line code:"if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)"
+    example title:"lazy — a subtree built on its first display, then only shown and hidden"
+        card gap:10
+            text "This panel costs nothing until you open it the first time. Type into it, close it, open it again: the text is still there. An if would have disposed the whole branch and rebuilt it empty." size:13 color:muted
+            button label:"Toggle panel" fill:primary on_press(|| $show_panel.toggle())
+            lazy when:$show_panel
+                let _ = panel_builds.update(|n| *n += 1)
+                col gap:8
+                    text "this subtree has been built {$panel_builds} time(s) — reopening never adds one" size:13 color:primary
+                    box fill:surface_alt stroke:border radius:8 pad_x:14 pad_y:12 width:300
+                        input value:$panel_note size:15 color:ink
+        code_line code:"lazy when:$open  >  …   (deferred until first shown, then kept)"
     example title:"input + focus — two editable fields; Tab moves focus, each binds a signal (wrap a box for the look)"
         card gap:10
             box fill:surface_alt stroke:border radius:8 pad_x:12 pad_y:10 width:300

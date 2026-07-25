@@ -6,6 +6,7 @@ mod container;
 mod control_flow;
 mod input;
 mod interp;
+mod lazy;
 mod media;
 mod path;
 mod scroll;
@@ -285,6 +286,7 @@ impl<'a> ViewGen<'a> {
             "row" => "row",
             "box" => "sbox",
             "overlay" => "overlay",
+            "lazy" => "lazy",
             "img" | "image" => "img",
             "input" => "input",
             "svg" => "svg",
@@ -418,6 +420,7 @@ impl<'a> ViewGen<'a> {
             "col" | "row" | "grid" => self.emit_container(el),
             "box" => self.emit_box(el),
             "overlay" => self.emit_overlay(el),
+            "lazy" => self.emit_lazy(el),
             "img" | "image" => self.emit_image(el),
             "input" => self.emit_input(el),
             "svg" => self.emit_svg(el),
