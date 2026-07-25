@@ -1,10 +1,11 @@
 use crate::core::theme::theme;
 use rsx::{
     AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event, EventResult,
-    JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NavHost, NavPage,
-    NavTransition, Navigator, NodeId, NodeVec, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle,
-    PagePolicy, SizeDimension, StyledContainer, Text, TextStyle, compute_layout, hot_signal, mark_dirty, use_dismiss_depth, new_container,
-    new_leaf, reset_layout_runtime, set_display, set_overlay_host, signal,
+    JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NavPage,
+    NavTransition, Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, RwSignal,
+    ShapeStyle, SizeDimension, StyledContainer, TabHost, TabStacks, Text, TextStyle, compute_layout,
+    hot_signal, mark_dirty, new_container, new_leaf, reset_layout_runtime, set_display,
+    set_overlay_host, signal, use_dismiss_depth,
 };
 
 /// Width of the navigation rail / drawer, in px. Kept in sync with the `width:` on `sidebar.rsx`'s root.
@@ -26,21 +27,13 @@ struct SectionDef {
     source: &'static str,
 }
 
-/// A navigation destination. A section is the overview a reader lands on; its source is the detail pushed from
-/// it — so navigating in adds a stack entry and Back returns to the section, at the scroll position it had.
+/// A destination *within* a section. The section itself is not part of this: each rail item is a tab with its
+/// own stack, so the route only has to say how deep into that section you are — the overview a reader lands
+/// on, or the source listing pushed over it. Back returns to the overview at the scroll position it had.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
-enum Route {
-    Section(usize),
-    Source(usize),
-}
-
-impl Route {
-    /// The section this destination belongs to, so the rail highlights it from the source page too.
-    fn section(self) -> usize {
-        match self {
-            Route::Section(i) | Route::Source(i) => i,
-        }
-    }
+enum SectionRoute {
+    Overview,
+    Source,
 }
 
 /// Builds the [`SECTIONS`] table, baking each entry's `.rsx` source in beside its builder so a section stays a
@@ -101,7 +94,7 @@ struct SectionPage {
 }
 
 impl SectionPage {
-    fn new(nav: Navigator<Route>, section: usize) -> Result<Self, LayoutError> {
+    fn new(nav: Navigator<SectionRoute>, section: usize) -> Result<Self, LayoutError> {
         let def = section_def(section);
         // Reading column: fills the width it is given but never past a legible line length.
         let column = Container::new(
@@ -153,7 +146,10 @@ impl NavPage for SectionPage {
 /// Footer of a section page: pushes that section's `.rsx` source as a detail page. A push rather than an
 /// overlay because the listing is long — its scroll position is state the stack should remember, and Back is
 /// the way out.
-fn build_source_link(nav: Navigator<Route>, section: usize) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn build_source_link(
+    nav: Navigator<SectionRoute>,
+    section: usize,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let file = section_def(section).file;
     let label = Text::auto(
         move || format!("View source \u{2192} {file}"),
@@ -178,7 +174,7 @@ fn build_source_link(nav: Navigator<Route>, section: usize) -> Result<Box<dyn La
             .with_fill(theme().border)
             .with_radius(BorderRadius::all(8.0))
     })
-    .on_press(move || nav.push(Route::Source(section)));
+    .on_press(move || nav.push(SectionRoute::Source));
     // A row so the button hugs its label instead of stretching across the reading column.
     Ok(Box::new(Container::new(
         LayoutStyle::new().flex_row(),
@@ -267,11 +263,22 @@ impl NavPage for SourcePage {
     }
 }
 
-/// Builds whichever page a route names — the [`NavHost`]'s factory, called on a route's first visit.
-fn build_page(nav: &Navigator<Route>, route: Route) -> Result<Box<dyn NavPage>, LayoutError> {
+/// Builds whichever page a route names inside `section` — the [`TabHost`]'s factory, called on a route's first
+/// visit to that section's own stack. The stack handed to the overview is that section's, so its source link
+/// pushes onto the section it belongs to rather than onto whatever tab happens to be active.
+fn build_page(
+    stacks: &TabStacks<usize, SectionRoute>,
+    section: usize,
+    route: SectionRoute,
+) -> Result<Box<dyn NavPage>, LayoutError> {
     Ok(match route {
-        Route::Section(i) => Box::new(SectionPage::new(nav.clone(), i)?) as Box<dyn NavPage>,
-        Route::Source(i) => Box::new(SourcePage::new(i)?),
+        SectionRoute::Overview => {
+            let nav = stacks
+                .navigator_for(&section)
+                .expect("every section declares a stack");
+            Box::new(SectionPage::new(nav, section)?) as Box<dyn NavPage>
+        }
+        SectionRoute::Source => Box::new(SourcePage::new(section)?),
     })
 }
 
@@ -292,14 +299,16 @@ fn nav_rect_hover(active: bool) -> RectStyle {
     RectStyle::default().with_fill(fill).with_radius(radius)
 }
 
-/// Back control: closes an open dialog if there is one, else returns to the previously viewed section. Always
-/// present and always live — `back` is a no-op with nothing open at the root — but it dims to `muted` there so
-/// it reads as unavailable without the layout shifting when history appears.
-fn build_back(nav: Navigator<Route>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    // Live when there is either a dialog to close or a page to pop; both reads are reactive, so the control
-    // lights up the moment a modal opens even at the root of the stack.
-    let live = move |nav: &Navigator<Route>| use_dismiss_depth() > 0 || nav.can_pop();
-    let on_label = nav.clone();
+/// Back control: closes an open dialog if there is one, else pops the current section's own stack (out of a
+/// source listing, back to its overview), else returns to the section read before this one. Always present,
+/// but it dims to `muted` once there is nothing left to go back to, so it reads as unavailable without the
+/// layout shifting when history appears.
+fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    // Live when there is either a dialog to close or a page to pop; both reads are reactive, so the control lights up the moment a modal opens even at the root of a section's stack.
+    let live = move |stacks: &TabStacks<usize, SectionRoute>| {
+        use_dismiss_depth() > 0 || stacks.can_pop()
+    };
+    let on_label = stacks.clone();
     let label = Text::auto(
         || "\u{2190} Back".to_string(),
         LayoutStyle::new(),
@@ -309,8 +318,8 @@ fn build_back(nav: Navigator<Route>) -> Result<Box<dyn LayoutItem>, LayoutError>
             TextStyle::new(13.0, color)
         },
     )?;
-    let on_hover = nav.clone();
-    let on_press = nav.clone();
+    let on_hover = stacks.clone();
+    let on_press = stacks.clone();
     let btn = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -338,21 +347,21 @@ fn build_back(nav: Navigator<Route>) -> Result<Box<dyn LayoutItem>, LayoutError>
     Ok(Box::new(btn))
 }
 
-/// Contents nav: one full-width button per section that navigates to it, above a back control. The active
-/// one is highlighted. Selecting a section *pushes* it, so the stack doubles as reading history — Back walks
-/// the sections you came through, the way a browser does. A section stays highlighted while its source detail
-/// is on screen, since that page is part of the section rather than a sibling of it.
-fn build_nav(nav: Navigator<Route>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+/// Contents nav: one full-width button per section, above a back control. The active one is highlighted.
+/// Each item is a *tab*, not a history entry: selecting one switches to that section's own stack, leaving the
+/// one you came from standing exactly where it was — a source listing still open, scrolled where you left it.
+/// Pressing the section you are already reading pops it back to its overview, so an item is never inert.
+fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut buttons: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(SECTIONS.len());
     for (i, def) in SECTIONS.iter().enumerate() {
         let title = def.title;
-        let on_label = nav.clone();
+        let on_label = stacks.clone();
         let label = Text::auto(
             move || title.to_string(),
             LayoutStyle::new(),
             move || {
                 let t = theme();
-                let color = if on_label.current().section() == i {
+                let color = if on_label.active() == i {
                     t.on_primary
                 } else {
                     t.ink
@@ -360,9 +369,9 @@ fn build_nav(nav: Navigator<Route>) -> Result<Box<dyn LayoutItem>, LayoutError> 
                 TextStyle::new(13.0, color)
             },
         )?;
-        let on_base = nav.clone();
-        let on_hover = nav.clone();
-        let on_press = nav.clone();
+        let on_base = stacks.clone();
+        let on_hover = stacks.clone();
+        let on_press = stacks.clone();
         // A row: the parent column stretches the item to full width, and `justify_content:center` centres
         // the measured `Text::auto` label within it (a column would collapse the label's stretched cross axis).
         let btn = StyledContainer::new(
@@ -374,17 +383,11 @@ fn build_nav(nav: Navigator<Route>) -> Result<Box<dyn LayoutItem>, LayoutError> 
                 // Light vertical padding keeps each item near its old height (`Text::auto` already reserves a
                 // full line box), so the tall nav still fits the rail and every section stays reachable.
                 .padding_vertical(3.0),
-            move |_r| nav_rect(on_base.current().section() == i),
+            move |_r| nav_rect(on_base.active() == i),
             vec![Box::new(label)],
         )?
-        .on_hover_style(move |_r| nav_rect_hover(on_hover.current().section() == i))
-        // Pressing the section a source page belongs to navigates up to the section itself, so the rail is
-        // never inert; only re-pressing the section you are already reading does nothing.
-        .on_press(move || {
-            if on_press.peek_current() != Route::Section(i) {
-                on_press.push(Route::Section(i));
-            }
-        });
+        .on_hover_style(move |_r| nav_rect_hover(on_hover.active() == i))
+        .on_press(move || on_press.select(i));
         buttons.push(Box::new(btn));
     }
     let list = Container::new(LayoutStyle::new().flex_column().gap(3.0), buttons)?;
@@ -394,14 +397,14 @@ fn build_nav(nav: Navigator<Route>) -> Result<Box<dyn LayoutItem>, LayoutError> 
     )?;
     Ok(Box::new(Container::new(
         LayoutStyle::new().flex_column().gap(8.0),
-        vec![build_back(nav)?, Box::new(label), Box::new(list)],
+        vec![build_back(stacks)?, Box::new(label), Box::new(list)],
     )?))
 }
 
 /// Full sidebar: the `.rsx` header + theme switcher, then the Rust-built section nav.
-fn build_sidebar(nav: Navigator<Route>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn build_sidebar(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let header_theme = crate::core_sidebar()?;
-    let nav = build_nav(nav)?;
+    let nav = build_nav(stacks)?;
     Ok(Box::new(Container::new(
         LayoutStyle::new()
             .flex_column()
@@ -468,8 +471,8 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
 /// that slides over a dimming scrim when `menu_open` is set. The sidebar is laid out on its own so it
 /// can overlay content in either mode.
 ///
-/// The content pane is a [`NavHost`]: it builds a section the first time it is navigated to and caches it,
-/// so opening the app costs one section rather than all 26.
+/// The content pane is a [`TabHost`]: every rail item is a tab with its own page stack, built the first time
+/// it is visited, so opening the app costs one section rather than all 26.
 struct ShellPage {
     root: NodeId,
     // Empty leaf that reserves the rail's width on desktop; hidden on mobile so content spans full width.
@@ -480,7 +483,7 @@ struct ShellPage {
     sidebar_scroll: LayoutScrollArea,
     sidebar_scroll_node: NodeId,
     sidebar_content_node: NodeId,
-    nav_host: NavHost<Route>,
+    nav_host: TabHost<usize, SectionRoute>,
     menu_open: RwSignal<bool>,
     mobile: bool,
     win_w: f32,
@@ -491,20 +494,20 @@ struct ShellPage {
 }
 
 impl ShellPage {
-    fn new(sidebar: Box<dyn LayoutItem>, nav: Navigator<Route>) -> Result<Self, LayoutError> {
+    fn new(
+        sidebar: Box<dyn LayoutItem>,
+        stacks: TabStacks<usize, SectionRoute>,
+    ) -> Result<Self, LayoutError> {
         let sidebar_content_node = sidebar.layout_node();
-        let factory_nav = nav.clone();
-        let nav_host = NavHost::new(nav.clone(), move |route: &Route| {
-            build_page(&factory_nav, *route)
+        let factory_stacks = stacks.clone();
+        let nav_host = TabHost::new(stacks, move |section: &usize, route: &SectionRoute| {
+            build_page(&factory_stacks, *section, *route)
         })?
-        // The rail's sections are persistent destinations — coming back to one shows it as you left it,
-        // reading position included. A source listing is a pushed screen: fresh on each push, released when
-        // you go back, so two visits to the same file never share one scroll position.
-        .with_policy_for(|route: &Route| match route {
-            Route::Section(_) => PagePolicy::KeepAlive,
-            Route::Source(_) => PagePolicy::Transient,
-        })
-        .with_transition(NavTransition::Fade);
+        // Every page is a stack entry now: a section survives being left because its *stack* stays alive while another tab is on screen, not because the host pins it by route. So a source listing is fresh on each push and released on the way back, and two visits to the same file never share a scroll.
+        .with_policy(PagePolicy::Transient)
+        .with_transition(NavTransition::Fade)
+        // The rail reads as a table of contents rather than a tab bar, so switching sections gets the same fade as drilling into one. A real tab bar would leave this off and swap instantly.
+        .with_tab_transition(NavTransition::Fade);
         // Wrap the sidebar so it scrolls when the nav is taller than the window; laid out as an overlay.
         let sidebar_scroll = LayoutScrollArea::new(
             LayoutStyle::new()
@@ -563,9 +566,9 @@ impl ShellPage {
     }
 
     /// Reconciles the content pane after the sidebar handled a press. The host only reconciles from events
-    /// dispatched into it, and the rail sits outside its subtree — so a nav press has to be pushed in here.
-    /// Only a press that actually navigated closes the mobile drawer, leaving the theme switcher (also in the
-    /// rail) free to keep it open.
+    /// dispatched into it, and the rail sits outside its subtree — so a tab press has to be pushed in here.
+    /// Only a press that actually moved the user closes the mobile drawer, leaving the theme switcher (also in
+    /// the rail) free to keep it open.
     fn after_sidebar_press(&mut self) {
         if self.nav_host.sync() && self.mobile {
             self.menu_open.set(false);
@@ -729,12 +732,25 @@ pub struct SandboxRoot;
 impl App for SandboxRoot {
     fn root(&self) -> Box<dyn rsx::Component> {
         reset_layout_runtime();
-        // The stack — not just the current section — is hot state: a reload lands you back where you were
-        // reading, with your history intact.
-        let root = Route::Section(0);
-        let nav = Navigator::from_signal(hot_signal("sandbox::nav_stack", vec![root]), root);
-        let sidebar = build_sidebar(nav.clone()).expect("sidebar build failed");
-        let page = ShellPage::new(sidebar, nav).expect("shell layout failed");
+        // Every section's stack is hot state, not just the active one: a reload lands you back where you were reading, in the section you were reading, with each section's own history intact.
+        let sections: Vec<usize> = (0..SECTIONS.len()).collect();
+        let stacks = TabStacks::new(
+            hot_signal("sandbox::section", 0usize),
+            &sections,
+            |section| {
+                Navigator::from_signal(
+                    hot_signal(
+                        &format!("sandbox::stack::{section}"),
+                        vec![SectionRoute::Overview],
+                    ),
+                    SectionRoute::Overview,
+                )
+            },
+        )
+        // The rail is a table of contents, so Back means "what I was just reading": it walks out of a source listing first, then back through the sections visited to get here. Without this a section's Back is inert the moment its own stack is at its root, which for a docs shell reads as broken.
+        .with_tab_history();
+        let sidebar = build_sidebar(stacks.clone()).expect("sidebar build failed");
+        let page = ShellPage::new(sidebar, stacks).expect("shell layout failed");
         Box::new(page)
     }
 
@@ -762,31 +778,76 @@ mod tests {
         }
     }
 
-    // The source listing is a pushed page, not an overlay: navigating in deepens the stack, Back returns to the
-    // section, and a Back at the root reports "nothing to do" so a hardware back can fall through to the OS.
-    #[test]
-    fn source_detail_pushes_a_page_and_back_returns_to_the_section() {
+    fn shell_stacks() -> (TabHost<usize, SectionRoute>, TabStacks<usize, SectionRoute>) {
         reset_layout_runtime();
         rsx::set_theme(crate::core::theme::SandboxTheme::modern());
-        let nav = Navigator::new(Route::Section(5));
-        let factory_nav = nav.clone();
-        let mut host =
-            NavHost::new(nav.clone(), move |r: &Route| build_page(&factory_nav, *r)).unwrap();
-
-        nav.push(Route::Source(5));
-        host.sync();
-        assert_eq!(host.current(), Route::Source(5));
-        assert_eq!(nav.depth(), 2);
-
-        assert!(nav.back());
-        host.sync();
-        assert_eq!(host.current(), Route::Section(5));
-        assert!(!nav.back(), "at the root with nothing open there is nothing to go back to");
+        let sections: Vec<usize> = (0..SECTIONS.len()).collect();
+        let stacks = TabStacks::new(signal(5usize), &sections, |_| {
+            Navigator::new(SectionRoute::Overview)
+        });
+        let factory = stacks.clone();
+        let host = TabHost::new(stacks.clone(), move |section: &usize, route: &SectionRoute| {
+            build_page(&factory, *section, *route)
+        })
+        .unwrap()
+        .with_policy(PagePolicy::Transient);
+        (host, stacks)
     }
 
-    // The rail highlights by section, so a source page keeps its section lit rather than clearing the rail.
+    // The source listing is a pushed page, not an overlay: navigating in deepens that section's own stack, Back returns to the overview, and a Back at the root reports "nothing to do" so a hardware back can fall through to the OS.
     #[test]
-    fn a_source_route_belongs_to_its_section() {
-        assert_eq!(Route::Source(7).section(), Route::Section(7).section());
+    fn source_detail_pushes_a_page_and_back_returns_to_the_section() {
+        let (mut host, stacks) = shell_stacks();
+
+        stacks.push(SectionRoute::Source);
+        host.sync();
+        assert_eq!(host.current_route(), Some(SectionRoute::Source));
+        assert_eq!(stacks.depth(), 2);
+
+        assert!(stacks.back());
+        host.sync();
+        assert_eq!(host.current_route(), Some(SectionRoute::Overview));
+        assert!(
+            !stacks.back(),
+            "at a section's root with nothing open there is nothing to go back to"
+        );
+    }
+
+    // The point of one stack per section: switching away from a section you had drilled into and coming back finds it still drilled in, without any keep-alive policy holding the page up by route.
+    #[test]
+    fn a_section_keeps_its_own_depth_while_you_read_another() {
+        let (mut host, stacks) = shell_stacks();
+        stacks.push(SectionRoute::Source);
+        host.sync();
+
+        stacks.select(9);
+        host.sync();
+        assert_eq!(host.current_tab(), 9);
+        assert_eq!(
+            host.current_route(),
+            Some(SectionRoute::Overview),
+            "arriving at a section lands on its overview, not the depth of the one you left"
+        );
+
+        stacks.select(5);
+        host.sync();
+        assert_eq!(
+            host.current_route(),
+            Some(SectionRoute::Source),
+            "the section you left is still showing its source listing"
+        );
+    }
+
+    // Pressing the rail item you are already reading is the way back out of its source listing, which is what keeps every item live instead of inert on the section you are on.
+    #[test]
+    fn reselecting_the_current_section_returns_to_its_overview() {
+        let (mut host, stacks) = shell_stacks();
+        stacks.push(SectionRoute::Source);
+        host.sync();
+
+        stacks.select(5);
+        host.sync();
+        assert_eq!(host.current_route(), Some(SectionRoute::Overview));
+        assert_eq!(stacks.depth(), 1);
     }
 }

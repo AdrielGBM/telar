@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use layout_core::{LayoutError, LayoutStyle, SizeDimension};
-use motion_core::{Animated, Easing, tween};
+use motion_core::Animated;
 use platform_core::Event;
 use ui_core::{
     Component, EventResult, LayoutItem, NodeId, RenderNode, absolute_rect, mark_dirty,
@@ -11,8 +9,6 @@ use ui_core::{
 use crate::navigator::Navigator;
 use crate::page::{NavPage, PagePolicy};
 use crate::transition::NavTransition;
-
-const TRANSITION_MS: u64 = 220;
 
 /// Builds a page for a route on its first visit — returns any [`NavPage`], or a [`LayoutError`] if the page's
 /// widgets fail to construct.
@@ -124,14 +120,19 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
 
     /// Sets the animation played on the incoming page when navigation changes the current route.
     pub fn with_transition(mut self, transition: NavTransition) -> Self {
-        self.transition = transition;
+        self.set_transition(transition);
         self
+    }
+
+    /// [`with_transition`](Self::with_transition) for a host that is already owned elsewhere — a
+    /// [`TabHost`](crate::TabHost) mints one of these per tab and cannot take it by value.
+    pub fn set_transition(&mut self, transition: NavTransition) {
+        self.transition = transition;
     }
 
     /// Applies one policy to every destination. Defaults to [`PagePolicy::KeepAlive`].
     pub fn with_policy(mut self, policy: PagePolicy) -> Self {
-        self.policy = Box::new(move |_| policy);
-        self.reseat_current_key();
+        self.set_policy_for(move |_| policy);
         self
     }
 
@@ -145,9 +146,14 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
     /// })
     /// ```
     pub fn with_policy_for(mut self, policy: impl Fn(&R) -> PagePolicy + 'static) -> Self {
+        self.set_policy_for(policy);
+        self
+    }
+
+    /// [`with_policy_for`](Self::with_policy_for) for a host that is already owned elsewhere.
+    pub fn set_policy_for(&mut self, policy: impl Fn(&R) -> PagePolicy + 'static) {
         self.policy = Box::new(policy);
         self.reseat_current_key();
-        self
     }
 
     /// Re-files the already-built root page under the key the new policy gives it, so a builder call after
@@ -213,12 +219,7 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
         self.refresh_display();
         mark_dirty(self.content_area).ok();
 
-        if self.transition.is_animated() {
-            let anim = Animated::new(
-                0.0,
-                tween(Duration::from_millis(TRANSITION_MS), Easing::EaseOut),
-            );
-            anim.retarget(1.0);
+        if let Some(anim) = self.transition.start() {
             self.entrance = Some(Entrance {
                 key: key.clone(),
                 forward,
@@ -300,19 +301,10 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
     }
 
     fn wrap_transition(&self, child: RenderNode, progress: f32, forward: bool) -> RenderNode {
-        let p = progress.clamp(0.0, 1.0);
-        match self.transition {
-            NavTransition::None => child,
-            NavTransition::Fade => RenderNode::layer(p, 0.0, [child]),
-            NavTransition::SlideHorizontal => {
-                let width = absolute_rect(self.content_area)
-                    .map(|r| r.width)
-                    .unwrap_or(0.0);
-                let dir = if forward { 1.0 } else { -1.0 };
-                let dx = dir * width * (1.0 - p);
-                RenderNode::transform_with([1.0, 0.0, 0.0, 1.0, dx, 0.0], [child])
-            }
-        }
+        let width = absolute_rect(self.content_area)
+            .map(|r| r.width)
+            .unwrap_or(0.0);
+        self.transition.wrap(child, progress, forward, width)
     }
 }
 
