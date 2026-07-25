@@ -28,6 +28,20 @@ struct RectInstance {
     transform_abcd: vec4<f32>,
     transform_ef: vec2<f32>,
     _pad_t: vec2<f32>,
+    stroke_type: u32,
+    _pad_st_0: u32,
+    _pad_st_1: u32,
+    _pad_st_2: u32,
+    stroke_grad_p0: vec2<f32>,
+    stroke_grad_p1: vec2<f32>,
+    stroke_grad_radius: f32,
+    stroke_grad_stop_count: u32,
+    _pad_sg: vec2<f32>,
+    stroke_grad_positions: vec4<f32>,
+    stroke_grad_colors_0: vec4<f32>,
+    stroke_grad_colors_1: vec4<f32>,
+    stroke_grad_colors_2: vec4<f32>,
+    stroke_grad_colors_3: vec4<f32>,
 }
 
 @group(1) @binding(0) var<storage, read> instances: array<RectInstance>;
@@ -172,7 +186,34 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         fill_color = inst.fill_color;
     }
 
-    let has_stroke = inst.stroke_width > 0.0 && inst.stroke_color.a > 0.0;
+    let stroke_grad_colors = array<vec4<f32>, 4>(
+        inst.stroke_grad_colors_0,
+        inst.stroke_grad_colors_1,
+        inst.stroke_grad_colors_2,
+        inst.stroke_grad_colors_3,
+    );
+
+    var stroke_color: vec4<f32>;
+    if inst.stroke_type == 1u {
+        let dir = inst.stroke_grad_p1 - inst.stroke_grad_p0;
+        let len_sq = dot(dir, dir);
+        var t = 0.0;
+        if len_sq > 0.0001 {
+            t = dot(in.world_pos - inst.stroke_grad_p0, dir) / len_sq;
+        }
+        stroke_color = sample_gradient(t, inst.stroke_grad_positions, stroke_grad_colors, inst.stroke_grad_stop_count);
+    } else if inst.stroke_type == 2u {
+        var t = 0.0;
+        if inst.stroke_grad_radius > 0.0001 {
+            t = length(in.world_pos - inst.stroke_grad_p0) / inst.stroke_grad_radius;
+        }
+        stroke_color = sample_gradient(t, inst.stroke_grad_positions, stroke_grad_colors, inst.stroke_grad_stop_count);
+    } else {
+        stroke_color = inst.stroke_color;
+    }
+
+    // A gradient stroke leaves `stroke_color` transparent in the instance data (its colour lives in the stop slots), so presence is decided by the paint type, not by that alpha.
+    let has_stroke = inst.stroke_width > 0.0 && (inst.stroke_type != 0u || inst.stroke_color.a > 0.0);
 
     var fill_mask: f32;
     var stroke_mask: f32;
@@ -180,7 +221,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if has_stroke {
         let inner_mask = smoothstep(-inst.stroke_width + aa, -inst.stroke_width - aa, dist);
         fill_mask = rect_mask * inner_mask * fill_color.a;
-        stroke_mask = rect_mask * (1.0 - inner_mask) * inst.stroke_color.a;
+        stroke_mask = rect_mask * (1.0 - inner_mask) * stroke_color.a;
     } else {
         fill_mask = rect_mask * fill_color.a;
         stroke_mask = 0.0;
@@ -189,7 +230,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let main_a = fill_mask + stroke_mask * (1.0 - fill_mask);
     let main_rgb = select(
         vec3<f32>(0.0),
-        (fill_color.rgb * fill_mask + inst.stroke_color.rgb * stroke_mask * (1.0 - fill_mask)) / main_a,
+        (fill_color.rgb * fill_mask + stroke_color.rgb * stroke_mask * (1.0 - fill_mask)) / main_a,
         main_a > 0.001
     );
 

@@ -8,8 +8,8 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 use platform_headless::HeadlessWindow;
 use renderer_core::{
-    Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow, ShapeStyle,
-    TextStyle,
+    Color, DrawCommand, Gradient, Paint, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
+    ShapeStyle, Stroke, TextStyle,
 };
 use renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
 use renderer_text::TextShaperConfig;
@@ -61,6 +61,161 @@ fn headless_renders_non_empty_frame() {
         &pixels[center..center + 3],
         &pixels[0..3],
         "rect region should differ from cleared background"
+    );
+}
+
+/// A gradient-painted stroke must vary along the trace, not flatten to its first stop.
+///
+/// The hardware backend used to resolve a stroke's paint with `solid_color()`, which returns stop 0 — so a
+/// red→blue stroke came out uniformly red on GPU while the software backend painted the real ramp. Asserted
+/// as "each end leans toward its own stop" rather than on exact values, so it does not encode llvmpipe's
+/// rounding; before the fix both ends read red and the second assertion fails.
+#[test]
+fn a_gradient_stroke_varies_along_the_path() {
+    let (w, h) = (64u32, 32u32);
+    let Some(mut renderer) = headless(w, h) else {
+        return;
+    };
+
+    let (x0, x1, y) = (8.0f32, 56.0f32, 16.0f32);
+    let cmds = vec![DrawCommand::Path {
+        data: Arc::new(
+            PathData::new()
+                .move_to(Point::new(x0, y))
+                .line_to(Point::new(x1, y)),
+        ),
+        style: Arc::new(PathStyle {
+            stroke: Some(Stroke::new(red_to_blue(x0, x1, y), 12.0)),
+            ..Default::default()
+        }),
+    }];
+
+    renderer.begin_frame(w, h, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::BLACK))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+
+    let at = |x: u32, y: u32| {
+        let i = ((y * w + x) * 4) as usize;
+        (pixels[i], pixels[i + 2])
+    };
+    let (lr, lb) = at(14, y as u32);
+    let (rr, rb) = at(50, y as u32);
+
+    assert!(
+        lr > lb,
+        "the start of the stroke should lean red, got r={lr} b={lb}"
+    );
+    assert!(
+        rb > rr,
+        "the end of the stroke should lean blue, got r={rr} b={rb} — a flattened stroke paints stop 0 everywhere"
+    );
+}
+
+/// Builds a headless renderer, or `None` when the machine has no GPU adapter (CI without one).
+fn headless(w: u32, h: u32) -> Option<HardwareRenderer<HeadlessWindow>> {
+    match pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
+        w,
+        h,
+        None,
+        false,
+        TextShaperConfig::default(),
+        HardwareRendererConfig::default(),
+    )) {
+        Ok(r) => Some(r),
+        Err(e) => {
+            eprintln!("skipping: no GPU adapter available: {e:?}");
+            None
+        }
+    }
+}
+
+/// A red→blue linear gradient spanning `x0..x1` at height `y`.
+fn red_to_blue(x0: f32, x1: f32, y: f32) -> Paint {
+    Paint::Gradient(Gradient::linear(
+        Point::new(x0, y),
+        Point::new(x1, y),
+        &[
+            (0.0, Color::rgb(1.0, 0.0, 0.0)),
+            (1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ],
+    ))
+}
+
+/// A rect's border is drawn by the same SDF shader as its fill, from its own paint slots — so a gradient
+/// stroke ramps across the border instead of painting stop 0 all the way round. The two sampled points sit on
+/// the top edge, inside the stroke band, near each end.
+#[test]
+fn a_gradient_stroke_varies_along_a_rect_border() {
+    let (w, h) = (64u32, 40u32);
+    let Some(mut renderer) = headless(w, h) else {
+        return;
+    };
+
+    let (x0, x1) = (4.0f32, 60.0f32);
+    let cmds = vec![DrawCommand::Rect {
+        rect: Rect::new(x0, 4.0, x1 - x0, 32.0),
+        style: Arc::new(RectStyle {
+            fill: None,
+            stroke: Some(Stroke::new(red_to_blue(x0, x1, 4.0), 6.0)),
+            ..Default::default()
+        }),
+    }];
+
+    renderer.begin_frame(w, h, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::BLACK))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+    let at = |x: u32, y: u32| {
+        let i = ((y * w + x) * 4) as usize;
+        (pixels[i], pixels[i + 2])
+    };
+
+    let (lr, lb) = at(9, 6);
+    let (rr, rb) = at(55, 6);
+    assert!(
+        lr > lb,
+        "the border's left end should lean red, r={lr} b={lb}"
+    );
+    assert!(
+        rb > rr,
+        "the border's right end should lean blue, r={rr} b={rb} — a flattened stroke paints stop 0 everywhere"
+    );
+}
+
+/// The `line` primitive resolves its paint per fragment for the same reason.
+#[test]
+fn a_gradient_line_varies_along_its_length() {
+    let (w, h) = (64u32, 32u32);
+    let Some(mut renderer) = headless(w, h) else {
+        return;
+    };
+
+    let (x0, x1, y) = (8.0f32, 56.0f32, 16.0f32);
+    let cmds = vec![DrawCommand::Line {
+        p1: Point::new(x0, y),
+        p2: Point::new(x1, y),
+        style: Stroke::new(red_to_blue(x0, x1, y), 10.0),
+    }];
+
+    renderer.begin_frame(w, h, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::BLACK))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+    let at = |x: u32, y: u32| {
+        let i = ((y * w + x) * 4) as usize;
+        (pixels[i], pixels[i + 2])
+    };
+
+    let (lr, lb) = at(14, y as u32);
+    let (rr, rb) = at(50, y as u32);
+    assert!(lr > lb, "the line's start should lean red, r={lr} b={lb}");
+    assert!(
+        rb > rr,
+        "the line's end should lean blue, r={rr} b={rb} — a flattened paint uses stop 0 everywhere"
     );
 }
 

@@ -10,6 +10,22 @@ pub(crate) struct EncodedFill<const N: usize> {
     pub grad_colors: [[f32; 4]; N],
 }
 
+impl<const N: usize> EncodedFill<N> {
+    /// The "no paint at all" encoding: solid, fully transparent. What an absent fill or stroke uploads.
+    pub(crate) fn none() -> Self {
+        Self {
+            fill_type: 0,
+            fill_color: [0.0; 4],
+            grad_p0: [0.0; 2],
+            grad_p1: [0.0; 2],
+            grad_radius: 0.0,
+            grad_stop_count: 0,
+            grad_positions: [0.0; N],
+            grad_colors: [[0.0; 4]; N],
+        }
+    }
+}
+
 pub(crate) fn encode_fill_style<const N: usize>(
     fill: &renderer_core::Paint,
     matrix: [f32; 6],

@@ -30,6 +30,16 @@ pub(crate) struct RectInstance {
     // transform (offset 240)
     pub transform: [f32; 6],
     pub _pad_t: [f32; 2],
+    // Stroke paint, mirroring the fill block above. An element can carry a gradient fill AND a gradient stroke, so the stroke cannot borrow the fill's slots; `stroke_color` above still carries a solid one.
+    pub stroke_type: u32,
+    pub _pad_st: [u32; 3],
+    pub stroke_grad_p0: [f32; 2],
+    pub stroke_grad_p1: [f32; 2],
+    pub stroke_grad_radius: f32,
+    pub stroke_grad_stop_count: u32,
+    pub _pad_sg: [f32; 2],
+    pub stroke_grad_positions: [f32; 4],
+    pub stroke_grad_colors: [[f32; 4]; 4],
 }
 
 pub(crate) struct RectPipeline {
@@ -72,21 +82,14 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         .fill
         .as_ref()
         .map(|fill| encode_fill_style::<4>(fill, matrix))
-        .unwrap_or(super::EncodedFill {
-            fill_type: 0,
-            fill_color: [0.0; 4],
-            grad_p0: [0.0; 2],
-            grad_p1: [0.0; 2],
-            grad_radius: 0.0,
-            grad_stop_count: 0,
-            grad_positions: [0.0; 4],
-            grad_colors: [[0.0; 4]; 4],
-        });
+        .unwrap_or_else(super::EncodedFill::none);
 
-    let (stroke_color, stroke_width) = match style.stroke {
-        Some(s) => (s.paint.solid_color().to_array(), s.width),
-        None => ([0.0; 4], 0.0),
+    // Encoded the same way as the fill, so a gradient stroke keeps its whole ramp instead of collapsing to its first stop. For a solid stroke the encoder puts the colour in `fill_color`, which is what `stroke_color` uploads; for a gradient it leaves that transparent and fills the gradient slots.
+    let (stroke, stroke_width) = match style.stroke {
+        Some(s) => (encode_fill_style::<4>(&s.paint, matrix), s.width),
+        None => (super::EncodedFill::none(), 0.0),
     };
+    let stroke_color = stroke.fill_color;
 
     let (shadow_color, shadow_offset, shadow_blur, shadow_spread) = match style.shadow {
         Some(s) => (
@@ -127,5 +130,14 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         shadow_spread,
         transform: matrix,
         _pad_t: [0.0; 2],
+        stroke_type: stroke.fill_type,
+        _pad_st: [0; 3],
+        stroke_grad_p0: stroke.grad_p0,
+        stroke_grad_p1: stroke.grad_p1,
+        stroke_grad_radius: stroke.grad_radius,
+        stroke_grad_stop_count: stroke.grad_stop_count,
+        _pad_sg: [0.0; 2],
+        stroke_grad_positions: stroke.grad_positions,
+        stroke_grad_colors: stroke.grad_colors,
     }
 }

@@ -699,7 +699,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     let tp1 = Point::new(lx1, ly1);
                     let tp2 = Point::new(lx2, ly2);
                     self.pending_line_instances
-                        .push(crate::primitives::line::prepare_line(tp1, tp2, *style));
+                        .push(crate::primitives::line::prepare_line(
+                            tp1,
+                            tp2,
+                            *style,
+                            self.draw_state.cumulative_matrix,
+                        ));
                 }
                 DrawCommand::Path { data, style } => {
                     let style = **style;

@@ -45,10 +45,6 @@ impl PathFillData {
             grad_colors: enc.grad_colors,
         }
     }
-
-    pub(crate) fn from_solid(color: renderer_core::Color) -> Self {
-        Self::from_fill_style(renderer_core::Paint::Solid(color))
-    }
 }
 
 pub(crate) struct FillDataBuffer {
@@ -378,7 +374,8 @@ pub(crate) fn prepare_path(
 
         if let Some(geom) = cache.stroke.get_mut(&stroke_key) {
             let stroke_fill_index = out_fill_data.len() as u32;
-            out_fill_data.push(PathFillData::from_solid(s.paint.solid_color()));
+            // The stroke gets its own fill-data entry, so it resolves its paint the same way the fill does. Flattening it to `solid_color()` here silently painted a gradient stroke in its first stop.
+            out_fill_data.push(PathFillData::from_fill_style(s.paint));
             if emit_cached_geom(
                 geom,
                 stroke_fill_index,
