@@ -84,6 +84,12 @@ impl<T: 'static> RwSignal<T> {
         read_with::<T, R>(self.id, f)
     }
 
+    /// As [`with`](Self::with), but does not subscribe the caller — for reads from an event handler, where
+    /// tracking would attach the value to whatever effect happens to be running.
+    pub fn peek_with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        peek_with::<T, R>(self.id, f)
+    }
+
     pub fn read_only(&self) -> ReadSignal<T> {
         runtime::clone_signal(self.id);
         ReadSignal {
