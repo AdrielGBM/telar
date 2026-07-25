@@ -2040,6 +2040,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         } else {
                             None
                         };
+                    // Scissors must be clamped to the attachment actually bound below, which inside a layer is
+                    // that layer's texture — smaller than the surface. Clamping to the surface instead lets a
+                    // clip nested in a layer name pixels outside the attachment, which wgpu rejects as fatal.
+                    let (target_w, target_h) = layer_stack
+                        .last()
+                        .map(|l| (l.5, l.6))
+                        .unwrap_or((self.width, self.height));
 
                     // When the init pass was folded away (first segment is this top-level Draw), apply the frame's clear here instead of Loading an uninitialised target.
                     let pass_load = if seg_idx == 0 && fold_init_clear {
@@ -2152,13 +2159,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                 };
                                 match clipped_rect {
                                     None => {
-                                        render_pass.set_scissor_rect(0, 0, self.width, self.height);
+                                        render_pass.set_scissor_rect(0, 0, target_w, target_h);
                                     }
                                     Some(r) => {
                                         let (x, y, w, h) = physical_scissor(
                                             r,
-                                            self.width,
-                                            self.height,
+                                            target_w,
+                                            target_h,
                                             self.scale_factor,
                                         );
                                         render_pass.set_scissor_rect(x, y, w, h);
@@ -2438,6 +2445,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         } else {
                             &self.viewport_bind_group
                         };
+                    // The layer being composited is already popped, so this is the PARENT — the attachment the
+                    // blit writes into, and therefore what its scissor must be clamped against.
+                    let (parent_w, parent_h) = layer_stack
+                        .last()
+                        .map(|l| (l.5, l.6))
+                        .unwrap_or((self.width, self.height));
 
                     {
                         let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -2469,7 +2482,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         };
                         if let Some(s) = composite_scissor {
                             let (x, y, w, h) =
-                                physical_scissor(s, self.width, self.height, self.scale_factor);
+                                physical_scissor(s, parent_w, parent_h, self.scale_factor);
                             blit.set_scissor_rect(x, y, w, h);
                         }
                         blit.draw(0..6, 0..1);
@@ -2532,6 +2545,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         } else {
                             &self.viewport_bind_group
                         };
+                    // The layer being composited is already popped, so this is the PARENT — the attachment the
+                    // blit writes into, and therefore what its scissor must be clamped against.
+                    let (parent_w, parent_h) = layer_stack
+                        .last()
+                        .map(|l| (l.5, l.6))
+                        .unwrap_or((self.width, self.height));
                     let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("rsx-prerendered-layer-blit"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2558,7 +2577,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     };
                     if let Some(s) = composite_scissor {
                         let (x, y, w, h) =
-                            physical_scissor(s, self.width, self.height, self.scale_factor);
+                            physical_scissor(s, parent_w, parent_h, self.scale_factor);
                         blit.set_scissor_rect(x, y, w, h);
                     }
                     blit.draw(0..6, 0..1);

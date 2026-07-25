@@ -512,3 +512,60 @@ fn render_frame_pixel_golden() {
         );
     }
 }
+
+/// A clip nested inside a layer may name pixels outside that layer's texture: the layer is sized to the
+/// bounds of what it draws, while the clip carries window coordinates. Scissors are clamped to the bound
+/// attachment, so this must stay in-bounds — clamping to the surface instead made wgpu reject the scissor as
+/// a fatal validation error the moment a scrolling page was wrapped in an opacity/transition layer.
+#[test]
+fn clip_below_a_layers_bounds_stays_in_the_attachment() {
+    const W: u32 = 640;
+    const H: u32 = 1080;
+
+    let mut renderer = match pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
+        W,
+        H,
+        None,
+        false,
+        TextShaperConfig::default(),
+        HardwareRendererConfig::default(),
+    )) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("skipping layer-scissor test: no GPU adapter available: {e:?}");
+            return;
+        }
+    };
+
+    // The layer draws only near the top, so its texture is a fraction of the 1080px surface...
+    let cmds = vec![
+        DrawCommand::PushLayer {
+            opacity: 0.5,
+            backdrop_blur: 0.0,
+        },
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 0.0, 640.0, 192.0),
+            style: Arc::new(RectStyle::filled(Color::rgb(0.2, 0.6, 0.9), 0.0)),
+        },
+        // ...while this clip sits near the bottom of the window, far past the layer's texture height. It
+        // emits its scissor unconditionally, and the draw inside falls outside it — so the draw is culled and
+        // never grows the layer's bounds, leaving the scissor pointing well outside the layer's texture.
+        DrawCommand::PushClip {
+            rect: Rect::new(48.0, 1063.0, 604.0, 1.0),
+            radius: Default::default(),
+        },
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 0.0, 10.0, 10.0),
+            style: Arc::new(RectStyle::filled(Color::rgb(0.9, 0.3, 0.3), 0.0)),
+        },
+        DrawCommand::PopClip,
+        DrawCommand::PopLayer,
+    ];
+
+    renderer.begin_frame(W, H, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::rgb(0.05, 0.05, 0.08)))
+        .expect("render_frame must not raise a wgpu scissor validation error");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+    assert_eq!(pixels.len(), (W * H * 4) as usize);
+}
