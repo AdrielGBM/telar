@@ -29,6 +29,28 @@ mod i18n_smoke {
         rsx::set_locale("fr");
         assert_eq!(rsx::t!("nav.overview"), "Overview");
     }
+
+    // A plural table is baked as one key with per-category branches, and the active locale's rules pick one.
+    #[test]
+    fn plural_selects_a_branch_per_locale() {
+        rsx::set_locale("en");
+        assert_eq!(rsx::t!("items", count = "1"), "1 item");
+        assert_eq!(rsx::t!("items", count = "0"), "0 items");
+        assert_eq!(rsx::t!("items", count = "5"), "5 items");
+
+        rsx::set_locale("es");
+        assert_eq!(rsx::t!("items", count = "1"), "1 elemento");
+        assert_eq!(rsx::t!("items", count = "5"), "5 elementos");
+
+        // Arabic is the reason the category set is not just one/other: it uses all six.
+        rsx::set_locale("ar");
+        assert_eq!(rsx::t!("items", count = "0"), "لا عناصر");
+        assert_eq!(rsx::t!("items", count = "1"), "عنصر واحد");
+        assert_eq!(rsx::t!("items", count = "2"), "عنصران");
+        assert_eq!(rsx::t!("items", count = "3"), "3 عناصر");
+        assert_eq!(rsx::t!("items", count = "11"), "11 عنصرًا");
+        rsx::set_locale("en");
+    }
 }
 
 #[cfg(test)]

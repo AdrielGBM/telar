@@ -2,3 +2,7 @@ greeting = "Hola, {name}!"
 
 [nav]
 overview = "Resumen"
+
+[items]
+one = "{count} elemento"
+other = "{count} elementos"
