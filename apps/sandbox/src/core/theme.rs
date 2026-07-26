@@ -28,6 +28,8 @@ pub struct SandboxTheme {
     // Code blocks
     pub code_bg: Color,
     pub code_fg: Color,
+    // Spacing scale. A non-colour token, so it can only be reached from `.rsx` through the dotted form (`pad:theme.gutter`) — a bare ident there means a `[style]` constant.
+    pub gutter: f32,
 }
 
 impl Theme for SandboxTheme {
@@ -84,6 +86,7 @@ impl SandboxTheme {
             cyan: c("#22aecb"),
             code_bg: c("#1b1e2b"),
             code_fg: c("#d7dcec"),
+            gutter: 14.0,
         }
     }
 
@@ -105,6 +108,7 @@ impl SandboxTheme {
             cyan: c("#5bc7c0"),
             code_bg: c("#322a41"),
             code_fg: c("#e7def4"),
+            gutter: 16.0,
         }
     }
 
@@ -126,6 +130,7 @@ impl SandboxTheme {
             cyan: c("#38c6e6"),
             code_bg: c("#0a0c12"),
             code_fg: c("#cfd6ea"),
+            gutter: 12.0,
         }
     }
 }

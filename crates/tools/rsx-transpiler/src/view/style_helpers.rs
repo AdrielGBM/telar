@@ -74,7 +74,12 @@ impl ViewGen<'_> {
         let radius = pattrs
             .iter()
             .find(|a| a.key == "radius")
-            .map(|a| format!("BorderRadius::all({})", format_number(&a.value)))
+            .map(|a| {
+                format!(
+                    "BorderRadius::all({})",
+                    format_number(&a.value, self.theme_type.as_deref())
+                )
+            })
             .unwrap_or_else(|| "BorderRadius::zero()".to_string());
         let param = if gradient.is_some() { "r" } else { "_" };
         let rect_style =
@@ -200,7 +205,9 @@ impl ViewGen<'_> {
             for name in rest {
                 if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
                     for prop in &class.props {
-                        if let Some(call) = layout_prop_call(&prop.key, &prop.value) {
+                        if let Some(call) =
+                            layout_prop_call(&prop.key, &prop.value, self.theme_type.as_deref())
+                        {
                             base.push_str(&call);
                         }
                     }
@@ -236,7 +243,8 @@ impl ViewGen<'_> {
 
         // Inline attributes are applied on top of the base style and take precedence.
         for attr in attrs {
-            if let Some(call) = layout_prop_call(&attr.key, &attr.value) {
+            if let Some(call) = layout_prop_call(&attr.key, &attr.value, self.theme_type.as_deref())
+            {
                 expr.push_str(&call);
             }
         }

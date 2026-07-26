@@ -90,6 +90,10 @@ impl ViewGen<'_> {
         if v.contains('(') || v.contains('$') {
             return substitute_reads(v);
         }
+        // The explicit `theme.field` form, so one spelling reaches the theme from any attribute; a numeric attribute has no bare-ident form, since there a bare ident is a `[style]` constant.
+        if let Some(expr) = crate::style::theme_field_expr(v, self.theme_type.as_deref()) {
+            return expr;
+        }
         if v.starts_with("Color::") {
             return v.to_string();
         }

@@ -4,10 +4,26 @@ use std::fmt::Write;
 
 use rsx_parser::{StyleClass, StyleConstant, StyleSection, StyleValue};
 
-use crate::naming::{constant_name, style_function_name};
+use crate::naming::{constant_name, is_ident, style_function_name, to_snake_case};
 
-/// Renders all constants and style functions for the document's style section. When a theme is active (`theme_active`), `[style]` color constants are omitted: color references resolve through `use_theme` instead (see `color_expr`), so they react to theme switches. Number/raw constants are always emitted.
-pub fn generate_style_section(section: &StyleSection, theme_active: bool) -> String {
+/// A `theme.field` reference resolved to a reactive theme read, or `None` when `value` is not one (or no
+/// theme is configured, in which case the reference is left alone for rustc to reject by name).
+///
+/// The dotted form is what lets a **non-color** token reach the theme. A bare ident already means "a `[style]`
+/// constant" everywhere except color attributes, so overloading it would silently change what existing
+/// `pad:card_gap` means; `theme.card_gap` is unambiguous and works in any attribute position.
+pub fn theme_field_expr(value: &str, theme: Option<&str>) -> Option<String> {
+    let field = value.trim().strip_prefix("theme.")?;
+    let theme = theme?;
+    if field.is_empty() || !is_ident(field) {
+        return None;
+    }
+    Some(format!("use_theme::<{theme}>().{}", to_snake_case(field)))
+}
+
+/// Renders all constants and style functions for the document's style section. When a theme is active, `[style]` color constants are omitted: color references resolve through `use_theme` instead (see `color_expr`), so they react to theme switches. Number/raw constants are always emitted.
+pub fn generate_style_section(section: &StyleSection, theme: Option<&str>) -> String {
+    let theme_active = theme.is_some();
     let mut out = String::new();
 
     let mut emitted_const = false;
@@ -29,7 +45,7 @@ pub fn generate_style_section(section: &StyleSection, theme_active: bool) -> Str
         if i > 0 {
             out.push('\n');
         }
-        out.push_str(&generate_class_function(class));
+        out.push_str(&generate_class_function(class, theme));
         out.push('\n');
     }
 
@@ -54,7 +70,7 @@ fn generate_constant(c: &StyleConstant) -> String {
     }
 }
 
-fn generate_class_function(class: &StyleClass) -> String {
+fn generate_class_function(class: &StyleClass, theme: Option<&str>) -> String {
     let mut out = String::new();
     // A paint-only class (or one only ever used as a non-first, composed class) never has its layout fn
     // called — its paint reaches the RectStyle and its layout props are inlined at the call site — so the
@@ -67,7 +83,7 @@ fn generate_class_function(class: &StyleClass) -> String {
     );
     out.push_str("    LayoutStyle::new()");
     for prop in &class.props {
-        if let Some(call) = layout_prop_call(&prop.key, &prop.value) {
+        if let Some(call) = layout_prop_call(&prop.key, &prop.value, theme) {
             let _ = write!(out, "\n        {call}");
         }
     }
@@ -76,17 +92,17 @@ fn generate_class_function(class: &StyleClass) -> String {
 }
 
 /// Maps a style property to a `LayoutStyle` builder call, or `None` if the property is purely visual and not represented in layout.
-pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
+pub fn layout_prop_call(key: &str, value: &str, theme: Option<&str>) -> Option<String> {
     let value = value.trim();
     Some(match key {
-        "width" => format!(".width({})", dimension(value)),
-        "height" => format!(".height({})", dimension(value)),
-        "min_width" => format!(".min_width({})", dimension(value)),
-        "min_height" => format!(".min_height({})", dimension(value)),
-        "max_width" => format!(".max_width({})", dimension(value)),
-        "max_height" => format!(".max_height({})", dimension(value)),
-        "basis" | "flex_basis" => format!(".flex_basis({})", dimension(value)),
-        "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value)),
+        "width" => format!(".width({})", dimension(value, theme)),
+        "height" => format!(".height({})", dimension(value, theme)),
+        "min_width" => format!(".min_width({})", dimension(value, theme)),
+        "min_height" => format!(".min_height({})", dimension(value, theme)),
+        "max_width" => format!(".max_width({})", dimension(value, theme)),
+        "max_height" => format!(".max_height({})", dimension(value, theme)),
+        "basis" | "flex_basis" => format!(".flex_basis({})", dimension(value, theme)),
+        "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value, theme)),
         // `wrap` is a flag (no value) or `wrap`/`true`; anything else is ignored.
         "wrap" => match value {
             "" | "wrap" | "true" => ".flex_wrap()".to_string(),
@@ -101,21 +117,21 @@ pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
             "end" => ".align_self_end()".to_string(),
             _ => return None,
         },
-        "padding" | "pad" => format!(".padding_all({})", format_number(value)),
-        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value)),
-        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value)),
+        "padding" | "pad" => format!(".padding_all({})", format_number(value, theme)),
+        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value, theme)),
+        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value, theme)),
         // Logical edges: resolved to left/right against the active writing direction at layout time, so one build serves LTR and RTL.
-        "padding_start" | "pad_start" => format!(".padding_start({})", format_number(value)),
-        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value)),
-        "margin_start" => format!(".margin_start({})", format_number(value)),
-        "margin_end" => format!(".margin_end({})", format_number(value)),
-        "inset_start" => format!(".inset_start({})", format_number(value)),
-        "inset_end" => format!(".inset_end({})", format_number(value)),
-        "gap" => format!(".gap({})", format_number(value)),
-        "gap_x" => format!(".gap_x({})", format_number(value)),
-        "gap_y" => format!(".gap_y({})", format_number(value)),
-        "grow" => format!(".flex_grow({})", format_number(value)),
-        "shrink" => format!(".flex_shrink({})", format_number(value)),
+        "padding_start" | "pad_start" => format!(".padding_start({})", format_number(value, theme)),
+        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value, theme)),
+        "margin_start" => format!(".margin_start({})", format_number(value, theme)),
+        "margin_end" => format!(".margin_end({})", format_number(value, theme)),
+        "inset_start" => format!(".inset_start({})", format_number(value, theme)),
+        "inset_end" => format!(".inset_end({})", format_number(value, theme)),
+        "gap" => format!(".gap({})", format_number(value, theme)),
+        "gap_x" => format!(".gap_x({})", format_number(value, theme)),
+        "gap_y" => format!(".gap_y({})", format_number(value, theme)),
+        "grow" => format!(".flex_grow({})", format_number(value, theme)),
+        "shrink" => format!(".flex_shrink({})", format_number(value, theme)),
         "span" => match value.trim().parse::<u16>() {
             Ok(n) => format!(".grid_column_span({n})"),
             Err(_) => return None,
@@ -207,7 +223,10 @@ fn parse_track_token(s: &str) -> Option<String> {
 }
 
 /// Renders a numeric literal as a float suffix-free Rust expression. Non-numeric values are passed through verbatim (e.g. references to other constants).
-pub fn format_number(value: &str) -> String {
+pub fn format_number(value: &str, theme: Option<&str>) -> String {
+    if let Some(expr) = theme_field_expr(value, theme) {
+        return expr;
+    }
     match value.parse::<f32>() {
         Ok(n) => format_f32(n),
         Err(_) => value.to_string(),
@@ -216,14 +235,14 @@ pub fn format_number(value: &str) -> String {
 
 /// Renders a sizing value: `%` becomes `SizeDimension::Percent` (`100%` == `1.0`), a bare number stays an
 /// `f32` literal (coerced to `Px`), and anything else is forwarded verbatim (e.g. a `[style]` constant name).
-fn dimension(value: &str) -> String {
+fn dimension(value: &str, theme: Option<&str>) -> String {
     let v = value.trim();
     if let Some(pct) = v.strip_suffix('%') {
         if let Ok(n) = pct.trim().parse::<f32>() {
             return format!("SizeDimension::Percent({})", format_f32(n / 100.0));
         }
     }
-    format_number(v)
+    format_number(v, theme)
 }
 
 /// Formats an f32 so it always carries a decimal point (`240` -> `240.0`).
@@ -272,7 +291,7 @@ mod tests {
     #[test]
     fn width_prop() {
         assert_eq!(
-            layout_prop_call("width", "240").as_deref(),
+            layout_prop_call("width", "240", None).as_deref(),
             Some(".width(240.0)")
         );
     }
@@ -287,7 +306,7 @@ mod tests {
             ("inset_end", ".inset_end(12.0)"),
         ] {
             assert_eq!(
-                layout_prop_call(key, "12").as_deref(),
+                layout_prop_call(key, "12", None).as_deref(),
                 Some(expected),
                 "{key}"
             );
@@ -297,28 +316,61 @@ mod tests {
     #[test]
     fn direction_row_reverse_is_the_physical_one() {
         assert_eq!(
-            layout_prop_call("direction", "row").as_deref(),
+            layout_prop_call("direction", "row", None).as_deref(),
             Some(".flex_row()")
         );
         assert_eq!(
-            layout_prop_call("direction", "row_reverse").as_deref(),
+            layout_prop_call("direction", "row_reverse", None).as_deref(),
             Some(".flex_row_reverse()")
         );
     }
 
     #[test]
+    fn a_theme_path_resolves_in_any_numeric_prop() {
+        for (key, expected) in [
+            ("pad", ".padding_all(use_theme::<Th>().gutter)"),
+            ("gap", ".gap(use_theme::<Th>().gutter)"),
+            ("width", ".width(use_theme::<Th>().gutter)"),
+            ("margin_start", ".margin_start(use_theme::<Th>().gutter)"),
+        ] {
+            assert_eq!(
+                layout_prop_call(key, "theme.gutter", Some("Th")).as_deref(),
+                Some(expected),
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_bare_ident_still_means_a_style_constant_not_a_theme_field() {
+        // The whole reason the theme form is dotted: this must keep meaning what it always meant.
+        assert_eq!(
+            layout_prop_call("pad", "card_gap", Some("Th")).as_deref(),
+            Some(".padding_all(card_gap)")
+        );
+    }
+
+    #[test]
+    fn a_theme_path_without_a_theme_is_left_for_rustc() {
+        assert_eq!(theme_field_expr("theme.gutter", None), None);
+        assert_eq!(theme_field_expr("gutter", Some("Th")), None);
+        assert_eq!(theme_field_expr("theme.", Some("Th")), None);
+        assert_eq!(theme_field_expr("theme.not an ident", Some("Th")), None);
+    }
+
+    #[test]
     fn radius_is_ignored() {
-        assert!(layout_prop_call("radius", "6").is_none());
+        assert!(layout_prop_call("radius", "6", None).is_none());
     }
 
     #[test]
     fn aspect_maps_to_aspect_ratio() {
         assert_eq!(
-            layout_prop_call("aspect", "1").as_deref(),
+            layout_prop_call("aspect", "1", None).as_deref(),
             Some(".aspect_ratio(1.0)")
         );
         assert_eq!(
-            layout_prop_call("aspect_ratio", "1.5").as_deref(),
+            layout_prop_call("aspect_ratio", "1.5", None).as_deref(),
             Some(".aspect_ratio(1.5)")
         );
     }

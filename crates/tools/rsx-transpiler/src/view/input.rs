@@ -27,7 +27,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "size")
-            .map(|a| format_number(&a.value))
+            .map(|a| format_number(&a.value, self.theme_type.as_deref()))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = el.attributes.iter().find(|a| a.key == "color");
         let color = color_attr
@@ -45,7 +45,7 @@ impl ViewGen<'_> {
             if matches!(a.key.as_str(), "value" | "size" | "color" | "on_submit") {
                 continue;
             }
-            if let Some(call) = layout_prop_call(&a.key, &a.value) {
+            if let Some(call) = layout_prop_call(&a.key, &a.value, self.theme_type.as_deref()) {
                 extra.push_str(&call);
             }
         }

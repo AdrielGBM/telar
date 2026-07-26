@@ -296,7 +296,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "size")
-            .map(|a| format_number(&a.value))
+            .map(|a| format_number(&a.value, self.theme_type.as_deref()))
             .unwrap_or_else(|| "14.0".to_string());
 
         let color = el

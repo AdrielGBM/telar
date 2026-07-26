@@ -98,7 +98,7 @@ col gap:20
                 let _ = panel_builds.update(|n| *n += 1)
                 col gap:8
                     text "this subtree has been built {$panel_builds} time(s) — reopening never adds one" size:13 color:primary
-                    box fill:surface_alt stroke:border radius:8 pad_x:14 pad_y:12 width:300
+                    box fill:surface_alt stroke:border radius:8 pad_x:theme.gutter pad_y:12 width:300
                         input value:$panel_note size:15 color:ink
         code_line code:"lazy when:$open  >  …   (deferred until first shown, then kept)"
     example title:"input + focus — two editable fields; Tab moves focus, each binds a signal (wrap a box for the look)"

@@ -42,7 +42,7 @@ impl ViewGen<'_> {
             ) {
                 continue;
             }
-            if let Some(call) = layout_prop_call(&a.key, &a.value) {
+            if let Some(call) = layout_prop_call(&a.key, &a.value, self.theme_type.as_deref()) {
                 extra.push_str(&call);
             }
         }
@@ -51,7 +51,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "height")
-            .and_then(|a| layout_prop_call("height", &a.value));
+            .and_then(|a| layout_prop_call("height", &a.value, self.theme_type.as_deref()));
 
         let (ctor, layout_style) = match explicit_height {
             Some(h) => ("Text::new", format!("LayoutStyle::new(){h}{extra}")),
@@ -189,7 +189,7 @@ impl ViewGen<'_> {
         let size = attrs
             .iter()
             .find(|a| a.key == "size")
-            .map(|a| format_number(&a.value))
+            .map(|a| format_number(&a.value, self.theme_type.as_deref()))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = attrs.iter().find(|a| a.key == "color");
         let mut color = color_attr
