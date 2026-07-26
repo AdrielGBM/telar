@@ -13,37 +13,52 @@ pub struct ThemeView<'a> {
     pub theme_fields: &'a HashSet<String>,
 }
 
-/// Runs the `.rsx` semantic checks (undefined style classes, unknown color references) over a parsed
-/// document, returning neutral diagnostics. `theme` is `None` when the project has no theme configured.
-pub fn semantic_diagnostics(doc: &RsxDocument, theme: Option<&ThemeView>) -> Vec<Diagnostic> {
+/// A filesystem-free view of the project's baked i18n catalog, used to validate `t"key"` markup against the
+/// keys the catalog actually defines. Built by the analyzer's `ProjectInfo` from `parse_catalog`, so this
+/// crate never touches disk. `None` when the project has no catalog (i18n unused).
+pub struct CatalogView<'a> {
+    pub keys: &'a HashSet<String>,
+}
+
+/// Everything the per-node checks read, gathered once. Passed by reference through the walk so adding a
+/// check does not mean threading another positional argument through every recursion site.
+struct Ctx<'a> {
+    defined_classes: HashSet<&'a str>,
+    local_constants: HashSet<&'a str>,
+    /// Every identifier token that appears in `[logic]`. A `widget "x"` splices the in-scope binding `x`, so a
+    /// name absent from this set is a typo or a renamed binding. Membership (not a `let`-binding parse) keeps
+    /// it conservative: destructured/patterned bindings still appear here, so a real binding is never a false
+    /// positive; at worst a stray match suppresses a diagnostic (safe).
+    logic_idents: HashSet<&'a str>,
+    theme: Option<&'a ThemeView<'a>>,
+    theme_configured: bool,
+    catalog: Option<&'a CatalogView<'a>>,
+}
+
+/// Runs the `.rsx` semantic checks (undefined style classes, unknown color references, `widget` misuse,
+/// unknown i18n keys) over a parsed document, returning neutral diagnostics. `theme` is `None` when the
+/// project has no theme configured, `catalog` when it has no translations.
+pub fn semantic_diagnostics(
+    doc: &RsxDocument,
+    theme: Option<&ThemeView>,
+    catalog: Option<&CatalogView>,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-
-    let defined_classes: HashSet<&str> =
-        doc.style.classes.iter().map(|c| c.name.as_str()).collect();
-    let local_constants: HashSet<&str> = doc
-        .style
-        .constants
-        .iter()
-        .map(|c| c.name.as_str())
-        .collect();
-    // Every identifier token that appears in `[logic]`. A `widget "x"` splices the in-scope binding `x`,
-    // so a name absent from this set is a typo or a renamed binding — flagged below. Membership (not a
-    // `let`-binding parse) keeps it conservative: destructured/patterned bindings still appear here, so a
-    // real binding is never a false positive; at worst a stray match suppresses a diagnostic (safe).
-    let logic_idents = collect_idents(&doc.logic.source);
-
-    let theme_configured = theme.map(|t| t.theme_type.is_some()).unwrap_or(false);
-
-    check_nodes(
-        &doc.view.nodes,
-        &defined_classes,
-        &local_constants,
-        &logic_idents,
+    let ctx = Ctx {
+        defined_classes: doc.style.classes.iter().map(|c| c.name.as_str()).collect(),
+        local_constants: doc
+            .style
+            .constants
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect(),
+        logic_idents: collect_idents(&doc.logic.source),
         theme,
-        theme_configured,
-        false,
-        &mut diagnostics,
-    );
+        theme_configured: theme.map(|t| t.theme_type.is_some()).unwrap_or(false),
+        catalog,
+    };
+
+    check_nodes(&doc.view.nodes, &ctx, false, &mut diagnostics);
 
     diagnostics
 }
@@ -74,88 +89,32 @@ fn is_ident(s: &str) -> bool {
         && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn check_nodes(
-    nodes: &[ViewNode],
-    defined_classes: &HashSet<&str>,
-    local_constants: &HashSet<&str>,
-    logic_idents: &HashSet<&str>,
-    theme: Option<&ThemeView>,
-    theme_configured: bool,
-    reactive: bool,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_nodes(nodes: &[ViewNode], ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<Diagnostic>) {
     for node in nodes {
         match node {
-            ViewNode::Element(el) => check_element(
-                el,
-                defined_classes,
-                local_constants,
-                logic_idents,
-                theme,
-                theme_configured,
-                reactive,
-                diagnostics,
-            ),
+            ViewNode::Element(el) => check_element(el, ctx, reactive, diagnostics),
             ViewNode::IfBlock(b) => {
                 // The same test the transpiler makes: a `$signal` in the condition is what turns this into a rebuilding region.
                 let reactive = reactive || b.condition.contains('$');
-                check_nodes(
-                    &b.then_branch,
-                    defined_classes,
-                    local_constants,
-                    logic_idents,
-                    theme,
-                    theme_configured,
-                    reactive,
-                    diagnostics,
-                );
+                check_nodes(&b.then_branch, ctx, reactive, diagnostics);
                 if let Some(else_b) = &b.else_branch {
-                    check_nodes(
-                        else_b,
-                        defined_classes,
-                        local_constants,
-                        logic_idents,
-                        theme,
-                        theme_configured,
-                        reactive,
-                        diagnostics,
-                    );
+                    check_nodes(else_b, ctx, reactive, diagnostics);
                 }
             }
             ViewNode::ForBlock(b) => {
                 let reactive = reactive || b.iterable.trim_start().starts_with('$');
-                check_nodes(
-                    &b.body,
-                    defined_classes,
-                    local_constants,
-                    logic_idents,
-                    theme,
-                    theme_configured,
-                    reactive,
-                    diagnostics,
-                );
+                check_nodes(&b.body, ctx, reactive, diagnostics);
             }
             ViewNode::LetStmt(_) => {}
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn check_element(
-    el: &Element,
-    defined_classes: &HashSet<&str>,
-    local_constants: &HashSet<&str>,
-    logic_idents: &HashSet<&str>,
-    theme: Option<&ThemeView>,
-    theme_configured: bool,
-    reactive: bool,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_element(el: &Element, ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<Diagnostic>) {
     let span = Span::line(el.line);
 
     for class in &el.classes {
-        if !defined_classes.contains(class.as_str()) {
+        if !ctx.defined_classes.contains(class.as_str()) {
             diagnostics.push(Diagnostic::warning(
                 format!("Style class `@{class}` is not defined in [style]"),
                 span.clone(),
@@ -171,7 +130,7 @@ fn check_element(
         && let Some(name) = el.content.as_deref().map(str::trim)
         && !name.is_empty()
         && is_ident(name)
-        && !logic_idents.contains(name)
+        && !ctx.logic_idents.contains(name)
     {
         diagnostics.push(Diagnostic::warning(
             format!("`widget \"{name}\"` references `{name}`, which is not defined in [logic]"),
@@ -194,8 +153,11 @@ fn check_element(
         ));
     }
 
-    if theme_configured {
-        let theme_fields = theme.map(|t| t.theme_fields);
+    check_i18n_keys(el, ctx, &span, diagnostics);
+    check_theme_paths(el, ctx, &span, diagnostics);
+
+    if ctx.theme_configured {
+        let theme_fields = ctx.theme.map(|t| t.theme_fields);
         for attr in &el.attributes {
             if color_attr_keys().contains(&attr.key.as_str()) {
                 let val = &attr.value;
@@ -203,11 +165,13 @@ fn check_element(
                     || val.starts_with('#')
                     || val.starts_with('$')
                     || val.starts_with("Color::")
+                    // An explicit `theme.field` is validated by `check_theme_paths`, which knows the dotted form.
+                    || val.starts_with("theme.")
                     || color_keywords().contains(&val.as_str())
                 {
                     continue;
                 }
-                let known = local_constants.contains(val.as_str())
+                let known = ctx.local_constants.contains(val.as_str())
                     || theme_fields
                         .map(|f| f.contains(val.as_str()))
                         .unwrap_or(false);
@@ -222,14 +186,65 @@ fn check_element(
     }
 
     // Reactivity is inherited: a plain `row` nested inside a reactive branch is rebuilt with it.
-    check_nodes(
-        &el.children,
-        defined_classes,
-        local_constants,
-        logic_idents,
-        theme,
-        theme_configured,
-        reactive,
-        diagnostics,
-    );
+    check_nodes(&el.children, ctx, reactive, diagnostics);
+}
+
+/// Flags an explicit `theme.field` reference — the spelling that reaches the theme from a non-color
+/// attribute (`pad:theme.gutter`) — whose field the theme type does not declare.
+///
+/// The bare-ident form on a color attribute is already covered by the color check; this one applies to any
+/// attribute, which is exactly why it needs its own pass.
+fn check_theme_paths(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec<Diagnostic>) {
+    let Some(theme) = ctx.theme.filter(|t| t.theme_type.is_some()) else {
+        return;
+    };
+    for attr in &el.attributes {
+        let Some(field) = attr.value.trim().strip_prefix("theme.") else {
+            continue;
+        };
+        if field.is_empty() || !is_ident(field) || theme.theme_fields.contains(field) {
+            continue;
+        }
+        diagnostics.push(Diagnostic::error(
+            format!(
+                "Unknown theme field `{field}` in `{}:theme.{field}`",
+                attr.key
+            ),
+            span.clone(),
+        ));
+    }
+}
+
+/// Flags a `t"key"` — as element content (`text t"nav.title"`) or as an attribute value
+/// (`btn label:t"buttons.save"`) — whose key the catalog does not define.
+///
+/// Worth catching here specifically: unlike the `t!` macro, which validates its key at compile time, a markup
+/// key that misses falls back to rendering the key string itself. So the only symptom is `nav.titel` showing
+/// up in the UI, with nothing failing anywhere.
+fn check_i18n_keys(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec<Diagnostic>) {
+    let Some(catalog) = ctx.catalog else {
+        return;
+    };
+    let mut check = |key: &str, where_: &str| {
+        let key = key.trim();
+        if key.is_empty() || catalog.keys.contains(key) {
+            return;
+        }
+        diagnostics.push(Diagnostic::warning(
+            format!(
+                "Unknown translation key `{key}` in {where_} — not defined in any locale catalog"
+            ),
+            span.clone(),
+        ));
+    };
+    if el.content_i18n
+        && let Some(content) = el.content.as_deref()
+    {
+        check(content, "t\"…\"");
+    }
+    for attr in &el.attributes {
+        if attr.i18n {
+            check(&attr.value, &format!("`{}:`", attr.key));
+        }
+    }
 }

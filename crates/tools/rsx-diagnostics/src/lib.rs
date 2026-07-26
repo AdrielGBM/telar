@@ -8,7 +8,7 @@ mod diagnostic;
 mod semantic;
 
 pub use diagnostic::{Diagnostic, Severity, Span};
-pub use semantic::{ThemeView, semantic_diagnostics};
+pub use semantic::{CatalogView, ThemeView, semantic_diagnostics};
 
 #[cfg(feature = "lsp")]
 mod lsp;

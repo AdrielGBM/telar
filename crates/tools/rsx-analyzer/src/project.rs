@@ -5,6 +5,8 @@ pub struct ProjectInfo {
     pub root: PathBuf,
     pub theme_type: Option<String>,
     pub theme_fields: HashSet<String>,
+    /// Every key the project's baked catalog defines, or empty when it has no translations.
+    pub i18n_keys: HashSet<String>,
 }
 
 impl ProjectInfo {
@@ -14,6 +16,17 @@ impl ProjectInfo {
             theme_type: self.theme_type.as_deref(),
             theme_fields: &self.theme_fields,
         }
+    }
+
+    /// The same for the i18n catalog. `None` when the project has no translations at all, so a project that
+    /// never opted into i18n gets no key diagnostics rather than one per `t"…"`.
+    pub fn catalog_view(&self) -> Option<rsx_diagnostics::CatalogView<'_>> {
+        if self.i18n_keys.is_empty() {
+            return None;
+        }
+        Some(rsx_diagnostics::CatalogView {
+            keys: &self.i18n_keys,
+        })
     }
 
     pub fn find_theme_field_location(&self, field_name: &str) -> Option<(PathBuf, usize)> {
@@ -44,10 +57,17 @@ impl ProjectInfo {
         } else {
             HashSet::new()
         };
+        // A malformed catalog is the baker's error to report, not the analyzer's: "no keys known" silences the check rather than flagging every `t"…"`.
+        let i18n_keys = rsx_transpiler::parse_catalog(&root)
+            .ok()
+            .flatten()
+            .map(|c| c.keys().cloned().collect())
+            .unwrap_or_default();
         Some(Self {
             root,
             theme_type,
             theme_fields,
+            i18n_keys,
         })
     }
 }
