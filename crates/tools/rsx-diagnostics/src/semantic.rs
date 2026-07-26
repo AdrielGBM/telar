@@ -41,6 +41,7 @@ pub fn semantic_diagnostics(doc: &RsxDocument, theme: Option<&ThemeView>) -> Vec
         &logic_idents,
         theme,
         theme_configured,
+        false,
         &mut diagnostics,
     );
 
@@ -81,6 +82,7 @@ fn check_nodes(
     logic_idents: &HashSet<&str>,
     theme: Option<&ThemeView>,
     theme_configured: bool,
+    reactive: bool,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for node in nodes {
@@ -92,9 +94,12 @@ fn check_nodes(
                 logic_idents,
                 theme,
                 theme_configured,
+                reactive,
                 diagnostics,
             ),
             ViewNode::IfBlock(b) => {
+                // The same test the transpiler makes: a `$signal` in the condition is what turns this into a rebuilding region.
+                let reactive = reactive || b.condition.contains('$');
                 check_nodes(
                     &b.then_branch,
                     defined_classes,
@@ -102,6 +107,7 @@ fn check_nodes(
                     logic_idents,
                     theme,
                     theme_configured,
+                    reactive,
                     diagnostics,
                 );
                 if let Some(else_b) = &b.else_branch {
@@ -112,11 +118,13 @@ fn check_nodes(
                         logic_idents,
                         theme,
                         theme_configured,
+                        reactive,
                         diagnostics,
                     );
                 }
             }
             ViewNode::ForBlock(b) => {
+                let reactive = reactive || b.iterable.trim_start().starts_with('$');
                 check_nodes(
                     &b.body,
                     defined_classes,
@@ -124,6 +132,7 @@ fn check_nodes(
                     logic_idents,
                     theme,
                     theme_configured,
+                    reactive,
                     diagnostics,
                 );
             }
@@ -140,6 +149,7 @@ fn check_element(
     logic_idents: &HashSet<&str>,
     theme: Option<&ThemeView>,
     theme_configured: bool,
+    reactive: bool,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let span = Span::line(el.line);
@@ -165,6 +175,21 @@ fn check_element(
     {
         diagnostics.push(Diagnostic::warning(
             format!("`widget \"{name}\"` references `{name}`, which is not defined in [logic]"),
+            span.clone(),
+        ));
+    }
+
+    // The transpiler already turns this into a `compile_error!`; repeating it here is what puts the squiggle in the editor rather than at the next build.
+    if el.tag == "widget"
+        && reactive
+        && let Some(name) = el.content.as_deref().map(str::trim)
+        && !name.is_empty()
+    {
+        diagnostics.push(Diagnostic::warning(
+            format!(
+                "`widget \"{name}\"` cannot be used inside a reactive `if`/`for`, which rebuilds its \
+                 content. Use `build \"{name}()?\"` — an expression evaluated per build."
+            ),
             span.clone(),
         ));
     }
@@ -196,6 +221,7 @@ fn check_element(
         }
     }
 
+    // Reactivity is inherited: a plain `row` nested inside a reactive branch is rebuilt with it.
     check_nodes(
         &el.children,
         defined_classes,
@@ -203,6 +229,7 @@ fn check_element(
         logic_idents,
         theme,
         theme_configured,
+        reactive,
         diagnostics,
     );
 }

@@ -201,6 +201,50 @@ fn widget_ref_to_defined_binding_is_ok() {
     assert!(semantic_diagnostics(&doc, None).is_empty());
 }
 
+fn if_block(condition: &str, body: Vec<ViewNode>) -> ViewNode {
+    ViewNode::IfBlock(rsx_parser::IfBlock {
+        condition: condition.to_string(),
+        then_branch: body,
+        else_branch: None,
+        line: 3,
+        condition_start: 0,
+    })
+}
+
+#[test]
+fn widget_inside_a_reactive_if_warns_before_the_build_does() {
+    // The same rule the transpiler enforces as an E0507-shaped `compile_error!`, reported against the `.rsx` line instead.
+    let doc = document_with_logic(
+        "let icon = make_icon()?;\nlet shown = memo(move || true);",
+        vec![if_block(
+            "$shown",
+            vec![ViewNode::Element(widget_element("icon", 4))],
+        )],
+    );
+    let diags = semantic_diagnostics(&doc, None);
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert_eq!(diags[0].severity, Severity::Warning);
+    assert_eq!(
+        diags[0].span.line, 4,
+        "reported at the widget, not the `if`"
+    );
+    assert!(diags[0].message.contains("reactive"));
+    assert!(diags[0].message.contains("build"), "it names the fix");
+}
+
+#[test]
+fn widget_inside_a_construction_time_if_is_fine() {
+    // A plain condition picks its branch once, so splicing a binding there stays sound.
+    let doc = document_with_logic(
+        "let icon = make_icon()?;\nlet vertical = true;",
+        vec![if_block(
+            "vertical",
+            vec![ViewNode::Element(widget_element("icon", 4))],
+        )],
+    );
+    assert!(semantic_diagnostics(&doc, None).is_empty());
+}
+
 #[test]
 fn widget_ref_to_unknown_binding_warns() {
     // The binding was renamed/typo'd, so the reference resolves to nothing in [logic].
