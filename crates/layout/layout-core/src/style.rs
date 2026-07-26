@@ -5,6 +5,7 @@ use taffy::{
 
 pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
 
+use crate::direction::Direction;
 use crate::track::TemplateTrack;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,9 +31,39 @@ impl From<SizeDimension> for Dimension {
     }
 }
 
+/// The parts of a style that cannot be turned into physical edges until a [`Direction`] is known. Kept
+/// alongside the resolved `taffy::Style` rather than folded into it, so a direction flip can re-resolve the
+/// original intent instead of trying to un-swap edges it can no longer tell apart from physical ones.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct LogicalStyle {
+    pub(crate) padding_start: Option<f32>,
+    pub(crate) padding_end: Option<f32>,
+    pub(crate) margin_start: Option<f32>,
+    pub(crate) margin_end: Option<f32>,
+    pub(crate) inset_start: Option<f32>,
+    pub(crate) inset_end: Option<f32>,
+    /// Set by [`LayoutStyle::flex_row`]: the main axis is the inline axis, so it reverses under RTL. An
+    /// explicit [`LayoutStyle::flex_row_reverse`] leaves this clear — it means "reversed" in either direction.
+    pub(crate) row_follows_direction: bool,
+}
+
+impl LogicalStyle {
+    /// Whether any edge needs re-resolving on a direction flip. A direction-following row alone does not: it
+    /// is a single flag the engine can toggle in place, without the original style to resolve against.
+    pub(crate) fn has_edges(&self) -> bool {
+        self.padding_start.is_some()
+            || self.padding_end.is_some()
+            || self.margin_start.is_some()
+            || self.margin_end.is_some()
+            || self.inset_start.is_some()
+            || self.inset_end.is_some()
+    }
+}
+
 #[derive(Clone)]
 pub struct LayoutStyle {
     pub(crate) inner: Style,
+    pub(crate) logical: LogicalStyle,
 }
 
 impl LayoutStyle {
@@ -42,18 +73,33 @@ impl LayoutStyle {
                 display: Display::Block,
                 ..Style::default()
             },
+            logical: LogicalStyle::default(),
         }
     }
 
+    /// A flex row along the inline axis: items run left-to-right under [`Direction::Ltr`] and right-to-left
+    /// under [`Direction::Rtl`], the way `flex-direction: row` follows `dir` on the web. Use
+    /// [`flex_row_reverse`](Self::flex_row_reverse) for a row that is reversed in both directions.
     pub fn flex_row(mut self) -> Self {
         self.inner.display = Display::Flex;
         self.inner.flex_direction = FlexDirection::Row;
+        self.logical.row_follows_direction = true;
+        self
+    }
+
+    /// A flex row laid out against the writing direction, unconditionally. Unlike
+    /// [`flex_row`](Self::flex_row) this is a physical choice and does not flip with [`Direction`].
+    pub fn flex_row_reverse(mut self) -> Self {
+        self.inner.display = Display::Flex;
+        self.inner.flex_direction = FlexDirection::RowReverse;
+        self.logical.row_follows_direction = false;
         self
     }
 
     pub fn flex_column(mut self) -> Self {
         self.inner.display = Display::Flex;
         self.inner.flex_direction = FlexDirection::Column;
+        self.logical.row_follows_direction = false;
         self
     }
 
@@ -192,6 +238,20 @@ impl LayoutStyle {
         self
     }
 
+    /// Padding on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under
+    /// [`Direction::Rtl`].
+    pub fn padding_start(mut self, px: f32) -> Self {
+        self.logical.padding_start = Some(px);
+        self
+    }
+
+    /// Padding on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under
+    /// [`Direction::Rtl`].
+    pub fn padding_end(mut self, px: f32) -> Self {
+        self.logical.padding_end = Some(px);
+        self
+    }
+
     pub fn margin_all(mut self, px: f32) -> Self {
         let value = LengthPercentageAuto::length(px);
         self.inner.margin = taffy::geometry::Rect {
@@ -232,6 +292,33 @@ impl LayoutStyle {
 
     pub fn margin_right(mut self, px: f32) -> Self {
         self.inner.margin.right = LengthPercentageAuto::length(px);
+        self
+    }
+
+    /// Margin on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under
+    /// [`Direction::Rtl`].
+    pub fn margin_start(mut self, px: f32) -> Self {
+        self.logical.margin_start = Some(px);
+        self
+    }
+
+    /// Margin on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under
+    /// [`Direction::Rtl`].
+    pub fn margin_end(mut self, px: f32) -> Self {
+        self.logical.margin_end = Some(px);
+        self
+    }
+
+    /// Inset from the edge the text starts from, for a node already taken out of flow (see
+    /// [`absolute_fill`](Self::absolute_fill)); ignored on an in-flow node, as `inset` is in CSS.
+    pub fn inset_start(mut self, px: f32) -> Self {
+        self.logical.inset_start = Some(px);
+        self
+    }
+
+    /// Inset from the edge the text runs towards, for a node already taken out of flow.
+    pub fn inset_end(mut self, px: f32) -> Self {
+        self.logical.inset_end = Some(px);
         self
     }
 
@@ -354,6 +441,52 @@ impl LayoutStyle {
         self.inner.aspect_ratio = Some(ratio);
         self
     }
+
+    /// The physical `taffy::Style` this describes under `direction`. Called by the engine at every point a
+    /// style reaches a node, and again for each affected node when the direction flips.
+    pub(crate) fn resolve(&self, direction: Direction) -> Style {
+        let mut style = self.inner.clone();
+        let logical = &self.logical;
+        if logical.row_follows_direction && direction.is_rtl() {
+            style.flex_direction = FlexDirection::RowReverse;
+        }
+        let (start, end) = if direction.is_rtl() {
+            (Edge::Right, Edge::Left)
+        } else {
+            (Edge::Left, Edge::Right)
+        };
+        for (edge, px) in [(start, logical.padding_start), (end, logical.padding_end)] {
+            if let Some(px) = px {
+                *edge.of_mut(&mut style.padding) = LengthPercentage::length(px);
+            }
+        }
+        for (edge, px) in [(start, logical.margin_start), (end, logical.margin_end)] {
+            if let Some(px) = px {
+                *edge.of_mut(&mut style.margin) = LengthPercentageAuto::length(px);
+            }
+        }
+        for (edge, px) in [(start, logical.inset_start), (end, logical.inset_end)] {
+            if let Some(px) = px {
+                *edge.of_mut(&mut style.inset) = LengthPercentageAuto::length(px);
+            }
+        }
+        style
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Edge {
+    Left,
+    Right,
+}
+
+impl Edge {
+    fn of_mut<T>(self, rect: &mut taffy::geometry::Rect<T>) -> &mut T {
+        match self {
+            Edge::Left => &mut rect.left,
+            Edge::Right => &mut rect.right,
+        }
+    }
 }
 
 impl Default for LayoutStyle {
@@ -365,6 +498,73 @@ impl Default for LayoutStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn logical_padding_resolves_to_the_edge_the_direction_starts_from() {
+        let style = LayoutStyle::new().padding_start(8.0).padding_end(2.0);
+        let ltr = style.resolve(Direction::Ltr);
+        assert_eq!(ltr.padding.left, LengthPercentage::length(8.0));
+        assert_eq!(ltr.padding.right, LengthPercentage::length(2.0));
+        let rtl = style.resolve(Direction::Rtl);
+        assert_eq!(rtl.padding.right, LengthPercentage::length(8.0));
+        assert_eq!(rtl.padding.left, LengthPercentage::length(2.0));
+    }
+
+    #[test]
+    fn a_physical_edge_is_left_alone_by_the_direction() {
+        let style = LayoutStyle::new().padding_left(12.0);
+        for direction in [Direction::Ltr, Direction::Rtl] {
+            let resolved = style.resolve(direction);
+            assert_eq!(resolved.padding.left, LengthPercentage::length(12.0));
+            assert_eq!(resolved.padding.right, LengthPercentage::length(0.0));
+        }
+    }
+
+    #[test]
+    fn resolving_twice_does_not_accumulate() {
+        // The engine re-resolves from the same LayoutStyle on every flip, so resolution must be a pure function of the intent.
+        let style = LayoutStyle::new().padding_start(8.0);
+        let _ = style.resolve(Direction::Rtl);
+        let back = style.resolve(Direction::Ltr);
+        assert_eq!(back.padding.left, LengthPercentage::length(8.0));
+        assert_eq!(back.padding.right, LengthPercentage::length(0.0));
+    }
+
+    #[test]
+    fn a_row_reverses_under_rtl_but_an_explicit_reverse_does_not_flip_back() {
+        let row = LayoutStyle::new().flex_row();
+        assert_eq!(
+            row.resolve(Direction::Ltr).flex_direction,
+            FlexDirection::Row
+        );
+        assert_eq!(
+            row.resolve(Direction::Rtl).flex_direction,
+            FlexDirection::RowReverse
+        );
+        let reversed = LayoutStyle::new().flex_row_reverse();
+        for direction in [Direction::Ltr, Direction::Rtl] {
+            assert_eq!(
+                reversed.resolve(direction).flex_direction,
+                FlexDirection::RowReverse,
+                "an explicit reverse is physical"
+            );
+        }
+    }
+
+    #[test]
+    fn a_column_is_unaffected_by_direction() {
+        let col = LayoutStyle::new().flex_column();
+        for direction in [Direction::Ltr, Direction::Rtl] {
+            assert_eq!(col.resolve(direction).flex_direction, FlexDirection::Column);
+        }
+    }
+
+    #[test]
+    fn only_logical_edges_need_the_style_kept_for_a_flip() {
+        assert!(!LayoutStyle::new().flex_row().logical.has_edges());
+        assert!(LayoutStyle::new().margin_start(4.0).logical.has_edges());
+        assert!(LayoutStyle::new().inset_end(4.0).logical.has_edges());
+    }
 
     #[test]
     fn style_default_is_block() {

@@ -1,5 +1,7 @@
+use rustc_hash::{FxHashMap, FxHashSet};
 use taffy::{TaffyTree, TraversePartialTree};
 
+use crate::direction::Direction;
 use crate::error::LayoutError;
 use crate::style::{AvailableSpace, LayoutStyle};
 
@@ -12,17 +14,97 @@ pub type MeasureFn = Box<dyn FnMut(f32) -> (f32, f32)>;
 
 pub struct LayoutEngine {
     tree: TaffyTree<MeasureFn>,
+    direction: Direction,
+    /// Nodes whose style holds logical edges, kept so a direction flip can re-resolve them from the original
+    /// intent. Only these nodes pay for the copy; a tree with no logical edges keeps the map empty.
+    logical: FxHashMap<NodeId, LayoutStyle>,
+    /// Rows whose main axis follows the writing direction. Held apart from `logical` because flipping one is
+    /// a flag toggle that needs no original style — and rows are common enough that a `NodeId` is worth the
+    /// saving over a whole `LayoutStyle`.
+    directional_rows: FxHashSet<NodeId>,
+    /// Main-axis gap margins applied by [`set_leading_margin`](Self::set_leading_margin), which sit on the
+    /// *leading* edge and so must move to the other side when a row reverses.
+    leading_margins: FxHashMap<NodeId, (bool, f32)>,
 }
 
 impl LayoutEngine {
     pub fn new() -> Self {
         Self {
             tree: TaffyTree::new(),
+            direction: Direction::default(),
+            logical: FxHashMap::default(),
+            directional_rows: FxHashSet::default(),
+            leading_margins: FxHashMap::default(),
         }
     }
 
+    /// The direction logical edges currently resolve against.
+    pub fn direction(&self) -> Direction {
+        self.direction
+    }
+
+    /// Re-resolves every direction-dependent node against `direction`, returning whether anything changed.
+    /// The caller still has to mark the tree dirty and recompute — this only rewrites styles.
+    ///
+    /// This is what lets one build serve both directions: rather than rebuilding the widget tree, each node
+    /// that was authored logically is resolved again from the intent recorded when it was created.
+    pub fn set_direction(&mut self, direction: Direction) -> bool {
+        if self.direction == direction {
+            return false;
+        }
+        self.direction = direction;
+        let rows = std::mem::take(&mut self.directional_rows);
+        for &node in &rows {
+            if let Ok(current) = self.tree.style(node) {
+                let mut style = current.clone();
+                style.flex_direction = if direction.is_rtl() {
+                    taffy::FlexDirection::RowReverse
+                } else {
+                    taffy::FlexDirection::Row
+                };
+                let _ = self.tree.set_style(node, style);
+            }
+        }
+        self.directional_rows = rows;
+        let logical = std::mem::take(&mut self.logical);
+        for (&node, style) in &logical {
+            let _ = self.tree.set_style(node, style.resolve(direction));
+        }
+        self.logical = logical;
+        let margins = std::mem::take(&mut self.leading_margins);
+        for (&node, &(is_row, px)) in &margins {
+            self.apply_leading_margin(node, is_row, px, true);
+        }
+        self.leading_margins = margins;
+        true
+    }
+
+    /// Records whichever direction-dependent parts of `style` the node will need re-resolved on a flip, and
+    /// drops any it no longer has — a restyled node must not keep the previous style's logical edges.
+    fn track(&mut self, node: NodeId, style: LayoutStyle) {
+        if style.logical.has_edges() {
+            self.directional_rows.remove(&node);
+            self.logical.insert(node, style);
+            return;
+        }
+        self.logical.remove(&node);
+        if style.logical.row_follows_direction {
+            self.directional_rows.insert(node);
+        } else {
+            self.directional_rows.remove(&node);
+        }
+    }
+
+    fn forget(&mut self, node: NodeId) {
+        self.logical.remove(&node);
+        self.directional_rows.remove(&node);
+        self.leading_margins.remove(&node);
+    }
+
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
-        self.tree.new_leaf(style.inner).map_err(LayoutError::from)
+        let node = self.tree.new_leaf(style.resolve(self.direction))?;
+        self.track(node, style);
+        Ok(node)
     }
 
     pub fn new_measured_leaf(
@@ -30,9 +112,11 @@ impl LayoutEngine {
         style: LayoutStyle,
         measure: MeasureFn,
     ) -> Result<NodeId, LayoutError> {
-        self.tree
-            .new_leaf_with_context(style.inner, measure)
-            .map_err(LayoutError::from)
+        let node = self
+            .tree
+            .new_leaf_with_context(style.resolve(self.direction), measure)?;
+        self.track(node, style);
+        Ok(node)
     }
 
     pub fn new_container(
@@ -40,15 +124,17 @@ impl LayoutEngine {
         style: LayoutStyle,
         children: &[NodeId],
     ) -> Result<NodeId, LayoutError> {
-        self.tree
-            .new_with_children(style.inner, children)
-            .map_err(LayoutError::from)
+        let node = self
+            .tree
+            .new_with_children(style.resolve(self.direction), children)?;
+        self.track(node, style);
+        Ok(node)
     }
 
     pub fn set_style(&mut self, node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
-        self.tree
-            .set_style(node, style.inner)
-            .map_err(LayoutError::from)
+        self.tree.set_style(node, style.resolve(self.direction))?;
+        self.track(node, style);
+        Ok(())
     }
 
     /// Replaces `parent`'s children with `children`, in order. Used by reactive lists to insert, move,
@@ -78,6 +164,7 @@ impl LayoutEngine {
     /// Frees a node (and its measure context) from the tree. The caller must have already detached it from
     /// its parent (via [`set_children`]); a removed node id must not be used again.
     pub fn remove(&mut self, node: NodeId) {
+        self.forget(node);
         let _ = self.tree.remove(node);
     }
 
@@ -137,20 +224,51 @@ impl LayoutEngine {
             .unwrap_or(false)
     }
 
-    /// Sets the node's leading margin on the host's main axis (`left` for a row, `top` for a column) to `px`,
-    /// leaving the other three edges untouched. A transparent `for … gap:N` uses this to space its items by a
-    /// gap without a container of its own: the item cell carries the gap as a margin instead.
+    /// Sets the node's leading margin on the host's main axis (`top` for a column; for a row, whichever
+    /// horizontal edge the host lays out from) to `px`, leaving the other edges untouched. A transparent
+    /// `for … gap:N` uses this to space its items by a gap without a container of its own: the item cell
+    /// carries the gap as a margin instead.
     pub fn set_leading_margin(&mut self, node: NodeId, is_row: bool, px: f32) {
-        if let Ok(s) = self.tree.style(node) {
-            let mut style = s.clone();
-            let m = taffy::LengthPercentageAuto::length(px);
-            if is_row {
-                style.margin.left = m;
+        self.leading_margins.insert(node, (is_row, px));
+        self.apply_leading_margin(node, is_row, px, false);
+    }
+
+    /// Whether the node's host lays its children out from the right — an RTL row, or one explicitly reversed.
+    fn leads_from_right(&self, node: NodeId) -> bool {
+        self.tree
+            .parent(node)
+            .and_then(|parent| self.tree.style(parent).ok())
+            .map(|s| s.flex_direction == taffy::FlexDirection::RowReverse)
+            .unwrap_or(false)
+    }
+
+    /// `clear_opposite` un-sets the horizontal edge this node's gap used to sit on, which a re-application
+    /// after a direction flip needs and a first application must not do (it would clobber an author's margin).
+    fn apply_leading_margin(&mut self, node: NodeId, is_row: bool, px: f32, clear_opposite: bool) {
+        let leading_right = is_row && self.leads_from_right(node);
+        let Ok(current) = self.tree.style(node) else {
+            return;
+        };
+        let mut style = current.clone();
+        let m = taffy::LengthPercentageAuto::length(px);
+        if is_row {
+            if leading_right {
+                style.margin.right = m;
             } else {
-                style.margin.top = m;
+                style.margin.left = m;
             }
-            let _ = self.tree.set_style(node, style);
+            if clear_opposite {
+                let zero = taffy::LengthPercentageAuto::length(0.0);
+                if leading_right {
+                    style.margin.left = zero;
+                } else {
+                    style.margin.right = zero;
+                }
+            }
+        } else {
+            style.margin.top = m;
         }
+        let _ = self.tree.set_style(node, style);
     }
 
     /// Toggles a node in or out of layout flow. A hidden node (`Display::None`) takes no space and lays out none of its subtree; a visible node is `Display::Flex`. Used for responsive show/hide (e.g. collapsing a sidebar on narrow windows).
@@ -301,6 +419,129 @@ impl Default for LayoutEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lay_out(engine: &mut LayoutEngine, root: NodeId) {
+        engine
+            .compute_layout(
+                root,
+                AvailableSpace::Definite(300.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn flipping_direction_relays_an_existing_row_without_rebuilding_it() {
+        // The whole point of resolving late: the same nodes, laid out the other way round.
+        let mut engine = LayoutEngine::new();
+        let first = engine
+            .new_leaf(LayoutStyle::new().width(50.0).height(10.0))
+            .unwrap();
+        let second = engine
+            .new_leaf(LayoutStyle::new().width(50.0).height(10.0))
+            .unwrap();
+        let row = engine
+            .new_container(
+                LayoutStyle::new().flex_row().width(300.0).height(100.0),
+                &[first, second],
+            )
+            .unwrap();
+        lay_out(&mut engine, row);
+        assert_eq!(engine.layout(first).unwrap().x, 0.0);
+        assert_eq!(engine.layout(second).unwrap().x, 50.0);
+
+        assert!(engine.set_direction(Direction::Rtl));
+        engine.mark_dirty(row).unwrap();
+        lay_out(&mut engine, row);
+        assert_eq!(
+            engine.layout(first).unwrap().x,
+            250.0,
+            "the first item now starts at the right edge"
+        );
+        assert_eq!(engine.layout(second).unwrap().x, 200.0);
+    }
+
+    #[test]
+    fn flipping_direction_moves_logical_padding_to_the_other_edge() {
+        let mut engine = LayoutEngine::new();
+        let child = engine
+            .new_leaf(LayoutStyle::new().width(50.0).height(10.0))
+            .unwrap();
+        let box_ = engine
+            .new_container(
+                LayoutStyle::new()
+                    .flex_column()
+                    .width(300.0)
+                    .height(100.0)
+                    .padding_start(20.0),
+                &[child],
+            )
+            .unwrap();
+        lay_out(&mut engine, box_);
+        assert_eq!(engine.layout(child).unwrap().x, 20.0);
+
+        engine.set_direction(Direction::Rtl);
+        engine.mark_dirty(box_).unwrap();
+        lay_out(&mut engine, box_);
+        assert_eq!(
+            engine.layout(child).unwrap().x,
+            0.0,
+            "padding moved to the right edge, so the child starts flush left"
+        );
+    }
+
+    #[test]
+    fn setting_the_same_direction_reports_no_change() {
+        let mut engine = LayoutEngine::new();
+        assert!(!engine.set_direction(Direction::Ltr));
+        assert!(engine.set_direction(Direction::Rtl));
+        assert!(!engine.set_direction(Direction::Rtl));
+    }
+
+    #[test]
+    fn restyling_a_node_drops_the_logical_edges_it_no_longer_has() {
+        // A stale entry would keep re-applying the old padding on every flip.
+        let mut engine = LayoutEngine::new();
+        let node = engine
+            .new_leaf(LayoutStyle::new().padding_start(20.0).width(50.0))
+            .unwrap();
+        engine
+            .set_style(node, LayoutStyle::new().width(50.0))
+            .unwrap();
+        engine.set_direction(Direction::Rtl);
+        let style = engine.tree.style(node).unwrap();
+        assert_eq!(style.padding.left, taffy::LengthPercentage::length(0.0));
+        assert_eq!(style.padding.right, taffy::LengthPercentage::length(0.0));
+    }
+
+    #[test]
+    fn a_gap_margin_follows_the_edge_its_row_leads_from() {
+        let mut engine = LayoutEngine::new();
+        let first = engine.new_leaf(LayoutStyle::new().width(50.0)).unwrap();
+        let second = engine.new_leaf(LayoutStyle::new().width(50.0)).unwrap();
+        let row = engine
+            .new_container(LayoutStyle::new().flex_row().width(300.0), &[first, second])
+            .unwrap();
+        engine.set_leading_margin(second, true, 8.0);
+        assert_eq!(
+            engine.tree.style(second).unwrap().margin.left,
+            taffy::LengthPercentageAuto::length(8.0)
+        );
+
+        engine.set_direction(Direction::Rtl);
+        engine.mark_dirty(row).unwrap();
+        let margin = engine.tree.style(second).unwrap().margin;
+        assert_eq!(
+            margin.right,
+            taffy::LengthPercentageAuto::length(8.0),
+            "the gap moved to the edge the reversed row leads from"
+        );
+        assert_eq!(
+            margin.left,
+            taffy::LengthPercentageAuto::length(0.0),
+            "and does not linger on the old one"
+        );
+    }
 
     #[test]
     fn engine_leaf_layout() {

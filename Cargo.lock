@@ -2001,6 +2001,7 @@ name = "layout-core"
 version = "0.1.0"
 dependencies = [
  "geometry-core",
+ "rustc-hash 2.1.2",
  "taffy",
  "thiserror 2.0.18",
 ]
