@@ -205,8 +205,13 @@ impl StyledContainer {
 
     /// Fire `f(true)` when the mouse enters the box and `f(false)` when it leaves (mouse only). Independent
     /// of `on_hover_style`: a box can observe hover without swapping its paint.
+    ///
+    /// Registers the box as a pointer target, like [`on_scroll`](Self::on_scroll) does for the same reason: a
+    /// surface that carves its input region from its content (a click-through overlay) never receives a move
+    /// event over a box it left out of that region, so a hover it did not register is a hover it can't observe.
     pub fn on_hover(mut self, f: impl Fn(bool) + 'static) -> Self {
         self.on_hover = Some(Box::new(f));
+        self.mark_interactive();
         self
     }
 
