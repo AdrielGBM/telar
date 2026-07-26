@@ -318,9 +318,88 @@ impl ViewGen<'_> {
                 code: String::new(),
             };
         }
+        // Splicing a binding into a rebuilding region moves the same non-`Clone` `Box<dyn LayoutItem>` twice; rustc catches it as an E0507 against generated code the author never wrote.
+        if self.in_reactive_region() {
+            let msg = format!(
+                "`widget \"{var}\"` cannot be used inside a reactive `if`/`for`: the region rebuilds its \
+                 content, and a widget binding can only be placed once. Use `build` with an expression that \
+                 constructs it, e.g. build \"{var}()?\"."
+            );
+            return ChildEmit::Simple {
+                name: format!("compile_error!({})", rust_str(&msg)),
+                code: String::new(),
+            };
+        }
         ChildEmit::Simple {
             name: var,
             code: String::new(),
         }
     }
+
+    /// `build "expr"`: splices a Rust *expression* rather than a binding, so it is evaluated afresh at every
+    /// construction point — which is what a reactive `if`/`for` needs, since it rebuilds its content each time
+    /// a branch or item comes back. Outside a reactive region it behaves exactly like `widget`.
+    ///
+    /// The expression is emitted verbatim, so a `?` inside it propagates through the enclosing builder (which
+    /// returns `Result`), and its identifiers are collected into the reactive closure's clone prelude like any
+    /// other snippet — so a signal it reads stays available to the rest of the view.
+    pub(super) fn emit_build_expr(&mut self, el: &Element) -> ChildEmit {
+        let expr = el.content.as_deref().unwrap_or("").trim().to_string();
+        if expr.is_empty() {
+            let msg = "`build` needs an expression, e.g. build \"icon_view(name)?\"";
+            return ChildEmit::Simple {
+                name: format!("compile_error!({})", rust_str(msg)),
+                code: String::new(),
+            };
+        }
+        // Not a Rust parser — just enough that a truncated expression names the tag instead of surfacing as a syntax error inside generated code.
+        if !delimiters_balanced(&expr) {
+            let msg = format!("build expression \"{expr}\" has unbalanced brackets");
+            return ChildEmit::Simple {
+                name: format!("compile_error!({})", rust_str(&msg)),
+                code: String::new(),
+            };
+        }
+        // Emitted bare: every site that splices a child already parenthesises it, so wrapping it again only earns an `unused_parens` warning against generated code.
+        ChildEmit::Simple {
+            name: expr,
+            code: String::new(),
+        }
+    }
+}
+
+/// Whether every `(`/`[`/`{` in `expr` is closed by its own kind, ignoring anything inside a string or char
+/// literal — so `build "text(\")\")"` is not misread as unbalanced.
+fn delimiters_balanced(expr: &str) -> bool {
+    let mut stack = Vec::new();
+    let mut chars = expr.chars();
+    let mut quote: Option<char> = None;
+    while let Some(c) = chars.next() {
+        if let Some(open) = quote {
+            match c {
+                '\\' => {
+                    chars.next();
+                }
+                _ if c == open => quote = None,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' | '\'' => quote = Some(c),
+            '(' | '[' | '{' => stack.push(c),
+            ')' | ']' | '}' => {
+                let expected = match c {
+                    ')' => '(',
+                    ']' => '[',
+                    _ => '{',
+                };
+                if stack.pop() != Some(expected) {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    stack.is_empty() && quote.is_none()
 }

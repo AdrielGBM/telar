@@ -71,7 +71,7 @@ impl ViewGen<'_> {
             "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
         self.indent += 2;
-        self.emit_branch_returns(block, &mut body);
+        self.in_reactive(|g| g.emit_branch_returns(block, &mut body));
         self.indent -= 2;
         let _ = write!(body, "{pad}    }}");
         let branches =
@@ -102,7 +102,7 @@ impl ViewGen<'_> {
             "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
         );
         self.indent += 2;
-        self.emit_branch_returns(block, &mut body);
+        self.in_reactive(|g| g.emit_branch_returns(block, &mut body));
         self.indent -= 2;
         let _ = write!(body, "{pad}    }}");
         let branches =
@@ -228,7 +228,7 @@ impl ViewGen<'_> {
         let idents = pattern_idents(pattern);
         let added = idents.len();
         self.loop_variables.extend(idents);
-        let cell = self.emit_content_cell(&block.body, &mut body);
+        let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
         self.loop_variables
             .truncate(self.loop_variables.len() - added);
         let pad2 = self.indent_str();
@@ -292,7 +292,7 @@ impl ViewGen<'_> {
         let idents = pattern_idents(pattern);
         let added = idents.len();
         self.loop_variables.extend(idents);
-        let cell = self.emit_content_cell(&block.body, &mut body);
+        let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
         self.loop_variables
             .truncate(self.loop_variables.len() - added);
         let ipad = self.indent_str();

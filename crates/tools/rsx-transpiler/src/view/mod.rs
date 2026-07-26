@@ -182,6 +182,10 @@ pub struct ViewGen<'a> {
     /// Stack of child accumulators (see [`ChildSink`]); the top is the one an emitted `if`/`for` body
     /// pushes into. Pushed before a container's children are emitted, popped after.
     child_sinks: Vec<ChildSink>,
+    /// How many reactive branch/item closures enclose the node being emitted. Non-zero means the code being
+    /// generated may run more than once for the same content, which is what makes a one-shot `widget`
+    /// reference unsound there — see [`ViewGen::in_reactive_region`].
+    reactive_depth: usize,
 }
 
 impl<'a> ViewGen<'a> {
@@ -203,7 +207,22 @@ impl<'a> ViewGen<'a> {
             baked_asset_count: 0,
             registry: None,
             child_sinks: Vec::new(),
+            reactive_depth: 0,
         }
+    }
+
+    /// Whether the node being emitted sits inside a reactive branch or item closure, i.e. inside code that may
+    /// build the same content again after the region has disposed it.
+    pub(super) fn in_reactive_region(&self) -> bool {
+        self.reactive_depth > 0
+    }
+
+    /// Runs `emit` with the reactive region marked, so anything emitted inside knows it may be rebuilt.
+    pub(super) fn in_reactive<R>(&mut self, emit: impl FnOnce(&mut Self) -> R) -> R {
+        self.reactive_depth += 1;
+        let result = emit(self);
+        self.reactive_depth -= 1;
+        result
     }
 
     /// Runs `emit` with a child-accumulator context in scope, so `if`/`for` bodies emitted inside push into
@@ -428,6 +447,7 @@ impl<'a> ViewGen<'a> {
             "scroll" => self.emit_scroll(el),
             "canvas" => self.emit_canvas(el),
             "widget" => self.emit_widget_ref(el),
+            "build" => self.emit_build_expr(el),
             "children" => self.emit_slot(el),
             other => self.emit_component_call(el, other),
         }
@@ -485,6 +505,92 @@ mod tests {
         let src = "[logic]\nlet canvas = build_canvas()?;\n[view]\nwidget \"canvas\"\n";
         let out = crate::transpile_source_with_theme(src, "my_section", None, None).unwrap();
         assert!(out.rust_code.contains("Ok(Box::new(canvas))"));
+    }
+
+    #[test]
+    fn build_splices_an_expression_evaluated_at_each_construction_point() {
+        // The point of `build`: inside a reactive region it re-runs, so nothing is moved twice.
+        let src = "[logic]\nlet items = memo(move || vec![1, 2]);\n[view]\nrow\n    for id in $items key *id\n        build \"icon_view(id)?\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("Ok(box_item(icon_view(id)?))"),
+            "the expression is emitted inside the item closure:\n{code}"
+        );
+        assert!(
+            !code.contains("compile_error!"),
+            "and it is not an error:\n{code}"
+        );
+    }
+
+    #[test]
+    fn build_works_alongside_widget_in_a_static_view() {
+        let src = "[logic]\nlet icon = make_icon()?;\n[view]\nrow\n    widget \"icon\"\n    build \"other()?\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains("children![icon, other()?]"),
+            "a spliced binding and a built expression are siblings:\n{}",
+            out.rust_code
+        );
+    }
+
+    #[test]
+    fn widget_inside_a_reactive_region_names_the_rule_and_the_fix() {
+        // Without this the author gets rustc's E0507 pointing into generated code they never wrote.
+        for src in [
+            "[logic]\nlet icon = make_icon()?;\nlet shown = memo(move || true);\n[view]\nrow\n    if $shown\n        widget \"icon\"\n",
+            "[logic]\nlet icon = make_icon()?;\nlet items = memo(move || vec![1]);\n[view]\nrow\n    for id in $items key *id\n        widget \"icon\"\n",
+            // Nested one level down: a plain container inside a reactive branch is rebuilt with it.
+            "[logic]\nlet icon = make_icon()?;\nlet shown = memo(move || true);\n[view]\nrow\n    if $shown\n        col\n            widget \"icon\"\n",
+        ] {
+            let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+            let code = &out.rust_code;
+            assert!(
+                code.contains("compile_error!")
+                    && code.contains("cannot be used inside a reactive"),
+                "a reactive `widget` must explain itself:\n{code}"
+            );
+            assert!(
+                code.contains("build"),
+                "and point at the alternative:\n{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_non_reactive_branch_still_takes_a_widget() {
+        // A construction-time `if` picks its branch once, so the guard is about rebuilding, not about branching.
+        let src = "[logic]\nlet icon = make_icon()?;\nlet vertical = true;\n[view]\nrow\n    if vertical\n        widget \"icon\"\n";
+        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            !out.rust_code.contains("compile_error!"),
+            "a one-shot `if` is not a reactive region:\n{}",
+            out.rust_code
+        );
+    }
+
+    #[test]
+    fn build_rejects_an_empty_or_truncated_expression() {
+        for (src, why) in [
+            ("[logic]\n[view]\nbuild \"\"\n", "empty"),
+            ("[logic]\n[view]\nbuild \"icon_view(name\"\n", "unbalanced"),
+        ] {
+            let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+            assert!(
+                out.rust_code.contains("compile_error!"),
+                "a {why} build expression should not reach rustc as broken syntax:\n{}",
+                out.rust_code
+            );
+        }
+        // A bracket inside a string literal is not an unbalanced bracket.
+        let ok = crate::transpile_source_with_theme(
+            "[logic]\n[view]\nbuild \"label(\\\")\\\")?\"\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(!ok.rust_code.contains("compile_error!"), "{}", ok.rust_code);
     }
 
     #[test]
