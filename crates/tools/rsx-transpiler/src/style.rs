@@ -104,6 +104,13 @@ pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
         "padding" | "pad" => format!(".padding_all({})", format_number(value)),
         "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value)),
         "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value)),
+        // Logical edges: resolved to left/right against the active writing direction at layout time, so one build serves LTR and RTL.
+        "padding_start" | "pad_start" => format!(".padding_start({})", format_number(value)),
+        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value)),
+        "margin_start" => format!(".margin_start({})", format_number(value)),
+        "margin_end" => format!(".margin_end({})", format_number(value)),
+        "inset_start" => format!(".inset_start({})", format_number(value)),
+        "inset_end" => format!(".inset_end({})", format_number(value)),
         "gap" => format!(".gap({})", format_number(value)),
         "gap_x" => format!(".gap_x({})", format_number(value)),
         "gap_y" => format!(".gap_y({})", format_number(value)),
@@ -124,6 +131,8 @@ pub fn layout_prop_call(key: &str, value: &str) -> Option<String> {
         "direction" => match value {
             "col" | "column" => ".flex_column()".to_string(),
             "row" => ".flex_row()".to_string(),
+            // Reversed in both writing directions, unlike `row`, which follows the active one.
+            "row_reverse" => ".flex_row_reverse()".to_string(),
             _ => return None,
         },
         "align" => format!(".align_items(AlignItems::{})", align_variant(value)?),
@@ -265,6 +274,35 @@ mod tests {
         assert_eq!(
             layout_prop_call("width", "240").as_deref(),
             Some(".width(240.0)")
+        );
+    }
+
+    #[test]
+    fn logical_edge_props_map_to_their_builder_calls() {
+        for (key, expected) in [
+            ("pad_start", ".padding_start(12.0)"),
+            ("padding_start", ".padding_start(12.0)"),
+            ("pad_end", ".padding_end(12.0)"),
+            ("margin_start", ".margin_start(12.0)"),
+            ("inset_end", ".inset_end(12.0)"),
+        ] {
+            assert_eq!(
+                layout_prop_call(key, "12").as_deref(),
+                Some(expected),
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn direction_row_reverse_is_the_physical_one() {
+        assert_eq!(
+            layout_prop_call("direction", "row").as_deref(),
+            Some(".flex_row()")
+        );
+        assert_eq!(
+            layout_prop_call("direction", "row_reverse").as_deref(),
+            Some(".flex_row_reverse()")
         );
     }
 
