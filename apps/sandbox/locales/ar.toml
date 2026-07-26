@@ -1,0 +1,4 @@
+greeting = "مرحبًا، {name}!"
+
+[nav]
+overview = "نظرة عامة"

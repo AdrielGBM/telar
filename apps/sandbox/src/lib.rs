@@ -6,6 +6,7 @@ rsx::app!(
         // Open following the OS light/dark preference (modern for light, midnight for dark); the sidebar
         // buttons still override manually until the next OS change.
         rsx::follow_system(core::theme::DEFAULT_MODE, "midnight");
+        rsx::follow_locale_direction();
     },
     rsx::AppConfig::default(),
     core::app::SandboxRoot
@@ -46,6 +47,62 @@ mod smoke {
         });
         // Flatten once to make sure every section's view() runs.
         let _ = tree.commands();
+    }
+
+    // Exercises the whole path against the real shell — locale signal → follow effect → engine → layout pass — on the same tree, which is re-laid-out rather than rebuilt.
+    #[test]
+    fn an_rtl_locale_mirrors_the_shell() {
+        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
+        rsx::follow_locale_direction();
+        rsx::set_locale("en");
+        let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
+        let resize = Event::WindowResized {
+            width: 1200,
+            height: 900,
+        };
+        tree.on_event(&resize);
+        let ltr = nav_rail_center_x(&tree);
+
+        rsx::set_locale("ar");
+        tree.on_event(&resize);
+        let rtl = nav_rail_center_x(&tree);
+
+        rsx::set_locale("en");
+        assert!(
+            ltr < 300.0,
+            "the rail sits on the left under LTR, got {ltr}"
+        );
+        assert!(
+            rtl > 900.0,
+            "and on the right under RTL, got {rtl} (rail did not mirror)"
+        );
+    }
+
+    /// The horizontal center of the widest sidebar-sized rect — the nav rail's own background.
+    fn nav_rail_center_x(tree: &rsx::ComponentList) -> f32 {
+        let cmds = tree.commands();
+        let mut tx = vec![0.0f32];
+        let mut widest: Option<(f32, f32)> = None;
+        for c in cmds.iter() {
+            match c {
+                rsx::DrawCommand::PushMatrix { matrix } => tx.push(tx.last().unwrap() + matrix[4]),
+                rsx::DrawCommand::PopMatrix => {
+                    tx.pop();
+                }
+                rsx::DrawCommand::Rect { rect, .. } => {
+                    if rect.height > 700.0 && rect.width < 400.0 {
+                        let cx = tx.last().unwrap() + rect.x + rect.width / 2.0;
+                        if widest.is_none_or(|(w, _)| rect.width > w) {
+                            widest = Some((rect.width, cx));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        widest
+            .expect("the desktop shell draws a full-height sidebar")
+            .1
     }
 
     // The responsive shell must survive both breakpoints and the transition between them: desktop rail,

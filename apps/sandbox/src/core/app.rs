@@ -5,7 +5,7 @@ use rsx::{
     NavTransition, Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, RwSignal,
     ShapeStyle, SizeDimension, StyledContainer, TabHost, TabStacks, Text, TextStyle, compute_layout,
     hot_signal, mark_dirty, new_container, new_leaf, reset_layout_runtime, set_display,
-    set_overlay_host, signal, use_dismiss_depth,
+    set_overlay_host, signal, transform_pointer, use_direction, use_dismiss_depth,
 };
 
 /// Width of the navigation rail / drawer, in px. Kept in sync with the `width:` on `sidebar.rsx`'s root.
@@ -565,6 +565,29 @@ impl ShellPage {
         })
     }
 
+    /// The rail's left edge. The rail is painted as an overlay at a position this shell picks, not laid out
+    /// in the body row, so mirroring it under RTL is the app's job — layout cannot move a hand-placed node.
+    fn rail_x(&self) -> f32 {
+        if use_direction().is_rtl() {
+            self.win_w - SIDEBAR_W
+        } else {
+            0.0
+        }
+    }
+
+    /// Dispatches into the rail through the same transform `view` paints it under, so a press lands where the
+    /// user sees the button rather than 248px away once the rail has mirrored.
+    fn sidebar_on_event(&mut self, event: &Event) -> EventResult {
+        let rail_x = self.rail_x();
+        if rail_x == 0.0 {
+            return self.sidebar_scroll.on_event(event);
+        }
+        match transform_pointer(event, [1.0, 0.0, 0.0, 1.0, rail_x, 0.0]) {
+            Some(local) => self.sidebar_scroll.on_event(&local),
+            None => self.sidebar_scroll.on_event(event),
+        }
+    }
+
     /// Reconciles the content pane after the sidebar handled a press. The host only reconciles from events
     /// dispatched into it, and the rail sits outside its subtree — so a tab press has to be pushed in here.
     /// Only a press that actually moved the user closes the mobile drawer, leaving the theme switcher (also in
@@ -640,16 +663,22 @@ impl Component for ShellPage {
                 ));
             }
             // Paint the panel background first so it fills the full height even when the nav is shorter than the window.
-            overlay.push(RenderNode::rect(
-                Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: SIDEBAR_W,
-                    height: self.win_h,
-                },
-                RectStyle::default().with_fill(theme().surface_alt),
-            ));
-            overlay.push(self.sidebar_scroll.view());
+            let rail = RenderNode::transform_with(
+                [1.0, 0.0, 0.0, 1.0, self.rail_x(), 0.0],
+                [
+                    RenderNode::rect(
+                        Rect {
+                            x: 0.0,
+                            y: 0.0,
+                            width: SIDEBAR_W,
+                            height: self.win_h,
+                        },
+                        RectStyle::default().with_fill(theme().surface_alt),
+                    ),
+                    self.sidebar_scroll.view(),
+                ],
+            );
+            overlay.push(rail);
             // Wrap the overlay in a clip: besides bounding it to the window, the clip is a structural
             // boundary that stops the hardware batcher (merge_opaque_batches) from reordering the top
             // bar's text above the drawer background — otherwise the hamburger icon floats over the drawer.
@@ -680,24 +709,25 @@ impl Component for ShellPage {
             _ => {}
         }
         // A Scrolled event carries no coordinates, so route it by where the pointer last was.
-        let over_sidebar = self.ptr_x < SIDEBAR_W;
+        let rail_x = self.rail_x();
+        let over_sidebar = (rail_x..rail_x + SIDEBAR_W).contains(&self.ptr_x);
 
         if self.mobile {
             if self.menu_open.get() {
                 if let Event::Scrolled { .. } = event {
                     // Only the drawer scrolls while it is open; a scroll over the scrim is swallowed.
                     if over_sidebar {
-                        self.sidebar_scroll.on_event(event);
+                        self.sidebar_on_event(event);
                     }
                     return EventResult::Handled;
                 }
-                // Drawer open: the sidebar (theme + nav buttons) hit-tests first; a press on the scrim (right of the drawer) closes it.
-                if self.sidebar_scroll.on_event(event) == EventResult::Handled {
+                // Drawer open: the sidebar (theme + nav buttons) hit-tests first; a press off the drawer closes it.
+                if self.sidebar_on_event(event) == EventResult::Handled {
                     self.after_sidebar_press();
                     return EventResult::Handled;
                 }
                 if let Event::PointerPressed { x, .. } = event {
-                    if *x as f32 >= SIDEBAR_W {
+                    if !(rail_x..rail_x + SIDEBAR_W).contains(&(*x as f32)) {
                         self.menu_open.set(false);
                     }
                 }
@@ -713,13 +743,13 @@ impl Component for ShellPage {
         // Desktop: scroll goes to whichever pane the pointer is over; the rail never eats the content's scroll.
         if let Event::Scrolled { .. } = event {
             return if over_sidebar {
-                self.sidebar_scroll.on_event(event)
+                self.sidebar_on_event(event)
             } else {
                 self.nav_host.on_event(event)
             };
         }
         // Other events: the sidebar rail hit-tests first (by coords), then the content pane.
-        if self.sidebar_scroll.on_event(event) == EventResult::Handled {
+        if self.sidebar_on_event(event) == EventResult::Handled {
             self.after_sidebar_press();
             return EventResult::Handled;
         }
