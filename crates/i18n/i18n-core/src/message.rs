@@ -2,6 +2,8 @@
 //! emit a whole catalog as a single `static CATALOG: Catalog = Catalog { .. };` — pure `&'static` data with
 //! no runtime parsing and no heap, mirroring how the svg baker emits `&'static` draw commands.
 
+use crate::plural::{PluralCategory, plural_category};
+
 /// One piece of a message: literal text, or a named placeholder to be filled from the call's arguments.
 pub enum Part {
     Lit(&'static str),
@@ -14,14 +16,40 @@ pub enum Part {
 pub enum Message {
     Plain(&'static str),
     Format(&'static [Part]),
+    /// One message per plural category. The baker guarantees [`PluralCategory::Other`] is present, so
+    /// selection always has a branch to land on however exotic the active locale's rules are.
+    Plural(&'static [(PluralCategory, Message)]),
 }
 
 impl Message {
+    /// Resolves a plural to the branch `locale` selects for the `count` argument; a non-plural message is
+    /// returned unchanged.
+    ///
+    /// Selection lives here rather than in [`render`](Self::render) because it needs the active locale —
+    /// which category a count falls into is a property of the *language*, not of the message.
+    pub fn select(&self, locale: &str, args: &[(&str, &str)]) -> &Message {
+        let Message::Plural(branches) = self else {
+            return self;
+        };
+        let count = args
+            .iter()
+            .find(|(name, _)| *name == "count")
+            .and_then(|(_, value)| value.parse::<i64>().ok())
+            .unwrap_or(0);
+        let wanted = plural_category(locale, count);
+        let pick = |c: PluralCategory| branches.iter().find(|(cat, _)| *cat == c).map(|(_, m)| m);
+        pick(wanted)
+            .or_else(|| pick(PluralCategory::Other))
+            .unwrap_or(self)
+    }
+
     /// Renders the message, substituting each `Arg(name)` with the matching value from `args`. An argument
     /// with no matching placeholder is ignored; a placeholder with no matching argument is left visible as
     /// `{name}` so the gap surfaces instead of silently vanishing.
     pub fn render(&self, args: &[(&str, &str)]) -> String {
         match self {
+            // Only the direct-call path: `translate` selects first. With no locale to choose with, `Other` is the honest fallback.
+            Message::Plural(_) => self.select("", args).render(args),
             Message::Plain(s) => (*s).to_string(),
             Message::Format(parts) => {
                 let mut out = String::new();
@@ -48,6 +76,18 @@ impl Message {
     pub fn arg_names(&self) -> Vec<&'static str> {
         match self {
             Message::Plain(_) => Vec::new(),
+            // The union across branches: a `t!` call must satisfy whichever branch the locale picks, and that is not known until runtime.
+            Message::Plural(branches) => {
+                let mut names = Vec::new();
+                for (_, message) in *branches {
+                    for name in message.arg_names() {
+                        if !names.contains(&name) {
+                            names.push(name);
+                        }
+                    }
+                }
+                names
+            }
             Message::Format(parts) => parts
                 .iter()
                 .filter_map(|p| match p {

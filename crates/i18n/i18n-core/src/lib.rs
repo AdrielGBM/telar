@@ -8,9 +8,11 @@
 
 mod locale;
 mod message;
+mod plural;
 
 pub use locale::{current_locale, detect_system_locale, init_locale, set_locale, use_locale};
 pub use message::{Catalog, Entry, Message, Part};
+pub use plural::{PluralCategory, plural_category};
 
 /// Looks up `key` in `catalog` for the currently active locale and renders it with `args`.
 ///
@@ -23,7 +25,7 @@ pub fn translate(catalog: &Catalog, key: &str, args: &[(&str, &str)]) -> String 
     let locale = active.as_deref().unwrap_or(catalog.default_locale);
     catalog
         .message(key, locale)
-        .map(|m| m.render(args))
+        .map(|m| m.select(locale, args).render(args))
         .unwrap_or_else(|| key.to_string())
 }
 

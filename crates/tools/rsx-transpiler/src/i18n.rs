@@ -27,23 +27,55 @@ pub enum PartModel {
 pub enum MessageModel {
     Plain(String),
     Format(Vec<PartModel>),
+    /// Per-CLDR-category messages, keyed by category name and always containing `other`. `BTreeMap` keeps the
+    /// emitted order deterministic, as everywhere else in the baker.
+    Plural(BTreeMap<String, MessageModel>),
 }
 
 impl MessageModel {
-    /// The placeholder names this message expects, in source order (with duplicates removed).
+    /// The placeholder names this message expects, in source order (with duplicates removed). A plural
+    /// contributes the union across its branches: which one a call renders is a runtime decision.
     pub fn arg_names(&self) -> Vec<String> {
         let mut names = Vec::new();
-        if let MessageModel::Format(parts) = self {
-            for p in parts {
-                if let PartModel::Arg(name) = p
-                    && !names.contains(name)
-                {
-                    names.push(name.clone());
+        let mut push = |name: &String| {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        };
+        match self {
+            MessageModel::Plain(_) => {}
+            MessageModel::Format(parts) => {
+                for p in parts {
+                    if let PartModel::Arg(name) = p {
+                        push(name);
+                    }
+                }
+            }
+            MessageModel::Plural(branches) => {
+                for name in branches.values().flat_map(MessageModel::arg_names) {
+                    push(&name);
                 }
             }
         }
         names
     }
+}
+
+/// Whether `table` spells a plural set rather than a namespace: every key is a CLDR category *and* `other`
+/// is among them.
+///
+/// Both halves matter. Requiring `other` is what CLDR requires of any language, and it keeps a namespace
+/// that happens to hold a single `one = "…"` key from being swallowed; requiring every key to be a category
+/// keeps a namespace with a stray `few` sibling from being misread.
+fn is_plural_table(table: &toml::Table) -> bool {
+    !table.is_empty()
+        && table.contains_key("other")
+        && table.keys().all(|k| {
+            matches!(
+                k.as_str(),
+                "zero" | "one" | "two" | "few" | "many" | "other"
+            )
+        })
 }
 
 /// The whole project's parsed catalog: available locales, the fallback locale, and every key's per-locale
@@ -248,6 +280,20 @@ fn flatten(
             format!("{prefix}.{key}")
         };
         match value {
+            toml::Value::Table(inner) if is_plural_table(inner) => {
+                let mut branches = BTreeMap::new();
+                for (category, message) in inner {
+                    let toml::Value::String(s) = message else {
+                        return Err(format!(
+                            "{}: plural `{full}.{category}` must be a string, found `{}`",
+                            path.display(),
+                            message.type_str()
+                        ));
+                    };
+                    branches.insert(category.clone(), parse_message(s));
+                }
+                out.insert(full, MessageModel::Plural(branches));
+            }
             toml::Value::Table(inner) => flatten(inner, full, out, path)?,
             toml::Value::String(s) => {
                 out.insert(full, parse_message(s));
@@ -320,7 +366,17 @@ pub fn parse_message(content: &str) -> MessageModel {
 /// generated file compiles with the same `rsx` dependency every generated `.rsx` file has.
 pub fn to_source(model: &CatalogModel) -> String {
     let mut s = String::new();
-    s.push_str("use rsx::i18n::{Catalog, Entry, Message, Part};\n\n");
+    // Only imported when something uses it: an unconditional import would warn in every project with no plurals, against a file its author cannot edit.
+    let has_plural = model
+        .entries
+        .values()
+        .flat_map(|per_locale| per_locale.values())
+        .any(|m| matches!(m, MessageModel::Plural(_)));
+    s.push_str("use rsx::i18n::{Catalog, Entry, Message, Part");
+    if has_plural {
+        s.push_str(", PluralCategory");
+    }
+    s.push_str("};\n\n");
     s.push_str("pub static CATALOG: Catalog = Catalog {\n");
     s.push_str(&format!(
         "    locales: &[{}],\n",
@@ -362,6 +418,30 @@ fn ser_message(message: &MessageModel) -> String {
                 .collect();
             format!("Message::Format(&[{}])", inner.join(", "))
         }
+        MessageModel::Plural(branches) => {
+            let inner: Vec<String> = branches
+                .iter()
+                .map(|(category, message)| {
+                    format!(
+                        "(PluralCategory::{}, {})",
+                        ser_category(category),
+                        ser_message(message)
+                    )
+                })
+                .collect();
+            format!("Message::Plural(&[{}])", inner.join(", "))
+        }
+    }
+}
+
+fn ser_category(name: &str) -> &'static str {
+    match name {
+        "zero" => "Zero",
+        "one" => "One",
+        "two" => "Two",
+        "few" => "Few",
+        "many" => "Many",
+        _ => "Other",
     }
 }
 
@@ -553,5 +633,91 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         assert!(parse_catalog(&root).unwrap().is_none());
         let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod plural_tests {
+    use super::*;
+
+    fn table(src: &str) -> toml::Table {
+        src.parse().unwrap()
+    }
+
+    fn flat(src: &str) -> BTreeMap<String, MessageModel> {
+        let mut out = BTreeMap::new();
+        flatten(&table(src), String::new(), &mut out, Path::new("t.toml")).unwrap();
+        out
+    }
+
+    #[test]
+    fn a_category_table_becomes_one_plural_key() {
+        let out = flat("[items]\none = \"{count} item\"\nother = \"{count} items\"\n");
+        assert_eq!(out.len(), 1, "not two namespaced keys: {out:?}");
+        let MessageModel::Plural(branches) = &out["items"] else {
+            panic!("expected a plural, got {:?}", out["items"]);
+        };
+        assert_eq!(branches.len(), 2);
+        assert!(branches.contains_key("one") && branches.contains_key("other"));
+    }
+
+    #[test]
+    fn a_namespace_table_is_still_flattened() {
+        let out = flat("[nav]\noverview = \"Overview\"\nsettings = \"Settings\"\n");
+        assert_eq!(out.len(), 2);
+        assert!(out.contains_key("nav.overview") && out.contains_key("nav.settings"));
+    }
+
+    #[test]
+    fn a_namespace_is_not_swallowed_just_because_one_key_looks_like_a_category() {
+        // `other` alone is a plausible namespace entry; without the all-keys test this would misparse.
+        let out = flat("[status]\none = \"Single\"\nname = \"Status\"\n");
+        assert_eq!(out.len(), 2, "{out:?}");
+        assert!(out.contains_key("status.one"));
+
+        // And a category table missing `other` is a namespace, since CLDR requires `other` of every language.
+        let out = flat("[thing]\none = \"One\"\nfew = \"Few\"\n");
+        assert!(out.contains_key("thing.one"), "{out:?}");
+    }
+
+    #[test]
+    fn plural_arg_names_union_the_branches() {
+        let out = flat("[items]\none = \"one item\"\nother = \"{count} items\"\n");
+        assert_eq!(out["items"].arg_names(), vec!["count".to_string()]);
+    }
+
+    #[test]
+    fn plural_serializes_with_its_categories() {
+        let out = flat("[items]\none = \"item\"\nother = \"items\"\n");
+        let src = ser_message(&out["items"]);
+        assert!(src.starts_with("Message::Plural(&["), "{src}");
+        assert!(src.contains("PluralCategory::One"), "{src}");
+        assert!(src.contains("PluralCategory::Other"), "{src}");
+    }
+
+    #[test]
+    fn the_plural_category_import_is_emitted_only_when_used() {
+        let plain = CatalogModel {
+            locales: vec!["en".into()],
+            default_locale: "en".into(),
+            entries: BTreeMap::from([(
+                "a".to_string(),
+                BTreeMap::from([("en".to_string(), MessageModel::Plain("x".into()))]),
+            )]),
+        };
+        assert!(!to_source(&plain).contains("PluralCategory"));
+
+        let mut with_plural = plain;
+        with_plural.entries.insert(
+            "items".to_string(),
+            BTreeMap::from([(
+                "en".to_string(),
+                MessageModel::Plural(BTreeMap::from([(
+                    "other".to_string(),
+                    MessageModel::Plain("items".into()),
+                )])),
+            )]),
+        );
+        assert!(to_source(&with_plural).contains("PluralCategory"));
     }
 }
