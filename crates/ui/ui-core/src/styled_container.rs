@@ -165,6 +165,18 @@ impl StyledContainer {
         self
     }
 
+    /// Fire `f(button)` on a tap with a **non-primary** button — `Secondary` (right) or `Auxiliary` (middle).
+    /// Same tap-on-release semantics as [`Self::on_press`]: a child that handles the press wins, and travel
+    /// past the tap slop cancels it.
+    ///
+    /// Opt-in per box rather than folded into `on_press`, because a non-primary press otherwise falls through
+    /// to whatever is behind it — silently swallowing right-clicks on every pressable box would break that.
+    pub fn on_alt_press(mut self, f: impl Fn(PointerButton) + 'static) -> Self {
+        self.press.set_alt_press(f);
+        self.mark_interactive();
+        self
+    }
+
     /// Fires once a press inside the box is held past ~500ms without moving past the tap slop, instead of
     /// `on_press`'s tap-on-release. There is no dedicated timer in the gesture pipeline, so the threshold is
     /// only checked on the next pointer event after the press (a move or the release) — it fires slightly
@@ -332,24 +344,25 @@ impl Component for StyledContainer {
                 if dragged { EventResult::Handled } else { child }
             }
             // A child (e.g. an inner button) hit-tests first and wins; only a press on the bare box arms our tap/drag.
-            Event::PointerPressed {
-                x,
-                y,
-                button: PointerButton::Primary,
-                ..
-            } => {
+            Event::PointerPressed { x, y, button, .. } => {
+                // Pressed state, focus and drag are primary-only gestures. A box that asked for other buttons
+                // gets them routed to its press gesture; every other box lets them fall through untouched.
+                let primary = *button == PointerButton::Primary;
+                if !primary && !self.press.wants_alt() {
+                    return self.dispatch_children(event);
+                }
                 if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
                     self.drag.end();
                     return EventResult::Handled;
                 }
                 // A primary press inside the box enters the pressed state (purely visual; independent of on_press).
-                if rect.contains(*x as f32, *y as f32) {
+                if primary && rect.contains(*x as f32, *y as f32) {
                     self.set_active(true);
                 }
                 // A tap inside a focusable box takes focus (and consumes the press so focus sticks).
                 let focused = match self.focus_id {
-                    Some(id) if rect.contains(*x as f32, *y as f32) => {
+                    Some(id) if primary && rect.contains(*x as f32, *y as f32) => {
                         focus::request(id);
                         true
                     }
@@ -357,26 +370,30 @@ impl Component for StyledContainer {
                 };
                 let tapped =
                     self.press.is_set() && self.press.arm(event, rect) == EventResult::Handled;
-                let dragged =
-                    self.drag.is_set() && self.drag.press(event, rect) == EventResult::Handled;
+                let dragged = primary
+                    && self.drag.is_set()
+                    && self.drag.press(event, rect) == EventResult::Handled;
                 if tapped || dragged || focused {
                     EventResult::Handled
                 } else {
                     EventResult::Ignored
                 }
             }
-            Event::PointerReleased {
-                button: PointerButton::Primary,
-                ..
-            } => {
+            Event::PointerReleased { button, .. } => {
+                let primary = *button == PointerButton::Primary;
+                if !primary && !self.press.wants_alt() {
+                    return self.dispatch_children(event);
+                }
                 // A release always ends the pressed state, wherever it lands.
-                self.set_active(false);
+                if primary {
+                    self.set_active(false);
+                }
                 if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
                     self.drag.end();
                     return EventResult::Handled;
                 }
-                let dragged = self.drag.end();
+                let dragged = primary && self.drag.end();
                 let tapped =
                     self.press.is_set() && self.press.release(event, rect) == EventResult::Handled;
                 if tapped || dragged {
@@ -815,6 +832,132 @@ mod tests {
             "a release after the threshold fires on_long_press"
         );
         assert!(!tap_flag.get(), "a long press must not also fire on_press");
+    }
+
+    fn press_with(x: f64, y: f64, button: PointerButton) -> Event {
+        Event::PointerPressed {
+            x,
+            y,
+            button,
+            source: PointerSource::Mouse,
+        }
+    }
+    fn release_with(x: f64, y: f64, button: PointerButton) -> Event {
+        Event::PointerReleased {
+            x,
+            y,
+            button,
+            source: PointerSource::Mouse,
+        }
+    }
+
+    fn laid_out_box() -> StyledContainer {
+        reset_layout_runtime();
+        StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+    }
+
+    fn settle(card: &mut StyledContainer) {
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn on_alt_press_reports_which_non_primary_button_tapped() {
+        let seen: Rc<Cell<Option<PointerButton>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let mut card = laid_out_box().on_alt_press(move |b| sink.set(Some(b)));
+        settle(&mut card);
+
+        card.on_event(&press_with(50.0, 50.0, PointerButton::Secondary));
+        card.on_event(&release_with(50.0, 50.0, PointerButton::Secondary));
+        assert_eq!(seen.take(), Some(PointerButton::Secondary));
+
+        card.on_event(&press_with(50.0, 50.0, PointerButton::Auxiliary));
+        card.on_event(&release_with(50.0, 50.0, PointerButton::Auxiliary));
+        assert_eq!(seen.take(), Some(PointerButton::Auxiliary));
+    }
+
+    #[test]
+    fn a_box_wanting_only_alt_presses_leaves_the_primary_one_alone() {
+        let alt = Rc::new(Cell::new(false));
+        let sink = alt.clone();
+        let mut card = laid_out_box().on_alt_press(move |_| sink.set(true));
+        settle(&mut card);
+
+        assert_eq!(
+            card.on_event(&press_with(50.0, 50.0, PointerButton::Primary)),
+            EventResult::Ignored,
+            "a primary press must still fall through to whatever is behind the box"
+        );
+        card.on_event(&release_with(50.0, 50.0, PointerButton::Primary));
+        assert!(!alt.get(), "the primary button is not an alt press");
+    }
+
+    #[test]
+    fn a_plain_pressable_box_still_ignores_non_primary_buttons() {
+        let tapped = Rc::new(Cell::new(false));
+        let sink = tapped.clone();
+        let mut card = laid_out_box().on_press(move || sink.set(true));
+        settle(&mut card);
+
+        assert_eq!(
+            card.on_event(&press_with(50.0, 50.0, PointerButton::Secondary)),
+            EventResult::Ignored,
+            "right-click keeps passing through a box that never asked for it"
+        );
+        card.on_event(&release_with(50.0, 50.0, PointerButton::Secondary));
+        assert!(!tapped.get(), "on_press is a primary-button gesture");
+    }
+
+    #[test]
+    fn releasing_a_different_button_than_armed_completes_nothing() {
+        let seen: Rc<Cell<Option<PointerButton>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let tapped = Rc::new(Cell::new(false));
+        let tap_sink = tapped.clone();
+        let mut card = laid_out_box()
+            .on_press(move || tap_sink.set(true))
+            .on_alt_press(move |b| sink.set(Some(b)));
+        settle(&mut card);
+
+        card.on_event(&press_with(50.0, 50.0, PointerButton::Secondary));
+        card.on_event(&release_with(50.0, 50.0, PointerButton::Primary));
+        assert_eq!(
+            seen.take(),
+            None,
+            "the right button armed it, the left cannot complete it"
+        );
+        assert!(!tapped.get());
+    }
+
+    #[test]
+    fn dragging_off_the_box_cancels_an_alt_press() {
+        let seen: Rc<Cell<Option<PointerButton>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let mut card = laid_out_box().on_alt_press(move |b| sink.set(Some(b)));
+        settle(&mut card);
+
+        card.on_event(&press_with(50.0, 50.0, PointerButton::Secondary));
+        card.on_event(&Event::PointerMoved {
+            x: 95.0,
+            y: 95.0,
+            source: PointerSource::Mouse,
+        });
+        card.on_event(&release_with(95.0, 95.0, PointerButton::Secondary));
+        assert_eq!(
+            seen.take(),
+            None,
+            "travel past the tap slop cancels an alt press just as it cancels a tap"
+        );
     }
 
     // A child that handles the press (an inner button) wins; the box's own on_press must stay silent.
