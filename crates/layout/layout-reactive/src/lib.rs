@@ -1,4 +1,7 @@
 mod context;
+mod direction;
+
+pub use direction::{current_direction, set_direction, use_direction};
 
 pub use context::{
     LayoutContext, LayoutGuard, absolute_rect, attach_overlay, compute_layout, compute_layout_root,
@@ -7,6 +10,6 @@ pub use context::{
     set_display, set_leading_margin, set_min_height, set_overlay_host, track_layout,
 };
 pub use layout_core::{
-    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, MeasureFn, NodeId,
-    SizeDimension, TemplateTrack,
+    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, MeasureFn,
+    NodeId, SizeDimension, TemplateTrack,
 };

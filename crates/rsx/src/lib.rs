@@ -7,6 +7,8 @@ pub mod app_config;
 #[cfg(feature = "runtime")]
 pub mod app_context;
 #[cfg(feature = "runtime")]
+mod direction;
+#[cfg(feature = "runtime")]
 pub mod prefs;
 #[cfg(feature = "runtime")]
 pub mod window_signals;
@@ -54,7 +56,7 @@ pub use devtools_core::{DevAction, DevPlugin};
 pub use geometry_core::{ObjectFit, Point, Rect, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
-    AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
+    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
     TemplateTrack,
 };
 #[cfg(feature = "plugin")]
@@ -69,6 +71,8 @@ pub use motion_core as motion;
 // Always-on for the same reason as `motion`: the transpiler emits `i18n::translate` paths and the baked
 // `crate::__rsx_i18n` catalog module references `i18n::{Catalog, Message, Part, Entry}`, so the facade must
 // always expose them. Inert unless the app has a `locales/` catalog — nothing is baked or linked otherwise.
+#[cfg(feature = "runtime")]
+pub use direction::follow_locale_direction;
 pub use i18n_core as i18n;
 pub use i18n_core::{current_locale, detect_system_locale, init_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
@@ -126,12 +130,13 @@ pub use ui_core::{
     NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport,
     ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,
     SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea,
-    anchor_rect, box_item, box_transform, close_overlay, compute_layout, dismiss_depth,
-    dismiss_top, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
-    interactive_rects, mark_dirty, named_overlay, new_container, new_leaf, open_overlay,
-    overlay_open, overlay_state, relayout_if_dirty, remove_node, reset_layout_runtime,
-    set_children, set_display, set_min_height, set_overlay_host, surface_frame, toggle_overlay,
-    track_layout, use_dismiss_depth, use_overlay_open,
+    anchor_rect, box_item, box_transform, close_overlay, compute_layout, current_direction,
+    dismiss_depth, dismiss_top, focus, fragment, fragment_gap, fragment_positional,
+    fragment_positional_gap, interactive_rects, mark_dirty, named_overlay, new_container, new_leaf,
+    open_overlay, overlay_open, overlay_state, relayout_if_dirty, remove_node,
+    reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
+    set_overlay_host, surface_frame, toggle_overlay, track_layout, transform_pointer,
+    use_direction, use_dismiss_depth, use_overlay_open,
 };
 
 #[cfg(feature = "navigate")]

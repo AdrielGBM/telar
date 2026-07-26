@@ -11,8 +11,13 @@ pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
     }
 }
 
-// Applies the full affine inverse of `matrix` to all pointer-coordinate events. Returns None for non-pointer events or when `matrix` is degenerate (det ≈ 0), so callers fall back to the original.
-pub(crate) fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
+/// Applies the full affine inverse of `matrix` to all pointer-coordinate events. Returns `None` for
+/// non-pointer events or when `matrix` is degenerate (det ≈ 0), so callers fall back to the original.
+///
+/// Public because a component that paints a subtree under a [`RenderNode::Transform`] it chose itself — a
+/// hand-placed rail or panel, rather than a laid-out one — has to put the same transform's inverse on the
+/// events it forwards there, or its hit-testing drifts from what is on screen.
+pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
     let inv = geometry_core::Transform::from_array(matrix).invert()?;
     // Map in f64 so pointer coordinates keep their precision; Transform::apply would round-trip through f32.
     let apply = |world_x: f64, world_y: f64| -> (f64, f64) {

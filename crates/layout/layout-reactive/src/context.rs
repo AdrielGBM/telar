@@ -54,6 +54,9 @@ pub fn compute_layout_root(
     width: AvailableSpace,
     height: AvailableSpace,
 ) -> Result<(), LayoutError> {
+    // Reconciled here rather than in `set_direction` so the flip reaches every surface on the thread: the setter only knows about whichever one was active when it ran.
+    let direction = crate::direction::current_direction();
+    with_runtime(|rt| rt.engine.set_direction(direction));
     let updates = with_runtime(|rt| rt.compute_layout(root, width, height))?;
     batch(|| {
         for (sig, rect) in updates {
@@ -888,6 +891,38 @@ mod tests {
         .unwrap();
         assert_eq!(rect.get().width, 100.0);
         assert_eq!(rect.get().height, 50.0);
+    }
+
+    #[test]
+    fn setting_the_direction_signal_reaches_the_engine_on_the_next_layout_pass() {
+        // Nothing rebuilds, so the rect signals asserted here are the same ones the widgets already hold.
+        reset_layout_runtime();
+        crate::set_direction(layout_core::Direction::Ltr);
+        let (first, first_rect) = new_leaf(LayoutStyle::new().width(40.0).height(10.0)).unwrap();
+        let (second, second_rect) = new_leaf(LayoutStyle::new().width(40.0).height(10.0)).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_row().width(200.0).height(100.0),
+            &[first, second],
+        )
+        .unwrap();
+        let space = || {
+            (
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(100.0),
+            )
+        };
+        let (w, h) = space();
+        compute_layout(root, w, h).unwrap();
+        assert_eq!(first_rect.get().x, 0.0);
+        assert_eq!(second_rect.get().x, 40.0);
+
+        crate::set_direction(layout_core::Direction::Rtl);
+        mark_dirty(root).unwrap();
+        let (w, h) = space();
+        compute_layout(root, w, h).unwrap();
+        assert_eq!(first_rect.get().x, 160.0, "the row now starts at the right");
+        assert_eq!(second_rect.get().x, 120.0);
+        crate::set_direction(layout_core::Direction::Ltr);
     }
 
     // An overlay's content, attached to the host, fills the viewport — not the small box it was declared in.

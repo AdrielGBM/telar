@@ -42,9 +42,9 @@ pub use child_host::{
 };
 pub use container::Container;
 pub use context::{
-    NodeId, absolute_rect, compute_layout, compute_layout_root, mark_dirty, new_container,
-    new_leaf, relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_display,
-    set_min_height, set_overlay_host, track_layout,
+    NodeId, absolute_rect, compute_layout, compute_layout_root, current_direction, mark_dirty,
+    new_container, new_leaf, relayout_if_dirty, remove_node, reset_layout_runtime, set_children,
+    set_direction, set_display, set_min_height, set_overlay_host, track_layout, use_direction,
 };
 pub use dismiss::{dismiss_depth, dismiss_top, use_dismiss_depth};
 pub use image::Image;
@@ -61,6 +61,7 @@ pub use named_overlay::{
 };
 pub use overlay::{Overlay, Placement, anchor_rect};
 pub use path::Path;
+pub use pointer::transform_pointer;
 pub use reactive_list::ReactiveList;
 pub use rect::Rectangle;
 pub use rich_text::RichText;
