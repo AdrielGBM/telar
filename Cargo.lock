@@ -2957,6 +2957,7 @@ dependencies = [
 name = "platform-core"
 version = "0.1.0"
 dependencies = [
+ "geometry-core",
  "raw-window-handle",
  "thiserror 2.0.18",
 ]

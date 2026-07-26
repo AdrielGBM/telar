@@ -836,4 +836,10 @@ where
     fn last_frame_rgba(&self) -> Option<Vec<u8>> {
         self.renderer.as_ref().and_then(|r| r.read_rgba())
     }
+
+    // Entering the surface is the whole point: the registry is one of its per-surface worlds, so a caller outside this handler reads the ambient (always empty) one instead.
+    fn interactive_rects(&self) -> Vec<geometry_core::Rect> {
+        let _surface = self.enter_surface();
+        ui_core::interactive_rects()
+    }
 }

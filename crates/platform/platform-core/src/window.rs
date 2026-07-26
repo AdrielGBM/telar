@@ -107,6 +107,18 @@ pub trait EventHandler<W: Window> {
     fn last_frame_rgba(&self) -> Option<Vec<u8>> {
         None
     }
+    /// The laid-out rects of this handler's pointer targets, in logical surface coordinates.
+    ///
+    /// A backend that carves a surface's input region from its content — a click-through overlay that must
+    /// still take input over its own cards — needs these, and **cannot read them itself**: they live in the
+    /// handler's per-surface world, which is only active inside the handler's own calls. Read from outside,
+    /// the ambient world answers instead, and it is always empty — which a backend then applies as "this
+    /// surface takes no input anywhere".
+    ///
+    /// Defaults to empty, which is the honest answer for a handler that owns no surface world.
+    fn interactive_rects(&self) -> Vec<geometry_core::Rect> {
+        Vec::new()
+    }
 }
 
 // Lets a multi-surface runner hold heterogeneous handlers in one map — the statically-declared surfaces and
@@ -136,6 +148,9 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
     }
     fn last_frame_rgba(&self) -> Option<Vec<u8>> {
         (**self).last_frame_rgba()
+    }
+    fn interactive_rects(&self) -> Vec<geometry_core::Rect> {
+        (**self).interactive_rects()
     }
 }
 
