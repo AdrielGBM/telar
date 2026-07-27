@@ -30,6 +30,9 @@ pub struct Input {
     // Hint shown (muted) while the value is empty. Rendered in place of the text so the field stays a live,
     // tappable `Input` even when empty — a separate placeholder widget swapped in would not take focus.
     placeholder: String,
+    // Character drawn in place of every character of the value. Affects rendering only: the bound signal, the
+    // caret offsets and every edit still work on the real text.
+    mask: Option<char>,
 }
 
 impl Input {
@@ -51,7 +54,31 @@ impl Input {
             leaf,
             on_submit: None,
             placeholder: String::new(),
+            mask: None,
         })
+    }
+
+    /// Draws `bullet` in place of every character, for a password or a PIN.
+    ///
+    /// Rendering only — the bound signal keeps the real text, so a submit handler reads what was typed. Worth
+    /// having as a property of the field rather than as a caller-side transformation: a caller that masked the
+    /// *signal* would have to keep a second copy of the truth, and the caret would measure the wrong string.
+    pub fn masked(mut self, bullet: char) -> Self {
+        self.mask = Some(bullet);
+        self
+    }
+
+    /// [`masked`](Self::masked) with the conventional bullet.
+    pub fn secret(self) -> Self {
+        self.masked('•')
+    }
+
+    /// What is drawn for `text`: the text itself, or one mask character per character of it.
+    fn shown(&self, text: &str) -> String {
+        match self.mask {
+            Some(bullet) => text.chars().map(|_| bullet).collect(),
+            None => text.to_string(),
+        }
     }
 
     /// Runs when Enter is pressed while focused (e.g. submit a form / run a search).
@@ -163,13 +190,16 @@ impl Component for Input {
             ph_style.paint = muted;
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
-            RenderNode::text(text.clone(), full, style)
+            RenderNode::text(self.shown(&text), full, style)
         };
 
         // The caret is drawn only while focused; reading `is_focused` subscribes this view to focus moves.
         if focus::is_focused(self.id) {
             let caret = self.caret_at(&text);
-            let (prefix_w, _) = renderer_text::measure_text(&text[..caret], 1.0e6, &style);
+            // Measured against what is *drawn*: a mask character is not the width of the character it hides,
+            // so measuring the real prefix would put the caret somewhere the text is not.
+            let prefix = self.shown(&text[..caret]);
+            let (prefix_w, _) = renderer_text::measure_text(&prefix, 1.0e6, &style);
             let line_h = style.font_size * renderer_text::LINE_HEIGHT_FACTOR;
             let caret_rect = Rect {
                 x: prefix_w,
@@ -323,6 +353,36 @@ mod tests {
         let r = input.on_event(&key(Key::Char('z')));
         assert_eq!(r, EventResult::Ignored);
         assert_eq!(value.get(), "a", "an unfocused input must not edit");
+    }
+
+    #[test]
+    fn a_masked_field_hides_the_text_without_changing_it() {
+        let (mut input, value) = focused_input("");
+        input = input.secret();
+        for c in ['h', 'u', 'n', 't', 'e', 'r'] {
+            input.on_event(&key(Key::Char(c)));
+        }
+        assert_eq!(
+            value.get(),
+            "hunter",
+            "the bound signal keeps the real text, which is what a submit handler reads"
+        );
+        assert_eq!(
+            input.shown(&value.get()),
+            "••••••",
+            "and the screen does not"
+        );
+
+        // One mask character per character, not per byte: a multi-byte password must not leak its length in
+        // bytes, and the caret is measured against this string.
+        assert_eq!(input.shown("mañana"), "••••••");
+        assert_eq!(input.shown(""), "");
+    }
+
+    #[test]
+    fn an_unmasked_field_is_unchanged() {
+        let (input, value) = focused_input("plain");
+        assert_eq!(input.shown(&value.get()), "plain");
     }
 
     #[test]
