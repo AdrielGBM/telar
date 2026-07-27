@@ -1,5 +1,11 @@
 use crate::runtime;
 
+/// A live subscription. Dropping it deregisters the effect, so the closure runs once and never again — which
+/// looks exactly like a working binding until the value it derives is expected to move. Bind it to something
+/// that lives as long as the work should: a struct field, a returned value, or a `let` the reader captures.
+#[must_use = "dropping the handle deregisters the effect: it runs once and then stops. Bind it (a struct \
+              field, a returned value, a captured `let`) for as long as the subscription should last, or use \
+              `memo`, whose handle is `Rc`-backed and kept alive by whoever reads it."]
 pub struct Effect {
     id: runtime::EffectId,
 }
