@@ -11,7 +11,10 @@ use ui_tree::EventResult;
 #[derive(Default)]
 pub(crate) struct DragGesture {
     on_drag: Option<Box<dyn Fn(f32, f32)>>,
+    on_drag_end: Option<Box<dyn Fn(f32, f32)>>,
     dragging: bool,
+    /// The last position the drag reported, so an end with no event of its own still knows where it got to.
+    last: (f32, f32),
 }
 
 impl DragGesture {
@@ -19,8 +22,12 @@ impl DragGesture {
         self.on_drag = Some(Box::new(f));
     }
 
+    pub(crate) fn set_end(&mut self, f: impl Fn(f32, f32) + 'static) {
+        self.on_drag_end = Some(Box::new(f));
+    }
+
     pub(crate) fn is_set(&self) -> bool {
-        self.on_drag.is_some()
+        self.on_drag.is_some() || self.on_drag_end.is_some()
     }
 
     /// A primary press inside `rect` starts the drag and reports the press point. Returns `Handled` when
@@ -35,9 +42,7 @@ impl DragGesture {
             && rect.contains(*x as f32, *y as f32)
         {
             self.dragging = true;
-            if let Some(cb) = &self.on_drag {
-                cb(*x as f32 - rect.x, *y as f32 - rect.y);
-            }
+            self.report(*x as f32 - rect.x, *y as f32 - rect.y);
             return EventResult::Handled;
         }
         EventResult::Ignored
@@ -48,17 +53,34 @@ impl DragGesture {
         if self.dragging
             && let Event::PointerMoved { x, y, .. } = event
         {
-            if let Some(cb) = &self.on_drag {
-                cb(*x as f32 - rect.x, *y as f32 - rect.y);
-            }
+            self.report(*x as f32 - rect.x, *y as f32 - rect.y);
             return EventResult::Handled;
         }
         EventResult::Ignored
     }
 
-    /// Ends the drag (on release, or when the pointer leaves the window). Returns whether one was active,
-    /// so the caller can consume the release that ended it.
-    pub(crate) fn end(&mut self) -> bool {
-        std::mem::take(&mut self.dragging)
+    fn report(&mut self, x: f32, y: f32) {
+        self.last = (x, y);
+        if let Some(cb) = &self.on_drag {
+            cb(x, y);
+        }
+    }
+
+    /// Ends the drag (on release, or when the pointer leaves the window) and fires `on_drag_end` with where
+    /// it finished. Returns whether one was active, so the caller can consume the release that ended it.
+    ///
+    /// `at` is the release position when the caller has one. The fallback matters: a drag also ends on
+    /// `CursorLeft`, and on a child consuming the release, neither of which carries a position — reporting the
+    /// last place the drag actually reached is the only answer that is true in all three cases.
+    pub(crate) fn end(&mut self, at: Option<(f32, f32)>) -> bool {
+        let was_dragging = std::mem::take(&mut self.dragging);
+        if was_dragging {
+            let (x, y) = at.unwrap_or(self.last);
+            self.last = (x, y);
+            if let Some(cb) = &self.on_drag_end {
+                cb(x, y);
+            }
+        }
+        was_dragging
     }
 }

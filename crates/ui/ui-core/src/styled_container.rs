@@ -190,6 +190,19 @@ impl StyledContainer {
     /// Make the box draggable. The callback fires with the pointer position (layout space) on a press
     /// inside the box and on every move until release — even after the pointer leaves the box. Map the
     /// coordinate to a value (slider) or an offset (reorder/resize).
+    /// Fires once when a drag started on this box ends, with the position it finished at (layout space, local
+    /// to the box, same as [`on_drag`](Self::on_drag)).
+    ///
+    /// This is what makes a *threshold* gesture expressible: `on_drag` alone reports where the pointer is but
+    /// never that it let go, so a swipe-to-dismiss or a drag-to-open can be tracked and never decided. A drag
+    /// also ends when the pointer leaves the window or a child consumes the release; those carry no position,
+    /// so the last one the drag reached is reported instead — the gesture always ends exactly once.
+    pub fn on_drag_end(mut self, f: impl Fn(f32, f32) + 'static) -> Self {
+        self.drag.set_end(f);
+        self.mark_interactive();
+        self
+    }
+
     pub fn on_drag(mut self, f: impl Fn(f32, f32) + 'static) -> Self {
         self.drag.set(f);
         self.mark_interactive();
@@ -358,7 +371,7 @@ impl Component for StyledContainer {
                 }
                 if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
-                    self.drag.end();
+                    self.drag.end(None);
                     return EventResult::Handled;
                 }
                 // A primary press inside the box enters the pressed state (purely visual; independent of on_press).
@@ -395,10 +408,18 @@ impl Component for StyledContainer {
                 }
                 if self.dispatch_children(event) == EventResult::Handled {
                     self.press.cancel();
-                    self.drag.end();
+                    self.drag.end(None);
                     return EventResult::Handled;
                 }
-                let dragged = primary && self.drag.end();
+                // The release carries its own position, which is the one the gesture actually finished at —
+                // a drag can end past the last move the compositor delivered.
+                let released_at = match event {
+                    Event::PointerReleased { x, y, .. } => {
+                        Some((*x as f32 - rect.x, *y as f32 - rect.y))
+                    }
+                    _ => None,
+                };
+                let dragged = primary && self.drag.end(released_at);
                 let tapped =
                     self.press.is_set() && self.press.release(event, rect) == EventResult::Handled;
                 if tapped || dragged {
@@ -409,7 +430,7 @@ impl Component for StyledContainer {
             }
             Event::CursorLeft => {
                 self.press.cancel();
-                self.drag.end();
+                self.drag.end(None);
                 self.set_active(false);
                 let tracks_hover = self.hover_style.is_some()
                     || self.on_hover.is_some()
@@ -1320,6 +1341,113 @@ mod tests {
             vec![(50.0, 50.0), (250.0, 250.0)],
             "drag ended on the outside release; the post-release move must not fire"
         );
+    }
+
+    // `on_drag_end` is what makes a threshold gesture (swipe-to-dismiss, drag-to-open) expressible: it fires
+    // exactly once per drag, with the position it finished at.
+    #[test]
+    fn on_drag_end_fires_once_with_the_release_position() {
+        use std::cell::RefCell;
+        let ends: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink = ends.clone();
+        reset_layout_runtime();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_drag_end(move |x, y| sink.borrow_mut().push((x, y)));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let moved = |x: f64, y: f64| Event::PointerMoved {
+            x,
+            y,
+            source: PointerSource::Mouse,
+        };
+        card.on_event(&moved(10.0, 10.0));
+        assert!(ends.borrow().is_empty(), "a move with no drag ends nothing");
+
+        card.on_event(&press(20.0, 20.0, PointerSource::Mouse));
+        card.on_event(&moved(70.0, 30.0));
+        assert!(ends.borrow().is_empty(), "still dragging");
+        card.on_event(&release(90.0, 40.0, PointerSource::Mouse));
+        assert_eq!(
+            *ends.borrow(),
+            vec![(90.0, 40.0)],
+            "the release position, not the last move — a drag can end past it"
+        );
+
+        // Exactly once: a second release with no drag in flight fires nothing.
+        card.on_event(&release(95.0, 45.0, PointerSource::Mouse));
+        assert_eq!(ends.borrow().len(), 1);
+    }
+
+    // A drag also ends when the pointer leaves the window, which carries no position. It must still end —
+    // otherwise the gesture is stuck armed — reporting the last place it reached.
+    #[test]
+    fn on_drag_end_still_fires_when_the_cursor_leaves() {
+        use std::cell::RefCell;
+        let ends: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink = ends.clone();
+        reset_layout_runtime();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_drag_end(move |x, y| sink.borrow_mut().push((x, y)));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        card.on_event(&press(20.0, 20.0, PointerSource::Mouse));
+        card.on_event(&Event::PointerMoved {
+            x: 60.0,
+            y: 25.0,
+            source: PointerSource::Mouse,
+        });
+        card.on_event(&Event::CursorLeft);
+        assert_eq!(
+            *ends.borrow(),
+            vec![(60.0, 25.0)],
+            "the last position the drag reached"
+        );
+    }
+
+    // `on_drag_end` alone is enough to make a box draggable: a gesture that only cares about the outcome
+    // should not have to register a per-move callback it ignores.
+    #[test]
+    fn on_drag_end_works_without_an_on_drag() {
+        use std::cell::RefCell;
+        let ends: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink = ends.clone();
+        reset_layout_runtime();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_drag_end(move |x, y| sink.borrow_mut().push((x, y)));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        card.on_event(&press(10.0, 10.0, PointerSource::Mouse));
+        card.on_event(&release(80.0, 10.0, PointerSource::Mouse));
+        assert_eq!(*ends.borrow(), vec![(80.0, 10.0)]);
     }
 
     // A focusable box fires on_focus(true) when tapped and on_focus(false) when focus is cleared.
