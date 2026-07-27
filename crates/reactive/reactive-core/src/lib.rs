@@ -109,6 +109,45 @@ mod tests {
         );
     }
 
+    // A cascade inside one flush: `writer` runs after `reader` and writes the signal `reader` depends on, so
+    // `reader` has to run again. It is scheduled either way — the regression was the flush-wide epoch stamp,
+    // which turned that second run into a no-op with nothing left to reschedule it, so the reader kept the
+    // stale value until some later, unrelated write opened a fresh flush.
+    #[test]
+    fn an_effect_reruns_when_a_later_effect_in_the_same_flush_writes_its_source() {
+        let trigger = signal(0i32);
+        let source = signal(0i32);
+        let seen: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+
+        // The reader is scheduled by the same write as the writer, and runs first — so by the time the writer
+        // moves `source`, the reader has already run once in this flush.
+        let read_trigger = trigger.read_only();
+        let read_source = source.read_only();
+        let seen_c = Rc::clone(&seen);
+        let _reader = effect(move || {
+            read_trigger.get();
+            seen_c.borrow_mut().push(read_source.get());
+        });
+
+        let read_trigger = trigger.read_only();
+        let write_source = source.clone();
+        let _writer = effect(move || {
+            let v = read_trigger.get();
+            if v > 0 {
+                write_source.set(v);
+            }
+        });
+
+        seen.borrow_mut().clear();
+        trigger.set(7);
+        assert_eq!(
+            seen.borrow().last().copied(),
+            Some(7),
+            "the reader never saw a write made later in the same flush: {:?}",
+            seen.borrow()
+        );
+    }
+
     #[test]
     fn signal_update() {
         let count = signal(10i32);

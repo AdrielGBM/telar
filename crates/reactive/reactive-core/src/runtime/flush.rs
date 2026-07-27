@@ -7,11 +7,7 @@ use super::{EffectId, FlushNotifyHandle, RUNTIME, Runtime};
 const MAX_FLUSH_ITERATIONS: usize = 1_000;
 
 pub(crate) fn flush() {
-    RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        rt.flushing = true;
-        rt.flush_epoch += 1;
-    });
+    RUNTIME.with(|rt| rt.borrow_mut().flushing = true);
 
     // With the runtime shared across surfaces, a panic mid-effect must not leave `flushing` stuck true —
     // that would wedge every surface's scheduling (schedule() early-returns while flushing). The guard
@@ -28,6 +24,13 @@ pub(crate) fn flush() {
         let mut did_work = false;
         let mut overflowed = true;
         for _ in 0..MAX_FLUSH_ITERATIONS {
+            // One epoch per drain, not one per flush. The dedup in `run_effect` is there so two writes to
+            // the same signal in one drain cost one run; an effect whose source is written by a *later*
+            // effect in the same cascade must still run again. Under a flush-wide epoch that re-run was
+            // scheduled, popped and skipped, and nothing rescheduled it — the effect stayed stale until
+            // some unrelated event forced it. A genuine write-read cycle is still caught by the
+            // iteration cap below.
+            RUNTIME.with(|rt| rt.borrow_mut().flush_epoch += 1);
             // Drain memo_pending first (pure computations), then user effects. Pop minimum height first so producers run before consumers (topological order).
             let memo_batch: Vec<EffectId> = RUNTIME.with(|rt| {
                 let mut rt = rt.borrow_mut();
