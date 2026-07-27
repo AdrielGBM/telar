@@ -33,6 +33,7 @@ mod surface_context;
 mod svg;
 mod text;
 mod text_area;
+mod virtual_list;
 
 #[cfg(feature = "async-assets")]
 pub use async_asset::{AssetSource, AssetState};
@@ -79,6 +80,7 @@ pub use svg::Svg;
 pub use text::Text;
 pub use text_area::TextArea;
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};
+pub use virtual_list::{VirtualList, visible_window};
 
 /// Routes an event to the overlay layer before the widget tree sees it.
 ///
