@@ -94,6 +94,35 @@ impl Input {
         self
     }
 
+    /// Gives this field keyboard focus as it is built, so the surface it is on is typed into rather than
+    /// clicked into first.
+    ///
+    /// A field is otherwise focused only by a tap, which is the right default for a form but wrong for the
+    /// surface that exists *because* it wants a keystroke — a search overlay opened on a keybind, a password
+    /// prompt. Registration happens in [`new`](Self::new), so this is a request against an id that is already
+    /// in the tab order.
+    pub fn autofocus(self) -> Self {
+        focus::request(self.id);
+        self
+    }
+
+    /// Gives keyboard focus to this field (as a tap would). For programmatic focus after construction — e.g. a
+    /// container focusing the field when its tab becomes active. Mirrors `TextArea::request_focus`.
+    pub fn request_focus(&self) {
+        focus::request(self.id);
+    }
+
+    /// Whether this field currently holds keyboard focus.
+    pub fn focused(&self) -> bool {
+        focus::is_focused(self.id)
+    }
+
+    /// A `Copy` [`focus::FocusHandle`] to this field, so a caller that has moved it into a container can still
+    /// focus it later without keeping a reference to the field itself.
+    pub fn focus_handle(&self) -> focus::FocusHandle {
+        focus::handle(self.id)
+    }
+
     /// The current caret byte offset, clamped to the text and snapped to a char boundary.
     fn caret_at(&self, text: &str) -> usize {
         let mut c = self.caret.get().min(text.len());
@@ -318,6 +347,37 @@ mod tests {
         .unwrap();
         focus::request(input.id);
         (input, value)
+    }
+
+    #[test]
+    fn autofocus_makes_a_field_typable_without_a_tap() {
+        reset_layout_runtime();
+        focus::clear();
+        let value = signal(String::new());
+        let mut input = Input::new(
+            value.clone(),
+            LayoutStyle::new().width(200.0).height(20.0),
+            || TextStyle::new(14.0, Color::BLACK),
+        )
+        .unwrap()
+        .autofocus();
+        assert!(input.focused(), "the field holds focus from construction");
+        input.on_event(&key(Key::Char('x')));
+        assert_eq!(value.get(), "x", "and the very first keystroke is text");
+
+        // Without it, the same field ignores the keystroke — which is the default a form wants.
+        reset_layout_runtime();
+        focus::clear();
+        let untouched = signal(String::new());
+        let mut plain = Input::new(
+            untouched.clone(),
+            LayoutStyle::new().width(200.0).height(20.0),
+            || TextStyle::new(14.0, Color::BLACK),
+        )
+        .unwrap();
+        assert!(!plain.focused());
+        plain.on_event(&key(Key::Char('x')));
+        assert_eq!(untouched.get(), "");
     }
 
     #[test]
