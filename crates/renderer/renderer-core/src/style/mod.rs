@@ -57,6 +57,19 @@ impl TextStyle {
         self
     }
 
+    /// Overrides the size a style was built at, so a style carrying theme-resolved weight and slant can be
+    /// re-sized without being rebuilt from scratch (and losing them).
+    pub fn with_size(mut self, font_size: f32) -> Self {
+        self.font_size = font_size;
+        self
+    }
+
+    /// Drops a shadow behind the glyphs — what keeps text legible over an image the style knows nothing about.
+    pub fn with_shadow(mut self, shadow: Shadow) -> Self {
+        self.shadow = Some(shadow);
+        self
+    }
+
     pub fn with_italic(mut self, italic: bool) -> Self {
         self.italic = italic;
         self
