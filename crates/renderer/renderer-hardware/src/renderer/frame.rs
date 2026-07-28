@@ -378,10 +378,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             && clear_color.is_some_and(|c| c.a >= 1.0)
             && !frame_blocks_damage
             && ((self.msaa_samples > 1 && self.retained_view.is_some()) || self.msaa_samples == 1);
+        // A transparent frame Loads instead of Clearing, which assumes the target still holds the previous
+        // frame. That holds on the single-sample path, where the offscreen persists across frames (see the
+        // note above), and NOT on the multisample one: there the frame is resolved out to `retained_view`
+        // and the multisample target is left with no dependable copy of what was last presented. Repainting
+        // only the dirty rect over that dropped everything that had not changed this frame — on a
+        // transparent bar the chips blinked out one at a time, and hovering, which dirties the rect under
+        // the cursor, brought one back for a single frame. The opaque path is immune because it re-seeds
+        // with a prime quad from `retained_view` first; giving the transparent path the same prime needs an
+        // erase-to-transparent inside the dirty rect (the primed pixels are not overwritten by a background
+        // fill, so a moved element would leave a ghost), which is why this refuses rather than primes.
+        let allow_damage_transparent = clear_color.is_none() && self.msaa_samples == 1;
         // Multiple dirty rects are collapsed to their bounding union because GPUs support only a single scissor rect per pass (hardware limitation asymmetry vs. software backend which can clip per-rect).
         let dirty_scissor: Option<Rect> = if scroll_blit.is_none()
             && !self.prev_commands.is_empty()
-            && (clear_color.is_none() || allow_damage_with_clear)
+            && (allow_damage_transparent || allow_damage_with_clear)
         {
             renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
                 renderer_core::culling::command_visual_rect(cmd, m, &self.font_metrics)
