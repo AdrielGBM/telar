@@ -17,7 +17,7 @@ use super::font_config::{
     hardware_cache_path,
 };
 use super::hot_host::{HardwareFrameMsg, spawn_hardware_render_thread};
-use super::{FRAME_BUDGET, HW_KEEPALIVE_GRACE};
+use super::{FRAME_BUDGET, HW_KEEPALIVE_GRACE, HW_KEEPALIVE_INTERVAL};
 
 pub(super) struct AppHandler<W, D: DevPlugin>
 where
@@ -56,6 +56,10 @@ where
     pub(super) window_signals: Option<WindowSignals>,
     pub(super) app_name: String,
     pub(super) last_frame: std::time::Instant,
+    // When the frame pass last ran, as opposed to `last_frame`, which only advances on a frame carrying new content; `on_redraw` paces itself against this so the pass costs the same however often the platform calls it.
+    pub(super) last_tick: std::time::Instant,
+    // When a frame was last submitted, content or keepalive; paces the keepalive blit.
+    pub(super) last_submit: std::time::Instant,
     pub(super) dev: D,
     pub(super) font_paths: Vec<std::path::PathBuf>,
     pub(super) font_data: Vec<Vec<u8>>,
@@ -112,6 +116,13 @@ where
         window_signals: None,
         app_name,
         last_frame: std::time::Instant::now(),
+        // Backdated so the first `on_redraw` after resume composes immediately instead of waiting out a frame it has nothing to pace against yet.
+        last_tick: std::time::Instant::now()
+            .checked_sub(FRAME_BUDGET)
+            .unwrap_or_else(std::time::Instant::now),
+        last_submit: std::time::Instant::now()
+            .checked_sub(HW_KEEPALIVE_INTERVAL)
+            .unwrap_or_else(std::time::Instant::now),
         dev: D::default(),
         paths,
         font_paths,
@@ -509,7 +520,13 @@ where
             }
         }
         // Drive the motion engine before tree_dirty is read below: tick()'s .set() calls only enqueue effects while a batch is open (new_events already opened one), so force a flush here to re-run any segment reading an animated value now, not on the next cycle. This is what makes an animation-only frame (no user event, tree otherwise clean) observe interpolated values in this same frame's tree.commands(). The tree is mounted in the app's own runtime (`crate::tree`), so those values reach the segments that read them even under hot reload — a host-mounted tree would instead re-send the commands composed for the animation's first value (a page stuck at opacity 0) until some event forced a re-render.
-        self.app.motion_tick(std::time::Instant::now());
+        // Everything below composes a frame, so pace the whole pass rather than only capping the render at the end. A platform may call `on_redraw` on every loop turn, and the pass then schedules its own next call — the motion tick's `.set()` writes flush, and the flush notifies the platform to redraw — so the loop free-runs instead of sleeping.
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_tick) < FRAME_BUDGET {
+            return;
+        }
+        self.last_tick = now;
+        self.app.motion_tick(now);
         end_batch();
         // Runtime-driven relayout: a reactive change (e.g. a reactive list adding/removing items) mutated
         // the layout tree during the flush above but the app shell only recomputes layout on resize/route
@@ -651,13 +668,18 @@ where
             return;
         }
 
-        // 60 FPS cap: defer this redraw until the frame budget expires; about_to_wait() schedules the WaitUntil wakeup.
-        if tree_dirty && self.last_frame.elapsed() < FRAME_BUDGET {
+        // A keepalive blit carries no new content, so it runs at the keepalive cadence rather than the frame rate. Enforced here instead of left to `about_to_wait`'s reported interval because a submitted frame is itself a wakeup: its commit makes the compositor fd readable, returning the next dispatch immediately to compose another one.
+        let keepalive_interval = self
+            .dev
+            .keepalive_interval()
+            .unwrap_or(HW_KEEPALIVE_INTERVAL);
+        if !tree_dirty && now.duration_since(self.last_submit) < keepalive_interval {
             return;
         }
+        self.last_submit = now;
         // Only update last_frame for content frames; keepalive blits must not reset the budget clock (would delay next content render by up to 16ms).
         if tree_dirty {
-            self.last_frame = std::time::Instant::now();
+            self.last_frame = now;
         }
 
         let (w, h) = (window.width(), window.height());
@@ -812,8 +834,8 @@ where
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
         // An unsettled animation must keep the loop scheduling frames even while the tree itself is momentarily clean (e.g. the tick that only established t0); once it settles, has_active() drops out and this falls through to the existing idle/keepalive branch below.
         if tree_dirty || self.app.motion_has_active() {
-            // Return the time remaining in the current frame budget so the platform wakes us up exactly when the next 60fps slot opens (or immediately if already past it).
-            Some(FRAME_BUDGET.saturating_sub(self.last_frame.elapsed()))
+            // Against `last_tick`, the clock `on_redraw` actually gates on: reporting a deadline the pass would decline to act on wakes the loop early and it spins re-asking. The two disagree whenever a tick leaves the tree clean, advancing `last_tick` but not `last_frame`.
+            Some(FRAME_BUDGET.saturating_sub(self.last_tick.elapsed()))
         } else {
             let dev_keepalive = self.dev.keepalive_interval();
             if let Some(interval) = dev_keepalive {
@@ -824,7 +846,7 @@ where
                 // last content frame (covers interactive bursts), then let it sleep — real input/redraw
                 // events still wake the loop. `last_frame` isn't reset by keepalive blits, so its
                 // elapsed measures true inactivity. Saves ~1 idle GPU wake/sec on battery.
-                Some(std::time::Duration::from_millis(1000))
+                Some(HW_KEEPALIVE_INTERVAL)
             } else {
                 None
             }

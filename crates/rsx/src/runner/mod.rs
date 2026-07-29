@@ -17,6 +17,9 @@ const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_
 // second forever on a truly static screen (battery). Real input/redraw events still wake the loop.
 const HW_KEEPALIVE_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
 
+// The cadence of those keepalive blits. Enforced in `on_redraw` as well as reported by `about_to_wait`, because a platform may call `on_redraw` on every loop turn rather than only when a frame is due.
+const HW_KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+
 #[cfg(target_os = "android")]
 pub use android::run_android_app_with_name;
 #[cfg(all(feature = "desktop", not(target_os = "android")))]
