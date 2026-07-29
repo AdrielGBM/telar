@@ -14,6 +14,8 @@ const NOOP_EPS_SQ: f32 = 1e-12;
 const MAX_SUBSTEP: f32 = 1.0 / 240.0;
 // Upper bound on a single integrated frame; caps the jump after a long stall (paused window, breakpoint).
 const MAX_FRAME_DT: f32 = 0.1;
+// Lower bound on one. The registry is thread-global but driven per surface, so a multi-surface app ticks every animation once per surface per frame; at those microsecond gaps both integration steps round away in f32 and the animation freezes short of settling, pinning `has_active()` true for good.
+const MIN_FRAME_DT: f32 = 1.0 / 1000.0;
 // Spring settles once both squared displacement and squared velocity fall below these.
 const DISP_EPS_SQ: f32 = 1e-6;
 const VEL_EPS_SQ: f32 = 1e-6;
@@ -51,11 +53,12 @@ impl<T: Lerp + 'static> AnimInner<T> {
                 return None;
             }
         };
-        self.last = Some(now);
         let dt = now.saturating_duration_since(last).as_secs_f32() * scale;
-        if dt <= 0.0 {
+        // Before `self.last` advances: a skipped step must leave the clock alone so its time is carried into the next one rather than discarded.
+        if dt < MIN_FRAME_DT {
             return None;
         }
+        self.last = Some(now);
         match self.curve {
             Curve::Tween(t) => self.step_tween(t, dt),
             Curve::Spring(s) => self.step_spring(s, dt),
@@ -78,6 +81,7 @@ impl<T: Lerp + 'static> AnimInner<T> {
         let steps = (dt / MAX_SUBSTEP).ceil().max(1.0) as u32;
         let h = dt / steps as f32;
         let mass = s.mass.max(MIN_MASS);
+        let before = self.current.clone();
         for _ in 0..steps {
             // Semi-implicit Euler in value space: a = (-k*(x - target) - c*v) / m, then v += a*h, x += v*h.
             let displacement = self.current.sub(&self.target);
@@ -88,12 +92,17 @@ impl<T: Lerp + 'static> AnimInner<T> {
             self.velocity = self.velocity.add(&accel.scale(h));
             self.current = self.current.add(&self.velocity.scale(h));
         }
-        let settled = self.current.sub(&self.target).magnitude_sq() < DISP_EPS_SQ
+        let arrived = self.current.sub(&self.target).magnitude_sq() < DISP_EPS_SQ
             && self.velocity.magnitude_sq() < VEL_EPS_SQ;
-        if settled {
+        if arrived || self.value_is_frozen(&before) {
             return Some(self.snap_to_target());
         }
         Some(self.current.clone())
+    }
+
+    // A frame that left the value bit-identical will never move it again — same state, same forces — so the animation is over. This is what guarantees one terminates at all: the epsilons above cannot, being absolute while the value is not, so a spring on screen coordinates (one f32 ULP is 2.4e-4 at x=2400) goes numerically dead while still short of `DISP_EPS_SQ` and ticks forever. Snapping is safe precisely because the step failed to round: what is left to travel is below what the value can represent.
+    fn value_is_frozen(&self, before: &T) -> bool {
+        self.current.sub(before).magnitude_sq() == 0.0
     }
 
     fn snap_to_target(&mut self) -> T {
@@ -208,6 +217,7 @@ mod tests {
     use crate::curve::{spring, tween};
     use crate::easing::Easing;
     use crate::ticker::{has_active, reset, set_scale, tick};
+    use geometry_core::Rect;
 
     // Each test isolates the thread-local ticker state; libtest runs one thread per test but this is defensive against thread reuse.
     fn fresh() -> Instant {
@@ -327,6 +337,48 @@ mod tests {
         assert!(a.is_settled());
         assert!(!has_active());
         set_scale(1.0);
+    }
+
+    // The magnitude is the point: at these coordinates the settle epsilons are below one f32 ULP.
+    #[test]
+    fn spring_on_large_coordinates_stops_being_active() {
+        let base = fresh();
+        let a = Animated::new(Rect::new(1920.0, 1080.0, 240.0, 64.0), spring(180.0, 26.0));
+        a.retarget(Rect::new(2400.0, 1080.0, 240.0, 64.0));
+        tick(base);
+        let mut now = base;
+        for _ in 0..600 {
+            now += Duration::from_micros(16_667);
+            tick(now);
+            if !has_active() {
+                break;
+            }
+        }
+        assert!(!has_active(), "spring never deregistered: {:?}", a.get());
+        assert!(
+            (a.get().x - 2400.0).abs() < 1e-2,
+            "settled at {:?}",
+            a.get()
+        );
+    }
+
+    // The tick pattern a multi-surface app produces: one real frame step, then one per sibling surface microseconds behind it.
+    #[test]
+    fn sub_frame_ticks_do_not_consume_elapsed_time() {
+        let base = fresh();
+        let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::Linear));
+        a.retarget(1.0);
+        tick(base);
+        for extra in 1..7u64 {
+            tick(base + Duration::from_micros(extra * 20));
+        }
+        assert_eq!(a.get(), 0.0, "a sub-frame tick moved the value");
+        tick(base + Duration::from_millis(100));
+        assert!(
+            (a.get() - 0.5).abs() < 1e-3,
+            "elapsed time was lost to the sub-frame ticks: {}",
+            a.get()
+        );
     }
 
     #[test]
