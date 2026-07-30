@@ -1,7 +1,9 @@
 [package]
 name = "telar-transpiler"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 # Always-on baker: renderer-assets (usvg/resvg/image) compiles into the proc-macro HOST only, never the app binary. `dynamic-svg`/`dynamic-image` are the host features that let the baker parse SVG / decode images at build time.
