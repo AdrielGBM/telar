@@ -14,6 +14,7 @@ pub struct Image {
     leaf: LayoutLeaf,
     filter: Box<dyn Fn() -> ImageFilter>,
     fit: Box<dyn Fn() -> ObjectFit>,
+    radius: BorderRadius,
 }
 
 impl Image {
@@ -35,7 +36,24 @@ impl Image {
             leaf,
             filter: Box::new(filter_fn),
             fit: Box::new(fit_fn),
+            radius: BorderRadius::zero(),
         })
+    }
+
+    /// Rounds the picture's own corners.
+    ///
+    /// A `StyledContainer` around it cannot do this — its radius rounds the *fill* it paints, and a bitmap child
+    /// draws over that — so a thumbnail, an avatar or a cover in a rounded UI had no way to be anything but a
+    /// square. The clip primitive already carries a radius; this is the widget passing one through.
+    pub fn with_radius(mut self, radius: f32) -> Self {
+        self.radius = BorderRadius::all(radius.max(0.0));
+        self
+    }
+
+    /// Rounds each corner separately, for a picture that meets an edge on one side only.
+    pub fn with_border_radius(mut self, radius: BorderRadius) -> Self {
+        self.radius = radius;
+        self
     }
 }
 
@@ -59,11 +77,11 @@ impl Component for Image {
             rect: content,
             filter: (self.filter)(),
         });
-        // Cover overflows the box; clip it to the local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll.
-        let node = if clip {
+        // Cover overflows the box; clip it to the local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll. A radius is the other reason to clip, and it applies to a `Contain` fit that overflows nothing too.
+        let node = if clip || !self.radius.is_zero() {
             RenderNode::Clip {
                 rect: r_local,
-                radius: BorderRadius::zero(),
+                radius: self.radius,
                 children: NodeVec::collect([image]),
             }
         } else {
@@ -118,6 +136,40 @@ mod tests {
         let rect = image.leaf.rect.get();
         assert_eq!(rect.width, 40.0);
         assert_eq!(rect.height, 20.0);
+    }
+
+    /// A radius has to reach the render tree even on a fit that overflows nothing, since `Contain` takes the
+    /// early return that skips the clip entirely.
+    #[test]
+    fn a_radius_clips_the_picture_whatever_the_fit() {
+        reset_layout_runtime();
+        let data = Arc::new(ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20));
+        let image = Image::new(
+            LayoutStyle::new().width(40.0).height(20.0),
+            move || Arc::clone(&data),
+            || ImageFilter::Linear,
+            || ObjectFit::Contain,
+        )
+        .unwrap()
+        .with_radius(6.0);
+
+        let radius_of = |node: &RenderNode| -> Option<BorderRadius> {
+            let mut current = node;
+            loop {
+                match current {
+                    RenderNode::Clip { radius, .. } => return Some(*radius),
+                    RenderNode::Transform { children, .. } | RenderNode::Layer { children, .. } => {
+                        current = children.first()?;
+                    }
+                    _ => return None,
+                }
+            }
+        };
+        assert_eq!(
+            radius_of(&image.view()).map(|r| r.top_left),
+            Some(6.0),
+            "the clip carries the radius the caller asked for"
+        );
     }
 
     #[test]
