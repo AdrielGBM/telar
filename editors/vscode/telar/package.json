@@ -1,0 +1,92 @@
+{
+  "name": "telar-analyzer",
+  "displayName": "Telar",
+  "description": "RSX language support for Visual Studio Code",
+  "version": "0.1.2",
+  "publisher": "telar",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "rsx",
+        "aliases": [
+          "RSX",
+          "rsx"
+        ],
+        "extensions": [
+          ".rsx"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rsx",
+        "scopeName": "source.rsx",
+        "path": "./syntaxes/rsx.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.rust": "rust",
+          "meta.embedded.expression.rsx": "rust"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "rsx",
+        "path": "./snippets/rsx.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "telar.preview",
+        "title": "Preview component",
+        "category": "Telar"
+      },
+      {
+        "command": "telar.showServerLog",
+        "title": "Show server log",
+        "category": "Telar"
+      }
+    ],
+    "configuration": {
+      "title": "RSX",
+      "properties": {
+        "telar.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the telar-analyzer binary. If empty, uses the bundled server/ binary (if present), then searches PATH, then ~/.cargo/bin/telar-analyzer."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "[rsx]": {
+        "editor.quickSuggestions": {
+          "other": "on",
+          "comments": "off",
+          "strings": "on"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "compile:typecheck": "tsc -p ./ --noEmit",
+    "package": "pnpm run compile && pnpx @vscode/vsce package --no-dependencies",
+    "package:platform": "pnpm run compile && pnpx @vscode/vsce package --no-dependencies --target <target>"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "@types/vscode": "^1.80.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3"
+  }
+}

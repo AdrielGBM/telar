@@ -1,4 +1,4 @@
-use rsx::SvgData;
+use telar::SvgData;
 use std::sync::Arc;
 
 pub fn make_icon() -> Arc<SvgData> {

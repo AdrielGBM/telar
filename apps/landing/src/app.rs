@@ -1,5 +1,5 @@
 use crate::theme::theme;
-use rsx::{
+use telar::{
     App, AvailableSpace, Color, Component, Event, EventResult, LayoutError, LayoutItem,
     LayoutScrollArea, LayoutStyle, NodeId, RenderNode, SizeDimension, compute_layout, mark_dirty,
     new_container, reset_layout_runtime,
@@ -68,7 +68,7 @@ impl Component for ScrollPage {
 pub struct LandingRoot;
 
 impl App for LandingRoot {
-    fn root(&self) -> Box<dyn rsx::Component> {
+    fn root(&self) -> Box<dyn telar::Component> {
         reset_layout_runtime();
         let content = crate::home().expect("layout failed");
         let page = ScrollPage::new(content).expect("page layout failed");

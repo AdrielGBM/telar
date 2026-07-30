@@ -54,7 +54,7 @@ impl BlurPipeline {
                     source_view,
                     &view,
                     &params,
-                    "rsx-blur-downsample-pass",
+                    "telar-blur-downsample-pass",
                 );
             }
             // Store the source dimensions so the matching up-sample pass can recreate the symmetric output size.
@@ -92,7 +92,7 @@ impl BlurPipeline {
                     source_view,
                     &out_view,
                     &params,
-                    "rsx-blur-upsample-pass",
+                    "telar-blur-upsample-pass",
                 );
             }
             current_view = Some(out_view.clone());
@@ -137,7 +137,7 @@ impl BlurPipeline {
             return (t, v);
         }
         let t = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-blur-mip"),
+            label: Some("telar-blur-mip"),
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -169,7 +169,7 @@ impl BlurPipeline {
     ) {
         let bg = if use_immediates {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("rsx-blur-dual-bind-group"),
+                label: Some("telar-blur-dual-bind-group"),
                 layout: bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
@@ -185,12 +185,12 @@ impl BlurPipeline {
         } else {
             use wgpu::util::DeviceExt;
             let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("rsx-blur-dual-params"),
+                label: Some("telar-blur-dual-params"),
                 contents: bytemuck::bytes_of(params),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
             device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("rsx-blur-dual-bind-group"),
+                label: Some("telar-blur-dual-bind-group"),
                 layout: bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {

@@ -28,7 +28,7 @@ let result = Canvas::with_intrinsic_height(360.0, |rect| {
 
     // Uniform scale around each cell's center.
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("scale around center — 0.5× · 0.75× · 1× · 1.5× · 2×"),
+        telar::static_rc_str!("scale around center — 0.5× · 0.75× · 1× · 1.5× · 2×"),
         Rect {
             x: 0.0,
             y: 8.0,
@@ -58,7 +58,7 @@ let result = Canvas::with_intrinsic_height(360.0, |rect| {
 
     // Rotation of a shared arrow shape.
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("rotate around center — 0° · 30° · 60° · 90° · 120°"),
+        telar::static_rc_str!("rotate around center — 0° · 30° · 60° · 90° · 120°"),
         Rect {
             x: 0.0,
             y: 140.0,
@@ -83,7 +83,7 @@ let result = Canvas::with_intrinsic_height(360.0, |rect| {
 
     // Compose: rotate then scale, both around the same center.
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("compose — rotate then scale (transforms multiply)"),
+        telar::static_rc_str!("compose — rotate then scale (transforms multiply)"),
         Rect {
             x: 0.0,
             y: 270.0,

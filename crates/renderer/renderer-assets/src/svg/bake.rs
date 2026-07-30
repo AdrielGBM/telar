@@ -69,7 +69,7 @@ pub fn bake_to_source(content: &str) -> Result<String, SvgError> {
     Ok(serialize(size, &baked))
 }
 
-// Emits bare type names (`SvgData`, `DrawCommand`, `Point`, …) because the transpiler drops this expression into generated code that does `use rsx::*`, whose facade re-exports every renderer-core / geometry-core type unqualified.
+// Emits bare type names (`SvgData`, `DrawCommand`, `Point`, …) because the transpiler drops this expression into generated code that does `use telar::*`, whose facade re-exports every renderer-core / geometry-core type unqualified.
 fn serialize(size: (f32, f32), baked: &BakedSvg) -> String {
     match baked {
         BakedSvg::Vector(cmds) => {

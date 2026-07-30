@@ -1,6 +1,6 @@
-//! Ad-hoc visual harness: renders a scene headless and writes a PNG to `RSX_VISUAL_OUT`, so a
+//! Ad-hoc visual harness: renders a scene headless and writes a PNG to `TELAR_VISUAL_OUT`, so a
 //! render change can be eyeballed (open the PNG) instead of only hashed. Run with:
-//!   RSX_VISUAL_OUT=/path/out.png cargo test -p renderer-software --test visual_check -- --nocapture
+//!   TELAR_VISUAL_OUT=/path/out.png cargo test -p renderer-software --test visual_check -- --nocapture
 
 use std::sync::Arc;
 
@@ -11,8 +11,8 @@ use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 #[test]
 fn visual_check_png() {
-    let Ok(out) = std::env::var("RSX_VISUAL_OUT") else {
-        eprintln!("set RSX_VISUAL_OUT to write a PNG; skipping");
+    let Ok(out) = std::env::var("TELAR_VISUAL_OUT") else {
+        eprintln!("set TELAR_VISUAL_OUT to write a PNG; skipping");
         return;
     };
 

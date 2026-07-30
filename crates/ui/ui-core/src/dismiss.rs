@@ -23,7 +23,7 @@ struct Entry {
 }
 
 // ManuallyDrop keeps these TLS slots trivially-destructible: registering a TLS destructor from a hot-reloaded
-// dylib would make dlclose unsafe (same constraint as `rsx::hot_state`).
+// dylib would make dlclose unsafe (same constraint as `telar::hot_state`).
 thread_local! {
     static STACK: ManuallyDrop<RefCell<Vec<Entry>>> = ManuallyDrop::new(RefCell::new(Vec::new()));
     static NEXT_ID: ManuallyDrop<RefCell<u64>> = ManuallyDrop::new(RefCell::new(0));

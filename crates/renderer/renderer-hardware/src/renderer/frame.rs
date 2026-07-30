@@ -153,7 +153,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let frame_blocks_damage = frame_has_backdrop_blur;
         // F1 on the single-sample (mobile) path damage-tracks by Loading the persistent msaa_texture,
         // which requires rendering through the offscreen rather than straight into the rotating
-        // swapchain — so direct-to-surface is disabled whenever damage tracking is on. (RSX_HW_DAMAGE=0
+        // swapchain — so direct-to-surface is disabled whenever damage tracking is on. (TELAR_HW_DAMAGE=0
         // restores direct-to-surface + full repaints.)
         let direct_to_surface = self.msaa_samples == 1
             && clear_color.is_some()
@@ -213,7 +213,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("rsx-encoder"),
+                label: Some("telar-encoder"),
             });
 
         self.resolve_shadows(&mut encoder);
@@ -298,11 +298,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 let mut encoder =
                     self.device
                         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("rsx-idle-blit"),
+                            label: Some("telar-idle-blit"),
                         });
                 {
                     let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("rsx-idle-blit-pass"),
+                        label: Some("telar-idle-blit-pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &surface_view,
                             resolve_target: None,
@@ -1460,12 +1460,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     let buf = self
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("rsx-shadow-instances"),
+                            label: Some("telar-shadow-instances"),
                             contents: bytemuck::cast_slice(&self.pending_shadow_instances),
                             usage: wgpu::BufferUsages::STORAGE,
                         });
                     let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some("rsx-shadow-instances-bg"),
+                        label: Some("telar-shadow-instances-bg"),
                         layout: &self.text_pipeline.instances.instances_bind_group_layout,
                         entries: &[wgpu::BindGroupEntry {
                             binding: 0,
@@ -1486,7 +1486,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 Some(
                     self.device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("rsx-shadow-path-vb"),
+                            label: Some("telar-shadow-path-vb"),
                             contents: bytemuck::cast_slice(&self.pending_shadow_path_vertices),
                             usage: wgpu::BufferUsages::VERTEX,
                         }),
@@ -1498,7 +1498,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 Some(
                     self.device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("rsx-shadow-path-ib"),
+                            label: Some("telar-shadow-path-ib"),
                             contents: bytemuck::cast_slice(&self.pending_shadow_path_indices),
                             usage: wgpu::BufferUsages::INDEX,
                         }),
@@ -1510,12 +1510,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 let fd_buf = self
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("rsx-shadow-path-fd"),
+                        label: Some("telar-shadow-path-fd"),
                         contents: bytemuck::cast_slice(&self.pending_shadow_path_fill_data),
                         usage: wgpu::BufferUsages::STORAGE,
                     });
                 let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("rsx-shadow-path-fd-bg"),
+                    label: Some("telar-shadow-path-fd-bg"),
                     layout: &self.path_pipeline.fill_data.bind_group_layout,
                     entries: &[wgpu::BindGroupEntry {
                         binding: 0,
@@ -1646,11 +1646,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 );
                 let vp_buf = crate::primitives::create_viewport_buffer(
                     &self.device,
-                    "rsx-shadow-vp",
+                    "telar-shadow-vp",
                     &vp_data,
                 );
                 let shadow_vp_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("rsx-shadow-vp-bg"),
+                    label: Some("telar-shadow-vp-bg"),
                     layout: &self.viewport_bind_group_layout,
                     entries: &[wgpu::BindGroupEntry {
                         binding: 0,
@@ -1670,7 +1670,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         None
                     };
                     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("rsx-shadow-capture"),
+                        label: Some("telar-shadow-capture"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: cap_draw_view,
                             resolve_target: cap_resolve_opt,
@@ -1987,7 +1987,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             self.msaa_samples == 1 && matches!(segments.first(), Some(Segment::Draw { .. }));
         if !fold_init_clear {
             let mut init = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rsx-main-init"),
+                label: Some("telar-main-init"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &msaa_view,
                     resolve_target: None,
@@ -2071,7 +2071,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         wgpu::LoadOp::Load
                     };
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("rsx-render-pass"),
+                        label: Some("telar-render-pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: attach_view,
                             resolve_target: resolve_view_opt,
@@ -2227,7 +2227,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             &resolve_view
                         };
                         let _clear = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("rsx-layer-clear"),
+                            label: Some("telar-layer-clear"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: clear_target,
                                 resolve_target: None,
@@ -2265,7 +2265,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             parent_w.max(1),
                             parent_h.max(1),
                             self.surface_format,
-                            "rsx-backdrop-resolve",
+                            "telar-backdrop-resolve",
                             scratch_usage,
                         );
                         let temp_resolve = &temp_resolve_entry.3;
@@ -2273,7 +2273,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
                         if self.msaa_samples > 1 {
                             let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("rsx-backdrop-parent-resolve"),
+                                label: Some("telar-backdrop-parent-resolve"),
                                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                     view: parent_msaa_view,
                                     resolve_target: Some(temp_resolve_view),
@@ -2322,7 +2322,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             crop_w.max(1),
                             crop_h.max(1),
                             self.surface_format,
-                            "rsx-backdrop-crop",
+                            "telar-backdrop-crop",
                             scratch_usage,
                         );
                         let cropped = &cropped_entry.3;
@@ -2380,7 +2380,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             };
                             let mut backdrop_pass =
                                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                    label: Some("rsx-backdrop-composite"),
+                                    label: Some("telar-backdrop-composite"),
                                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                         view: backdrop_target,
                                         resolve_target: None,
@@ -2429,7 +2429,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     // When msaa_samples==1, draws already targeted resolve_view directly so no resolve pass is needed.
                     if !endlayer_resolve_done[seg_idx] && self.msaa_samples > 1 {
                         let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("rsx-layer-resolve"),
+                            label: Some("telar-layer-resolve"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: &l_msaa_view,
                                 resolve_target: Some(&l_resolve_view),
@@ -2470,7 +2470,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
                     {
                         let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("rsx-layer-blit"),
+                            label: Some("telar-layer-blit"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: parent_view,
                                 resolve_target: None,
@@ -2568,7 +2568,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         .map(|l| (l.5, l.6))
                         .unwrap_or((self.width, self.height));
                     let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("rsx-prerendered-layer-blit"),
+                        label: Some("telar-prerendered-layer-blit"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: parent_view,
                             resolve_target: None,
@@ -2628,7 +2628,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             // Resolve MSAA into retained_view so the idle-blit path has valid content next frame.
             {
                 let _final = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("rsx-final-resolve"),
+                    label: Some("telar-final-resolve"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &msaa_view,
                         resolve_target: Some(&retained_view),
@@ -2660,7 +2660,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             );
             {
                 let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("rsx-retained-blit"),
+                    label: Some("telar-retained-blit"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &surface_view,
                         resolve_target: None,

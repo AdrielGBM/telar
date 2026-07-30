@@ -49,20 +49,20 @@ impl BlurPipeline {
             )
         };
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("rsx-blur-shader"),
+            label: Some("telar-blur-shader"),
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
         let downsample_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("rsx-blur-downsample-shader"),
+            label: Some("telar-blur-downsample-shader"),
             source: wgpu::ShaderSource::Wgsl(downsample_source.into()),
         });
         let upsample_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("rsx-blur-upsample-shader"),
+            label: Some("telar-blur-upsample-shader"),
             source: wgpu::ShaderSource::Wgsl(upsample_source.into()),
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("rsx-blur-sampler"),
+            label: Some("telar-blur-sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
@@ -103,7 +103,7 @@ impl BlurPipeline {
             });
         }
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-blur-bgl"),
+            label: Some("telar-blur-bgl"),
             entries: &bind_group_layout_entries,
         });
 
@@ -113,13 +113,13 @@ impl BlurPipeline {
             0
         };
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("rsx-blur-pipeline-layout"),
+            label: Some("telar-blur-pipeline-layout"),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("rsx-blur-pipeline"),
+            label: Some("telar-blur-pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -187,8 +187,8 @@ impl BlurPipeline {
                 })
             };
         let downsample_pipeline =
-            make_dual_pipeline("rsx-blur-downsample-pipeline", &downsample_shader);
-        let upsample_pipeline = make_dual_pipeline("rsx-blur-upsample-pipeline", &upsample_shader);
+            make_dual_pipeline("telar-blur-downsample-pipeline", &downsample_shader);
+        let upsample_pipeline = make_dual_pipeline("telar-blur-upsample-pipeline", &upsample_shader);
 
         Self {
             pipeline,

@@ -506,14 +506,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "cargo-rsx"
+name = "cargo-telar"
 version = "0.1.0"
 dependencies = [
  "clap",
  "notify",
- "rsx",
- "rsx-workspace",
  "serde",
+ "telar",
+ "telar-workspace",
  "toml",
 ]
 
@@ -1992,7 +1992,7 @@ checksum = "3752f229dcc5a481d60f385fa479ff46818033d881d2d801aa27dffcfb5e8306"
 name = "landing"
 version = "0.1.0"
 dependencies = [
- "rsx",
+ "telar",
  "tracing-subscriber",
 ]
 
@@ -4272,120 +4272,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rsx"
-version = "0.1.0"
-dependencies = [
- "devtools-core",
- "geometry-core",
- "i18n-core",
- "layout-core",
- "libc",
- "libloading 0.9.0",
- "motion-core",
- "navigate-core",
- "platform-android",
- "platform-core",
- "platform-desktop",
- "platform-headless",
- "raw-window-handle",
- "reactive-core",
- "renderer-assets",
- "renderer-core",
- "renderer-hardware",
- "renderer-software",
- "renderer-text",
- "rsx-devtools",
- "rsx-macros",
- "serde",
- "serde_json",
- "services-core",
- "theme-core",
- "toml",
- "tracing",
- "ui-components",
- "ui-core",
- "ui-tree",
-]
-
-[[package]]
-name = "rsx-analyzer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "lsp-types",
- "ra_ap_hir",
- "ra_ap_ide",
- "ra_ap_ide_db",
- "ra_ap_load-cargo",
- "ra_ap_paths",
- "ra_ap_proc_macro_api",
- "ra_ap_project_model",
- "ra_ap_vfs",
- "rsx-diagnostics",
- "rsx-parser",
- "rsx-transpiler",
- "rsx-workspace",
- "serde",
- "serde_json",
- "tokio",
- "toml",
- "url",
-]
-
-[[package]]
-name = "rsx-devtools"
-version = "0.1.0"
-dependencies = [
- "devtools-core",
- "geometry-core",
- "platform-core",
- "renderer-core",
-]
-
-[[package]]
-name = "rsx-diagnostics"
-version = "0.1.0"
-dependencies = [
- "lsp-types",
- "rsx-parser",
- "rsx-transpiler",
-]
-
-[[package]]
-name = "rsx-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "rsx-transpiler",
- "syn",
-]
-
-[[package]]
-name = "rsx-parser"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "rsx-transpiler"
-version = "0.1.0"
-dependencies = [
- "renderer-assets",
- "rsx-parser",
- "thiserror 2.0.18",
- "toml",
-]
-
-[[package]]
-name = "rsx-workspace"
-version = "0.1.0"
-dependencies = [
- "toml",
-]
-
-[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4546,8 +4432,8 @@ version = "0.1.0"
 dependencies = [
  "platform-core",
  "platform-headless",
- "rsx",
  "serde",
+ "telar",
  "tracing-subscriber",
 ]
 
@@ -4959,6 +4845,120 @@ dependencies = [
  "grid",
  "serde",
  "slotmap",
+]
+
+[[package]]
+name = "telar"
+version = "0.1.0"
+dependencies = [
+ "devtools-core",
+ "geometry-core",
+ "i18n-core",
+ "layout-core",
+ "libc",
+ "libloading 0.9.0",
+ "motion-core",
+ "navigate-core",
+ "platform-android",
+ "platform-core",
+ "platform-desktop",
+ "platform-headless",
+ "raw-window-handle",
+ "reactive-core",
+ "renderer-assets",
+ "renderer-core",
+ "renderer-hardware",
+ "renderer-software",
+ "renderer-text",
+ "serde",
+ "serde_json",
+ "services-core",
+ "telar-devtools",
+ "telar-macros",
+ "theme-core",
+ "toml",
+ "tracing",
+ "ui-components",
+ "ui-core",
+ "ui-tree",
+]
+
+[[package]]
+name = "telar-analyzer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "lsp-types",
+ "ra_ap_hir",
+ "ra_ap_ide",
+ "ra_ap_ide_db",
+ "ra_ap_load-cargo",
+ "ra_ap_paths",
+ "ra_ap_proc_macro_api",
+ "ra_ap_project_model",
+ "ra_ap_vfs",
+ "serde",
+ "serde_json",
+ "telar-diagnostics",
+ "telar-parser",
+ "telar-transpiler",
+ "telar-workspace",
+ "tokio",
+ "toml",
+ "url",
+]
+
+[[package]]
+name = "telar-devtools"
+version = "0.1.0"
+dependencies = [
+ "devtools-core",
+ "geometry-core",
+ "platform-core",
+ "renderer-core",
+]
+
+[[package]]
+name = "telar-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "lsp-types",
+ "telar-parser",
+ "telar-transpiler",
+]
+
+[[package]]
+name = "telar-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "telar-transpiler",
+]
+
+[[package]]
+name = "telar-parser"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "telar-transpiler"
+version = "0.1.0"
+dependencies = [
+ "renderer-assets",
+ "telar-parser",
+ "thiserror 2.0.18",
+ "toml",
+]
+
+[[package]]
+name = "telar-workspace"
+version = "0.1.0"
+dependencies = [
+ "toml",
 ]
 
 [[package]]

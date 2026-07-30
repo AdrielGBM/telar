@@ -1,6 +1,6 @@
 //! Headless render gallery for the ui-components catalogue: builds the inline form widgets in visible
 //! states and renders them to a PNG for eyeballing. Runs in CI (asserts it renders with content); pass
-//! RSX_WIDGETS_OUT=/path.png to also dump the image.
+//! TELAR_WIDGETS_OUT=/path.png to also dump the image.
 
 use layout_core::{AvailableSpace, LayoutStyle};
 use platform_headless::HeadlessWindow;
@@ -116,7 +116,7 @@ fn form_widgets_render() {
         rgba.chunks_exact(4).any(|px| px[0] != 244),
         "expected widgets to draw content over the clear color"
     );
-    if let Ok(out) = std::env::var("RSX_WIDGETS_OUT") {
+    if let Ok(out) = std::env::var("TELAR_WIDGETS_OUT") {
         image::RgbaImage::from_raw(w, h, rgba.to_vec())
             .expect("rgba len")
             .save(&out)
@@ -184,7 +184,7 @@ fn modal_renders_over_a_page() {
         rgba.chunks_exact(4).any(|px| px[0] != 238),
         "expected the modal to draw over the page"
     );
-    if let Ok(out) = std::env::var("RSX_MODAL_OUT") {
+    if let Ok(out) = std::env::var("TELAR_MODAL_OUT") {
         image::RgbaImage::from_raw(w, h, rgba.to_vec())
             .expect("rgba len")
             .save(&out)
@@ -262,7 +262,7 @@ fn select_open_renders() {
         .render_frame(&tree.commands(), Some(Color::from_rgb_u8(244, 245, 248)))
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap");
-    if let Ok(out) = std::env::var("RSX_SELECT_OUT") {
+    if let Ok(out) = std::env::var("TELAR_SELECT_OUT") {
         image::RgbaImage::from_raw(w, h, rgba.to_vec())
             .expect("rgba")
             .save(&out)

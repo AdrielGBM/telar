@@ -1,0 +1,1038 @@
+//! The codegen engine: turns a parsed [`RsxDocument`] into compilable Rust source, wiring the `[logic]`, `[style]`, `[view]`, and `[preview]` zones together with a per-line source map.
+
+use std::path::Path;
+
+use telar_parser::{RsxDocument, ViewNode};
+
+use crate::error::TranspileError;
+use crate::naming::{
+    contains_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
+};
+use crate::signal_scan::scan_signals;
+use crate::style::generate_style_section;
+use crate::view::ViewGen;
+
+/// The call-relevant shape of a component: what its function signature and `Props` struct look like,
+/// so a *caller* in another `.rsx` can emit the right arguments (optional props, the slot argument)
+/// without seeing the callee's source. Collected across the workspace into a [`ComponentRegistry`].
+#[derive(Clone, Debug, Default)]
+pub struct ComponentSig {
+    /// The component declares a `pub struct Props`, so calls must pass a `Props` argument.
+    pub has_props: bool,
+    /// `Props` derives `Default`, so a call may omit fields (`..Default::default()` fills the rest).
+    pub props_default: bool,
+    /// The `Props` field names, so a caller knows when it has omitted some (and must default them).
+    pub prop_fields: Vec<String>,
+    /// The view uses a `children` slot placeholder, so every call must pass a `Slots` argument — even a
+    /// childless one (which passes `Slots::new()`).
+    pub has_slot: bool,
+    /// Prop fields whose value is a reactive colour: the caller emits them as a `Box<dyn Fn() -> Color>`
+    /// closure (re-read each frame) instead of a resolved `Color`, so a theme token or `$signal` colour
+    /// re-colours live. Empty for scanned `.rsx` components; set only for the built-in component catalogue.
+    pub color_fields: Vec<String>,
+    /// Prop fields whose value is a reactive string: the caller emits them as a `Box<dyn Fn() -> String>`
+    /// closure (re-read each frame) instead of a `&'static str`, so a `t"key"` translation or `$signal`
+    /// string re-renders live on a locale/state change. Mirrors [`Self::color_fields`]; scanned from a
+    /// `.rsx`'s `Box<dyn Fn() -> String>` fields and listed explicitly for the built-in component catalogue.
+    pub text_fields: Vec<String>,
+    /// Prop fields the callee declares `Option<...>` (so `Default` yields `None`): the caller wraps a
+    /// provided value in `Some(...)` and lets an omitted one fall to `..Default::default()`. Lets a widget
+    /// expose a `RwSignal<T>` or a required `Box<dyn Fn(..)>` field — neither of which is `Default` — while
+    /// still deriving `Default` for its other props. Scanned from a `.rsx`'s `Option<...>` fields; listed
+    /// explicitly for the built-in component catalogue.
+    pub optional_fields: Vec<String>,
+}
+
+impl ComponentSig {
+    /// Marks `fields` as reactive string props (`Box<dyn Fn() -> String>`), used when declaring the built-in
+    /// component catalogue.
+    fn with_text(mut self, fields: &[&str]) -> Self {
+        self.text_fields = fields.iter().map(|f| f.to_string()).collect();
+        self
+    }
+}
+
+/// Signatures for the built-in component catalogue (`ui-components`, opt-in via the `components` feature). These
+/// components are not local `.rsx` files, so `scan_component_sig` never sees them; this seeds the
+/// [`ComponentRegistry`] (and backstops call-site lookups) so calls emit the right arity and reactive
+/// colour props. Keep in sync with `crates/ui/ui-components`.
+pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
+    // `optional` names the subset of `fields` the callee declares `Option<...>`; the caller wraps their
+    // values in `Some(...)` and defaults an omitted one to `None`.
+    let s = |fields: &[&str], has_slot: bool, color: &[&str], optional: &[&str]| ComponentSig {
+        has_props: true,
+        props_default: true,
+        prop_fields: fields.iter().map(|f| f.to_string()).collect(),
+        has_slot,
+        color_fields: color.iter().map(|f| f.to_string()).collect(),
+        text_fields: Vec::new(),
+        optional_fields: optional.iter().map(|f| f.to_string()).collect(),
+    };
+    vec![
+        (
+            "button",
+            s(
+                &["label", "fill", "outline", "ghost", "on_press"],
+                false,
+                &["fill", "outline"],
+                &[],
+            )
+            .with_text(&["label"]),
+        ),
+        (
+            "heading",
+            s(&["text"], false, &[], &[]).with_text(&["text"]),
+        ),
+        (
+            "section",
+            s(&["title"], true, &[], &[]).with_text(&["title"]),
+        ),
+        // Form controls (built on box/text/on_press/on_drag/input). A bound `RwSignal` field is `Option`
+        // (so `Props` derives `Default`): `None` = uncontrolled, `Some` = caller-bound.
+        (
+            "checkbox",
+            s(
+                &["checked", "label", "color", "on_toggle"],
+                false,
+                &["color"],
+                &["checked", "on_toggle"],
+            )
+            .with_text(&["label"]),
+        ),
+        (
+            "toggle",
+            s(
+                &["checked", "label", "color", "on_toggle"],
+                false,
+                &["color"],
+                &["checked", "on_toggle"],
+            )
+            .with_text(&["label"]),
+        ),
+        (
+            "radio",
+            s(
+                &["selected", "value", "label", "color", "on_select"],
+                false,
+                &["color"],
+                &["selected", "on_select"],
+            )
+            .with_text(&["label"]),
+        ),
+        (
+            "slider",
+            s(
+                &[
+                    "value",
+                    "color",
+                    "track_color",
+                    "width",
+                    "min",
+                    "max",
+                    "step",
+                    "label",
+                    "on_change",
+                ],
+                false,
+                &["color", "track_color"],
+                &["value", "on_change"],
+            )
+            .with_text(&["label"]),
+        ),
+        (
+            "text_field",
+            s(
+                &[
+                    "value",
+                    "placeholder",
+                    "label",
+                    "width",
+                    "color",
+                    "on_submit",
+                ],
+                false,
+                &["color"],
+                &["value", "on_submit"],
+            )
+            .with_text(&["placeholder", "label"]),
+        ),
+        // Overlay-backed (built on the `overlay` portal + anchor).
+        (
+            "select",
+            s(
+                &["selected", "options", "color", "on_select"],
+                false,
+                &["color"],
+                &["selected", "on_select"],
+            ),
+        ),
+        (
+            "menu",
+            s(
+                &["label", "items", "on_select", "color"],
+                false,
+                &["color"],
+                &["on_select"],
+            )
+            .with_text(&["label"]),
+        ),
+        (
+            "modal",
+            s(
+                &["open", "id", "title", "on_close", "color"],
+                true,
+                &["color"],
+                &["open", "on_close"],
+            )
+            .with_text(&["title"]),
+        ),
+        (
+            "drawer",
+            s(
+                &["open", "id", "side", "width", "on_close", "color"],
+                true,
+                &["color"],
+                &["open", "on_close"],
+            ),
+        ),
+        (
+            "tooltip",
+            s(&["text", "color"], true, &["color"], &[]).with_text(&["text"]),
+        ),
+        // Presentation & indicators.
+        (
+            "progress",
+            s(
+                &["value", "color", "track_color", "width", "height"],
+                false,
+                &["color", "track_color"],
+                &["value"],
+            ),
+        ),
+        ("spinner", s(&["color", "size"], false, &["color"], &[])),
+        (
+            "badge",
+            s(&["label", "color"], false, &["color"], &[]).with_text(&["label"]),
+        ),
+        (
+            "chip",
+            s(
+                &["label", "color", "on_close"],
+                false,
+                &["color"],
+                &["on_close"],
+            )
+            .with_text(&["label"]),
+        ),
+        // Navigation & disclosure.
+        (
+            "tabs",
+            s(
+                &["items", "selected", "color"],
+                false,
+                &["color"],
+                &["selected"],
+            ),
+        ),
+        (
+            "accordion",
+            s(&["title", "open", "color"], true, &["color"], &["open"]).with_text(&["title"]),
+        ),
+        (
+            "stepper",
+            s(
+                &["value", "min", "max", "step", "color", "on_change"],
+                false,
+                &["color"],
+                &["value", "on_change"],
+            ),
+        ),
+    ]
+}
+
+/// Maps a component's callable name (both its path-flattened stem and its bare basename) to its
+/// [`ComponentSig`]. Built once per build/analyze pass and threaded into every file's transpile.
+pub type ComponentRegistry = std::collections::HashMap<String, ComponentSig>;
+
+/// Scans one `.rsx` source for its [`ComponentSig`] (its `Props` shape and whether it takes a slot).
+/// A parse failure yields an empty sig, so a temporarily-broken file never poisons the registry.
+pub fn scan_component_sig(source: &str) -> ComponentSig {
+    let Ok(doc) = telar_parser::parse(source) else {
+        return ComponentSig::default();
+    };
+    let (has_props, props_default, prop_fields, optional_fields) =
+        scan_props_struct(&doc.logic.source);
+    ComponentSig {
+        has_props,
+        props_default,
+        prop_fields,
+        has_slot: view_uses_slot(&doc.view.nodes),
+        // Scanned `.rsx` components declare no reactive colour/text props; only the built-in catalogue does, so
+        // a local component's `&'static str` label stays a literal.
+        color_fields: Vec::new(),
+        text_fields: Vec::new(),
+        optional_fields,
+    }
+}
+
+/// Scans the logic zone for `struct Props`: returns whether it exists, whether a preceding
+/// `#[derive(...)]` lists `Default` (→ optional props), the field names, and the subset of those whose
+/// type is `Option<...>` (→ the caller `Some(...)`-wraps their values).
+fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>, Vec<String>) {
+    let Some(spos) = logic.find("struct Props") else {
+        return (false, false, Vec::new(), Vec::new());
+    };
+
+    // A `#[derive(...Default...)]` on the attribute lines immediately above the struct opts it into defaults.
+    let lines: Vec<&str> = logic.lines().collect();
+    let sidx = lines
+        .iter()
+        .position(|l| l.contains("struct Props"))
+        .unwrap_or(0);
+    let mut derives_default = false;
+    let mut i = sidx;
+    while i > 0 {
+        let t = lines[i - 1].trim();
+        if t.is_empty() || t.starts_with("//") {
+            i -= 1;
+            continue;
+        }
+        if t.starts_with('#') {
+            if t.contains("Default") {
+                derives_default = true;
+            }
+            i -= 1;
+            continue;
+        }
+        break;
+    }
+
+    // Field names live between the struct's first `{` and its matching `}`.
+    let Some(open_rel) = logic[spos..].find('{') else {
+        return (true, derives_default, Vec::new(), Vec::new());
+    };
+    let body_start = spos + open_rel + 1;
+    let mut depth = 1i32;
+    let mut end = body_start;
+    for (i, c) in logic[body_start..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = body_start + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut fields = Vec::new();
+    let mut optional = Vec::new();
+    let mut has_inline_default = false;
+    for chunk in split_top_level_commas(&logic[body_start..end]) {
+        if let Some(field) = parse_field(&chunk) {
+            if field.optional {
+                optional.push(field.name.clone());
+            }
+            if field.default.is_some() {
+                has_inline_default = true;
+            }
+            fields.push(field.name);
+        }
+    }
+    // Inline field defaults synthesize a `Default` impl (see `extract_props_struct`), so the struct is
+    // default-constructible even without `#[derive(Default)]` — callers may omit its props like a derived one.
+    (
+        true,
+        derives_default || has_inline_default,
+        fields,
+        optional,
+    )
+}
+
+/// A parsed `Props` field: its name, its type, whether the type is `Option<...>` (→ the caller
+/// `Some(...)`-wraps its value), and any inline default expression (the `name: Type = expr` sugar).
+struct ParsedField {
+    name: String,
+    ty: String,
+    optional: bool,
+    default: Option<String>,
+}
+
+/// Finds the byte index of the top-level `=` that separates a field type from an inline default
+/// expression (`name: Type = expr`), or `None`. Skips `=` inside angle brackets and the
+/// `==`/`=>`/`<=`/`>=`/`!=` operators, and treats `->` as an arrow (not a generic close) so a type
+/// like `Box<dyn Fn() -> T>` keeps correct bracket depth.
+fn find_default_sep(s: &str) -> Option<usize> {
+    let b = s.as_bytes();
+    let mut depth = 0i32;
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'<' => depth += 1,
+            b'>' if i > 0 && b[i - 1] == b'-' => {}
+            b'>' => depth = (depth - 1).max(0),
+            b'=' if depth == 0 => {
+                let prev = if i > 0 { b[i - 1] } else { 0 };
+                let next = if i + 1 < b.len() { b[i + 1] } else { 0 };
+                if !matches!(prev, b'=' | b'<' | b'>' | b'!') && !matches!(next, b'=' | b'>') {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Splits a struct body into field chunks on top-level commas, so a comma inside a default expression
+/// (e.g. `= Color::rgba(1.0, 0.0, 0.0, 1.0)`) or a generic (`Vec<A, B>`) does not split a field.
+fn split_top_level_commas(body: &str) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    let b = body.as_bytes();
+    for (i, &c) in b.iter().enumerate() {
+        match c {
+            b'(' | b'[' | b'{' | b'<' => depth += 1,
+            b')' | b']' | b'}' => depth = (depth - 1).max(0),
+            b'>' if i > 0 && b[i - 1] == b'-' => {}
+            b'>' => depth = (depth - 1).max(0),
+            b',' if depth == 0 => {
+                chunks.push(body[start..i].to_string());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    chunks.push(body[start..].to_string());
+    chunks
+}
+
+/// Extracts a `Props` field from a `[pub] name: Type[ = default]` chunk, skipping comment lines.
+fn parse_field(chunk: &str) -> Option<ParsedField> {
+    let cleaned = chunk
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let t = cleaned.trim();
+    let t = t.strip_prefix("pub ").unwrap_or(t).trim_start();
+    let colon = t.find(':')?;
+    let name = t[..colon].trim();
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    let rest = t[colon + 1..].trim_start();
+    let (ty, default) = match find_default_sep(rest) {
+        Some(i) => (rest[..i].trim(), Some(rest[i + 1..].trim().to_string())),
+        None => (rest.trim(), None),
+    };
+    let optional = ty.starts_with("Option<") || ty.starts_with("Option <");
+    Some(ParsedField {
+        name: name.to_string(),
+        ty: ty.to_string(),
+        optional,
+        default,
+    })
+}
+
+/// Input to a single transpilation: the parsed document plus the desired component function name (typically derived from the source file stem).
+pub(crate) struct TranspileInput<'a> {
+    pub document: &'a RsxDocument,
+    pub component_name: &'a str,
+    /// Concrete theme type path (e.g. `SandboxTheme`). When set, `[style]` color references resolve through `use_theme::<Type>()` instead of `COLOR_*` consts.
+    pub theme_type: Option<&'a str>,
+    /// Directory of the `.rsx` being transpiled, used to resolve static `svg`/`img` asset paths (`src:"path"`) for build-time baking. `None` when no filesystem anchor is available (e.g. some analyzer/test paths), in which case a static asset yields a `compile_error!`.
+    pub base_dir: Option<&'a Path>,
+    /// Signatures of every component in the workspace, so a call site emits optional props and the slot argument correctly. `None` (tests, isolated transpiles) falls back to the per-file heuristic: pass a slot arg only when markup children are present, and require every prop field.
+    pub registry: Option<&'a ComponentRegistry>,
+}
+
+/// The generated Rust source for one `.rsx` file.
+pub struct TranspiledSource {
+    pub rust_code: String,
+    pub preview_names: Vec<String>,
+    /// Per generated line (0-based), the 0-based `.rsx` line it originated from, or `None` for boilerplate and transpiler-injected lines. Lets the analyzer map rust-analyzer's diagnostics on the generated code back onto the `.rsx` source.
+    pub source_map: Vec<Option<u32>>,
+    /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the generated Rust. In-memory only (not serialized, not part of the `.rs.map`): the analyzer uses them to offer Rust completion inside `[view]` expressions. See [`ExprSpan`].
+    pub expr_spans: Vec<ExprSpan>,
+    /// Whether the component takes a `Props` argument, so callers can alias its `Props` type by base name.
+    pub has_props: bool,
+}
+
+/// A `[view]` Rust expression that is copied byte-for-byte from the `.rsx` source into the generated Rust, so `gen_start + (cursor_byte - rsx_start)` maps a `.rsx` cursor onto the generated file on a UTF-8 char boundary. Only emitted for verbatim fragments (interpolation `{expr}`, `if`/`let` expressions, verbatim closure / pass-through attr values); non-verbatim ones (`for` re-tokenized patterns, transformed numeric/color attrs) produce no span.
+pub struct ExprSpan {
+    /// Byte offset of the fragment's start in the `.rsx` source.
+    pub rsx_start: u32,
+    /// Byte length of the fragment (identical in source and generated).
+    pub len: u32,
+    /// Byte offset of the fragment's start in the generated Rust.
+    pub gen_start: u32,
+}
+
+/// Serializes a [`TranspiledSource::source_map`] as a JSON array (`[null,3,3,...]`), the format the editor extension reads to map rust-analyzer's diagnostics on the generated Rust back to `.rsx`.
+pub fn source_map_to_json(map: &[Option<u32>]) -> String {
+    let mut out = String::with_capacity(map.len() * 3 + 2);
+    out.push('[');
+    for (i, entry) in map.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        match entry {
+            Some(line) => out.push_str(&line.to_string()),
+            None => out.push_str("null"),
+        }
+    }
+    out.push(']');
+    out
+}
+
+/// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect. `base_dir` is the directory of the `.rsx` (its parent), against which static `svg`/`img` asset paths are resolved and baked at build time.
+pub fn transpile_source_with_theme(
+    source: &str,
+    component_name: &str,
+    theme_type: Option<&str>,
+    base_dir: Option<&Path>,
+) -> Result<TranspiledSource, TranspileError> {
+    transpile_source_full(source, component_name, theme_type, base_dir, None)
+}
+
+/// Like [`transpile_source_with_theme`], but also given the workspace [`ComponentRegistry`] so calls to
+/// other components emit optional props and the slot argument correctly (a childless call to a slotted
+/// component still passes `Slots::new()`; a call that omits defaultable props adds `..Default::default()`).
+pub fn transpile_source_full(
+    source: &str,
+    component_name: &str,
+    theme_type: Option<&str>,
+    base_dir: Option<&Path>,
+    registry: Option<&ComponentRegistry>,
+) -> Result<TranspiledSource, TranspileError> {
+    let document = telar_parser::parse(source)?;
+    transpile(TranspileInput {
+        document: &document,
+        component_name,
+        theme_type,
+        base_dir,
+        registry,
+    })
+}
+
+/// Accumulates generated code together with a per-line origin map. Each completed line (terminated by `\n`) records the `.rsx` source line passed when its newline was appended, so callers tag a line by emitting its content and the closing newline with the same `src`.
+#[derive(Default)]
+struct Code {
+    out: String,
+    map: Vec<Option<u32>>,
+}
+
+impl Code {
+    fn push(&mut self, text: &str, src: Option<u32>) {
+        for ch in text.chars() {
+            self.out.push(ch);
+            if ch == '\n' {
+                self.map.push(src);
+            }
+        }
+    }
+}
+
+fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
+    let doc = input.document;
+    let fn_name = to_snake_case(input.component_name);
+    if fn_name.is_empty() {
+        return Err(TranspileError::Codegen(
+            "component name is empty or has no valid identifier characters".into(),
+        ));
+    }
+
+    let (props_struct, props_default_impl, logic_no_props, struct_span) =
+        extract_props_struct(&doc.logic.source, &fn_name);
+    let has_props = props_struct.is_some();
+    let props_type = if has_props {
+        to_pascal_case(&fn_name) + "Props"
+    } else {
+        String::new()
+    };
+    let logic_source = if has_props {
+        &logic_no_props
+    } else {
+        &doc.logic.source
+    };
+
+    let signals = scan_signals(logic_source);
+
+    let style_section = generate_style_section(&doc.style, input.theme_type.as_deref());
+
+    let mut view_gen = ViewGen::with_theme(
+        &doc.style.classes,
+        &doc.style.constants,
+        input.theme_type,
+        input.base_dir,
+    )
+    .with_registry(input.registry);
+    let view_body = view_gen.generate_root(&doc.view.nodes);
+    let uses_theme = view_gen.uses_theme();
+
+    let logic = logic_source.trim_end();
+
+    // A `children` placeholder anywhere in the view makes the component take a `Slots` argument.
+    let has_slot = view_uses_slot(&doc.view.nodes);
+    let ret = "Result<Box<dyn LayoutItem>, LayoutError>";
+    let signature = match (has_props, has_slot) {
+        (true, true) => {
+            format!("pub fn {fn_name}(props: {props_type}, mut __slots: Slots) -> {ret}")
+        }
+        (true, false) => format!("pub fn {fn_name}(props: {props_type}) -> {ret}"),
+        (false, true) => format!("pub fn {fn_name}(mut __slots: Slots) -> {ret}"),
+        (false, false) => format!("pub fn {fn_name}() -> {ret}"),
+    };
+
+    // 0-based `.rsx` line of `logic_source` line 0, used to map generated lines back to the source.
+    let logic_start0 = doc.logic.start_line.saturating_sub(1) as u32;
+    let struct_len = struct_span.map(|(s, e)| e - s + 1).unwrap_or(0);
+    let struct_start = struct_span.map(|(s, _)| s).unwrap_or(0);
+    // `logic_source` (props-struct removed when present) line index -> its 0-based `.rsx` line.
+    let logic_line_src = |j: usize| -> u32 {
+        let orig = if struct_span.is_some() && j >= struct_start {
+            j + struct_len
+        } else {
+            j
+        };
+        logic_start0 + orig as u32
+    };
+
+    let mut code = Code::default();
+    code.push(
+        "// Generated by telar-transpiler — do not edit manually\n",
+        None,
+    );
+    // Silence clippy for the whole generated module: this is machine-emitted code the consumer can't edit, so
+    // lints like `clone_on_copy` (a loop var cloned into a closure) or `collapsible_if` are pure noise on
+    // `cargo clippy`. Only clippy is suppressed — rustc errors/warnings still surface (and the analyzer maps
+    // them back onto the `.rsx` source), so real mistakes in `[logic]`/`[view]` are unaffected.
+    code.push("#![allow(clippy::all)]\n", None);
+    code.push("#[allow(unused_imports)] use telar::*;\n", None);
+    // Each `.rsx` is wired as its own `mod` (so rust-analyzer treats it as a real module and offers completion); `use super::*` re-imports the sibling components the host re-exports, so cross-component calls like `feature_card()` resolve by bare name just as they did under the old `include!`.
+    code.push("#[allow(unused_imports)] use super::*;\n", None);
+    code.push("\n", None);
+
+    // Emit Props struct at file scope (not inside the fn body) so the type is reachable from the function signature and from other crate files.
+    if let Some(struct_code) = &props_struct {
+        for (k, line) in struct_code.lines().enumerate() {
+            let src = Some(logic_start0 + (struct_start + k) as u32);
+            code.push(line, src);
+            code.push("\n", src);
+        }
+        // Synthesized from inline `field: Type = expr` defaults (no source span — it maps to no `.rsx` line).
+        if let Some(impl_code) = &props_default_impl {
+            for line in impl_code.lines() {
+                code.push(line, None);
+                code.push("\n", None);
+            }
+        }
+        code.push("\n", None);
+    }
+
+    if !style_section.is_empty() {
+        code.push(&style_section, None);
+        if !style_section.ends_with('\n') {
+            code.push("\n", None);
+        }
+        code.push("\n", None);
+    }
+
+    code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
+    code.push(&signature, None);
+    code.push(" {\n", None);
+    // use_theme inside the fn so multiple include!-ed files don't conflict at crate scope.
+    if uses_theme {
+        code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
+    }
+
+    if !logic.is_empty() {
+        // Set by cargo-telar for hot-reload builds (the transpiler runs inside the app's proc macro); keyed signals let the dev host snapshot/restore state across dylib swaps.
+        let hot_build = std::env::var("TELAR_HOT_RELOAD_BUILD").is_ok();
+        // Argument-context depth carried across lines: a `move` closure sitting at depth 0 starts a statement
+        // (a `let clone;` can precede it), but at depth > 0 it is an argument inside an unclosed call/array,
+        // where a preceding statement would be invalid Rust — there the clone must wrap the closure instead.
+        let mut arg_depth = 0i32;
+        for (j, line) in logic.lines().enumerate() {
+            let src = Some(logic_line_src(j));
+            if line.is_empty() {
+                code.push("\n", src);
+                continue;
+            }
+            // If this line has a `move` closure that captures a previously declared signal, clone the signal
+            // under a mangled name for the closure and rewrite the closure to capture that clone instead — so
+            // the original binding stays usable by the view/later logic.
+            let mut emitted_line = line.to_string();
+            if hot_build
+                && let Some(rewritten) =
+                    crate::signal_scan::hot_rewrite_signal_decl(&emitted_line, &fn_name)
+            {
+                emitted_line = rewritten;
+            }
+            let line_start_depth = arg_depth;
+            arg_depth += arg_depth_delta(line);
+            if line.contains("move") {
+                // `scan_signals` already recorded each signal's declaring line index, so "declared above this line" is a lookup, not a re-parse (and it no longer misses type-annotated `let name: T = signal(...)` bindings).
+                let captured: Vec<&str> = signals
+                    .iter()
+                    .filter(|s| s.line_index < j && contains_ident(line, &s.name))
+                    .map(|s| s.name.as_str())
+                    .collect();
+                if line_start_depth > 0 {
+                    // Inside call args: wrap just the closure in a clone block so it stays a valid expression.
+                    emitted_line = wrap_closure_clones(&emitted_line, &captured);
+                } else {
+                    for name in &captured {
+                        let mv_name = format!("{name}_rsx_mv");
+                        // Injected clone: no `.rsx` counterpart.
+                        code.push(&format!("    let {mv_name} = {name}.clone();\n"), None);
+                        emitted_line = replace_whole_word(&emitted_line, name, &mv_name);
+                    }
+                }
+            }
+            code.push(&format!("    {emitted_line}\n"), src);
+        }
+        code.push("\n", None);
+    }
+
+    // The view body carries source markers from generation; resolve them into per-line origins (for diagnostics) plus the byte spans of verbatim expressions. `view_prefix_len` is the body's start offset in the final file, so each span's relative offset rebases onto the generated file.
+    let view_prefix_len = code.out.len();
+    let resolved = crate::view::resolve_source_map(&view_body);
+    for (line, src) in &resolved.lines {
+        code.push(line, *src);
+        code.push("\n", *src);
+    }
+    let mut expr_spans: Vec<ExprSpan> = resolved
+        .expr_spans
+        .iter()
+        .map(|&(rel, rsx_start, len)| ExprSpan {
+            rsx_start,
+            len,
+            gen_start: (view_prefix_len + rel) as u32,
+        })
+        .collect();
+    if !code.out.ends_with('\n') {
+        code.push("\n", None);
+    }
+    code.push("}\n", None);
+
+    if !doc.previews.is_empty() {
+        // Each preview is its own build fn — so a prop-taking component can be previewed via its markup body — plus a PreviewEntry the bundler collects. The body reuses the view codegen with no signals in scope (a preview has no `[logic]`).
+        for (i, preview) in doc.previews.iter().enumerate() {
+            let pfn = format!("{fn_name}_preview_{i}");
+            let mut pgen = ViewGen::with_theme(
+                &doc.style.classes,
+                &doc.style.constants,
+                input.theme_type,
+                input.base_dir,
+            )
+            .with_registry(input.registry);
+            let pbody = pgen.generate_root(&preview.body);
+            code.push("\n", None);
+            code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
+            code.push(
+                &format!("pub fn {pfn}() -> Result<Box<dyn LayoutItem>, LayoutError> {{\n"),
+                None,
+            );
+            if pgen.uses_theme() {
+                code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
+            }
+            let prefix = code.out.len();
+            let resolved = crate::view::resolve_source_map(&pbody);
+            for (line, src) in &resolved.lines {
+                code.push(line, *src);
+                code.push("\n", *src);
+            }
+            for &(rel, rsx_start, len) in &resolved.expr_spans {
+                expr_spans.push(ExprSpan {
+                    rsx_start,
+                    len,
+                    gen_start: (prefix + rel) as u32,
+                });
+            }
+            if !code.out.ends_with('\n') {
+                code.push("\n", None);
+            }
+            code.push("}\n", None);
+        }
+
+        code.push("\n", None);
+        let const_name = preview_entries_const_name(&fn_name);
+        code.push(
+            &format!("pub const {const_name}: &[::telar::PreviewEntry] = &[\n"),
+            None,
+        );
+        for (i, preview) in doc.previews.iter().enumerate() {
+            let pfn = format!("{fn_name}_preview_{i}");
+            code.push(
+                &format!(
+                    "    ::telar::PreviewEntry {{ component_name: \"{fn_name}\", preview_name: \"{}\", build: {pfn} }},\n",
+                    preview.name.replace('"', "\\\"")
+                ),
+                None,
+            );
+        }
+        code.push("];\n", None);
+    }
+
+    Ok(TranspiledSource {
+        rust_code: code.out,
+        preview_names: doc.previews.iter().map(|p| p.name.clone()).collect(),
+        source_map: code.map,
+        expr_spans,
+        has_props,
+    })
+}
+
+/// Net change in argument-context depth for `line`: `(`/`[` open it, `)`/`]` close it. Block braces `{}` are
+/// statement contexts (a `let` is valid inside them), so they don't count. String/char literals and line
+/// comments are skipped so brackets inside them don't miscount; a `'a` lifetime tick is left alone (it has no
+/// closing quote, unlike a `'x'` char literal). Used by the `[logic]` signal-clone pass to tell a
+/// statement-start line from a continuation line inside an open call/array.
+fn arg_depth_delta(line: &str) -> i32 {
+    let bytes = line.as_bytes();
+    let mut depth = 0i32;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'/' if bytes.get(i + 1) == Some(&b'/') => break,
+            b'"' => {
+                i += 1;
+                while i < bytes.len() && bytes[i] != b'"' {
+                    i += if bytes[i] == b'\\' { 2 } else { 1 };
+                }
+            }
+            b'\'' if bytes.get(i + 1) == Some(&b'\\') && bytes.get(i + 3) == Some(&b'\'') => i += 3,
+            b'\'' if bytes.get(i + 2) == Some(&b'\'') => i += 2,
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth -= 1,
+            _ => {}
+        }
+        i += 1;
+    }
+    depth
+}
+
+/// Byte index of the first whole-word `move` keyword in `line`, or `None`.
+fn find_move_keyword(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let mut from = 0;
+    while let Some(rel) = line[from..].find("move") {
+        let pos = from + rel;
+        let before_ok = pos == 0 || !is_word(bytes[pos - 1]);
+        let after_ok = bytes.get(pos + 4).is_none_or(|&b| !is_word(b));
+        if before_ok && after_ok {
+            return Some(pos);
+        }
+        from = pos + 4;
+    }
+    None
+}
+
+/// Byte index just past the closure that begins at `start`: scans its body tracking bracket depth and stops
+/// at the first depth-0 `,` or the first closing bracket that would pop past the closure's own nesting (i.e.
+/// one that closes the *enclosing* call), or end of line. Lets a continuation-line closure argument be
+/// wrapped without swallowing the surrounding call's `)`/`,`.
+fn closure_end(line: &str, start: usize) -> usize {
+    let bytes = line.as_bytes();
+    let mut depth = 0i32;
+    let mut i = start;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => {
+                i += 1;
+                while i < bytes.len() && bytes[i] != b'"' {
+                    i += if bytes[i] == b'\\' { 2 } else { 1 };
+                }
+            }
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' if depth == 0 => break,
+            b')' | b']' | b'}' => depth -= 1,
+            b',' if depth == 0 => break,
+            _ => {}
+        }
+        i += 1;
+    }
+    i
+}
+
+/// Wraps the `move` closure on `line` in a clone block — `{ let x_rsx_mv = x.clone(); move |..| ..x_rsx_mv.. }`
+/// — for every `captured` signal it references, renaming those signals inside the closure. Used when the
+/// closure is a call argument (depth > 0), where a preceding `let` statement would be invalid Rust. Returns
+/// `line` unchanged when there is no `move` keyword or nothing to capture.
+fn wrap_closure_clones(line: &str, captured: &[&str]) -> String {
+    if captured.is_empty() {
+        return line.to_string();
+    }
+    let Some(mpos) = find_move_keyword(line) else {
+        return line.to_string();
+    };
+    let end = closure_end(line, mpos);
+    let mut inner = line[mpos..end].to_string();
+    let mut clones = String::new();
+    for name in captured {
+        let mv = format!("{name}_rsx_mv");
+        inner = replace_whole_word(&inner, name, &mv);
+        clones.push_str(&format!("let {mv} = {name}.clone(); "));
+    }
+    format!("{}{{ {clones}{inner} }}{}", &line[..mpos], &line[end..])
+}
+
+/// Whether any node in the view tree is a `children` slot placeholder, so the component function must
+/// take a `Slots` argument. Recurses through element children and `if`/`for` branches.
+fn view_uses_slot(nodes: &[ViewNode]) -> bool {
+    nodes.iter().any(node_uses_slot)
+}
+
+fn node_uses_slot(node: &ViewNode) -> bool {
+    match node {
+        ViewNode::Element(el) => el.tag == "children" || view_uses_slot(&el.children),
+        ViewNode::IfBlock(b) => {
+            view_uses_slot(&b.then_branch) || b.else_branch.as_deref().is_some_and(view_uses_slot)
+        }
+        ViewNode::ForBlock(b) => view_uses_slot(&b.body),
+        ViewNode::LetStmt(_) => false,
+    }
+}
+
+/// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone,
+/// renames it to `{PascalFnName}Props`, and returns `(struct_code, default_impl, logic_without_struct, span)`.
+/// `default_impl` is `Some` only when the struct uses inline `field: Type = expr` defaults (a synthesized
+/// `Default` impl); it is emitted after the struct with no source mapping. `span` is the struct's
+/// `[start, end]` (inclusive) line span within `logic`, so the caller can map the struct back to source.
+/// `(struct_code, default_impl, logic_without_struct, struct_line_span)` — the output of extracting a
+/// `Props` struct from a logic zone.
+type ExtractedProps = (
+    Option<String>,
+    Option<String>,
+    String,
+    Option<(usize, usize)>,
+);
+
+fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
+    let lines: Vec<&str> = logic.lines().collect();
+
+    let Some(struct_line) = lines.iter().position(|l| l.trim().contains("struct Props")) else {
+        return (None, None, logic.to_string(), None);
+    };
+
+    // Include any preceding `#[…]` attribute lines (e.g. `#[derive(Props)]`).
+    let mut start = struct_line;
+    while start > 0 && lines[start - 1].trim().starts_with('#') {
+        start -= 1;
+    }
+
+    // Scan from the `struct Props` line, counting braces to find the closing `}`.
+    let mut depth = 0i32;
+    let mut end = struct_line;
+    let mut found_close = false;
+    for (i, line) in lines[struct_line..].iter().enumerate() {
+        for c in line.chars() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        found_close = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if found_close {
+            end = struct_line + i;
+            break;
+        }
+    }
+
+    if !found_close {
+        return (None, None, logic.to_string(), None);
+    }
+
+    let struct_code = lines[start..=end].join("\n");
+    let props_type = to_pascal_case(fn_name) + "Props";
+    // Only rename the struct declaration, not the `derive(Props)` attribute.
+    let renamed = struct_code.replace("struct Props", &format!("struct {props_type}"));
+
+    let remaining = {
+        let mut remaining_lines = lines[..start].to_vec();
+        remaining_lines.extend_from_slice(&lines[end + 1..]);
+        remaining_lines.join("\n")
+    };
+    let span = Some((start, end));
+
+    // Inline `name: Type = expr` defaults: strip them from the emitted struct (Rust fields can't carry
+    // a default) and synthesize a `Default` impl instead. Absent any inline default, the struct is
+    // emitted verbatim (renamed) — byte-identical to the pre-sugar behaviour.
+    let (open_rel, close_rel) = match (renamed.find('{'), renamed.rfind('}')) {
+        (Some(o), Some(c)) if o < c => (o, c),
+        _ => return (Some(renamed), None, remaining, span),
+    };
+    let body = &renamed[open_rel + 1..close_rel];
+    let parsed: Vec<ParsedField> = split_top_level_commas(body)
+        .iter()
+        .filter_map(|c| parse_field(c))
+        .collect();
+    if !parsed.iter().any(|f| f.default.is_some()) {
+        return (Some(renamed), None, remaining, span);
+    }
+
+    // Rebuild the struct with defaults stripped, dropping `Default` from any `#[derive(...)]` (it would
+    // collide with the synthesized impl). Field-level comments are dropped in the generated output only.
+    let header = &renamed[..open_rel];
+    let mut struct_out = String::new();
+    for line in header.lines() {
+        if let Some(kept) = strip_default_from_derive(line) {
+            struct_out.push_str(&kept);
+            struct_out.push('\n');
+        }
+    }
+    let brace_line = struct_out.trim_end().to_string();
+    struct_out.clear();
+    struct_out.push_str(&brace_line);
+    struct_out.push_str(" {\n");
+    for f in &parsed {
+        struct_out.push_str(&format!("    pub {}: {},\n", f.name, f.ty));
+    }
+    struct_out.push('}');
+
+    let mut impl_body = String::new();
+    for f in &parsed {
+        let val = f
+            .default
+            .clone()
+            .unwrap_or_else(|| "Default::default()".to_string());
+        impl_body.push_str(&format!("            {}: {},\n", f.name, val));
+    }
+    let impl_code = format!(
+        "impl Default for {props_type} {{\n    fn default() -> Self {{\n        Self {{\n{impl_body}        }}\n    }}\n}}"
+    );
+
+    (Some(struct_out), Some(impl_code), remaining, span)
+}
+
+/// Removes `Default` from a `#[derive(...)]` attribute line (returning `None` if the derive becomes
+/// empty, so the caller drops the line); any non-derive line passes through unchanged.
+fn strip_default_from_derive(line: &str) -> Option<String> {
+    let t = line.trim();
+    if !t.starts_with("#[derive(") {
+        return Some(line.to_string());
+    }
+    let inner_start = t.find('(')? + 1;
+    let inner_end = t.rfind(')')?;
+    let items: Vec<&str> = t[inner_start..inner_end]
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty() && *s != "Default")
+        .collect();
+    if items.is_empty() {
+        return None;
+    }
+    Some(format!("#[derive({})]", items.join(", ")))
+}

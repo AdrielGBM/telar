@@ -1,4 +1,4 @@
-use rsx::{Color, Theme, ThemeTokens, register_mode, set_theme, use_theme};
+use telar::{Color, Theme, ThemeTokens, register_mode, set_theme, use_theme};
 
 /// Mode id applied on first launch (and the fallback when a restored/unknown id has no variant).
 pub const DEFAULT_MODE: &str = "modern";

@@ -1,0 +1,360 @@
+use std::path::{Path, PathBuf};
+
+use telar::RendererBackend;
+use serde::Deserialize;
+
+#[derive(Deserialize, Default, Clone)]
+pub(crate) struct WindowConfig {
+    pub title: Option<String>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub decorations: Option<bool>,
+    pub resizable: Option<bool>,
+    pub transparent: Option<bool>,
+    // "disabled" | "borderless" | "exclusive"
+    pub fullscreen: Option<String>,
+    // "centered" | "<x>,<y>"
+    pub position: Option<String>,
+}
+
+#[derive(Deserialize, Default, Clone)]
+pub(crate) struct DevConfig {
+    #[serde(default)]
+    pub window: Option<WindowConfig>,
+    #[serde(default)]
+    pub devtools: Option<bool>,
+}
+
+#[derive(Deserialize, Default)]
+pub(crate) struct TelarConfig {
+    #[serde(default)]
+    pub backend: Option<RendererBackend>,
+    #[serde(default)]
+    pub dev: Option<DevConfig>,
+    // Note: `[telar] auto_modules` is read directly by the `telar::app!` macro, not by cargo-telar; serde ignores the unknown key here so it needs no field.
+}
+
+#[derive(Deserialize, Default)]
+struct TelarToml {
+    #[serde(default)]
+    pub rsx: TelarConfig,
+}
+
+#[derive(Deserialize, Default)]
+pub(crate) struct CargoWorkspace {
+    pub(crate) members: Vec<String>,
+}
+#[derive(Deserialize, Default)]
+pub(crate) struct CargoManifest {
+    pub(crate) workspace: Option<CargoWorkspace>,
+    pub(crate) package: Option<CargoPackage>,
+}
+#[derive(Deserialize, Default)]
+pub(crate) struct CargoPackage {
+    pub(crate) name: String,
+    #[serde(default, deserialize_with = "deserialize_inheritable_version")]
+    pub(crate) version: Option<String>,
+    #[serde(default)]
+    pub(crate) description: Option<String>,
+    pub(crate) metadata: Option<CargoPackageMetadata>,
+}
+
+// `version` may be a plain string or a workspace-inherited table (`version = { workspace = true }`); accept either shape and keep only a concrete string so parsing never fails.
+fn deserialize_inheritable_version<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = toml::Value::deserialize(deserializer)?;
+    Ok(value.as_str().map(|s| s.to_owned()))
+}
+#[derive(Deserialize, Default)]
+pub(crate) struct CargoPackageMetadata {
+    pub(crate) android: Option<AndroidMetadata>,
+    // `[package.metadata.telar]` — same schema as telar.toml's `[telar]`, but overridden by telar.toml.
+    pub(crate) telar: Option<TelarConfig>,
+}
+#[derive(Deserialize, Default)]
+pub(crate) struct AndroidMetadata {
+    pub(crate) package: Option<String>,
+}
+
+pub(crate) fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
+    if let Some(prefix) = pattern.strip_suffix("/*") {
+        std::fs::read_dir(workspace_root.join(prefix))
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect()
+    } else {
+        vec![workspace_root.join(pattern)]
+    }
+}
+
+fn find_package_dir_in_workspace(workspace_root: &Path, package_name: &str) -> Option<PathBuf> {
+    let workspace_manifest = std::fs::read_to_string(workspace_root.join("Cargo.toml")).ok()?;
+    let manifest: CargoManifest = toml::from_str(&workspace_manifest).ok()?;
+    let members = manifest.workspace?.members;
+
+    for member_glob in members {
+        for member_path in expand_member(workspace_root, &member_glob) {
+            let cargo_toml = member_path.join("Cargo.toml");
+            if let Ok(content) = std::fs::read_to_string(&cargo_toml)
+                && let Ok(m) = toml::from_str::<CargoManifest>(&content)
+                && m.package.map(|p| p.name == package_name).unwrap_or(false)
+            {
+                return Some(member_path);
+            }
+        }
+    }
+    None
+}
+
+pub(crate) fn find_package_dir(args: &[String]) -> PathBuf {
+    let package_name = args
+        .windows(2)
+        .find(|pair| pair[0] == "-p" || pair[0] == "--package")
+        .map(|pair| pair[1].as_str());
+
+    if let Some(name) = package_name {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        if let Some(root) = telar_workspace::find_workspace_root(&cwd)
+            && let Some(dir) = find_package_dir_in_workspace(&root, name)
+        {
+            return dir;
+        }
+    }
+
+    let mut dir = std::env::current_dir().unwrap_or_default();
+    loop {
+        if dir.join("Cargo.toml").exists() {
+            return dir;
+        }
+        match dir.parent() {
+            Some(parent) => dir = parent.to_path_buf(),
+            None => return std::env::current_dir().unwrap_or_default(),
+        }
+    }
+}
+
+fn read_package_manifest_in(dir: &Path) -> Option<CargoPackage> {
+    let content = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
+    let manifest: CargoManifest = toml::from_str(&content).ok()?;
+    manifest.package
+}
+
+pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
+    read_package_manifest_in(&find_package_dir(args))
+}
+
+pub(crate) struct ResolvedPackage {
+    pub(crate) workspace_root: PathBuf,
+    pub(crate) package: Option<CargoPackage>,
+}
+
+impl ResolvedPackage {
+    // Falls back to cargo's default "app" binary name when the manifest can't be read.
+    pub(crate) fn name(&self) -> String {
+        self.package
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "app".to_string())
+    }
+
+    pub(crate) fn version(&self) -> String {
+        self.package
+            .as_ref()
+            .and_then(|p| p.version.clone())
+            .unwrap_or_else(|| "0.1.0".to_string())
+    }
+}
+
+// Resolves the target package's workspace root and parsed manifest in a single pass so the packaging paths stop re-deriving them (and re-reading Cargo.toml) at each call site.
+pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
+    let dir = find_package_dir(args);
+    let workspace_root = telar_workspace::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
+    let package = read_package_manifest_in(&dir);
+    ResolvedPackage {
+        workspace_root,
+        package,
+    }
+}
+
+// Default reverse-DNS app id for demo/tooling builds that set no vendor prefix; shared by the Android package id and macOS bundle id defaults, which are otherwise distinct.
+pub(crate) fn default_app_id(name: &str) -> String {
+    format!("com.example.{name}")
+}
+
+// Reads `[package.metadata.telar]` from the package's Cargo.toml (the lowest-precedence file source).
+fn read_manifest_config(dir: &Path) -> TelarConfig {
+    let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
+        return TelarConfig::default();
+    };
+    toml::from_str::<CargoManifest>(&content)
+        .ok()
+        .and_then(|m| m.package)
+        .and_then(|p| p.metadata)
+        .and_then(|m| m.telar)
+        .unwrap_or_default()
+}
+
+// Presence check for `[package.metadata.telar]`; read_manifest_config erases the present/absent distinction via unwrap_or_default, so presence needs its own read.
+pub(crate) fn manifest_has_telar(dir: &Path) -> bool {
+    std::fs::read_to_string(dir.join("Cargo.toml"))
+        .ok()
+        .and_then(|c| toml::from_str::<CargoManifest>(&c).ok())
+        .and_then(|m| m.package)
+        .and_then(|p| p.metadata)
+        .and_then(|m| m.telar)
+        .is_some()
+}
+
+// Reads `[telar]` from telar.toml, which overrides the manifest metadata.
+fn read_toml_config(dir: &Path) -> TelarConfig {
+    let path = dir.join("telar.toml");
+    match std::fs::read_to_string(&path) {
+        Ok(content) => {
+            toml::from_str::<TelarToml>(&content)
+                .unwrap_or_else(|e| {
+                    eprintln!(
+                        "[cargo-telar] Warning: failed to parse {}: {e}",
+                        path.display()
+                    );
+                    TelarToml::default()
+                })
+                .rsx
+        }
+        Err(_) => TelarConfig::default(),
+    }
+}
+
+// Config precedence, lowest to highest: built-in defaults < `[package.metadata.telar]` (Cargo.toml) < `telar.toml` < CLI flags. CLI flags are layered on by each command after this returns.
+pub(crate) fn load_config(args: &[String]) -> TelarConfig {
+    let dir = find_package_dir(args);
+    merge_config(read_manifest_config(&dir), read_toml_config(&dir))
+}
+
+fn merge_opt<T>(base: Option<T>, over: Option<T>, merge: impl FnOnce(T, T) -> T) -> Option<T> {
+    match (base, over) {
+        (Some(b), Some(o)) => Some(merge(b, o)),
+        (b, o) => o.or(b),
+    }
+}
+
+fn merge_window(base: WindowConfig, over: WindowConfig) -> WindowConfig {
+    WindowConfig {
+        title: over.title.or(base.title),
+        width: over.width.or(base.width),
+        height: over.height.or(base.height),
+        decorations: over.decorations.or(base.decorations),
+        resizable: over.resizable.or(base.resizable),
+        transparent: over.transparent.or(base.transparent),
+        fullscreen: over.fullscreen.or(base.fullscreen),
+        position: over.position.or(base.position),
+    }
+}
+
+fn merge_dev(base: DevConfig, over: DevConfig) -> DevConfig {
+    DevConfig {
+        window: merge_opt(base.window, over.window, merge_window),
+        devtools: over.devtools.or(base.devtools),
+    }
+}
+
+fn merge_config(base: TelarConfig, over: TelarConfig) -> TelarConfig {
+    TelarConfig {
+        backend: over.backend.or(base.backend),
+        dev: merge_opt(base.dev, over.dev, merge_dev),
+    }
+}
+
+pub(crate) fn backend_as_str(backend: RendererBackend) -> &'static str {
+    match backend {
+        RendererBackend::Auto => "auto",
+        RendererBackend::Hardware => "hardware",
+        RendererBackend::Software => "software",
+    }
+}
+
+pub(crate) fn split_android_flag(args: Vec<String>) -> (bool, Vec<String>) {
+    let android = args.contains(&"--android".to_string());
+    let rest = args.into_iter().filter(|a| a != "--android").collect();
+    (android, rest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn telar_toml_overrides_manifest_field_by_field() {
+        let manifest = TelarConfig {
+            backend: Some(RendererBackend::Software),
+            dev: Some(DevConfig {
+                window: Some(WindowConfig {
+                    width: Some(800),
+                    height: Some(600),
+                    fullscreen: Some("disabled".to_string()),
+                    ..Default::default()
+                }),
+                devtools: Some(true),
+            }),
+        };
+        let file = TelarConfig {
+            backend: Some(RendererBackend::Hardware),
+            dev: Some(DevConfig {
+                // telar.toml sets width + position but omits height/fullscreen/devtools.
+                window: Some(WindowConfig {
+                    width: Some(1024),
+                    position: Some("10,20".to_string()),
+                    ..Default::default()
+                }),
+                devtools: None,
+            }),
+        };
+
+        let merged = merge_config(manifest, file);
+        assert!(matches!(merged.backend, Some(RendererBackend::Hardware)));
+        let dev = merged.dev.unwrap();
+        assert_eq!(dev.devtools, Some(true)); // omitted in telar.toml → manifest value survives
+        let window = dev.window.unwrap();
+        assert_eq!(window.width, Some(1024)); // telar.toml wins
+        assert_eq!(window.height, Some(600)); // falls back to manifest
+        assert_eq!(window.position.as_deref(), Some("10,20")); // only in telar.toml
+        assert_eq!(window.fullscreen.as_deref(), Some("disabled")); // only in manifest
+    }
+
+    #[test]
+    fn manifest_used_when_rsx_toml_absent() {
+        let manifest = TelarConfig {
+            backend: Some(RendererBackend::Software),
+            dev: None,
+        };
+        let merged = merge_config(manifest, TelarConfig::default());
+        assert!(matches!(merged.backend, Some(RendererBackend::Software)));
+        assert!(merged.dev.is_none());
+    }
+
+    #[test]
+    fn workspace_inherited_version_deserializes_to_none() {
+        // `version = { workspace = true }` must not fail parsing; it yields no concrete string.
+        let manifest: CargoManifest = toml::from_str(
+            "[package]\nname = \"demo\"\nversion = { workspace = true }\ndescription = \"hi\"\n",
+        )
+        .expect("workspace-inherited version should parse");
+        let pkg = manifest.package.expect("package section");
+        assert_eq!(pkg.name, "demo");
+        assert_eq!(pkg.version, None);
+        assert_eq!(pkg.description.as_deref(), Some("hi"));
+    }
+
+    #[test]
+    fn explicit_version_string_deserializes() {
+        let manifest: CargoManifest =
+            toml::from_str("[package]\nname = \"demo\"\nversion = \"2.0.1\"\n")
+                .expect("explicit version should parse");
+        let pkg = manifest.package.expect("package section");
+        assert_eq!(pkg.version.as_deref(), Some("2.0.1"));
+    }
+}

@@ -2,11 +2,11 @@
 //! reactive/layout/motion copies), does a click alone keep re-composing frames?
 //!
 //! This is the condition no in-process test can reproduce, and the one that made an entrance transition sit at
-//! opacity 0 — a black page — until the user moved the mouse. It needs a dylib built the way `cargo rsx dev`
+//! opacity 0 — a black page — until the user moved the mouse. It needs a dylib built the way `cargo telar dev`
 //! builds one, so it is `#[ignore]`d by default. To run it:
 //!
 //! ```text
-//! RSX_HOT_RELOAD_BUILD=1 RUSTFLAGS=--cfg=rsx_hot_reload cargo build -p sandbox --features rsx/dev --lib
+//! TELAR_HOT_RELOAD_BUILD=1 RUSTFLAGS=--cfg=telar_hot_reload cargo build -p sandbox --features rsx/dev --lib
 //! cargo test -p sandbox --features dev --test hot_tree -- --ignored
 //! ```
 
@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use platform_core::{Event, EventHandler, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
-use rsx::{App, AppPathsProvider, build_surface_handler};
+use telar::{App, AppPathsProvider, build_surface_handler};
 
 struct NullPaths;
 
@@ -55,7 +55,7 @@ fn dylib_path() -> PathBuf {
 fn the_dylib_tree_composes_and_is_released_before_its_library() {
     let path = dylib_path();
     assert!(path.exists(), "no dylib at {}", path.display());
-    let mut app = rsx::hot::load_hot_app(&path).expect("dlopen failed");
+    let mut app = telar::hot::load_hot_app(&path).expect("dlopen failed");
     let mut tree = app.mount();
     tree.on_event(&Event::WindowResized {
         width: 1200,
@@ -80,13 +80,13 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
         "no dylib at {}: build it as the module docs describe",
         path.display()
     );
-    let app = rsx::hot::load_hot_app(&path).expect("dlopen failed");
+    let app = telar::hot::load_hot_app(&path).expect("dlopen failed");
     let (w, h) = (1200u32, 900u32);
     let window = HeadlessWindow::new(w, h);
     let mut handler: Box<dyn EventHandler<HeadlessWindow>> = build_surface_handler(
         app,
         Box::new(NullPaths) as Box<dyn AppPathsProvider>,
-        "rsx-sandbox-hot-tree-test",
+        "telar-sandbox-hot-tree-test",
     );
     handler.new_events();
     assert!(handler.on_resume(&window), "headless renderer init failed");
@@ -146,7 +146,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     assert!(
         distinct >= 2,
         "only {distinct} distinct frame(s) after the click with no further input: the app's tree is not \
-         re-composing on its own. If the dylib was last built without RSX_HOT_RELOAD_BUILD it exports no \
+         re-composing on its own. If the dylib was last built without TELAR_HOT_RELOAD_BUILD it exports no \
          tree shims and the host mounted the tree itself — rebuild it as the module docs describe."
     );
 }

@@ -1,4 +1,4 @@
-use rsx::ImageData;
+use telar::ImageData;
 
 pub fn make_gradient(width: u32, height: u32) -> ImageData {
     let mut pixels = Vec::with_capacity((width * height * 4) as usize);

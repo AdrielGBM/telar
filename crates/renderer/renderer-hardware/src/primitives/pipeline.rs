@@ -9,7 +9,7 @@ pub(crate) fn create_render_pipeline(
     cache: Option<&wgpu::PipelineCache>,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some(&format!("rsx-{label}-shader")),
+        label: Some(&format!("telar-{label}-shader")),
         source: wgpu::ShaderSource::Wgsl(shader_source.to_owned().into()),
     });
 
@@ -17,13 +17,13 @@ pub(crate) fn create_render_pipeline(
         bind_group_layouts.iter().map(|b| Some(*b)).collect();
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some(&format!("rsx-{label}-pipeline-layout")),
+        label: Some(&format!("telar-{label}-pipeline-layout")),
         bind_group_layouts: &bgl_opts,
         immediate_size: 0,
     });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(&format!("rsx-{label}-pipeline")),
+        label: Some(&format!("telar-{label}-pipeline")),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,

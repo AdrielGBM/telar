@@ -29,12 +29,12 @@ impl CompositePipeline {
     ) -> Self {
         let shader_source = include_str!("composite.wgsl");
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("rsx-composite-shader"),
+            label: Some("telar-composite-shader"),
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("rsx-composite-sampler"),
+            label: Some("telar-composite-sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
@@ -43,7 +43,7 @@ impl CompositePipeline {
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-composite-bgl"),
+            label: Some("telar-composite-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -77,13 +77,13 @@ impl CompositePipeline {
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("rsx-composite-pipeline-layout"),
+            label: Some("telar-composite-pipeline-layout"),
             bind_group_layouts: &[Some(viewport_bgl), Some(&bind_group_layout)],
             immediate_size: 0,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("rsx-composite-pipeline"),
+            label: Some("telar-composite-pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -153,13 +153,13 @@ impl CompositePipeline {
                 buf
             }
             None => device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("rsx-composite-params"),
+                label: Some("telar-composite-params"),
                 contents: bytemuck::bytes_of(&params),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             }),
         };
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-composite-bind-group"),
+            label: Some("telar-composite-bind-group"),
             layout: &self.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {

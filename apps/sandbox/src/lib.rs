@@ -1,14 +1,14 @@
-// Module tree (core/, shared/) is auto-declared by `rsx::app!` — see `auto_modules` in rsx.toml.
-rsx::app!(
+// Module tree (core/, shared/) is auto-declared by `telar::app!` — see `auto_modules` in telar.toml.
+telar::app!(
     core::theme::SandboxTheme,
     {
         core::theme::register_modes();
         // Open following the OS light/dark preference (modern for light, midnight for dark); the sidebar
         // buttons still override manually until the next OS change.
-        rsx::follow_system(core::theme::DEFAULT_MODE, "midnight");
-        rsx::follow_locale_direction();
+        telar::follow_system(core::theme::DEFAULT_MODE, "midnight");
+        telar::follow_locale_direction();
     },
-    rsx::AppConfig::default(),
+    telar::AppConfig::default(),
     core::app::SandboxRoot
 );
 
@@ -19,50 +19,50 @@ mod i18n_smoke {
     // active locale — switching the locale changes the output.
     #[test]
     fn catalog_translates_and_switches() {
-        rsx::set_locale("en");
-        assert_eq!(rsx::t!("greeting", name = "Ada"), "Hello, Ada!");
-        assert_eq!(rsx::t!("nav.overview"), "Overview");
-        rsx::set_locale("es");
-        assert_eq!(rsx::t!("greeting", name = "Ada"), "Hola, Ada!");
-        assert_eq!(rsx::t!("nav.overview"), "Resumen");
+        telar::set_locale("en");
+        assert_eq!(telar::t!("greeting", name = "Ada"), "Hello, Ada!");
+        assert_eq!(telar::t!("nav.overview"), "Overview");
+        telar::set_locale("es");
+        assert_eq!(telar::t!("greeting", name = "Ada"), "Hola, Ada!");
+        assert_eq!(telar::t!("nav.overview"), "Resumen");
         // An unknown locale falls back to the default (en).
-        rsx::set_locale("fr");
-        assert_eq!(rsx::t!("nav.overview"), "Overview");
+        telar::set_locale("fr");
+        assert_eq!(telar::t!("nav.overview"), "Overview");
     }
 
     // A plural table is baked as one key with per-category branches, and the active locale's rules pick one.
     #[test]
     fn plural_selects_a_branch_per_locale() {
-        rsx::set_locale("en");
-        assert_eq!(rsx::t!("items", count = "1"), "1 item");
-        assert_eq!(rsx::t!("items", count = "0"), "0 items");
-        assert_eq!(rsx::t!("items", count = "5"), "5 items");
+        telar::set_locale("en");
+        assert_eq!(telar::t!("items", count = "1"), "1 item");
+        assert_eq!(telar::t!("items", count = "0"), "0 items");
+        assert_eq!(telar::t!("items", count = "5"), "5 items");
 
-        rsx::set_locale("es");
-        assert_eq!(rsx::t!("items", count = "1"), "1 elemento");
-        assert_eq!(rsx::t!("items", count = "5"), "5 elementos");
+        telar::set_locale("es");
+        assert_eq!(telar::t!("items", count = "1"), "1 elemento");
+        assert_eq!(telar::t!("items", count = "5"), "5 elementos");
 
         // Arabic is the reason the category set is not just one/other: it uses all six.
-        rsx::set_locale("ar");
-        assert_eq!(rsx::t!("items", count = "0"), "لا عناصر");
-        assert_eq!(rsx::t!("items", count = "1"), "عنصر واحد");
-        assert_eq!(rsx::t!("items", count = "2"), "عنصران");
-        assert_eq!(rsx::t!("items", count = "3"), "3 عناصر");
-        assert_eq!(rsx::t!("items", count = "11"), "11 عنصرًا");
-        rsx::set_locale("en");
+        telar::set_locale("ar");
+        assert_eq!(telar::t!("items", count = "0"), "لا عناصر");
+        assert_eq!(telar::t!("items", count = "1"), "عنصر واحد");
+        assert_eq!(telar::t!("items", count = "2"), "عنصران");
+        assert_eq!(telar::t!("items", count = "3"), "3 عناصر");
+        assert_eq!(telar::t!("items", count = "11"), "11 عنصرًا");
+        telar::set_locale("en");
     }
 }
 
 #[cfg(test)]
 mod smoke {
-    use rsx::{App, AvailableSpace, Event, compute_layout};
+    use telar::{App, AvailableSpace, Event, compute_layout};
 
     // The whole documentation app must build and lay out without panicking, and every section fn
     // must produce a tree — a regression guard over the two-pane shell and all `.rsx` sections.
     #[test]
     fn app_root_builds_and_lays_out() {
-        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
-        let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
+        telar::set_theme(crate::core::theme::SandboxTheme::modern());
+        let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
         tree.on_event(&Event::WindowResized {
             width: 1200,
             height: 900,
@@ -74,10 +74,10 @@ mod smoke {
     // Exercises the whole path against the real shell — locale signal → follow effect → engine → layout pass — on the same tree, which is re-laid-out rather than rebuilt.
     #[test]
     fn an_rtl_locale_mirrors_the_shell() {
-        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
-        rsx::follow_locale_direction();
-        rsx::set_locale("en");
-        let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
+        telar::set_theme(crate::core::theme::SandboxTheme::modern());
+        telar::follow_locale_direction();
+        telar::set_locale("en");
+        let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
         let resize = Event::WindowResized {
             width: 1200,
             height: 900,
@@ -85,11 +85,11 @@ mod smoke {
         tree.on_event(&resize);
         let ltr = nav_rail_center_x(&tree);
 
-        rsx::set_locale("ar");
+        telar::set_locale("ar");
         tree.on_event(&resize);
         let rtl = nav_rail_center_x(&tree);
 
-        rsx::set_locale("en");
+        telar::set_locale("en");
         assert!(
             ltr < 300.0,
             "the rail sits on the left under LTR, got {ltr}"
@@ -101,17 +101,17 @@ mod smoke {
     }
 
     /// The horizontal center of the widest sidebar-sized rect — the nav rail's own background.
-    fn nav_rail_center_x(tree: &rsx::ComponentList) -> f32 {
+    fn nav_rail_center_x(tree: &telar::ComponentList) -> f32 {
         let cmds = tree.commands();
         let mut tx = vec![0.0f32];
         let mut widest: Option<(f32, f32)> = None;
         for c in cmds.iter() {
             match c {
-                rsx::DrawCommand::PushMatrix { matrix } => tx.push(tx.last().unwrap() + matrix[4]),
-                rsx::DrawCommand::PopMatrix => {
+                telar::DrawCommand::PushMatrix { matrix } => tx.push(tx.last().unwrap() + matrix[4]),
+                telar::DrawCommand::PopMatrix => {
                     tx.pop();
                 }
-                rsx::DrawCommand::Rect { rect, .. } => {
+                telar::DrawCommand::Rect { rect, .. } => {
                     if rect.height > 700.0 && rect.width < 400.0 {
                         let cx = tx.last().unwrap() + rect.x + rect.width / 2.0;
                         if widest.is_none_or(|(w, _)| rect.width > w) {
@@ -131,8 +131,8 @@ mod smoke {
     // mobile hamburger top bar, and back. A regression guard over the set_display collapse + drawer overlay.
     #[test]
     fn shell_survives_breakpoint_transition() {
-        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
-        let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
+        telar::set_theme(crate::core::theme::SandboxTheme::modern());
+        let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
         for (width, height) in [(1200u32, 900u32), (380, 720), (1000, 800), (360, 640)] {
             tree.on_event(&Event::WindowResized { width, height });
             let _ = tree.commands();
@@ -144,8 +144,8 @@ mod smoke {
     #[test]
     fn nav_click_switches_section() {
         use platform_core::{PointerButton, PointerSource};
-        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
-        let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
+        telar::set_theme(crate::core::theme::SandboxTheme::modern());
+        let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
         tree.on_event(&Event::WindowResized {
             width: 1200,
             height: 900,
@@ -185,7 +185,7 @@ mod smoke {
     #[test]
     fn nav_tracks_theme_after_navigation() {
         use platform_core::{PointerButton, PointerSource};
-        use rsx::EventResult;
+        use telar::EventResult;
 
         // The runner only bumps force-ticks in dev builds. The freeze must not appear in either mode, so the
         // subscriptions themselves must stay intact; run the whole scenario under both to cover release too.
@@ -195,11 +195,11 @@ mod smoke {
 
         fn run_theme_tracking_scenario(force_tick: bool) {
             // A nav button's composed rect: center point + fill color, walking the matrix stack.
-            fn nav_rects(tree: &rsx::ComponentList) -> Vec<(f32, f32, rsx::Color)> {
+            fn nav_rects(tree: &telar::ComponentList) -> Vec<(f32, f32, telar::Color)> {
                 collect_button_rects(tree, |w, _cy| (190.0..230.0).contains(&w))
             }
             // The three theme buttons: content-sized primary rects near the top of the sidebar.
-            fn theme_button_centers(tree: &rsx::ComponentList) -> Vec<(f32, f32)> {
+            fn theme_button_centers(tree: &telar::ComponentList) -> Vec<(f32, f32)> {
                 collect_button_rects(tree, |w, cy| (40.0..140.0).contains(&w) && cy < 220.0)
                     .into_iter()
                     .filter(|(_, _, c)| c.b > 0.5 && c.r < 0.6)
@@ -207,23 +207,23 @@ mod smoke {
                     .collect()
             }
             fn collect_button_rects(
-                tree: &rsx::ComponentList,
+                tree: &telar::ComponentList,
                 keep: impl Fn(f32, f32) -> bool,
-            ) -> Vec<(f32, f32, rsx::Color)> {
+            ) -> Vec<(f32, f32, telar::Color)> {
                 let cmds = tree.commands();
                 let (mut tx, mut ty) = (vec![0.0f32], vec![0.0f32]);
                 let mut out = Vec::new();
                 for c in cmds.iter() {
                     match c {
-                        rsx::DrawCommand::PushMatrix { matrix } => {
+                        telar::DrawCommand::PushMatrix { matrix } => {
                             tx.push(tx.last().unwrap() + matrix[4]);
                             ty.push(ty.last().unwrap() + matrix[5]);
                         }
-                        rsx::DrawCommand::PopMatrix => {
+                        telar::DrawCommand::PopMatrix => {
                             tx.pop();
                             ty.pop();
                         }
-                        rsx::DrawCommand::Rect { rect, style } => {
+                        telar::DrawCommand::Rect { rect, style } => {
                             let cy = ty.last().unwrap() + rect.y + rect.height / 2.0;
                             if (25.0..45.0).contains(&rect.height) && keep(rect.width, cy) {
                                 if let Some(p) = style.fill.as_ref() {
@@ -239,13 +239,13 @@ mod smoke {
             }
 
             // One runner cycle for a single event: begin (new_events), dispatch, dev force-tick, end (flush).
-            let feed = move |tree: &mut rsx::ComponentList, ev: &Event| {
-                rsx::begin_batch();
+            let feed = move |tree: &mut telar::ComponentList, ev: &Event| {
+                telar::begin_batch();
                 let handled = tree.on_event(ev);
                 if force_tick && handled == EventResult::Handled {
                     tree.bump_force_ticks();
                 }
-                rsx::end_batch();
+                telar::end_batch();
             };
             let mv = |x: f32, y: f32| Event::PointerMoved {
                 x: x as f64,
@@ -265,10 +265,10 @@ mod smoke {
                 source: PointerSource::Mouse,
             };
 
-            rsx::set_theme(crate::core::theme::SandboxTheme::modern());
+            telar::set_theme(crate::core::theme::SandboxTheme::modern());
             // The sidebar theme buttons now call `set_mode(id)`; register the appliers so a click installs the variant.
             crate::core::theme::register_modes();
-            let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
+            let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
             feed(
                 &mut tree,
                 &Event::WindowResized {
@@ -279,7 +279,7 @@ mod smoke {
             assert!(nav_rects(&tree).len() >= 16, "need nav buttons laid out");
 
             // Navigate to `target`: mouse travels down over the buttons above it (hover churn), then clicks it.
-            let nav_to = |tree: &mut rsx::ComponentList, target: usize| {
+            let nav_to = |tree: &mut telar::ComponentList, target: usize| {
                 let rects = nav_rects(tree);
                 let (tx, ty, _) = rects[target];
                 for r in rects.iter().take(target + 1) {
@@ -290,7 +290,7 @@ mod smoke {
                 let _ = tree.commands();
             };
             // Switch theme by clicking its button (dispatched event — button borrowed mid-dispatch, the real path).
-            let switch_theme = |tree: &mut rsx::ComponentList, idx: usize| {
+            let switch_theme = |tree: &mut telar::ComponentList, idx: usize| {
                 let btns = theme_button_centers(tree);
                 assert_eq!(btns.len(), 3, "expected 3 theme buttons, found {btns:?}");
                 let (cx, cy) = btns[idx];
@@ -300,7 +300,7 @@ mod smoke {
                 let _ = tree.commands();
             };
 
-            let close = |a: rsx::Color, b: rsx::Color| {
+            let close = |a: telar::Color, b: telar::Color| {
                 (a.r - b.r).abs() < 0.02 && (a.g - b.g).abs() < 0.02 && (a.b - b.b).abs() < 0.02
             };
 
@@ -344,19 +344,19 @@ mod smoke {
     fn nav_highlight_follows_selection() {
         use platform_core::{PointerButton, PointerSource};
         // y-coordinates of primary-blue, nav-button-width (~208px) rects, composed through the matrix stack.
-        fn active_nav_ys(tree: &rsx::ComponentList) -> Vec<i32> {
+        fn active_nav_ys(tree: &telar::ComponentList) -> Vec<i32> {
             let cmds = tree.commands();
             let mut ty = vec![0.0f32];
             let mut ys = Vec::new();
             for c in cmds.iter() {
                 match c {
-                    rsx::DrawCommand::PushMatrix { matrix } => {
+                    telar::DrawCommand::PushMatrix { matrix } => {
                         ty.push(ty.last().unwrap() + matrix[5])
                     }
-                    rsx::DrawCommand::PopMatrix => {
+                    telar::DrawCommand::PopMatrix => {
                         ty.pop();
                     }
-                    rsx::DrawCommand::Rect { rect, style } => {
+                    telar::DrawCommand::Rect { rect, style } => {
                         let blue = style
                             .fill
                             .as_ref()
@@ -371,8 +371,8 @@ mod smoke {
             }
             ys
         }
-        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
-        let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
+        telar::set_theme(crate::core::theme::SandboxTheme::modern());
+        let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
         tree.on_event(&Event::WindowResized {
             width: 1200,
             height: 900,
@@ -426,8 +426,8 @@ mod smoke {
     // Canvas-free source should sit in the content region; the strays are gone.
     #[test]
     fn hidden_canvas_sections_do_not_bleed() {
-        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
-        let mut tree = rsx::ComponentList::new(crate::core::app::SandboxRoot.root());
+        telar::set_theme(crate::core::theme::SandboxTheme::modern());
+        let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
         tree.on_event(&Event::WindowResized {
             width: 1200,
             height: 900,
@@ -450,14 +450,14 @@ mod smoke {
         let mut leaked = 0;
         for c in cmds.iter() {
             match c {
-                rsx::DrawCommand::PushMatrix { matrix } => {
+                telar::DrawCommand::PushMatrix { matrix } => {
                     stack.push(cur);
                     cur = compose(cur, *matrix);
                 }
-                rsx::DrawCommand::PopMatrix => {
+                telar::DrawCommand::PopMatrix => {
                     cur = stack.pop().unwrap_or([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
                 }
-                rsx::DrawCommand::Rect { rect, style } => {
+                telar::DrawCommand::Rect { rect, style } => {
                     let blue = style
                         .fill
                         .as_ref()
@@ -486,10 +486,10 @@ mod smoke {
             crate::core::theme::SandboxTheme::pastel,
             crate::core::theme::SandboxTheme::midnight,
         ] {
-            rsx::set_theme(make());
-            rsx::reset_layout_runtime();
+            telar::set_theme(make());
+            telar::reset_layout_runtime();
             let content = crate::features_color().expect("color section builds");
-            let node = rsx::LayoutItem::layout_node(content.as_ref());
+            let node = telar::LayoutItem::layout_node(content.as_ref());
             compute_layout(
                 node,
                 AvailableSpace::Definite(800.0),

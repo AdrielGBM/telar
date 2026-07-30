@@ -1,0 +1,10 @@
+[package]
+name = "telar-devtools"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+devtools-core = { workspace = true }
+platform-core = { workspace = true }
+renderer-core = { workspace = true }
+geometry-core = { workspace = true }

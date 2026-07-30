@@ -77,7 +77,7 @@ impl Dispatch<wl_buffer::WlBuffer, Arc<AtomicBool>> for State {
 fn create_memfile() -> std::io::Result<File> {
     use rustix::fs::{MemfdFlags, SealFlags};
     let fd = rustix::fs::memfd_create(
-        c"rsx-alpha-shm",
+        c"telar-alpha-shm",
         MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING,
     )?;
     // Sealing lets the compositor mmap the fd read-only without worrying it might shrink under it.

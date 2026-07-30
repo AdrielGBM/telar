@@ -30,7 +30,7 @@ impl<R: Clone + 'static> Navigator<R> {
 
     /// Adopts an externally owned stack signal, seeding it with `root` when it is empty.
     ///
-    /// Lets the stack come from somewhere the navigator itself cannot reach — notably `rsx::hot_signal`, so
+    /// Lets the stack come from somewhere the navigator itself cannot reach — notably `telar::hot_signal`, so
     /// the history survives a hot-reload dylib swap. The `root` seed also repairs a restored snapshot that
     /// deserialized to an empty vector, upholding the never-empty invariant [`current`](Self::current) relies on.
     pub fn from_signal(stack: RwSignal<Vec<R>>, root: R) -> Self {

@@ -11,20 +11,20 @@ name = "sandbox"
 path = "src/main.rs"
 
 [dependencies]
-rsx = { workspace = true, features = ["dynamic-svg", "components", "navigate"] }
+telar = { workspace = true, features = ["dynamic-svg", "components", "navigate"] }
 serde.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [features]
-# Mirrors the feature `cargo rsx dev` injects, so the hot-reload integration test can gate on it.
-dev = ["rsx/dev"]
+# Mirrors the feature `cargo telar dev` injects, so the hot-reload integration test can gate on it.
+dev = ["telar/dev"]
 
 [dev-dependencies]
 platform-core = { workspace = true }
 platform-headless.workspace = true
 
 [package.metadata.android]
-package = "com.example.rsx.sandbox"
+package = "com.example.telar.sandbox"
 build_targets = ["aarch64-linux-android"]
 
 [package.metadata.android.sdk]

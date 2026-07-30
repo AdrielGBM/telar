@@ -11,11 +11,11 @@ name = "landing"
 path = "src/main.rs"
 
 [dependencies]
-rsx = { workspace = true, features = ["components"] }
+telar = { workspace = true, features = ["components"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [package.metadata.android]
-package = "com.example.rsx.landing"
+package = "com.example.telar.landing"
 build_targets = ["aarch64-linux-android"]
 
 [package.metadata.android.sdk]

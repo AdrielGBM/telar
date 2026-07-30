@@ -43,7 +43,7 @@ impl ImagePipeline {
         let instances = InstancePipeline::<ImageInstance>::new(device, "image", 16);
 
         let texture_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-image-texture-bgl"),
+            label: Some("telar-image-texture-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -103,7 +103,7 @@ impl ImagePipeline {
         filter: ImageFilter,
     ) -> GpuImage {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-image-texture"),
+            label: Some("telar-image-texture"),
             size: wgpu::Extent3d {
                 width: image.width,
                 height: image.height,
@@ -144,7 +144,7 @@ impl ImagePipeline {
         };
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-image-texture-bg"),
+            label: Some("telar-image-texture-bg"),
             layout: &self.texture_bgl,
             entries: &[
                 wgpu::BindGroupEntry {

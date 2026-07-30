@@ -252,10 +252,10 @@ fn fold_bytes(bytes: &[u8]) -> u64 {
 // behavior change: (1) the scene's text has no bundled font, so cosmic-text falls back to the host's
 // system fonts — a different typeface on Linux vs macOS vs Windows; (2) tiny-skia is built with `simd`,
 // whose float rounding can differ between x86 (Linux/Windows runners) and ARM (Apple-Silicon macOS
-// runners). So enforce the exact hash only under `RSX_SOFTWARE_GOLDEN` on the baseline machine; elsewhere
+// runners). So enforce the exact hash only under `TELAR_SOFTWARE_GOLDEN` on the baseline machine; elsewhere
 // the always-on checks below (renders without error, tightly-packed readback of the right size, content
 // actually drawn) are the portable smoke test and a hash mismatch is reported, not fatal. Mirrors the
-// hardware golden (`renderer-hardware/tests/headless_smoke.rs`, gated by `RSX_HARDWARE_GOLDEN`).
+// hardware golden (`renderer-hardware/tests/headless_smoke.rs`, gated by `TELAR_HARDWARE_GOLDEN`).
 #[test]
 fn render_frame_pixel_golden() {
     const EXPECTED: u64 = 0x165a_2776_436b_d755;
@@ -286,7 +286,7 @@ fn render_frame_pixel_golden() {
     );
 
     let hash = fold_bytes(rgba);
-    if std::env::var_os("RSX_SOFTWARE_GOLDEN").is_some() {
+    if std::env::var_os("TELAR_SOFTWARE_GOLDEN").is_some() {
         assert_eq!(
             hash, EXPECTED,
             "render_frame pixel output changed: got {hash:#018x}, expected {EXPECTED:#018x}"
@@ -295,7 +295,7 @@ fn render_frame_pixel_golden() {
         eprintln!(
             "note: software golden hash {hash:#018x} != baseline {EXPECTED:#018x} \
              (expected on a different platform/arch or system fonts); \
-             set RSX_SOFTWARE_GOLDEN=1 on the baseline machine to enforce"
+             set TELAR_SOFTWARE_GOLDEN=1 on the baseline machine to enforce"
         );
     }
 }

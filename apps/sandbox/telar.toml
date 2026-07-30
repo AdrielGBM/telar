@@ -1,0 +1,18 @@
+[telar]
+backend = "auto"
+auto_modules = true
+# Root for baked `src:"..."` assets, relative to the package. Defaults to "assets"; e.g. "src/shared/assets".
+# assets = "assets"
+
+[telar.dev]
+devtools = true
+
+[telar.dev.window]
+title = "sandbox"
+width = 1200
+height = 1200
+decorations = true
+resizable = true
+transparent = false
+fullscreen = "disabled"
+position = "centered"

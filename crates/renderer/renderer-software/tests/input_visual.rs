@@ -1,7 +1,7 @@
 //! Visual harness for the `Input` primitive: builds a focused text field (a bordered box wrapping an
-//! `Input`), lays it out, taps it to focus, and renders the flattened scene headless to `RSX_VISUAL_OUT`.
+//! `Input`), lays it out, taps it to focus, and renders the flattened scene headless to `TELAR_VISUAL_OUT`.
 //! No-op without the env var (so it never gates CI). Run:
-//!   RSX_VISUAL_OUT=/tmp/input.png cargo test -p renderer-software --test input_visual -- --nocapture
+//!   TELAR_VISUAL_OUT=/tmp/input.png cargo test -p renderer-software --test input_visual -- --nocapture
 
 use layout_core::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle};
 use platform_core::{Event, PointerButton, PointerSource};
@@ -17,8 +17,8 @@ use ui_tree::ComponentList;
 
 #[test]
 fn input_visual_png() {
-    let Ok(out) = std::env::var("RSX_VISUAL_OUT") else {
-        eprintln!("set RSX_VISUAL_OUT to write a PNG; skipping");
+    let Ok(out) = std::env::var("TELAR_VISUAL_OUT") else {
+        eprintln!("set TELAR_VISUAL_OUT to write a PNG; skipping");
         return;
     };
 
@@ -105,8 +105,8 @@ fn input_visual_png() {
 
 #[test]
 fn slider_visual_png() {
-    let Ok(out) = std::env::var("RSX_SLIDER_OUT") else {
-        eprintln!("set RSX_SLIDER_OUT to write a PNG; skipping");
+    let Ok(out) = std::env::var("TELAR_SLIDER_OUT") else {
+        eprintln!("set TELAR_SLIDER_OUT to write a PNG; skipping");
         return;
     };
 
@@ -170,8 +170,8 @@ fn slider_visual_png() {
 
 #[test]
 fn overlay_visual_png() {
-    let Ok(out) = std::env::var("RSX_OVERLAY_OUT") else {
-        eprintln!("set RSX_OVERLAY_OUT to write a PNG; skipping");
+    let Ok(out) = std::env::var("TELAR_OVERLAY_OUT") else {
+        eprintln!("set TELAR_OVERLAY_OUT to write a PNG; skipping");
         return;
     };
 

@@ -27,7 +27,7 @@ impl LayerPipeline {
         wgpu::TextureView,
     ) {
         let msaa = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-layer-msaa"),
+            label: Some("telar-layer-msaa"),
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -42,7 +42,7 @@ impl LayerPipeline {
         });
         let msaa_view = msaa.create_view(&wgpu::TextureViewDescriptor::default());
         let resolve = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-layer-resolve"),
+            label: Some("telar-layer-resolve"),
             size: wgpu::Extent3d {
                 width,
                 height,

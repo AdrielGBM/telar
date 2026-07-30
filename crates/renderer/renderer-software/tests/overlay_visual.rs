@@ -1,7 +1,7 @@
 //! End-to-end headless check for the `overlay` modal fix: builds a red background covered by a blue
 //! overlay scrim, renders the real widget tree, and confirms (1) the overlay draws on top (compose still
 //! hoists it), and (2) a tap at the center reaches the scrim and is blocked from the background behind it
-//! (priority pointer routing). Runs in CI without an env var; pass `RSX_VISUAL_OUT` to also dump a PNG.
+//! (priority pointer routing). Runs in CI without an env var; pass `TELAR_VISUAL_OUT` to also dump a PNG.
 
 use layout_core::{AvailableSpace, LayoutStyle};
 use platform_core::{Event, PointerButton, PointerSource};
@@ -79,7 +79,7 @@ fn overlay_draws_on_top_and_captures_the_tap() {
         .render_frame(&tree.commands(), Some(Color::BLACK))
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap exists after a frame");
-    if let Ok(out) = std::env::var("RSX_VISUAL_OUT") {
+    if let Ok(out) = std::env::var("TELAR_VISUAL_OUT") {
         image::RgbaImage::from_raw(w, h, rgba.to_vec())
             .expect("rgba length matches w*h*4")
             .save(&out)

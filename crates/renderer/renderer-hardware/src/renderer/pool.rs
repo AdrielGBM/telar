@@ -21,13 +21,13 @@ pub(super) fn create_viewport_pool_slot(
     viewport_bind_group_layout: &wgpu::BindGroupLayout,
 ) -> (wgpu::Buffer, wgpu::BindGroup) {
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("rsx-layer-vp-pool"),
+        label: Some("telar-layer-vp-pool"),
         size: std::mem::size_of::<Viewport>() as u64,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("rsx-layer-vp-pool-bg"),
+        label: Some("telar-layer-vp-pool-bg"),
         layout: viewport_bind_group_layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,

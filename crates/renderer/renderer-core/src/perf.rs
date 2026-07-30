@@ -1,4 +1,4 @@
-//! Lightweight per-phase frame timing, gated on the `RSX_PERF` env var. When disabled every
+//! Lightweight per-phase frame timing, gated on the `TELAR_PERF` env var. When disabled every
 //! entry point is a single relaxed-atomic load or an early return, so it is safe to leave the
 //! instrumentation compiled into release builds. Enabled it accumulates per-phase durations
 //! across both the UI thread (command build/clone) and the render thread (interpret/gpu) and
@@ -51,7 +51,7 @@ pub fn note_damage(active: bool) {
 #[inline]
 pub fn enabled() -> bool {
     *ENABLED.get_or_init(
-        || matches!(std::env::var("RSX_PERF").as_deref(), Ok(v) if !v.is_empty() && v != "0"),
+        || matches!(std::env::var("TELAR_PERF").as_deref(), Ok(v) if !v.is_empty() && v != "0"),
     )
 }
 
@@ -129,5 +129,5 @@ pub fn tick() {
         parts.push_str(&format!("{}={avg_us:.0}/{max_us:.0}us(n{cnt}) ", NAMES[i]));
     }
     let damage = DAMAGE_FRAMES.swap(0, Ordering::Relaxed);
-    tracing::info!(target: "rsx_perf", "perf[{DUMP_EVERY}f] {}damage={damage}", parts);
+    tracing::info!(target: "telar_perf", "perf[{DUMP_EVERY}f] {}damage={damage}", parts);
 }

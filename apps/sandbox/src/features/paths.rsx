@@ -23,7 +23,7 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         Path::static_data(triangle, move || PathStyle::default().with_fill(primary)).view(),
     );
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("polygon fill"),
+        telar::static_rc_str!("polygon fill"),
         Rect {
             x: 0.0,
             y: 128.0,
@@ -53,7 +53,7 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         .view(),
     );
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("fill + stroke"),
+        telar::static_rc_str!("fill + stroke"),
         Rect {
             x: 175.0,
             y: 128.0,
@@ -86,7 +86,7 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         .view(),
     );
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("even-odd fill"),
+        telar::static_rc_str!("even-odd fill"),
         Rect {
             x: 350.0,
             y: 128.0,
@@ -109,7 +109,7 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         .view(),
     );
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("quad_to arch"),
+        telar::static_rc_str!("quad_to arch"),
         Rect {
             x: 0.0,
             y: 258.0,
@@ -131,7 +131,7 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         .view(),
     );
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("cubic_to S-curve"),
+        telar::static_rc_str!("cubic_to S-curve"),
         Rect {
             x: 175.0,
             y: 258.0,
@@ -178,7 +178,7 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         .view(),
     );
     kids.push(RenderNode::text(
-        rsx::static_rc_str!("path + drop shadow"),
+        telar::static_rc_str!("path + drop shadow"),
         Rect {
             x: 350.0,
             y: 268.0,

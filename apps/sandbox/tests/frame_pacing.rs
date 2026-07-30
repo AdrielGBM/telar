@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use platform_core::{Event, EventHandler, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
-use rsx::{AppPathsProvider, build_surface_handler};
+use telar::{AppPathsProvider, build_surface_handler};
 
 struct NullPaths;
 
@@ -70,12 +70,12 @@ fn release(x: f64, y: f64) -> Event {
 fn a_nav_click_keeps_the_loop_scheduling_frames_until_the_fade_settles() {
     let (w, h) = (1200u32, 900u32);
     // The `app!` setup closure normally does this before the tree mounts.
-    rsx::set_theme(sandbox::core::theme::SandboxTheme::modern());
+    telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
     let window = HeadlessWindow::new(w, h);
     let mut handler: Box<dyn EventHandler<HeadlessWindow>> = build_surface_handler(
         sandbox::core::app::SandboxRoot,
         Box::new(NullPaths) as Box<dyn AppPathsProvider>,
-        "rsx-sandbox-pacing-test",
+        "telar-sandbox-pacing-test",
     );
 
     handler.new_events();
@@ -98,7 +98,7 @@ fn a_nav_click_keeps_the_loop_scheduling_frames_until_the_fade_settles() {
     feed(&mut handler, &window, press(x, y));
     let after_release = feed(&mut handler, &window, release(x, y));
     assert!(
-        rsx::motion::has_active(),
+        telar::motion::has_active(),
         "the click did not start the page transition"
     );
     assert!(
@@ -111,7 +111,7 @@ fn a_nav_click_keeps_the_loop_scheduling_frames_until_the_fade_settles() {
     // handler must keep asking for the next frame; once it settles it must stop, so the loop can sleep.
     for i in 0..60 {
         let pace = frame(&mut handler, &window);
-        if rsx::motion::has_active() {
+        if telar::motion::has_active() {
             assert!(
                 pace.is_some(),
                 "frame {i}: the fade is still running but the loop was told it could sleep"

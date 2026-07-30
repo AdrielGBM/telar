@@ -30,7 +30,7 @@ pub type SurfaceFrameSink = Arc<Mutex<HashMap<SurfaceId, Vec<u8>>>>;
 ///
 /// Construct it with the surface size, optionally script input events and a frame count, and optionally
 /// capture the final frame's pixels; then drive it via [`crate::run`-style entry points] — e.g.
-/// `rsx::run_with_platform(HeadlessPlatform::new(w, h).capture_into(sink), …)`.
+/// `telar::run_with_platform(HeadlessPlatform::new(w, h).capture_into(sink), …)`.
 pub struct HeadlessPlatform {
     width: u32,
     height: u32,

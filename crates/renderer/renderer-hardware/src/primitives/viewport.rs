@@ -49,7 +49,7 @@ pub(crate) fn create_viewport_buffer(
 
 pub(crate) fn create_viewport_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("rsx-viewport-bgl"),
+        label: Some("telar-viewport-bgl"),
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,

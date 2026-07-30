@@ -1,4 +1,4 @@
-//! First-party catalogue of high-level, fully-customizable widgets built on the rsx kernel primitives, opt-in via the `components` feature. Keep sigs in `rsx-transpiler`'s `external_component_sigs()` in sync.
+//! First-party catalogue of high-level, fully-customizable widgets built on the rsx kernel primitives, opt-in via the `components` feature. Keep sigs in `telar-transpiler`'s `external_component_sigs()` in sync.
 
 mod accordion;
 mod badge;

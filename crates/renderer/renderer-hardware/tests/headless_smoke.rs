@@ -610,7 +610,7 @@ fn golden_scene() -> Vec<DrawCommand> {
 
 /// Smoke test for the `render_frame` decomposition: renders a fixed scene headless and checks it succeeds
 /// with a tightly-packed readback. It also hashes the pixels against a baked constant, but that hash is
-/// GPU/platform-specific (see below), so it is enforced only under `RSX_HARDWARE_GOLDEN` on the baseline
+/// GPU/platform-specific (see below), so it is enforced only under `TELAR_HARDWARE_GOLDEN` on the baseline
 /// machine — cross-platform CI relies on the smoke checks and the software renderer's deterministic golden.
 #[test]
 fn render_frame_pixel_golden() {
@@ -655,7 +655,7 @@ fn render_frame_pixel_golden() {
     // opted in (that machine); everywhere else — cross-platform CI — the assertions above (renders without
     // error, tightly-packed readback of the right size) are the portable smoke test, and a hash mismatch is
     // reported but not fatal. The deterministic cross-platform pixel guard is the software renderer's golden.
-    if std::env::var_os("RSX_HARDWARE_GOLDEN").is_some() {
+    if std::env::var_os("TELAR_HARDWARE_GOLDEN").is_some() {
         assert_eq!(
             hash, EXPECTED,
             "golden pixel hash changed: render_frame behavior differs from baseline (got {hash:#018x})"
@@ -663,7 +663,7 @@ fn render_frame_pixel_golden() {
     } else if hash != EXPECTED {
         eprintln!(
             "note: hardware golden hash {hash:#018x} != baseline {EXPECTED:#018x} \
-             (expected on a different GPU/platform); set RSX_HARDWARE_GOLDEN=1 on the baseline machine to enforce"
+             (expected on a different GPU/platform); set TELAR_HARDWARE_GOLDEN=1 on the baseline machine to enforce"
         );
     }
 }

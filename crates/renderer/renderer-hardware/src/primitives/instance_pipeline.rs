@@ -9,14 +9,14 @@ pub(crate) struct InstancePipeline<I: bytemuck::Pod> {
 impl<I: bytemuck::Pod> InstancePipeline<I> {
     pub(crate) fn new(device: &wgpu::Device, label: &str, initial_capacity: usize) -> Self {
         let instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(&format!("rsx-{label}-instances")),
+            label: Some(&format!("telar-{label}-instances")),
             size: (std::mem::size_of::<I>() * initial_capacity) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let instances_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some(&format!("rsx-{label}-instances-bgl")),
+                label: Some(&format!("telar-{label}-instances-bgl")),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,

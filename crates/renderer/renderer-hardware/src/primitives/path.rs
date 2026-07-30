@@ -57,7 +57,7 @@ pub(crate) struct FillDataBuffer {
 impl FillDataBuffer {
     pub(crate) fn new(device: &wgpu::Device) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-path-fill-bgl"),
+            label: Some("telar-path-fill-bgl"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::FRAGMENT,
@@ -88,13 +88,13 @@ impl FillDataBuffer {
     ) -> (wgpu::Buffer, wgpu::BindGroup) {
         let size = (std::mem::size_of::<PathFillData>() * capacity.max(1)) as u64;
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-path-fill-buf"),
+            label: Some("telar-path-fill-buf"),
             size,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-path-fill-bg"),
+            label: Some("telar-path-fill-bg"),
             layout: bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -423,14 +423,14 @@ impl PathPipeline {
         msaa_samples: u32,
     ) -> Self {
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-path-vb"),
+            label: Some("telar-path-vb"),
             size: (std::mem::size_of::<PathVertex>() * 1024) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-path-ib"),
+            label: Some("telar-path-ib"),
             size: (std::mem::size_of::<u32>() * 3072) as u64,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -486,7 +486,7 @@ impl PathPipeline {
         if vertex_count > self.vertex_capacity {
             let new_cap = (vertex_count * 2).max(self.vertex_capacity * 2);
             self.vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("rsx-path-vb"),
+                label: Some("telar-path-vb"),
                 size: (std::mem::size_of::<PathVertex>() * new_cap) as u64,
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
@@ -496,7 +496,7 @@ impl PathPipeline {
         if index_count > self.index_capacity {
             let new_cap = (index_count * 2).max(self.index_capacity * 2);
             self.index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("rsx-path-ib"),
+                label: Some("telar-path-ib"),
                 size: (std::mem::size_of::<u32>() * new_cap) as u64,
                 usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,

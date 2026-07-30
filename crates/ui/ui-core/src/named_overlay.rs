@@ -19,7 +19,7 @@ use std::mem::ManuallyDrop;
 
 use reactive_core::{RwSignal, signal};
 
-// ManuallyDrop keeps this TLS slot trivially-destructible: registering a TLS destructor from a hot-reloaded dylib would make dlclose unsafe (same constraint as `dismiss` and `rsx::hot_state`).
+// ManuallyDrop keeps this TLS slot trivially-destructible: registering a TLS destructor from a hot-reloaded dylib would make dlclose unsafe (same constraint as `dismiss` and `telar::hot_state`).
 thread_local! {
     static NAMED: ManuallyDrop<RefCell<HashMap<String, RwSignal<bool>>>> =
         ManuallyDrop::new(RefCell::new(HashMap::new()));

@@ -2,23 +2,23 @@ pub mod app;
 pub mod demo_images;
 pub mod theme;
 
-rsx::app!(
+telar::app!(
     theme::LandingTheme,
     {
-        rsx::set_theme(theme::LandingTheme::light());
+        telar::set_theme(theme::LandingTheme::light());
     },
-    rsx::AppConfig::default(),
+    telar::AppConfig::default(),
     app::LandingRoot
 );
 
 #[cfg(test)]
 mod layout_tests {
-    use rsx::{AvailableSpace, LayoutItem, compute_layout, track_layout};
+    use telar::{AvailableSpace, LayoutItem, compute_layout, track_layout};
 
     // The root page must fill the available window width at any size so its full-bleed bands stretch instead of collapsing into a centered column.
     fn page_rect_at(window_width: f32) -> (f32, f32) {
-        rsx::set_theme(crate::theme::LandingTheme::light());
-        rsx::reset_layout_runtime();
+        telar::set_theme(crate::theme::LandingTheme::light());
+        telar::reset_layout_runtime();
         let page = crate::home().expect("home build");
         let node = page.layout_node();
         compute_layout(
@@ -53,8 +53,8 @@ mod layout_tests {
     }
 
     // Walks the flattened draw commands applying the PushMatrix/PopMatrix stack and returns the rightmost edge of actually-drawn content (Rect/Text/Image). This is what the user sees, unlike the page node rect.
-    fn content_right_edge(cmds: &[rsx::DrawCommand]) -> f32 {
-        use rsx::DrawCommand::*;
+    fn content_right_edge(cmds: &[telar::DrawCommand]) -> f32 {
+        use telar::DrawCommand::*;
         fn mul(a: [f32; 6], b: [f32; 6]) -> [f32; 6] {
             [
                 a[0] * b[0] + a[2] * b[1],
@@ -95,14 +95,14 @@ mod layout_tests {
     // Auto-height text must reserve more vertical space when it is narrower (more wrapped lines), so following content is pushed down instead of overlapped.
     #[test]
     fn auto_text_height_grows_when_narrower() {
-        use rsx::{
+        use telar::{
             AvailableSpace, Color, LayoutItem, LayoutStyle, Text, TextStyle, compute_layout,
             track_layout,
         };
         let long = "This is a deliberately long paragraph of text that wraps onto several \
                     lines when the available width is small, and fewer lines when it is wide.";
         let height_at = |w: f32| -> f32 {
-            rsx::reset_layout_runtime();
+            telar::reset_layout_runtime();
             let t = Text::auto(
                 move || long.to_string(),
                 LayoutStyle::new(),
@@ -129,12 +129,12 @@ mod layout_tests {
     // The real feature cards (different body lengths → different heights) in a wrap row must not overflow the row's reserved height when one wraps to line 2.
     #[test]
     fn real_feature_cards_do_not_overflow_row() {
-        use rsx::{
+        use telar::{
             AvailableSpace, LayoutItem, LayoutStyle, compute_layout, new_container, new_leaf,
             track_layout,
         };
-        rsx::set_theme(crate::theme::LandingTheme::light());
-        rsx::reset_layout_runtime();
+        telar::set_theme(crate::theme::LandingTheme::light());
+        telar::reset_layout_runtime();
         let bodies = [
             (
                 "⚡",
@@ -200,10 +200,10 @@ mod layout_tests {
     // A wrapping flex row must reserve height for ALL its lines so a following sibling sits below it instead of overlapping. Reproduces the "next section positions as if the wrapped card didn't exist" report.
     #[test]
     fn wrapped_flex_row_reserves_height_for_all_lines() {
-        use rsx::{
+        use telar::{
             AvailableSpace, LayoutStyle, compute_layout, new_container, new_leaf, track_layout,
         };
-        rsx::reset_layout_runtime();
+        telar::reset_layout_runtime();
         let mut cards = Vec::new();
         for _ in 0..4 {
             let (n, _) = new_leaf(
@@ -246,10 +246,10 @@ mod layout_tests {
     // Same as above but the cards are content-sized containers (a column whose height comes from its children) with grow:1 — the real feature-card shape.
     #[test]
     fn wrapped_content_sized_cards_reserve_height() {
-        use rsx::{
+        use telar::{
             AvailableSpace, LayoutStyle, compute_layout, new_container, new_leaf, track_layout,
         };
-        rsx::reset_layout_runtime();
+        telar::reset_layout_runtime();
         let mut cards = Vec::new();
         for _ in 0..4 {
             let (inner, _) = new_leaf(LayoutStyle::new().height(100.0)).unwrap();
@@ -290,8 +290,8 @@ mod layout_tests {
         );
     }
 
-    fn content_bottom_edge(cmds: &[rsx::DrawCommand]) -> f32 {
-        use rsx::DrawCommand::*;
+    fn content_bottom_edge(cmds: &[telar::DrawCommand]) -> f32 {
+        use telar::DrawCommand::*;
         let mut ty = 0.0f32;
         let mut stack = vec![0.0f32];
         let mut max_y = 0.0f32;
@@ -320,10 +320,10 @@ mod layout_tests {
     // Diagnostic: at a wrap-inducing width, the drawn content must not extend below the page's own computed height — otherwise text/cards overflow onto whatever sits below them (the "next section positions as if it didn't exist" report).
     #[test]
     fn drawn_content_stays_within_page_height() {
-        use rsx::{App, AvailableSpace, Event, LayoutItem, compute_layout, track_layout};
+        use telar::{App, AvailableSpace, Event, LayoutItem, compute_layout, track_layout};
         let bottom = {
-            rsx::set_theme(crate::theme::LandingTheme::light());
-            let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
+            telar::set_theme(crate::theme::LandingTheme::light());
+            let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
             tree.on_event(&Event::WindowResized {
                 width: 1000,
                 height: 800,
@@ -332,8 +332,8 @@ mod layout_tests {
             content_bottom_edge(&cmds)
         };
 
-        rsx::set_theme(crate::theme::LandingTheme::light());
-        rsx::reset_layout_runtime();
+        telar::set_theme(crate::theme::LandingTheme::light());
+        telar::reset_layout_runtime();
         let page = crate::home().unwrap();
         let node = page.layout_node();
         compute_layout(
@@ -355,8 +355,8 @@ mod layout_tests {
     }
 
     // Collects (top, bottom) of full-width band background rects in absolute coords.
-    fn collect_bands(cmds: &[rsx::DrawCommand], min_width: f32) -> Vec<(f32, f32)> {
-        use rsx::DrawCommand::*;
+    fn collect_bands(cmds: &[telar::DrawCommand], min_width: f32) -> Vec<(f32, f32)> {
+        use telar::DrawCommand::*;
         let mut ty = 0.0f32;
         let mut stack = vec![0.0f32];
         let mut out = Vec::new();
@@ -382,10 +382,10 @@ mod layout_tests {
     // Detects the real symptom: content drawn BEFORE a later full-width band that falls inside that band's vertical range — the band, painted afterwards, covers it ("cross-platform card stays behind Built-in rendering").
     #[test]
     fn no_content_hidden_behind_a_later_band() {
-        use rsx::{App, DrawCommand::*, Event};
+        use telar::{App, DrawCommand::*, Event};
         for w in [560u32, 720, 900, 1100, 1280, 1440, 1920] {
-            rsx::set_theme(crate::theme::LandingTheme::light());
-            let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
+            telar::set_theme(crate::theme::LandingTheme::light());
+            let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
             tree.on_event(&Event::WindowResized {
                 width: w,
                 height: 900,
@@ -435,10 +435,10 @@ mod layout_tests {
     // Full-width section bands must not overlap vertically at any width, including the ones where the feature cards wrap to a second line.
     #[test]
     fn section_bands_do_not_overlap() {
-        use rsx::{App, Event};
+        use telar::{App, Event};
         for w in [820u32, 900, 1000, 1100, 1180] {
-            rsx::set_theme(crate::theme::LandingTheme::light());
-            let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
+            telar::set_theme(crate::theme::LandingTheme::light());
+            let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
             tree.on_event(&Event::WindowResized {
                 width: w,
                 height: 800,
@@ -462,9 +462,9 @@ mod layout_tests {
     // The drawn content must actually widen with the window, not stay fixed.
     #[test]
     fn drawn_content_follows_width() {
-        use rsx::{App, Event};
-        rsx::set_theme(crate::theme::LandingTheme::light());
-        let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
+        use telar::{App, Event};
+        telar::set_theme(crate::theme::LandingTheme::light());
+        let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
 
         tree.on_event(&Event::WindowResized {
             width: 1400,
@@ -487,9 +487,9 @@ mod layout_tests {
     // Reproduces the live-app flow: feed the SAME root tree several WindowResized events and confirm every resize re-flattens to different draw commands. A dropped subscription would show up as an unchanged generation after the first.
     #[test]
     fn live_tree_relayouts_on_every_resize() {
-        use rsx::{App, Event};
-        rsx::set_theme(crate::theme::LandingTheme::light());
-        let mut tree = rsx::ComponentList::new(crate::app::LandingRoot.root());
+        use telar::{App, Event};
+        telar::set_theme(crate::theme::LandingTheme::light());
+        let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
 
         let mut last_gen = None;
         for (w, h) in [(1400, 900), (600, 900), (1000, 700), (500, 1000)] {

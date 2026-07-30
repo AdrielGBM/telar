@@ -1,4 +1,4 @@
-name: Release rsx-analyzer
+name: Release telar-analyzer
 
 on:
   push:
@@ -15,18 +15,18 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            binary: rsx-analyzer
+            binary: telar-analyzer
           - target: aarch64-apple-darwin
             # macos-latest is Apple Silicon (M-series); native ARM build avoids cross-compilation of ra_ap_* crates.
             os: macos-latest
-            binary: rsx-analyzer
+            binary: telar-analyzer
           - target: x86_64-apple-darwin
             # macos-13 is the last GitHub-hosted Intel runner.
             os: macos-13
-            binary: rsx-analyzer
+            binary: telar-analyzer
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            binary: rsx-analyzer.exe
+            binary: telar-analyzer.exe
     steps:
       - uses: actions/checkout@v4
 
@@ -35,13 +35,13 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build rsx-analyzer
-        run: cargo build --release --package rsx-analyzer --target ${{ matrix.target }}
+      - name: Build telar-analyzer
+        run: cargo build --release --package telar-analyzer --target ${{ matrix.target }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rsx-analyzer-${{ matrix.target }}
+          name: telar-analyzer-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
           if-no-files-found: error
 
@@ -61,27 +61,27 @@ jobs:
 
       - name: Rename artifacts for release upload
         run: |
-          mv artifacts/rsx-analyzer-x86_64-unknown-linux-gnu/rsx-analyzer   artifacts/rsx-analyzer-x86_64-unknown-linux-gnu
-          mv artifacts/rsx-analyzer-aarch64-apple-darwin/rsx-analyzer        artifacts/rsx-analyzer-aarch64-apple-darwin
-          mv artifacts/rsx-analyzer-x86_64-apple-darwin/rsx-analyzer         artifacts/rsx-analyzer-x86_64-apple-darwin
-          mv artifacts/rsx-analyzer-x86_64-pc-windows-msvc/rsx-analyzer.exe  artifacts/rsx-analyzer-x86_64-pc-windows-msvc.exe
+          mv artifacts/telar-analyzer-x86_64-unknown-linux-gnu/telar-analyzer   artifacts/telar-analyzer-x86_64-unknown-linux-gnu
+          mv artifacts/telar-analyzer-aarch64-apple-darwin/telar-analyzer        artifacts/telar-analyzer-aarch64-apple-darwin
+          mv artifacts/telar-analyzer-x86_64-apple-darwin/telar-analyzer         artifacts/telar-analyzer-x86_64-apple-darwin
+          mv artifacts/telar-analyzer-x86_64-pc-windows-msvc/telar-analyzer.exe  artifacts/telar-analyzer-x86_64-pc-windows-msvc.exe
 
       - name: Create release and upload binaries
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/rsx-analyzer-x86_64-unknown-linux-gnu
-            artifacts/rsx-analyzer-aarch64-apple-darwin
-            artifacts/rsx-analyzer-x86_64-apple-darwin
-            artifacts/rsx-analyzer-x86_64-pc-windows-msvc.exe
+            artifacts/telar-analyzer-x86_64-unknown-linux-gnu
+            artifacts/telar-analyzer-aarch64-apple-darwin
+            artifacts/telar-analyzer-x86_64-apple-darwin
+            artifacts/telar-analyzer-x86_64-pc-windows-msvc.exe
 
   # TODO(user): This job builds and publishes platform-specific VSIXs to the VS Code Marketplace.
   # Before enabling it:
-  #   1. Go to https://marketplace.visualstudio.com/manage → publisher "rsx".
+  #   1. Go to https://marketplace.visualstudio.com/manage → publisher "telar".
   #   2. Create a Personal Access Token (PAT) with "Marketplace (Manage)" scope.
   #   3. Store it as a secret named VSCE_PAT in this repo (Settings → Secrets → Actions).
   #   4. Remove the `if: false` guard below.
-  # Each VSIX bundles the target-native rsx-analyzer binary inside server/ so the extension
+  # Each VSIX bundles the target-native telar-analyzer binary inside server/ so the extension
   # can ship the precompiled binary without users needing cargo.
   publish-vsix:
     name: Publish VSIX (${{ matrix.vsce-target }})
@@ -93,17 +93,17 @@ jobs:
       matrix:
         include:
           - vsce-target: linux-x64
-            artifact: rsx-analyzer-x86_64-unknown-linux-gnu
-            binary: rsx-analyzer
+            artifact: telar-analyzer-x86_64-unknown-linux-gnu
+            binary: telar-analyzer
           - vsce-target: darwin-arm64
-            artifact: rsx-analyzer-aarch64-apple-darwin
-            binary: rsx-analyzer
+            artifact: telar-analyzer-aarch64-apple-darwin
+            binary: telar-analyzer
           - vsce-target: darwin-x64
-            artifact: rsx-analyzer-x86_64-apple-darwin
-            binary: rsx-analyzer
+            artifact: telar-analyzer-x86_64-apple-darwin
+            binary: telar-analyzer
           - vsce-target: win32-x64
-            artifact: rsx-analyzer-x86_64-pc-windows-msvc
-            binary: rsx-analyzer.exe
+            artifact: telar-analyzer-x86_64-pc-windows-msvc
+            binary: telar-analyzer.exe
     steps:
       - uses: actions/checkout@v4
 
@@ -112,11 +112,11 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           # Drop the binary into server/ so resolveServerPath() finds it in the installed extension.
-          path: editors/vscode/rsx/server/
+          path: editors/vscode/telar/server/
 
       - name: Mark binary executable
         if: matrix.vsce-target != 'win32-x64'
-        run: chmod +x editors/vscode/rsx/server/${{ matrix.binary }}
+        run: chmod +x editors/vscode/telar/server/${{ matrix.binary }}
 
       - uses: actions/setup-node@v4
         with:
@@ -126,14 +126,14 @@ jobs:
 
       - name: Install extension dependencies
         run: pnpm install
-        working-directory: editors/vscode/rsx
+        working-directory: editors/vscode/telar
 
       - name: Compile extension
         run: pnpm run compile
-        working-directory: editors/vscode/rsx
+        working-directory: editors/vscode/telar
 
       - name: Package and publish platform VSIX
-        working-directory: editors/vscode/rsx
+        working-directory: editors/vscode/telar
         env:
           # TODO(user): set VSCE_PAT secret — see comment on this job above.
           VSCE_PAT: ${{ secrets.VSCE_PAT }}

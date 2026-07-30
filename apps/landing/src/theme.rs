@@ -1,4 +1,4 @@
-use rsx::{Color, Theme, ThemeTokens, use_theme};
+use telar::{Color, Theme, ThemeTokens, use_theme};
 
 #[derive(Clone)]
 pub struct LandingTheme {

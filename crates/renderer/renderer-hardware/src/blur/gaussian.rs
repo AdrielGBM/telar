@@ -30,7 +30,7 @@ impl BlurPipeline {
             (t, v)
         } else {
             let t = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("rsx-blur-intermediate"),
+                label: Some("telar-blur-intermediate"),
                 size: wgpu::Extent3d {
                     width,
                     height,
@@ -48,7 +48,7 @@ impl BlurPipeline {
         };
 
         let output = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-blur-output"),
+            label: Some("telar-blur-output"),
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -68,7 +68,7 @@ impl BlurPipeline {
         let make_bg_with_params = |view: &wgpu::TextureView, params: &BlurParams| {
             if use_immediates {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("rsx-blur-bind-group"),
+                    label: Some("telar-blur-bind-group"),
                     layout: bind_group_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
@@ -84,12 +84,12 @@ impl BlurPipeline {
             } else {
                 use wgpu::util::DeviceExt;
                 let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("rsx-blur-params"),
+                    label: Some("telar-blur-params"),
                     contents: bytemuck::bytes_of(params),
                     usage: wgpu::BufferUsages::UNIFORM,
                 });
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("rsx-blur-bind-group"),
+                    label: Some("telar-blur-bind-group"),
                     layout: bind_group_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
@@ -118,7 +118,7 @@ impl BlurPipeline {
             };
             let bg = make_bg_with_params(src_view, &params);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rsx-blur-h-pass"),
+                label: Some("telar-blur-h-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &intermediate_view,
                     resolve_target: None,
@@ -150,7 +150,7 @@ impl BlurPipeline {
             };
             let bg = make_bg_with_params(&intermediate_view, &params);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rsx-blur-v-pass"),
+                label: Some("telar-blur-v-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &output_view,
                     resolve_target: None,

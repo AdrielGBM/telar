@@ -43,7 +43,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --exclude platform-android
 
-  # Exercises `cargo rsx build` per host OS: the raw binary everywhere plus each platform's native installer formats.
+  # Exercises `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
   package:
     strategy:
       fail-fast: false
@@ -79,17 +79,17 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: |
           for format in ${{ matrix.formats }}; do
-            echo "::group::cargo rsx build --format $format"
-            cargo run -p cargo-rsx -- build --format "$format" --package sandbox
+            echo "::group::cargo telar build --format $format"
+            cargo run -p cargo-telar -- build --format "$format" --package sandbox
             echo "::endgroup::"
           done
-          ls -R target/rsx-dist
+          ls -R target/telar-dist
       - uses: actions/upload-artifact@v7
         with:
-          name: rsx-dist-${{ matrix.os }}
+          name: telar-dist-${{ matrix.os }}
           path: |
-            target/rsx-dist/*.deb
-            target/rsx-dist/*.AppImage
-            target/rsx-dist/*.dmg
-            target/rsx-dist/*_setup.exe
+            target/telar-dist/*.deb
+            target/telar-dist/*.AppImage
+            target/telar-dist/*.dmg
+            target/telar-dist/*_setup.exe
           if-no-files-found: ignore

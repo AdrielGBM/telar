@@ -1,5 +1,5 @@
 use crate::core::theme::theme;
-use rsx::{
+use telar::{
     AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event, EventResult,
     JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NavPage,
     NavTransition, Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, RwSignal,
@@ -185,7 +185,7 @@ fn build_source_link(
 /// The `.rsx` source behind a section, as a pushed detail page: the file name above the listing, in its own
 /// scroll viewport.
 ///
-/// The listing is one wrapped text block rather than a [`LineGutter`](rsx::LineGutter) column: a gutter numbers
+/// The listing is one wrapped text block rather than a [`LineGutter`](telar::LineGutter) column: a gutter numbers
 /// *logical* lines, and with no monospace or no-wrap in `TextStyle` a long line soft-wraps, which would slide
 /// the numbers out of step with the code.
 struct SourcePage {
@@ -760,7 +760,7 @@ impl Component for ShellPage {
 pub struct SandboxRoot;
 
 impl App for SandboxRoot {
-    fn root(&self) -> Box<dyn rsx::Component> {
+    fn root(&self) -> Box<dyn telar::Component> {
         reset_layout_runtime();
         // Every section's stack is hot state, not just the active one: a reload lands you back where you were reading, in the section you were reading, with each section's own history intact.
         let sections: Vec<usize> = (0..SECTIONS.len()).collect();
@@ -810,7 +810,7 @@ mod tests {
 
     fn shell_stacks() -> (TabHost<usize, SectionRoute>, TabStacks<usize, SectionRoute>) {
         reset_layout_runtime();
-        rsx::set_theme(crate::core::theme::SandboxTheme::modern());
+        telar::set_theme(crate::core::theme::SandboxTheme::modern());
         let sections: Vec<usize> = (0..SECTIONS.len()).collect();
         let stacks = TabStacks::new(signal(5usize), &sections, |_| {
             Navigator::new(SectionRoute::Overview)

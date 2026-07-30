@@ -150,7 +150,7 @@ fn create_offscreen_texture(
     height: u32,
 ) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("rsx-offscreen-output"),
+        label: Some("telar-offscreen-output"),
         size: wgpu::Extent3d {
             width,
             height,
@@ -246,7 +246,7 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
     }
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
-            label: Some("rsx-hardware-renderer"),
+            label: Some("telar-hardware-renderer"),
             required_features: pipeline_cache_feature | immediates_feature,
             required_limits,
             ..Default::default()
@@ -265,21 +265,21 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
     Ok(SHARED_GPU.get().expect("shared GPU just set"))
 }
 
-// Hardware scroll-blit-with-clear: seed the offscreen with the previous frame shifted by the scroll delta so a cleared scrolling frame only redraws the exposed band. On by default for the MSAA (desktop) path; set RSX_HW_SCROLL_BLIT=0 to fall back to a full re-render.
+// Hardware scroll-blit-with-clear: seed the offscreen with the previous frame shifted by the scroll delta so a cleared scrolling frame only redraws the exposed band. On by default for the MSAA (desktop) path; set TELAR_HW_SCROLL_BLIT=0 to fall back to a full re-render.
 fn hw_scroll_blit_enabled() -> bool {
     use std::sync::OnceLock;
     static V: OnceLock<bool> = OnceLock::new();
-    *V.get_or_init(|| std::env::var("RSX_HW_SCROLL_BLIT").as_deref() != Ok("0"))
+    *V.get_or_init(|| std::env::var("TELAR_HW_SCROLL_BLIT").as_deref() != Ok("0"))
 }
 
 // Damage tracking with an opaque clear (F1): generalize the scroll-blit-with-clear prime to an
 // arbitrary dirty rect so a `clear_color` frame that changed only a small region seeds the offscreen
 // with the previous frame (retained_view) and repaints only the dirty scissor instead of the whole
-// surface. On by default for the MSAA (desktop) path; set RSX_HW_DAMAGE=0 to force a full re-render.
+// surface. On by default for the MSAA (desktop) path; set TELAR_HW_DAMAGE=0 to force a full re-render.
 fn hw_damage_with_clear_enabled() -> bool {
     use std::sync::OnceLock;
     static V: OnceLock<bool> = OnceLock::new();
-    *V.get_or_init(|| std::env::var("RSX_HW_DAMAGE").as_deref() != Ok("0"))
+    *V.get_or_init(|| std::env::var("TELAR_HW_DAMAGE").as_deref() != Ok("0"))
 }
 
 fn cull_bounds(
@@ -488,7 +488,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 let data = std::fs::read(&path).ok();
                 let cache = unsafe {
                     device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
-                        label: Some("rsx-pipeline-cache"),
+                        label: Some("telar-pipeline-cache"),
                         data: data.as_deref(),
                         fallback: true,
                     })
@@ -500,14 +500,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         };
 
         let viewport_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-viewport"),
+            label: Some("telar-viewport"),
             size: std::mem::size_of::<Viewport>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let viewport_bind_group_layout = create_viewport_bind_group_layout(&device);
         let viewport_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-viewport-bg"),
+            label: Some("telar-viewport-bg"),
             layout: &viewport_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -735,7 +735,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
         let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rsx-readback"),
+            label: Some("telar-readback"),
             size: (padded_bytes_per_row * height) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -743,7 +743,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("rsx-readback-encoder"),
+                label: Some("telar-readback-encoder"),
             });
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
@@ -860,7 +860,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             wgpu::TextureUsages::RENDER_ATTACHMENT
         };
         self.msaa_texture = Some(self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-msaa"),
+            label: Some("telar-msaa"),
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -882,7 +882,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING
         };
         let retained = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-retained"),
+            label: Some("telar-retained"),
             size: wgpu::Extent3d {
                 width,
                 height,

@@ -20,16 +20,16 @@ members = [
     "crates/ui/theme-core",
     "crates/ui/ui-core",
     "crates/ui/ui-tree",
-    "crates/rsx",
-    "crates/tools/cargo-rsx",
-    "crates/tools/rsx-parser",
-    "crates/tools/rsx-transpiler",
+    "crates/telar",
+    "crates/tools/cargo-telar",
+    "crates/tools/telar-parser",
+    "crates/tools/telar-transpiler",
     "crates/tools/devtools-core",
-    "crates/tools/rsx-devtools",
-    "crates/tools/rsx-analyzer",
-    "crates/tools/rsx-diagnostics",
-    "crates/tools/rsx-macros",
-    "crates/tools/rsx-workspace",
+    "crates/tools/telar-devtools",
+    "crates/tools/telar-analyzer",
+    "crates/tools/telar-diagnostics",
+    "crates/tools/telar-macros",
+    "crates/tools/telar-workspace",
     "apps/sandbox",
     "apps/landing",
     "crates/ui/ui-components", "crates/i18n/i18n-core", "crates/navigate/navigate-core",
@@ -53,15 +53,15 @@ default-members = [
     "crates/ui/theme-core",
     "crates/ui/ui-core",
     "crates/ui/ui-tree",
-    "crates/rsx",
-    "crates/tools/cargo-rsx",
-    "crates/tools/rsx-parser",
-    "crates/tools/rsx-transpiler",
+    "crates/telar",
+    "crates/tools/cargo-telar",
+    "crates/tools/telar-parser",
+    "crates/tools/telar-transpiler",
     "crates/tools/devtools-core",
-    "crates/tools/rsx-devtools",
-    "crates/tools/rsx-diagnostics",
-    "crates/tools/rsx-macros",
-    "crates/tools/rsx-workspace",
+    "crates/tools/telar-devtools",
+    "crates/tools/telar-diagnostics",
+    "crates/tools/telar-macros",
+    "crates/tools/telar-workspace",
     "apps/sandbox",
 ]
 
@@ -112,11 +112,11 @@ ui-core = { path = "crates/ui/ui-core" }
 ui-tree = { path = "crates/ui/ui-tree" }
 ui-components = { path = "crates/ui/ui-components" }
 navigate-core = { path = "crates/navigate/navigate-core" }
-rsx = { path = "crates/rsx" }
+telar = { path = "crates/telar" }
 devtools-core = { path = "crates/tools/devtools-core" }
-rsx-devtools = { path = "crates/tools/rsx-devtools" }
-rsx-diagnostics = { path = "crates/tools/rsx-diagnostics" }
-rsx-parser = { path = "crates/tools/rsx-parser" }
-rsx-transpiler = { path = "crates/tools/rsx-transpiler" }
-rsx-macros = { path = "crates/tools/rsx-macros" }
-rsx-workspace = { path = "crates/tools/rsx-workspace" }
+telar-devtools = { path = "crates/tools/telar-devtools" }
+telar-diagnostics = { path = "crates/tools/telar-diagnostics" }
+telar-parser = { path = "crates/tools/telar-parser" }
+telar-transpiler = { path = "crates/tools/telar-transpiler" }
+telar-macros = { path = "crates/tools/telar-macros" }
+telar-workspace = { path = "crates/tools/telar-workspace" }

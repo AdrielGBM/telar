@@ -31,7 +31,7 @@ pub fn decode(bytes: &[u8]) -> Result<ImageData, ImageError> {
 #[cfg(feature = "dynamic-image")]
 pub fn bake_image_to_source(bytes: &[u8]) -> Result<String, ImageError> {
     let (rgba, w, h) = decode_rgba8(bytes)?;
-    // Bare `ImageData` (not `::renderer_core::ImageData`): the transpiler drops this into code that does `use rsx::*`, whose facade re-exports the type unqualified.
+    // Bare `ImageData` (not `::renderer_core::ImageData`): the transpiler drops this into code that does `use telar::*`, whose facade re-exports the type unqualified.
     Ok(format!(
         "ImageData::new({}.to_vec(), {}, {})",
         byte_string_literal(&rgba),

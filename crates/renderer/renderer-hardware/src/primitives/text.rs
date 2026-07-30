@@ -32,7 +32,7 @@ impl TextPipeline {
         let instances = InstancePipeline::<TextInstance>::new(device, "text", 256);
 
         let atlas_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rsx-text-atlas-bgl"),
+            label: Some("telar-text-atlas-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -54,7 +54,7 @@ impl TextPipeline {
         });
 
         let atlas_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rsx-text-atlas"),
+            label: Some("telar-text-atlas"),
             size: wgpu::Extent3d {
                 width: ATLAS_SIZE,
                 height: ATLAS_SIZE,
@@ -70,7 +70,7 @@ impl TextPipeline {
 
         let atlas_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("rsx-text-sampler"),
+            label: Some("telar-text-sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -81,7 +81,7 @@ impl TextPipeline {
         });
 
         let atlas_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rsx-text-atlas-bg"),
+            label: Some("telar-text-atlas-bg"),
             layout: &atlas_bgl,
             entries: &[
                 wgpu::BindGroupEntry {

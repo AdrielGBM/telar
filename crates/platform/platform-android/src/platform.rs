@@ -164,7 +164,7 @@ impl AndroidPlatform {
 
         // Route tracing events (and `log` records bridged from winit/wgpu) to Android logcat under
         // the `rsx` tag. `try_init` is a no-op if a subscriber is already installed.
-        let logcat = paranoid_android::layer("rsx").with_filter(LevelFilter::DEBUG);
+        let logcat = paranoid_android::layer("telar").with_filter(LevelFilter::DEBUG);
         tracing_subscriber::registry().with(logcat).try_init().ok();
 
         let event_loop = EventLoop::builder()

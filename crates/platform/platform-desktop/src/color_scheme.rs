@@ -41,7 +41,7 @@ fn scheme_u32(v: &zbus::zvariant::Value) -> Option<u32> {
 /// the session bus is unavailable.
 pub fn spawn_watch(on_change: impl Fn(bool) + Send + 'static) {
     std::thread::Builder::new()
-        .name("rsx-color-scheme".to_string())
+        .name("telar-color-scheme".to_string())
         .spawn(move || {
             let Ok(conn) = zbus::blocking::Connection::session() else {
                 return;
