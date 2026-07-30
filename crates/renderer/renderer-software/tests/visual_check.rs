@@ -7,7 +7,7 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use platform_headless::HeadlessWindow;
 use renderer_core::{Color, DrawCommand, RenderBackend, TextStyle};
-use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 #[test]
 fn visual_check_png() {

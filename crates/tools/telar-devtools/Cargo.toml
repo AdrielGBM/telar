@@ -2,6 +2,11 @@
 name = "telar-devtools"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "In-app developer overlay for Telar: live component tree inspection."
+keywords = ["telar", "devtools", "ui", "gui", "debugging"]
+categories = ["development-tools::debugging", "gui"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

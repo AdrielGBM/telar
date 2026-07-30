@@ -7,7 +7,7 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use platform_headless::HeadlessWindow;
 use renderer_core::{Color, DrawCommand, RectStyle, RenderBackend, ShapeStyle};
-use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 fn alpha_at(rgba: &[u8], w: u32, x: u32, y: u32) -> u8 {
     rgba[((y * w + x) * 4 + 3) as usize]

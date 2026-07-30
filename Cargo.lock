@@ -925,16 +925,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "devtools-core"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "platform-core",
- "renderer-core",
- "ui-tree",
-]
-
-[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1391,10 +1381,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "geometry-core"
-version = "0.1.0"
-
-[[package]]
 name = "gethostname"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1626,13 +1612,6 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
-
-[[package]]
-name = "i18n-core"
-version = "0.1.0"
-dependencies = [
- "reactive-core",
-]
 
 [[package]]
 name = "icu_collections"
@@ -1997,26 +1976,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "layout-core"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "rustc-hash 2.1.2",
- "taffy",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "layout-reactive"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "layout-core",
- "reactive-core",
- "rustc-hash 2.1.2",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2266,14 +2225,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "motion-core"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "reactive-core",
-]
-
-[[package]]
 name = "moxcms"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2307,17 +2258,6 @@ dependencies = [
  "spirv",
  "thiserror 2.0.18",
  "unicode-ident",
-]
-
-[[package]]
-name = "navigate-core"
-version = "0.1.0"
-dependencies = [
- "layout-core",
- "motion-core",
- "platform-core",
- "reactive-core",
- "ui-core",
 ]
 
 [[package]]
@@ -2936,62 +2876,6 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
-
-[[package]]
-name = "platform-android"
-version = "0.1.0"
-dependencies = [
- "android-activity",
- "libc",
- "paranoid-android",
- "platform-core",
- "platform-winit",
- "raw-window-handle",
- "services-core",
- "tracing",
- "tracing-subscriber",
- "winit",
-]
-
-[[package]]
-name = "platform-core"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "raw-window-handle",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "platform-desktop"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "platform-core",
- "platform-winit",
- "renderer-core",
- "services-core",
- "tracing",
- "winit",
- "zbus",
-]
-
-[[package]]
-name = "platform-headless"
-version = "0.1.0"
-dependencies = [
- "platform-core",
- "raw-window-handle",
-]
-
-[[package]]
-name = "platform-winit"
-version = "0.1.0"
-dependencies = [
- "platform-core",
- "raw-window-handle",
- "winit",
-]
 
 [[package]]
 name = "plotters"
@@ -4010,15 +3894,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reactive-core"
-version = "0.1.0"
-dependencies = [
- "rustc-hash 2.1.2",
- "slab",
- "smallvec",
-]
-
-[[package]]
 name = "read-fonts"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4122,100 +3997,6 @@ name = "renderdoc-sys"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
-
-[[package]]
-name = "renderer-assets"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "image",
- "renderer-core",
- "resvg",
- "rustc-hash 2.1.2",
- "thiserror 2.0.18",
- "usvg",
-]
-
-[[package]]
-name = "renderer-core"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "criterion",
- "geometry-core",
- "rustc-hash 2.1.2",
- "smallvec",
- "thiserror 2.0.18",
- "tracing",
- "wide",
-]
-
-[[package]]
-name = "renderer-hardware"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "criterion",
- "geometry-core",
- "lyon",
- "platform-headless",
- "pollster",
- "raw-window-handle",
- "renderer-core",
- "renderer-text",
- "rustc-hash 2.1.2",
- "tracing",
- "wgpu",
-]
-
-[[package]]
-name = "renderer-software"
-version = "0.1.0"
-dependencies = [
- "clru",
- "criterion",
- "geometry-core",
- "image",
- "layout-core",
- "lru",
- "memmap2",
- "ndk",
- "platform-core",
- "platform-headless",
- "raw-window-handle",
- "rayon",
- "reactive-core",
- "renderer-core",
- "renderer-text",
- "rustc-hash 2.1.2",
- "rustix 0.38.44",
- "smallvec",
- "softbuffer",
- "tiny-skia 0.12.0",
- "tracing",
- "ui-components",
- "ui-core",
- "ui-tree",
- "wayland-client",
- "wide",
-]
-
-[[package]]
-name = "renderer-text"
-version = "0.1.0"
-dependencies = [
- "clru",
- "cosmic-text",
- "criterion",
- "etagere",
- "fontdb",
- "geometry-core",
- "lru",
- "renderer-core",
- "rustc-hash 2.1.2",
- "skrifa 0.43.2",
- "tiny-skia 0.12.0",
-]
 
 [[package]]
 name = "resvg"
@@ -4430,10 +4211,10 @@ dependencies = [
 name = "sandbox"
 version = "0.1.0"
 dependencies = [
- "platform-core",
- "platform-headless",
  "serde",
  "telar",
+ "telar-platform-core",
+ "telar-platform-headless",
  "tracing-subscriber",
 ]
 
@@ -4539,14 +4320,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
-]
-
-[[package]]
-name = "services-core"
-version = "0.1.0"
-dependencies = [
- "rustc-hash 2.1.2",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -4851,36 +4624,36 @@ dependencies = [
 name = "telar"
 version = "0.1.0"
 dependencies = [
- "devtools-core",
- "geometry-core",
- "i18n-core",
- "layout-core",
  "libc",
  "libloading 0.9.0",
- "motion-core",
- "navigate-core",
- "platform-android",
- "platform-core",
- "platform-desktop",
- "platform-headless",
  "raw-window-handle",
- "reactive-core",
- "renderer-assets",
- "renderer-core",
- "renderer-hardware",
- "renderer-software",
- "renderer-text",
  "serde",
  "serde_json",
- "services-core",
  "telar-devtools",
+ "telar-devtools-core",
+ "telar-geometry-core",
+ "telar-i18n-core",
+ "telar-layout-core",
  "telar-macros",
- "theme-core",
+ "telar-motion-core",
+ "telar-navigate-core",
+ "telar-platform-android",
+ "telar-platform-core",
+ "telar-platform-desktop",
+ "telar-platform-headless",
+ "telar-reactive-core",
+ "telar-renderer-assets",
+ "telar-renderer-core",
+ "telar-renderer-hardware",
+ "telar-renderer-software",
+ "telar-renderer-text",
+ "telar-services-core",
+ "telar-theme-core",
+ "telar-ui-components",
+ "telar-ui-core",
+ "telar-ui-tree",
  "toml",
  "tracing",
- "ui-components",
- "ui-core",
- "ui-tree",
 ]
 
 [[package]]
@@ -4912,10 +4685,20 @@ dependencies = [
 name = "telar-devtools"
 version = "0.1.0"
 dependencies = [
- "devtools-core",
- "geometry-core",
- "platform-core",
- "renderer-core",
+ "telar-devtools-core",
+ "telar-geometry-core",
+ "telar-platform-core",
+ "telar-renderer-core",
+]
+
+[[package]]
+name = "telar-devtools-core"
+version = "0.1.0"
+dependencies = [
+ "telar-geometry-core",
+ "telar-platform-core",
+ "telar-renderer-core",
+ "telar-ui-tree",
 ]
 
 [[package]]
@@ -4925,6 +4708,37 @@ dependencies = [
  "lsp-types",
  "telar-parser",
  "telar-transpiler",
+]
+
+[[package]]
+name = "telar-geometry-core"
+version = "0.1.0"
+
+[[package]]
+name = "telar-i18n-core"
+version = "0.1.0"
+dependencies = [
+ "telar-reactive-core",
+]
+
+[[package]]
+name = "telar-layout-core"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash 2.1.2",
+ "taffy",
+ "telar-geometry-core",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "telar-layout-reactive"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash 2.1.2",
+ "telar-geometry-core",
+ "telar-layout-core",
+ "telar-reactive-core",
 ]
 
 [[package]]
@@ -4938,6 +4752,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-motion-core"
+version = "0.1.0"
+dependencies = [
+ "telar-geometry-core",
+ "telar-reactive-core",
+]
+
+[[package]]
+name = "telar-navigate-core"
+version = "0.1.0"
+dependencies = [
+ "telar-layout-core",
+ "telar-motion-core",
+ "telar-platform-core",
+ "telar-reactive-core",
+ "telar-ui-core",
+]
+
+[[package]]
 name = "telar-parser"
 version = "0.1.0"
 dependencies = [
@@ -4945,13 +4778,233 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-platform-android"
+version = "0.1.0"
+dependencies = [
+ "android-activity",
+ "libc",
+ "paranoid-android",
+ "raw-window-handle",
+ "telar-platform-core",
+ "telar-platform-winit",
+ "telar-services-core",
+ "tracing",
+ "tracing-subscriber",
+ "winit",
+]
+
+[[package]]
+name = "telar-platform-core"
+version = "0.1.0"
+dependencies = [
+ "raw-window-handle",
+ "telar-geometry-core",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "telar-platform-desktop"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "telar-platform-core",
+ "telar-platform-winit",
+ "telar-renderer-core",
+ "telar-services-core",
+ "tracing",
+ "winit",
+ "zbus",
+]
+
+[[package]]
+name = "telar-platform-headless"
+version = "0.1.0"
+dependencies = [
+ "raw-window-handle",
+ "telar-platform-core",
+]
+
+[[package]]
+name = "telar-platform-winit"
+version = "0.1.0"
+dependencies = [
+ "raw-window-handle",
+ "telar-platform-core",
+ "winit",
+]
+
+[[package]]
+name = "telar-reactive-core"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash 2.1.2",
+ "slab",
+ "smallvec",
+]
+
+[[package]]
+name = "telar-renderer-assets"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "resvg",
+ "rustc-hash 2.1.2",
+ "telar-geometry-core",
+ "telar-renderer-core",
+ "thiserror 2.0.18",
+ "usvg",
+]
+
+[[package]]
+name = "telar-renderer-core"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "criterion",
+ "rustc-hash 2.1.2",
+ "smallvec",
+ "telar-geometry-core",
+ "thiserror 2.0.18",
+ "tracing",
+ "wide",
+]
+
+[[package]]
+name = "telar-renderer-hardware"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "criterion",
+ "lyon",
+ "pollster",
+ "raw-window-handle",
+ "rustc-hash 2.1.2",
+ "telar-geometry-core",
+ "telar-platform-headless",
+ "telar-renderer-core",
+ "telar-renderer-text",
+ "tracing",
+ "wgpu",
+]
+
+[[package]]
+name = "telar-renderer-software"
+version = "0.1.0"
+dependencies = [
+ "clru",
+ "criterion",
+ "image",
+ "lru",
+ "memmap2",
+ "ndk",
+ "raw-window-handle",
+ "rayon",
+ "rustc-hash 2.1.2",
+ "rustix 0.38.44",
+ "smallvec",
+ "softbuffer",
+ "telar-geometry-core",
+ "telar-layout-core",
+ "telar-platform-core",
+ "telar-platform-headless",
+ "telar-reactive-core",
+ "telar-renderer-core",
+ "telar-renderer-text",
+ "telar-ui-components",
+ "telar-ui-core",
+ "telar-ui-tree",
+ "tiny-skia 0.12.0",
+ "tracing",
+ "wayland-client",
+ "wide",
+]
+
+[[package]]
+name = "telar-renderer-text"
+version = "0.1.0"
+dependencies = [
+ "clru",
+ "cosmic-text",
+ "criterion",
+ "etagere",
+ "fontdb",
+ "lru",
+ "rustc-hash 2.1.2",
+ "skrifa 0.43.2",
+ "telar-geometry-core",
+ "telar-renderer-core",
+ "tiny-skia 0.12.0",
+]
+
+[[package]]
+name = "telar-services-core"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash 2.1.2",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "telar-theme-core"
+version = "0.1.0"
+dependencies = [
+ "telar-geometry-core",
+ "telar-reactive-core",
+]
+
+[[package]]
 name = "telar-transpiler"
 version = "0.1.0"
 dependencies = [
- "renderer-assets",
  "telar-parser",
+ "telar-renderer-assets",
  "thiserror 2.0.18",
  "toml",
+]
+
+[[package]]
+name = "telar-ui-components"
+version = "0.1.0"
+dependencies = [
+ "telar-geometry-core",
+ "telar-layout-core",
+ "telar-motion-core",
+ "telar-platform-core",
+ "telar-reactive-core",
+ "telar-renderer-core",
+ "telar-theme-core",
+ "telar-ui-core",
+]
+
+[[package]]
+name = "telar-ui-core"
+version = "0.1.0"
+dependencies = [
+ "telar-geometry-core",
+ "telar-layout-core",
+ "telar-layout-reactive",
+ "telar-motion-core",
+ "telar-platform-core",
+ "telar-reactive-core",
+ "telar-renderer-assets",
+ "telar-renderer-core",
+ "telar-renderer-text",
+ "telar-services-core",
+ "telar-theme-core",
+ "telar-ui-tree",
+]
+
+[[package]]
+name = "telar-ui-tree"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "rustc-hash 2.1.2",
+ "telar-geometry-core",
+ "telar-motion-core",
+ "telar-platform-core",
+ "telar-reactive-core",
+ "telar-renderer-core",
 ]
 
 [[package]]
@@ -4994,14 +5047,6 @@ name = "text-size"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f18aa187839b2bdb1ad2fa35ead8c4c2976b64e4363c386d45ac0f7ee85c9233"
-
-[[package]]
-name = "theme-core"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "reactive-core",
-]
 
 [[package]]
 name = "thin-vec"
@@ -5373,51 +5418,6 @@ dependencies = [
  "memoffset",
  "tempfile",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "ui-components"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "layout-core",
- "motion-core",
- "platform-core",
- "reactive-core",
- "renderer-core",
- "theme-core",
- "ui-core",
-]
-
-[[package]]
-name = "ui-core"
-version = "0.1.0"
-dependencies = [
- "geometry-core",
- "layout-core",
- "layout-reactive",
- "motion-core",
- "platform-core",
- "reactive-core",
- "renderer-assets",
- "renderer-core",
- "renderer-text",
- "services-core",
- "theme-core",
- "ui-tree",
-]
-
-[[package]]
-name = "ui-tree"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "geometry-core",
- "motion-core",
- "platform-core",
- "reactive-core",
- "renderer-core",
- "rustc-hash 2.1.2",
 ]
 
 [[package]]

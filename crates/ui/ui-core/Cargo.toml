@@ -1,7 +1,12 @@
 [package]
-name = "ui-core"
+name = "telar-ui-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Widget kernel for Telar: containers, text, input handling, scrolling and canvas primitives."
+keywords = ["telar", "ui", "gui", "widgets", "reactive"]
+categories = ["gui"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

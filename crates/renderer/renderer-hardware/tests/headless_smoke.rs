@@ -11,8 +11,8 @@ use renderer_core::{
     Color, DrawCommand, Gradient, Paint, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
     ShapeStyle, Stroke, TextStyle,
 };
-use renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
 use renderer_text::TextShaperConfig;
+use telar_renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
 
 #[test]
 fn headless_renders_non_empty_frame() {

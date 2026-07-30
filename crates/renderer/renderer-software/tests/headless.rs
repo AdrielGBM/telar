@@ -6,7 +6,7 @@ use renderer_core::{
     BorderRadius, Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
     ShapeStyle, Stroke, TextStyle,
 };
-use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 #[test]
 fn headless_renders_visible_pixels() {

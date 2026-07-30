@@ -1,7 +1,12 @@
 [package]
-name = "motion-core"
+name = "telar-motion-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Signal-backed animation engine for Telar: tweens and springs driven by a central frame ticker."
+keywords = ["telar", "animation", "spring", "tween", "reactive"]
+categories = ["gui", "graphics"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

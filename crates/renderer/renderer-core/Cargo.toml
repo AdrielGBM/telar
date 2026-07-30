@@ -1,7 +1,12 @@
 [package]
-name = "renderer-core"
+name = "telar-renderer-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Renderer-agnostic drawing vocabulary for Telar: draw commands, culling, dirty tracking and GPU sync."
+keywords = ["telar", "renderer", "graphics", "2d", "gui"]
+categories = ["rendering", "graphics", "gui"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

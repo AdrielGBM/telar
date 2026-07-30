@@ -14,7 +14,7 @@
 /// Generates a swappable per-surface thread-local plus its `Context`/`Guard`. See the module docs.
 ///
 /// ```ignore
-/// reactive_core::surface_local! {
+/// telar_reactive_core::surface_local! {
 ///     slot LAYOUT: LayoutRuntime = LayoutRuntime::new();
 ///     access with_layout, with_layout_ref;
 ///     context LayoutContext, LayoutGuard;

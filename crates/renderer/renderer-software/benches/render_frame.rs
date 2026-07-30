@@ -12,7 +12,7 @@ use renderer_core::{
     BorderRadius, Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
     ShapeStyle, Stroke, TextStyle,
 };
-use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;

@@ -8,7 +8,7 @@ use platform_core::{Event, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, RenderBackend, ShapeStyle};
-use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use ui_core::{LayoutItem, Overlay, StyledContainer, compute_layout, reset_layout_runtime};
 use ui_tree::ComponentList;
 

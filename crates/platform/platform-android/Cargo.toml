@@ -1,7 +1,12 @@
 [package]
-name = "platform-android"
+name = "telar-platform-android"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Android platform backend for Telar, built on android-activity."
+keywords = ["telar", "android", "platform", "mobile", "gui"]
+categories = ["gui", "os"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

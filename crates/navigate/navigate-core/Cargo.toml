@@ -1,7 +1,12 @@
 [package]
-name = "navigate-core"
+name = "telar-navigate-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Page-stack navigation for Telar: a reactive navigator and an animated navigation host."
+keywords = ["telar", "navigation", "router", "ui", "gui"]
+categories = ["gui"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

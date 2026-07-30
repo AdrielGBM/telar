@@ -7,7 +7,7 @@ use platform_headless::HeadlessWindow;
 use reactive_core::signal;
 use renderer_core::TextStyle;
 use renderer_core::{Color, RenderBackend};
-use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use ui_components::{
     CheckboxProps, RadioProps, SliderProps, TextFieldProps, ToggleProps, checkbox, radio, slider,
     text_field, toggle,

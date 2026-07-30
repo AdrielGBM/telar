@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use geometry_core::Rect;
-use renderer_core::{
+use telar_renderer_core::{
     BorderRadius, Color, DrawCommand, RectStyle, ScaleScratch, TextStyle, scale_commands,
 };
 

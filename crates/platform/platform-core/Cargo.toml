@@ -1,7 +1,12 @@
 [package]
-name = "platform-core"
+name = "telar-platform-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Platform abstraction for Telar: window, event and event-loop traits."
+keywords = ["telar", "platform", "window", "events", "gui"]
+categories = ["gui", "os"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

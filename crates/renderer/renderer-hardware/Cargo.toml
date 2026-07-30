@@ -1,7 +1,12 @@
 [package]
-name = "renderer-hardware"
+name = "telar-renderer-hardware"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "wgpu-based GPU renderer for Telar with path tessellation, blur and compositing."
+keywords = ["telar", "renderer", "wgpu", "gpu", "graphics"]
+categories = ["rendering::engine", "rendering::graphics-api", "graphics"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

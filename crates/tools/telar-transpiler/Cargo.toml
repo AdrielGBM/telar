@@ -2,6 +2,11 @@
 name = "telar-transpiler"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Transpiles parsed .rsx documents into compilable Rust source for the Telar runtime."
+keywords = ["telar", "rsx", "transpiler", "codegen", "ui"]
+categories = ["development-tools::build-utils", "compilers", "gui"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

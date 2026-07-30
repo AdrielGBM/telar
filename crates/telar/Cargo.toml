@@ -2,6 +2,11 @@
 name = "telar"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "A modular Rust UI framework with its own template language, reactive signals and a self-contained renderer."
+keywords = ["ui", "gui", "framework", "reactive", "declarative"]
+categories = ["gui", "rendering", "graphics"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

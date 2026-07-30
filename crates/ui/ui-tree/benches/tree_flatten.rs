@@ -10,7 +10,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use geometry_core::Rect;
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
-use ui_tree::{Component, ComponentList, NodeVec, RenderNode, Segment, SegmentRoot};
+use telar_ui_tree::{Component, ComponentList, NodeVec, RenderNode, Segment, SegmentRoot};
 
 /// One card's render structure, shared by the monolithic and segmented benches so command counts match.
 fn card(row: usize, t: f32) -> RenderNode {

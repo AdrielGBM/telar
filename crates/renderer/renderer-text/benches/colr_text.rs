@@ -15,7 +15,7 @@ use std::hint::black_box;
 use criterion::{Criterion, criterion_group, criterion_main};
 use geometry_core::Rect;
 use renderer_core::{Color, TextStyle};
-use renderer_text::TextShaper;
+use telar_renderer_text::TextShaper;
 
 fn ui_rect() -> Rect {
     Rect {

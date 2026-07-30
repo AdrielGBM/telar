@@ -1,7 +1,12 @@
 [package]
-name = "services-core"
+name = "telar-services-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Platform path providers and an optional dependency-injection scope for Telar."
+keywords = ["telar", "services", "paths", "di", "ui"]
+categories = ["gui", "filesystem"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

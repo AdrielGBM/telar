@@ -17,8 +17,8 @@ use renderer_core::{
     Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow, ShapeStyle,
     TextStyle,
 };
-use renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
 use renderer_text::TextShaperConfig;
+use telar_renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
 
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;

@@ -1,7 +1,12 @@
 [package]
-name = "layout-core"
+name = "telar-layout-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "Flexbox and grid layout engine for Telar, built on Taffy."
+keywords = ["telar", "layout", "flexbox", "grid", "ui"]
+categories = ["gui"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

@@ -1,7 +1,12 @@
 [package]
-name = "ui-components"
+name = "telar-ui-components"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "First-party widget catalogue for Telar: buttons, inputs, chips, accordions and more."
+keywords = ["telar", "ui", "gui", "widgets", "components"]
+categories = ["gui"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

@@ -1,7 +1,12 @@
 [package]
-name = "platform-winit"
+name = "telar-platform-winit"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "winit-backed window and input mapping for Telar's platform abstraction."
+keywords = ["telar", "winit", "window", "platform", "gui"]
+categories = ["gui", "os"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 

@@ -1,7 +1,12 @@
 [package]
-name = "renderer-software"
+name = "telar-renderer-software"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+description = "CPU rasterizer for Telar, built on tiny-skia, with software surface presentation."
+keywords = ["telar", "renderer", "software", "rasterizer", "2d"]
+categories = ["rendering::engine", "graphics", "gui"]
+readme.workspace = true
 license.workspace = true
 repository.workspace = true
 
