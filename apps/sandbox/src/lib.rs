@@ -320,7 +320,9 @@ mod smoke {
             ];
             for (idx, theme) in themes {
                 switch_theme(&mut tree, idx);
-                for (i, (_, _, fill)) in nav_rects(&tree).into_iter().enumerate() {
+                let rects = nav_rects(&tree);
+                let found = rects.len();
+                for (i, (cx, cy, fill)) in rects.into_iter().enumerate() {
                     let want = if i == 15 {
                         theme.primary
                     } else {
@@ -328,7 +330,7 @@ mod smoke {
                     };
                     assert!(
                         close(fill, want),
-                        "force_tick={force_tick} theme={} nav[{i}] fill={:?} != expected {:?} (frozen at a stale theme)",
+                        "force_tick={force_tick} theme={} nav[{i}] of {found} at ({cx:.0},{cy:.0}) fill={:?} != expected {:?} (frozen at a stale theme)",
                         theme.name,
                         (fill.r, fill.g, fill.b),
                         (want.r, want.g, want.b),
