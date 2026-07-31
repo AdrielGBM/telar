@@ -46,13 +46,30 @@ impl DrawState {
         }
     }
 
+    /// Pushes `rect` as a clip, intersected with whatever is already clipping, and returns the effective
+    /// scissor.
+    ///
+    /// A child clip that does *not* meet its parent clips away to nothing, and that case is worth spelling
+    /// out because getting it wrong is invisible in every test that does not scroll: `intersect` answers
+    /// `None` for two rects that do not overlap, and falling back to `rect` there hands the child its **own**
+    /// box as the scissor — outside everything that contains it. A widget that emits a clip of its own (an
+    /// image does, for a `Cover` overflow or a corner radius) therefore escaped the scroll area it lived in
+    /// the moment it scrolled out of view: it went on being drawn at its true position, outside the panel,
+    /// sliding as the content scrolled, and only looked right once its own box fell back inside the viewport.
+    /// Nothing *without* a clip of its own could show the bug, which is why the text and boxes beside it in
+    /// the same list were always clipped correctly.
     #[inline]
     pub fn push_clip(&mut self, rect: Rect) -> Rect {
-        let effective = self
-            .clip_stack
-            .last()
-            .and_then(|&current| current.intersect(rect))
-            .unwrap_or(rect);
+        // The empty rect is placed at the *parent's* origin rather than the child's. An empty clip has no
+        // position worth keeping, and a backend that cannot express one — wgpu rejects an empty scissor, so
+        // `physical_scissor` rounds it up to 1×1 — then draws that one pixel somewhere it was already allowed
+        // to draw, instead of leaving a stray dot outside the panel.
+        let effective = match self.clip_stack.last() {
+            Some(&current) => current
+                .intersect(rect)
+                .unwrap_or_else(|| Rect::new(current.x, current.y, 0.0, 0.0)),
+            None => rect,
+        };
         self.clip_stack.push(effective);
         effective
     }
@@ -146,5 +163,39 @@ mod tests {
         state.push_matrix(cumulative);
         state.push_matrix(matrix);
         assert_eq!(state.cumulative_matrix, expected);
+    }
+
+    /// A clip nested inside one it does not touch must clip away to nothing. The failing case is a widget
+    /// that emits its own clip — an image with a `Cover` overflow or a corner radius — scrolled out of the
+    /// viewport containing it: falling back to the child's own rect scissors to a box outside the parent, and
+    /// the widget goes on being drawn there, over whatever the panel happens to be sitting on.
+    #[test]
+    fn a_clip_outside_its_parent_clips_away_to_nothing() {
+        let viewport = Rect::new(0.0, 0.0, 340.0, 300.0);
+        let mut state = DrawState::new();
+        assert_eq!(state.push_clip(viewport), viewport, "the outermost clip is itself");
+
+        // An avatar 560px down a scrolling column: its own 56×56 clip is nowhere near the viewport.
+        let escaped = state.push_clip(Rect::new(0.0, 560.0, 56.0, 56.0));
+        assert_eq!(
+            (escaped.width, escaped.height),
+            (0.0, 0.0),
+            "an image scrolled out of its panel must not be drawn at all, got {escaped:?}"
+        );
+        assert!(
+            viewport.intersect(Rect::new(escaped.x, escaped.y, 1.0, 1.0)).is_some(),
+            "and the empty clip sits inside the parent, so a backend that rounds it up to 1×1 draws that \
+             pixel where it was already allowed to: {escaped:?}"
+        );
+
+        state.pop_clip();
+        // The same image scrolled back in is clipped to the part of it the viewport actually shows.
+        let visible = state.push_clip(Rect::new(0.0, 280.0, 56.0, 56.0));
+        assert_eq!(visible, Rect::new(0.0, 280.0, 56.0, 20.0));
+
+        // And a clip with nothing above it is still itself, which is what the scroll area's own one relies on.
+        let mut fresh = DrawState::new();
+        let alone = Rect::new(12.0, 34.0, 56.0, 78.0);
+        assert_eq!(fresh.push_clip(alone), alone);
     }
 }
