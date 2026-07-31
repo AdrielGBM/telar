@@ -268,12 +268,17 @@ mod smoke {
             telar::set_theme(crate::core::theme::SandboxTheme::modern());
             // The sidebar theme buttons now call `set_mode(id)`; register the appliers so a click installs the variant.
             crate::core::theme::register_modes();
+            // Tall enough that every nav button this test clicks stays well inside the viewport. At 900 the
+            // deepest target sat 13px above the bottom edge, so a platform whose font metrics pushed the rail
+            // down (Windows did, by 14px) dropped the click outside the window and left the previous section
+            // selected — which surfaced as a stale-looking fill rather than as a missed click.
+            const WINDOW_H: u32 = 1200;
             let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
             feed(
                 &mut tree,
                 &Event::WindowResized {
                     width: 1200,
-                    height: 900,
+                    height: WINDOW_H,
                 },
             );
             assert!(nav_rects(&tree).len() >= 16, "need nav buttons laid out");
@@ -282,6 +287,10 @@ mod smoke {
             let nav_to = |tree: &mut telar::ComponentList, target: usize| {
                 let rects = nav_rects(tree);
                 let (tx, ty, _) = rects[target];
+                assert!(
+                    ty < WINDOW_H as f32,
+                    "nav[{target}] sits at y={ty:.0}, past the {WINDOW_H}px viewport — the click would never land"
+                );
                 for r in rects.iter().take(target + 1) {
                     feed(tree, &mv(r.0, r.1));
                 }
