@@ -180,7 +180,7 @@ where
 }
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use platform_android::AndroidApp;
-#[cfg(feature = "runtime")]
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::build_surface_handler;
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use runner::run_android_app_with_name;

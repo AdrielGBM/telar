@@ -15,7 +15,7 @@ use crate::config;
 use crate::prefs::UserPrefs;
 
 #[cfg(target_os = "android")]
-use super::handler::AppHandler;
+use super::handler::build_app_handler;
 
 // App processes do not inherit the adb shell environment, so debug flags that are env vars on
 // desktop (TELAR_PERF, TELAR_HW_DAMAGE, …) are unreachable on Android. Bridge them from `debug.telar.<k>`
@@ -85,40 +85,15 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
     }
     if let Err(e) = platform.run(
         window,
-        AppHandler::<AndroidWindow, D> {
-            app: Box::new(app),
-            surface: None,
-            window_commands: platform_core::WindowCommandContext::new(),
-            tree: None,
-            renderer: None,
-            renderer_is_hardware: false,
-            backend,
-            prefs,
-            pending_restart: false,
-            pending_renderer: None,
-            _flush_notify: None,
-            scale_factor: 1.0,
-            exit_requested: false,
-            redraw_waker: None,
-            scale_scratch: renderer_core::ScaleScratch::new(),
-            window_signals: None,
-            app_name: app_name.to_owned(),
-            last_frame: std::time::Instant::now(),
-            dev: D::default(),
+        build_app_handler::<AndroidWindow, D>(
+            Box::new(app),
             paths,
             font_paths,
             font_data,
-            _window: std::marker::PhantomData,
-            render_tx: None,
-            render_ret_rx: None,
-            command_buf_pool: Vec::new(),
-            render_join: None,
-            hw_renderer: None,
-            #[cfg(all(feature = "dev", not(target_os = "android")))]
-            hot_reload_rx: None,
-            hint_session: None,
-            frame_start: std::time::Instant::now(),
-        },
+            backend,
+            prefs,
+            app_name.to_owned(),
+        ),
     ) {
         tracing::error!("Android event loop exited with error: {e}");
     }

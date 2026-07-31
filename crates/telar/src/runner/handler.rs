@@ -135,6 +135,10 @@ where
         hw_renderer: None,
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         hot_reload_rx: None,
+        #[cfg(target_os = "android")]
+        hint_session: None,
+        #[cfg(target_os = "android")]
+        frame_start: std::time::Instant::now(),
     }
 }
 
