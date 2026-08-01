@@ -127,16 +127,16 @@ pub use ui_core::{AssetSource, AssetState};
 pub use ui_core::{
     Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
     EventResult, Image, Input, KeyboardMode, LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter,
-    NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport,
-    ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,
-    SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, Text, TextArea,
-    VirtualList, anchor_rect, box_item, box_transform, close_overlay, compute_layout,
-    current_direction, dismiss_depth, dismiss_top, focus, fragment, fragment_gap,
-    fragment_positional, fragment_positional_gap, interactive_rects, mark_dirty, named_overlay,
-    new_container, new_leaf, open_overlay, overlay_open, overlay_state, relayout_if_dirty,
-    remove_node, reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
-    set_overlay_host, surface_frame, toggle_overlay, track_layout, transform_pointer,
-    use_direction, use_dismiss_depth, use_overlay_open, visible_window,
+    MIN_FRAME_SIZE, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText,
+    ScrollViewport, ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor,
+    SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize,
+    SurfaceTransition, Text, TextArea, VirtualList, anchor_rect, box_item, box_transform,
+    close_overlay, compute_layout, current_direction, dismiss_depth, dismiss_top, focus, fragment,
+    fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects, mark_dirty,
+    named_overlay, new_container, new_leaf, open_overlay, overlay_open, overlay_state,
+    relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_direction, set_display,
+    set_min_height, set_overlay_host, surface_frame, toggle_overlay, track_layout,
+    transform_pointer, use_direction, use_dismiss_depth, use_overlay_open, visible_window,
 };
 
 #[cfg(feature = "navigate")]

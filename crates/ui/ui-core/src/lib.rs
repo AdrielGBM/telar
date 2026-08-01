@@ -71,8 +71,9 @@ pub use scroll_region::visible_rect;
 pub use slots::Slots;
 pub use styled_container::{StyledContainer, box_transform};
 pub use surface::{
-    DEFAULT_SCRIM, KeyboardMode, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement,
-    SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, surface_frame,
+    DEFAULT_SCRIM, KeyboardMode, MIN_FRAME_SIZE, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,
+    SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, SurfaceTransition,
+    surface_frame,
 };
 pub use surface_context::{Surface, SurfaceGuard};
 #[cfg(feature = "svg")]
