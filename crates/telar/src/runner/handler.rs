@@ -37,6 +37,10 @@ where
     pub(super) tree: Option<Box<dyn crate::tree::UiTree>>,
     pub(super) renderer: Option<Box<dyn RenderBackend>>,
     pub(super) renderer_is_hardware: bool,
+    // The transparency the live renderer was built for. Only `remount` reads it: an app whose surface changes
+    // from opaque to transparent between two mounts needs the renderer built again, and asking the app after
+    // the rebuild would compare the new answer with itself.
+    pub(super) renderer_transparent: bool,
     pub(super) backend: RendererBackend,
     pub(super) prefs: UserPrefs,
     pub(super) paths: Box<dyn AppPathsProvider>,
@@ -104,6 +108,7 @@ where
         tree: None,
         renderer: None,
         renderer_is_hardware: false,
+        renderer_transparent: false,
         backend,
         prefs,
         pending_restart: false,
@@ -315,6 +320,7 @@ where
         if !renderer_ok {
             return false;
         }
+        self.renderer_transparent = self.is_transparent();
         let sf = window.scale_factor() as f32;
         self.scale_factor = sf;
         self.window_signals = Some(WindowSignals::new(
@@ -368,6 +374,34 @@ where
         }
         window.request_redraw();
         true
+    }
+
+    /// Builds the app's UI again on the surface it is already running on, dropping the previous tree first so
+    /// its effects and their subscriptions go with it.
+    ///
+    /// The window, the renderer and the surface's place on screen are untouched — this is a re-render, not a
+    /// restart. The one exception is transparency, which a renderer is *built* with: an app that now asks for
+    /// the other kind gets its renderer rebuilt on the next frame, which is the same path a backend switch
+    /// takes.
+    fn remount(&mut self, window: &W) {
+        let _surface = self.enter_surface();
+        // Dropped before the new one is built: an effect from the outgoing tree that re-runs while its
+        // replacement is being assembled would write into widgets nothing is drawing any more.
+        self.tree = None;
+        self.tree = Some(self.app.mount());
+        if self.is_transparent() != self.renderer_transparent {
+            self.pending_restart = true;
+        }
+        // The same synthetic resize a fresh mount gets: a tree starts at its 0×0 defaults and learns the
+        // surface's real size from this event, exactly as it would from a monitor's own resize.
+        let resize = Event::WindowResized {
+            width: (window.width() as f32 / self.scale_factor) as u32,
+            height: (window.height() as f32 / self.scale_factor) as u32,
+        };
+        if let Some(ref mut tree) = self.tree {
+            tree.on_event(&resize);
+        }
+        window.request_redraw();
     }
 
     fn on_event(&mut self, event: Event, window: &W) {
@@ -601,6 +635,7 @@ where
 
         if self.pending_restart {
             self.pending_restart = false;
+            self.renderer_transparent = self.is_transparent();
             self.backend = self
                 .prefs
                 .backend

@@ -155,16 +155,12 @@ fn window_config_for(placement: &SurfacePlacement) -> WindowConfig {
 // `reset_layout_runtime`: the handler's own `Surface` supplies a fresh, isolated layout world.
 struct HostedSurfaceApp {
     placement: SurfacePlacement,
-    content: RefCell<Option<SurfaceContent>>,
+    content: SurfaceContent,
 }
 
 impl App for HostedSurfaceApp {
     fn root(&self) -> Box<dyn Component> {
-        let content = self
-            .content
-            .borrow_mut()
-            .take()
-            .expect("surface content built once")();
+        let content = (self.content)();
         if self.placement.needs_scaffold() {
             Box::new(
                 SurfaceScaffold::new(&self.placement, content, None)
@@ -197,10 +193,7 @@ struct WinitSurfaceHost;
 impl SurfaceHost for WinitSurfaceHost {
     fn open(&self, placement: SurfacePlacement, content: SurfaceContent) -> SurfaceToken {
         let window_config = window_config_for(&placement);
-        let app = HostedSurfaceApp {
-            placement,
-            content: RefCell::new(Some(content)),
-        };
+        let app = HostedSurfaceApp { placement, content };
         let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
         let prefs = crate::prefs::UserPrefs::load("telar-surface", paths.as_ref());
         // Same backend convention as every other window: the resolved preference, else the compile-time

@@ -112,7 +112,7 @@ pub use services_core::{Scope, provide, try_inject, with_service};
 #[cfg(feature = "runtime")]
 pub use surface::{
     SurfaceContent, SurfaceControl, SurfaceHost, SurfaceToken, has_surface_host, open_surface,
-    set_surface_host,
+    set_surface_host, surface_content,
 };
 #[cfg(feature = "runtime")]
 pub use theme_core::{
@@ -132,8 +132,8 @@ pub use ui_core::{
     SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize,
     SurfaceTransition, Text, TextArea, VirtualList, anchor_rect, box_item, box_transform,
     close_overlay, compute_layout, current_direction, dismiss_depth, dismiss_top, focus, fragment,
-    fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects, mark_dirty,
-    named_overlay, new_container, new_leaf, open_overlay, overlay_open, overlay_state,
+    fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects, kept,
+    mark_dirty, named_overlay, new_container, new_leaf, open_overlay, overlay_open, overlay_state,
     relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_direction, set_display,
     set_min_height, set_overlay_host, surface_frame, toggle_overlay, track_layout,
     transform_pointer, use_direction, use_dismiss_depth, use_overlay_open, visible_window,

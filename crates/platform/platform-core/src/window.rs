@@ -91,6 +91,13 @@ pub trait EventHandler<W: Window> {
     fn on_event(&mut self, event: Event, window: &W);
     fn on_redraw(&mut self, window: &W);
     fn on_suspend(&mut self) {}
+    /// Rebuilds this handler's UI from its app, on the surface it is already running on.
+    ///
+    /// For a backend whose surfaces outlive the state they were built from — a shell whose bars are described
+    /// by a config file the user edits — this is the difference between a reload and a restart: the window,
+    /// its renderer and its place on screen are kept, and only the tree is built again. A handler with no tree
+    /// to rebuild leaves it a no-op.
+    fn remount(&mut self, _window: &W) {}
     fn new_events(&mut self) {}
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
         None
@@ -136,6 +143,9 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
     }
     fn on_suspend(&mut self) {
         (**self).on_suspend()
+    }
+    fn remount(&mut self, window: &W) {
+        (**self).remount(window)
     }
     fn new_events(&mut self) {
         (**self).new_events()
