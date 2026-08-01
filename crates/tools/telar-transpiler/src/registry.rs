@@ -208,6 +208,8 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             keys
         }
         "img" | "image" => with(&["src"]),
+        // `keep:` names the surface-kept position of this viewport, so a remounted tree reopens where it was.
+        "scroll" => with(&["keep"]),
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
         "input" => with(&["value", "size", "color", "on_submit"]),
         "svg" => with(&["src", "tint"]),

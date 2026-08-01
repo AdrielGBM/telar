@@ -35,6 +35,36 @@ mod tests {
     use super::*;
     use std::path::{Path, PathBuf};
 
+    /// `keep:` is what turns a viewport into one whose position survives its tree being rebuilt; without it
+    /// the emission must not change at all, since every scroll that never asked to be kept is one whose
+    /// position belongs to the tree it was built with.
+    #[test]
+    fn a_scroll_keeps_its_position_only_when_it_is_asked_to() {
+        let plain =
+            transpile_source_with_theme("[view]\nscroll\n    text \"x\"\n", "demo", None, None)
+                .unwrap();
+        assert!(
+            plain.rust_code.contains("LayoutScrollArea::new(")
+                && !plain.rust_code.contains("new_kept"),
+            "unkeyed scrolls compile exactly as before:\n{}",
+            plain.rust_code
+        );
+
+        let kept = transpile_source_with_theme(
+            "[view]\nscroll keep:\"panel.body\"\n    text \"x\"\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            kept.rust_code
+                .contains("LayoutScrollArea::new_kept(\"panel.body\""),
+            "a keyed scroll is built through the surface's store:\n{}",
+            kept.rust_code
+        );
+    }
+
     #[test]
     fn i18n_markup_text_emits_catalog_lookup() {
         // A `t"key"` text node compiles to a reactive catalog lookup, not a literal string.
@@ -110,7 +140,10 @@ mod tests {
         assert_eq!(result.source_map[let_idx], Some(5));
 
         // Boilerplate (the prelude `use`) has no source line.
-        let use_idx = lines.iter().position(|l| l.contains("use telar::*")).unwrap();
+        let use_idx = lines
+            .iter()
+            .position(|l| l.contains("use telar::*"))
+            .unwrap();
         assert_eq!(result.source_map[use_idx], None);
     }
 

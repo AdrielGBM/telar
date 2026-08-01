@@ -11,6 +11,20 @@ impl ViewGen<'_> {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
+        // `keep:"a.key"` names this viewport's position among the things its *surface* keeps, so a remounted
+        // tree reopens where the reader left it instead of at the top. Named and opt-in rather than implicit:
+        // a scroll emitted inside a `for` would otherwise have every row sharing one position.
+        let keep = el
+            .attributes
+            .iter()
+            .find(|attr| attr.key == "keep")
+            .map(|attr| format!("\"{}\"", attr.value.trim_matches('"')));
+        let build = |content: &str| match &keep {
+            Some(key) => format!(
+                "LayoutScrollArea::new_kept({key}, {style}, |_| Ok(Box::new({content}) as Box<dyn LayoutItem>))?"
+            ),
+            None => format!("LayoutScrollArea::new({style}, Box::new({content}))?"),
+        };
 
         // LayoutScrollArea wraps a single content item. A reactive `for`/`if` inside becomes a transparent
         // fragment whose items flow in the wrapping flex-column content (`from_slots`); static control flow
@@ -35,10 +49,7 @@ impl ViewGen<'_> {
                 }
             }
             let content = wrap_as_single_content(&names);
-            let _ = writeln!(
-                code,
-                "{inner_pad}LayoutScrollArea::new({style}, Box::new({content}))?"
-            );
+            let _ = writeln!(code, "{inner_pad}{}", build(&content));
         } else {
             let children =
                 self.emit_children_collection(&mut code, &child_emits, &inner_pad, mode, &[]);
@@ -48,10 +59,7 @@ impl ViewGen<'_> {
                 format!("Container::column({children})?")
             };
             let _ = writeln!(code, "{inner_pad}let __scroll_content = {content};");
-            let _ = writeln!(
-                code,
-                "{inner_pad}LayoutScrollArea::new({style}, Box::new(__scroll_content))?"
-            );
+            let _ = writeln!(code, "{inner_pad}{}", build("__scroll_content"));
         }
 
         let _ = write!(code, "{pad}}};");
