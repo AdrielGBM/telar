@@ -13,6 +13,7 @@ use ui_tree::NodeVec;
 
 use crate::context::track_layout;
 use crate::impl_leaf_widget;
+use crate::kept::kept;
 use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, offset_pointer};
@@ -181,25 +182,28 @@ impl ScrollCore {
         }
     }
 
+    // Both of these write the offsets they read, so both `peek` them: whoever calls them may be doing so from
+    // an effect, and a reactive read there would subscribe that effect to its own correction (see
+    // `ScrollViewport::reveal`, where that bug bites).
     fn scroll_to_top(&mut self) {
-        if self.scroll_x.get() != 0.0 {
+        if self.scroll_x.peek() != 0.0 {
             self.scroll_x.set(0.0);
         }
-        if self.scroll_y.get() != 0.0 {
+        if self.scroll_y.peek() != 0.0 {
             self.scroll_y.set(0.0);
         }
     }
 
     fn clamp_scroll(&mut self, viewport: Rect) {
-        let content_rect = self.content_rect_signal.get();
+        let content_rect = self.content_rect_signal.peek();
         let max_x = (content_rect.width - viewport.width).max(0.0);
         let max_y = (content_rect.height - viewport.height).max(0.0);
-        let clamped_x = self.scroll_x.get().clamp(0.0, max_x);
-        let clamped_y = self.scroll_y.get().clamp(0.0, max_y);
-        if self.scroll_x.get() != clamped_x {
+        let clamped_x = self.scroll_x.peek().clamp(0.0, max_x);
+        let clamped_y = self.scroll_y.peek().clamp(0.0, max_y);
+        if self.scroll_x.peek() != clamped_x {
             self.scroll_x.set(clamped_x);
         }
-        if self.scroll_y.get() != clamped_y {
+        if self.scroll_y.peek() != clamped_y {
             self.scroll_y.set(clamped_y);
         }
     }
@@ -350,12 +354,17 @@ impl ScrollViewport {
             }
         };
 
-        let y = reveal_axis(self.set_y.get(), viewport.height, item.y, item.height);
-        if y != self.set_y.get() {
+        // `peek` on the offsets, and it is load-bearing: this is a *command*, and the natural place to call it
+        // from is an effect ("while this row is the selected one, keep it in view"). A reactive read of the
+        // offset there would subscribe that effect to the very signal it writes, so scrolling by hand would
+        // re-run it and drag the view straight back — a list that cannot be scrolled at all. The item and
+        // viewport rects are inputs rather than outputs, so re-running when *those* move is the right thing.
+        let y = reveal_axis(self.set_y.peek(), viewport.height, item.y, item.height);
+        if y != self.set_y.peek() {
             self.set_y.set(y);
         }
-        let x = reveal_axis(self.set_x.get(), viewport.width, item.x, item.width);
-        if x != self.set_x.get() {
+        let x = reveal_axis(self.set_x.peek(), viewport.width, item.x, item.width);
+        if x != self.set_x.peek() {
             self.set_x.set(x);
         }
     }
@@ -363,6 +372,25 @@ impl ScrollViewport {
     /// The live viewport rect; its `width`/`height` are the visible window's size.
     pub fn rect(&self) -> ReadSignal<Rect> {
         self.rect.clone()
+    }
+
+    /// Puts the view back at the top-left.
+    ///
+    /// For content that has been *replaced* rather than resized — a page swapped for another one — which is
+    /// the one thing the scroll area cannot tell on its own: a shorter page is clamped back into range
+    /// automatically, but only the caller knows that what is in the viewport is now a different thing, and
+    /// that being three screens down someone else's page is not where the reader left off.
+    ///
+    /// `peek` for the same reason as [`reveal`](Self::reveal), and this is where it bites hardest: "the page
+    /// changed" is noticed by an effect, so a reactive read of the offset would make every wheel tick re-run
+    /// the effect that puts the offset back — the viewport pinned to the top for good.
+    pub fn scroll_to_top(&self) {
+        if self.set_x.peek() != 0.0 {
+            self.set_x.set(0.0);
+        }
+        if self.set_y.peek() != 0.0 {
+            self.set_y.set(0.0);
+        }
     }
 
     /// A reactive flag for whether `item` currently intersects the visible window, grown by `margin` px
@@ -397,6 +425,8 @@ pub struct LayoutScrollArea {
     // so a `scroll` element works on its own — its content is not a taffy child of the viewport leaf, so
     // nothing else would lay it out (the app shell computes only its OWN top-level scroll by hand).
     _layout_effect: Effect,
+    // Keeps the offset inside the range the content and the viewport currently allow. See `clamp_effect`.
+    _clamp_effect: Effect,
 }
 
 impl LayoutScrollArea {
@@ -416,9 +446,44 @@ impl LayoutScrollArea {
     where
         F: FnOnce(ScrollViewport) -> Result<Box<dyn LayoutItem>, LayoutError>,
     {
+        Self::new_keeping(layout_style, (signal(0.0), signal(0.0)), build)
+    }
+
+    /// A scroll area whose position the *surface* keeps under `key`, so it survives a rebuild of the tree.
+    ///
+    /// The usual spelling of [`new_keeping`](Self::new_keeping): a remounted view — a shell following a
+    /// config edit, a page rebuilt under the same window — reopens where the reader left it instead of
+    /// snapping to the top. `key` names this viewport among everything else the surface keeps, so two scroll
+    /// areas on one surface need two keys (see [`kept`]).
+    pub fn new_kept<F>(
+        key: &'static str,
+        layout_style: LayoutStyle,
+        build: F,
+    ) -> Result<Self, LayoutError>
+    where
+        F: FnOnce(ScrollViewport) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    {
+        let offset = kept(key, || (signal(0.0f32), signal(0.0f32)));
+        Self::new_keeping(layout_style, offset, build)
+    }
+
+    /// Like [`new_with`](Self::new_with), but against offset signals the *caller* owns — so the scroll
+    /// position can outlive this widget.
+    ///
+    /// For a tree that is rebuilt while its surface stays (a shell following a config edit, a view remounted
+    /// under the same window): a scroll area built with fresh signals starts at the top every time, which
+    /// reads as the list jumping back under the reader's hands. Hand it the same pair on every build and the
+    /// view is where they left it. [`new_kept`](Self::new_kept) is this with the surface holding the pair.
+    pub fn new_keeping<F>(
+        layout_style: LayoutStyle,
+        offset: (RwSignal<f32>, RwSignal<f32>),
+        build: F,
+    ) -> Result<Self, LayoutError>
+    where
+        F: FnOnce(ScrollViewport) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    {
         let leaf = LayoutLeaf::register(layout_style)?;
-        let scroll_x = signal(0.0f32);
-        let scroll_y = signal(0.0f32);
+        let (scroll_x, scroll_y) = offset;
         let content = build(ScrollViewport {
             offset_x: scroll_x.read_only(),
             offset_y: scroll_y.read_only(),
@@ -446,6 +511,37 @@ impl LayoutScrollArea {
             }
         });
 
+        // Nothing may be scrolled past the end of what there is, and *both* things that decide where the end
+        // is move underneath the offset: how tall the content is (a page swapped for a shorter one, a list
+        // that lost rows) and how tall the viewport is (a window resized). Clamped from an effect rather than
+        // from the scroll handler because neither of those is an input event — left to the next wheel tick,
+        // the transform goes on pushing the content clean out of the clip and the viewport shows *nothing*,
+        // which is the shape this bug always takes: a page that is blank until it is touched.
+        let clamp_effect = {
+            let viewport = leaf.rect.clone();
+            let content_rect = content_rect_signal.clone();
+            let (scroll_x, scroll_y) = (scroll_x.clone(), scroll_y.clone());
+            effect(move || {
+                let vp = viewport.get();
+                let content = content_rect.get();
+                // A zero rect is "not laid out yet", not "empty": clamping against it would throw away an
+                // offset the caller deliberately kept, one flush before the layout that justifies it.
+                if vp.height <= 0.0 || content.height <= 0.0 {
+                    return;
+                }
+                let max_x = (content.width - vp.width).max(0.0);
+                let max_y = (content.height - vp.height).max(0.0);
+                // `peek`, not `get`: this effect writes those signals, and reading them would make it its own
+                // dependency and re-run it for its own correction.
+                if scroll_x.peek() > max_x {
+                    scroll_x.set(max_x);
+                }
+                if scroll_y.peek() > max_y {
+                    scroll_y.set(max_y);
+                }
+            })
+        };
+
         // Registered on the CONTENT node, not the viewport leaf: the content is laid out as its own root (see the effect above), so the leaf is never its ancestor and a subtree test against it would miss.
         let scroll_region =
             register_scroll_region(content_node, scroll_x.clone(), scroll_y.clone());
@@ -455,6 +551,7 @@ impl LayoutScrollArea {
             core: ScrollCore::with_offsets(content_rect_signal, content, scroll_x, scroll_y),
             scroll_region,
             _layout_effect: layout_effect,
+            _clamp_effect: clamp_effect,
         })
     }
 
@@ -512,7 +609,7 @@ impl Component for LayoutScrollArea {
 mod tests {
     use crate::context::reset_layout_runtime;
     use geometry_core::Rect;
-    use layout_core::{AvailableSpace, LayoutStyle, NodeId};
+    use layout_core::{AvailableSpace, LayoutStyle, NodeId, SizeDimension};
     use platform_core::{Event, PointerSource, ScrollDelta};
     use renderer_core::DrawCommand;
     use ui_tree::{Component, EventResult, RenderNode};
@@ -549,6 +646,236 @@ mod tests {
         assert!(
             content_rect.height > 0.0,
             "scroll must lay out its content, got {content_rect:?}"
+        );
+    }
+
+    /// A page swapped for a shorter one must not leave the viewport looking at nothing.
+    ///
+    /// This is the bug as a user meets it: scroll down a long page, switch to a short one, and the panel is
+    /// blank — the offset is still 600 while there is 200 of content, so the transform has pushed all of it
+    /// out of the clip. It comes back on the next wheel tick, which is what makes it read as a repaint bug
+    /// rather than a scroll one. Nothing here touches an input event: the layout alone has to put it right.
+    #[test]
+    fn content_that_gets_shorter_pulls_the_view_back_into_it() {
+        reset_layout_runtime();
+        let tall = Canvas::new(LayoutStyle::new().width(300.0).height(900.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let short = Canvas::new(LayoutStyle::new().width(300.0).height(120.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let short_node = short.layout_node();
+        let page = crate::container::Container::new(
+            LayoutStyle::new().flex_column(),
+            vec![Box::new(tall) as Box<dyn LayoutItem>],
+        )
+        .unwrap();
+        let page_node = page.layout_node();
+        let scroll = LayoutScrollArea::new(
+            LayoutStyle::new().width(300.0).height(200.0),
+            Box::new(page),
+        )
+        .unwrap();
+        compute_layout(
+            scroll.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+
+        scroll.core.scroll_y.set(600.0);
+        assert_eq!(scroll.core.scroll_y.get(), 600.0, "600 of 700 scrollable");
+
+        // The page is swapped, exactly as a reactive list swaps what it shows.
+        crate::context::set_children(page_node, &[short_node]).unwrap();
+        crate::context::mark_dirty(page_node).unwrap();
+        crate::context::relayout_if_dirty();
+
+        assert_eq!(
+            scroll.core.scroll_y.get(),
+            0.0,
+            "a page shorter than the viewport has nothing to scroll, so the view is at its top — not \
+             600px past the end of it, drawing nothing"
+        );
+    }
+
+    /// A viewport command called from an effect must not subscribe that effect to the offset it writes.
+    ///
+    /// This is how the fix for "the page changed, put the view back at the top" turned into "the page can no
+    /// longer be scrolled at all": the effect noticing the page change also *read* the offset, so every wheel
+    /// tick re-ran it, and it dutifully put the view back at the top. Both commands are `peek`-only for this
+    /// reason, and both are exercised here — the launcher's follow-the-selection effect calls `reveal` from
+    /// exactly the same place.
+    #[test]
+    fn a_viewport_command_run_from_an_effect_does_not_undo_the_users_own_scrolling() {
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(300.0).height(900.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let row = content.layout_node();
+        let captured: Rc<RefCell<Option<ScrollViewport>>> = Rc::new(RefCell::new(None));
+        let sink = Rc::clone(&captured);
+        let scroll = LayoutScrollArea::new_with(
+            LayoutStyle::new().width(300.0).height(200.0),
+            move |viewport| {
+                *sink.borrow_mut() = Some(viewport);
+                Ok(Box::new(content) as Box<dyn LayoutItem>)
+            },
+        )
+        .unwrap();
+        compute_layout(
+            scroll.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        let viewport = captured.borrow().clone().expect("the builder ran");
+
+        // The shape every caller uses: an effect over what it is following, issuing a command.
+        let page = signal(0u32);
+        let watched = page.read_only();
+        let commanded = viewport.clone();
+        let followed = watched.clone();
+        let _follow = effect(move || {
+            followed.get();
+            commanded.scroll_to_top();
+        });
+
+        scroll.core.scroll_y.set(150.0);
+        reactive_core::batch(|| {});
+        assert_eq!(
+            scroll.core.scroll_y.get(),
+            150.0,
+            "scrolling is not a page change, so the effect must not have run and pulled the view back"
+        );
+
+        page.set(1);
+        reactive_core::batch(|| {});
+        assert_eq!(
+            scroll.core.scroll_y.get(),
+            0.0,
+            "and the command still does its job when the thing it follows actually changes"
+        );
+
+        // `reveal` is the same shape and the same trap.
+        let revealing = viewport.clone();
+        let _follow_row = effect(move || {
+            watched.get();
+            revealing.reveal(row, 4.0);
+        });
+        scroll.core.scroll_y.set(80.0);
+        reactive_core::batch(|| {});
+        assert_eq!(
+            scroll.core.scroll_y.get(),
+            80.0,
+            "a row already in view is left alone, and scrolling must not re-ask about it"
+        );
+    }
+
+    /// The same rule from the other side: the content stayed, the window grew.
+    #[test]
+    fn a_taller_viewport_pulls_the_view_back_into_the_content() {
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(300.0).height(500.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        // Inside a column that fills the surface, which is how a page area actually gets its height: the
+        // viewport is whatever is left over, so resizing the surface resizes it.
+        let scroll = LayoutScrollArea::new(
+            LayoutStyle::new()
+                .width(SizeDimension::Percent(1.0))
+                .flex_grow(1.0)
+                .min_height(0.0),
+            Box::new(content),
+        )
+        .unwrap();
+        let scroll_node = scroll.layout_node();
+        let surface = new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0))
+                .height(SizeDimension::Percent(1.0)),
+            &[scroll_node],
+        )
+        .unwrap();
+        compute_layout(
+            surface,
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        scroll.core.scroll_y.set(400.0);
+
+        // The surface is resized taller — a float dragged by its grip, a monitor that changed mode.
+        crate::context::mark_dirty(surface).unwrap();
+        compute_layout(
+            surface,
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(450.0),
+        )
+        .unwrap();
+
+        assert_eq!(
+            scroll.core.scroll_y.get(),
+            50.0,
+            "500 of content in 450 of window leaves 50 to scroll, and that is where the view lands"
+        );
+    }
+
+    /// A rebuilt tree — a shell following a config edit — is a second scroll area over the same offsets.
+    #[test]
+    fn a_scroll_built_on_kept_offsets_opens_where_the_last_one_left_off() {
+        reset_layout_runtime();
+        let offset = (signal(0.0f32), signal(0.0f32));
+        let content = Canvas::new(LayoutStyle::new().width(300.0).height(900.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let first = LayoutScrollArea::new_keeping(
+            LayoutStyle::new().width(300.0).height(200.0),
+            offset.clone(),
+            |_| Ok(Box::new(content) as Box<dyn LayoutItem>),
+        )
+        .unwrap();
+        compute_layout(
+            first.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        first.core.scroll_y.set(320.0);
+        drop(first);
+
+        let content = Canvas::new(LayoutStyle::new().width(300.0).height(900.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let rebuilt = LayoutScrollArea::new_keeping(
+            LayoutStyle::new().width(300.0).height(200.0),
+            offset,
+            |_| Ok(Box::new(content) as Box<dyn LayoutItem>),
+        )
+        .unwrap();
+        assert_eq!(
+            rebuilt.core.scroll_y.get(),
+            320.0,
+            "the tree was replaced, the reader's place in it was not"
+        );
+        compute_layout(
+            rebuilt.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        assert_eq!(
+            rebuilt.core.scroll_y.get(),
+            320.0,
+            "and laying the rebuilt content out does not throw it away — a 0×0 rect is 'not measured yet', \
+             not 'nothing to show'"
         );
     }
 

@@ -93,10 +93,15 @@ pub fn is_focused(id: FocusId) -> bool {
     current() == Some(id)
 }
 
+// The three commands below `peek` the signal they write, and it matters: a command is a thing an *effect* may
+// well issue ("while this row is the selected one, focus its field"), and a reactive read there would
+// subscribe that effect to the focus it sets — so the next focus change anywhere would re-run it and it would
+// take the focus straight back. Same rule, and the same bug, as `ScrollViewport::reveal`.
+
 /// Gives focus to `id` (a no-op if it already holds it).
 pub fn request(id: FocusId) {
     let focused = focused_signal();
-    if focused.get() != Some(id) {
+    if focused.peek() != Some(id) {
         focused.set(Some(id));
     }
 }
@@ -105,7 +110,7 @@ pub fn request(id: FocusId) {
 /// focus away from another.
 pub fn release(id: FocusId) {
     let focused = focused_signal();
-    if focused.get() == Some(id) {
+    if focused.peek() == Some(id) {
         focused.set(None);
     }
 }
@@ -113,7 +118,7 @@ pub fn release(id: FocusId) {
 /// Clears focus entirely, whoever holds it.
 pub fn clear() {
     let focused = focused_signal();
-    if focused.get().is_some() {
+    if focused.peek().is_some() {
         focused.set(None);
     }
 }
