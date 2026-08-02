@@ -12,11 +12,11 @@ use std::rc::Rc;
 
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::quote;
-use telar_transpiler::CatalogModel;
 use syn::{
     Expr, LitStr, Token,
     parse::{Parse, ParseStream, Result as ParseResult},
 };
+use telar_transpiler::CatalogModel;
 
 pub(crate) struct TInput {
     key: LitStr,

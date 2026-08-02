@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use telar::RendererBackend;
 use serde::Deserialize;
+use telar::RendererBackend;
 
 #[derive(Deserialize, Default, Clone)]
 pub(crate) struct WindowConfig {

@@ -30,8 +30,8 @@ pub fn code_lenses(doc: &RsxDocument, uri: &Uri) -> Vec<CodeLens> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use telar_parser::parse;
     use std::str::FromStr;
+    use telar_parser::parse;
 
     #[test]
     fn one_lens_per_preview_on_its_header_line() {

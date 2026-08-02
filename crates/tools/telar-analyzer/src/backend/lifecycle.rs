@@ -101,7 +101,9 @@ impl Backend {
                 if lock_ms > 1000 || ra_ms > 1000 {
                     log.log_message(
                         MessageType::INFO,
-                        format!("telar-analyzer: slow diagnostics — lock {lock_ms}ms, ra {ra_ms}ms"),
+                        format!(
+                            "telar-analyzer: slow diagnostics — lock {lock_ms}ms, ra {ra_ms}ms"
+                        ),
                     );
                 }
                 Some(result)

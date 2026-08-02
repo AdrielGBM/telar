@@ -107,7 +107,9 @@ mod smoke {
         let mut widest: Option<(f32, f32)> = None;
         for c in cmds.iter() {
             match c {
-                telar::DrawCommand::PushMatrix { matrix } => tx.push(tx.last().unwrap() + matrix[4]),
+                telar::DrawCommand::PushMatrix { matrix } => {
+                    tx.push(tx.last().unwrap() + matrix[4])
+                }
                 telar::DrawCommand::PopMatrix => {
                     tx.pop();
                 }

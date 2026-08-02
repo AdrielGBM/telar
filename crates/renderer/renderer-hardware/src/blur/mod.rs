@@ -188,7 +188,8 @@ impl BlurPipeline {
             };
         let downsample_pipeline =
             make_dual_pipeline("telar-blur-downsample-pipeline", &downsample_shader);
-        let upsample_pipeline = make_dual_pipeline("telar-blur-upsample-pipeline", &upsample_shader);
+        let upsample_pipeline =
+            make_dual_pipeline("telar-blur-upsample-pipeline", &upsample_shader);
 
         Self {
             pipeline,

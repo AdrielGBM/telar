@@ -1,7 +1,7 @@
 use lsp_types::Uri;
+use std::collections::HashMap;
 use telar_diagnostics::Diagnostic;
 use telar_parser::{RsxDocument, parse};
-use std::collections::HashMap;
 
 pub struct ParsedDocument {
     pub source: String,

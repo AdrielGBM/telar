@@ -70,7 +70,10 @@ fn apply_dev_window_env(envs: &mut Vec<(String, String)>, window: &WindowConfig)
         ));
     }
     if let Some(fullscreen) = &window.fullscreen {
-        envs.push(("TELAR_DEV_WINDOW_FULLSCREEN".to_string(), fullscreen.clone()));
+        envs.push((
+            "TELAR_DEV_WINDOW_FULLSCREEN".to_string(),
+            fullscreen.clone(),
+        ));
     }
     if let Some(position) = &window.position {
         envs.push(("TELAR_DEV_WINDOW_POSITION".to_string(), position.clone()));

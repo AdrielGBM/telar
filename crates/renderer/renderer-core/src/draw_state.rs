@@ -173,7 +173,11 @@ mod tests {
     fn a_clip_outside_its_parent_clips_away_to_nothing() {
         let viewport = Rect::new(0.0, 0.0, 340.0, 300.0);
         let mut state = DrawState::new();
-        assert_eq!(state.push_clip(viewport), viewport, "the outermost clip is itself");
+        assert_eq!(
+            state.push_clip(viewport),
+            viewport,
+            "the outermost clip is itself"
+        );
 
         // An avatar 560px down a scrolling column: its own 56×56 clip is nowhere near the viewport.
         let escaped = state.push_clip(Rect::new(0.0, 560.0, 56.0, 56.0));
@@ -183,7 +187,9 @@ mod tests {
             "an image scrolled out of its panel must not be drawn at all, got {escaped:?}"
         );
         assert!(
-            viewport.intersect(Rect::new(escaped.x, escaped.y, 1.0, 1.0)).is_some(),
+            viewport
+                .intersect(Rect::new(escaped.x, escaped.y, 1.0, 1.0))
+                .is_some(),
             "and the empty clip sits inside the parent, so a backend that rounds it up to 1×1 draws that \
              pixel where it was already allowed to: {escaped:?}"
         );
