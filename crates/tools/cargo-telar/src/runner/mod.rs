@@ -7,6 +7,7 @@ mod android;
 mod cli;
 mod config;
 mod doctor;
+mod fmt;
 mod package;
 mod watch;
 
@@ -17,6 +18,7 @@ use cli::{
 };
 use config::load_config;
 use doctor::run_doctor_cmd;
+use fmt::run_fmt_cmd;
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis};
 use watch::{HotLoopOpts, HotMode, run_hot_loop};
 
@@ -32,6 +34,7 @@ pub fn run(args: Vec<String>) {
             std::process::exit(1);
         }
         TelarCommand::Doctor => run_doctor_cmd(),
+        TelarCommand::Fmt(args) => run_fmt_cmd(args),
     }
 }
 

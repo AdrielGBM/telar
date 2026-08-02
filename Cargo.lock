@@ -513,6 +513,7 @@ dependencies = [
  "notify",
  "serde",
  "telar",
+ "telar-parser",
  "telar-workspace",
  "toml",
 ]

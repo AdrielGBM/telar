@@ -28,6 +28,20 @@ pub(crate) enum TelarCommand {
     },
     /// Check the development environment
     Doctor,
+    /// Format every `.rsx` and `.rs` file in the project
+    Fmt(FmtArgs),
+}
+
+/// `cargo fmt` cannot do this job: it never sees a `.rsx` file, and the `.rs` modules an `auto_modules` crate
+/// declares come out of a macro it does not expand, so it walks into `lib.rs` and stops there — reporting a
+/// clean tree it never looked at.
+#[derive(clap::Args)]
+pub(crate) struct FmtArgs {
+    /// Report which files would change and exit non-zero, without writing
+    #[arg(long)]
+    pub(crate) check: bool,
+    /// Directories or files to format; defaults to the current package or workspace
+    pub(crate) paths: Vec<std::path::PathBuf>,
 }
 
 #[derive(clap::Args)]

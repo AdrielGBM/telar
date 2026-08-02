@@ -6,6 +6,12 @@
 //! - a `[view]` section describing an indentation-based node tree.
 //!
 //! [`parse`] turns the source into an [`RsxDocument`] AST consumed by the transpiler.
+//!
+//! [`format::format_document`] is the inverse: it re-serializes that AST into canonical source. It lives beside
+//! the parser rather than with the language server so anything holding a `.rsx` file can reach it — the editor
+//! through the LSP, `cargo telar fmt` from a terminal — and both give the same answer by construction.
+
+pub mod format;
 
 mod ast;
 mod error;
