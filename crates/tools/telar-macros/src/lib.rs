@@ -56,7 +56,7 @@ pub fn app(input: TokenStream) -> TokenStream {
     };
 
     // Detected at macro expansion time: cargo-telar sets these env vars.
-    let is_hot_reload = std::env::var("TELAR_HOT_RELOAD_BUILD").is_ok();
+    let is_hot_reload = hot_reload_build();
     let is_preview = std::env::var("TELAR_PREVIEW_BUILD").is_ok();
 
     let run_tail = quote! {
@@ -293,13 +293,18 @@ pub fn app(input: TokenStream) -> TokenStream {
     .into()
 }
 
+// Set by cargo-telar for the dylib build. Cargo does not track env reads from a proc macro, so this must only ever select between outputs that are themselves distinguishable to cargo — here, two output directories.
+fn hot_reload_build() -> bool {
+    std::env::var("TELAR_HOT_RELOAD_BUILD").is_ok()
+}
+
 struct TranspileOutput {
     include_stmts: TokenStream2,
     rerun_stmts: TokenStream2,
     preview_const_idents: Vec<Ident>,
 }
 
-// Transpiles every `.rsx` file under `src/` into `.telar/build/`, wiring each as a `#[path] mod` and aliasing
+// Transpiles every `.rsx` file under `src/` into `.telar/build/` (`.telar/build-hot/` for a hot-reload build), wiring each as a `#[path] mod` and aliasing
 // nested components to their basenames; also emits `include_str!` rerun triggers and (via `auto_modules`)
 // declares the hand-written `.rs` module tree. Shared by `app!` (which then adds the runner) and
 // `rsx_modules!` (transpilation only). `theme_type_str` types the transpiler's `use_theme` calls; pass `None`
@@ -309,9 +314,11 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         .map(PathBuf::from)
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set") })?;
 
-    let generated_dir = manifest_dir.join(".telar").join("build");
+    // A hot-reload build emits different code for the same `.rsx` (signals become `hot_signal_auto!`), so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other's files on every build, leaving each cargo unit permanently stale.
+    let flavour = if hot_reload_build() { "build-hot" } else { "build" };
+    let generated_dir = manifest_dir.join(".telar").join(flavour);
     if let Err(e) = std::fs::create_dir_all(&generated_dir) {
-        let msg = format!("Failed to create .telar/build/: {e}");
+        let msg = format!("Failed to create {}: {e}", generated_dir.display());
         return Err(quote! { compile_error!(#msg) });
     }
 
@@ -478,7 +485,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         // file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
         let modtree_dir = generated_dir.join("__modules");
         if let Err(e) = std::fs::create_dir_all(&modtree_dir) {
-            let msg = format!("Failed to create .telar/build/__modules/: {e}");
+            let msg = format!("Failed to create {}: {e}", modtree_dir.display());
             return Err(quote! { compile_error!(#msg) });
         }
         let modules_src = match telar_transpiler::discover_rust_modules(&src_dir, &modtree_dir) {
