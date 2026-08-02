@@ -41,6 +41,18 @@ where
     // from opaque to transparent between two mounts needs the renderer built again, and asking the app after
     // the rebuild would compare the new answer with itself.
     pub(super) renderer_transparent: bool,
+    /// Added to the tree's own compose generation on its way to a renderer, and stepped past everything already
+    /// drawn whenever the tree is replaced.
+    ///
+    /// A renderer skips its whole pipeline and re-presents the texture it retained when the generation it is
+    /// handed matches the last one it rendered — the invariant being that equal generations mean identical draw
+    /// commands. A remount breaks that on its own: the counter lives on the tree, so a new tree starts over, and
+    /// a surface whose content never changes hands out the very same number it did before. Static surfaces are
+    /// then exactly the ones that keep showing the frame they had before the rebuild, while anything with a
+    /// clock in it repaints because its counter had already climbed past the collision.
+    pub(super) generation_base: u64,
+    /// The highest generation handed to a renderer for this surface, so the next tree can start past it.
+    pub(super) last_generation: u64,
     pub(super) backend: RendererBackend,
     pub(super) prefs: UserPrefs,
     pub(super) paths: Box<dyn AppPathsProvider>,
@@ -109,6 +121,8 @@ where
         renderer: None,
         renderer_is_hardware: false,
         renderer_transparent: false,
+        generation_base: 0,
+        last_generation: 0,
         backend,
         prefs,
         pending_restart: false,
@@ -190,6 +204,15 @@ where
             _surface: s.enter(),
             _commands: self.window_commands.enter(),
         })
+    }
+
+    /// The generation this frame's commands go out under: the tree's own, offset past every tree this surface
+    /// has had before it. See [`generation_base`](Self::generation_base) for why the offset has to exist.
+    fn frame_generation(&mut self) -> u64 {
+        let composed = self.tree.as_ref().map(|t| t.generation()).unwrap_or(0);
+        let generation = self.generation_base.saturating_add(composed);
+        self.last_generation = self.last_generation.max(generation);
+        generation
     }
 
     /// Whether the app asked for a transparent surface (`WindowConfig::is_transparent`). Read at each renderer creation so hardware picks a premultiplied-alpha composite mode and software presents an alpha-preserving buffer.
@@ -389,6 +412,9 @@ where
         // replacement is being assembled would write into widgets nothing is drawing any more.
         self.tree = None;
         self.tree = Some(self.app.mount());
+        // Past every generation this surface has already been drawn at, so the renderer cannot mistake the new
+        // tree's fresh counter for content it is already showing. See `generation_base`.
+        self.generation_base = self.last_generation + 1;
         if self.is_transparent() != self.renderer_transparent {
             self.pending_restart = true;
         }
@@ -722,6 +748,7 @@ where
         }
 
         let (w, h) = (window.width(), window.height());
+        let generation = self.frame_generation();
         tracing::debug!(
             "on_redraw: window {}x{} scale={} tree_dirty={}",
             w,
@@ -765,7 +792,7 @@ where
                 width: w,
                 height: h,
                 scale_factor: self.scale_factor,
-                generation: self.tree.as_ref().map(|t| t.generation()).unwrap_or(0),
+                generation,
                 commands,
                 clear,
                 timestamp: std::time::Instant::now(),
@@ -793,12 +820,7 @@ where
         {
             self.frame_start = std::time::Instant::now();
         }
-        if let Err(e) = renderer.begin_frame(
-            w,
-            h,
-            self.scale_factor,
-            self.tree.as_ref().map(|t| t.generation()).unwrap_or(0),
-        ) {
+        if let Err(e) = renderer.begin_frame(w, h, self.scale_factor, generation) {
             tracing::error!("begin_frame failed: {e}");
             return;
         }
@@ -902,5 +924,92 @@ where
     fn interactive_rects(&self) -> Vec<geometry_core::Rect> {
         let _surface = self.enter_surface();
         ui_core::interactive_rects()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use platform_headless::HeadlessWindow;
+
+    struct NullPaths;
+
+    impl AppPathsProvider for NullPaths {
+        fn config_dir(&self) -> Option<std::path::PathBuf> {
+            None
+        }
+        fn data_dir(&self) -> Option<std::path::PathBuf> {
+            None
+        }
+        fn cache_dir(&self) -> Option<std::path::PathBuf> {
+            None
+        }
+    }
+
+    /// An app whose content never changes — a shell's frame ring, a wallpaper, a static diagram. Its tree's
+    /// own generation is fixed for the life of the tree, which is what makes the collision below reachable.
+    struct Unchanging;
+
+    impl App for Unchanging {
+        fn root(&self) -> Box<dyn ui_tree::Component> {
+            ui_core::reset_layout_runtime();
+            Box::new(
+                ui_core::Rectangle::new(
+                    layout_core::LayoutStyle::new().width(10.0).height(10.0),
+                    || renderer_core::RectStyle::filled(renderer_core::Color::BLACK, 0.0),
+                )
+                .expect("a rectangle builds"),
+            )
+        }
+    }
+
+    fn handler() -> AppHandler<HeadlessWindow, ()> {
+        build_app_handler::<HeadlessWindow, ()>(
+            Box::new(Unchanging),
+            Box::new(NullPaths),
+            Vec::new(),
+            Vec::new(),
+            RendererBackend::Software,
+            UserPrefs::default(),
+            "generation-test".to_string(),
+        )
+    }
+
+    /// A rebuilt tree must never hand the renderer a generation it has already drawn — see
+    /// [`AppHandler::generation_base`] for why one otherwise would.
+    ///
+    /// What it looked like: a shell's config reload moved the space its bars reserved but left the frame ring
+    /// and the wallpaper exactly as they were, until the process was restarted. The bars followed the edit,
+    /// because a ticking clock had already carried their counter past the collision.
+    #[test]
+    fn a_remounted_tree_never_reuses_a_generation_the_renderer_has_drawn() {
+        let mut handler = handler();
+        let window = HeadlessWindow::new(120, 80);
+
+        handler.tree = Some(handler.app.mount());
+        let first = handler.frame_generation();
+
+        // The collision, stated: the fresh tree's own counter is back where the outgoing one started.
+        handler.remount(&window);
+        let composed = handler.tree.as_ref().map(|t| t.generation()).unwrap_or(0);
+        let second = handler.frame_generation();
+
+        assert!(
+            second > first,
+            "a rebuilt tree reported generation {second} after {first} was already drawn, so the renderer \
+             would blit the frame from before the rebuild"
+        );
+        assert!(
+            composed <= first,
+            "this test proves nothing unless the new tree's own counter really is back in drawn territory: \
+             it reported {composed} against {first}"
+        );
+
+        // A tree that is *not* rebuilt keeps its generation, which is what lets the renderer skip idle frames.
+        assert_eq!(
+            handler.frame_generation(),
+            second,
+            "an unchanged tree must keep reporting the same generation, or every idle frame re-renders"
+        );
     }
 }
