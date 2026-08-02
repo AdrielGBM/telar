@@ -486,7 +486,16 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     let workspace_root = resolved.workspace_root.clone();
     let profile = profile_of(&rest);
 
-    if !no_hot_reload {
+    // Gated on the manifest rather than on the built artifact: the dylib build differs from the plain one in both RUSTFLAGS and the generated sources, so running it for a package that can never produce a dylib compiles the crate graph twice per `cargo telar dev` and leaves each half stale for the next run.
+    let hot_reload = !no_hot_reload && resolved.produces_cdylib;
+    if !no_hot_reload && !hot_reload {
+        eprintln!(
+            "[cargo-telar] Hot reload off: `{}` declares no `[lib] crate-type = [\"cdylib\", ..]`. Restarting the process on change instead.",
+            resolved.name()
+        );
+    }
+
+    if hot_reload {
         let rustflags = mode.rustflags();
         let package_name = resolved.name();
         let lib_path = package_lib_path(&workspace_root, &package_name, profile);
@@ -503,6 +512,8 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         build_cmd
             .args(&build_args)
             .env("TELAR_HOT_RELOAD_BUILD", "1")
+            // `telar`'s backend is resolved with `option_env!`, so it is a tracked build input: omitting it here would compile a different backend than the hot rebuilds and make the first of them recompile the graph.
+            .env("TELAR_RENDERER_BACKEND", backend_value)
             .env("RUSTFLAGS", &rustflags);
         if is_preview {
             build_cmd.env("TELAR_PREVIEW_BUILD", "1");

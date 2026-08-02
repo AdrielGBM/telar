@@ -48,6 +48,12 @@ pub(crate) struct CargoWorkspace {
 pub(crate) struct CargoManifest {
     pub(crate) workspace: Option<CargoWorkspace>,
     pub(crate) package: Option<CargoPackage>,
+    pub(crate) lib: Option<CargoLib>,
+}
+#[derive(Deserialize, Default)]
+pub(crate) struct CargoLib {
+    #[serde(default, rename = "crate-type")]
+    pub(crate) crate_type: Vec<String>,
 }
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoPackage {
@@ -138,10 +144,13 @@ pub(crate) fn find_package_dir(args: &[String]) -> PathBuf {
     }
 }
 
-fn read_package_manifest_in(dir: &Path) -> Option<CargoPackage> {
+fn read_manifest_in(dir: &Path) -> Option<CargoManifest> {
     let content = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
-    let manifest: CargoManifest = toml::from_str(&content).ok()?;
-    manifest.package
+    toml::from_str(&content).ok()
+}
+
+fn read_package_manifest_in(dir: &Path) -> Option<CargoPackage> {
+    read_manifest_in(dir)?.package
 }
 
 pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
@@ -151,6 +160,8 @@ pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
 pub(crate) struct ResolvedPackage {
     pub(crate) workspace_root: PathBuf,
     pub(crate) package: Option<CargoPackage>,
+    // Hot reload dlopens the package's own cdylib. Without `crate-type = ["cdylib", ..]` cargo never emits one, so the dylib build is dead weight and the runner has to fall back to process restart.
+    pub(crate) produces_cdylib: bool,
 }
 
 impl ResolvedPackage {
@@ -174,10 +185,15 @@ impl ResolvedPackage {
 pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
     let dir = find_package_dir(args);
     let workspace_root = telar_workspace::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
-    let package = read_package_manifest_in(&dir);
+    let manifest = read_manifest_in(&dir);
+    let produces_cdylib = manifest
+        .as_ref()
+        .and_then(|m| m.lib.as_ref())
+        .is_some_and(|lib| lib.crate_type.iter().any(|kind| kind == "cdylib"));
     ResolvedPackage {
         workspace_root,
-        package,
+        package: manifest.and_then(|m| m.package),
+        produces_cdylib,
     }
 }
 
@@ -347,6 +363,27 @@ mod tests {
         assert_eq!(pkg.name, "demo");
         assert_eq!(pkg.version, None);
         assert_eq!(pkg.description.as_deref(), Some("hi"));
+    }
+
+    #[test]
+    fn crate_type_distinguishes_a_hot_reloadable_package() {
+        let plain: CargoManifest =
+            toml::from_str("[package]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[lib]\n")
+                .expect("bare [lib] should parse");
+        assert!(plain.lib.expect("lib section").crate_type.is_empty());
+
+        let dylib: CargoManifest = toml::from_str(
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[lib]\ncrate-type = [\"cdylib\", \"lib\"]\n",
+        )
+        .expect("crate-type should parse");
+        assert!(
+            dylib
+                .lib
+                .expect("lib section")
+                .crate_type
+                .iter()
+                .any(|kind| kind == "cdylib")
+        );
     }
 
     #[test]
