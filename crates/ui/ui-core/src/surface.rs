@@ -7,7 +7,7 @@ use layout_core::{
     AlignItems, AvailableSpace, JustifyContent, LayoutError, LayoutStyle, NodeId, SizeDimension,
 };
 use motion_core::{Animated, Easing, tween};
-use platform_core::{Event, PointerButton};
+use platform_core::{Event, Key, NamedKey, PointerButton};
 use reactive_core::RwSignal;
 use renderer_core::{Color, RectStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
@@ -482,6 +482,20 @@ impl Component for SurfaceScaffold {
                     _ => self.content.on_event(event),
                 }
             }
+            // Escape is the keyboard's version of a press outside, so a surface that answers to one answers to
+            // the other. Same rule as the in-window dismiss stack (see `dispatch_overlays`): the content gets
+            // first refusal, so a focused field blurs on the first press and the surface closes on the second,
+            // and backing out of an armed confirmation never takes the surface with it.
+            Event::KeyPressed {
+                key: Key::Named(NamedKey::Escape),
+                ..
+            } => match (self.content.on_event(event), &self.dismiss) {
+                (EventResult::Ignored, Some(dismiss)) => {
+                    dismiss();
+                    EventResult::Handled
+                }
+                (result, _) => result,
+            },
             _ => self.content.on_event(event),
         }
     }
@@ -780,6 +794,66 @@ mod tests {
         assert_eq!(fired.get(), 0, "a press inside the panel must not dismiss");
         scaffold.on_event(&press(10.0, 190.0));
         assert_eq!(fired.get(), 1, "a press outside the panel dismisses");
+    }
+
+    /// Escape is the keyboard's way out of a surface that a press outside would also close, and it only reaches
+    /// the surface when nothing inside wanted it: a focused field, an armed confirmation and an open dropdown
+    /// all cancel themselves first, and taking the whole surface down with them is the bug this guards.
+    #[test]
+    fn escape_dismisses_only_what_the_panel_left_alone() {
+        reset_layout_runtime();
+        let fired = Rc::new(Cell::new(0u32));
+        let f = fired.clone();
+        let placement = SurfacePlacement::drawer(SurfaceAnchor::Top).inset(20);
+        let mut scaffold = SurfaceScaffold::new(
+            &placement,
+            panel(),
+            Some(Rc::new(move || f.set(f.get() + 1))),
+        )
+        .unwrap();
+        scaffold.on_event(&Event::WindowResized {
+            width: 200,
+            height: 200,
+        });
+
+        let escape = Event::KeyPressed {
+            key: Key::Named(NamedKey::Escape),
+            modifiers: Default::default(),
+        };
+        assert_eq!(scaffold.on_event(&escape), EventResult::Handled);
+        assert_eq!(
+            fired.get(),
+            1,
+            "a plain panel lets Escape close the surface"
+        );
+
+        reset_layout_runtime();
+        let untouched = Rc::new(Cell::new(0u32));
+        let u = untouched.clone();
+        let field = crate::input::Input::new(
+            reactive_core::signal(String::new()),
+            LayoutStyle::new().width(100.0).height(30.0),
+            || TextStyle::new(14.0, Color::BLACK),
+        )
+        .unwrap()
+        .autofocus();
+        let mut focused = SurfaceScaffold::new(
+            &placement,
+            box_item(field),
+            Some(Rc::new(move || u.set(u.get() + 1))),
+        )
+        .unwrap();
+        focused.on_event(&Event::WindowResized {
+            width: 200,
+            height: 200,
+        });
+        focused.on_event(&press(100.0, 40.0));
+        focused.on_event(&escape);
+        assert_eq!(
+            untouched.get(),
+            0,
+            "a field that claims Escape to release its own focus keeps the surface up"
+        );
     }
 
     #[test]
