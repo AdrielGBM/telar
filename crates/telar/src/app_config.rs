@@ -1,5 +1,6 @@
 use platform_core::WindowConfig;
 
+#[derive(Clone)]
 pub struct AppConfig {
     pub window: WindowConfig,
     pub font_paths: Vec<std::path::PathBuf>,

@@ -125,11 +125,143 @@ impl App for PreviewApp {
         Box::new(page)
     }
 
+    /// A page light enough to read dark ink on, or dark enough to read light ink on — decided by the installed
+    /// theme rather than fixed, because a component drawn for a dark surface is invisible on a light page and
+    /// that reads as a broken preview rather than as a mismatched background. `ThemeTokens` has no page-background
+    /// token to ask for directly, so the ink's own lightness is the proxy.
     fn clear_color(&self) -> Option<Color> {
-        Some(Color::rgba(0.96, 0.96, 0.98, 1.0))
+        let light_ink = crate::use_theme_tokens()
+            .map(|tokens| {
+                let ink = tokens.ink();
+                ink.r * 0.299 + ink.g * 0.587 + ink.b * 0.114 > 0.5
+            })
+            .unwrap_or(false);
+        Some(if light_ink {
+            Color::rgba(0.12, 0.12, 0.15, 1.0)
+        } else {
+            Color::rgba(0.96, 0.96, 0.98, 1.0)
+        })
     }
 }
 
+#[cfg(feature = "preview")]
 pub fn run_preview_window(entries: Vec<PreviewEntry>, config: AppConfig) {
     crate::run_app_with_name(config, PreviewApp { entries }, "telar-preview");
+}
+
+/// Renders every `[preview]` entry to its own PNG under `out_dir` on the headless backend, then exits.
+///
+/// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] proves a component builds
+/// and lays out but never draws a pixel, and [`run_preview_window`] draws but needs a desktop window a shell has
+/// no way to open. Each entry gets its own file rather than one page of all of them, so a name identifies a
+/// preview and a golden-image run can compare them one at a time.
+#[cfg(feature = "preview-headless")]
+pub fn run_preview_png(
+    entries: Vec<PreviewEntry>,
+    config: AppConfig,
+    out_dir: &std::path::Path,
+) -> ! {
+    use std::sync::{Arc, Mutex};
+
+    if let Err(e) = std::fs::create_dir_all(out_dir) {
+        eprintln!("cannot write previews to {}: {e}", out_dir.display());
+        std::process::exit(1);
+    }
+    let width = (config.window.width as u32).max(1);
+    let height = (config.window.height as u32).max(1);
+    println!("rendering {} preview component(s)", entries.len());
+
+    let (mut written, mut failed) = (0usize, 0usize);
+    for entry in entries {
+        let label = format!("{}::{}", entry.component_name, entry.preview_name);
+        let file = out_dir.join(format!(
+            "{}.png",
+            sanitize(&format!("{}-{}", entry.component_name, entry.preview_name))
+        ));
+        let sink: platform_headless::FrameSink = Arc::new(Mutex::new(None));
+        // The headless platform paces at a real 60fps, so a handful of frames covers an enter transition settling — a preview captured on the first frame shows every animation at its start value.
+        let platform = platform_headless::HeadlessPlatform::new(width, height)
+            .with_frames(PREVIEW_FRAMES)
+            .capture_into(sink.clone());
+        let app = PreviewApp {
+            entries: vec![entry],
+        };
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::run_with_platform::<_, _, ()>(
+                platform,
+                config.clone(),
+                Box::new(NullPaths) as Box<dyn crate::AppPathsProvider>,
+                app,
+                "telar-preview",
+            )
+        }));
+        let pixels = match outcome {
+            Ok(Ok(())) => sink.lock().ok().and_then(|mut held| held.take()),
+            Ok(Err(e)) => {
+                println!("  FAIL  {label}  {e}");
+                failed += 1;
+                continue;
+            }
+            Err(_) => {
+                println!("  FAIL  {label}  panicked while rendering");
+                failed += 1;
+                continue;
+            }
+        };
+        let Some(pixels) = pixels else {
+            println!("  FAIL  {label}  no frame captured");
+            failed += 1;
+            continue;
+        };
+        match image::RgbaImage::from_raw(width, height, pixels)
+            .ok_or_else(|| "frame size does not match the window".to_string())
+            .and_then(|img| img.save(&file).map_err(|e| e.to_string()))
+        {
+            Ok(()) => {
+                written += 1;
+                println!("  ok    {label}  → {}", file.display());
+            }
+            Err(e) => {
+                failed += 1;
+                println!("  FAIL  {label}  {e}");
+            }
+        }
+    }
+
+    println!();
+    println!("preview result: {written} written, {failed} failed");
+    std::process::exit(if failed == 0 { 0 } else { 1 });
+}
+
+/// Enough frames at 60fps for a 200ms enter transition to settle.
+#[cfg(feature = "preview-headless")]
+const PREVIEW_FRAMES: u32 = 13;
+
+#[cfg(feature = "preview-headless")]
+fn sanitize(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "preview-headless")]
+struct NullPaths;
+
+#[cfg(feature = "preview-headless")]
+impl crate::AppPathsProvider for NullPaths {
+    fn config_dir(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+    fn data_dir(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+    fn cache_dir(&self) -> Option<std::path::PathBuf> {
+        None
+    }
 }

@@ -159,8 +159,13 @@ pub fn dispatch_overlays(event: &Event) -> bool {
     ui_core::dispatch_overlays(event) == EventResult::Handled
 }
 
-#[cfg(all(feature = "preview", not(target_os = "android")))]
+#[cfg(all(
+    any(feature = "preview", feature = "preview-headless"),
+    not(target_os = "android")
+))]
 mod preview;
+#[cfg(all(feature = "preview-headless", not(target_os = "android")))]
+pub use preview::run_preview_png;
 #[cfg(all(feature = "preview", not(target_os = "android")))]
 pub use preview::run_preview_window;
 

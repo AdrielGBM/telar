@@ -40,6 +40,10 @@ dev = [
     "dep:serde_json",
 ]
 preview = ["runtime", "desktop"]
+# The same `[preview]` blocks rendered to PNG on the headless backend, for an app with no desktop window to show
+# them in — a shell, a CI job, a golden-image run. Deliberately does not imply `desktop`: pulling winit in to draw
+# a picture is what made `preview` unreachable for those callers in the first place.
+preview-headless = ["runtime", "dep:platform-headless", "dep:image"]
 
 # Dynamic plugins (production, distinct from dev hot-reload). `plugin` builds the dylib-side driver + the
 # `plugin!` export macro; `plugin-host` adds the host-side loader (pulls libloading, like `dev`).
@@ -53,6 +57,8 @@ svg = ["ui-core?/svg"]
 dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
 dynamic-image = ["renderer-assets?/dynamic-image"]
 async-assets = ["ui-core?/async-assets"]
+platform-headless = ["dep:platform-headless"]
+image = ["dep:image"]
 
 [dependencies]
 serde = { workspace = true }
@@ -83,6 +89,8 @@ libloading = { version = "0.9.0", optional = true }
 serde_json = { version = "1", optional = true }
 i18n-core.workspace = true
 raw-window-handle.workspace = true
+platform-headless = { workspace = true, optional = true }
+image = { version = "0.25.10", default-features = false, features = ["png"], optional = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 platform-desktop = { workspace = true, optional = true }

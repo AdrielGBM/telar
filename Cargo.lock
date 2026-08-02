@@ -4625,6 +4625,7 @@ dependencies = [
 name = "telar"
 version = "0.1.0"
 dependencies = [
+ "image",
  "libc",
  "libloading 0.9.0",
  "raw-window-handle",
