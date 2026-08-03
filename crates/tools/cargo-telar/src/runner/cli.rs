@@ -26,6 +26,8 @@ pub(crate) enum TelarCommand {
         /// Project name
         name: String,
     },
+    /// Type-check the project, reporting `.rsx` errors on their own lines
+    Check(CheckArgs),
     /// Check the development environment
     Doctor,
     /// Format every `.rsx` and `.rs` file in the project
@@ -95,6 +97,18 @@ pub(crate) struct PreviewArgs {
     /// List all available previews and exit
     #[arg(long)]
     pub(crate) list: bool,
+}
+
+/// `cargo check` cannot do this job: a `.rsx` compiles to a generated file under `.telar/build/`, so every error
+/// past the parse stage names a file the author never wrote. The per-line source map beside each generated file
+/// is what puts them back, and nothing outside the VS Code extension read it before this.
+#[derive(clap::Args)]
+pub(crate) struct CheckArgs {
+    #[command(flatten)]
+    pub(crate) common: CommonArgs,
+    /// Check tests, examples and benches too
+    #[arg(long)]
+    pub(crate) all_targets: bool,
 }
 
 #[derive(clap::Args)]

@@ -4,6 +4,7 @@ use clap::Parser;
 use telar::RendererBackend;
 
 mod android;
+mod check;
 mod cli;
 mod config;
 mod doctor;
@@ -12,9 +13,10 @@ mod package;
 mod watch;
 
 use android::build_android_package;
+use check::run_check_cmd;
 use cli::{
     BackendArg, BuildArgs, BuildFormat, Cli, CommonArgs, DevArgs, DevtoolsArg, HotArgs,
-    PreviewArgs, TelarCommand, Target, TestArgs,
+    PreviewArgs, Target, TelarCommand, TestArgs,
 };
 use config::load_config;
 use doctor::run_doctor_cmd;
@@ -33,6 +35,7 @@ pub fn run(args: Vec<String>) {
             eprintln!("[cargo-telar] `cargo telar new {name}` is not yet implemented.");
             std::process::exit(1);
         }
+        TelarCommand::Check(args) => run_check_cmd(args),
         TelarCommand::Doctor => run_doctor_cmd(),
         TelarCommand::Fmt(args) => run_fmt_cmd(args),
     }
