@@ -341,6 +341,21 @@ col @card
         );
     }
 
+    /// A `.rsx` component that declares a closure-typed prop gets the same live text and colour the built-in
+    /// catalogue gets. Without this a user component could only take `&'static str`, so it could never show a
+    /// value that changes — and anything with live text had to stay hand-written Rust.
+    #[test]
+    fn a_closure_typed_prop_takes_live_text_and_colour() {
+        let src = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub label: Box<dyn Fn() -> String>,\n    pub tint: Box<dyn Fn() -> telar::Color>,\n    pub dense: bool,\n}\n[view]\ntext \"x\"\n";
+        let sig = scan_component_sig(src);
+        assert_eq!(sig.text_fields, vec!["label".to_string()]);
+        assert_eq!(sig.color_fields, vec!["tint".to_string()]);
+        assert!(
+            !sig.text_fields.contains(&"dense".to_string()),
+            "a plain field is not a text prop"
+        );
+    }
+
     #[test]
     fn scan_component_sig_no_default_no_slot() {
         let src =

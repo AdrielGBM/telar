@@ -260,27 +260,40 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
     let Ok(doc) = telar_parser::parse(source) else {
         return ComponentSig::default();
     };
-    let (has_props, props_default, prop_fields, optional_fields) =
-        scan_props_struct(&doc.logic.source);
+    let props = scan_props_struct(&doc.logic.source);
     ComponentSig {
-        has_props,
-        props_default,
-        prop_fields,
+        has_props: props.has_props,
+        props_default: props.props_default,
+        prop_fields: props.fields,
         has_slot: view_uses_slot(&doc.view.nodes),
-        // Scanned `.rsx` components declare no reactive colour/text props; only the built-in catalogue does, so
-        // a local component's `&'static str` label stays a literal.
-        color_fields: Vec::new(),
-        text_fields: Vec::new(),
-        optional_fields,
+        color_fields: props.color,
+        text_fields: props.text,
+        optional_fields: props.optional,
     }
 }
 
-/// Scans the logic zone for `struct Props`: returns whether it exists, whether a preceding
-/// `#[derive(...)]` lists `Default` (→ optional props), the field names, and the subset of those whose
-/// type is `Option<...>` (→ the caller `Some(...)`-wraps their values).
-fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>, Vec<String>) {
+/// What a scanned `struct Props` tells a call site.
+#[derive(Default)]
+struct ScannedProps {
+    has_props: bool,
+    /// A preceding `#[derive(…Default…)]`, or an inline field default, makes every prop omittable at a call site.
+    props_default: bool,
+    fields: Vec<String>,
+    /// The subset typed `Option<…>`: the caller `Some(…)`-wraps their values.
+    optional: Vec<String>,
+    /// The subset typed `Box<dyn Fn() -> String>`: the caller may write a literal or a `$signal` and have it
+    /// boxed into a closure. Read off the declared type rather than a hardcoded list, so a `.rsx` component gets
+    /// the same live text the built-in catalogue does — without it, a user component can only take
+    /// `&'static str` and cannot show a value that changes.
+    text: Vec<String>,
+    /// The same for `Box<dyn Fn() -> Color>`.
+    color: Vec<String>,
+}
+
+/// Scans the logic zone for `struct Props`. See [`ScannedProps`] for what each part is used for.
+fn scan_props_struct(logic: &str) -> ScannedProps {
     let Some(spos) = logic.find("struct Props") else {
-        return (false, false, Vec::new(), Vec::new());
+        return ScannedProps::default();
     };
 
     // A `#[derive(...Default...)]` on the attribute lines immediately above the struct opts it into defaults.
@@ -309,7 +322,11 @@ fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>, Vec<String>) {
 
     // Field names live between the struct's first `{` and its matching `}`.
     let Some(open_rel) = logic[spos..].find('{') else {
-        return (true, derives_default, Vec::new(), Vec::new());
+        return ScannedProps {
+            has_props: true,
+            props_default: derives_default,
+            ..Default::default()
+        };
     };
     let body_start = spos + open_rel + 1;
     let mut depth = 1i32;
@@ -327,28 +344,53 @@ fn scan_props_struct(logic: &str) -> (bool, bool, Vec<String>, Vec<String>) {
             _ => {}
         }
     }
-    let mut fields = Vec::new();
-    let mut optional = Vec::new();
+    let mut scanned = ScannedProps {
+        has_props: true,
+        ..Default::default()
+    };
     let mut has_inline_default = false;
     for chunk in split_top_level_commas(&logic[body_start..end]) {
         if let Some(field) = parse_field(&chunk) {
             if field.optional {
-                optional.push(field.name.clone());
+                scanned.optional.push(field.name.clone());
+            }
+            match returned_closure_type(&field.ty) {
+                Some("String") => scanned.text.push(field.name.clone()),
+                Some("Color") => scanned.color.push(field.name.clone()),
+                _ => {}
             }
             if field.default.is_some() {
                 has_inline_default = true;
             }
-            fields.push(field.name);
+            scanned.fields.push(field.name);
         }
     }
     // Inline field defaults synthesize a `Default` impl (see `extract_props_struct`), so the struct is
     // default-constructible even without `#[derive(Default)]` — callers may omit its props like a derived one.
-    (
-        true,
-        derives_default || has_inline_default,
-        fields,
-        optional,
-    )
+    scanned.props_default = derives_default || has_inline_default;
+    scanned
+}
+
+/// The type a `Box<dyn Fn() -> T>` prop returns, unqualified (`Color` for `telar::Color`), or `None` when the
+/// field is not a nullary closure. This is what marks a prop as taking live text or a live colour, so a call
+/// site can pass a literal or a `$signal` and have it boxed.
+fn returned_closure_type(ty: &str) -> Option<&str> {
+    let compact: String = ty.split_whitespace().collect::<Vec<_>>().join(" ");
+    if !compact.contains("Fn()") {
+        return None;
+    }
+    let returned = compact
+        .rsplit("->")
+        .next()?
+        .trim()
+        .trim_end_matches('>')
+        .trim();
+    let last = returned.rsplit("::").next()?.trim();
+    match last {
+        "String" => Some("String"),
+        "Color" => Some("Color"),
+        _ => None,
+    }
 }
 
 /// A parsed `Props` field: its name, its type, whether the type is `Option<...>` (→ the caller
