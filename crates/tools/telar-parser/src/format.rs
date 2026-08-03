@@ -107,7 +107,15 @@ fn unwrap_logic(formatted: &str) -> Option<String> {
         return None;
     }
 
-    let body: Vec<String> = lines[1..close]
+    // rustfmt exits 0 having only *partly* reformatted a body it could not fully parse: the inline prop-default sugar (`field: Type = expr`) is not valid Rust, so a `Props` struct using it comes back with the wrapper's indent on the lines around it and none on its own fields. There is then no right amount to strip — taking one level walks the author's struct to the left on every `cargo telar fmt`, and taking none leaves the wrapper's indent behind. Keep the source verbatim instead.
+    let body = &lines[1..close];
+    if !body
+        .iter()
+        .all(|line| line.trim().is_empty() || line.starts_with(INDENT))
+    {
+        return None;
+    }
+    let body: Vec<String> = body
         .iter()
         .map(|line| line.strip_prefix(INDENT).unwrap_or(line).to_string())
         .collect();
@@ -508,5 +516,26 @@ mod tests {
             "preview section should survive:\n{out}"
         );
         assert!(out.contains("counter"));
+    }
+
+    /// The inline prop-default sugar (`field: Type = expr`) is not valid Rust, so rustfmt echoes the struct
+    /// untouched and exits 0. Formatting must leave it exactly as written rather than unindent it — the fault
+    /// compounds, so a file formatted twice loses two levels and eventually reads as a flat block.
+    #[test]
+    fn a_props_struct_with_inline_defaults_keeps_its_indentation() {
+        if find_rustfmt().is_none() {
+            return;
+        }
+        let src = "[logic]\npub struct Props {\n    pub text: Box<dyn Fn() -> String> = Box::new(String::new),\n    pub muted: bool = false,\n}\n\n[view]\ntext \"x\"\n";
+        let once = format_document(src).unwrap();
+        assert!(
+            once.contains("    pub text: Box<dyn Fn() -> String> = Box::new(String::new),"),
+            "the field keeps its indent:\n{once}"
+        );
+        assert_eq!(
+            format_document(&once).unwrap(),
+            once,
+            "and formatting is idempotent"
+        );
     }
 }
