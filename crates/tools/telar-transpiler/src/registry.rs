@@ -42,6 +42,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
 /// Mirrors the recognized `match` arms in `style::layout_prop_call` that map to `LayoutStyle` builder calls, excluding the grid-only keys (`cols`, `span`, `row_span`) which downstream tooling offers solely on the `grid` tag. Aliases (`pad`/`padding`) are listed individually so completion offers both.
 pub fn layout_attr_keys() -> &'static [&'static str] {
     &[
+        "track_rect",
         "width",
         "height",
         "min_width",

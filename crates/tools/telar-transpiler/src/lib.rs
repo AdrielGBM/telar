@@ -756,6 +756,28 @@ col @card
         );
     }
 
+    /// The idiom `track_layout` is used for in Rust, reachable from the view: read where a node ended up so a
+    /// sibling can be drawn from it. With a transform transition it is the whole of a sliding indicator, which
+    /// is why the two landed together.
+    #[test]
+    fn track_rect_mirrors_a_node_into_a_signal_and_keeps_the_effect() {
+        let src = "[logic]\nlet active = signal(Rect::ZERO);\n[view]\ncol\n    box track_rect:$active width:20\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("track_layout(__tracked.layout_node())"),
+            "the node's own rect signal is the source:\n{code}"
+        );
+        assert!(
+            code.contains("active.set(__rect.get())"),
+            "and it is mirrored into the author's signal:\n{code}"
+        );
+        assert!(
+            code.contains(".keeping(effect("),
+            "with the effect owned by the widget it belongs to:\n{code}"
+        );
+    }
+
     /// A transform is read per frame from a closure the renderer already re-runs, so animating one costs a
     /// repaint and no relayout — which is what lets `transition:` reach past paint without breaking the
     /// invariant the whole design rests on. It is also the half of a sliding indicator that is not `track_rect`.

@@ -77,20 +77,31 @@ impl ViewGen<'_> {
             "new"
         };
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
+        // `track_rect:$sig` needs the node, which only exists once the widget is built, so it binds the widget
+        // first and chains `keeping` onto it — the effect that mirrors the laid-out rect belongs to this widget
+        // and to nothing longer-lived.
+        let track = self.track_rect_tail(el, &inner_pad);
+        let bind = if track.is_empty() {
+            ""
+        } else {
+            "let __tracked = "
+        };
+        let terminator = if track.is_empty() { "" } else { ";" };
         match pieces {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}{terminator}"
                 );
             }
             None => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}Container::{ctor}({style}, {children})?{on_press}"
+                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{terminator}"
                 );
             }
         }
+        code.push_str(&track);
 
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
@@ -193,6 +204,27 @@ impl ViewGen<'_> {
     /// are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal`
     /// reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure;
     /// every value is cast to `f32` so integer and float literals both type-check.
+    /// `track_rect:$sig` — mirror this element's laid-out rect into `sig`, so a sibling can be positioned or
+    /// painted from where this one ended up.
+    ///
+    /// `track_layout` hands back the node's own rect signal; this copies it into the author's signal, which is
+    /// what makes the value reachable from the rest of their `[view]` and `[logic]`. The mirroring effect is
+    /// kept on the widget, so it stops when the widget goes rather than firing at a node that is gone.
+    fn track_rect_tail(&self, el: &Element, pad: &str) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "track_rect") else {
+            return String::new();
+        };
+        let target = attr.value.trim().trim_start_matches('$');
+        if target.is_empty() {
+            return String::new();
+        }
+        format!(
+            "{pad}let __rect = track_layout(__tracked.layout_node()).expect(\"a container registers its rect\");\n\
+             {pad}let {target} = {target}.clone();\n\
+             {pad}__tracked.keeping(effect(move || {target}.set(__rect.get())))\n"
+        )
+    }
+
     fn transform_call(
         &mut self,
         el: &Element,
