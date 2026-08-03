@@ -21,6 +21,8 @@ pub mod hot;
 pub mod hot_state;
 #[cfg(feature = "plugin")]
 pub mod plugin;
+#[cfg(feature = "platform-headless")]
+mod raster;
 #[cfg(feature = "runtime")]
 pub mod runner;
 #[cfg(feature = "runtime")]
@@ -168,6 +170,8 @@ mod preview;
 pub use preview::run_preview_png;
 #[cfg(all(feature = "preview", not(target_os = "android")))]
 pub use preview::run_preview_window;
+#[cfg(feature = "platform-headless")]
+pub use raster::rasterize;
 
 #[cfg(feature = "dev")]
 pub use hot_state::{hot_restore_json, hot_signal, hot_snapshot_json, probe};
