@@ -390,8 +390,8 @@ fn format_attr(attr: &Attr) -> String {
     } else if attr.value.is_empty() {
         // Bare flag attribute, e.g. `ghost`.
         attr.key.clone()
-    } else if attr.value.starts_with('|') {
-        // A closure value uses the parenthesized form `key(|…| …)` — the colon form is gone, since it ran to end of line and swallowed any following attributes.
+    } else if is_closure_value(&attr.value) {
+        // A closure value uses the parenthesized form `key(|…| …)` — the colon form is gone, since it ran to end of line and swallowed any following attributes. `move |…|` counts: re-emitting one with a colon produces a line the parser then reads as the attribute `key:move` followed by garbage, so formatting would break the file it just formatted.
         format!("{}({})", attr.key, attr.value)
     } else {
         format!("{}:{}", attr.key, attr.value)
@@ -559,6 +559,19 @@ mod tests {
         assert!(out.contains("counter"));
     }
 
+    /// The colon form rejects a closure — it runs to end of line and swallows whatever follows — so re-emitting
+    /// one with a colon does not merely reformat the file, it breaks the file it just formatted.
+    #[test]
+    fn a_move_closure_attribute_keeps_its_parens() {
+        let src = "[view]\nicon name(move || label()) tint(|| fg()) size:16\n";
+        let out = format_document(src).unwrap();
+        assert!(
+            out.contains("name(move || label())") && out.contains("tint(|| fg())"),
+            "both closure spellings keep the paren form:\n{out}"
+        );
+        assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
+    }
+
     /// Losing the `virtual` clause would turn a list that builds ten rows into one that builds ten thousand,
     /// silently, on the next format.
     #[test]
@@ -635,4 +648,13 @@ mod tests {
             "and formatting is idempotent"
         );
     }
+}
+
+/// Whether an attribute value is a closure, in either spelling the DSL accepts.
+fn is_closure_value(value: &str) -> bool {
+    let value = value.trim_start();
+    value.starts_with('|')
+        || value
+            .strip_prefix("move")
+            .is_some_and(|rest| rest.trim_start().starts_with('|'))
 }
