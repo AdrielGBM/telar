@@ -35,7 +35,6 @@ impl ViewGen<'_> {
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
         let active_call = self.active_style_call(el, &pattrs);
-        let transform_call = self.transform_call(el);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
         let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
@@ -44,6 +43,7 @@ impl ViewGen<'_> {
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
+        let transform_call = self.transform_call(el, &transitions, &mut hoists);
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
         let styling = format!(
@@ -193,7 +193,12 @@ impl ViewGen<'_> {
     /// are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal`
     /// reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure;
     /// every value is cast to `f32` so integer and float literals both type-check.
-    fn transform_call(&self, el: &Element) -> String {
+    fn transform_call(
+        &mut self,
+        el: &Element,
+        transitions: &HashMap<String, String>,
+        hoists: &mut Vec<String>,
+    ) -> String {
         if !el
             .attributes
             .iter()
@@ -215,13 +220,29 @@ impl ViewGen<'_> {
         let scale_y = raw("scale_y").or(scale).unwrap_or_else(|| "1".into());
         let tx = raw("translate_x").unwrap_or_else(|| "0".into());
         let ty = raw("translate_y").unwrap_or_else(|| "0".into());
-        let values = [rotate, scale_x, scale_y, tx, ty];
-        let args = values
-            .iter()
-            .map(|v| format!("({}) as f32", substitute_reads(v)))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let refs: Vec<&str> = values.iter().map(String::as_str).collect();
+        // Paired with the property each value came from, so a `transition:` names the axis it animates. `scale`
+        // stands in for both axes when neither was given its own value, matching how the value itself resolves.
+        let axis_prop = |own: &'static str| match transitions.contains_key(own) {
+            true => own,
+            false => "scale",
+        };
+        let values = [
+            (rotate, "rotate"),
+            (scale_x, axis_prop("scale_x")),
+            (scale_y, axis_prop("scale_y")),
+            (tx, "translate_x"),
+            (ty, "translate_y"),
+        ];
+        let mut args = Vec::new();
+        for (value, prop) in &values {
+            let read = format!("({}) as f32", substitute_reads(value));
+            args.push(match transitions.get(*prop) {
+                Some(curve) => self.wrap_transition(curve, &read, hoists),
+                None => read,
+            });
+        }
+        let args = args.join(", ");
+        let refs: Vec<&str> = values.iter().map(|(v, _)| v.as_str()).collect();
         let call = wrap_signal_clones(
             &refs,
             format!("move |__r: Rect| box_transform(__r, {args})"),

@@ -756,6 +756,37 @@ col @card
         );
     }
 
+    /// A transform is read per frame from a closure the renderer already re-runs, so animating one costs a
+    /// repaint and no relayout — which is what lets `transition:` reach past paint without breaking the
+    /// invariant the whole design rests on. It is also the half of a sliding indicator that is not `track_rect`.
+    #[test]
+    fn a_transform_can_be_transitioned() {
+        let src = "[logic]\nlet x = signal(0.0f32);\n[view]\nbox translate_x:$x transition(translate_x 200ms)\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("motion::Animated::new") && code.contains(".retarget("),
+            "the value is retargeted through a persistent Animated:\n{code}"
+        );
+        assert!(
+            code.contains("with_transform("),
+            "and still lands on the transform closure:\n{code}"
+        );
+    }
+
+    /// The layout box stays out: animating it would put a layout pass in every frame of every transition, which
+    /// is a separate decision from this one.
+    #[test]
+    fn transitioning_the_layout_box_is_still_refused() {
+        let src = "[view]\nbox width:40 transition(width 200ms)\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains("compile_error!"),
+            "an unsupported property is named, not ignored:\n{}",
+            out.rust_code
+        );
+    }
+
     /// The shape `if` could never express, and the reason 14 of hyprshell's 16 `widget "…"` escapes are icons:
     /// three arms of different structure, a payload bound out of the matched variant, and a key that is the
     /// payload's own identity rather than the variant — so re-arriving at the same picture does not rebuild.

@@ -11,8 +11,27 @@ pub(crate) struct TransitionSpec {
     pub curve: String,
 }
 
-/// Properties v1 can animate — paint-only, no relayout (F5 in the animations design doc).
-const SUPPORTED_PROPS: &[&str] = &["opacity", "fill", "stroke", "color"];
+/// Properties a `transition:` can animate.
+///
+/// Paint and transform, and deliberately not the layout box. Both halves are read per frame from a closure the
+/// renderer already re-runs, so animating them costs a repaint and nothing else — the "no relayout" invariant
+/// (F5 in `docs/animations.md`) that the whole design rests on. Animating `width`/`height`/`x`/`y` would put a
+/// layout pass in every frame of every transition, which is a different decision and needs its own.
+///
+/// A transform is enough for the shape this was missing: an indicator that slides to the active item moves by
+/// `translate_x`, not by its box.
+const SUPPORTED_PROPS: &[&str] = &[
+    "opacity",
+    "fill",
+    "stroke",
+    "color",
+    "rotate",
+    "scale",
+    "scale_x",
+    "scale_y",
+    "translate_x",
+    "translate_y",
+];
 
 /// Parses a `transition:` value into resolved specs plus human-readable error messages (a malformed clause becomes an error but does not abort the others). Parentheses are respected so the commas inside `cubic-bezier(...)`/`spring(...)` never split clauses.
 pub(crate) fn parse_transition_value(value: &str) -> (Vec<TransitionSpec>, Vec<String>) {
