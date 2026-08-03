@@ -177,7 +177,18 @@ impl StyledContainer {
 
     /// Make the box itself pressable. The callback fires on a tap (release, not press) inside the box;
     /// a child widget that handles the press wins, and a scroll gesture started on the box does not fire it.
-    pub fn on_press(mut self, f: impl Fn() + 'static) -> Self {
+    pub fn on_press(self, f: impl Fn() + 'static) -> Self {
+        self.maybe_on_press(Some(f))
+    }
+
+    /// [`on_press`](Self::on_press) for a handler the caller may not have supplied.
+    ///
+    /// What a wrapper component needs to forward an optional callback. A box whose press handler is a no-op
+    /// still reports the tap `Handled`, so "no handler" would become "swallows the click" — a display-only chip
+    /// eating a press instead of letting it through. `None` leaves the box exactly as it was; the `maybe_*`
+    /// pairs below say the same for every other event whose absence the box can observe.
+    pub fn maybe_on_press(mut self, f: Option<impl Fn() + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.press.set(f);
         self.mark_interactive();
         self
@@ -199,7 +210,13 @@ impl StyledContainer {
     /// `on_press`'s tap-on-release. There is no dedicated timer in the gesture pipeline, so the threshold is
     /// only checked on the next pointer event after the press (a move or the release) — it fires slightly
     /// late, never at exactly 500ms, and a release before that next check-in is a normal tap.
-    pub fn on_long_press(mut self, f: impl Fn() + 'static) -> Self {
+    pub fn on_long_press(self, f: impl Fn() + 'static) -> Self {
+        self.maybe_on_long_press(Some(f))
+    }
+
+    /// [`on_long_press`](Self::on_long_press) for a handler the caller may not have supplied.
+    pub fn maybe_on_long_press(mut self, f: Option<impl Fn() + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.press.set_long_press(f);
         self.mark_interactive();
         self
@@ -215,13 +232,25 @@ impl StyledContainer {
     /// never that it let go, so a swipe-to-dismiss or a drag-to-open can be tracked and never decided. A drag
     /// also ends when the pointer leaves the window or a child consumes the release; those carry no position,
     /// so the last one the drag reached is reported instead — the gesture always ends exactly once.
-    pub fn on_drag_end(mut self, f: impl Fn(f32, f32) + 'static) -> Self {
+    pub fn on_drag_end(self, f: impl Fn(f32, f32) + 'static) -> Self {
+        self.maybe_on_drag_end(Some(f))
+    }
+
+    /// [`on_drag_end`](Self::on_drag_end) for a handler the caller may not have supplied.
+    pub fn maybe_on_drag_end(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.drag.set_end(f);
         self.mark_interactive();
         self
     }
 
-    pub fn on_drag(mut self, f: impl Fn(f32, f32) + 'static) -> Self {
+    pub fn on_drag(self, f: impl Fn(f32, f32) + 'static) -> Self {
+        self.maybe_on_drag(Some(f))
+    }
+
+    /// [`on_drag`](Self::on_drag) for a handler the caller may not have supplied.
+    pub fn maybe_on_drag(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.drag.set(f);
         self.mark_interactive();
         self
@@ -240,7 +269,13 @@ impl StyledContainer {
     /// Registers the box as a pointer target, like [`on_scroll`](Self::on_scroll) does for the same reason: a
     /// surface that carves its input region from its content (a click-through overlay) never receives a move
     /// event over a box it left out of that region, so a hover it did not register is a hover it can't observe.
-    pub fn on_hover(mut self, f: impl Fn(bool) + 'static) -> Self {
+    pub fn on_hover(self, f: impl Fn(bool) + 'static) -> Self {
+        self.maybe_on_hover(Some(f))
+    }
+
+    /// [`on_hover`](Self::on_hover) for a handler the caller may not have supplied.
+    pub fn maybe_on_hover(mut self, f: Option<impl Fn(bool) + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.on_hover = Some(Box::new(f));
         self.mark_interactive();
         self
@@ -253,7 +288,13 @@ impl StyledContainer {
     /// Scroll events carry no pointer position, so the box's hover state is what targets them; this enables
     /// hover tracking on its own, without needing an `on_hover_style`. A scrollable child (a scroll area
     /// inside the box) hit-tests first and keeps the event.
-    pub fn on_scroll(mut self, f: impl Fn(f32, f32) + 'static) -> Self {
+    pub fn on_scroll(self, f: impl Fn(f32, f32) + 'static) -> Self {
+        self.maybe_on_scroll(Some(f))
+    }
+
+    /// [`on_scroll`](Self::on_scroll) for a handler the caller may not have supplied.
+    pub fn maybe_on_scroll(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.on_scroll = Some(Box::new(f));
         self.mark_interactive();
         self
@@ -261,7 +302,13 @@ impl StyledContainer {
 
     /// Fire `f(&key)` on every key press. This is a GLOBAL handler (key events reach every widget; there is
     /// no per-widget focus), so it suits app-level shortcuts, not focused text entry.
-    pub fn on_key(mut self, f: impl Fn(&Key) + 'static) -> Self {
+    pub fn on_key(self, f: impl Fn(&Key) + 'static) -> Self {
+        self.maybe_on_key(Some(f))
+    }
+
+    /// [`on_key`](Self::on_key) for a handler the caller may not have supplied.
+    pub fn maybe_on_key(mut self, f: Option<impl Fn(&Key) + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.on_key = Some(Box::new(f));
         self
     }
