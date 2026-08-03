@@ -149,6 +149,61 @@ impl ReactiveList {
         )
     }
 
+    /// A keyed list whose builder receives a **live handle** to its item rather than a copy of it.
+    ///
+    /// The difference decides what a row is allowed to be. With an owned snapshot, a key that persists reuses
+    /// the widget and the new value is discarded — so a row that must follow its data has to be keyed on that
+    /// data, which rebuilds it and throws away whatever local state it held: a caret, a drag in progress, a
+    /// scroll position. Keying on identity and reading the value through a handle separates the two questions —
+    /// the key decides whether this is still the same row, the handle carries what that row now says.
+    ///
+    /// Use [`Self::new`] where a row genuinely *is* its value, which most lists are, and this where a row
+    /// outlives its contents.
+    pub fn keyed<Item, Key, S, K, B>(source: S, key: K, build: B) -> Result<Self, LayoutError>
+    where
+        Key: Hash + 'static,
+        Item: Clone + 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        K: Fn(&Item) -> Key + 'static,
+        B: Fn(reactive_core::ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError>
+            + 'static,
+    {
+        // One signal per live key, held outside `ListState` so that stays non-generic. `sync` runs for every
+        // item on every reconcile and *before* the reuse decision, so a persisting row's handle already holds
+        // the new value by the time anything reads it, and a new row's handle exists for `build` to read.
+        let values: Rc<RefCell<HashMap<u64, RwSignal<Item>>>> =
+            Rc::new(RefCell::new(HashMap::new()));
+
+        let sync_values = Rc::clone(&values);
+        let sync = move |item: &Item, k: u64| {
+            let mut held = sync_values.borrow_mut();
+            match held.get(&k) {
+                Some(existing) => existing.set(item.clone()),
+                None => {
+                    held.insert(k, signal(item.clone()));
+                }
+            }
+        };
+
+        let key = Rc::new(key);
+        let key_for_build = Rc::clone(&key);
+        let build_values = Rc::clone(&values);
+        Self::build_with_sync(
+            LayoutStyle::new().flex_column(),
+            source,
+            move |item: Item| {
+                let held = build_values
+                    .borrow()
+                    .get(&hash_key(&key_for_build(&item)))
+                    .cloned()
+                    .expect("sync inserts a handle for every item before build runs");
+                build(held.read_only())
+            },
+            move |item: &Item, _idx: usize| hash_key(&key(item)),
+            sync,
+        )
+    }
+
     /// Shared constructor: `keyer` erases both reconciliation modes (hashed key, or plain index) to a
     /// `u64` so `reconcile` doesn't need to know which mode produced it.
     fn build<Item, S, B, KeyFn>(
@@ -162,6 +217,23 @@ impl ReactiveList {
         S: Fn() -> Vec<Item> + 'static,
         B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
         KeyFn: Fn(&Item, usize) -> u64 + 'static,
+    {
+        Self::build_with_sync(container_style, source, build, keyer, |_, _| {})
+    }
+
+    fn build_with_sync<Item, S, B, KeyFn, Sync>(
+        container_style: LayoutStyle,
+        source: S,
+        build: B,
+        keyer: KeyFn,
+        sync: Sync,
+    ) -> Result<Self, LayoutError>
+    where
+        Item: 'static,
+        S: Fn() -> Vec<Item> + 'static,
+        B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+        KeyFn: Fn(&Item, usize) -> u64 + 'static,
+        Sync: Fn(&Item, u64) + 'static,
     {
         let node = new_container(container_style, &[])?;
         let rect = track_layout(node).expect("list container is registered");
@@ -177,7 +249,7 @@ impl ReactiveList {
         // Runs once now (builds the initial list) and again on every change to a signal `source` reads.
         let _effect = effect(move || {
             let items = source();
-            reconcile(&eff_state, items, &keyer, &build);
+            reconcile(&eff_state, items, &keyer, &build, &sync);
             eff_version.update(|v| *v = v.wrapping_add(1));
         });
 
@@ -191,14 +263,16 @@ impl ReactiveList {
     }
 }
 
-fn reconcile<Item, KeyFn, B>(
+fn reconcile<Item, KeyFn, B, Sync>(
     state: &Rc<RefCell<ListState>>,
     items: Vec<Item>,
     keyer: &KeyFn,
     build: &B,
+    sync: &Sync,
 ) where
     KeyFn: Fn(&Item, usize) -> u64,
     B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    Sync: Fn(&Item, u64),
 {
     let mut st = state.borrow_mut();
     let container = st.node;
@@ -217,6 +291,9 @@ fn reconcile<Item, KeyFn, B>(
 
     for (idx, item) in items.into_iter().enumerate() {
         let k = keyer(&item, idx);
+        // Before the reuse decision, so a row that keeps its key still sees the value it now carries. The
+        // snapshot constructors pass a no-op here and keep the old behaviour exactly.
+        sync(&item, k);
         let child = match old.remove(&k) {
             Some(existing) => existing,
             None => make_child(build(item).expect("reactive list item build")),
@@ -432,6 +509,62 @@ mod tests {
             &v2[..2],
             &v1[..],
             "the first two positions keep their nodes"
+        );
+    }
+
+    /// The trap this exists to remove: with an owned snapshot a persisting key reuses the widget and the new
+    /// value is thrown away, so a row that must follow its data has to be keyed on that data — which rebuilds
+    /// it, and takes its local state with it. `keyed` lets the row keep its widget *and* see the new value.
+    #[test]
+    fn a_keyed_row_keeps_its_widget_and_still_sees_its_new_value() {
+        reset_layout_runtime();
+        reactive_core::reset_runtime();
+
+        #[derive(Clone)]
+        struct Row {
+            id: u32,
+            text: &'static str,
+        }
+
+        let rows = signal(vec![Row {
+            id: 1,
+            text: "before",
+        }]);
+        let seen = Rc::new(RefCell::new(Vec::<&'static str>::new()));
+        let builds = Rc::new(RefCell::new(0usize));
+
+        let (sink, counter) = (Rc::clone(&seen), Rc::clone(&builds));
+        let source = rows.clone();
+        let list = ReactiveList::keyed(
+            move || source.get(),
+            |row: &Row| row.id,
+            move |held: reactive_core::ReadSignal<Row>| {
+                *counter.borrow_mut() += 1;
+                let sink = Rc::clone(&sink);
+                // Reading the handle inside an effect is what a real row's text/style closure does.
+                let watch = effect(move || sink.borrow_mut().push(held.get().text));
+                Ok(Box::new(crate::Container::column(vec![])?.keeping(watch))
+                    as Box<dyn LayoutItem>)
+            },
+        )
+        .unwrap();
+
+        let first = list.state.borrow().children[0].node();
+        rows.set(vec![Row {
+            id: 1,
+            text: "after",
+        }]);
+
+        assert_eq!(*builds.borrow(), 1, "the row was built once, not rebuilt");
+        assert_eq!(
+            list.state.borrow().children[0].node(),
+            first,
+            "and kept the very node it had"
+        );
+        assert_eq!(
+            *seen.borrow(),
+            vec!["before", "after"],
+            "while still seeing what it now says"
         );
     }
 }
