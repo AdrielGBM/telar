@@ -756,6 +756,55 @@ col @card
         );
     }
 
+    /// The shape `if` could never express, and the reason 14 of hyprshell's 16 `widget "…"` escapes are icons:
+    /// three arms of different structure, a payload bound out of the matched variant, and a key that is the
+    /// payload's own identity rather than the variant — so re-arriving at the same picture does not rebuild.
+    #[test]
+    fn a_reactive_match_extracts_a_payload_and_keys_on_it() {
+        let src = "[logic]\nlet state = signal(AssetState::Loading);\n[view]\ncol\n    match $state as s key s.as_ready().map(|svg| svg.id())\n        AssetState::Ready(svg)\n            svg src:svg\n        AssetState::Failed\n            box width:16 height:16\n        _\n            text \"…\"\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("AssetState::Ready(svg) =>"),
+            "the payload is bound by the arm's own pattern:\n{code}"
+        );
+        assert!(
+            code.contains("s.as_ready().map(|svg| svg.id())"),
+            "the key is the payload's identity, not the variant:\n{code}"
+        );
+        assert!(
+            code.contains("state.get()"),
+            "and the scrutinee is read reactively:\n{code}"
+        );
+    }
+
+    /// Without a key the fallback must be hashable whatever the matched type is, so it reconciles on the variant
+    /// — rebuilding when the shape changes and not when the payload does.
+    #[test]
+    fn a_keyless_reactive_match_reconciles_on_the_variant() {
+        let src = "[logic]\nlet state = signal(Mode::A);\n[view]\ncol\n    match $state\n        Mode::A\n            text \"a\"\n        _\n            text \"b\"\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains("::std::mem::discriminant"),
+            "the variant is the default key:\n{}",
+            out.rust_code
+        );
+    }
+
+    /// A scrutinee with no `$` chooses its arm once, so it stays an ordinary Rust `match` — the same split `if`
+    /// and `for` already make between a construction-time branch and a reconciled one.
+    #[test]
+    fn a_match_without_a_signal_stays_a_construction_time_branch() {
+        let src = "[view]\ncol\n    match props.kind\n        Kind::One\n            text \"one\"\n        _\n            text \"other\"\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(code.contains("match props.kind {"), "plain match:\n{code}");
+        assert!(
+            !code.contains("discriminant") && !code.contains("ReactiveList::new"),
+            "and nothing reactive is built for it:\n{code}"
+        );
+    }
+
     /// `Svg::with_stroke` is how a theme draws every icon at one weight without editing the assets, and it was
     /// reachable only from Rust — which is one of the two reasons a themed icon could not be a `.rsx` component.
     #[test]

@@ -423,12 +423,14 @@ impl<'a> ViewGen<'a> {
             },
             ViewNode::IfBlock(block) => self.emit_if(block),
             ViewNode::ForBlock(block) => self.emit_for(block),
+            ViewNode::MatchBlock(block) => self.emit_match(block),
         };
         // Bracket this node's generated lines with source markers so the transpiler can map them back to the `.rsx` line. Nested nodes nest their own markers; `let` statements have no line of their own and inherit the enclosing node's mapping.
         match node {
             ViewNode::Element(el) => wrap_source_markers(emit, el.line),
             ViewNode::IfBlock(block) => wrap_source_markers(emit, block.line),
             ViewNode::ForBlock(block) => wrap_source_markers(emit, block.line),
+            ViewNode::MatchBlock(block) => wrap_source_markers(emit, block.line),
             ViewNode::LetStmt(_) => emit,
         }
     }
@@ -459,7 +461,10 @@ impl<'a> ViewGen<'a> {
 /// splices a runtime `Vec` into it.
 pub(crate) fn forces_child_vec(node: &ViewNode) -> bool {
     match node {
-        ViewNode::IfBlock(_) | ViewNode::ForBlock(_) | ViewNode::LetStmt(_) => true,
+        ViewNode::IfBlock(_)
+        | ViewNode::ForBlock(_)
+        | ViewNode::MatchBlock(_)
+        | ViewNode::LetStmt(_) => true,
         ViewNode::Element(el) => el.tag == "children",
     }
 }

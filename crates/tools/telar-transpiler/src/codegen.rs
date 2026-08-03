@@ -956,6 +956,7 @@ fn node_uses_slot(node: &ViewNode) -> bool {
             view_uses_slot(&b.then_branch) || b.else_branch.as_deref().is_some_and(view_uses_slot)
         }
         ViewNode::ForBlock(b) => view_uses_slot(&b.body),
+        ViewNode::MatchBlock(b) => b.arms.iter().any(|arm| view_uses_slot(&arm.body)),
         ViewNode::LetStmt(_) => false,
     }
 }

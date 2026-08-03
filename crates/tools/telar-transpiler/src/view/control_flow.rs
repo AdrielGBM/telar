@@ -1,8 +1,8 @@
-//! Control-flow emitters: `if`/`for` blocks and the branch-into-children helper.
+//! Control-flow emitters: `if`/`for`/`match` blocks and the branch-into-children helper.
 
 use std::fmt::Write;
 
-use telar_parser::{ForBlock, IfBlock, ViewNode};
+use telar_parser::{ForBlock, IfBlock, MatchBlock, ViewNode};
 
 use super::signals::{
     captured_idents, clone_block_multiline, pattern_idents, substitute_reads, subtree_snippets,
@@ -23,6 +23,106 @@ impl ViewGen<'_> {
         let raw_refs: Vec<&str> = raw.iter().map(String::as_str).collect();
         let idents = captured_idents(&raw_refs, &self.loop_variables);
         clone_block_multiline(&idents, closure, pad)
+    }
+
+    /// `match <expr> [as <name>] [key <expr>]`. A `$` in the scrutinee makes it reactive; without one the arm is
+    /// chosen once at construction and this is an ordinary Rust `match`.
+    pub(super) fn emit_match(&mut self, block: &MatchBlock) -> ChildEmit {
+        if block.scrutinee.contains('$') {
+            return self.emit_reactive_match(block);
+        }
+        let pad = self.indent_str();
+        let scrutinee = block.scrutinee.trim();
+        let marker = expr_marker(block.scrutinee_start, scrutinee.len());
+        let mut code = String::new();
+        let _ = writeln!(code, "{pad}match {marker}{scrutinee} {{");
+        for arm in &block.arms {
+            self.indent += 1;
+            let apad = self.indent_str();
+            let amarker = expr_marker(arm.pattern_start, arm.pattern.len());
+            let _ = writeln!(code, "{apad}{amarker}{} => {{", arm.pattern);
+            self.indent += 1;
+            self.emit_branch_into_children(&arm.body, &mut code);
+            self.indent -= 1;
+            let _ = writeln!(code, "{apad}}}");
+            self.indent -= 1;
+        }
+        let _ = write!(code, "{pad}}}");
+        ChildEmit::Dynamic { code }
+    }
+
+    /// A reactive `match $expr`: a one-item reconciled list whose key decides when an arm rebuilds. Unlike a
+    /// reactive `if`, the key is not the selector — a variant carries a payload, and keying on that payload's
+    /// own identity is what lets an arm keep its widget while its contents change. Without a `key` clause it
+    /// reconciles on the variant alone, which rebuilds when the shape changes and not when the payload does.
+    fn emit_reactive_match(&mut self, block: &MatchBlock) -> ChildEmit {
+        let boxed = !self.in_slot_host();
+        let var = self.next_variable_name(if boxed { "node" } else { "frag" });
+        let pad = self.indent_str();
+        let scrutinee = block.scrutinee.trim();
+        let source = wrap_signal_clones(
+            &[scrutinee],
+            format!("move || vec![{}]", substitute_reads(scrutinee)),
+        );
+
+        let binding = block.binding.as_deref().unwrap_or("__value");
+        let key_fn = match block.key_expr.as_deref().map(str::trim) {
+            Some(key) if !key.is_empty() => {
+                format!("|{binding}: &_| {}", substitute_reads(key))
+            }
+            // The variant alone. `discriminant` is `Hash` whether or not the item's own type is.
+            _ => "|__value: &_| ::std::mem::discriminant(__value)".to_string(),
+        };
+
+        let mut body = String::new();
+        let _ = writeln!(
+            body,
+            "{pad}    move |__value| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+        );
+        self.indent += 2;
+        let bpad = self.indent_str();
+        let _ = writeln!(body, "{bpad}match __value {{");
+        for arm in &block.arms {
+            self.indent += 1;
+            let apad = self.indent_str();
+            let amarker = expr_marker(arm.pattern_start, arm.pattern.len());
+            let _ = writeln!(body, "{apad}{amarker}{} => {{", arm.pattern);
+            self.indent += 1;
+            let arm_body = arm.body.clone();
+            let cell = self.in_reactive(|g| g.emit_content_cell(&arm_body, &mut body));
+            let ipad = self.indent_str();
+            let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
+            self.indent -= 1;
+            let _ = writeln!(body, "{apad}}}");
+            self.indent -= 1;
+        }
+        let _ = writeln!(body, "{bpad}}}");
+        self.indent -= 2;
+        let _ = write!(body, "{pad}    }}");
+
+        let arm_nodes: Vec<ViewNode> = block
+            .arms
+            .iter()
+            .flat_map(|arm| arm.body.iter().cloned())
+            .collect();
+        let branches = self.wrap_branch_closure(&arm_nodes, body, &format!("{pad}    "));
+
+        let mut code = String::new();
+        let opener = if boxed {
+            "ReactiveList::new("
+        } else {
+            "fragment("
+        };
+        let closer = if boxed { ")?;" } else { ");" };
+        let _ = writeln!(code, "{pad}let {var} = {opener}");
+        let _ = writeln!(code, "{pad}    {source},");
+        let _ = writeln!(code, "{pad}    {key_fn},");
+        let _ = writeln!(code, "{branches},");
+        let _ = write!(code, "{pad}{closer}");
+        match boxed {
+            true => ChildEmit::Simple { name: var, code },
+            false => ChildEmit::Fragment { name: var, code },
+        }
     }
 
     pub(super) fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {

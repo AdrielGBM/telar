@@ -105,6 +105,12 @@ fn check_nodes(nodes: &[ViewNode], ctx: &Ctx, reactive: bool, diagnostics: &mut 
                 let reactive = reactive || b.iterable.trim_start().starts_with('$');
                 check_nodes(&b.body, ctx, reactive, diagnostics);
             }
+            ViewNode::MatchBlock(b) => {
+                let reactive = reactive || b.scrutinee.contains('$');
+                for arm in &b.arms {
+                    check_nodes(&arm.body, ctx, reactive, diagnostics);
+                }
+            }
             ViewNode::LetStmt(_) => {}
         }
     }

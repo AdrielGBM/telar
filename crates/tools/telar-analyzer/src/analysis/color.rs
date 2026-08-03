@@ -90,6 +90,11 @@ fn collect_view_colors(nodes: &[ViewNode], source: &str, out: &mut Vec<ColorInfo
                 }
             }
             ViewNode::ForBlock(block) => collect_view_colors(&block.body, source, out),
+            ViewNode::MatchBlock(block) => {
+                for arm in &block.arms {
+                    collect_view_colors(&arm.body, source, out);
+                }
+            }
             ViewNode::LetStmt(_) => {}
         }
     }

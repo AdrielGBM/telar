@@ -79,6 +79,7 @@ impl Parser {
         match first_word {
             "if" => self.parse_if_block(indent),
             "for" => self.parse_for_block(indent),
+            "match" => self.parse_match_block(indent),
             "let" => {
                 let source_start = self.lines[self.pos].content_start;
                 self.pos += 1;
@@ -157,6 +158,65 @@ impl Parser {
             gap_expr,
             body,
             line: number,
+        }))
+    }
+
+    /// Parses `match <scrutinee> [as <name>] [key <expr>]` and its arms. Every direct child of a `match` is an
+    /// arm header — a raw Rust pattern — with the nodes it renders indented under it.
+    fn parse_match_block(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
+        let line = &self.lines[self.pos];
+        let number = line.number;
+        let after = &line.content["match".len()..];
+        let header_start =
+            line.content_start + "match".len() + (after.len() - after.trim_start().len());
+        let header = after.trim().to_string();
+        self.pos += 1;
+
+        let (scrutinee, binding, key_expr) =
+            split_match_header(&header).ok_or_else(|| ParseError {
+                message: format!(
+                    "expected `match <expr> [as <name>] [key <expr>]`, got `match {header}`"
+                ),
+                line: number,
+            })?;
+
+        let mut arms = Vec::new();
+        loop {
+            self.skip_blank_view_lines();
+            let Some(next) = self.lines.get(self.pos) else {
+                break;
+            };
+            if next.section != Section::View || next.indent <= indent {
+                break;
+            }
+            let arm_indent = next.indent;
+            let pattern = next.content.trim().to_string();
+            let pattern_start = next.content_start;
+            let arm_line = next.number;
+            self.pos += 1;
+            let body = self.parse_children(arm_indent)?;
+            arms.push(MatchArm {
+                pattern,
+                body,
+                line: arm_line,
+                pattern_start,
+            });
+        }
+
+        if arms.is_empty() {
+            return Err(ParseError {
+                message: "a `match` needs at least one arm".to_string(),
+                line: number,
+            });
+        }
+
+        Ok(ViewNode::MatchBlock(MatchBlock {
+            scrutinee,
+            binding,
+            key_expr,
+            arms,
+            line: number,
+            scrutinee_start: header_start,
         }))
     }
 
@@ -247,6 +307,28 @@ fn split_for_in(rest: &str) -> Option<(String, String, Option<String>, Option<St
         _ => (after_in.join(" "), None),
     };
     Some((pattern, iterable, key_expr, gap_expr))
+}
+
+/// Splits `<scrutinee> [as <name>] [key <expr>]` into its three parts. `key` is peeled first so an `as` inside
+/// the key expression cannot be mistaken for the binding.
+fn split_match_header(rest: &str) -> Option<(String, Option<String>, Option<String>)> {
+    let tokens: Vec<&str> = rest.split_whitespace().collect();
+    if tokens.is_empty() {
+        return None;
+    }
+    let (head, key_expr) = match tokens.iter().position(|&t| t == "key") {
+        Some(at) if at > 0 && at + 1 < tokens.len() => {
+            (&tokens[..at], Some(tokens[at + 1..].join(" ")))
+        }
+        _ => (&tokens[..], None),
+    };
+    let (scrutinee, binding) = match head.iter().position(|&t| t == "as") {
+        Some(at) if at > 0 && at + 1 == head.len() - 1 => {
+            (head[..at].join(" "), Some(head[at + 1].to_string()))
+        }
+        _ => (head.join(" "), None),
+    };
+    (!scrutinee.is_empty()).then_some((scrutinee, binding, key_expr))
 }
 
 /// Extracts the inner text from a leading `|params|` line (e.g. `w, h` from `|w, h|`).

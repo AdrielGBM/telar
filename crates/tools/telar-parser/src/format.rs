@@ -281,6 +281,30 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
                 }
             }
         }
+        ViewNode::MatchBlock(block) => {
+            out.push_str(&pad);
+            out.push_str(&format!("match {}", block.scrutinee));
+            if let Some(binding) = &block.binding {
+                out.push_str(&format!(" as {binding}"));
+            }
+            if let Some(key) = block
+                .key_expr
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                out.push_str(&format!(" key {key}"));
+            }
+            out.push('\n');
+            for arm in &block.arms {
+                out.push_str(&INDENT.repeat(depth + 1));
+                out.push_str(&arm.pattern);
+                out.push('\n');
+                for child in &arm.body {
+                    emit_node(child, depth + 2, out);
+                }
+            }
+        }
         ViewNode::ForBlock(block) => {
             out.push_str(&pad);
             out.push_str(&format!("for {} in {}", block.pattern, block.iterable));
@@ -525,6 +549,23 @@ mod tests {
             "preview section should survive:\n{out}"
         );
         assert!(out.contains("counter"));
+    }
+
+    /// A `match` header carries two optional clauses, and both change behaviour: dropping `key` silently
+    /// downgrades reconciliation to the variant, dropping `as` breaks the key that reads the binding.
+    #[test]
+    fn a_match_header_survives_a_round_trip() {
+        let src = "[view]\ncol\n    match $state as s key s.id()\n        Ready(svg)\n            text \"ok\"\n        _\n            text \"…\"\n";
+        let out = format_document(src).unwrap();
+        assert!(
+            out.contains("match $state as s key s.id()\n"),
+            "both clauses come back:\n{out}"
+        );
+        assert!(
+            out.contains("        Ready(svg)\n"),
+            "arms keep their indent:\n{out}"
+        );
+        assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }
 
     /// An `else if` chain parses to a nested `if` inside the else-branch, and re-emitting it as that nesting

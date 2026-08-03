@@ -320,6 +320,15 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
                 }
                 collect_snippets(&block.body, out);
             }
+            ViewNode::MatchBlock(block) => {
+                out.push(block.scrutinee.clone());
+                if let Some(key) = &block.key_expr {
+                    out.push(key.clone());
+                }
+                for arm in &block.arms {
+                    collect_snippets(&arm.body, out);
+                }
+            }
             ViewNode::LetStmt(stmt) => out.push(stmt.source.clone()),
         }
     }

@@ -40,6 +40,11 @@ fn collect(nodes: &[ViewNode], source: &str, file_dir: &Path, out: &mut Vec<Docu
                 }
             }
             ViewNode::ForBlock(block) => collect(&block.body, source, file_dir, out),
+            ViewNode::MatchBlock(block) => {
+                for arm in &block.arms {
+                    collect(&arm.body, source, file_dir, out);
+                }
+            }
             ViewNode::LetStmt(_) => {}
         }
     }

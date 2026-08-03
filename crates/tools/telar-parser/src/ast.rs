@@ -74,11 +74,43 @@ pub struct ViewSection {
     pub nodes: Vec<ViewNode>,
 }
 
+/// A `match <scrutinee> [as <binding>] [key <expr>]` block: the branching an `if` cannot do, because it extracts
+/// a payload from the matched variant and renders a structurally different subtree per arm.
+///
+/// A `$`-prefixed scrutinee marks it reactive (the shown arm swaps when the value changes); a plain one chooses
+/// its arm once at construction. `binding` names the matched value so `key_expr` can reach it — without a key a
+/// reactive match reconciles on the variant alone, so it rebuilds when the shape changes but not when the
+/// payload does.
+#[derive(Debug, Clone)]
+pub struct MatchBlock {
+    pub scrutinee: String,
+    /// The `as <name>` clause, in scope for `key_expr` only.
+    pub binding: Option<String>,
+    pub key_expr: Option<String>,
+    pub arms: Vec<MatchArm>,
+    /// 1-based `.rsx` line of the `match` header.
+    pub line: usize,
+    /// Byte offset in the source where the (trimmed) `scrutinee` begins.
+    pub scrutinee_start: usize,
+}
+
+/// One arm: a Rust pattern and the nodes it renders. The pattern is kept raw, so a guard (`Ready(x) if x.ok()`)
+/// or an or-pattern reaches rustc unchanged.
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub pattern: String,
+    pub body: Vec<ViewNode>,
+    pub line: usize,
+    /// Byte offset where `pattern` begins, so a rustc error on it maps back to this line.
+    pub pattern_start: usize,
+}
+
 #[derive(Debug, Clone)]
 pub enum ViewNode {
     Element(Element),
     IfBlock(IfBlock),
     ForBlock(ForBlock),
+    MatchBlock(MatchBlock),
     LetStmt(LetStmt),
 }
 
