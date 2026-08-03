@@ -22,6 +22,32 @@ fn close_size() -> f32 {
     shared::font_size() * 0.93
 }
 
+fn header_row() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::SPACE_BETWEEN)
+        .gap(dialog_gap())
+}
+fn card() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .gap(dialog_gap())
+        // A min width so the dialog never collapses to its content's min-content width (the header/body
+        // `Text` leaves are unmeasured → 0 intrinsic width, which otherwise shrinks the card to a strip).
+        .min_width(320.0)
+        .max_width(440.0)
+        .padding_all(dialog_pad())
+}
+fn backdrop() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .flex_grow(1.0)
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::CENTER)
+        .padding_all(dialog_pad())
+}
+
 /// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that
 /// escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque
 /// surface card holding the `title`, the slot children (the dialog body) and a Close affordance; when false
@@ -97,27 +123,14 @@ fn build_open_modal(
         move || (*dismiss)()
     });
 
-    let header = Container::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::SPACE_BETWEEN)
-            .gap(dialog_gap()),
-        vec![box_item(heading), box_item(close)],
-    )?;
+    let header = Container::new(header_row(), vec![box_item(heading), box_item(close)])?
+        .styled_by(header_row);
 
     let mut dialog_children: Vec<Box<dyn LayoutItem>> = vec![box_item(header)];
     dialog_children.extend(body);
 
     let dialog = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .gap(dialog_gap())
-            // A min width so the dialog never collapses to its content's min-content width (the header/body
-            // `Text` leaves are unmeasured → 0 intrinsic width, which otherwise shrinks the card to a strip).
-            .min_width(320.0)
-            .max_width(440.0)
-            .padding_all(dialog_pad()),
+        card(),
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), || shared::DEFAULT_SURFACE))
@@ -126,19 +139,16 @@ fn build_open_modal(
         },
         dialog_children,
     )?
+    .styled_by(card)
     // Swallow taps on the card so only the scrim (or Close) dismisses.
     .on_press(|| {});
 
     let scrim = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .flex_grow(1.0)
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER)
-            .padding_all(dialog_pad()),
+        backdrop(),
         |_r| RectStyle::default().with_fill(scrim::SCRIM),
         vec![box_item(dialog)],
     )?
+    .styled_by(backdrop)
     .on_press(move || (*dismiss)());
 
     Ok(box_item(scrim))

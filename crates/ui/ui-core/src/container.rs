@@ -79,6 +79,14 @@ impl Container {
         self
     }
 
+    /// Keeps this container's layout style in step with the reactive state it was built from — see
+    /// [`StyledContainer::styled_by`](crate::StyledContainer::styled_by), which is the same thing on a box that
+    /// also paints.
+    pub fn styled_by(self, style: impl Fn() -> LayoutStyle + 'static) -> Self {
+        let node = self.node;
+        self.keeping(crate::styled_container::style_follows(node, style))
+    }
+
     /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it;
     /// a child widget that handles the press wins, and a scroll gesture started on it does not fire it.
     pub fn on_press(mut self, f: impl Fn() + 'static) -> Self {

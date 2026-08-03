@@ -18,6 +18,17 @@ fn pad_y() -> f32 {
     shared::spacing() * 0.75
 }
 
+/// A row so the label's measured width sets the box's main-axis size (a column would collapse the cross axis:
+/// `Text::auto` sets `align_self_stretch`, which fights content-sizing and renders 0-wide).
+fn shell() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::CENTER)
+        .padding_horizontal(pad_x())
+        .padding_vertical(pad_y())
+}
+
 /// A labelled, pressable button. This is the high-level convenience over the primitives (`box` +
 /// `on_press` + `hover` + a centred `text`); it lives in `ui-components`, not the kernel, so an app can
 /// drop it or ship its own. `fill`/`outline` are reactive colour closures (re-read every frame) so a
@@ -85,17 +96,11 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let (base_fill, base_outline) = (Rc::clone(&fill), Rc::clone(&outline));
     let (hover_fill, hover_outline) = (Rc::clone(&fill), Rc::clone(&outline));
     let container = StyledContainer::new(
-        // A row so the label's measured width sets the box's main-axis size (a column would collapse the
-        // cross axis: `Text::auto` sets `align_self_stretch`, which fights content-sizing and renders 0-wide).
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER)
-            .padding_horizontal(pad_x())
-            .padding_vertical(pad_y()),
+        shell(),
         move |_r| variant_rect(base_fill.as_ref(), base_outline.as_ref(), ghost, false),
         vec![box_item(label_widget)],
     )?
+    .styled_by(shell)
     .on_hover_style(move |_r| {
         variant_rect(hover_fill.as_ref(), hover_outline.as_ref(), ghost, true)
     })
@@ -219,5 +224,53 @@ mod tests {
             source: PointerSource::Mouse,
         });
         assert!(flag.get(), "a tap fires on_press");
+    }
+
+    /// A theme switch has to re-*space*, not only re-colour.
+    ///
+    /// Paint is a closure the renderer re-runs every frame, so a colour token switches for free. A metric is a
+    /// number handed to the layout tree once, when the node is made — so until [`ui_core::style_follows`] the
+    /// button kept the padding of the theme it was built under, and only a rebuild caught it up.
+    #[test]
+    fn switching_theme_re_spaces_the_button() {
+        use std::any::Any;
+
+        use theme_core::{Theme, ThemeTokens, set_theme};
+        use ui_core::relayout_if_dirty;
+
+        #[derive(Clone)]
+        struct Spaced(f32);
+        impl Theme for Spaced {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+        impl ThemeTokens for Spaced {
+            fn spacing(&self) -> f32 {
+                self.0
+            }
+        }
+
+        reset_layout_runtime();
+        set_theme(Spaced(8.0));
+        // Measured with no label, so the width is the padding and nothing else — what a font system made of
+        // the text is a different question from whether the box followed the theme.
+        let btn = button(ButtonProps::default()).unwrap();
+        let node = btn.layout_node();
+        let rect = track_layout(node).unwrap();
+        compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
+        assert_eq!(
+            rect.get().width,
+            2.0 * 8.0 * 1.75,
+            "a button starts at the padding of the theme it was built under"
+        );
+
+        set_theme(Spaced(24.0));
+        relayout_if_dirty();
+        assert_eq!(
+            rect.get().width,
+            2.0 * 24.0 * 1.75,
+            "and follows the theme it is switched to, without being rebuilt"
+        );
     }
 }

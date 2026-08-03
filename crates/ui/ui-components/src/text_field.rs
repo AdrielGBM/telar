@@ -3,7 +3,7 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_theme_tokens;
-use ui_core::{Container, Input, LayoutItem, StyledContainer, Text, box_item};
+use ui_core::{Container, Input, LayoutItem, StyledContainer, Text, box_item, style_follows};
 
 /// Fallback text colour ("ink") when `color` is unset, matching the button catalogue's ghost-variant text.
 
@@ -25,6 +25,26 @@ fn label_size() -> f32 {
 }
 fn label_gap() -> f32 {
     shared::spacing() * 0.75
+}
+
+fn line_box() -> LayoutStyle {
+    LayoutStyle::new().height(font_size() * 1.4)
+}
+fn field_box(width: f32) -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .width(width)
+        .padding_horizontal(pad_x())
+        .padding_vertical(pad_y())
+}
+fn caption_box() -> LayoutStyle {
+    LayoutStyle::new().height(label_size() * 1.4)
+}
+fn column_box(width: f32) -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .gap(label_gap())
+        .width(width)
 }
 
 /// A labelled, bordered text input: the `Input` primitive (kernel, unstyled) wrapped in a padded/rounded
@@ -82,33 +102,27 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     // Always a live `Input` (with a muted placeholder shown while empty) so the field is tappable/typable
     // from a cold start — a swapped-in placeholder `Text` takes no focus, so an empty field couldn't be
     // clicked to begin typing.
-    let mut input = Input::new(
-        value.clone(),
-        LayoutStyle::new().height(font_size() * 1.4),
-        move || {
-            let c = color();
-            TextStyle::new(
-                font_size(),
-                if c == Color::TRANSPARENT {
-                    shared::ink()
-                } else {
-                    c
-                },
-            )
-        },
-    )?
+    let mut input = Input::new(value.clone(), line_box(), move || {
+        let c = color();
+        TextStyle::new(
+            font_size(),
+            if c == Color::TRANSPARENT {
+                shared::ink()
+            } else {
+                c
+            },
+        )
+    })?
     .placeholder(placeholder());
     if let Some(cb) = on_submit {
         input = input.on_submit(move || cb());
     }
+    // The input is a leaf, so its node's style is followed from the box that outlives it.
+    let line_node = input.layout_node();
     let field = box_item(input);
 
     let box_ = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .width(width)
-            .padding_horizontal(pad_x())
-            .padding_vertical(pad_y()),
+        field_box(width),
         |_r| {
             RectStyle::default()
                 .with_fill(shared::surface_alt())
@@ -116,23 +130,22 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
                 .with_radius(BorderRadius::all(box_radius()))
         },
         vec![box_item(field)],
-    )?;
+    )?
+    .styled_by(move || field_box(width))
+    .keeping(style_follows(line_node, line_box));
 
     if label().is_empty() {
         return Ok(box_item(box_));
     }
     let caption = Text::new(
         move || label(),
-        LayoutStyle::new().height(label_size() * 1.4),
+        caption_box(),
         || TextStyle::new(label_size(), muted_color()),
     )?;
-    let col = Container::new(
-        LayoutStyle::new()
-            .flex_column()
-            .gap(label_gap())
-            .width(width),
-        vec![box_item(caption), box_item(box_)],
-    )?;
+    let caption_node = caption.layout_node();
+    let col = Container::new(column_box(width), vec![box_item(caption), box_item(box_)])?
+        .styled_by(move || column_box(width))
+        .keeping(style_follows(caption_node, caption_box));
     Ok(box_item(col))
 }
 

@@ -115,20 +115,26 @@ fn build_bubble(
         LayoutStyle::new(),
         || TextStyle::new(bubble_text_size(), BUBBLE_INK),
     )?;
-    let chip = StyledContainer::new(
+    // The anchor is the trigger's rect as it stands now: a re-resolve on a theme switch keeps it, which is
+    // what the bubble is anchored to either way.
+    let bubble = move || {
         LayoutStyle::new()
             .flex_row()
             .padding_horizontal(bubble_pad_x())
             .padding_vertical(bubble_pad_y())
             .margin_left(anchor.x)
-            .margin_top(anchor.y + anchor.height),
+            .margin_top(anchor.y + anchor.height)
+    };
+    let chip = StyledContainer::new(
+        bubble(),
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), || DEFAULT_BUBBLE))
                 .with_radius(BorderRadius::all(bubble_radius()))
         },
         vec![box_item(label)],
-    )?;
+    )?
+    .styled_by(bubble);
     // `align_items(START)` so the chip sizes to its content instead of stretching to the full-viewport fill.
     let overlay = Overlay::new_click_through(
         LayoutStyle::new().align_items(AlignItems::START),

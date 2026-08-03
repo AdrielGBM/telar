@@ -18,6 +18,15 @@ fn radius() -> f32 {
     shared::radius() * 2.5
 }
 
+fn pill() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::CENTER)
+        .padding_horizontal(pad_x())
+        .padding_vertical(pad_y())
+}
+
 /// A small solid pill tag: an accent-filled box with a short label in a contrasting on-accent colour.
 /// Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in
 /// `ui-components`, not the kernel, so an app can drop it or ship its own.
@@ -46,19 +55,15 @@ pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label_widget = Text::auto(move || label(), LayoutStyle::new(), on_accent_style)?;
 
     let container = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER)
-            .padding_horizontal(pad_x())
-            .padding_vertical(pad_y()),
+        pill(),
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), fill_default))
                 .with_radius(BorderRadius::all(radius()))
         },
         vec![box_item(label_widget)],
-    )?;
+    )?
+    .styled_by(pill);
     Ok(box_item(container))
 }
 

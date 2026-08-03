@@ -13,6 +13,17 @@ use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 use crate::press::PressGesture;
 
+/// Re-resolves `node`'s layout style whenever the reactive state `style` reads changes, and once now.
+///
+/// The general form of [`StyledContainer::styled_by`], for a widget that is not a container — a text leaf sized
+/// off the theme's `font_size`, a slider thumb sized off its `spacing`. The returned [`Effect`] must be held for
+/// as long as the node lives, which for a leaf means its owning container `keeping` it.
+pub fn style_follows(node: NodeId, style: impl Fn() -> LayoutStyle + 'static) -> Effect {
+    effect(move || {
+        let _ = crate::context::set_layout_style(node, style());
+    })
+}
+
 pub struct StyledContainer {
     node: NodeId,
     rect: RwSignal<Rect>,
@@ -173,6 +184,21 @@ impl StyledContainer {
     pub fn keeping(mut self, subscription: Effect) -> Self {
         self.kept_effects.push(subscription);
         self
+    }
+
+    /// Keeps the box's *layout* style in step with the reactive state it was built from — the theme's metric
+    /// tokens, today. `style` runs now, and again whenever a signal it read changes; the node is restyled in
+    /// place, so a live theme switch re-spaces the box as well as re-colouring it.
+    ///
+    /// Paint needs nothing like this: a rect or text style is a closure the renderer re-runs every frame, so a
+    /// token read inside one is already live. A layout style is a *value*, handed to the layout tree once when
+    /// the node is made — which is why the reactive read has to be arranged here rather than coming for free.
+    ///
+    /// Give [`new`](Self::new) the same builder, so the node starts at the style it will settle on:
+    /// `StyledContainer::new(shell(), paint, kids)?.styled_by(shell)`.
+    pub fn styled_by(self, style: impl Fn() -> LayoutStyle + 'static) -> Self {
+        let node = self.node;
+        self.keeping(style_follows(node, style))
     }
 
     /// Make the box itself pressable. The callback fires on a tap (release, not press) inside the box;

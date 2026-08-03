@@ -28,6 +28,23 @@ fn dot_size() -> f32 {
     shared::spacing() * 0.75
 }
 
+fn dot_box() -> LayoutStyle {
+    LayoutStyle::new().width(dot_size()).height(dot_size())
+}
+fn inner_row() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .gap(gap())
+}
+fn pill_box() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .padding_horizontal(pad_x())
+        .padding_vertical(pad_y())
+}
+
 /// A small outlined tag, quieter than `badge`'s solid fill: a bordered surface pill with normal ink text,
 /// an optional small accent dot when `color` is set, and an optional `×` affordance that fires `on_close`.
 /// Non-interactive unless `on_close` is set. High-level sugar over `StyledContainer`/`Container` + `Text`;
@@ -69,11 +86,8 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // one); its shade is still re-read every frame so a live theme/signal colour tracks.
     if (color.as_ref())() != Color::TRANSPARENT {
         let dot_color = Rc::clone(&color);
-        let dot = StyledContainer::new(
-            LayoutStyle::new().width(dot_size()).height(dot_size()),
-            move |_r| dot_style(dot_color.as_ref()),
-            vec![],
-        )?;
+        let dot = StyledContainer::new(dot_box(), move |_r| dot_style(dot_color.as_ref()), vec![])?
+            .styled_by(dot_box);
         children.push(box_item(dot));
     }
 
@@ -101,20 +115,10 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         children.push(box_item(close));
     }
 
-    let row = Container::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .gap(gap()),
-        children,
-    )?;
+    let row = Container::new(inner_row(), children)?.styled_by(inner_row);
 
     let pill = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .padding_horizontal(pad_x())
-            .padding_vertical(pad_y()),
+        pill_box(),
         |_r| {
             RectStyle::default()
                 .with_fill(shared::surface_alt())
@@ -122,7 +126,8 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .with_radius(BorderRadius::all(radius()))
         },
         vec![box_item(row)],
-    )?;
+    )?
+    .styled_by(pill_box);
     Ok(box_item(pill))
 }
 

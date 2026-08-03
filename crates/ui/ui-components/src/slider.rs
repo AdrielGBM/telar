@@ -5,7 +5,9 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_theme_tokens;
-use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item, box_transform};
+use ui_core::{
+    Container, LayoutItem, StyledContainer, Text, box_item, box_transform, style_follows,
+};
 
 use crate::shared;
 
@@ -23,6 +25,22 @@ fn label_size() -> f32 {
 }
 fn label_gap() -> f32 {
     shared::spacing() * 0.75
+}
+
+fn thumb_box() -> LayoutStyle {
+    LayoutStyle::new().width(thumb_size()).height(thumb_size())
+}
+fn track_box(width: f32) -> LayoutStyle {
+    LayoutStyle::new().width(width).height(track_height())
+}
+fn caption_box() -> LayoutStyle {
+    LayoutStyle::new().height(label_size() * 1.4)
+}
+fn column_box(width: f32) -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .gap(label_gap())
+        .width(width)
 }
 
 /// A drag-driven `min..=max` control: a rounded track, an accent fill up to `value`, and a thumb positioned by
@@ -122,7 +140,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let thumb_value = value.clone();
     let thumb_color = color.clone();
     let thumb = StyledContainer::new(
-        LayoutStyle::new().width(thumb_size()).height(thumb_size()),
+        thumb_box(),
         move |_r| {
             let fill = shared::resolve(thumb_color.as_ref(), || {
                 use_theme_tokens()
@@ -136,6 +154,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         },
         vec![],
     )?
+    .styled_by(thumb_box)
     .with_transform(move |r| {
         let t = ((thumb_value.get() - min) / (max - min)).clamp(0.0, 1.0);
         let tx = t * (width - thumb_size());
@@ -144,7 +163,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     });
 
     let track = StyledContainer::new(
-        LayoutStyle::new().width(width).height(track_height()),
+        track_box(width),
         move |_r| {
             let fill = shared::resolve(track_color.as_ref(), || {
                 use_theme_tokens()
@@ -157,6 +176,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         },
         vec![box_item(fill), box_item(thumb)],
     )?
+    .styled_by(move || track_box(width))
     .on_drag(move |px, _py| {
         // `px` is already local to the track (`on_drag` reports widget-local coords), so no rect subtraction here.
         let t = (px / width).clamp(0.0, 1.0);
@@ -177,16 +197,15 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     }
     let caption = Text::new(
         move || label(),
-        LayoutStyle::new().height(label_size() * 1.4),
+        caption_box(),
         || TextStyle::new(label_size(), label_color()),
     )?;
-    let col = Container::new(
-        LayoutStyle::new()
-            .flex_column()
-            .gap(label_gap())
-            .width(width),
-        vec![box_item(caption), box_item(track)],
-    )?;
+    // The caption is a leaf, so its own node's style is followed from here — the column outlives it and is
+    // where an effect belonging to this subtree wants to be owned.
+    let caption_node = caption.layout_node();
+    let col = Container::new(column_box(width), vec![box_item(caption), box_item(track)])?
+        .styled_by(move || column_box(width))
+        .keeping(style_follows(caption_node, caption_box));
     Ok(box_item(col))
 }
 

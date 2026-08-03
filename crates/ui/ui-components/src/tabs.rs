@@ -25,6 +25,18 @@ fn radius() -> f32 {
 }
 const INK_MUTED: Color = Color::rgba(0.45, 0.45, 0.52, 1.0);
 
+fn tab_box() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::CENTER)
+        .padding_horizontal(pad_x())
+        .padding_vertical(pad_y())
+}
+fn bar() -> LayoutStyle {
+    LayoutStyle::new().flex_row().gap(gap())
+}
+
 /// A horizontal tab bar: one button per label, driving a `selected` index. Renders only the row of tab
 /// buttons — the matching content panel is the caller's responsibility (typically the DSL's reactive
 /// `if selected == i`, mirroring the sandbox's own nav-button/section-switch split). Modelled on
@@ -76,21 +88,17 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let hover_color = color.clone();
         let press_selected = selected.clone();
         let tab = StyledContainer::new(
-            LayoutStyle::new()
-                .flex_row()
-                .align_items(AlignItems::CENTER)
-                .justify_content(JustifyContent::CENTER)
-                .padding_horizontal(pad_x())
-                .padding_vertical(pad_y()),
+            tab_box(),
             move |_r| tab_rect(base_selected.get() == idx, base_color.as_ref(), false),
             vec![box_item(label_widget)],
         )?
+        .styled_by(tab_box)
         .on_hover_style(move |_r| tab_rect(hover_selected.get() == idx, hover_color.as_ref(), true))
         .on_press(move || press_selected.set(idx));
         tab_items.push(box_item(tab));
     }
 
-    let row = Container::new(LayoutStyle::new().flex_row().gap(gap()), tab_items)?;
+    let row = Container::new(bar(), tab_items)?.styled_by(bar);
     Ok(box_item(row))
 }
 

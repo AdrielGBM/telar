@@ -140,18 +140,20 @@ pub(crate) fn dropdown(
             // layout keeps the panel's hit rects in world space so the rows dispatch correctly. The trigger's
             // rect is window-absolute (the overlay hoists to the window), falling back to the local rect.
             let anchor = ui_core::overlay::anchor_rect(trigger_node, &trigger_rect);
-            let panel = StyledContainer::new(
+            // The anchor is the trigger's rect as it stands when the panel opens: a re-resolve on a theme
+            // switch keeps the margins it was built from, which is where the panel belongs either way.
+            let sheet = move || {
                 LayoutStyle::new()
                     .flex_column()
                     .width(PANEL_WIDTH)
                     .padding_all(panel_pad())
                     .margin_left(anchor.x)
-                    .margin_top(anchor.y + anchor.height),
-                |_r| panel_rect_style(),
-                row_items,
-            )?
-            // Swallow clicks on the panel's own padding so they don't dismiss via the backdrop.
-            .on_press(|| {});
+                    .margin_top(anchor.y + anchor.height)
+            };
+            let panel = StyledContainer::new(sheet(), |_r| panel_rect_style(), row_items)?
+                .styled_by(sheet)
+                // Swallow clicks on the panel's own padding so they don't dismiss via the backdrop.
+                .on_press(|| {});
             // A transparent full-viewport backdrop inside a BLOCKING overlay: stops hover/clicks bleeding
             // through to the page behind and dismisses the dropdown when a click lands outside the panel.
             let close = {

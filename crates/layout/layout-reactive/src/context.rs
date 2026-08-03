@@ -116,6 +116,18 @@ pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {
     with_runtime(|rt| rt.mark_dirty(node))
 }
 
+/// Replaces `node`'s layout style and dirties it, so the next pass lays it out again.
+///
+/// What a widget whose style is *derived* from reactive state calls when that state moves — a theme's metric
+/// tokens, today. Unlike rebuilding the widget it keeps the node, its children, and everything they hold; the
+/// engine re-resolves the new style against the current direction exactly as it would at construction.
+pub fn set_layout_style(node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
+    with_runtime(|rt| {
+        rt.engine.set_style(node, style)?;
+        rt.mark_dirty(node)
+    })
+}
+
 /// Shows or hides a node in layout flow. A hidden node takes no space (and lays out none of its subtree); mark an ancestor dirty and recompute for the change to take effect. Used for responsive layouts (e.g. collapsing a sidebar on narrow windows).
 pub fn set_display(node: NodeId, visible: bool) {
     with_runtime(|rt| rt.set_display(node, visible))

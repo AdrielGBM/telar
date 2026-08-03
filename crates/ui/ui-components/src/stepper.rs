@@ -26,6 +26,21 @@ fn value_size() -> f32 {
     shared::font_size()
 }
 
+fn row_box() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .gap(gap())
+}
+fn button_box() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::CENTER)
+        .width(button_size())
+        .height(button_size())
+}
+
 /// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see
 /// `button.rs`) plus a reactive `Text::auto` readout; lives in `ui-components`, not the kernel. `value` is
 /// `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own `signal(min)`).
@@ -119,12 +134,10 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     )?;
 
     let row = Container::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .gap(gap()),
+        row_box(),
         vec![box_item(minus), box_item(display), box_item(plus)],
-    )?;
+    )?
+    .styled_by(row_box);
     Ok(box_item(row))
 }
 
@@ -143,12 +156,7 @@ fn stepper_button(
         || TextStyle::new(glyph_size(), Color::WHITE),
     )?;
     let container = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER)
-            .width(button_size())
-            .height(button_size()),
+        button_box(),
         move |_r| {
             let fill = shared::resolve(color.as_ref(), || {
                 use_theme_tokens()
@@ -161,6 +169,7 @@ fn stepper_button(
         },
         vec![box_item(glyph_widget)],
     )?
+    .styled_by(button_box)
     .on_press(on_press);
     Ok(box_item(container))
 }

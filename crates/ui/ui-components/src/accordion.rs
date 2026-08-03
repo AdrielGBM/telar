@@ -27,6 +27,16 @@ fn caret_size() -> f32 {
 const CARET_CLOSED: &str = "\u{25B8}"; // ▸
 const CARET_OPEN: &str = "\u{25BE}"; // ▾
 
+fn header_box() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::SPACE_BETWEEN)
+        .gap(8.0)
+        .padding_horizontal(pad_x())
+        .padding_vertical(pad_y())
+}
+
 /// A single collapsible section: a clickable header (title + caret) that toggles an `open` bool, and the
 /// slot children below it, present only while open. This is high-level sugar over the primitives; lives in
 /// `ui-components`, not the kernel, so an app can drop it or ship its own.
@@ -96,16 +106,11 @@ pub fn accordion(
 
     let toggle_open = open.clone();
     let header = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::SPACE_BETWEEN)
-            .gap(8.0)
-            .padding_horizontal(pad_x())
-            .padding_vertical(pad_y()),
+        header_box(),
         |_r| RectStyle::default(),
         vec![box_item(title_widget), box_item(caret)],
     )?
+    .styled_by(header_box)
     .on_press(move || toggle_open.update(|o| *o = !*o));
 
     // Body: built once from the slot children. Clipped to its own rect so a collapsed (zero-rect) body

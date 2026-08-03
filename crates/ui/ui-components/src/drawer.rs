@@ -86,12 +86,15 @@ fn build_open_drawer(
     color: Box<dyn Fn() -> Color>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let panel = StyledContainer::new(
+    let sheet = move || {
         LayoutStyle::new()
             .flex_column()
             .width(width)
             .gap(panel_gap())
-            .padding_all(panel_pad()),
+            .padding_all(panel_pad())
+    };
+    let panel = StyledContainer::new(
+        sheet(),
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), || shared::DEFAULT_SURFACE))
@@ -99,6 +102,7 @@ fn build_open_drawer(
         },
         body,
     )?
+    .styled_by(sheet)
     // Swallow taps on the panel so only the scrim dismisses.
     .on_press(|| {});
 
