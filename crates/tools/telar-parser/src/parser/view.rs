@@ -110,8 +110,19 @@ impl Parser {
             && next.indent == indent
             && next.content.split_whitespace().next() == Some("else")
         {
-            self.pos += 1;
-            else_branch = Some(self.parse_children(indent)?);
+            let mut words = next.content.split_whitespace();
+            words.next();
+            if words.next() == Some("if") {
+                // `else if cond` desugars to the nesting a reader would otherwise write by hand: strip the `else`, re-parse the rest of the line as an `if`, and make it this else-branch's only child. `content_start` moves with the text so the condition still maps to its own bytes.
+                let line = &mut self.lines[self.pos];
+                let stripped = line.content["else".len()..].trim_start().to_string();
+                line.content_start += line.content.len() - stripped.len();
+                line.content = stripped;
+                else_branch = Some(vec![self.parse_if_block(indent)?]);
+            } else {
+                self.pos += 1;
+                else_branch = Some(self.parse_children(indent)?);
+            }
         }
 
         Ok(ViewNode::IfBlock(IfBlock {

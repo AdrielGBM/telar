@@ -265,10 +265,19 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
                 emit_node(child, depth + 1, out);
             }
             if let Some(else_branch) = &block.else_branch {
-                out.push_str(&pad);
-                out.push_str("else\n");
-                for child in else_branch {
-                    emit_node(child, depth + 1, out);
+                // An else-branch holding exactly one `if` is what `else if` parses to, so it re-emits as the chain rather than as the nesting — formatting a file must not rewrite the spelling its author chose.
+                if let [ViewNode::IfBlock(chained)] = else_branch.as_slice() {
+                    out.push_str(&pad);
+                    out.push_str("else ");
+                    let mut nested = String::new();
+                    emit_node(&ViewNode::IfBlock(chained.clone()), depth, &mut nested);
+                    out.push_str(nested.trim_start());
+                } else {
+                    out.push_str(&pad);
+                    out.push_str("else\n");
+                    for child in else_branch {
+                        emit_node(child, depth + 1, out);
+                    }
                 }
             }
         }
@@ -516,6 +525,19 @@ mod tests {
             "preview section should survive:\n{out}"
         );
         assert!(out.contains("counter"));
+    }
+
+    /// An `else if` chain parses to a nested `if` inside the else-branch, and re-emitting it as that nesting
+    /// would rewrite the author's spelling on every format.
+    #[test]
+    fn an_else_if_chain_survives_a_round_trip() {
+        let src = "[view]\ncol\n    if n > 1\n        text \"many\"\n    else if n > 0\n        text \"one\"\n    else\n        text \"none\"\n";
+        let out = format_document(src).unwrap();
+        assert!(
+            out.contains("    else if n > 0\n"),
+            "the chain comes back as a chain:\n{out}"
+        );
+        assert_eq!(format_document(&out).unwrap(), out, "and is idempotent");
     }
 
     /// The inline prop-default sugar (`field: Type = expr`) is not valid Rust, so rustfmt echoes the struct

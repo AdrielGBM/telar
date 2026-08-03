@@ -366,6 +366,35 @@ col @card
         assert_eq!(else_branch.len(), 1);
     }
 
+    /// `else if` used to match the plain-`else` check and have the rest of its line thrown away, silently — the
+    /// branch ran unconditionally and nothing said so. It chains now, and the absence of this test is why the
+    /// fault survived.
+    #[test]
+    fn parses_an_else_if_chain() {
+        let src = "[logic]\n[view]\ncol\n    if n > 1\n        text \"many\"\n    else if n > 0\n        text \"one\"\n    else\n        text \"none\"\n";
+        let doc = parse(src).unwrap();
+        let ViewNode::Element(col) = &doc.view.nodes[0] else {
+            panic!();
+        };
+        let ViewNode::IfBlock(outer) = &col.children[0] else {
+            panic!("expected if block");
+        };
+        assert_eq!(outer.condition, "n > 1");
+        let else_branch = outer.else_branch.as_ref().expect("else branch");
+        assert_eq!(else_branch.len(), 1, "the chain nests, it does not flatten");
+        let ViewNode::IfBlock(inner) = &else_branch[0] else {
+            panic!("the else branch holds the chained if");
+        };
+        assert_eq!(inner.condition, "n > 0");
+        assert_eq!(
+            inner.else_branch.as_ref().expect("trailing else").len(),
+            1,
+            "and the trailing else belongs to the innermost if"
+        );
+        // The condition still points at its own bytes, so a diagnostic on it lands on the right column.
+        assert_eq!(&src[inner.condition_start..][.."n > 0".len()], "n > 0");
+    }
+
     #[test]
     fn parses_for_block() {
         let src = "[logic]\n[view]\ncol\n    for (i, item) in items.iter().enumerate()\n        text \"{item}\"\n";
