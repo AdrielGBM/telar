@@ -180,7 +180,9 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
     };
     match tag {
         // `transition:` animates a paint/color property (see `transition::parse_transition_value`), so it is offered on the tags whose codegen wires it: `text` (color), `box`/containers (fill/stroke/opacity).
-        "text" => vec![
+        // A `text` is a leaf, but it is a leaf *in a flex box*: it takes the layout keys that size and place it
+        // among its siblings alongside its own type keys.
+        "text" => with(&[
             "size",
             "color",
             "weight",
@@ -191,7 +193,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "line_height",
             "letter_spacing",
             "transition",
-        ],
+        ]),
         // Both splice a whole widget in, so neither takes layout or paint keys: the expression owns its style.
         "widget" | "build" => vec![],
         // The `children` slot placeholder takes only an optional `name:` for a named slot.
@@ -206,14 +208,19 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         "col" | "row" | "box" => {
             let mut keys = with(CONTAINER_PAINT);
             keys.extend_from_slice(TRANSFORM_ATTR_KEYS);
+            // A box is a grid *item* wherever its parent is a grid, so it carries the placement keys even
+            // though it is not itself one.
+            keys.extend_from_slice(&["span", "row_span"]);
             keys
         }
-        "img" | "image" => with(&["src"]),
+        "img" | "image" => with(&["src", "fit", "filter"]),
         // `keep:` names the surface-kept position of this viewport, so a remounted tree reopens where it was.
         "scroll" => with(&["keep"]),
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
         "input" => with(&["value", "size", "color", "on_submit"]),
-        "svg" => with(&["src", "tint", "stroke"]),
+        "svg" => with(&["src", "tint", "stroke", "fit"]),
+        // `lazy` holds its subtree back until `when:` is true.
+        "lazy" => with(&["when"]),
         // `path` draws SVG path-data (`d:`) with a solid fill/stroke; sized by width/height like a leaf.
         "path" => with(&["d", "fill", "stroke", "stroke_width", "fill_rule"]),
         _ if is_builtin_tag(tag) => layout_attr_keys().to_vec(),

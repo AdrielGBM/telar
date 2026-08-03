@@ -435,7 +435,53 @@ impl<'a> ViewGen<'a> {
         }
     }
 
+    /// Names any attribute a built-in tag does not accept, instead of mapping it to a builder call that does
+    /// nothing. It checks the same table the analyzer completes from, so an attribute the editor never suggests
+    /// is now one the build refuses too — before this, `cols:` on a plain `box` compiled and did nothing.
+    /// Component tags are exempt: their keys are `Props` fields, which rustc already checks.
+    fn unknown_attr_errors(&self, el: &Element) -> String {
+        let allowed = crate::registry::tag_attr_keys(&el.tag);
+        if allowed.is_empty() {
+            return String::new();
+        }
+        let pad = self.indent_str();
+        el.attributes
+            .iter()
+            .filter(|attr| !allowed.contains(&attr.key.as_str()))
+            .map(|attr| {
+                format!(
+                    "{pad}compile_error!({});\n",
+                    signals::rust_str(&format!(
+                        "`{}` is not an attribute of `{}`",
+                        attr.key, el.tag
+                    ))
+                )
+            })
+            .collect()
+    }
+
     fn emit_element(&mut self, el: &Element) -> ChildEmit {
+        let unknown = self.unknown_attr_errors(el);
+        let emit = self.emit_element_inner(el);
+        if unknown.is_empty() {
+            return emit;
+        }
+        match emit {
+            ChildEmit::Simple { name, code } => ChildEmit::Simple {
+                name,
+                code: format!("{unknown}{code}"),
+            },
+            ChildEmit::Fragment { name, code } => ChildEmit::Fragment {
+                name,
+                code: format!("{unknown}{code}"),
+            },
+            ChildEmit::Dynamic { code } => ChildEmit::Dynamic {
+                code: format!("{unknown}{code}"),
+            },
+        }
+    }
+
+    fn emit_element_inner(&mut self, el: &Element) -> ChildEmit {
         match el.tag.as_str() {
             "text" => self.emit_text(el),
             "col" | "row" | "grid" => self.emit_container(el),

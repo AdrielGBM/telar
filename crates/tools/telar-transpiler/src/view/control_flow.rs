@@ -5,8 +5,8 @@ use std::fmt::Write;
 use telar_parser::{ForBlock, IfBlock, MatchBlock, ViewNode};
 
 use super::signals::{
-    captured_idents, clone_block_multiline, pattern_idents, substitute_reads, subtree_snippets,
-    wrap_signal_clones,
+    captured_idents, clone_block_multiline, pattern_idents, rust_str, substitute_reads,
+    subtree_snippets, wrap_signal_clones,
 };
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
@@ -262,6 +262,27 @@ impl ViewGen<'_> {
         }
         let pad = self.indent_str();
         let mut code = String::new();
+        // Both clauses parse on any `for`, and neither means anything here: a construction loop runs once, so it
+        // reconciles nothing to key and lays out no reconciled items to space. They used to be read and dropped
+        // in silence, which reads as "my key is being honoured" right up until a row goes wrong.
+        for (clause, why) in [
+            (
+                block.key_expr.as_ref().map(|_| "key"),
+                "a `key` names an identity for reconciliation, and a `for` over a plain iterable builds its items once — add a `$` to the iterable to make the list reactive, or drop the key",
+            ),
+            (
+                block.gap_expr.as_ref().map(|_| "gap"),
+                "a `gap:` on a `for` spaces *reconciled* items, so it needs a `$`-prefixed iterable — put the gap on the enclosing container instead",
+            ),
+        ] {
+            if let Some(name) = clause {
+                let _ = writeln!(
+                    code,
+                    "{pad}compile_error!({});",
+                    rust_str(&format!("`for … {name}` has no effect here: {why}"))
+                );
+            }
+        }
         let _ = writeln!(
             code,
             "{pad}for {} in {} {{",

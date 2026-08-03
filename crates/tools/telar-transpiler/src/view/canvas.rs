@@ -74,7 +74,15 @@ impl ViewGen<'_> {
             "text" => self.emit_canvas_text(el),
             "line" => self.emit_canvas_line(el),
             "layer" => self.emit_canvas_layer(el),
-            other => format!("/* unsupported canvas child: {other} */"),
+            // A canvas paints `RenderNode`s, not widgets, so its vocabulary is these four and nothing else.
+            // Turning an unknown child into a comment made a whole subtree vanish from the picture with the
+            // build still green.
+            other => format!(
+                "{{ compile_error!({}); RenderNode::group(vec![]) }}",
+                super::signals::rust_str(&format!(
+                    "`{other}` is not a canvas child: a canvas draws `rect`, `text`, `line` and `layer`, and holds no widgets"
+                ))
+            ),
         }
     }
 

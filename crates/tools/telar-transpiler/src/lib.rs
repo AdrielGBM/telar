@@ -756,6 +756,32 @@ col @card
         );
     }
 
+    /// An attribute a tag does not accept used to map to a builder call that did nothing, or to nothing at all —
+    /// `cols:` on a plain `box` compiled and had no effect. The table it checks is the one the analyzer completes
+    /// from, so what the editor never suggests is what the build now refuses.
+    #[test]
+    fn an_attribute_a_tag_does_not_take_is_named() {
+        let out =
+            transpile_source_with_theme("[view]\nbox nonsense:4 width:10\n", "demo", None, None)
+                .unwrap();
+        assert!(
+            out.rust_code
+                .contains("`nonsense` is not an attribute of `box`"),
+            "the offending key and tag are both named:\n{}",
+            out.rust_code
+        );
+
+        // A component's keys are its `Props` fields, which rustc checks — the gate must not guess at them.
+        let component =
+            transpile_source_with_theme("[view]\nmy_widget anything:4\n", "demo", None, None)
+                .unwrap();
+        assert!(
+            !component.rust_code.contains("is not an attribute"),
+            "a component tag is exempt:\n{}",
+            component.rust_code
+        );
+    }
+
     /// The idiom `track_layout` is used for in Rust, reachable from the view: read where a node ended up so a
     /// sibling can be drawn from it. With a transform transition it is the whole of a sliding indicator, which
     /// is why the two landed together.
