@@ -212,7 +212,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         "scroll" => with(&["keep"]),
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
         "input" => with(&["value", "size", "color", "on_submit"]),
-        "svg" => with(&["src", "tint"]),
+        "svg" => with(&["src", "tint", "stroke"]),
         // `path` draws SVG path-data (`d:`) with a solid fill/stroke; sized by width/height like a leaf.
         "path" => with(&["d", "fill", "stroke", "stroke_width", "fill_rule"]),
         _ if is_builtin_tag(tag) => layout_attr_keys().to_vec(),

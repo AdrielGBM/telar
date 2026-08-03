@@ -104,6 +104,11 @@ impl ViewGen<'_> {
         );
 
         let tint_fn = self.svg_tint_closure(el.attributes.iter().find(|a| a.key == "tint"));
+        let stroke = el.attributes.iter().find(|a| a.key == "stroke");
+        let stroke_call = match stroke {
+            Some(_) => format!(".with_stroke({})", self.svg_stroke_closure(stroke)),
+            None => String::new(),
+        };
 
         let fit = fit_closure(&el.attributes);
 
@@ -117,7 +122,7 @@ impl ViewGen<'_> {
              {pad}        {data_fn},\n\
              {pad}        {tint_fn},\n\
              {pad}        {fit},\n\
-             {pad}    )?\n\
+             {pad}    )?{stroke_call}\n\
              {pad}}};"
         );
 
@@ -141,6 +146,19 @@ impl ViewGen<'_> {
             return "|| None".to_string();
         }
         let expr = self.color_expr(v);
+        wrap_signal_clones(&[v], format!("move || Some({expr})"))
+    }
+
+    /// `stroke:` on an `svg`, overriding the stroke width the document declares. A theme that draws its icons at one weight sets it here rather than editing every asset, which is why the override exists on `Svg` at all — it was simply unreachable from `[view]`.
+    fn svg_stroke_closure(&self, stroke_attr: Option<&Attr>) -> String {
+        let Some(a) = stroke_attr else {
+            return "|| None".to_string();
+        };
+        let v = a.value.trim();
+        if v.is_empty() {
+            return "|| None".to_string();
+        }
+        let expr = substitute_reads(&crate::style::format_number(v, self.theme_type.as_deref()));
         wrap_signal_clones(&[v], format!("move || Some({expr})"))
     }
 

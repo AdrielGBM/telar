@@ -756,6 +756,50 @@ col @card
         );
     }
 
+    /// `Svg::with_stroke` is how a theme draws every icon at one weight without editing the assets, and it was
+    /// reachable only from Rust — which is one of the two reasons a themed icon could not be a `.rsx` component.
+    #[test]
+    fn svg_stroke_overrides_the_documents_own_weight() {
+        let literal = transpile_source_with_theme(
+            "[view]\ncol\n    svg src:props.icon stroke:1.5\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            literal.rust_code.contains(".with_stroke("),
+            "stroke reaches the builder:\n{}",
+            literal.rust_code
+        );
+
+        let live = transpile_source_with_theme(
+            "[logic]\nlet weight = signal(2.0f32);\n[view]\ncol\n    svg src:props.icon stroke:$weight\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            live.rust_code.contains(".with_stroke(") && live.rust_code.contains("weight.get()"),
+            "and a signal is read inside the closure:\n{}",
+            live.rust_code
+        );
+
+        let none = transpile_source_with_theme(
+            "[view]\ncol\n    svg src:props.icon\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            !none.rust_code.contains(".with_stroke("),
+            "an svg that asks for no stroke keeps the document's own:\n{}",
+            none.rust_code
+        );
+    }
+
     #[test]
     fn svg_without_tint_generates_none() {
         let src = "[view]\ncol\n    svg src:props.icon\n";
