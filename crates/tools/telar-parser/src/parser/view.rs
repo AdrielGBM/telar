@@ -142,20 +142,22 @@ impl Parser {
         let rest = after.trim().to_string();
         self.pos += 1;
 
-        // Split on the first standalone ` in ` keyword, then peel off optional `key <expr>` / `gap:<expr>` clauses.
-        let (pattern, iterable, key_expr, gap_expr) =
-            split_for_in(&rest).ok_or_else(|| ParseError {
-                message: format!("expected `for <pattern> in <expr>`, got `for {rest}`"),
-                line: number,
-            })?;
+        // Split on the first standalone ` in ` keyword, then peel off the optional trailing clauses.
+        let header = split_for_in(&rest).ok_or_else(|| ParseError {
+            message: format!(
+                "expected `for <pattern> in <expr> [key <expr>] [gap:<expr>] [virtual row_height:<expr>]`, got `for {rest}`"
+            ),
+            line: number,
+        })?;
 
         let body = self.parse_children(indent)?;
 
         Ok(ViewNode::ForBlock(ForBlock {
-            pattern,
-            iterable,
-            key_expr,
-            gap_expr,
+            pattern: header.pattern,
+            iterable: header.iterable,
+            key_expr: header.key_expr,
+            gap_expr: header.gap_expr,
+            virtual_row_height: header.virtual_row_height,
             body,
             line: number,
         }))
@@ -279,7 +281,7 @@ impl Parser {
 /// an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional
 /// ` key <expr>` clause (identity for reconciliation; without it a reactive list reconciles by position).
 /// `gap` is always the last token on the line, so it's peeled off before the `key` search.
-fn split_for_in(rest: &str) -> Option<(String, String, Option<String>, Option<String>)> {
+fn split_for_in(rest: &str) -> Option<ForHeader> {
     let tokens: Vec<&str> = rest.split_whitespace().collect();
     let in_idx = tokens.iter().position(|&t| t == "in")?;
     if in_idx == 0 || in_idx + 1 >= tokens.len() {
@@ -287,6 +289,25 @@ fn split_for_in(rest: &str) -> Option<(String, String, Option<String>, Option<St
     }
     let pattern = tokens[..in_idx].join(" ");
     let mut after_in: Vec<&str> = tokens[in_idx + 1..].to_vec();
+
+    // `virtual row_height:<expr>` peels off first: both its tokens sit at the end, and leaving them in would
+    // put `virtual` inside the iterable expression.
+    let virtual_row_height = match after_in
+        .iter()
+        .position(|&t| t == "virtual")
+        .filter(|at| *at > 0)
+    {
+        Some(at) => {
+            let height = after_in
+                .get(at + 1)
+                .and_then(|t| split_once_colon(t))
+                .filter(|(name, _)| *name == "row_height")
+                .map(|(_, value)| value.to_string());
+            after_in.truncate(at);
+            Some(height?)
+        }
+        None => None,
+    };
 
     let gap_expr = match (
         after_in.len(),
@@ -306,7 +327,22 @@ fn split_for_in(rest: &str) -> Option<(String, String, Option<String>, Option<St
         }
         _ => (after_in.join(" "), None),
     };
-    Some((pattern, iterable, key_expr, gap_expr))
+    Some(ForHeader {
+        pattern,
+        iterable,
+        key_expr,
+        gap_expr,
+        virtual_row_height,
+    })
+}
+
+/// The parsed pieces of a `for` header line.
+struct ForHeader {
+    pattern: String,
+    iterable: String,
+    key_expr: Option<String>,
+    gap_expr: Option<String>,
+    virtual_row_height: Option<String>,
 }
 
 /// Splits `<scrutinee> [as <name>] [key <expr>]` into its three parts. `key` is peeled first so an `as` inside

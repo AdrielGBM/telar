@@ -756,6 +756,54 @@ col @card
         );
     }
 
+    /// `VirtualList` was built, exported, and referenced by nothing in the toolchain, so every `.rsx` list built
+    /// a widget per row up front and long lists were capped instead. It is opt-in rather than inferred: it needs
+    /// a fixed row height and an enclosing viewport, and neither is safe to assume of a loop.
+    #[test]
+    fn a_virtual_loop_builds_only_the_rows_its_scroll_shows() {
+        let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows key row.id virtual row_height:32\n        text \"{row.name}\"\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("VirtualList::new("),
+            "the loop builds a virtual list:\n{code}"
+        );
+        assert!(
+            code.contains("LayoutScrollArea::new_with(") && code.contains("__viewport"),
+            "and the scroll hands its viewport over for it:\n{code}"
+        );
+        assert!(
+            code.contains("move |__index: usize, row|"),
+            "with the row's index alongside the item:\n{code}"
+        );
+    }
+
+    /// A scroll with no virtual loop under it keeps the cheaper constructor: the viewport is handed over only
+    /// where something asked for it.
+    #[test]
+    fn an_ordinary_scroll_does_not_expose_a_viewport() {
+        let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows\n        text \"{row.name}\"\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            !out.rust_code.contains("__viewport"),
+            "no viewport is bound:\n{}",
+            out.rust_code
+        );
+    }
+
+    /// Outside a scroll there is no viewport to ask what is visible, so this is refused where it is written
+    /// rather than quietly building every row.
+    #[test]
+    fn a_virtual_loop_outside_a_scroll_is_refused() {
+        let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\ncol\n    for row in $rows virtual row_height:32\n        text \"x\"\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains("needs an enclosing `scroll`"),
+            "the requirement is named:\n{}",
+            out.rust_code
+        );
+    }
+
     /// An attribute a tag does not accept used to map to a builder call that did nothing, or to nothing at all —
     /// `cols:` on a plain `box` compiled and had no effect. The table it checks is the one the analyzer completes
     /// from, so what the editor never suggests is what the build now refuses.

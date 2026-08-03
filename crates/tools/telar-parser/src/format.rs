@@ -327,6 +327,14 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
             {
                 out.push_str(&format!(" gap:{gap}"));
             }
+            if let Some(height) = block
+                .virtual_row_height
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                out.push_str(&format!(" virtual row_height:{height}"));
+            }
             out.push('\n');
             for child in &block.body {
                 emit_node(child, depth + 1, out);
@@ -549,6 +557,19 @@ mod tests {
             "preview section should survive:\n{out}"
         );
         assert!(out.contains("counter"));
+    }
+
+    /// Losing the `virtual` clause would turn a list that builds ten rows into one that builds ten thousand,
+    /// silently, on the next format.
+    #[test]
+    fn a_virtual_for_keeps_its_clause() {
+        let src = "[view]\nscroll\n    for row in $rows key row.id virtual row_height:32\n        text \"a\"\n";
+        let out = format_document(src).unwrap();
+        assert!(
+            out.contains("for row in $rows key row.id virtual row_height:32\n"),
+            "the clause comes back:\n{out}"
+        );
+        assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }
 
     /// Both `for` clauses change behaviour, so neither may be lost on a round trip: `key` decides what

@@ -258,6 +258,14 @@ impl ViewGen<'_> {
         // A `$`-prefixed source is a reactive list: build a keyed, reconciling `ReactiveList` widget
         // instead of a one-shot construction loop.
         if block.iterable.trim_start().starts_with('$') {
+            if let Some(height) = block
+                .virtual_row_height
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                return self.emit_virtual_for(block, height);
+            }
             return self.emit_reactive_for(block);
         }
         let pad = self.indent_str();
@@ -273,6 +281,10 @@ impl ViewGen<'_> {
             (
                 block.gap_expr.as_ref().map(|_| "gap"),
                 "a `gap:` on a `for` spaces *reconciled* items, so it needs a `$`-prefixed iterable — put the gap on the enclosing container instead",
+            ),
+            (
+                block.virtual_row_height.as_ref().map(|_| "virtual"),
+                "`virtual` builds only the rows a viewport shows as it scrolls, which a loop that runs once has nothing to do with — add a `$` to the iterable",
             ),
         ] {
             if let Some(name) = clause {
@@ -370,6 +382,75 @@ impl ViewGen<'_> {
         }
         let _ = write!(code, "{pad});");
         ChildEmit::Fragment { name: var, code }
+    }
+
+    /// A `virtual` loop: only the rows the enclosing scroll shows get built, instead of every row up front.
+    ///
+    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent
+    /// fragment. The row height is fixed by construction: measuring rows that have not been built is the
+    /// circular problem virtualisation exists to solve, and `VirtualList` says as much in its own doc.
+    fn emit_virtual_for(&mut self, block: &ForBlock, row_height: &str) -> ChildEmit {
+        let pad = self.indent_str();
+        let Some(viewport) = self.scroll_viewport.clone() else {
+            return ChildEmit::Dynamic {
+                code: format!(
+                    "{pad}compile_error!({});",
+                    rust_str(
+                        "a `virtual` loop needs an enclosing `scroll`: it builds only the rows that viewport shows, and outside one there is no viewport to ask"
+                    )
+                ),
+            };
+        };
+        let var = self.next_variable_name("node");
+        let iterable = block.iterable.trim();
+        let pattern = block.pattern.trim();
+        let key_expr = block
+            .key_expr
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| "__index".to_string());
+
+        let source = wrap_signal_clones(
+            &[iterable],
+            format!("move || {}", substitute_reads(iterable)),
+        );
+
+        let prelude_pad = format!("{pad}    ");
+        let mut body = String::new();
+        // `VirtualList` hands a row its index alongside the item, since a virtualised row often wants to know
+        // where it sits. The author's pattern binds the item; `__index` is the index.
+        let _ = writeln!(
+            body,
+            "{pad}    move |__index: usize, {pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+        );
+        self.indent += 2;
+        let idents = pattern_idents(pattern);
+        let added = idents.len();
+        self.loop_variables.extend(idents);
+        let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
+        self.loop_variables
+            .truncate(self.loop_variables.len() - added);
+        let ipad = self.indent_str();
+        let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
+        self.indent -= 2;
+        let _ = write!(body, "{pad}    }}");
+        let item_builder = self.wrap_branch_closure(&block.body, body, &prelude_pad);
+
+        let mut code = String::new();
+        let _ = writeln!(code, "{pad}let {var} = VirtualList::new(");
+        let _ = writeln!(code, "{pad}    LayoutStyle::new().flex_column(),");
+        let _ = writeln!(code, "{pad}    {viewport}.clone(),");
+        let _ = writeln!(code, "{pad}    ({row_height}) as f32,");
+        // Rows built beyond the viewport on each side, so a fast scroll does not show a blank band before the
+        // next build catches up.
+        let _ = writeln!(code, "{pad}    2,");
+        let _ = writeln!(code, "{pad}    {source},");
+        let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
+        let _ = writeln!(code, "{item_builder},");
+        let _ = write!(code, "{pad})?;");
+        ChildEmit::Simple { name: var, code }
     }
 
     /// The pre-transparency reactive `for`: a boxed `ReactiveList` (its own container node) with an optional

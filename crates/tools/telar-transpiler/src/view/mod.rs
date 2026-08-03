@@ -186,6 +186,10 @@ pub struct ViewGen<'a> {
     /// generated may run more than once for the same content, which is what makes a one-shot `widget`
     /// reference unsound there — see [`ViewGen::in_reactive_region`].
     reactive_depth: usize,
+    /// The in-scope binding holding the enclosing scroll's live viewport, when the node being emitted sits
+    /// inside one that exposed it. `VirtualList` needs it to know which rows are on screen, and only a `scroll`
+    /// can supply it — so a `virtual` loop outside one is an error rather than a surprise at runtime.
+    scroll_viewport: Option<String>,
 }
 
 impl<'a> ViewGen<'a> {
@@ -208,6 +212,7 @@ impl<'a> ViewGen<'a> {
             registry: None,
             child_sinks: Vec::new(),
             reactive_depth: 0,
+            scroll_viewport: None,
         }
     }
 

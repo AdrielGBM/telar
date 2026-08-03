@@ -192,6 +192,10 @@ pub struct ForBlock {
     pub iterable: String,
     pub key_expr: Option<String>,
     pub gap_expr: Option<String>,
+    /// The `row_height:<expr>` of a `virtual` loop: build only the rows the enclosing scroll viewport shows,
+    /// instead of every row up front. Opt-in and explicit, because virtualising needs a fixed row height and an
+    /// enclosing `scroll` — neither is something to infer from a loop that did not ask.
+    pub virtual_row_height: Option<String>,
     pub body: Vec<ViewNode>,
     /// 1-based `.rsx` line of the `for` header, used to map generated code back to source.
     pub line: usize,
