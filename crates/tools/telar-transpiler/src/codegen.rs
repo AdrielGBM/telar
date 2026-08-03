@@ -907,8 +907,9 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             let pfn = format!("{fn_name}_preview_{i}");
             code.push(
                 &format!(
-                    "    ::telar::PreviewEntry {{ component_name: \"{fn_name}\", preview_name: \"{}\", build: {pfn} }},\n",
-                    preview.name.replace('"', "\\\"")
+                    "    ::telar::PreviewEntry {{ component_name: \"{fn_name}\", preview_name: \"{}\", build: {pfn}, surface: {} }},\n",
+                    preview.name.replace('"', "\\\""),
+                    preview_surface(preview)
                 ),
                 None,
             );
@@ -1033,6 +1034,41 @@ fn preview_fixture(preview: &telar_parser::Preview) -> Option<String> {
         .trim()
         .trim_matches('"');
     (!value.is_empty()).then(|| value.to_string())
+}
+
+/// The `surface:WxH` header option of a `[preview]`, as the `Option<PreviewSurface>` its entry carries.
+///
+/// `[preview "Float" surface:360x240]` renders the component the way the runner mounts a surface — inside a box
+/// of that size, under the root that plays the enter transition — instead of as one more widget in the page's
+/// column. The bare `animate` flag beside it asks for that transition to run, which is how a preview shows what
+/// opening the surface looks like rather than only what it settles to.
+fn preview_surface(preview: &telar_parser::Preview) -> String {
+    let Some(size) = preview
+        .options
+        .iter()
+        .find(|option| option.key == "surface")
+        .map(|option| option.value.trim().trim_matches('"'))
+    else {
+        return "None".to_string();
+    };
+    let Some((width, height)) = size
+        .split_once(['x', 'X'])
+        .and_then(|(w, h)| Some((w.trim().parse::<f32>().ok()?, h.trim().parse::<f32>().ok()?)))
+    else {
+        // A size that does not parse is a preview the author meant to be a surface, so falling back to a tree
+        // would answer a question they did not ask. The generated code names it instead.
+        return format!(
+            "compile_error!(\"[preview] surface: expects WIDTHxHEIGHT, e.g. surface:360x240 (got {})\")",
+            size.replace('"', "'")
+        );
+    };
+    let animate = preview
+        .options
+        .iter()
+        .any(|option| option.key == "animate" && option.value.is_empty());
+    format!(
+        "Some(::telar::PreviewSurface {{ width: {width:?}, height: {height:?}, animate: {animate} }})"
+    )
 }
 
 fn view_uses_slot(nodes: &[ViewNode]) -> bool {

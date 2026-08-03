@@ -69,6 +69,32 @@ impl Component for ScrollPage {
     }
 }
 
+/// A tree preview is dropped into the page as it is; a surface preview is first given the two things a
+/// compositor would give it — a definite size to lay out against, and the root that plays its enter transition.
+///
+/// The size goes on a box *around* the root rather than on the root itself: `SurfaceRoot` fills its parent by
+/// design (that is how a surface's content stretches to its window), so it needs a parent with a size.
+fn mounted(
+    content: Box<dyn LayoutItem>,
+    surface: Option<crate::PreviewSurface>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let Some(surface) = surface else {
+        return Ok(content);
+    };
+    let root = crate::SurfaceRoot::new(content)?;
+    let root = if surface.animate {
+        root.animate_in()
+    } else {
+        root
+    };
+    Ok(Box::new(Container::new(
+        LayoutStyle::new()
+            .width(surface.width)
+            .height(surface.height),
+        vec![Box::new(root) as Box<dyn LayoutItem>],
+    )?))
+}
+
 impl App for PreviewApp {
     fn root(&self) -> Box<dyn Component> {
         reset_layout_runtime();
@@ -93,7 +119,7 @@ impl App for PreviewApp {
             .unwrap();
 
             let mut children: Vec<Box<dyn LayoutItem>> = vec![Box::new(header)];
-            match (entry.build)() {
+            match (entry.build)().and_then(|widget| mounted(widget, entry.surface)) {
                 Ok(widget) => children.push(widget),
                 Err(err) => {
                     let msg = format!("Error: {err}");

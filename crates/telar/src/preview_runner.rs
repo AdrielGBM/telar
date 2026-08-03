@@ -10,6 +10,45 @@ pub struct PreviewEntry {
     pub component_name: &'static str,
     pub preview_name: &'static str,
     pub build: fn() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    /// Set when the preview is a *surface* rather than a tree — `[preview "…" surface:360x240]`. See
+    /// [`PreviewSurface`].
+    pub surface: Option<PreviewSurface>,
+}
+
+/// What a preview needs to be rendered the way the runner mounts a surface, rather than as one more widget in
+/// the page's column.
+///
+/// A tree preview answers "does this component look right"; a surface preview answers "does this *window* look
+/// right" — and the difference is everything a surface adds on top of its content: a definite size the content
+/// lays out against, and the enter transition its root plays. Without it the two questions could not both be
+/// asked, so an app ended up keeping a headless harness of its own for the second one.
+#[cfg(feature = "runtime")]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PreviewSurface {
+    /// The size the surface would be given by the compositor, in logical px.
+    pub width: f32,
+    pub height: f32,
+    /// Play the root's enter transition, so a preview shows what the user sees when the surface opens — and a
+    /// transition that never settles shows up as a window that is still half-transparent when the frames run out.
+    pub animate: bool,
+}
+
+#[cfg(feature = "runtime")]
+impl PreviewSurface {
+    pub fn new(width: f32, height: f32) -> Self {
+        Self {
+            width,
+            height,
+            animate: false,
+        }
+    }
+
+    pub fn animated(self) -> Self {
+        Self {
+            animate: true,
+            ..self
+        }
+    }
 }
 
 #[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]

@@ -38,7 +38,7 @@ pub use config::RendererBackend;
 mod preview_runner;
 
 #[cfg(feature = "runtime")]
-pub use preview_runner::PreviewEntry;
+pub use preview_runner::{PreviewEntry, PreviewSurface};
 
 #[cfg(feature = "runtime")]
 pub use app_config::AppConfig;
@@ -118,8 +118,9 @@ pub use surface::{
 };
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    Theme, ThemeTokens, follow_system, init_mode, is_dark, register_mode, set_dark, set_light_dark,
-    set_mode, set_system_dark, set_theme, toggle_dark, use_mode, use_theme, use_theme_tokens,
+    ControlSize, Theme, ThemeTokens, control_scale, follow_system, init_mode, is_dark,
+    register_mode, set_control_size, set_dark, set_light_dark, set_mode, set_system_dark,
+    set_theme, toggle_dark, use_control_size, use_mode, use_theme, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;

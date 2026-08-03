@@ -431,6 +431,37 @@ col @card
         );
     }
 
+    /// `surface:WxH` turns a preview from a tree into a window: the entry carries the size the compositor would
+    /// give it and, with `animate`, the enter transition its root plays. A size that does not parse is named
+    /// where it was written rather than quietly falling back to a tree, which would answer a question the
+    /// author never asked.
+    #[test]
+    fn a_preview_can_declare_the_surface_it_is() {
+        let src = "[view]\ntext \"x\"\n\n[preview \"Float\" surface:360x240 animate]\ndemo\n\n[preview \"Tree\"]\ndemo\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(
+                "surface: Some(::telar::PreviewSurface { width: 360.0, height: 240.0, animate: true })"
+            ),
+            "the size and the transition reach the entry:\n{code}"
+        );
+        assert!(
+            code.contains("build: demo_preview_1, surface: None"),
+            "and a preview that declares none is still a tree:\n{code}"
+        );
+
+        let bad = "[view]\ntext \"x\"\n\n[preview \"Float\" surface:wide]\ndemo\n";
+        let code = transpile_source_with_theme(bad, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!(\"[preview] surface: expects WIDTHxHEIGHT"),
+            "a size that does not parse names itself:\n{code}"
+        );
+    }
+
     /// A `.rsx` component that declares a closure-typed prop gets the same live text and colour the built-in
     /// catalogue gets. Without this a user component could only take `&'static str`, so it could never show a
     /// value that changes — and anything with live text had to stay hand-written Rust.
