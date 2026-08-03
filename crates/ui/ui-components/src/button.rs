@@ -273,4 +273,47 @@ mod tests {
             "and follows the theme it is switched to, without being rebuilt"
         );
     }
+
+    /// The control size is one ambient number that every component interprets through its own proportions —
+    /// the alternative being a `size` prop on each of them and a table of what each of their parts measures at
+    /// each size. So the check is that the button did *not* need to know: nothing about it mentions a size, and
+    /// it still gets smaller.
+    #[test]
+    fn the_ambient_control_size_scales_a_control_that_never_asked_for_one() {
+        use std::any::Any;
+
+        use theme_core::{ControlSize, Theme, ThemeTokens, set_control_size, set_theme};
+        use ui_core::relayout_if_dirty;
+
+        #[derive(Clone)]
+        struct Plain;
+        impl Theme for Plain {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+        impl ThemeTokens for Plain {
+            fn spacing(&self) -> f32 {
+                8.0
+            }
+        }
+
+        reset_layout_runtime();
+        set_theme(Plain);
+        set_control_size(ControlSize::Regular);
+        let btn = button(ButtonProps::default()).unwrap();
+        let node = btn.layout_node();
+        let rect = track_layout(node).unwrap();
+        compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
+        let regular = rect.get().width;
+
+        set_control_size(ControlSize::Mini);
+        relayout_if_dirty();
+        assert_eq!(
+            rect.get().width,
+            regular * ControlSize::Mini.scale(),
+            "a denser control size carries through the button's own padding ratio"
+        );
+        set_control_size(ControlSize::Regular);
+    }
 }

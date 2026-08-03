@@ -57,20 +57,24 @@ pub(crate) fn radius() -> f32 {
     use_theme_tokens().map(|t| t.radius()).unwrap_or(4.0)
 }
 /// Base spacing unit from the theme, and what a component derives its own padding from.
+///
+/// Scaled by the ambient [`ControlSize`](theme_core::ControlSize) — which is the whole of how a control gets
+/// smaller here: each component keeps its own proportions and the unit underneath them moves. See
+/// `theme-core`'s `density` module for why that is one number rather than a size matrix per component.
 pub(crate) fn spacing() -> f32 {
-    use_theme_tokens().map(|t| t.spacing()).unwrap_or(8.0)
+    use_theme_tokens().map(|t| t.spacing()).unwrap_or(8.0) * theme_core::control_scale()
 }
-/// Base body text size from the theme.
+/// Base body text size from the theme, scaled by the ambient control size.
 ///
 /// A component scales this by a ratio of its own — `font_size() * 1.4` for a heading, `* 0.85` for a caption —
 /// instead of asking for a named role. Naming the roles here would decide for every application which roles it
 /// is allowed to have, and a theme's own vocabulary belongs to its own type.
 pub(crate) fn font_size() -> f32 {
-    use_theme_tokens().map(|t| t.font_size()).unwrap_or(14.0)
+    use_theme_tokens().map(|t| t.font_size()).unwrap_or(14.0) * theme_core::control_scale()
 }
-/// Default standalone icon size from the theme.
+/// Default standalone icon size from the theme, scaled by the ambient control size.
 pub(crate) fn icon_size() -> f32 {
-    use_theme_tokens().map(|t| t.icon_size()).unwrap_or(16.0)
+    use_theme_tokens().map(|t| t.icon_size()).unwrap_or(16.0) * theme_core::control_scale()
 }
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`.
