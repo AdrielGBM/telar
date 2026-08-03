@@ -34,6 +34,8 @@ pub struct StyledContainer {
     dyn_host: Option<DynHost>,
     // Optional tap gesture so a styled box can itself be pressable (a clickable card); children still hit-test first.
     press: PressGesture,
+    // Effects whose life is this widget's. Dropping an `Effect` deregisters it, so one that belongs to a widget must be owned by that widget: parked somewhere longer-lived it keeps firing against a node that is gone, and dropped on the floor it runs once and stops. Held here rather than in a wrapper so owning one costs no layout node — a row owning five effects is still one box.
+    kept_effects: Vec<Effect>,
     // Optional drag gesture (slider/reorder/resize): reports the pointer position on press and each move.
     drag: DragGesture,
     // Fires with `true`/`false` as the mouse enters/leaves the box (mouse only, like the hover style).
@@ -70,6 +72,7 @@ impl StyledContainer {
             children,
             dyn_host: None,
             press: PressGesture::default(),
+            kept_effects: Vec::new(),
             drag: DragGesture::default(),
             on_hover: None,
             on_scroll: None,
@@ -103,6 +106,7 @@ impl StyledContainer {
             children: Vec::new(),
             dyn_host: Some(dyn_host),
             press: PressGesture::default(),
+            kept_effects: Vec::new(),
             drag: DragGesture::default(),
             on_hover: None,
             on_scroll: None,
@@ -155,6 +159,20 @@ impl StyledContainer {
         if self.active_style.is_some() && self.is_active.get() != active {
             self.is_active.set(active);
         }
+    }
+
+    /// Give this widget ownership of an [`Effect`], so it runs for exactly as long as the widget exists.
+    ///
+    /// The reactive runtime scopes an effect to the *surface* it was registered on, which is the right span for
+    /// a shell-wide subscription and far too coarse for one row of a list: the row goes, the effect stays, and
+    /// it keeps firing at a node that is gone. Dropping the handle instead is the opposite failure — the effect
+    /// deregisters, runs once, and stops, with nothing to say so. This is the third answer, and the one an
+    /// effect that belongs to a widget wants.
+    ///
+    /// Chainable, so several effects can be kept without nesting anything.
+    pub fn keeping(mut self, subscription: Effect) -> Self {
+        self.kept_effects.push(subscription);
+        self
     }
 
     /// Make the box itself pressable. The callback fires on a tap (release, not press) inside the box;
@@ -1518,6 +1536,34 @@ mod tests {
             interactive_rects().len(),
             baseline,
             "dropping the pressable withdraws its rect"
+        );
+    }
+
+    /// The two failures this exists to sit between: an effect dropped on the floor runs once and stops, and one
+    /// parked somewhere longer-lived keeps firing at a widget that is gone. Kept on the widget it belongs to, it
+    /// does neither.
+    #[test]
+    fn a_kept_effect_lives_exactly_as_long_as_its_widget() {
+        crate::reset_layout_runtime();
+        reactive_core::reset_runtime();
+        let source = signal(0i32);
+        let seen = std::rc::Rc::new(std::cell::Cell::new(0i32));
+
+        let watched = source.clone();
+        let sink = seen.clone();
+        let boxed = StyledContainer::new(LayoutStyle::new(), |_r| RectStyle::default(), vec![])
+            .unwrap()
+            .keeping(effect(move || sink.set(watched.get())));
+
+        source.set(7);
+        assert_eq!(seen.get(), 7, "the effect runs while the widget is alive");
+
+        drop(boxed);
+        source.set(9);
+        assert_eq!(
+            seen.get(),
+            7,
+            "and stops when the widget goes, rather than firing at a node that is gone"
         );
     }
 }

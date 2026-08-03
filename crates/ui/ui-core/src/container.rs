@@ -18,7 +18,9 @@ pub struct Container {
     children: TrackedChildren,
     dyn_host: Option<DynHost>,
     // Optional tap gesture so a plain row/col can be pressable; children still hit-test first.
+    // See `StyledContainer::keeping` for why a widget owns its effects.
     press: PressGesture,
+    kept_effects: Vec<reactive_core::Effect>,
 }
 
 impl Container {
@@ -33,6 +35,7 @@ impl Container {
             children,
             dyn_host: None,
             press: PressGesture::default(),
+            kept_effects: Vec::new(),
         })
     }
 
@@ -52,6 +55,7 @@ impl Container {
             children: Vec::new(),
             dyn_host: Some(dyn_host),
             press: PressGesture::default(),
+            kept_effects: Vec::new(),
         })
     }
 
@@ -64,6 +68,15 @@ impl Container {
             Some(host) => host.dispatch(event),
             None => dispatch_container_event(&mut self.children, event),
         }
+    }
+
+    /// Give this container ownership of an [`Effect`](reactive_core::Effect), so it runs for exactly as long as
+    /// the container exists. See [`StyledContainer::keeping`](crate::StyledContainer::keeping) for why that is
+    /// the span an effect belonging to a widget wants, and why neither dropping the handle nor parking it
+    /// somewhere longer-lived is it.
+    pub fn keeping(mut self, subscription: reactive_core::Effect) -> Self {
+        self.kept_effects.push(subscription);
+        self
     }
 
     /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it;
