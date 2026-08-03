@@ -11,7 +11,7 @@ pub(crate) struct TransitionSpec {
     pub curve: String,
 }
 
-/// Properties a `transition:` can animate.
+/// Properties a `transition:` can animate (F5 in `docs/animations.md`).
 ///
 /// Paint and transform, and deliberately not the layout box. Both halves are read per frame from a closure the
 /// renderer already re-runs, so animating them costs a repaint and nothing else — the "no relayout" invariant

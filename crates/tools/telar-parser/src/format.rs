@@ -551,6 +551,19 @@ mod tests {
         assert!(out.contains("counter"));
     }
 
+    /// Both `for` clauses change behaviour, so neither may be lost on a round trip: `key` decides what
+    /// reconciles, and `gap` is what the transparent fragment spaces its items by.
+    #[test]
+    fn a_for_keeps_its_key_and_gap_clauses() {
+        let src = "[view]\ncol\n    for x in $items key x.id gap:8\n        text \"a\"\n";
+        let out = format_document(src).unwrap();
+        assert!(
+            out.contains("for x in $items key x.id gap:8\n"),
+            "both clauses come back:\n{out}"
+        );
+        assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
+    }
+
     /// A `match` header carries two optional clauses, and both change behaviour: dropping `key` silently
     /// downgrades reconciliation to the variant, dropping `as` breaks the key that reads the binding.
     #[test]
