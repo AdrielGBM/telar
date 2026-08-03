@@ -112,6 +112,9 @@ pub enum ViewNode {
     ForBlock(ForBlock),
     MatchBlock(MatchBlock),
     LetStmt(LetStmt),
+    /// A `//` note. Kept in the tree rather than discarded at the lexer, so the formatter puts it back where
+    /// its author left it. Builds nothing.
+    Comment(String),
 }
 
 /// A verbatim `let` binding in the view, captured as raw Rust source.

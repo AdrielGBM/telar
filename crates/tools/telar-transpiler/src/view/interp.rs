@@ -70,8 +70,9 @@ impl ViewGen<'_> {
     /// 2. A bare `$ident` → `ident.get()`, a reactive read of a `RwSignal<Color>` (or compatible) in scope.
     /// 3. A computed expression — a call, method chain, or arithmetic that yields a `Color`, recognized by a `(` or an embedded `$` beyond a bare handle (e.g. `chip_fill($snapshot, id)` for state-driven paint). `$signal` reads are made reactive via `substitute_reads`; the rest is emitted verbatim. For (2) and (3) the caller clones any captured signal into the enclosing `move` paint closure (see `wrap_signal_clones`), so the color re-reads and the outer handle stays usable.
     /// 4. `Color::*` literal / CSS keyword → static expression.
-    /// 5. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
-    /// 6. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
+    /// 5. A `[logic]` binding of that name → the binding itself, so a local shadows a same-named token the way it would in Rust.
+    /// 6. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
+    /// 7. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
     pub(super) fn color_expr(&self, value: &str) -> String {
         let v = value.trim();
         if v.starts_with('#') {
@@ -102,6 +103,9 @@ impl ViewGen<'_> {
             "black" => return "Color::BLACK".to_string(),
             "transparent" => return "Color::TRANSPARENT".to_string(),
             _ => {}
+        }
+        if self.is_local(v) {
+            return v.to_string();
         }
         if let Some(theme) = &self.theme_type {
             return format!("use_theme::<{theme}>().{}", to_snake_case(v));

@@ -154,6 +154,10 @@ const CONTAINER_PAINT: &[&str] = &[
     "on_hover",
     "on_key",
     "on_drag",
+    // A drag the markup can start but never finish is half a gesture: the release is where a pull-to-open, a
+    // scrub or a reorder actually commits.
+    "on_drag_end",
+    "on_scroll",
     "on_focus",
     "hover_style",
     "active_style",
@@ -213,7 +217,8 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             keys.extend_from_slice(&["span", "row_span"]);
             keys
         }
-        "img" | "image" => with(&["src", "fit", "filter"]),
+        // `radius` rounds the picture itself; a leaf takes no other paint key.
+        "img" | "image" => with(&["src", "fit", "filter", "radius"]),
         // `keep:` names the surface-kept position of this viewport, so a remounted tree reopens where it was.
         "scroll" => with(&["keep"]),
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.

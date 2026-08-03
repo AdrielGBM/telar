@@ -113,6 +113,6 @@ fn wants_viewport(nodes: &[telar_parser::ViewNode]) -> bool {
         }
         ViewNode::MatchBlock(block) => block.arms.iter().any(|arm| wants_viewport(&arm.body)),
         ViewNode::Element(el) => el.tag != "scroll" && wants_viewport(&el.children),
-        ViewNode::LetStmt(_) => false,
+        ViewNode::LetStmt(_) | ViewNode::Comment(_) => false,
     })
 }

@@ -366,17 +366,6 @@ pub fn parse_message(content: &str) -> MessageModel {
 /// generated file compiles with the same `rsx` dependency every generated `.rsx` file has.
 pub fn to_source(model: &CatalogModel) -> String {
     let mut s = String::new();
-    // Only imported when something uses it: an unconditional import would warn in every project with no plurals, against a file its author cannot edit.
-    let has_plural = model
-        .entries
-        .values()
-        .flat_map(|per_locale| per_locale.values())
-        .any(|m| matches!(m, MessageModel::Plural(_)));
-    s.push_str("use telar::i18n::{Catalog, Entry, Message, Part");
-    if has_plural {
-        s.push_str(", PluralCategory");
-    }
-    s.push_str("};\n\n");
     s.push_str("pub static CATALOG: Catalog = Catalog {\n");
     s.push_str(&format!(
         "    locales: &[{}],\n",
@@ -402,7 +391,16 @@ pub fn to_source(model: &CatalogModel) -> String {
         s.push_str("] },\n");
     }
     s.push_str("    ],\n};\n");
-    s
+
+    // Imported by what the body actually mentions: a catalogue with no interpolation and no plurals would
+    // otherwise warn on two unused names, in a file its author cannot edit.
+    let mut names = vec!["Catalog", "Entry", "Message"];
+    names.extend(
+        ["Part", "PluralCategory"]
+            .into_iter()
+            .filter(|name| s.contains(&format!("{name}::"))),
+    );
+    format!("use telar::i18n::{{{}}};\n\n{s}", names.join(", "))
 }
 
 fn ser_message(message: &MessageModel) -> String {

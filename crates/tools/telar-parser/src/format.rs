@@ -345,6 +345,11 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
             out.push_str(&stmt.source);
             out.push('\n');
         }
+        ViewNode::Comment(text) => {
+            out.push_str(&pad);
+            out.push_str(text);
+            out.push('\n');
+        }
     }
 }
 
@@ -390,8 +395,9 @@ fn format_attr(attr: &Attr) -> String {
     } else if attr.value.is_empty() {
         // Bare flag attribute, e.g. `ghost`.
         attr.key.clone()
-    } else if is_closure_value(&attr.value) {
+    } else if is_closure_value(&attr.value) || takes_a_parenthesized_value(&attr.key) {
         // A closure value uses the parenthesized form `key(|…| …)` — the colon form is gone, since it ran to end of line and swallowed any following attributes. `move |…|` counts: re-emitting one with a colon produces a line the parser then reads as the attribute `key:move` followed by garbage, so formatting would break the file it just formatted.
+        // A paint list is the same story: its value is itself `key:value` pairs, so `hover_style:fill:x stroke:y` is a spelling nothing can read back.
         format!("{}({})", attr.key, attr.value)
     } else {
         format!("{}:{}", attr.key, attr.value)
@@ -650,8 +656,18 @@ mod tests {
     }
 }
 
-/// Whether an attribute value is a closure, in either spelling the DSL accepts.
-fn is_closure_value(value: &str) -> bool {
+/// Whether `key` is written in the parenthesized form regardless of what its value looks like: an event
+/// handler, which reads as a call and must accept a closure, and a paint list, whose value is itself
+/// `key:value` pairs. Keeping the spelling uniform is the point — an `on_press` that took the colon form for a
+/// forwarded handler and parens for a closure would teach two spellings for one thing.
+fn takes_a_parenthesized_value(key: &str) -> bool {
+    key.starts_with("on_") || matches!(key, "hover_style" | "active_style")
+}
+
+/// Whether an attribute value is a closure written out in place, in either spelling the DSL accepts — as
+/// opposed to a handler expression the caller is forwarding. The formatter keeps the two spellings apart and
+/// the transpiler wires them to different methods, so both read it from here rather than each testing its own.
+pub fn is_closure_value(value: &str) -> bool {
     let value = value.trim_start();
     value.starts_with('|')
         || value

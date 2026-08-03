@@ -95,7 +95,7 @@ fn collect_view_colors(nodes: &[ViewNode], source: &str, out: &mut Vec<ColorInfo
                     collect_view_colors(&arm.body, source, out);
                 }
             }
-            ViewNode::LetStmt(_) => {}
+            ViewNode::LetStmt(_) | ViewNode::Comment(_) => {}
         }
     }
 }

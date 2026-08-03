@@ -45,7 +45,7 @@ fn collect(nodes: &[ViewNode], source: &str, file_dir: &Path, out: &mut Vec<Docu
                     collect(&arm.body, source, file_dir, out);
                 }
             }
-            ViewNode::LetStmt(_) => {}
+            ViewNode::LetStmt(_) | ViewNode::Comment(_) => {}
         }
     }
 }

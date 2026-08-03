@@ -111,7 +111,7 @@ fn check_nodes(nodes: &[ViewNode], ctx: &Ctx, reactive: bool, diagnostics: &mut 
                     check_nodes(&arm.body, ctx, reactive, diagnostics);
                 }
             }
-            ViewNode::LetStmt(_) => {}
+            ViewNode::LetStmt(_) | ViewNode::Comment(_) => {}
         }
     }
 }

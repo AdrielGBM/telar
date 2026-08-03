@@ -2,6 +2,8 @@
 
 use telar_parser::{Attr, Element};
 
+use crate::style::format_number;
+
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ViewGen, expr_marker};
 
@@ -78,6 +80,15 @@ impl ViewGen<'_> {
 
         let layout_style = self.make_layout_style("img", &el.classes, &el.attributes);
 
+        // Rounding is the picture's own, not a parent's: clipping to a rounded box would need a container per
+        // image, and a thumbnail grid is where that cost lands hardest.
+        let radius = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "radius")
+            .map(|a| format!(".with_radius({})", format_number(&a.value, None)))
+            .unwrap_or_default();
+
         let code = format!(
             "{pad}let {var} = {{\n\
              {setup}\
@@ -86,7 +97,7 @@ impl ViewGen<'_> {
              {pad}        {data_fn},\n\
              {pad}        move || {filter},\n\
              {pad}        {fit},\n\
-             {pad}    )?\n\
+             {pad}    )?{radius}\n\
              {pad}}};"
         );
 

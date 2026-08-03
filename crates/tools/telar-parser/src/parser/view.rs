@@ -71,10 +71,17 @@ impl Parser {
         Ok(nodes)
     }
 
-    /// Parses one view node (element, if, for, or let) starting at `indent`.
+    /// Parses one view node (comment, element, if, for, match, or let) starting at `indent`.
     fn parse_view_node(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
         let content = self.lines[self.pos].content.clone();
         let first_word = content.split_whitespace().next().unwrap_or("");
+
+        // Before the tag dispatch: an unrecognised first word becomes a component call, so a note left here
+        // used to compile into a call to a component named `//`.
+        if content.starts_with("//") {
+            self.pos += 1;
+            return Ok(ViewNode::Comment(content));
+        }
 
         match first_word {
             "if" => self.parse_if_block(indent),

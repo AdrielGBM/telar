@@ -300,16 +300,48 @@ impl ViewGen<'_> {
             .constants
             .iter()
             .any(|c| to_snake_case(&c.name) == snake);
+        // A bare lowercase name is a theme token only when nothing nearer answers to it. This prop may not even
+        // be a colour — the guess reaches every field alike, so `size:size` compiles to a token lookup, and a
+        // binding named `radius` or `muted` would read the theme instead of itself without a word.
         let looks_like_color_name = is_ident(v)
+            && !self.is_local(v)
             && v.chars()
                 .next()
                 .is_some_and(|c| c.is_ascii_lowercase() || c == '_');
         if in_style || (self.theme_type.is_some() && looks_like_color_name) {
             return self.color_expr(v);
         }
-        // Verbatim pass-through: tag the value with its source span so the analyzer can complete in it.
+        // Verbatim pass-through: tag the value with its source span so the analyzer can complete in it. The
+        // delimiting parens are dropped here rather than at the call, so the span still covers the expression
+        // itself and nothing wider.
         let lead = attr.value.len() - attr.value.trim_start().len();
-        format!("{}{v}", expr_marker(attr.value_start + lead, v.len()))
+        match Self::redundant_parens(v) {
+            Some(inner) => format!(
+                "{}{inner}",
+                expr_marker(attr.value_start + lead + 1, inner.len())
+            ),
+            None => format!("{}{v}", expr_marker(attr.value_start + lead, v.len())),
+        }
+    }
+
+    /// The expression inside a redundant paren pair, or `None` when the parens carry meaning.
+    ///
+    /// `key:(expr)` is how the markup delimits a value that would otherwise run to end of line, so the parens
+    /// are punctuation rather than grammar and emitting them warns `unused_parens` in code the author cannot
+    /// edit. A top-level comma makes them a tuple, which is grammar, and stays.
+    fn redundant_parens(expr: &str) -> Option<&str> {
+        let inner = expr.trim().strip_prefix('(')?.strip_suffix(')')?;
+        let mut depth = 0i32;
+        for c in inner.chars() {
+            match c {
+                '(' | '[' | '{' => depth += 1,
+                ')' if depth == 0 => return None,
+                ')' | ']' | '}' => depth -= 1,
+                ',' if depth == 0 => return None,
+                _ => {}
+            }
+        }
+        Some(inner)
     }
 
     pub(super) fn emit_widget_ref(&mut self, el: &Element) -> ChildEmit {

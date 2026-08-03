@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use telar_parser::format::is_closure_value;
 use telar_parser::{Attr, Element};
 
 use crate::style::format_f32;
@@ -11,7 +12,7 @@ use super::signals::{
     build_gradient_stops, closure_marker, emit_transition_prelude, has_paint, normalize_closure,
     substitute_handles, substitute_reads, wrap_signal_clones,
 };
-use super::{ChildEmit, ChildMode, ViewGen, forces_child_vec};
+use super::{ChildEmit, ChildMode, ViewGen, expr_marker, forces_child_vec};
 
 impl ViewGen<'_> {
     pub(super) fn emit_container(&mut self, el: &Element) -> ChildEmit {
@@ -38,6 +39,8 @@ impl ViewGen<'_> {
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
         let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
+        let on_drag_end = self.closure_attr_call(el, "on_drag_end", "on_drag_end");
+        let on_scroll = self.closure_attr_call(el, "on_scroll", "on_scroll");
         let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
         let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
         let (specs, errors) = self.parse_transitions(el);
@@ -47,7 +50,7 @@ impl ViewGen<'_> {
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
         let styling = format!(
-            "{hover_call}{active_call}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}"
+            "{hover_call}{active_call}{transform_call}{on_hover}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}"
         );
         let pieces = if always_style || has_paint(&pattrs) || !styling.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
@@ -91,7 +94,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_focus}{on_long_press}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{terminator}"
                 );
             }
             None => {
@@ -177,6 +180,14 @@ impl ViewGen<'_> {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
+        // A value that is not a closure literal is an `Option<handler>` the caller is forwarding, and it wires
+        // through the `maybe_` form so `None` leaves the box untouched. A wrapper component has no other way to
+        // say "only if my caller gave me one": a no-op stand-in still reports the event handled, which turns a
+        // chip with nothing to do into one that swallows the click.
+        if !is_closure_value(&attr.value) {
+            let marker = expr_marker(attr.value_start, attr.value.len());
+            return format!(".maybe_{method}({marker}{})", attr.value.trim());
+        }
         format!(".{method}({})", self.emit_closure_value(attr))
     }
 

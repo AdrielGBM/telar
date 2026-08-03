@@ -18,6 +18,63 @@ pub enum SignalKind {
     Memo,
 }
 
+/// Every identifier the logic zone binds with a top-level `let`, so a bare name in the view resolves to the
+/// binding the author wrote three lines above instead of an ambient theme token that happens to share its
+/// spelling. Without this the shadowing runs the wrong way: `let size = props.size` is unreachable from
+/// `size:size`, and a binding named after a real token (`radius`, `spacing`, `muted`) silently reads the theme.
+///
+/// Only bindings at the zone's own indentation count — anything deeper belongs to a nested `fn` or block and is
+/// not in scope where the view is emitted. Destructuring patterns contribute every name they bind.
+pub fn scan_locals(logic_source: &str) -> Vec<String> {
+    let base = logic_source
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start().len())
+        .min()
+        .unwrap_or(0);
+
+    let mut locals = Vec::new();
+    for raw in logic_source.lines() {
+        if raw.trim().is_empty() || raw.len() - raw.trim_start().len() != base {
+            continue;
+        }
+        let Some(rest) = raw.trim_start().strip_prefix("let ") else {
+            continue;
+        };
+        let pattern = rest.split('=').next().unwrap_or("").trim_end_matches(';');
+        for name in pattern_bindings(pattern) {
+            if !locals.contains(&name) {
+                locals.push(name);
+            }
+        }
+    }
+    locals
+}
+
+/// The identifiers a `let` pattern binds. A simple `name: Type` keeps only the name; anything with a
+/// destructuring delimiter yields every identifier in it, since telling a bound name from a path segment there
+/// needs a real parser and over-collecting only costs a shadowed token.
+fn pattern_bindings(pattern: &str) -> Vec<String> {
+    let destructures = pattern.contains(['(', '{', '[', ',']);
+    let pattern = if destructures {
+        pattern
+    } else {
+        pattern.split(':').next().unwrap_or("")
+    };
+
+    let mut names = Vec::new();
+    for word in pattern.split(|c: char| !c.is_alphanumeric() && c != '_') {
+        if matches!(word, "mut" | "ref" | "let" | "else" | "") || !is_ident(word) {
+            continue;
+        }
+        if word.starts_with(|c: char| c.is_ascii_uppercase()) {
+            continue;
+        }
+        names.push(word.to_string());
+    }
+    names
+}
+
 /// Scans the logic source for signal declarations and returns their names.
 ///
 /// Recognised forms:

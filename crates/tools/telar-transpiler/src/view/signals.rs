@@ -330,6 +330,8 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
                 }
             }
             ViewNode::LetStmt(stmt) => out.push(stmt.source.clone()),
+            // A note reads nothing, so nothing it names is cloned into a closure.
+            ViewNode::Comment(_) => {}
         }
     }
 }

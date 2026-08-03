@@ -8,7 +8,7 @@ use crate::error::TranspileError;
 use crate::naming::{
     contains_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
 };
-use crate::signal_scan::scan_signals;
+use crate::signal_scan::{scan_locals, scan_signals};
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
 
@@ -431,12 +431,22 @@ fn find_default_sep(s: &str) -> Option<usize> {
 
 /// Splits a struct body into field chunks on top-level commas, so a comma inside a default expression
 /// (e.g. `= Color::rgba(1.0, 0.0, 0.0, 1.0)`) or a generic (`Vec<A, B>`) does not split a field.
+///
+/// Comments and string literals are skipped whole. A field's own doc comment is prose, and prose has commas in
+/// it — counting those split the field away from its type and dropped it from the struct without a word, which
+/// surfaced much later as a missing field at the first call site.
 fn split_top_level_commas(body: &str) -> Vec<String> {
     let mut chunks = Vec::new();
     let mut depth = 0i32;
     let mut start = 0;
     let b = body.as_bytes();
-    for (i, &c) in b.iter().enumerate() {
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        if let Some(next) = skip_literal_or_comment(b, i) {
+            i = next;
+            continue;
+        }
         match c {
             b'(' | b'[' | b'{' | b'<' => depth += 1,
             b')' | b']' | b'}' => depth = (depth - 1).max(0),
@@ -448,9 +458,67 @@ fn split_top_level_commas(body: &str) -> Vec<String> {
             }
             _ => {}
         }
+        i += 1;
     }
     chunks.push(body[start..].to_string());
     chunks
+}
+
+/// The index just past the comment or literal beginning at `at`, or `None` when nothing starts there. A `'` is
+/// only a char literal when it closes within three bytes — otherwise it opens a lifetime (`&'static str`).
+fn skip_literal_or_comment(b: &[u8], at: usize) -> Option<usize> {
+    let past_line_end = |from: usize| {
+        b[from..]
+            .iter()
+            .position(|&c| c == b'\n')
+            .map_or(b.len(), |n| from + n)
+    };
+    match (b[at], b.get(at + 1)) {
+        (b'/', Some(b'/')) => Some(past_line_end(at)),
+        (b'/', Some(b'*')) => {
+            let mut i = at + 2;
+            while i + 1 < b.len() && !(b[i] == b'*' && b[i + 1] == b'/') {
+                i += 1;
+            }
+            Some((i + 2).min(b.len()))
+        }
+        (b'"', _) => {
+            let mut i = at + 1;
+            while i < b.len() && b[i] != b'"' {
+                i += if b[i] == b'\\' { 2 } else { 1 };
+            }
+            Some((i + 1).min(b.len()))
+        }
+        (b'\'', _) => (2..=3)
+            .find(|n| b.get(at + n) == Some(&b'\''))
+            .map(|n| at + n + 1),
+        _ => None,
+    }
+}
+
+/// Indices of the logic-zone lines that make up a top-level `use` statement, in source order.
+///
+/// Column 0 is the test, so a `use` inside a nested `fn` or block stays where its author put it. An unterminated
+/// statement is left alone rather than guessed at, so a malformed import fails where it was written.
+fn hoisted_use_lines(logic: &str) -> Vec<usize> {
+    let lines: Vec<&str> = logic.lines().collect();
+    let mut hoisted = Vec::new();
+    let mut i = 0;
+    while i < lines.len() {
+        if lines[i].starts_with("use ") {
+            let start = i;
+            while i < lines.len() && !lines[i].trim_end().ends_with(';') {
+                i += 1;
+            }
+            if i < lines.len() {
+                hoisted.extend(start..=i);
+            } else {
+                i = start;
+            }
+        }
+        i += 1;
+    }
+    hoisted
 }
 
 /// Extracts a `Props` field from a `[pub] name: Type[ = default]` chunk, skipping comment lines.
@@ -613,6 +681,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         input.theme_type,
         input.base_dir,
     )
+    .with_locals(scan_locals(logic_source))
     .with_registry(input.registry);
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
@@ -658,6 +727,24 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     code.push("#[allow(unused_imports)] use telar::*;\n", None);
     // Each `.rsx` is wired as its own `mod` (so rust-analyzer treats it as a real module and offers completion); `use super::*` re-imports the sibling components the host re-exports, so cross-component calls like `feature_card()` resolve by bare name just as they did under the old `include!`.
     code.push("#[allow(unused_imports)] use super::*;\n", None);
+
+    // The logic zone's own imports, lifted to module scope: `Props` and each `[preview]` are emitted as siblings
+    // of the component function, so a `use` left in its body would be out of scope for exactly the declarations
+    // most likely to name an imported type. Inside the body the two placements are equivalent.
+    let hoisted_uses = hoisted_use_lines(logic_source);
+    if !hoisted_uses.is_empty() {
+        let lines: Vec<&str> = logic_source.lines().collect();
+        for &j in &hoisted_uses {
+            let src = Some(logic_line_src(j));
+            // Only the statement's own first line takes the attribute; a `use foo::{` spanning several lines
+            // would otherwise get one per continuation, in the middle of the braced list.
+            if lines[j].starts_with("use ") {
+                code.push("#[allow(unused_imports)] ", src);
+            }
+            code.push(lines[j], src);
+            code.push("\n", src);
+        }
+    }
     code.push("\n", None);
 
     // Emit Props struct at file scope (not inside the fn body) so the type is reachable from the function signature and from other crate files.
@@ -702,6 +789,9 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         let mut arg_depth = 0i32;
         for (j, line) in logic.lines().enumerate() {
             let src = Some(logic_line_src(j));
+            if hoisted_uses.contains(&j) {
+                continue;
+            }
             if line.is_empty() {
                 code.push("\n", src);
                 continue;
@@ -957,7 +1047,7 @@ fn node_uses_slot(node: &ViewNode) -> bool {
         }
         ViewNode::ForBlock(b) => view_uses_slot(&b.body),
         ViewNode::MatchBlock(b) => b.arms.iter().any(|arm| view_uses_slot(&arm.body)),
-        ViewNode::LetStmt(_) => false,
+        ViewNode::LetStmt(_) | ViewNode::Comment(_) => false,
     }
 }
 
@@ -982,9 +1072,14 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
         return (None, None, logic.to_string(), None);
     };
 
-    // Include any preceding `#[…]` attribute lines (e.g. `#[derive(Props)]`).
+    // Include any preceding `#[…]` attribute lines (e.g. `#[derive(Props)]`) and the struct's own comment: a
+    // doc comment left behind lands on whatever statement follows it in the function body, describing the wrong
+    // thing in the one place a reader of the generated crate would look for the props.
     let mut start = struct_line;
-    while start > 0 && lines[start - 1].trim().starts_with('#') {
+    while start > 0 && {
+        let above = lines[start - 1].trim();
+        above.starts_with('#') || above.starts_with("//")
+    } {
         start -= 1;
     }
 

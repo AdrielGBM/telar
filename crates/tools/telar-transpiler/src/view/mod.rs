@@ -167,6 +167,10 @@ pub struct ViewGen<'a> {
     counters: HashMap<String, usize>,
     /// When set, `[style]` color references resolve to `use_theme::<Type>().field` instead of generated `COLOR_*` consts, so theme switching takes effect.
     theme_type: Option<String>,
+    /// Identifiers the `[logic]` zone binds. A bare name in the view resolves to one of these before the theme
+    /// is consulted, so a local shadows a same-named token rather than the other way round — see
+    /// [`crate::signal_scan::scan_locals`].
+    locals: Vec<String>,
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,
     /// Loop-variable identifiers currently in scope, cloned per closure like signals.
@@ -204,6 +208,7 @@ impl<'a> ViewGen<'a> {
             constants,
             counters: HashMap::new(),
             theme_type: theme_type.map(str::to_string),
+            locals: Vec::new(),
             indent: 1,
             loop_variables: Vec::new(),
             transition_count: 0,
@@ -292,6 +297,19 @@ impl<'a> ViewGen<'a> {
         } else {
             ChildMode::Literal
         }
+    }
+
+    /// Attaches the names the `[logic]` zone binds, so a bare identifier in the view reaches them before the
+    /// theme. A preview has no logic zone and so passes none.
+    pub(crate) fn with_locals(mut self, locals: Vec<String>) -> Self {
+        self.locals = locals;
+        self
+    }
+
+    /// Whether `name` is a binding the logic zone made, which a bare reference in the view means before any
+    /// same-named theme token.
+    pub(super) fn is_local(&self, name: &str) -> bool {
+        self.locals.iter().any(|local| local == name)
     }
 
     /// Attaches the workspace component registry so `emit_component_call` can consult callee signatures.
@@ -429,6 +447,11 @@ impl<'a> ViewGen<'a> {
             ViewNode::IfBlock(block) => self.emit_if(block),
             ViewNode::ForBlock(block) => self.emit_for(block),
             ViewNode::MatchBlock(block) => self.emit_match(block),
+            // Carried through as a Rust comment: the generated file is what a diagnostic points at, and a note
+            // explaining the markup is worth as much there as it is in the `.rsx`.
+            ViewNode::Comment(text) => ChildEmit::Dynamic {
+                code: format!("{}{text}", self.indent_str()),
+            },
         };
         // Bracket this node's generated lines with source markers so the transpiler can map them back to the `.rsx` line. Nested nodes nest their own markers; `let` statements have no line of their own and inherit the enclosing node's mapping.
         match node {
@@ -436,7 +459,7 @@ impl<'a> ViewGen<'a> {
             ViewNode::IfBlock(block) => wrap_source_markers(emit, block.line),
             ViewNode::ForBlock(block) => wrap_source_markers(emit, block.line),
             ViewNode::MatchBlock(block) => wrap_source_markers(emit, block.line),
-            ViewNode::LetStmt(_) => emit,
+            ViewNode::LetStmt(_) | ViewNode::Comment(_) => emit,
         }
     }
 
@@ -517,6 +540,8 @@ pub(crate) fn forces_child_vec(node: &ViewNode) -> bool {
         | ViewNode::MatchBlock(_)
         | ViewNode::LetStmt(_) => true,
         ViewNode::Element(el) => el.tag == "children",
+        // A note builds nothing, so it must not push a sibling list into the vec shape.
+        ViewNode::Comment(_) => false,
     }
 }
 

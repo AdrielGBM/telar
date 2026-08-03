@@ -29,7 +29,7 @@ pub use registry::{
     TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, color_keywords, is_builtin_tag,
     is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, tag_attr_keys,
 };
-pub use signal_scan::{SignalInfo, scan_signals};
+pub use signal_scan::{SignalInfo, scan_locals, scan_signals};
 
 #[cfg(test)]
 mod tests {
@@ -63,6 +63,75 @@ mod tests {
                 .contains("LayoutScrollArea::new_kept(\"panel.body\""),
             "a keyed scroll is built through the surface's store:\n{}",
             kept.rust_code
+        );
+    }
+
+    /// A theme makes every bare lowercase name a candidate token, and that guess used to beat the file's own
+    /// bindings — so a `let` three lines above was unreachable from the view, and a binding named after a real
+    /// token read the theme instead of itself without any diagnostic. The binding wins now; a name the logic
+    /// zone never bound still reaches the theme.
+    #[test]
+    fn a_logic_binding_beats_a_theme_token_of_the_same_name() {
+        let logic = "let muted = telar::Color::WHITE;\nlet size = 16.0;\n";
+        let out = transpile_source_with_theme(
+            &format!(
+                "[logic]\n{logic}\n[view]\nbox fill:muted\n    spinner color:accent size:size\n"
+            ),
+            "demo",
+            Some("crate::Theme"),
+            None,
+        )
+        .unwrap();
+        assert!(
+            out.rust_code.contains("with_fill(muted)"),
+            "a bound colour is itself, not a token lookup:\n{}",
+            out.rust_code
+        );
+        assert!(
+            out.rust_code.contains("size: size"),
+            "a bound number reaches a prop that is not a colour at all:\n{}",
+            out.rust_code
+        );
+        assert!(
+            out.rust_code.contains("use_theme::<crate::Theme>().accent"),
+            "a name the file never bound still resolves through the theme:\n{}",
+            out.rust_code
+        );
+    }
+
+    /// Only the zone's own bindings are in scope where the view is emitted: a `let` inside a nested `fn` body
+    /// is not, and claiming it would shadow a token the author does mean.
+    #[test]
+    fn a_binding_nested_inside_a_fn_is_not_in_view_scope() {
+        let locals = scan_locals("let outer = 1.0;\nfn helper() {\n    let inner = 2.0;\n}\n");
+        assert_eq!(locals, vec!["outer".to_string()]);
+        assert_eq!(
+            scan_locals("let (a, b) = pair();\nlet mut c: f32 = 0.0;\n"),
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            "a destructuring pattern contributes every name it binds, and a type annotation none"
+        );
+    }
+
+    /// An unrecognised first word in the view is a component call, so a `//` note used to compile into a call
+    /// to a component named `//`, with the words after it read as its attributes. It builds nothing now, and
+    /// it is carried into the generated file — which is what a diagnostic points at.
+    #[test]
+    fn a_note_in_the_view_builds_nothing_and_is_carried_through() {
+        let src = "[view]\ncol\n    // why this box is here\n    text \"hi\"\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains("// why this box is here"),
+            "the note reaches the generated file:\n{code}"
+        );
+        assert!(
+            !code.contains("Props {"),
+            "the note is not a component call:\n{code}"
+        );
+        assert_eq!(
+            code.matches("Text::auto").count(),
+            1,
+            "and it adds no widget of its own:\n{code}"
         );
     }
 
@@ -549,6 +618,46 @@ col @card
             code.contains("#[derive(Props)]"),
             "derive attribute must be preserved"
         );
+    }
+
+    /// A props struct is emitted as a sibling of the component function, so everything it needs has to reach
+    /// file scope with it: the imports its field types name, and the comment that says what it is. Both used to
+    /// stay behind in the function body — the first as a compile error at the struct, the second as a doc
+    /// comment describing whichever statement happened to follow it.
+    #[test]
+    fn a_props_struct_takes_its_imports_and_its_comment_with_it() {
+        let src = "[logic]\nuse crate::model::Item;\n\n/// What the card shows.\npub struct Props {\n    pub item: Option<Item> = None,\n}\n\nlet item = props.item;\n[view]\ntext \"hi\"\n";
+        let out = transpile_source_with_theme(src, "card", None, None).unwrap();
+        let code = &out.rust_code;
+        let struct_pos = code.find("pub struct CardProps").unwrap();
+        assert!(
+            code.find("use crate::model::Item;").unwrap() < struct_pos,
+            "the import the field type names must precede the struct:\n{code}"
+        );
+        assert!(
+            code.find("/// What the card shows.").unwrap() < struct_pos,
+            "the struct's comment travels with it:\n{code}"
+        );
+        assert!(
+            !code.contains("    use crate::model::Item;"),
+            "the import is moved, not duplicated into the body:\n{code}"
+        );
+    }
+
+    /// A field's own comment is prose, and prose has commas in it. Splitting the struct body on every comma
+    /// tore such a field away from its type and dropped it silently — the first sign was a missing field at a
+    /// call site, nowhere near the comment that caused it.
+    #[test]
+    fn a_comma_inside_a_comment_or_string_does_not_split_a_props_field() {
+        let src = "[logic]\npub struct Props {\n    // One meter, never two, because a card is a glance.\n    pub meter: Option<f32> = None,\n    pub label: String = \"a, b\".to_string(),\n    pub tail: bool = false,\n}\n[view]\ntext \"hi\"\n";
+        let out = transpile_source_with_theme(src, "card", None, None).unwrap();
+        let code = &out.rust_code;
+        for field in ["meter", "label", "tail"] {
+            assert!(
+                code.contains(&format!("pub {field}:")),
+                "field `{field}` must survive the split:\n{code}"
+            );
+        }
     }
 
     #[test]
