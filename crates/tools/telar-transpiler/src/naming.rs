@@ -267,12 +267,32 @@ mod tests {
             "charging_glyph"
         );
     }
+
+    #[test]
+    fn replace_whole_word_leaves_a_struct_literal_field_alone() {
+        // The shape every form's save closure has: a field and the signal holding it share a name, and the
+        // clone rewrite used to rename both — leaving a struct literal naming a field that does not exist.
+        assert_eq!(
+            replace_whole_word("Config { vim: vim.peek() }", "vim", "vim_rsx_mv"),
+            "Config { vim: vim_rsx_mv.peek() }"
+        );
+        assert_eq!(
+            replace_whole_word("C { a: 1, vim: vim.peek() }", "vim", "v2"),
+            "C { a: 1, vim: v2.peek() }"
+        );
+        // A type annotation is not a field name, and a path is not a colon.
+        assert_eq!(
+            replace_whole_word("let vim: bool = vim.peek();", "vim", "v2"),
+            "let v2: bool = v2.peek();"
+        );
+        assert_eq!(replace_whole_word("vim::set()", "vim", "v2"), "v2::set()");
+    }
 }
 
 /// Replaces every whole-word occurrence of identifier `from` with `to`, leaving string/char literals and
 /// line comments untouched (a `from` inside `"..."` or after `//` is not an identifier, so rewriting it
 /// would corrupt the text). Skipping the same regions as [`contains_ident`] keeps detection and rewrite in
-/// agreement.
+/// agreement. A struct literal's field name is skipped for the same reason — see [`is_struct_field_name`].
 pub(crate) fn replace_whole_word(s: &str, from: &str, to: &str) -> String {
     let bytes = s.as_bytes();
     let mut result = String::with_capacity(s.len());
@@ -286,6 +306,7 @@ pub(crate) fn replace_whole_word(s: &str, from: &str, to: &str) -> String {
         if s[i..].starts_with(from)
             && (i == 0 || !is_ident_byte(bytes[i - 1]))
             && bytes.get(i + from.len()).is_none_or(|&b| !is_ident_byte(b))
+            && !is_struct_field_name(bytes, i, from.len())
         {
             result.push_str(to);
             i += from.len();
@@ -296,4 +317,22 @@ pub(crate) fn replace_whole_word(s: &str, from: &str, to: &str) -> String {
         }
     }
     result
+}
+
+/// Whether the identifier at `start` names a field in a struct literal (`Config { volume: volume.peek() }`)
+/// rather than a binding. Renaming it there produces a struct that has no such field — which is what a form's
+/// save closure writes on nearly every line, since a field and the signal holding it want the same name.
+fn is_struct_field_name(bytes: &[u8], start: usize, len: usize) -> bool {
+    let mut after = start + len;
+    while bytes.get(after).is_some_and(u8::is_ascii_whitespace) {
+        after += 1;
+    }
+    if bytes.get(after) != Some(&b':') || bytes.get(after + 1) == Some(&b':') {
+        return false;
+    }
+    let mut before = start;
+    while before > 0 && bytes[before - 1].is_ascii_whitespace() {
+        before -= 1;
+    }
+    before > 0 && matches!(bytes[before - 1], b'{' | b',')
 }
