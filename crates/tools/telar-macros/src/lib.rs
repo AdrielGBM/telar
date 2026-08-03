@@ -59,22 +59,16 @@ pub fn app(input: TokenStream) -> TokenStream {
     let is_hot_reload = hot_reload_build();
     let is_preview = std::env::var("TELAR_PREVIEW_BUILD").is_ok();
 
+    // The env-var dispatch lives in `telar::dev_entry` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
     let run_tail = quote! {
+        if ::telar::dev_entry(
+            telar_all_preview_entries,
+            ::telar::AppConfig::from(#config),
+            || #setup,
+        ) {
+            return;
+        }
         #setup
-        if ::std::env::var("TELAR_PREVIEW_LIST").is_ok() {
-            for entry in telar_all_preview_entries() {
-                ::std::println!("{}\t{}", entry.component_name, entry.preview_name);
-            }
-            ::std::process::exit(0);
-        }
-        if ::std::env::var("TELAR_TEST").is_ok() {
-            ::telar::try_run_test(telar_all_preview_entries(), ::telar::AppConfig::from(#config));
-        }
-        if ::std::env::var("TELAR_PREVIEW").is_ok() {
-            if ::telar::try_run_preview(telar_all_preview_entries(), ::telar::AppConfig::from(#config)) {
-                return;
-            }
-        }
         ::telar::run_app_with_name(
             ::telar::AppConfig::from(#config),
             #app_expr,

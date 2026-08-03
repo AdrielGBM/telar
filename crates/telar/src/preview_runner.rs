@@ -29,6 +29,58 @@ pub fn try_run_preview(entries: Vec<PreviewEntry>, config: AppConfig) -> bool {
     false
 }
 
+/// The `cargo telar` dev-loop entry, for an app that wires its own runner instead of expanding [`crate::app!`] —
+/// a multi-surface host, or one on an out-of-tree backend, which reaches [`crate::run_with_platform`] or
+/// [`crate::run_multi_with_platform`] directly. `app!` generates a call to this; anything using `rsx_modules!`
+/// has to make it by hand, and until it does, `cargo telar preview`/`test` silently start the real application.
+///
+/// Returns `true` when it handled the invocation and the caller must return without starting its app.
+///
+/// `setup` runs only on the dev path, never on the way to a normal start — a caller whose setup seeds a world
+/// that exists *for* previews must not pay for it, or change its own startup, every time the app launches. It is
+/// not optional on the dev path, because [`crate::use_theme`] panics when no theme is set: a `[preview]` reading
+/// one would otherwise fail for a reason that has nothing to do with the component under test.
+///
+/// `entries` is a closure so a normal run pays nothing to build a list it will not read. A workspace whose
+/// `.rsx` files live in several crates concatenates one `telar_all_preview_entries()` per crate here — each
+/// `rsx_modules!` invocation emits its own, and they are per crate rather than per process.
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub fn dev_entry<F>(entries: F, config: AppConfig, setup: impl FnOnce()) -> bool
+where
+    F: Fn() -> Vec<PreviewEntry>,
+{
+    let wanted = [
+        "TELAR_PREVIEW_LIST",
+        "TELAR_TEST",
+        "TELAR_PREVIEW",
+        "TELAR_PREVIEW_PNG",
+    ]
+    .iter()
+    .any(|var| std::env::var(var).is_ok());
+    if !wanted {
+        return false;
+    }
+    setup();
+    // Checked before `TELAR_PREVIEW` so an app built with both hosts can still ask for pictures rather than a window; the value is the directory to write them to.
+    #[cfg(feature = "preview-headless")]
+    if let Ok(out_dir) = std::env::var("TELAR_PREVIEW_PNG") {
+        crate::run_preview_png(entries(), config, std::path::Path::new(&out_dir));
+    }
+    if std::env::var("TELAR_PREVIEW_LIST").is_ok() {
+        for entry in entries() {
+            println!("{}\t{}", entry.component_name, entry.preview_name);
+        }
+        std::process::exit(0);
+    }
+    if std::env::var("TELAR_TEST").is_ok() {
+        try_run_test(entries(), config);
+    }
+    if std::env::var("TELAR_PREVIEW").is_ok() {
+        return try_run_preview(entries(), config);
+    }
+    false
+}
+
 /// Renders every preview component headlessly (build → layout → flatten) and exits with a non-zero code if any panics or returns a layout error. Backs `cargo telar test`, entered via the `TELAR_TEST` env var set on the app binary.
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {

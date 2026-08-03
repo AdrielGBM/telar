@@ -205,4 +205,4 @@ pub use telar_macros::{app, rsx_modules, t};
 #[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]
 pub use preview_runner::make_hot_preview_app;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub use preview_runner::{try_run_preview, try_run_test};
+pub use preview_runner::{dev_entry, try_run_preview, try_run_test};
