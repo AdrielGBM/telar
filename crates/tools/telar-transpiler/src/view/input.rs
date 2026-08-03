@@ -4,7 +4,7 @@ use telar_parser::Element;
 
 use crate::style::{format_number, layout_prop_call};
 
-use super::signals::{normalize_closure, substitute_handles, wrap_signal_clones};
+use super::signals::{normalize_closure, rust_str, substitute_handles, wrap_signal_clones};
 use super::{ChildEmit, ViewGen};
 
 impl ViewGen<'_> {
@@ -42,7 +42,10 @@ impl ViewGen<'_> {
         // Remaining attrs are layout (width/height/…); `value`/`size`/`color`/`on_submit` are consumed above.
         let mut extra = String::new();
         for a in &el.attributes {
-            if matches!(a.key.as_str(), "value" | "size" | "color" | "on_submit") {
+            if matches!(
+                a.key.as_str(),
+                "value" | "size" | "color" | "on_submit" | "placeholder"
+            ) {
                 continue;
             }
             if let Some(call) = layout_prop_call(&a.key, &a.value, self.theme_type.as_deref()) {
@@ -67,10 +70,30 @@ impl ViewGen<'_> {
                 wrap_signal_clones(&[a.value.as_str()], format!("move {closure}"))
             });
 
-        let tail = match on_submit {
-            Some(c) => format!(".on_submit({c})"),
-            None => String::new(),
-        };
+        // The hint shown while the field is empty: a quoted literal, a `t"…"` translation, or any expression
+        // yielding a `String`. The widget has taken one since it existed; without a spelling for it, every form
+        // field in a real application had to stay hand-written Rust just to say what it is for.
+        let placeholder = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "placeholder")
+            .map(|a| {
+                if a.i18n {
+                    self.i18n_lookup(&a.value)
+                } else if a.is_quoted {
+                    format!("{}.to_string()", rust_str(&a.value))
+                } else {
+                    a.value.trim().to_string()
+                }
+            });
+
+        let mut tail = String::new();
+        if let Some(c) = on_submit {
+            tail.push_str(&format!(".on_submit({c})"));
+        }
+        if let Some(p) = placeholder {
+            tail.push_str(&format!(".placeholder({p})"));
+        }
         let code =
             format!("{pad}let {var} = Input::new({value_expr}, {layout_style}, {style})?{tail};");
         ChildEmit::Simple { name: var, code }
