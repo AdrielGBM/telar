@@ -6,10 +6,20 @@ use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
 
-/// The off-track fill.
+/// The off-track fill with no theme to ask — a light neutral, which reads on a light page and is a bright slab
+/// on a dark one.
 const OFF_TRACK: Color = Color::rgba(0.80, 0.82, 0.85, 1.0);
+
 /// How far the knob slides between off (left inset) and on (right inset): track 40 − knob 16 − 3px each side.
 const KNOB_TRAVEL: f32 = 18.0;
+
+/// Themed, the off track is the strongest of the three highlight washes: a switch has to read as a *track*
+/// against the surface it sits on, whichever end of the ramp that surface is.
+fn off_track() -> Color {
+    use_theme_tokens()
+        .map(|t| t.highlight_high())
+        .unwrap_or(OFF_TRACK)
+}
 
 /// A labelled switch: a 40×22 pill whose knob sits left (off) / right (on) and whose track fills with the
 /// accent while on; tapping the row toggles its bound `checked` signal (and fires `on_toggle`). High-level
@@ -80,7 +90,7 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         .unwrap_or(shared::DEFAULT_ACCENT)
                 })
             } else {
-                OFF_TRACK
+                off_track()
             };
             RectStyle::default()
                 .with_fill(fill)
