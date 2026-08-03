@@ -1,5 +1,5 @@
-use telar::SvgData;
 use std::sync::Arc;
+use telar::SvgData;
 
 pub fn make_icon() -> Arc<SvgData> {
     let src = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">

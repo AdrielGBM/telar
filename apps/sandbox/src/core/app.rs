@@ -1,9 +1,9 @@
 use crate::core::theme::theme;
 use telar::{
     AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event, EventResult,
-    JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NavPage,
-    NavTransition, Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, RwSignal,
-    ShapeStyle, SizeDimension, StyledContainer, TabHost, TabStacks, Text, TextStyle, compute_layout,
+    JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NavPage, NavTransition,
+    Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle,
+    SizeDimension, StyledContainer, TabHost, TabStacks, Text, TextStyle, compute_layout,
     hot_signal, mark_dirty, new_container, new_leaf, reset_layout_runtime, set_display,
     set_overlay_host, signal, transform_pointer, use_direction, use_dismiss_depth,
 };
@@ -69,15 +69,31 @@ const SECTIONS: &[SectionDef] = sections![
     ("Buttons", crate::features_buttons, "buttons.rsx"),
     ("Form controls", crate::features_forms, "forms.rsx"),
     ("Sliders", crate::features_sliders, "sliders.rsx"),
-    ("Text fields", crate::features_text_fields, "text_fields.rsx"),
+    (
+        "Text fields",
+        crate::features_text_fields,
+        "text_fields.rsx"
+    ),
     ("Stepper", crate::features_steppers, "steppers.rsx"),
-    ("Progress & spinner", crate::features_indicators, "indicators.rsx"),
-    ("Tabs & accordion", crate::features_navigation, "navigation.rsx"),
+    (
+        "Progress & spinner",
+        crate::features_indicators,
+        "indicators.rsx"
+    ),
+    (
+        "Tabs & accordion",
+        crate::features_navigation,
+        "navigation.rsx"
+    ),
     ("Badges & chips", crate::features_pills, "pills.rsx"),
     ("Menus & select", crate::features_menus, "menus.rsx"),
     ("Dialogs & overlays", crate::features_dialogs, "dialogs.rsx"),
     ("Reactivity", crate::features_reactivity, "reactivity.rsx"),
-    ("Transitions", crate::features_transitions, "transitions.rsx"),
+    (
+        "Transitions",
+        crate::features_transitions,
+        "transitions.rsx"
+    ),
     ("Motion", crate::features_motion, "motion.rsx"),
 ];
 
@@ -305,9 +321,8 @@ fn nav_rect_hover(active: bool) -> RectStyle {
 /// layout shifting when history appears.
 fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Live when there is either a dialog to close or a page to pop; both reads are reactive, so the control lights up the moment a modal opens even at the root of a section's stack.
-    let live = move |stacks: &TabStacks<usize, SectionRoute>| {
-        use_dismiss_depth() > 0 || stacks.can_pop()
-    };
+    let live =
+        move |stacks: &TabStacks<usize, SectionRoute>| use_dismiss_depth() > 0 || stacks.can_pop();
     let on_label = stacks.clone();
     let label = Text::auto(
         || "\u{2190} Back".to_string(),
@@ -402,7 +417,9 @@ fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIte
 }
 
 /// Full sidebar: the `.rsx` header + theme switcher, then the Rust-built section nav.
-fn build_sidebar(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn build_sidebar(
+    stacks: TabStacks<usize, SectionRoute>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let header_theme = crate::core_sidebar()?;
     let nav = build_nav(stacks)?;
     Ok(Box::new(Container::new(
@@ -816,9 +833,10 @@ mod tests {
             Navigator::new(SectionRoute::Overview)
         });
         let factory = stacks.clone();
-        let host = TabHost::new(stacks.clone(), move |section: &usize, route: &SectionRoute| {
-            build_page(&factory, *section, *route)
-        })
+        let host = TabHost::new(
+            stacks.clone(),
+            move |section: &usize, route: &SectionRoute| build_page(&factory, *section, *route),
+        )
         .unwrap()
         .with_policy(PagePolicy::Transient);
         (host, stacks)

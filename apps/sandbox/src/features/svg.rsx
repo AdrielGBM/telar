@@ -1,6 +1,6 @@
 [logic]
 use crate::core::theme::theme;
-use crate::shared::demo_svgs::{make_icon, make_logo, make_blurred};
+use crate::shared::demo_svgs::{make_blurred, make_icon, make_logo};
 
 // Each returns an Arc<SvgData> parsed at runtime (the app enables the dynamic-svg feature).
 let icon = make_icon();

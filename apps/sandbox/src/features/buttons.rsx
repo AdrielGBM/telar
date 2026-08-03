@@ -37,9 +37,9 @@ col gap:20
     example title:"hover — a container restyles while the pointer is over it (mouse only)"
         card gap:10
             row gap:10 wrap
-                box @center fill:surface_alt radius:10 pad:16 hover_style:fill:primary width:150 height:64
+                box @center fill:surface_alt radius:10 pad:16 hover_style(fill:primary) width:150 height:64
                     text "Fill on hover" size:13 color:ink
-                box @center fill:surface_alt stroke:border radius:10 pad:16 hover_style:stroke:primary radius:16 width:150 height:64
+                box @center fill:surface_alt stroke:border radius:10 pad:16 hover_style(stroke:primary) radius:16 width:150 height:64
                     text "Stroke + radius" size:13 color:ink
             text "Each box carries its own hover_style(...) — different hovers in one file, no signals." size:12 color:muted
         code_line code:"box fill:surface_alt hover_style(fill:primary)      (swap style while hovered)"
