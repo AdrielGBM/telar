@@ -8,11 +8,21 @@ use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
-const PAD_X: f32 = 16.0;
-const PAD_Y: f32 = 8.0;
-const GAP: f32 = 4.0;
-const FONT_SIZE: f32 = 14.0;
-const RADIUS: f32 = 6.0;
+fn pad_x() -> f32 {
+    shared::spacing() * 2.0
+}
+fn pad_y() -> f32 {
+    shared::spacing()
+}
+fn gap() -> f32 {
+    shared::spacing() * 0.5
+}
+fn font_size() -> f32 {
+    shared::font_size()
+}
+fn radius() -> f32 {
+    shared::radius() * 1.5
+}
 const INK_MUTED: Color = Color::rgba(0.45, 0.45, 0.52, 1.0);
 
 /// A horizontal tab bar: one button per label, driving a `selected` index. Renders only the row of tab
@@ -57,7 +67,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let label_widget = Text::auto(
             move || label.to_string(),
             LayoutStyle::new(),
-            move || TextStyle::new(FONT_SIZE, tab_ink(label_selected.get() == idx)),
+            move || TextStyle::new(font_size(), tab_ink(label_selected.get() == idx)),
         )?;
 
         let base_selected = selected.clone();
@@ -70,8 +80,8 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .flex_row()
                 .align_items(AlignItems::CENTER)
                 .justify_content(JustifyContent::CENTER)
-                .padding_horizontal(PAD_X)
-                .padding_vertical(PAD_Y),
+                .padding_horizontal(pad_x())
+                .padding_vertical(pad_y()),
             move |_r| tab_rect(base_selected.get() == idx, base_color.as_ref(), false),
             vec![box_item(label_widget)],
         )?
@@ -80,14 +90,14 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         tab_items.push(box_item(tab));
     }
 
-    let row = Container::new(LayoutStyle::new().flex_row().gap(GAP), tab_items)?;
+    let row = Container::new(LayoutStyle::new().flex_row().gap(gap()), tab_items)?;
     Ok(box_item(row))
 }
 
 /// The tab pill's paint: the active tab fills with the accent (a touch darker on hover); an inactive tab
 /// blends in until hovered, when it lifts to a faint accent wash.
 fn tab_rect(active: bool, color: &dyn Fn() -> Color, hovered: bool) -> RectStyle {
-    let radius = BorderRadius::all(RADIUS);
+    let radius = BorderRadius::all(radius());
     let accent = shared::resolve(color, || {
         use_theme_tokens()
             .map(|t| t.primary())

@@ -12,10 +12,18 @@ use ui_core::{
 
 use crate::shared;
 
-const PAD_X: f32 = 14.0;
-const PAD_Y: f32 = 10.0;
-const TITLE_SIZE: f32 = 14.0;
-const CARET_SIZE: f32 = 12.0;
+fn pad_x() -> f32 {
+    shared::spacing() * 1.75
+}
+fn pad_y() -> f32 {
+    shared::spacing() * 1.25
+}
+fn title_size() -> f32 {
+    shared::font_size()
+}
+fn caret_size() -> f32 {
+    shared::font_size() * 0.85
+}
 const CARET_CLOSED: &str = "\u{25B8}"; // ▸
 const CARET_OPEN: &str = "\u{25BE}"; // ▾
 
@@ -76,14 +84,14 @@ pub fn accordion(
                     .map(|t| t.primary())
                     .unwrap_or(shared::DEFAULT_ACCENT)
             });
-            TextStyle::new(CARET_SIZE, accent)
+            TextStyle::new(caret_size(), accent)
         },
     )?;
 
     let title_widget = Text::auto(
         move || title(),
         LayoutStyle::new(),
-        || TextStyle::new(TITLE_SIZE, shared::ink()),
+        || TextStyle::new(title_size(), shared::ink()),
     )?;
 
     let toggle_open = open.clone();
@@ -93,8 +101,8 @@ pub fn accordion(
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::SPACE_BETWEEN)
             .gap(8.0)
-            .padding_horizontal(PAD_X)
-            .padding_vertical(PAD_Y),
+            .padding_horizontal(pad_x())
+            .padding_vertical(pad_y()),
         |_r| RectStyle::default(),
         vec![box_item(title_widget), box_item(caret)],
     )?

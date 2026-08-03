@@ -5,10 +5,18 @@ use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
-const PAD_X: f32 = 8.0;
-const PAD_Y: f32 = 2.0;
-const FONT_SIZE: f32 = 12.0;
-const RADIUS: f32 = 10.0;
+fn pad_x() -> f32 {
+    shared::spacing()
+}
+fn pad_y() -> f32 {
+    shared::spacing() * 0.25
+}
+fn font_size() -> f32 {
+    shared::font_size() * 0.85
+}
+fn radius() -> f32 {
+    shared::radius() * 2.5
+}
 
 /// A small solid pill tag: an accent-filled box with a short label in a contrasting on-accent colour.
 /// Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in
@@ -42,12 +50,12 @@ pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .flex_row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .padding_horizontal(PAD_X)
-            .padding_vertical(PAD_Y),
+            .padding_horizontal(pad_x())
+            .padding_vertical(pad_y()),
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), fill_default))
-                .with_radius(BorderRadius::all(RADIUS))
+                .with_radius(BorderRadius::all(radius()))
         },
         vec![box_item(label_widget)],
     )?;
@@ -67,7 +75,7 @@ fn on_accent_style() -> TextStyle {
     let color = use_theme_tokens()
         .map(|t| t.on_primary())
         .unwrap_or(Color::WHITE);
-    TextStyle::new(FONT_SIZE, color)
+    TextStyle::new(font_size(), color)
 }
 
 #[cfg(test)]

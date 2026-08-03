@@ -5,7 +5,7 @@ use ui_core::LayoutItem;
 use crate::dropdown;
 // Re-exported for the test module below, which reads these via `use super::*` to compute click points.
 #[cfg(test)]
-use crate::dropdown::{PANEL_PAD, PANEL_WIDTH, ROW_HEIGHT, TRIGGER_HEIGHT};
+use crate::dropdown::{PANEL_WIDTH, ROW_HEIGHT, TRIGGER_HEIGHT, panel_pad};
 #[cfg(test)]
 use ui_core::track_layout;
 
@@ -142,7 +142,7 @@ mod tests {
 
         // Item index 1 ("Duplicate") sits at the trigger's bottom + panel padding + one row.
         let ox = (PANEL_WIDTH / 2.0) as f64;
-        let oy = (TRIGGER_HEIGHT + PANEL_PAD + ROW_HEIGHT + ROW_HEIGHT / 2.0) as f64;
+        let oy = (TRIGGER_HEIGHT + panel_pad() + ROW_HEIGHT + ROW_HEIGHT / 2.0) as f64;
         route(&mut tree, &press(ox, oy));
         route(&mut tree, &release(ox, oy));
 

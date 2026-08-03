@@ -1,3 +1,4 @@
+use crate::shared;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
@@ -5,14 +6,26 @@ use theme_core::use_theme_tokens;
 use ui_core::{Container, Input, LayoutItem, StyledContainer, Text, box_item};
 
 /// Fallback text colour ("ink") when `color` is unset, matching the button catalogue's ghost-variant text.
-const DEFAULT_INK: Color = Color::rgba(0.12, 0.12, 0.16, 1.0);
-const BOX_RADIUS: f32 = 8.0;
-const PAD_X: f32 = 12.0;
-const PAD_Y: f32 = 10.0;
+
+fn box_radius() -> f32 {
+    shared::radius() * 2.0
+}
+fn pad_x() -> f32 {
+    shared::spacing() * 1.5
+}
+fn pad_y() -> f32 {
+    shared::spacing() * 1.25
+}
 const DEFAULT_WIDTH: f32 = 300.0;
-const FONT_SIZE: f32 = 15.0;
-const LABEL_SIZE: f32 = 12.0;
-const LABEL_GAP: f32 = 6.0;
+fn font_size() -> f32 {
+    shared::font_size() * 1.07
+}
+fn label_size() -> f32 {
+    shared::font_size() * 0.85
+}
+fn label_gap() -> f32 {
+    shared::spacing() * 0.75
+}
 
 /// A labelled, bordered text input: the `Input` primitive (kernel, unstyled) wrapped in a padded/rounded
 /// box (see the raw `box fill:surface_alt stroke:border radius:8 pad_x:12 pad_y:10 > input` pattern in
@@ -29,7 +42,7 @@ pub struct TextFieldProps {
     pub label: Box<dyn Fn() -> String>,
     /// Box width in logical px. `0.0` (the default) means "unset" and resolves to `DEFAULT_WIDTH`.
     pub width: f32,
-    /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset" -> `DEFAULT_INK`. A
+    /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset" -> `shared::ink()`. A
     /// closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s
     /// `fill`/`outline`.
     pub color: Box<dyn Fn() -> Color>,
@@ -71,13 +84,13 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     // clicked to begin typing.
     let mut input = Input::new(
         value.clone(),
-        LayoutStyle::new().height(FONT_SIZE * 1.4),
+        LayoutStyle::new().height(font_size() * 1.4),
         move || {
             let c = color();
             TextStyle::new(
-                FONT_SIZE,
+                font_size(),
                 if c == Color::TRANSPARENT {
-                    DEFAULT_INK
+                    shared::ink()
                 } else {
                     c
                 },
@@ -94,13 +107,13 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         LayoutStyle::new()
             .flex_column()
             .width(width)
-            .padding_horizontal(PAD_X)
-            .padding_vertical(PAD_Y),
+            .padding_horizontal(pad_x())
+            .padding_vertical(pad_y()),
         |_r| {
             RectStyle::default()
-                .with_fill(Color::rgba(0.5, 0.5, 0.55, 0.10))
-                .with_stroke(Stroke::new(Color::rgba(0.5, 0.5, 0.55, 0.35), 1.0))
-                .with_radius(BorderRadius::all(BOX_RADIUS))
+                .with_fill(shared::surface_alt())
+                .with_stroke(Stroke::new(shared::border(), 1.0))
+                .with_radius(BorderRadius::all(box_radius()))
         },
         vec![box_item(field)],
     )?;
@@ -110,11 +123,14 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     }
     let caption = Text::new(
         move || label(),
-        LayoutStyle::new().height(LABEL_SIZE * 1.4),
-        || TextStyle::new(LABEL_SIZE, muted_color()),
+        LayoutStyle::new().height(label_size() * 1.4),
+        || TextStyle::new(label_size(), muted_color()),
     )?;
     let col = Container::new(
-        LayoutStyle::new().flex_column().gap(LABEL_GAP).width(width),
+        LayoutStyle::new()
+            .flex_column()
+            .gap(label_gap())
+            .width(width),
         vec![box_item(caption), box_item(box_)],
     )?;
     Ok(box_item(col))
@@ -211,8 +227,8 @@ mod tests {
         let mut tree = ComponentList::new(field);
         let _ = tree.commands(); // build the initial segments before dispatching events
 
-        let press_x = (rect.x + PAD_X + 2.0) as f64;
-        let press_y = (rect.y + PAD_Y + 2.0) as f64;
+        let press_x = (rect.x + pad_x() + 2.0) as f64;
+        let press_y = (rect.y + pad_y() + 2.0) as f64;
         tree.on_event(&press(press_x, press_y));
         tree.on_event(&Event::KeyPressed {
             key: Key::Char('z'),
@@ -238,8 +254,8 @@ mod tests {
         let mut tree = ComponentList::new(field);
         let _ = tree.commands();
 
-        let press_x = (rect.x + PAD_X + 2.0) as f64;
-        let press_y = (rect.y + PAD_Y + 2.0) as f64;
+        let press_x = (rect.x + pad_x() + 2.0) as f64;
+        let press_y = (rect.y + pad_y() + 2.0) as f64;
         tree.on_event(&press(press_x, press_y));
         tree.on_event(&Event::KeyPressed {
             key: Key::Named(NamedKey::Enter),

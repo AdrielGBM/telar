@@ -8,8 +8,12 @@ use crate::shared;
 
 /// Panel width when `width` is unset (`0.0`).
 const DEFAULT_WIDTH: f32 = 280.0;
-const PANEL_PAD: f32 = 20.0;
-const PANEL_GAP: f32 = 12.0;
+fn panel_pad() -> f32 {
+    shared::spacing() * 2.5
+}
+fn panel_gap() -> f32 {
+    shared::spacing() * 1.5
+}
 
 /// A side panel that covers the page from the left or right edge over a dimming scrim. When `open` is true it
 /// portals an `Overlay` with a translucent scrim and a full-height opaque panel pinned to `side`, holding the
@@ -86,8 +90,8 @@ fn build_open_drawer(
         LayoutStyle::new()
             .flex_column()
             .width(width)
-            .gap(PANEL_GAP)
-            .padding_all(PANEL_PAD),
+            .gap(panel_gap())
+            .padding_all(panel_pad()),
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), || shared::DEFAULT_SURFACE))

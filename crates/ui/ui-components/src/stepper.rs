@@ -9,12 +9,22 @@ use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 use crate::shared;
 
 /// − / + button side length (px) — square, small enough to sit beside the value without dominating it.
-const BUTTON_SIZE: f32 = 24.0;
+fn button_size() -> f32 {
+    shared::icon_size() * 1.5
+}
 /// Gap between the − button, the value, and the + button.
-const GAP: f32 = 8.0;
-const GLYPH_SIZE: f32 = 14.0;
-const RADIUS: f32 = 4.0;
-const VALUE_SIZE: f32 = 14.0;
+fn gap() -> f32 {
+    shared::spacing()
+}
+fn glyph_size() -> f32 {
+    shared::font_size()
+}
+fn radius() -> f32 {
+    shared::radius()
+}
+fn value_size() -> f32 {
+    shared::font_size()
+}
 
 /// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see
 /// `button.rs`) plus a reactive `Text::auto` readout; lives in `ui-components`, not the kernel. `value` is
@@ -105,14 +115,14 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             }
         },
         LayoutStyle::new(),
-        || TextStyle::new(VALUE_SIZE, shared::ink()),
+        || TextStyle::new(value_size(), shared::ink()),
     )?;
 
     let row = Container::new(
         LayoutStyle::new()
             .flex_row()
             .align_items(AlignItems::CENTER)
-            .gap(GAP),
+            .gap(gap()),
         vec![box_item(minus), box_item(display), box_item(plus)],
     )?;
     Ok(box_item(row))
@@ -130,15 +140,15 @@ fn stepper_button(
         LayoutStyle::new(),
         // Always the filled variant (never ghost/outline), so the glyph is always white, per `button.rs`'s
         // `label_color` filled case.
-        || TextStyle::new(GLYPH_SIZE, Color::WHITE),
+        || TextStyle::new(glyph_size(), Color::WHITE),
     )?;
     let container = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .width(BUTTON_SIZE)
-            .height(BUTTON_SIZE),
+            .width(button_size())
+            .height(button_size()),
         move |_r| {
             let fill = shared::resolve(color.as_ref(), || {
                 use_theme_tokens()
@@ -147,7 +157,7 @@ fn stepper_button(
             });
             RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(RADIUS))
+                .with_radius(BorderRadius::all(radius()))
         },
         vec![box_item(glyph_widget)],
     )?
@@ -185,10 +195,10 @@ mod tests {
     }
 
     // Taps (press then release inside) − and + at their expected edge positions: the row has no padding, so
-    // the − button occupies its left BUTTON_SIZE px and the + button its right BUTTON_SIZE px.
+    // the − button occupies its left button_size() px and the + button its right button_size() px.
     fn tap_minus(widget: &mut Box<dyn LayoutItem>, r: geometry_core::Rect) {
         let (x, y) = (
-            (r.x + BUTTON_SIZE / 2.0) as f64,
+            (r.x + button_size() / 2.0) as f64,
             (r.y + r.height / 2.0) as f64,
         );
         widget.on_event(&press(x, y));
@@ -196,7 +206,7 @@ mod tests {
     }
     fn tap_plus(widget: &mut Box<dyn LayoutItem>, r: geometry_core::Rect) {
         let (x, y) = (
-            (r.x + r.width - BUTTON_SIZE / 2.0) as f64,
+            (r.x + r.width - button_size() / 2.0) as f64,
             (r.y + r.height / 2.0) as f64,
         );
         widget.on_event(&press(x, y));

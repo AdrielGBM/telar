@@ -9,10 +9,44 @@ pub trait Theme: 'static {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-// Opt-in semantic-token contract the built-in component catalogue reads through. A theme implements this so a component can resolve semantic colors without knowing the concrete theme type. Only the two primary tokens are mandatory; the rest carry defaults so a theme can omit them.
+/// Opt-in semantic-token contract the built-in component catalogue reads through, so a component can resolve a
+/// token without knowing the concrete theme type.
+///
+/// **Every method carries a default**, which makes `impl ThemeTokens for MyTheme {}` valid and each token an
+/// independent opt-in: a theme answers the questions it cares about and lets the catalogue keep its own answer
+/// for the rest. This trait is deliberately not where a theme's vocabulary lives — that belongs to the theme's
+/// own type, reachable in full through [`use_theme`]. What is here is only the subset a component written
+/// without knowledge of that type has to be able to ask for.
+///
+/// The metric tokens are *bases*, not a size scale. A catalogue component derives its own proportions from
+/// [`font_size`](Self::font_size) rather than asking for a named role, because naming the roles would decide for
+/// every application which roles may exist. One number scales the type; the component keeps its own ratios.
 pub trait ThemeTokens: 'static {
-    fn primary(&self) -> Color;
-    fn on_primary(&self) -> Color;
+    fn primary(&self) -> Color {
+        Color::rgba(0.24, 0.47, 0.98, 1.0)
+    }
+    fn on_primary(&self) -> Color {
+        Color::rgba(1.0, 1.0, 1.0, 1.0)
+    }
+
+    /// Base corner radius in px. A component rounds by this, or by a multiple of it where its shape asks for
+    /// one (a pill is not a card).
+    fn radius(&self) -> f32 {
+        4.0
+    }
+    /// Base gap between adjacent things in px, and the unit a component derives its own padding from.
+    fn spacing(&self) -> f32 {
+        8.0
+    }
+    /// Base body text size in px. Every catalogue component scales its own text off this, so changing it scales
+    /// the whole type ramp.
+    fn font_size(&self) -> f32 {
+        14.0
+    }
+    /// Default size of a standalone icon in px.
+    fn icon_size(&self) -> f32 {
+        16.0
+    }
 
     fn muted(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
@@ -25,6 +59,11 @@ pub trait ThemeTokens: 'static {
     /// it (e.g. a dark theme returns a light ink) so component text stays legible on its surface.
     fn ink(&self) -> Color {
         Color::rgba(0.15, 0.15, 0.2, 1.0)
+    }
+    /// The background a floating panel sits on — a menu, a dropdown, a dialog. Opaque by default, because the
+    /// thing it covers must not read through it.
+    fn surface(&self) -> Color {
+        Color::rgba(1.0, 1.0, 1.0, 1.0)
     }
     /// A quiet, low-contrast surface tone for chip/tag backgrounds. Defaults to a faint neutral wash.
     fn surface_alt(&self) -> Color {

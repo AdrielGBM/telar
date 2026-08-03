@@ -6,13 +6,27 @@ use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
-const PAD_X: f32 = 10.0;
-const PAD_Y: f32 = 4.0;
-const RADIUS: f32 = 12.0;
-const GAP: f32 = 6.0;
-const FONT_SIZE: f32 = 13.0;
-const CLOSE_SIZE: f32 = 12.0;
-const DOT_SIZE: f32 = 6.0;
+fn pad_x() -> f32 {
+    shared::spacing() * 1.25
+}
+fn pad_y() -> f32 {
+    shared::spacing() * 0.5
+}
+fn radius() -> f32 {
+    shared::radius() * 3.0
+}
+fn gap() -> f32 {
+    shared::spacing() * 0.75
+}
+fn font_size() -> f32 {
+    shared::font_size() * 0.93
+}
+fn close_size() -> f32 {
+    shared::font_size() * 0.85
+}
+fn dot_size() -> f32 {
+    shared::spacing() * 0.75
+}
 
 /// A small outlined tag, quieter than `badge`'s solid fill: a bordered surface pill with normal ink text,
 /// an optional small accent dot when `color` is set, and an optional `×` affordance that fires `on_close`.
@@ -56,7 +70,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     if (color.as_ref())() != Color::TRANSPARENT {
         let dot_color = Rc::clone(&color);
         let dot = StyledContainer::new(
-            LayoutStyle::new().width(DOT_SIZE).height(DOT_SIZE),
+            LayoutStyle::new().width(dot_size()).height(dot_size()),
             move |_r| dot_style(dot_color.as_ref()),
             vec![],
         )?;
@@ -68,7 +82,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label_widget = Text::auto(
         move || label(),
         LayoutStyle::new(),
-        || TextStyle::new(FONT_SIZE, shared::ink()),
+        || TextStyle::new(font_size(), shared::ink()),
     )?;
     children.push(box_item(label_widget));
 
@@ -76,7 +90,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let close_label = Text::auto(
             || "×".to_string(),
             LayoutStyle::new(),
-            || TextStyle::new(CLOSE_SIZE, shared::ink()),
+            || TextStyle::new(close_size(), shared::ink()),
         )?;
         let close = StyledContainer::new(
             LayoutStyle::new().flex_row(),
@@ -91,7 +105,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new()
             .flex_row()
             .align_items(AlignItems::CENTER)
-            .gap(GAP),
+            .gap(gap()),
         children,
     )?;
 
@@ -99,13 +113,13 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new()
             .flex_row()
             .align_items(AlignItems::CENTER)
-            .padding_horizontal(PAD_X)
-            .padding_vertical(PAD_Y),
+            .padding_horizontal(pad_x())
+            .padding_vertical(pad_y()),
         |_r| {
             RectStyle::default()
                 .with_fill(shared::surface_alt())
                 .with_stroke(Stroke::new(shared::border(), 1.0))
-                .with_radius(BorderRadius::all(RADIUS))
+                .with_radius(BorderRadius::all(radius()))
         },
         vec![box_item(row)],
     )?;
@@ -115,7 +129,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 fn dot_style(color: &dyn Fn() -> Color) -> RectStyle {
     RectStyle::default()
         .with_fill(color())
-        .with_radius(BorderRadius::all(DOT_SIZE / 2.0))
+        .with_radius(BorderRadius::all(dot_size() / 2.0))
 }
 
 #[cfg(test)]
@@ -192,7 +206,7 @@ mod tests {
         let r = rect.get();
         // Tap just inside the pill's right padding, where the × close target sits.
         let (cx, cy) = (
-            (r.x + r.width - PAD_X - 3.0) as f64,
+            (r.x + r.width - pad_x() - 3.0) as f64,
             (r.y + r.height / 2.0) as f64,
         );
         chip.on_event(&Event::PointerPressed {

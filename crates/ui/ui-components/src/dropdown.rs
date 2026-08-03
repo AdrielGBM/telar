@@ -19,11 +19,9 @@ use crate::shared;
 pub(crate) const PANEL_WIDTH: f32 = 180.0;
 pub(crate) const TRIGGER_HEIGHT: f32 = 36.0;
 pub(crate) const ROW_HEIGHT: f32 = 32.0;
-pub(crate) const PANEL_PAD: f32 = 4.0;
-
-const INK: Color = Color::rgba(0.12, 0.13, 0.16, 1.0);
-const SURFACE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
-const BORDER: Color = Color::rgba(0.85, 0.86, 0.9, 1.0);
+pub(crate) fn panel_pad() -> f32 {
+    shared::spacing() * 0.5
+}
 
 /// The trigger + anchored-panel scaffold shared by `menu` and `select`: a bordered trigger button opens a
 /// blocking overlay whose transparent backdrop dismisses on click-away, and whose anchored panel lists `rows`;
@@ -48,7 +46,7 @@ pub(crate) fn dropdown(
     // Trigger: a bordered button with the label; a tap toggles `open`.
     // `auto` (measured) so the label has width in this row; `single_line` only sets height → width 0 → invisible.
     let label_text = Text::auto(trigger_label, LayoutStyle::new(), || {
-        TextStyle::new(14.0, INK)
+        TextStyle::new(shared::font_size(), shared::ink())
     })?;
     let trigger_style = {
         let color = color.clone();
@@ -123,7 +121,7 @@ pub(crate) fn dropdown(
                 let text = Text::auto(
                     move || label.to_string(),
                     LayoutStyle::new(),
-                    || TextStyle::new(14.0, INK),
+                    || TextStyle::new(shared::font_size(), shared::ink()),
                 )?;
                 let row = StyledContainer::new(
                     LayoutStyle::new()
@@ -146,7 +144,7 @@ pub(crate) fn dropdown(
                 LayoutStyle::new()
                     .flex_column()
                     .width(PANEL_WIDTH)
-                    .padding_all(PANEL_PAD)
+                    .padding_all(panel_pad())
                     .margin_left(anchor.x)
                     .margin_top(anchor.y + anchor.height),
                 |_r| panel_rect_style(),
@@ -187,15 +185,15 @@ fn trigger_rect_style(color: &dyn Fn() -> Color) -> RectStyle {
             .unwrap_or(shared::DEFAULT_ACCENT)
     });
     RectStyle::default()
-        .with_fill(SURFACE)
+        .with_fill(shared::surface())
         .with_stroke(Stroke::new(accent, 1.0))
         .with_radius(BorderRadius::all(6.0))
 }
 
 fn panel_rect_style() -> RectStyle {
     RectStyle::default()
-        .with_fill(SURFACE)
-        .with_stroke(Stroke::new(BORDER, 1.0))
+        .with_fill(shared::surface())
+        .with_stroke(Stroke::new(shared::border(), 1.0))
         .with_radius(BorderRadius::all(8.0))
 }
 

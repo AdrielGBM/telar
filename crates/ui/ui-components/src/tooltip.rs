@@ -14,10 +14,18 @@ use crate::shared;
 const DEFAULT_BUBBLE: Color = Color::rgba(0.12, 0.12, 0.16, 0.96);
 /// Bubble text colour (always light, on the dark chip).
 const BUBBLE_INK: Color = Color::rgba(0.98, 0.98, 1.0, 1.0);
-const BUBBLE_RADIUS: f32 = 6.0;
-const BUBBLE_PAD_X: f32 = 8.0;
-const BUBBLE_PAD_Y: f32 = 5.0;
-const BUBBLE_TEXT_SIZE: f32 = 12.0;
+fn bubble_radius() -> f32 {
+    shared::radius() * 1.5
+}
+fn bubble_pad_x() -> f32 {
+    shared::spacing()
+}
+fn bubble_pad_y() -> f32 {
+    shared::spacing() * 0.6
+}
+fn bubble_text_size() -> f32 {
+    shared::font_size() * 0.85
+}
 
 /// A hover popup: wraps its slot (the trigger content) and, while the mouse is over it, shows a small `text`
 /// bubble anchored just below the trigger. Built on the `overlay` primitive's anchored variant (the bubble is
@@ -105,19 +113,19 @@ fn build_bubble(
     let label = Text::auto(
         move || text(),
         LayoutStyle::new(),
-        || TextStyle::new(BUBBLE_TEXT_SIZE, BUBBLE_INK),
+        || TextStyle::new(bubble_text_size(), BUBBLE_INK),
     )?;
     let chip = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
-            .padding_horizontal(BUBBLE_PAD_X)
-            .padding_vertical(BUBBLE_PAD_Y)
+            .padding_horizontal(bubble_pad_x())
+            .padding_vertical(bubble_pad_y())
             .margin_left(anchor.x)
             .margin_top(anchor.y + anchor.height),
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), || DEFAULT_BUBBLE))
-                .with_radius(BorderRadius::all(BUBBLE_RADIUS))
+                .with_radius(BorderRadius::all(bubble_radius()))
         },
         vec![box_item(label)],
     )?;

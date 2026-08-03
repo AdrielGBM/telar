@@ -9,10 +9,18 @@ use crate::shared;
 
 /// Muted tone for the Close affordance.
 const CLOSE_INK: Color = Color::rgba(0.35, 0.35, 0.42, 1.0);
-const DIALOG_RADIUS: f32 = 12.0;
-const DIALOG_PAD: f32 = 24.0;
-const DIALOG_GAP: f32 = 12.0;
-const CLOSE_SIZE: f32 = 13.0;
+fn dialog_radius() -> f32 {
+    shared::radius() * 3.0
+}
+fn dialog_pad() -> f32 {
+    shared::spacing() * 3.0
+}
+fn dialog_gap() -> f32 {
+    shared::spacing() * 1.5
+}
+fn close_size() -> f32 {
+    shared::font_size() * 0.93
+}
 
 /// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that
 /// escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque
@@ -77,7 +85,7 @@ fn build_open_modal(
     let close_label = Text::auto(
         || "Close".to_string(),
         LayoutStyle::new(),
-        || TextStyle::new(CLOSE_SIZE, CLOSE_INK),
+        || TextStyle::new(close_size(), CLOSE_INK),
     )?;
     let close = StyledContainer::new(
         LayoutStyle::new().flex_row(),
@@ -94,7 +102,7 @@ fn build_open_modal(
             .flex_row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::SPACE_BETWEEN)
-            .gap(DIALOG_GAP),
+            .gap(dialog_gap()),
         vec![box_item(heading), box_item(close)],
     )?;
 
@@ -104,17 +112,17 @@ fn build_open_modal(
     let dialog = StyledContainer::new(
         LayoutStyle::new()
             .flex_column()
-            .gap(DIALOG_GAP)
+            .gap(dialog_gap())
             // A min width so the dialog never collapses to its content's min-content width (the header/body
             // `Text` leaves are unmeasured → 0 intrinsic width, which otherwise shrinks the card to a strip).
             .min_width(320.0)
             .max_width(440.0)
-            .padding_all(DIALOG_PAD),
+            .padding_all(dialog_pad()),
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), || shared::DEFAULT_SURFACE))
                 .with_stroke(Stroke::new(scrim::DEFAULT_BORDER, 1.0))
-                .with_radius(BorderRadius::all(DIALOG_RADIUS))
+                .with_radius(BorderRadius::all(dialog_radius()))
         },
         dialog_children,
     )?
@@ -127,7 +135,7 @@ fn build_open_modal(
             .flex_grow(1.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .padding_all(DIALOG_PAD),
+            .padding_all(dialog_pad()),
         |_r| RectStyle::default().with_fill(scrim::SCRIM),
         vec![box_item(dialog)],
     )?

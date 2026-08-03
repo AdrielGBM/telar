@@ -34,6 +34,12 @@ pub(crate) const BORDER: Color = Color::rgba(0.5, 0.5, 0.55, 0.35);
 pub(crate) fn ink() -> Color {
     use_theme_tokens().map(|t| t.ink()).unwrap_or(INK)
 }
+/// Theme-resolved panel surface (`surface`), falling back to [`DEFAULT_SURFACE`].
+pub(crate) fn surface() -> Color {
+    use_theme_tokens()
+        .map(|t| t.surface())
+        .unwrap_or(DEFAULT_SURFACE)
+}
 /// Theme-resolved quiet surface (`surface_alt`), falling back to [`SURFACE_ALT`].
 pub(crate) fn surface_alt() -> Color {
     use_theme_tokens()
@@ -43,6 +49,28 @@ pub(crate) fn surface_alt() -> Color {
 /// Theme-resolved hairline border (`border`), falling back to [`BORDER`].
 pub(crate) fn border() -> Color {
     use_theme_tokens().map(|t| t.border()).unwrap_or(BORDER)
+}
+
+/// Base corner radius from the theme. A component that wants a different shape multiplies this rather than
+/// declaring its own constant, so one theme number still moves it.
+pub(crate) fn radius() -> f32 {
+    use_theme_tokens().map(|t| t.radius()).unwrap_or(4.0)
+}
+/// Base spacing unit from the theme, and what a component derives its own padding from.
+pub(crate) fn spacing() -> f32 {
+    use_theme_tokens().map(|t| t.spacing()).unwrap_or(8.0)
+}
+/// Base body text size from the theme.
+///
+/// A component scales this by a ratio of its own — `font_size() * 1.4` for a heading, `* 0.85` for a caption —
+/// instead of asking for a named role. Naming the roles here would decide for every application which roles it
+/// is allowed to have, and a theme's own vocabulary belongs to its own type.
+pub(crate) fn font_size() -> f32 {
+    use_theme_tokens().map(|t| t.font_size()).unwrap_or(14.0)
+}
+/// Default standalone icon size from the theme.
+pub(crate) fn icon_size() -> f32 {
+    use_theme_tokens().map(|t| t.icon_size()).unwrap_or(16.0)
 }
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`.

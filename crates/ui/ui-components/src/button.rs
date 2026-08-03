@@ -8,13 +8,15 @@ use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
-/// Padding a button reserves around its label, and the label's font size / corner radius. `Text::auto`
-/// measures the label at its full line box (taller than a bare `font_size * line_height`), so the vertical
-/// padding is lighter than the horizontal to keep the button close to its previous height.
-const PAD_X: f32 = 14.0;
-const PAD_Y: f32 = 6.0;
-const FONT_SIZE: f32 = 14.0;
-const RADIUS: f32 = 4.0;
+/// Padding a button reserves around its label, derived from the theme's spacing unit rather than fixed so one
+/// theme number moves it. `Text::auto` measures the label at its full line box (taller than a bare
+/// `font_size * line_height`), which is why the vertical share is the lighter of the two.
+fn pad_x() -> f32 {
+    shared::spacing() * 1.75
+}
+fn pad_y() -> f32 {
+    shared::spacing() * 0.75
+}
 
 /// A labelled, pressable button. This is the high-level convenience over the primitives (`box` +
 /// `on_press` + `hover` + a centred `text`); it lives in `ui-components`, not the kernel, so an app can
@@ -69,7 +71,7 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new(),
         move || {
             TextStyle::new(
-                FONT_SIZE,
+                shared::font_size(),
                 label_color(
                     label_fill.as_ref(),
                     label_outline.as_ref(),
@@ -89,8 +91,8 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .flex_row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .padding_horizontal(PAD_X)
-            .padding_vertical(PAD_Y),
+            .padding_horizontal(pad_x())
+            .padding_vertical(pad_y()),
         move |_r| variant_rect(base_fill.as_ref(), base_outline.as_ref(), ghost, false),
         vec![box_item(label_widget)],
     )?
@@ -112,7 +114,7 @@ fn variant_rect(
     ghost: bool,
     hovered: bool,
 ) -> RectStyle {
-    let radius = BorderRadius::all(RADIUS);
+    let radius = BorderRadius::all(shared::radius());
     if ghost {
         return RectStyle::default().with_radius(radius);
     }

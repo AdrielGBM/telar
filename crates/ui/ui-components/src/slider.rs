@@ -10,12 +10,20 @@ use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item, box_transf
 use crate::shared;
 
 /// Track thickness (px) — a slim pill rail with a floating thumb.
-const TRACK_HEIGHT: f32 = 8.0;
+fn track_height() -> f32 {
+    shared::spacing()
+}
 /// Thumb diameter (px), bigger than the track so it stays easy to grab; it overhangs the rail on purpose.
-const THUMB_SIZE: f32 = 16.0;
+fn thumb_size() -> f32 {
+    shared::icon_size()
+}
 /// Caption size/gap above the track, mirroring `text_field`'s label row.
-const LABEL_SIZE: f32 = 13.0;
-const LABEL_GAP: f32 = 6.0;
+fn label_size() -> f32 {
+    shared::font_size() * 0.93
+}
+fn label_gap() -> f32 {
+    shared::spacing() * 0.75
+}
 
 /// A drag-driven `min..=max` control: a rounded track, an accent fill up to `value`, and a thumb positioned by
 /// it. This is the canonical demo of the `on_drag` primitive (see `StyledContainer::on_drag`): the widget just
@@ -97,7 +105,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             });
             RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(TRACK_HEIGHT / 2.0))
+                .with_radius(BorderRadius::all(track_height() / 2.0))
         },
         vec![],
     )?
@@ -114,7 +122,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let thumb_value = value.clone();
     let thumb_color = color.clone();
     let thumb = StyledContainer::new(
-        LayoutStyle::new().width(THUMB_SIZE).height(THUMB_SIZE),
+        LayoutStyle::new().width(thumb_size()).height(thumb_size()),
         move |_r| {
             let fill = shared::resolve(thumb_color.as_ref(), || {
                 use_theme_tokens()
@@ -124,19 +132,19 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             RectStyle::default()
                 .with_fill(fill)
                 .with_stroke(Stroke::new(Color::WHITE, 2.0))
-                .with_radius(BorderRadius::all(THUMB_SIZE / 2.0))
+                .with_radius(BorderRadius::all(thumb_size() / 2.0))
         },
         vec![],
     )?
     .with_transform(move |r| {
         let t = ((thumb_value.get() - min) / (max - min)).clamp(0.0, 1.0);
-        let tx = t * (width - THUMB_SIZE);
-        let ty = (TRACK_HEIGHT - THUMB_SIZE) / 2.0;
+        let tx = t * (width - thumb_size());
+        let ty = (track_height() - thumb_size()) / 2.0;
         box_transform(r, 0.0, 1.0, 1.0, tx, ty)
     });
 
     let track = StyledContainer::new(
-        LayoutStyle::new().width(width).height(TRACK_HEIGHT),
+        LayoutStyle::new().width(width).height(track_height()),
         move |_r| {
             let fill = shared::resolve(track_color.as_ref(), || {
                 use_theme_tokens()
@@ -145,7 +153,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             });
             RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(TRACK_HEIGHT / 2.0))
+                .with_radius(BorderRadius::all(track_height() / 2.0))
         },
         vec![box_item(fill), box_item(thumb)],
     )?
@@ -169,11 +177,14 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     }
     let caption = Text::new(
         move || label(),
-        LayoutStyle::new().height(LABEL_SIZE * 1.4),
-        || TextStyle::new(LABEL_SIZE, label_color()),
+        LayoutStyle::new().height(label_size() * 1.4),
+        || TextStyle::new(label_size(), label_color()),
     )?;
     let col = Container::new(
-        LayoutStyle::new().flex_column().gap(LABEL_GAP).width(width),
+        LayoutStyle::new()
+            .flex_column()
+            .gap(label_gap())
+            .width(width),
         vec![box_item(caption), box_item(track)],
     )?;
     Ok(box_item(col))
