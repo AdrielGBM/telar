@@ -2,10 +2,10 @@ use crate::analysis::occurrences::declared_signals;
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
 use lsp_types::{CompletionItem, CompletionItemKind};
-use telar_parser::RsxDocument;
-use telar_transpiler::{color_attr_keys, color_keywords, is_control_flow_keyword, tag_attr_keys};
 use std::collections::HashSet;
 use std::path::Path;
+use telar_parser::RsxDocument;
+use telar_transpiler::{color_attr_keys, color_keywords, is_control_flow_keyword, tag_attr_keys};
 
 pub enum CompletionKind {
     ElementName,
@@ -96,7 +96,7 @@ pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
         .collect();
 
     if let Some(dir) = dir {
-        for path in telar_transpiler::find_rsx_files(dir) {
+        for path in telar_transpiler::find_rsx_files_in_tree(dir) {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str())
                 && !builtin_set.contains(stem)
             {

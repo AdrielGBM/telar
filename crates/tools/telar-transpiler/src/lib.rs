@@ -16,8 +16,9 @@ pub use codegen::{
     scan_component_sig, source_map_to_json, transpile_source_full, transpile_source_with_theme,
 };
 pub use discovery::{
-    assets_root, auto_modules_enabled, collect_files_by_ext, discover_rust_modules, find_rsx_files,
-    relative_output_path, relative_stem,
+    assets_root, auto_modules_enabled, collect_files_by_ext, component_paths,
+    discover_rust_modules, find_rsx_files, find_rsx_files_in_tree, relative_output_path,
+    relative_stem,
 };
 pub use error::TranspileError;
 pub use i18n::{

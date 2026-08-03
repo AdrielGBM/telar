@@ -87,12 +87,12 @@ fn find_component(
         crate::uri::to_path(current_uri).and_then(|p| p.parent().map(|d| d.to_path_buf()));
 
     let all_dirs = project
-        .map(|p| p.root.as_path())
+        .map(|p| p.component_root.as_path())
         .into_iter()
         .chain(current_dir.as_deref());
 
     for dir in all_dirs {
-        let files = telar_transpiler::find_rsx_files(dir);
+        let files = telar_transpiler::find_rsx_files_in_tree(dir);
         if let Some(path) = files
             .iter()
             .find(|p| p.file_stem().and_then(|s| s.to_str()) == Some(tag))

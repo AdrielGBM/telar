@@ -43,6 +43,16 @@ pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
     collect_files_by_ext(dir, "rsx", &|_| true)
 }
 
+/// Every `.rsx` under a whole workspace, skipping what a build produced rather than a person: `target/` and any
+/// dot-directory (which is where the generated `.telar/` tree lives). [`find_rsx_files`] descends into
+/// everything, which is right for one crate's `src/` and ruinous one directory up — a workspace root holds a
+/// `target/` that dwarfs the sources, and this runs on every completion request.
+pub fn find_rsx_files_in_tree(root: &Path) -> Vec<PathBuf> {
+    collect_files_by_ext(root, "rsx", &|name| {
+        name != "target" && !name.starts_with('.')
+    })
+}
+
 /// Parses the `[telar]` table from `<package_root>/telar.toml`, or `None` if the file/section is absent.
 fn read_rsx_section(package_root: &Path) -> Option<toml::Table> {
     let content = std::fs::read_to_string(package_root.join("telar.toml")).ok()?;
@@ -60,6 +70,29 @@ pub fn auto_modules_enabled(package_root: &Path) -> bool {
     read_rsx_section(package_root)
         .and_then(|s| s.get("auto_modules")?.as_bool())
         .unwrap_or(false)
+}
+
+/// Directories of `.rsx` files this crate may *call* but does not compile: `[telar] components` in
+/// `telar.toml`, a list of paths relative to the package root (e.g. `components = ["../ui/src"]`).
+///
+/// A component call needs the callee's signature — its `Props` shape, its optional fields, whether it takes a
+/// slot — and that signature lives in the callee's file. Without this, the registry holds only what is under
+/// this crate's own `src/`, so a workspace that keeps its shared vocabulary in one crate and its screens in
+/// another cannot compose them at all: the call emits with the wrong arity and fails in generated code. The
+/// listed directories are scanned for signatures only; each is still compiled by the crate that owns it.
+///
+/// This settles the *call*, not the *symbol*. The borrowing crate must also re-export what it borrows at its
+/// root (`pub use ::ui::{ChipLabelProps, chip_label};`), because a generated file reaches its neighbours
+/// through its own `use super::*`. A `use` inside `[logic]` does not do it: that lands inside the component
+/// function, and a `[preview]` is a different function in the same file.
+pub fn component_paths(package_root: &Path) -> Vec<PathBuf> {
+    read_rsx_section(package_root)
+        .and_then(|section| section.get("components")?.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|entry| entry.as_str())
+        .map(|relative| package_root.join(relative))
+        .collect()
 }
 
 /// The directory that baked `src:"..."` asset paths resolve against: `[telar] assets` in `telar.toml`
@@ -177,6 +210,69 @@ fn dir_has_rust_module(dir: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn borrowed_component_dirs_resolve_against_the_package_root() {
+        let root =
+            std::env::temp_dir().join(format!("telar_component_paths_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        // No key at all: a crate that borrows nothing keeps the registry it always had.
+        std::fs::write(root.join("telar.toml"), "[telar]\nauto_modules = true\n").unwrap();
+        assert!(component_paths(&root).is_empty());
+
+        std::fs::write(
+            root.join("telar.toml"),
+            "[telar]\ncomponents = [\"../ui/src\", \"../shared/src\"]\n",
+        )
+        .unwrap();
+        assert_eq!(
+            component_paths(&root),
+            vec![root.join("../ui/src"), root.join("../shared/src")]
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A workspace search must find every crate's `.rsx` and must not walk `target/` — the second half is what
+    /// makes it usable on every keystroke, since a workspace's build directory dwarfs its sources.
+    #[test]
+    fn a_tree_search_crosses_crates_and_skips_what_a_build_wrote() {
+        let root = std::env::temp_dir().join(format!("telar_tree_search_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for dir in [
+            root.join("crates/ui/src"),
+            root.join("crates/modules/src/clock"),
+            root.join("crates/modules/.telar/build"),
+            root.join("target/debug"),
+        ] {
+            std::fs::create_dir_all(&dir).unwrap();
+        }
+        std::fs::write(root.join("crates/ui/src/card.rsx"), "[view]\n").unwrap();
+        std::fs::write(root.join("crates/modules/src/clock/clock.rsx"), "[view]\n").unwrap();
+        std::fs::write(
+            root.join("crates/modules/.telar/build/stale.rsx"),
+            "[view]\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("target/debug/vendored.rsx"), "[view]\n").unwrap();
+
+        let found = find_rsx_files_in_tree(&root);
+        let names: Vec<_> = found
+            .iter()
+            .filter_map(|p| p.file_name()?.to_str())
+            .collect();
+        // Sorted by full path, so `crates/modules/…` precedes `crates/ui/…`.
+        assert_eq!(
+            names,
+            vec!["clock.rsx", "card.rsx"],
+            "a sibling crate's component is found; target/ and .telar/ are not"
+        );
+
+        // The single-crate search is the one that descends into everything, and stays that way.
+        assert_eq!(find_rsx_files(&root).len(), 4);
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn assets_root_default_and_configured() {

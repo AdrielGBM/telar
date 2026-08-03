@@ -262,9 +262,13 @@ impl Backend {
             let native =
                 completion_context(&parsed.source, pos.line, pos.character).map(
                     |kind| match kind {
-                        CompletionKind::ElementName => {
-                            element_name_items(file_path.as_deref().and_then(|p| p.parent()))
-                        }
+                        // The whole workspace, not the file's own directory: a component lives wherever its crate is, and offering only its siblings is what keeps `.rsx` files from composing.
+                        CompletionKind::ElementName => element_name_items(
+                            project
+                                .as_ref()
+                                .map(|p| p.component_root.as_path())
+                                .or_else(|| file_path.as_deref().and_then(|p| p.parent())),
+                        ),
                         CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
                         CompletionKind::ColorValue => {
                             color_items(&parsed.document, project.as_ref())
@@ -755,8 +759,9 @@ impl Backend {
             crate::analysis::occurrences::component_at(&source, pos.line, pos.character)
         {
             let path = crate::uri::to_path(uri)?;
-            let root = telar_workspace::find_telar_root(&path)
-                .or_else(|| telar_workspace::find_workspace_root(&path))?;
+            // Workspace first: a component is referenced from wherever it is used, which in a multi-crate project is not the crate that defines it. The nearest `telar.toml` is the narrower answer and is only right when there is no workspace above it.
+            let root = telar_workspace::find_workspace_root(&path)
+                .or_else(|| telar_workspace::find_telar_root(&path))?;
             let locations = self
                 .with_index(root, move |idx| idx.component_references(&name))
                 .await?;
@@ -911,9 +916,9 @@ impl Backend {
             let store = self.store.read().await;
             let uri = store.any_uri()?;
             let path = crate::uri::to_path(uri)?;
-            // Prefer an `telar.toml` root, but fall back to the Cargo workspace root so apps without an `telar.toml` (e.g. a themed app configured in code) still get workspace symbols.
-            telar_workspace::find_telar_root(&path)
-                .or_else(|| telar_workspace::find_workspace_root(&path))?
+            // The Cargo workspace root, so a `workspace/symbol` query answers for the whole workspace rather than for whichever crate happened to have a file open; the nearest `telar.toml` is the fallback for a project that is not in one.
+            telar_workspace::find_workspace_root(&path)
+                .or_else(|| telar_workspace::find_telar_root(&path))?
         };
         self.with_index(root, move |idx| idx.symbols(&query)).await
     }

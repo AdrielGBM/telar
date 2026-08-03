@@ -309,7 +309,11 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set") })?;
 
     // A hot-reload build emits different code for the same `.rsx` (signals become `hot_signal_auto!`), so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other's files on every build, leaving each cargo unit permanently stale.
-    let flavour = if hot_reload_build() { "build-hot" } else { "build" };
+    let flavour = if hot_reload_build() {
+        "build-hot"
+    } else {
+        "build"
+    };
     let generated_dir = manifest_dir.join(".telar").join(flavour);
     if let Err(e) = std::fs::create_dir_all(&generated_dir) {
         let msg = format!("Failed to create {}: {e}", generated_dir.display());
@@ -329,6 +333,25 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // Seed the built-in component catalogue first so a local `.rsx` of the same name still overrides it.
     for (name, sig) in telar_transpiler::external_component_sigs() {
         registry.insert(name.to_string(), sig);
+    }
+    // Then the crates this one borrows components from (`[telar] components` in telar.toml). Signatures only — each of those files is compiled by the crate that owns it — and before the local pass, so a component defined here still wins the name.
+    let borrowed_dirs = telar_transpiler::component_paths(&manifest_dir);
+    let mut borrowed_files: Vec<std::path::PathBuf> = Vec::new();
+    for dir in &borrowed_dirs {
+        for rsx_file in telar_transpiler::find_rsx_files(dir) {
+            let Ok(source) = std::fs::read_to_string(&rsx_file) else {
+                continue;
+            };
+            let sig = telar_transpiler::scan_component_sig(&source);
+            let stem = telar_transpiler::relative_stem(&rsx_file, dir);
+            registry.insert(telar_transpiler::naming::to_snake_case(&stem), sig.clone());
+            if let Some(base) = rsx_file.file_stem().and_then(|s| s.to_str()) {
+                registry
+                    .entry(telar_transpiler::naming::to_snake_case(base))
+                    .or_insert(sig);
+            }
+            borrowed_files.push(rsx_file);
+        }
     }
     for rsx_file in &rsx_files {
         let Ok(source) = std::fs::read_to_string(rsx_file) else {
@@ -416,7 +439,10 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         // and `Props` types reachable by bare name, exactly as `include!` did.
         let out_path_str = out_path.to_string_lossy().to_string();
         let mod_ident = Ident::new(
-            &format!("__rsx_mod_{}", telar_transpiler::naming::to_snake_case(&stem)),
+            &format!(
+                "__rsx_mod_{}",
+                telar_transpiler::naming::to_snake_case(&stem)
+            ),
             Span::call_site(),
         );
         include_stmts.extend(quote! {
@@ -468,6 +494,12 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     // Opt-in via `[telar] auto_modules = true` in telar.toml: declare the hand-written `.rs` modules by walking the
     // source tree, so an app needs no `mod.rs`/`mod` statements for them — mirroring how `.rsx` files are wired.
+    // A borrowed component's signature is baked into this crate's call sites, so editing its `Props` in the crate that owns it has to rebuild this one too — otherwise the call keeps the old arity and fails in generated code with nothing pointing at the file that moved.
+    for rsx_file in &borrowed_files {
+        let borrowed_str = rsx_file.to_string_lossy().to_string();
+        rerun_stmts.extend(quote! { const _: &str = include_str!(#borrowed_str); });
+    }
+
     let telar_toml = manifest_dir.join("telar.toml");
     if telar_toml.exists() {
         // Re-run the macro when telar.toml changes (e.g. toggling auto_modules), like the `.rsx` sources.

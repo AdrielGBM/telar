@@ -3,6 +3,11 @@ use std::path::{Path, PathBuf};
 
 pub struct ProjectInfo {
     pub root: PathBuf,
+    /// Where to look for *other components*, which is a wider question than [`Self::root`] answers. A crate's
+    /// `telar.toml` scopes its theme type and its i18n catalog — both genuinely per crate — but components are
+    /// shared across a workspace, and anchoring their search on the nearest `telar.toml` makes one defined in a
+    /// sibling crate invisible to completion and go-to-definition. Falls back to `root` outside a workspace.
+    pub component_root: PathBuf,
     pub theme_type: Option<String>,
     pub theme_fields: HashSet<String>,
     /// Every key the project's baked catalog defines, or empty when it has no translations.
@@ -63,8 +68,11 @@ impl ProjectInfo {
             .flatten()
             .map(|c| c.keys().cloned().collect())
             .unwrap_or_default();
+        let component_root =
+            telar_workspace::find_workspace_root(&root).unwrap_or_else(|| root.clone());
         Some(Self {
             root,
+            component_root,
             theme_type,
             theme_fields,
             i18n_keys,
