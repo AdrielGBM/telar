@@ -23,6 +23,8 @@ pub struct MenuProps {
     /// Accent colour (trigger border, hover highlight). `Color::TRANSPARENT` (the default) means "unset" and
     /// falls back to the theme accent. A closure so a theme token re-reads on every render.
     pub color: Box<dyn Fn() -> Color>,
+    /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::fill`].
+    pub fill: bool,
 }
 
 impl Default for MenuProps {
@@ -32,6 +34,7 @@ impl Default for MenuProps {
             items: Vec::new(),
             on_select: None,
             color: Box::new(|| Color::TRANSPARENT),
+            fill: false,
         }
     }
 }
@@ -39,7 +42,14 @@ impl Default for MenuProps {
 // A menu carries no bound selection (`selected: None`), so its rows are one-shot actions: no index is written
 // back and no row is highlighted. The reactive `label` closure is handed straight to the dropdown trigger.
 pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    dropdown::dropdown(props.label, props.items, props.color, props.on_select, None)
+    dropdown::dropdown(
+        props.label,
+        props.items,
+        props.color,
+        props.on_select,
+        None,
+        props.fill,
+    )
 }
 
 #[cfg(test)]

@@ -25,6 +25,9 @@ pub struct SelectProps {
     pub color: Box<dyn Fn() -> Color>,
     /// Fired with the picked index whenever a selection is made.
     pub on_select: Option<Box<dyn Fn(u32)>>,
+    /// Take the width the row offers instead of the fixed trigger width — what a form field wants, where a
+    /// 180px control beside full-width ones reads as a mistake. The panel opens at that width too.
+    pub fill: bool,
 }
 
 impl Default for SelectProps {
@@ -34,6 +37,7 @@ impl Default for SelectProps {
             options: Vec::new(),
             color: Box::new(|| Color::TRANSPARENT),
             on_select: None,
+            fill: false,
         }
     }
 }
@@ -61,6 +65,7 @@ pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         props.color,
         props.on_select,
         Some(selected),
+        props.fill,
     )
 }
 

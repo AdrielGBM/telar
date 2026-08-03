@@ -30,12 +30,18 @@ pub(crate) fn panel_pad() -> f32 {
 /// `trigger_label` is a closure so `select` can track its bound signal reactively while `menu` supplies a
 /// static label. `selected` drives the bound-selection behaviour: `Some` writes the picked index back and
 /// highlights the selected row; `None` (menu) skips both, leaving one-shot actions.
+///
+/// `fill` gives the trigger the width its row offers instead of the fixed [`PANEL_WIDTH`], and the panel then
+/// opens at whatever width the trigger was laid out to. That is what a form row wants — a control 180px wide
+/// beside fields that span the row reads as a mistake — and it is the caller's choice because a dropdown
+/// standing on its own has no row to take a width from.
 pub(crate) fn dropdown(
     trigger_label: impl Fn() -> String + 'static,
     rows: Vec<&'static str>,
     color: Box<dyn Fn() -> Color>,
     on_pick: Option<Box<dyn Fn(u32)>>,
     selected: Option<RwSignal<u32>>,
+    fill: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Erased to `Rc` so the colour/callback can be cloned into the trigger, every option row, and the panel
     // builder (which re-runs on each open) — a `Box<dyn Fn>` can't be shared, but the widget needs to.
@@ -56,17 +62,18 @@ pub(crate) fn dropdown(
         let open = open.clone();
         move || open.update(|o| *o = !*o)
     };
-    let trigger = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .width(PANEL_WIDTH)
-            .height(TRIGGER_HEIGHT)
-            .padding_horizontal(12.0),
-        trigger_style,
-        vec![box_item(label_text)],
-    )?
-    .on_press(toggle);
+    let trigger_box = LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .height(TRIGGER_HEIGHT)
+        .padding_horizontal(12.0);
+    let trigger_box = if fill {
+        trigger_box.flex_grow(1.0)
+    } else {
+        trigger_box.width(PANEL_WIDTH)
+    };
+    let trigger = StyledContainer::new(trigger_box, trigger_style, vec![box_item(label_text)])?
+        .on_press(toggle);
     let trigger_node = trigger.layout_node();
     // The trigger's laid-out rect positions the panel; `track_layout` returns the signal now (default rect)
     // and layout fills it in, so by the time the panel is built (on open) the trigger's rect is known.
@@ -142,10 +149,13 @@ pub(crate) fn dropdown(
             let anchor = ui_core::overlay::anchor_rect(trigger_node, &trigger_rect);
             // The anchor is the trigger's rect as it stands when the panel opens: a re-resolve on a theme
             // switch keeps the margins it was built from, which is where the panel belongs either way.
+            // A filled trigger sets the panel's width too: it opens under a control the row sized, so the
+            // panel that lists its options has to be that wide or it reads as a different control.
+            let width = if fill { anchor.width } else { PANEL_WIDTH };
             let sheet = move || {
                 LayoutStyle::new()
                     .flex_column()
-                    .width(PANEL_WIDTH)
+                    .width(width)
                     .padding_all(panel_pad())
                     .margin_left(anchor.x)
                     .margin_top(anchor.y + anchor.height)
@@ -173,10 +183,15 @@ pub(crate) fn dropdown(
 
     // The widget owns both the trigger and the (portaling) overlay holder; the holder's placeholder takes no
     // space in the column, so only the trigger participates in flow layout.
-    let root = Container::new(
-        LayoutStyle::new().flex_column(),
-        vec![box_item(trigger), box_item(overlay_holder)],
-    )?;
+    // `fill` has to reach the root as well as the trigger: the trigger grows inside *this* box, and this box
+    // is what the caller's row lays out — left content-sized it shrinks to the label and the trigger with it.
+    let root_box = LayoutStyle::new().flex_column();
+    let root_box = if fill {
+        root_box.flex_grow(1.0)
+    } else {
+        root_box
+    };
+    let root = Container::new(root_box, vec![box_item(trigger), box_item(overlay_holder)])?;
     Ok(box_item(root))
 }
 
