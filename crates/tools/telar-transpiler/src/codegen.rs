@@ -160,7 +160,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "select",
             s(
-                &["selected", "options", "color", "on_select"],
+                &["selected", "options", "color", "on_select", "fill"],
                 false,
                 &["color"],
                 &["selected", "on_select"],
@@ -169,7 +169,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "menu",
             s(
-                &["label", "items", "on_select", "color"],
+                &["label", "items", "on_select", "color", "fill"],
                 false,
                 &["color"],
                 &["on_select"],
