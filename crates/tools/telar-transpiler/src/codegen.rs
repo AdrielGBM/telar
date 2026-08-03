@@ -784,6 +784,10 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             if pgen.uses_theme() {
                 code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
             }
+            // `[preview "Name" fixture:path::to::fn]` seeds whatever ambient state this component reads. A path rather than a name declared in `[logic]`, because the logic zone is emitted *inside* the component function while a preview is a sibling function that cannot see into it; the generated module's own `use super::*` resolves a bare name at the crate root. Per-preview only — the process-wide half (theme, locale, config) belongs in the `setup` closure `telar::dev_entry` runs once.
+            if let Some(fixture) = preview_fixture(preview) {
+                code.push(&format!("    {fixture}();\n"), None);
+            }
             let prefix = code.out.len();
             let resolved = crate::view::resolve_source_map(&pbody);
             for (line, src) in &resolved.lines {
@@ -928,6 +932,19 @@ fn wrap_closure_clones(line: &str, captured: &[&str]) -> String {
 
 /// Whether any node in the view tree is a `children` slot placeholder, so the component function must
 /// take a `Slots` argument. Recurses through element children and `if`/`for` branches.
+/// The `fixture:` header option of a `[preview]`, if it names one. Quoted or bare, both spellings reach the same
+/// path — `fixture:"mock_env"` and `fixture:mock_env` are the same request.
+fn preview_fixture(preview: &telar_parser::Preview) -> Option<String> {
+    let value = preview
+        .options
+        .iter()
+        .find(|option| option.key == "fixture")?
+        .value
+        .trim()
+        .trim_matches('"');
+    (!value.is_empty()).then(|| value.to_string())
+}
+
 fn view_uses_slot(nodes: &[ViewNode]) -> bool {
     nodes.iter().any(node_uses_slot)
 }

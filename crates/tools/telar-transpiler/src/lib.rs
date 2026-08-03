@@ -341,6 +341,27 @@ col @card
         );
     }
 
+    /// A preview of a component that reads ambient state needs that state seeded first, and the seeding is not
+    /// the same for every preview of the same component — that is the whole point of naming one per block.
+    #[test]
+    fn a_preview_fixture_runs_before_the_component_is_built() {
+        let src = "[view]\ntext \"x\"\n\n[preview \"Charging\" fixture:mock_battery]\ndemo\n\n[preview \"Plain\"]\ndemo\n";
+        let out = transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let code = &out.rust_code;
+        let charging = code.find("demo_preview_0").unwrap();
+        let plain = code.find("demo_preview_1").unwrap();
+        let first = &code[charging..plain];
+        assert!(
+            first.contains("mock_battery();"),
+            "the named fixture runs first:\n{first}"
+        );
+        assert!(
+            !code[plain..].contains("mock_battery();"),
+            "and only for the preview that named it:\n{}",
+            &code[plain..]
+        );
+    }
+
     /// A `.rsx` component that declares a closure-typed prop gets the same live text and colour the built-in
     /// catalogue gets. Without this a user component could only take `&'static str`, so it could never show a
     /// value that changes — and anything with live text had to stay hand-written Rust.
