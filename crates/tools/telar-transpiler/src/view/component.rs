@@ -295,6 +295,13 @@ impl ViewGen<'_> {
         if let Ok(n) = v.parse::<f32>() {
             return format_f32(n);
         }
+        // `theme.…` reads the ambient theme whatever the prop's type: a component takes its sizes and radii from
+        // one as readily as its colours, and the verbatim arm below would emit a `theme` the view never bound.
+        if !v.contains('$')
+            && let Some(expr) = crate::style::theme_field_expr(v, self.theme_type.as_deref())
+        {
+            return expr;
+        }
         let snake = to_snake_case(v);
         let in_style = self
             .constants

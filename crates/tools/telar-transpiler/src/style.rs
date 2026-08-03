@@ -13,12 +13,48 @@ use crate::naming::{constant_name, is_ident, style_function_name, to_snake_case}
 /// constant" everywhere except color attributes, so overloading it would silently change what existing
 /// `pad:card_gap` means; `theme.card_gap` is unambiguous and works in any attribute position.
 pub fn theme_field_expr(value: &str, theme: Option<&str>) -> Option<String> {
-    let field = value.trim().strip_prefix("theme.")?;
+    let rest = value.trim().strip_prefix("theme.")?;
     let theme = theme?;
-    if field.is_empty() || !is_ident(field) {
+    let head: String = rest
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    if head.is_empty() || !is_ident(&head) {
         return None;
     }
-    Some(format!("use_theme::<{theme}>().{}", to_snake_case(field)))
+    // Whatever follows that first name is the author's own Rust — a call's arguments, a chain onto the value it
+    // returned — and is carried through untouched. A theme is a type the *application* declares, so its
+    // vocabulary is not something the DSL can enumerate: `font(FontRole::Body)` and `accent.darken(0.1)` are as
+    // much "read the theme" as a bare field is, and without them each one has to be hoisted into `[logic]` and
+    // referred to by a name the view invents for it.
+    let tail = &rest[head.len()..];
+    if !tail.is_empty() && !tail.starts_with('(') && !tail.starts_with('.') {
+        return None;
+    }
+    if !balanced(tail) {
+        return None;
+    }
+    Some(format!(
+        "use_theme::<{theme}>().{}{tail}",
+        to_snake_case(&head)
+    ))
+}
+
+/// Whether every bracket in `s` is closed, so a half-written call falls through to the arm that would have
+/// handled it instead of being emitted as a theme read that cannot compile.
+fn balanced(s: &str) -> bool {
+    let mut depth = 0i32;
+    for c in s.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            _ => {}
+        }
+        if depth < 0 {
+            return false;
+        }
+    }
+    depth == 0
 }
 
 /// Renders all constants and style functions for the document's style section. When a theme is active, `[style]` color constants are omitted: color references resolve through `use_theme` instead (see `color_expr`), so they react to theme switches. Number/raw constants are always emitted.
@@ -356,6 +392,26 @@ mod tests {
         assert_eq!(theme_field_expr("gutter", Some("Th")), None);
         assert_eq!(theme_field_expr("theme.", Some("Th")), None);
         assert_eq!(theme_field_expr("theme.not an ident", Some("Th")), None);
+    }
+
+    /// A theme's vocabulary is the application's, not the DSL's: half of what a real theme answers is a method
+    /// with an argument, and until this every one of those had to be hoisted into `[logic]` and given a name
+    /// the view then used instead.
+    #[test]
+    fn a_theme_read_can_be_a_call_or_a_chain_not_only_a_field() {
+        assert_eq!(
+            theme_field_expr("theme.font(FontRole::Body)", Some("Th")).as_deref(),
+            Some("use_theme::<Th>().font(FontRole::Body)")
+        );
+        assert_eq!(
+            theme_field_expr("theme.accent.darken(0.1)", Some("Th")).as_deref(),
+            Some("use_theme::<Th>().accent.darken(0.1)")
+        );
+        // Half-written, so it is left for the arm that would have handled it rather than emitted as a read.
+        assert_eq!(
+            theme_field_expr("theme.font(FontRole::Body", Some("Th")),
+            None
+        );
     }
 
     #[test]

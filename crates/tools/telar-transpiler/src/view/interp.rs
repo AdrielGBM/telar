@@ -84,16 +84,21 @@ impl ViewGen<'_> {
         {
             return format!("{ident}.get()");
         }
+        // The explicit `theme.…` form, so one spelling reaches the theme from any attribute; a numeric attribute
+        // has no bare-ident form, since there a bare ident is a `[style]` constant. Ahead of the computed arm
+        // because a theme read may itself be a call (`theme.font(FontRole::Body)`), which that arm would emit
+        // verbatim — leaving a `theme` binding the view never made.
+        if !v.contains('$')
+            && let Some(expr) = crate::style::theme_field_expr(v, self.theme_type.as_deref())
+        {
+            return expr;
+        }
         // A computed color expression (call / method chain / arithmetic) yielding a `Color`, with `$signal`
-        // reads made reactive. Comes before the `Color::`/keyword/theme arms so a state-driven paint like
+        // reads made reactive. Comes before the `Color::`/keyword arms so a state-driven paint like
         // `chip_fill($snapshot, id)` — or a verbatim `Color::from_rgb_u8(..)` — is emitted whole, not treated
-        // as a token. A theme token (`primary`, `ink`) has no `(`/`$`, so it still reaches the theme arm.
+        // as a token.
         if v.contains('(') || v.contains('$') {
             return substitute_reads(v);
-        }
-        // The explicit `theme.field` form, so one spelling reaches the theme from any attribute; a numeric attribute has no bare-ident form, since there a bare ident is a `[style]` constant.
-        if let Some(expr) = crate::style::theme_field_expr(v, self.theme_type.as_deref()) {
-            return expr;
         }
         if v.starts_with("Color::") {
             return v.to_string();
