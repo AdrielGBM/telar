@@ -159,7 +159,10 @@ impl ViewGen<'_> {
             return "|| None".to_string();
         }
         let expr = substitute_reads(&crate::style::format_number(v, self.theme_type.as_deref()));
-        wrap_signal_clones(&[v], format!("move || Some({expr})"))
+        // `.into()` rather than `Some(…)`, so both a width and an already-optional one work: std gives
+        // `From<T> for Option<T>` and the identity `From<T> for T`, and `with_stroke`'s parameter fixes the
+        // target. A theme that carries "no override" as `None` can then be passed straight through.
+        wrap_signal_clones(&[v], format!("move || ({expr}).into()"))
     }
 
     /// Resolves a media widget's `src` attribute into `(setup, data_fn)` fragments that slot into its construction block.

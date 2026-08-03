@@ -140,6 +140,9 @@ impl ViewGen<'_> {
     /// raw value is scanned for `$idents` to clone in, and `color_expr` applies the same `[style]`/theme
     /// precedence as built-in elements. The Props field is expected to be `Box<dyn Fn() -> Color>`.
     fn component_color_attr_expr(&self, attr: &Attr) -> String {
+        if let Some(closure) = already_a_closure(attr) {
+            return closure;
+        }
         let color = self.color_expr(&attr.value);
         let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {color}"));
         format!("Box::new({wrapped})")
@@ -151,6 +154,9 @@ impl ViewGen<'_> {
     /// A `t"key"` value becomes a catalog lookup, a plain `"literal"` a static string, and a `$signal`/expr a
     /// reactive read.
     fn component_text_attr_expr(&self, attr: &Attr) -> String {
+        if let Some(closure) = already_a_closure(attr) {
+            return closure;
+        }
         let body = if attr.i18n {
             self.i18n_lookup(&attr.value)
         } else if attr.is_quoted {
@@ -402,4 +408,16 @@ fn delimiters_balanced(expr: &str) -> bool {
         }
     }
     stack.is_empty() && quote.is_none()
+}
+
+/// A reactive text/colour prop whose value the caller already wrote as a closure, boxed as-is.
+///
+/// Auto-boxing exists so `label:"Save"` and `tint:$accent` can be written plainly; a caller who wrote
+/// `tint(move || fg.get())` has already said what they mean, and wrapping that again yields a closure returning
+/// a closure — a type error inside generated code, pointing at a line the author never wrote.
+fn already_a_closure(attr: &Attr) -> Option<String> {
+    let value = attr.value.trim();
+    let is_closure = !attr.is_quoted
+        && (value.starts_with('|') || value.starts_with("move |") || value.starts_with("move||"));
+    is_closure.then(|| format!("Box::new({value})"))
 }

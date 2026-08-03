@@ -11,6 +11,23 @@ pub enum AssetState<T> {
     Failed,
 }
 
+/// Two resolved states are the same asset when they hold the same `Arc` — identity, not contents. Comparing a
+/// decoded asset structurally would walk every path of every glyph to answer a question the pointer already
+/// answers, and answer it differently: two identical decodes of the same file are still two arrivals.
+///
+/// Only `Arc` payloads, which is what an [`AssetSource`] hands out. It exists so a `memo` can hold one, which is
+/// what lets a view `match` on an asset as it resolves.
+impl<T> PartialEq for AssetState<std::sync::Arc<T>> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (AssetState::Loading, AssetState::Loading) => true,
+            (AssetState::Failed, AssetState::Failed) => true,
+            (AssetState::Ready(a), AssetState::Ready(b)) => std::sync::Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
 impl<T> AssetState<T> {
     pub fn is_ready(&self) -> bool {
         matches!(self, AssetState::Ready(_))
