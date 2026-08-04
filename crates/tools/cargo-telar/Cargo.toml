@@ -13,7 +13,7 @@ repository.workspace = true
 [dependencies]
 serde = { workspace = true }
 toml = { workspace = true }
-telar = { path = "../../telar", version = "0.1.0", default-features = false }
+telar = { path = "../../telar", version = "0.1.1", default-features = false }
 notify = "8.2.0"
 clap = { version = "4.6.1", features = ["derive"] }
 telar-workspace = { workspace = true }
