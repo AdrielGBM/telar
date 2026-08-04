@@ -1,6 +1,6 @@
 {
   "name": "telar-analyzer",
-  "displayName": "Telar",
+  "displayName": "telar-analyzer",
   "description": "RSX language support for Visual Studio Code",
   "version": "0.1.2",
   "publisher": "telar",
@@ -60,7 +60,7 @@
         "telar.serverPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the telar-analyzer binary. If empty, uses the bundled server/ binary (if present), then searches PATH, then ~/.cargo/bin/telar-analyzer."
+          "description": "Path to the telar-analyzer binary. Takes precedence over everything else. If empty, uses the bundled server/ binary (patched for NixOS when needed), then searches PATH, then ~/.cargo/bin/telar-analyzer."
         }
       }
     },
@@ -88,5 +88,22 @@
     "@types/vscode": "^1.80.0",
     "esbuild": "^0.28.1",
     "typescript": "^6.0.3"
-  }
+  },
+  "license": "MIT OR Apache-2.0",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AdrielGBM/telar"
+  },
+  "homepage": "https://github.com/AdrielGBM/telar/tree/main/editors/vscode/telar",
+  "bugs": {
+    "url": "https://github.com/AdrielGBM/telar/issues"
+  },
+  "keywords": [
+    "telar",
+    "rsx",
+    "lsp",
+    "language-server",
+    "ide"
+  ]
 }

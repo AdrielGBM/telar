@@ -2,6 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import * as vscode from "vscode";
+import { exec } from "child_process";
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -12,11 +13,15 @@ import {
 
 let client: LanguageClient | undefined;
 
-export function activate(context: vscode.ExtensionContext): void {
-  const serverPath = resolveServerPath(context.extensionPath);
+const PATCHED_VERSION_KEY = "telar.patchedServerVersion";
+
+export async function activate(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  const serverPath = await resolveServerPath(context);
   if (!serverPath) {
     vscode.window.showErrorMessage(
-      "telar-analyzer not found. Install it with `cargo install telar-analyzer` or set telar.serverPath."
+      "telar-analyzer not found. Build it with `cargo build -p telar-analyzer --release` and point `telar.serverPath` at the binary.",
     );
     return;
   }
@@ -28,14 +33,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: "file", language: "rsx" }],
-    // Watch `.rs` + `Cargo.toml`/`Cargo.lock` too: the embedded rust-analyzer loads hand-written Rust
-    // once, so the server needs didChangeWatchedFiles to refresh them (the LSP never gets didChange for
-    // non-`.rsx`). A lockfile change (e.g. `cargo add`) shifts the dependency graph, so it forces a
-    // full reload just like `Cargo.toml`. Watched `.rsx` events keep the workspace symbol index fresh.
+    // The embedded rust-analyzer loads hand-written Rust once, so the server needs didChangeWatchedFiles to refresh it — the LSP never sends didChange for non-`.rsx` files.
+    // A lockfile change (e.g. `cargo add`) shifts the dependency graph, so it forces a full reload just like `Cargo.toml`. Watched `.rsx` events keep the workspace symbol index fresh.
+    // The `.rs` globs follow cargo's source layout instead of `**`: every workspace load runs `cargo check`, which writes generated `.rs` under `target/`, and watching those would feed a reload loop.
     synchronize: {
       fileEvents: [
         vscode.workspace.createFileSystemWatcher("**/*.rsx"),
-        vscode.workspace.createFileSystemWatcher("**/*.rs"),
+        vscode.workspace.createFileSystemWatcher("**/src/**/*.rs"),
+        vscode.workspace.createFileSystemWatcher("**/build.rs"),
         vscode.workspace.createFileSystemWatcher("**/Cargo.toml"),
         vscode.workspace.createFileSystemWatcher("**/Cargo.lock"),
       ],
@@ -46,7 +51,7 @@ export function activate(context: vscode.ExtensionContext): void {
     "telar-analyzer",
     "telar-analyzer",
     serverOptions,
-    clientOptions
+    clientOptions,
   );
 
   // Status bar item reflecting the LSP connection state. The listener MUST be attached before
@@ -54,7 +59,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // post-start listener exists, which left the item stuck on the spinner (never reaching the check).
   // Clicking it reveals the server log. (The embedded-analyzer "workspace ready" state — logged there
   // ~15s after connect — is a future refinement to surface here.)
-  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  const status = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    100,
+  );
   status.text = "$(loading~spin) rsx";
   status.tooltip = "telar-analyzer language server — click to show its log";
   status.command = "telar.showServerLog";
@@ -63,12 +71,15 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     client.onDidChangeState((e) => {
       if (e.newState === State.Running) status.text = "$(check) rsx";
-      else if (e.newState === State.Starting) status.text = "$(loading~spin) rsx";
+      else if (e.newState === State.Starting)
+        status.text = "$(loading~spin) rsx";
       else status.text = "$(error) rsx";
-    })
+    }),
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("telar.showServerLog", () => client?.outputChannel.show())
+    vscode.commands.registerCommand("telar.showServerLog", () =>
+      client?.outputChannel.show(),
+    ),
   );
 
   // Hover, go-to-definition and Rust diagnostics for `[logic]`/`[view]` are now served in-process by
@@ -81,14 +92,16 @@ export function activate(context: vscode.ExtensionContext): void {
   // `.telar/build/*.rs`) back onto the `.rsx`. This reuses the check the user's rust-analyzer already runs
   // on save — no duplicate cargo check — and gives clean, cascade-free semantic errors (wrong fn names,
   // unknown tags, type mismatches) on the source line. Our LSP keeps providing instant syntax errors.
-  const cargoDiagnostics = vscode.languages.createDiagnosticCollection("rsx-cargo-check");
+  const cargoDiagnostics =
+    vscode.languages.createDiagnosticCollection("rsx-cargo-check");
   context.subscriptions.push(cargoDiagnostics);
   context.subscriptions.push(
     vscode.languages.onDidChangeDiagnostics((e) => {
       for (const uri of e.uris) {
-        if (isGeneratedBuildFile(uri.fsPath)) projectGeneratedDiagnostics(uri, cargoDiagnostics);
+        if (isGeneratedBuildFile(uri.fsPath))
+          projectGeneratedDiagnostics(uri, cargoDiagnostics);
       }
-    })
+    }),
   );
   // `cargo check` reads the `.rsx` from disk (the macro re-expands it), and the stock rust-analyzer only
   // re-checks on saves of files *it* owns — never the `.rsx`. So on every `.rsx` save we nudge its
@@ -98,28 +111,36 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.languageId === "rsx" || doc.fileName.endsWith(".rsx")) {
-        void vscode.commands.executeCommand("rust-analyzer.runFlycheck").then(undefined, () => {
-          // rust-analyzer not installed / no flycheck — projection simply stays at its last state.
-        });
+        void vscode.commands
+          .executeCommand("rust-analyzer.runFlycheck")
+          .then(undefined, () => {
+            // rust-analyzer not installed / no flycheck — projection simply stays at its last state.
+          });
       }
-    })
+    }),
   );
 
   // The "▶ Preview" code lens runs `cargo telar preview --component <name>` in the file's crate.
   context.subscriptions.push(
-    vscode.commands.registerCommand("telar.preview", (uri?: vscode.Uri | string) => {
-      const target =
-        typeof uri === "string"
-          ? vscode.Uri.parse(uri)
-          : (uri ?? vscode.window.activeTextEditor?.document.uri);
-      if (!target) return;
-      const filePath = target.fsPath;
-      const component = path.basename(filePath, ".rsx");
-      const cwd = findCrateDir(filePath) ?? path.dirname(filePath);
-      const terminal = vscode.window.createTerminal({ name: "rsx preview", cwd });
-      terminal.show();
-      terminal.sendText(`cargo telar preview --component ${component}`);
-    })
+    vscode.commands.registerCommand(
+      "telar.preview",
+      (uri?: vscode.Uri | string) => {
+        const target =
+          typeof uri === "string"
+            ? vscode.Uri.parse(uri)
+            : (uri ?? vscode.window.activeTextEditor?.document.uri);
+        if (!target) return;
+        const filePath = target.fsPath;
+        const component = path.basename(filePath, ".rsx");
+        const cwd = findCrateDir(filePath) ?? path.dirname(filePath);
+        const terminal = vscode.window.createTerminal({
+          name: "rsx preview",
+          cwd,
+        });
+        terminal.show();
+        terminal.sendText(`cargo telar preview --component ${component}`);
+      },
+    ),
   );
 }
 
@@ -135,7 +156,9 @@ function generatedToSource(genFsPath: string): string | undefined {
   const idx = genFsPath.indexOf(BUILD_MARKER);
   if (idx < 0) return undefined;
   const root = genFsPath.slice(0, idx);
-  const rel = genFsPath.slice(idx + BUILD_MARKER.length).replace(/\.rs$/, ".rsx");
+  const rel = genFsPath
+    .slice(idx + BUILD_MARKER.length)
+    .replace(/\.rs$/, ".rsx");
   return path.join(root, "src", rel);
 }
 
@@ -155,7 +178,7 @@ function readLineMap(genFsPath: string): (number | null)[] | undefined {
 /// line is flagged.
 function projectGeneratedDiagnostics(
   genUri: vscode.Uri,
-  collection: vscode.DiagnosticCollection
+  collection: vscode.DiagnosticCollection,
 ): void {
   const source = generatedToSource(genUri.fsPath);
   if (!source) return;
@@ -166,7 +189,9 @@ function projectGeneratedDiagnostics(
   // keep the existing markers (VS Code shifts them as the user types) and let the next save's flycheck
   // refresh them against a matching map.
   const rsxUri = vscode.Uri.file(source);
-  const openDoc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === rsxUri.fsPath);
+  const openDoc = vscode.workspace.textDocuments.find(
+    (d) => d.uri.fsPath === rsxUri.fsPath,
+  );
   if (openDoc?.isDirty) return;
 
   const lineMap = readLineMap(genUri.fsPath);
@@ -174,11 +199,21 @@ function projectGeneratedDiagnostics(
 
   const mapped: vscode.Diagnostic[] = [];
   for (const d of vscode.languages.getDiagnostics(genUri)) {
-    if (d.source !== "rustc" || d.severity !== vscode.DiagnosticSeverity.Error) continue;
+    if (d.source !== "rustc" || d.severity !== vscode.DiagnosticSeverity.Error)
+      continue;
     const rsxLine = lineMap[d.range.start.line];
     if (rsxLine === null || rsxLine === undefined) continue;
-    const range = new vscode.Range(rsxLine, 0, rsxLine, Number.MAX_SAFE_INTEGER);
-    const diag = new vscode.Diagnostic(range, d.message, vscode.DiagnosticSeverity.Error);
+    const range = new vscode.Range(
+      rsxLine,
+      0,
+      rsxLine,
+      Number.MAX_SAFE_INTEGER,
+    );
+    const diag = new vscode.Diagnostic(
+      range,
+      d.message,
+      vscode.DiagnosticSeverity.Error,
+    );
     diag.source = "rsx (cargo check)";
     diag.code = d.code;
     mapped.push(diag);
@@ -203,18 +238,20 @@ export function deactivate(): Thenable<void> | undefined {
 
 // === server discovery ======================================================
 
-function resolveServerPath(extensionPath: string): string | undefined {
-  // Prefer the binary bundled inside the VSIX under server/ — this is the precompiled path
-  // for platform-specific extension packages that ship telar-analyzer alongside the extension.
-  const bundledName = process.platform === "win32" ? "telar-analyzer.exe" : "telar-analyzer";
-  const bundled = path.join(extensionPath, "server", bundledName);
-  if (fs.existsSync(bundled)) return bundled;
-
+async function resolveServerPath(
+  context: vscode.ExtensionContext,
+): Promise<string | undefined> {
   const config = vscode.workspace.getConfiguration("telar");
   const configured = config.get<string>("serverPath");
   if (configured && configured.trim().length > 0) {
     return configured.trim();
   }
+
+  // Checked before PATH so a packaged extension still resolves when the editor starts outside a dev shell.
+  const bundledName =
+    process.platform === "win32" ? "telar-analyzer.exe" : "telar-analyzer";
+  const bundled = path.join(context.extensionPath, "server", bundledName);
+  if (fs.existsSync(bundled)) return await prepareBundled(context, bundled);
 
   const onPath = findOnPath("telar-analyzer");
   if (onPath) return onPath;
@@ -234,4 +271,90 @@ function findOnPath(binary: string): string | undefined {
     if (fs.existsSync(full)) return full;
   }
   return undefined;
+}
+
+// A platform VSIX ships a binary whose ELF interpreter (/lib64/ld-linux-x86-64.so.2) does not exist on NixOS, so exec fails with a misleading ENOENT. Patch a private copy instead, mirroring rust-analyzer's bootstrap.
+async function prepareBundled(
+  context: vscode.ExtensionContext,
+  bundled: string,
+): Promise<string> {
+  if (process.platform !== "linux" || !(await isNixOs())) return bundled;
+
+  // A Nix-built extension bundles a store path that is already linked correctly, so patching it would be redundant work on every version bump.
+  if (fs.realpathSync(bundled).startsWith("/nix/store/")) return bundled;
+
+  const storageDir = context.globalStorageUri.fsPath;
+  const dest = path.join(storageDir, path.basename(bundled));
+  const version = context.extension.packageJSON.version as string;
+
+  if (
+    fs.existsSync(dest) &&
+    context.globalState.get<string>(PATCHED_VERSION_KEY) === version
+  ) {
+    return dest;
+  }
+
+  try {
+    await fs.promises.mkdir(storageDir, { recursive: true });
+    await fs.promises.rm(dest, { force: true });
+    await fs.promises.copyFile(bundled, dest);
+    await patchelf(dest);
+    await context.globalState.update(PATCHED_VERSION_KEY, version);
+    return dest;
+  } catch (err) {
+    vscode.window.showWarningMessage(
+      `Could not patch the bundled telar-analyzer for NixOS (${err}). Set telar.serverPath to a locally built binary.`,
+    );
+    return bundled;
+  }
+}
+
+async function isNixOs(): Promise<boolean> {
+  try {
+    const contents = await fs.promises.readFile("/etc/os-release", "utf8");
+    const id = contents.split("\n").find((line) => line.startsWith("ID="));
+    return (id ?? "").includes("nixos");
+  } catch {
+    return false;
+  }
+}
+
+async function patchelf(dest: string): Promise<void> {
+  const expression = `
+    {srcStr, pkgs ? import <nixpkgs> {}}:
+      pkgs.stdenv.mkDerivation {
+        name = "telar-analyzer";
+        src = /. + srcStr;
+        phases = [ "installPhase" "fixupPhase" ];
+        installPhase = "cp $src $out";
+        fixupPhase = ''
+          chmod 755 $out
+          patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" $out
+        '';
+      }
+  `;
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Patching telar-analyzer for NixOS",
+    },
+    async () => {
+      // `nix-build -o` replaces dest with a symlink into the store, so the unpatched copy has to move aside first.
+      const orig = `${dest}-orig`;
+      await fs.promises.rename(dest, orig);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const handle = exec(
+            `nix-build -E - --argstr srcStr '${orig}' -o '${dest}'`,
+            (err, _stdout, stderr) =>
+              err ? reject(new Error(stderr)) : resolve(),
+          );
+          handle.stdin?.write(expression);
+          handle.stdin?.end();
+        });
+      } finally {
+        await fs.promises.rm(orig, { force: true });
+      }
+    },
+  );
 }
