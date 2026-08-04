@@ -75,19 +75,17 @@ jobs:
             artifacts/telar-analyzer-x86_64-apple-darwin
             artifacts/telar-analyzer-x86_64-pc-windows-msvc.exe
 
-  # TODO(user): This job builds and publishes platform-specific VSIXs to the VS Code Marketplace.
-  # Before enabling it:
-  #   1. Go to https://marketplace.visualstudio.com/manage → publisher "telar".
-  #   2. Create a Personal Access Token (PAT) with "Marketplace (Manage)" scope.
-  #   3. Store it as a secret named VSCE_PAT in this repo (Settings → Secrets → Actions).
-  #   4. Remove the `if: false` guard below.
   # Each VSIX bundles the target-native telar-analyzer binary inside server/ so the extension
   # can ship the precompiled binary without users needing cargo.
+  # Open VSX is a separate registry (VSCodium, Cursor, Gitpod, Theia); the Microsoft marketplace
+  # does not feed it. Its step is skipped until OVSX_PAT exists, so the release still goes out.
   publish-vsix:
     name: Publish VSIX (${{ matrix.vsce-target }})
     needs: build
     runs-on: ubuntu-latest
-    if: false
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
     strategy:
       fail-fast: false
       matrix:
@@ -132,9 +130,22 @@ jobs:
         run: pnpm run compile
         working-directory: editors/vscode/telar
 
-      - name: Package and publish platform VSIX
+      # The tag is the single source of truth for the release, so the extension carries the same
+      # number as the analyzer it bundles. The marketplace refuses a version it has already seen.
+      - name: Take the version from the release tag
         working-directory: editors/vscode/telar
-        env:
-          # TODO(user): set VSCE_PAT secret — see comment on this job above.
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: pnpx @vscode/vsce publish --target ${{ matrix.vsce-target }} --no-dependencies
+        run: pnpm pkg set version="${GITHUB_REF_NAME#v}"
+
+      # Packaged once and published from the file, so both registries receive the identical artifact.
+      - name: Package platform VSIX
+        working-directory: editors/vscode/telar
+        run: pnpx @vscode/vsce package --target ${{ matrix.vsce-target }} --no-dependencies -o telar-analyzer-${{ matrix.vsce-target }}.vsix
+
+      - name: Publish to the VS Code Marketplace
+        working-directory: editors/vscode/telar
+        run: pnpx @vscode/vsce publish --packagePath telar-analyzer-${{ matrix.vsce-target }}.vsix
+
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        working-directory: editors/vscode/telar
+        run: pnpx ovsx publish telar-analyzer-${{ matrix.vsce-target }}.vsix
