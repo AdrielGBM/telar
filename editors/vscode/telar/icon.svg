@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Telar">
+  <rect width="128" height="128" rx="28" fill="#2E3440"/>
+  <g stroke-width="12" stroke-linecap="round" fill="none">
+    <g stroke="#EBCB8B">
+      <path d="M20 34h88"/>
+      <path d="M20 64h88"/>
+      <path d="M20 94h88"/>
+    </g>
+    <g stroke="#88C0D0">
+      <path d="M34 20v88"/>
+      <path d="M64 20v88"/>
+      <path d="M94 20v88"/>
+    </g>
+    <g stroke="#EBCB8B">
+      <path d="M23 64h22"/>
+      <path d="M53 34h22"/>
+      <path d="M53 94h22"/>
+      <path d="M83 64h22"/>
+    </g>
+  </g>
+</svg>
