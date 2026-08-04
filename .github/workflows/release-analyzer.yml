@@ -17,12 +17,13 @@ jobs:
             os: ubuntu-latest
             binary: telar-analyzer
           - target: aarch64-apple-darwin
-            # macos-latest is Apple Silicon (M-series); native ARM build avoids cross-compilation of ra_ap_* crates.
             os: macos-latest
             binary: telar-analyzer
+          # Cross-compiled from the Apple Silicon runner rather than a native Intel one: GitHub retired
+          # macos-13, so that label now queues until the 24h limit and takes the whole release with it.
+          # Apple's SDK targets both architectures and this crate pulls no native dependencies.
           - target: x86_64-apple-darwin
-            # macos-13 is the last GitHub-hosted Intel runner.
-            os: macos-13
+            os: macos-latest
             binary: telar-analyzer
           - target: x86_64-pc-windows-msvc
             os: windows-latest
