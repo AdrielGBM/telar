@@ -17,6 +17,8 @@ pub async fn run() {
     let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
     let backend = Arc::new(Backend::new(OutgoingSender::new(tx)));
 
+    spawn_shutdown_signals(backend.clone());
+
     // A single writer task owns stdout so server-originated messages never interleave.
     let writer = tokio::spawn(async move {
         let mut stdout = tokio::io::stdout();
@@ -60,9 +62,35 @@ pub async fn run() {
         }
     }
 
+    backend.release_analyzer();
     drop(backend);
     let _ = writer.await;
 }
+
+/// Releases the analyzer before the process dies on SIGTERM/SIGHUP, which is how an editor usually terminates us when it does not get to send `exit`. SIGKILL stays out of reach: the child is spawned inside `ra_ap_proc_macro_api`, so `PR_SET_PDEATHSIG` is not ours to set without hand-rolling that spawn against the pinned `ra_ap_*` snapshot.
+#[cfg(unix)]
+fn spawn_shutdown_signals(backend: Arc<Backend>) {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    tokio::spawn(async move {
+        let (Ok(mut term), Ok(mut hup)) = (
+            signal(SignalKind::terminate()),
+            signal(SignalKind::hangup()),
+        ) else {
+            return;
+        };
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = hup.recv() => {}
+        }
+        // Off the runtime thread: releasing waits on the analyzer mutex, which a blocking query may hold.
+        let _ = tokio::task::spawn_blocking(move || backend.release_analyzer()).await;
+        std::process::exit(0);
+    });
+}
+
+#[cfg(not(unix))]
+fn spawn_shutdown_signals(_backend: Arc<Backend>) {}
 
 async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Result<Value, Value> {
     let result = match method {

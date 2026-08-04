@@ -8,7 +8,7 @@ use crate::ra::{EmbeddedAnalyzer, RefTarget};
 use crate::text::byte_offset;
 
 use super::mapping::reverse_map_rust_refs;
-use super::{AnalyzerState, Backend};
+use super::{AnalyzerState, Backend, mark_reload};
 
 impl Backend {
     /// Maps a `[logic]` cursor into the generated module and runs `run` against the embedded analyzer on a blocking thread (the query is synchronous; the load may still be in flight, in which case this yields `None`).
@@ -36,6 +36,7 @@ impl Backend {
 
         let root = crate::build_sync::crate_root(&rsx_path)?;
         self.ensure_loading(root, Some(gen_path.clone()));
+        let reload_at = self.reload_at.clone();
 
         let analyzer = self.analyzer.clone();
         let outgoing = self.outgoing.clone();
@@ -48,7 +49,7 @@ impl Backend {
             };
             // A generated module the graph doesn't know yet (e.g. a `.rsx` added since load): drop to Idle so the next query reloads the workspace.
             if !a.knows_file(&gen_path) {
-                *state = AnalyzerState::Idle;
+                mark_reload(&reload_at);
                 return None;
             }
             let ra_at = std::time::Instant::now();
@@ -97,6 +98,7 @@ impl Backend {
 
         let root = crate::build_sync::crate_root(&rsx_path)?;
         self.ensure_loading(root, Some(gen_path.clone()));
+        let reload_at = self.reload_at.clone();
 
         let analyzer = self.analyzer.clone();
         let outgoing = self.outgoing.clone();
@@ -108,7 +110,7 @@ impl Backend {
                 return None;
             };
             if !a.knows_file(&gen_path) {
-                *state = AnalyzerState::Idle;
+                mark_reload(&reload_at);
                 return None;
             }
             let ra_at = std::time::Instant::now();
@@ -139,6 +141,7 @@ impl Backend {
         T: Send + 'static,
     {
         self.ensure_loading(root, Some(gen_path.clone()));
+        let reload_at = self.reload_at.clone();
         let analyzer = self.analyzer.clone();
         tokio::task::spawn_blocking(move || {
             let mut state = analyzer.lock().ok()?;
@@ -146,7 +149,7 @@ impl Backend {
                 return None;
             };
             if !a.knows_file(&gen_path) {
-                *state = AnalyzerState::Idle;
+                mark_reload(&reload_at);
                 return None;
             }
             run(a)

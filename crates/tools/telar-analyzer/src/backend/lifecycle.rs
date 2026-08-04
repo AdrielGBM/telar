@@ -8,7 +8,7 @@ use crate::index::WorkspaceIndex;
 use crate::project::ProjectInfo;
 use crate::ra::EmbeddedAnalyzer;
 
-use super::{AnalyzerState, Backend};
+use super::{AnalyzerState, Backend, RELOAD_DEBOUNCE, mark_reload};
 
 impl Backend {
     pub(crate) async fn reparse_and_diagnose(&self, uri: Uri, text: String) -> Vec<Diagnostic> {
@@ -79,6 +79,7 @@ impl Backend {
         let log = self.outgoing.clone();
         let store = self.store.clone();
         let revisions = self.revision.clone();
+        let reload_at = self.reload_at.clone();
         tokio::spawn(async move {
             let raw = tokio::task::spawn_blocking(move || {
                 // A newer edit already superseded this one: skip the expensive query without even contending for the analyzer lock (its `full_diagnostics` would be wasted work).
@@ -92,7 +93,7 @@ impl Backend {
                     return None;
                 };
                 if !a.knows_file(&gen_path) {
-                    *state = AnalyzerState::Idle;
+                    mark_reload(&reload_at);
                     return None;
                 }
                 let ra_at = std::time::Instant::now();
@@ -171,12 +172,32 @@ impl Backend {
         });
     }
 
+    /// Whether a pending invalidation has waited out [`RELOAD_DEBOUNCE`], consuming it if so. Timed from the first invalidation of a burst rather than the last, so queries that keep re-marking an unknown file cannot postpone the reload indefinitely.
+    fn take_due_reload(&self) -> bool {
+        let Ok(mut mark) = self.reload_at.lock() else {
+            return false;
+        };
+        match *mark {
+            Some(at) if at.elapsed() >= RELOAD_DEBOUNCE => {
+                *mark = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Starts the (slow) workspace load on a blocking thread if it hasn't started yet. Returns immediately; queries that arrive while loading simply yield nothing.
     pub(crate) fn ensure_loading(&self, root: PathBuf, warm: Option<PathBuf>) {
         // `try_lock`, never `lock`: this runs on the single-threaded runtime, and a blocking RA query can hold the mutex for the length of its `analysis` call. Blocking here would stall the whole LSP read loop. Contention means the analyzer is already `Ready`/`Loading` (no query runs while `Idle`), so there is nothing to start — and any state that just reset to `Idle` is picked up by the next edit's call.
         let Ok(mut state) = self.analyzer.try_lock() else {
             return;
         };
+        // The one place the `RootDatabase` is released, and only once its replacement is about to be loaded, so the two never coexist and the peak stays at one workspace. The mark is consumed only when it can be acted on: a contended lock or an in-flight load must not swallow the invalidation.
+        if matches!(*state, AnalyzerState::Ready(_) | AnalyzerState::Failed)
+            && self.take_due_reload()
+        {
+            *state = AnalyzerState::Idle;
+        }
         if matches!(*state, AnalyzerState::Idle) {
             *state = AnalyzerState::Loading;
             let analyzer = self.analyzer.clone();

@@ -1,6 +1,7 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use lsp_types::*;
 use serde_json::json;
@@ -37,6 +38,21 @@ enum AnalyzerState {
     Failed,
 }
 
+/// How long invalidations are coalesced before the workspace is actually torn down and reloaded. Measured from the *first* pending invalidation, never extended, so a steady stream of queries against an unknown file cannot starve the reload. Amortizes a ~15s load, so the exact value matters little.
+const RELOAD_DEBOUNCE: Duration = Duration::from_millis(500);
+
+/// Records that the crate graph is out of date without dropping the `RootDatabase`. A single `cargo add` touches `Cargo.toml` *and* `Cargo.lock`, and a branch switch touches dozens of files; tearing down per event would pay the full reload for each. Only [`Backend::ensure_loading`] acts on the mark, which keeps teardown to one place.
+fn mark_reload(reload_at: &Mutex<Option<Instant>>) {
+    if let Ok(mut mark) = reload_at.lock() {
+        mark.get_or_insert_with(Instant::now);
+    }
+}
+
+/// Whether `path` sits inside a cargo build directory. `ra::load` sets `load_out_dirs_from_check`, so every workspace load runs `cargo check` and writes generated `.rs` under `target/`; treating those as source changes would reload the workspace in an endless loop. The client cannot be trusted to exclude them — a non-VS Code editor registers its own watchers.
+fn is_under_target_dir(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == "target")
+}
+
 /// Server-side docs for one batch of rust-analyzer completion items, keyed by generation. The wire items are sent without documentation (lean list); `completionItem/resolve` re-attaches it from here. A new completion batch bumps `generation`, invalidating the previous batch's `data` references.
 #[derive(Default)]
 struct CompletionCache {
@@ -54,6 +70,7 @@ pub struct Backend {
     completion_cache: Arc<Mutex<CompletionCache>>,
     // Monotonic edit counter, bumped on every reparse. A spawned diagnostics task captures the value it was queued for and bails before the expensive rust-analyzer query if a newer edit superseded it, so keystroke-rate edits don't pile up redundant `full_diagnostics` runs behind the lock.
     revision: Arc<AtomicU64>,
+    reload_at: Arc<Mutex<Option<Instant>>>,
 }
 
 impl Backend {
@@ -65,11 +82,19 @@ impl Backend {
             index: Arc::new(Mutex::new(None)),
             completion_cache: Arc::new(Mutex::new(CompletionCache::default())),
             revision: Arc::new(AtomicU64::new(0)),
+            reload_at: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn outgoing(&self) -> &OutgoingSender {
         &self.outgoing
+    }
+
+    /// Drops the embedded analyzer, and with it the proc-macro server child, while the process is still alive. `server.rs` cannot rely on `drop(backend)` for this: spawned request handlers hold their own `Arc<Backend>` clones, so the `Drop` that kills the child may not run before the process exits, leaving it reparented to init holding its share of a multi-GB database.
+    pub fn release_analyzer(&self) {
+        if let Ok(mut state) = self.analyzer.lock() {
+            *state = AnalyzerState::Idle;
+        }
     }
 
     pub fn initialize(&self) -> InitializeResult {
@@ -180,7 +205,7 @@ impl Backend {
                 continue;
             };
             // Generated build files are driven by the overlay path; ignore their constant disk churn.
-            if crate::build_sync::is_generated_build_file(&path) {
+            if crate::build_sync::is_generated_build_file(&path) || is_under_target_dir(&path) {
                 continue;
             }
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -216,33 +241,29 @@ impl Backend {
             });
         }
 
-        if !needs_reload && to_refresh.is_empty() {
+        if needs_reload {
+            mark_reload(&self.reload_at);
+            self.outgoing.log_message(
+                MessageType::INFO,
+                "telar-analyzer: manifest/file change — workspace reload queued".to_string(),
+            );
+            return;
+        }
+        if to_refresh.is_empty() {
             return;
         }
         let analyzer = self.analyzer.clone();
-        let outgoing = self.outgoing.clone();
+        let reload_at = self.reload_at.clone();
         // Off the read loop: locking the analyzer can contend with an in-flight RA query.
         tokio::task::spawn_blocking(move || {
             let Ok(mut state) = analyzer.lock() else {
                 return;
             };
-            if needs_reload {
-                // Only disturb a settled analyzer; a load already in flight is re-validated by the next query's `knows_file` check.
-                if matches!(*state, AnalyzerState::Ready(_) | AnalyzerState::Failed) {
-                    *state = AnalyzerState::Idle;
-                    outgoing.log_message(
-                        MessageType::INFO,
-                        "telar-analyzer: manifest/file change — workspace will reload on next query"
-                            .to_string(),
-                    );
-                }
-                return;
-            }
             if let AnalyzerState::Ready(a) = &mut *state {
                 for path in &to_refresh {
                     if !a.refresh_from_disk(path) {
                         // A `.rs` the loaded graph doesn't know (e.g. newly created) → reload to pick it up.
-                        *state = AnalyzerState::Idle;
+                        mark_reload(&reload_at);
                         break;
                     }
                 }
