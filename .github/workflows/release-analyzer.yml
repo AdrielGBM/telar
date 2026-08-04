@@ -60,21 +60,20 @@ jobs:
         with:
           path: artifacts/
 
+      # Flattened into a separate directory: each artifact downloads as `artifacts/<name>/<binary>`, so
+      # renaming in place would move a file onto its own parent directory.
       - name: Rename artifacts for release upload
         run: |
-          mv artifacts/telar-analyzer-x86_64-unknown-linux-gnu/telar-analyzer   artifacts/telar-analyzer-x86_64-unknown-linux-gnu
-          mv artifacts/telar-analyzer-aarch64-apple-darwin/telar-analyzer        artifacts/telar-analyzer-aarch64-apple-darwin
-          mv artifacts/telar-analyzer-x86_64-apple-darwin/telar-analyzer         artifacts/telar-analyzer-x86_64-apple-darwin
-          mv artifacts/telar-analyzer-x86_64-pc-windows-msvc/telar-analyzer.exe  artifacts/telar-analyzer-x86_64-pc-windows-msvc.exe
+          mkdir -p release
+          mv artifacts/telar-analyzer-x86_64-unknown-linux-gnu/telar-analyzer   release/telar-analyzer-x86_64-unknown-linux-gnu
+          mv artifacts/telar-analyzer-aarch64-apple-darwin/telar-analyzer       release/telar-analyzer-aarch64-apple-darwin
+          mv artifacts/telar-analyzer-x86_64-apple-darwin/telar-analyzer        release/telar-analyzer-x86_64-apple-darwin
+          mv artifacts/telar-analyzer-x86_64-pc-windows-msvc/telar-analyzer.exe release/telar-analyzer-x86_64-pc-windows-msvc.exe
 
       - name: Create release and upload binaries
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/telar-analyzer-x86_64-unknown-linux-gnu
-            artifacts/telar-analyzer-aarch64-apple-darwin
-            artifacts/telar-analyzer-x86_64-apple-darwin
-            artifacts/telar-analyzer-x86_64-pc-windows-msvc.exe
+          files: release/*
 
   # Each VSIX bundles the target-native telar-analyzer binary inside server/ so the extension
   # can ship the precompiled binary without users needing cargo.
@@ -89,6 +88,9 @@ jobs:
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
     strategy:
       fail-fast: false
+      # Serialized: the first platform to publish creates the extension, and concurrent jobs racing to
+      # create it too are rejected with "already exists". Later ones only need to add their variant.
+      max-parallel: 1
       matrix:
         include:
           - vsce-target: linux-x64
