@@ -1,9 +1,9 @@
-name: Release telar-analyzer
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build:
@@ -75,6 +75,25 @@ jobs:
         with:
           files: release/*
 
+  # Without this the crates users compile against stay on whatever version was last published by hand,
+  # while the analyzer shipped in the VSIX tracks the tag — the editor then analyses a different
+  # transpiler output than the macro produces. The script reconciles against crates.io, so a partial
+  # upload is resumed rather than silently left half-done.
+  publish-crates:
+    name: Publish crates to crates.io
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish every publishable crate
+        if: env.CARGO_REGISTRY_TOKEN != ''
+        run: .github/scripts/publish-crates.sh
+
   # Each VSIX bundles the target-native telar-analyzer binary inside server/ so the extension
   # can ship the precompiled binary without users needing cargo.
   # Open VSX is a separate registry (VSCodium, Cursor, Gitpod, Theia); the Microsoft marketplace
@@ -121,7 +140,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - run: npm install -g pnpm
 
