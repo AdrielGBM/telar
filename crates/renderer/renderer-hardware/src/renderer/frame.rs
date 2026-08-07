@@ -240,7 +240,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             && self.width > 0
             && self.height > 0
         {
-            let output = match self.surface.as_ref().unwrap().get_current_texture() {
+            let acquired = {
+                let _swapchain = super::swapchain_lock();
+                self.surface.as_ref().unwrap().get_current_texture()
+            };
+            let output = match acquired {
                 wgpu::CurrentSurfaceTexture::Success(t) => t,
                 wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
                     tracing::debug!("hw idle-blit: suboptimal surface");
@@ -249,6 +253,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
                     tracing::warn!("hw idle-blit: surface Lost/Outdated, reconfiguring");
                     if let Some(config) = &self.config.clone() {
+                        let _swapchain = super::swapchain_rebuild_lock();
                         self.surface
                             .as_ref()
                             .unwrap()
@@ -325,7 +330,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 self.queue.submit(std::iter::once(encoder.finish()));
             }
             tracing::debug!("hw idle-blit: presenting");
-            output.present();
+            {
+                let _swapchain = super::swapchain_lock();
+                output.present();
+            }
             self.clear_pending();
             return Ok(true);
         }
@@ -1282,7 +1290,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         // Windowed: acquire the swapchain texture to present into. Headless (surface None): `output` stays None and every draw targets `offscreen_output` instead.
         let output: Option<wgpu::SurfaceTexture> = if self.surface.is_some() {
-            match self.surface.as_ref().unwrap().get_current_texture() {
+            let acquired = {
+                let _swapchain = super::swapchain_lock();
+                self.surface.as_ref().unwrap().get_current_texture()
+            };
+            match acquired {
                 wgpu::CurrentSurfaceTexture::Success(t) => Some(t),
                 wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
                     tracing::debug!("hw render_frame: suboptimal surface, rendering anyway");
@@ -1295,6 +1307,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         self.height
                     );
                     if let Some(config) = &self.config.clone() {
+                        let _swapchain = super::swapchain_rebuild_lock();
                         self.surface
                             .as_ref()
                             .unwrap()
@@ -2729,7 +2742,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         if let Some(output) = output {
             tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
             let present_start = renderer_core::perf::now_if_enabled();
-            output.present();
+            {
+                let _swapchain = super::swapchain_lock();
+                output.present();
+            }
             renderer_core::perf::record_since(renderer_core::perf::Phase::Present, present_start);
         }
         // generation already bumps iff content changed (same invariant the idle-blit fast path relies on), so it replaces the per-frame O(n) hash_draw_commands here; the is_empty() guard repopulates prev_commands after a resize cleared it without a content change.

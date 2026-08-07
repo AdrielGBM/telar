@@ -208,6 +208,49 @@ struct SharedGpu {
 
 static SHARED_GPU: std::sync::OnceLock<SharedGpu> = std::sync::OnceLock::new();
 
+// Keeps a swapchain from being rebuilt while any window is advancing one. A single device is shared by every
+// window (see SharedGpu) and the WSI beneath it does not take being driven from several threads at once:
+// reconfiguring one window's swapchain while a sibling sits inside its acquire loses the *device*, and a lost
+// device is every window at once — which is what a resize, of one window's grip or of every window's scale at
+// a time, used to cost.
+//
+// A read/write lock rather than a mutex because that is the shape of the rule: acquiring and presenting run
+// concurrently with each other exactly as wgpu intends, and only a rebuild excludes them. A mutex here made a
+// dragged window's per-frame reconfigure serialise every other window's presentation behind it, which is a
+// visible stutter across the whole desktop for the sake of a rule that never asked for it.
+//
+// Taken around each call rather than held across a frame: the acquire path reconfigures on `Lost`, and a read
+// guard still held there would deadlock against the write it needs.
+static SWAPCHAIN: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+/// Held while a swapchain is advanced — acquired or presented. Shared: any number of windows at once.
+pub(crate) fn swapchain_lock() -> std::sync::RwLockReadGuard<'static, ()> {
+    SWAPCHAIN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Held while a swapchain is built or rebuilt. Exclusive against every window's acquire and present.
+pub(crate) fn swapchain_rebuild_lock() -> std::sync::RwLockWriteGuard<'static, ()> {
+    // wgpu reports a fatal error as a panic, so the thread holding either guard can die with it. Poisoning
+    // would then take down the windows that survived, which is the opposite of the point.
+    SWAPCHAIN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// A pipeline built on a scoped thread, or the reason it could not be.
+///
+/// A panic here is rarely a bug in the pipeline: wgpu reports a fatal device error as a panic, so a device
+/// lost by any window arrives as one on every thread that touches it afterwards. Unwrapping would carry that
+/// into the caller — the UI thread — and end the process, which is how one dead device cost a whole
+/// application rather than the one surface that failed to open.
+fn built<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> Result<T, RendererError> {
+    handle
+        .join()
+        .map_err(|_| RendererError::Backend("a render pipeline could not be built".to_string()))
+}
+
 async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, RendererError> {
     if let Some(gpu) = SHARED_GPU.get() {
         return Ok(gpu);
@@ -578,17 +621,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             let t_retained = s.spawn(|| {
                 CompositePipeline::new(&device, surface_format, 1, &viewport_bind_group_layout, pc)
             });
-            (
-                t_rect.join().unwrap(),
-                t_text.join().unwrap(),
-                t_line.join().unwrap(),
-                t_path.join().unwrap(),
-                t_layer.join().unwrap(),
-                t_blur.join().unwrap(),
-                t_composite.join().unwrap(),
-                t_retained.join().unwrap(),
-            )
-        });
+            Ok::<_, RendererError>((
+                built(t_rect)?,
+                built(t_text)?,
+                built(t_line)?,
+                built(t_path)?,
+                built(t_layer)?,
+                built(t_blur)?,
+                built(t_composite)?,
+                built(t_retained)?,
+            ))
+        })?;
         // ImagePipeline holds an Rc<> cache and is not Send; create after the parallel scope.
         let image_pipeline = ImagePipeline::new(
             &device,
@@ -847,6 +890,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         // Headless mode has no surface to configure; the SurfaceConfiguration is still kept in `self.config` so the same `config.is_some()` gating used by the windowed path applies unchanged.
         if let Some(surface) = self.surface.as_ref() {
+            let _swapchain = swapchain_rebuild_lock();
             surface.configure(&self.device, &config);
         }
         self.config = Some(config);
