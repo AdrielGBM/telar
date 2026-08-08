@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-use renderer_cache::{Cache, CacheStat, limits};
+use renderer_cache::{Cache, CacheStat};
 use renderer_text::{TextShaper, TextShaperConfig};
 use tiny_skia::Pixmap;
 
@@ -31,7 +31,6 @@ pub(crate) fn pixmap_bytes(pixmap: &Pixmap) -> usize {
 
 pub(crate) struct SharedCaches {
     pub(crate) text_shaper: TextShaper,
-    pub(crate) image_cache: Cache<u64, Pixmap>,
     pub(crate) shadow_cache: Cache<ShadowCacheKey, Pixmap>,
     pub(crate) text_shadow_cache: Cache<TextShadowCacheKey, Pixmap>,
     pub(crate) path_shadow_cache: Cache<PathShadowCacheKey, Pixmap>,
@@ -49,7 +48,6 @@ impl SharedCaches {
                 shaping: config.text_shaping,
                 font: config.font.clone(),
             }),
-            image_cache: Cache::new(config.image, pixmap_bytes),
             shadow_cache: Cache::new(config.shadow, pixmap_bytes),
             text_shadow_cache: Cache::new(config.text_shadow, pixmap_bytes),
             path_shadow_cache: Cache::new(config.path_shadow, pixmap_bytes),
@@ -61,7 +59,6 @@ impl SharedCaches {
 
     fn stats(&self) -> Vec<CacheStat> {
         let mut stats = self.text_shaper.cache_stats();
-        stats.push(self.image_cache.stat("image"));
         stats.push(self.shadow_cache.stat("shadow.rect"));
         stats.push(self.text_shadow_cache.stat("shadow.text"));
         stats.push(self.path_shadow_cache.stat("shadow.path"));
@@ -82,16 +79,6 @@ pub(crate) fn init(config: &SoftwareRendererConfig) {
     });
 }
 
-/// Raises the surface-derived budgets to cover a surface of `width` × `height`.
-///
-/// Only ever raises, because these caches are shared: a budget that tracked whichever surface drew last would evict,
-/// on a bar's frame, the images a full-screen window still needs. So the thread ends up sized for its largest
-/// surface, which is the one that can actually demand the memory.
-pub(crate) fn note_surface_size(width: u32, height: u32) {
-    let budget = limits::surface_budget_bytes(width, height);
-    with_caches(|c| c.image_cache.grow_to(budget));
-}
-
 /// Drops everything no frame has asked for within each cache's idle horizon.
 ///
 /// The caches sweep themselves as they are used, which is enough while frames keep coming. It is not enough for a
@@ -99,7 +86,6 @@ pub(crate) fn note_surface_size(width: u32, height: u32) {
 pub fn sweep_idle() {
     with_caches(|c| {
         c.text_shaper.sweep_idle();
-        c.image_cache.sweep();
         c.shadow_cache.sweep();
         c.text_shadow_cache.sweep();
         c.path_shadow_cache.sweep();

@@ -102,11 +102,6 @@ pub const GLYPH_RASTER_BUDGET_BYTES: usize = 8 * 1024 * 1024;
 /// installed fonts" was a bound measured in the wrong unit.
 pub const FONT_FILE: Policy = Policy::new(32 * 1024 * 1024).idle(CPU_IDLE);
 
-/// Decoded image pixmaps, keyed by content hash. Surface-derived; see [`surface_budget_bytes`].
-pub fn image(surface_width: u32, surface_height: u32) -> Policy {
-    Policy::new(surface_budget_bytes(surface_width, surface_height)).idle(CPU_IDLE)
-}
-
 /// Pre-blurred rectangle shadows, keyed by geometry, radii and colour.
 pub const SHADOW: Policy = Policy::new(24 * 1024 * 1024).idle(CPU_IDLE);
 /// Pre-blurred text shadows.

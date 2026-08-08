@@ -430,17 +430,9 @@ where
                     } else {
                         None
                     };
-                    crate::caches::with_caches(|c| {
-                        crate::primitives::image::draw_image(
-                            pixmap,
-                            data,
-                            &mut c.image_cache,
-                            *rect,
-                            *filter,
-                            transform,
-                            clip,
-                        );
-                    });
+                    crate::primitives::image::draw_image(
+                        pixmap, data, *rect, *filter, transform, clip,
+                    );
                 }
                 DrawCommand::Line { p1, p2, style } => {
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
@@ -693,7 +685,6 @@ where
         if width != self.width || height != self.height {
             self.width = width;
             self.height = height;
-            crate::caches::note_surface_size(width, height);
             self.pixmap = Pixmap::new(width, height);
             self.clip_mask_buffer = tiny_skia::Mask::new(width, height);
             self.clip_mask_dirty = None;

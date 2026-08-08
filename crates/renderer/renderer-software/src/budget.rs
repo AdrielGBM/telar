@@ -6,9 +6,6 @@ use renderer_cache::{Policy, limits};
 /// A whole [`Policy`] per cache rather than a byte count, so an app can also say how long an entry may sit idle and
 /// whether one sighting is enough to keep it. A shell and a photo viewer want different answers to all three.
 pub struct SoftwareRendererConfig {
-    /// Decoded images. Defaults to the floor of the surface-derived budget and grows with the largest surface the
-    /// thread draws, so a bar does not reserve what a full-screen window would.
-    pub image: Policy,
     pub shadow: Policy,
     pub path_shadow: Policy,
     pub text_shadow: Policy,
@@ -22,7 +19,6 @@ pub struct SoftwareRendererConfig {
 impl Default for SoftwareRendererConfig {
     fn default() -> Self {
         Self {
-            image: limits::image(0, 0),
             shadow: limits::SHADOW,
             path_shadow: limits::PATH_SHADOW,
             text_shadow: limits::TEXT_SHADOW,
