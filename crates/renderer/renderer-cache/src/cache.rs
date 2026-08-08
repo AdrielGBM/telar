@@ -271,23 +271,34 @@ mod tests {
         assert!(cache.len() >= 96, "held {} entries", cache.len());
     }
 
+    /// Only ever sleeps *past* the horizon, never up to some fraction of it.
+    ///
+    /// `thread::sleep` guarantees a floor, not a duration: a loaded CI runner turned a 60 ms sleep into more than
+    /// 120 ms and evicted an entry this test had asserted was still there. Oversleeping cannot break "this should
+    /// be gone" — only "this should still be here", which is why that direction is tested without a clock at all.
     #[test]
     fn the_idle_sweep_drops_what_nothing_asked_for() {
-        let idle = Duration::from_millis(120);
+        let idle = Duration::from_millis(50);
         let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(4096).idle(idle), Vec::len);
         cache.insert(1, vec![0; 32]);
         cache.insert(2, vec![0; 32]);
 
-        std::thread::sleep(idle / 2);
-        assert!(cache.get(&1).is_some());
-        std::thread::sleep(idle);
+        std::thread::sleep(idle * 3);
+        cache.sweep();
+
+        assert!(cache.get(&1).is_none());
+        assert!(cache.get(&2).is_none());
+    }
+
+    #[test]
+    fn a_sweep_keeps_what_was_just_used() {
+        let mut cache: Cache<u32, Vec<u8>> =
+            Cache::new(Policy::new(4096).idle(Duration::from_secs(60)), Vec::len);
+        cache.insert(1, vec![0; 32]);
 
         cache.sweep();
-        assert!(
-            cache.get(&1).is_none(),
-            "even a re-touched entry goes once it too falls past the horizon"
-        );
-        assert!(cache.get(&2).is_none());
+
+        assert!(cache.get(&1).is_some());
     }
 
     #[test]
