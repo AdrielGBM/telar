@@ -312,16 +312,19 @@ where
                     } else {
                         None
                     };
-                    crate::primitives::rect::draw_rect(
-                        pixmap,
-                        rect,
-                        &style,
-                        transform,
-                        clip,
-                        &mut self.shadow_cache,
-                        &mut self.pending_shadows,
-                        &mut self.blur_scratch,
-                    );
+                    let blur_scratch = &mut self.blur_scratch;
+                    crate::caches::with_caches(|c| {
+                        crate::primitives::rect::draw_rect(
+                            pixmap,
+                            rect,
+                            &style,
+                            transform,
+                            clip,
+                            &mut c.shadow_cache,
+                            &mut c.pending_shadows,
+                            blur_scratch,
+                        );
+                    });
                 }
                 DrawCommand::Text { text, rect, style } => {
                     let rect = *rect;
@@ -345,24 +348,28 @@ where
                     } else {
                         None
                     };
-                    crate::primitives::text::draw_text(
-                        pixmap,
-                        &mut self.text_shaper,
-                        text,
-                        rect,
-                        &style,
-                        transform,
-                        clip,
-                        if inside_layer {
-                            None
-                        } else {
-                            self.draw_state.current_clip()
-                        },
-                        &mut self.blur_scratch,
-                        &mut self.text_pixmap_cache,
-                        &mut self.text_shadow_cache,
-                        &mut self.pending_text_shadows,
-                    );
+                    let outer_clip = if inside_layer {
+                        None
+                    } else {
+                        self.draw_state.current_clip()
+                    };
+                    let blur_scratch = &mut self.blur_scratch;
+                    crate::caches::with_caches(|c| {
+                        crate::primitives::text::draw_text(
+                            pixmap,
+                            &mut c.text_shaper,
+                            text,
+                            rect,
+                            &style,
+                            transform,
+                            clip,
+                            outer_clip,
+                            blur_scratch,
+                            &mut c.text_pixmap_cache,
+                            &mut c.text_shadow_cache,
+                            &mut c.pending_text_shadows,
+                        );
+                    });
                 }
                 DrawCommand::RichText { runs, rect, base } => {
                     let rect = *rect;
@@ -386,20 +393,23 @@ where
                     } else {
                         None
                     };
-                    crate::primitives::text::draw_rich_text(
-                        pixmap,
-                        &mut self.text_shaper,
-                        runs,
-                        rect,
-                        &base,
-                        transform,
-                        clip,
-                        if inside_layer {
-                            None
-                        } else {
-                            self.draw_state.current_clip()
-                        },
-                    );
+                    let outer_clip = if inside_layer {
+                        None
+                    } else {
+                        self.draw_state.current_clip()
+                    };
+                    crate::caches::with_caches(|c| {
+                        crate::primitives::text::draw_rich_text(
+                            pixmap,
+                            &mut c.text_shaper,
+                            runs,
+                            rect,
+                            &base,
+                            transform,
+                            clip,
+                            outer_clip,
+                        );
+                    });
                 }
                 DrawCommand::Image { data, rect, filter } => {
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
@@ -421,15 +431,17 @@ where
                     } else {
                         None
                     };
-                    crate::primitives::image::draw_image(
-                        pixmap,
-                        data,
-                        &mut self.image_cache,
-                        *rect,
-                        *filter,
-                        transform,
-                        clip,
-                    );
+                    crate::caches::with_caches(|c| {
+                        crate::primitives::image::draw_image(
+                            pixmap,
+                            data,
+                            &mut c.image_cache,
+                            *rect,
+                            *filter,
+                            transform,
+                            clip,
+                        );
+                    });
                 }
                 DrawCommand::Line { p1, p2, style } => {
                     if let Some(vr) = renderer_core::culling::command_visual_rect(
@@ -486,21 +498,25 @@ where
                     } else {
                         None
                     };
-                    crate::primitives::path::draw_path(
-                        pixmap,
-                        data,
-                        &style,
-                        transform,
-                        clip,
-                        if inside_layer {
-                            None
-                        } else {
-                            self.draw_state.current_clip()
-                        },
-                        &mut self.blur_scratch,
-                        &mut self.path_shadow_cache,
-                        &mut self.pending_path_shadows,
-                    );
+                    let outer_clip = if inside_layer {
+                        None
+                    } else {
+                        self.draw_state.current_clip()
+                    };
+                    let blur_scratch = &mut self.blur_scratch;
+                    crate::caches::with_caches(|c| {
+                        crate::primitives::path::draw_path(
+                            pixmap,
+                            data,
+                            &style,
+                            transform,
+                            clip,
+                            outer_clip,
+                            blur_scratch,
+                            &mut c.path_shadow_cache,
+                            &mut c.pending_path_shadows,
+                        );
+                    });
                 }
                 DrawCommand::PushClip { rect, radius } => {
                     let prev_dirty = self.clip_mask_dirty;

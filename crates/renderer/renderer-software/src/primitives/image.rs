@@ -30,6 +30,14 @@ pub(crate) fn new_image_cache(budget_bytes: usize) -> ImageCache {
     )
 }
 
+pub(crate) fn new_shadow_cache(budget_bytes: usize) -> ShadowCache {
+    CLruCache::with_config(
+        CLruCacheConfig::new(NonZeroUsize::new(budget_bytes.max(1)).unwrap())
+            .with_hasher(FxBuildHasher::default())
+            .with_scale(PixmapByteScale),
+    )
+}
+
 pub(crate) fn draw_image(
     pixmap: &mut tiny_skia::Pixmap,
     data: &Arc<ImageData>,

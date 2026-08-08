@@ -159,3 +159,29 @@ fn collect_colr_gating_records_and_skips() {
         "a cached false flag must skip COLR collection"
     );
 }
+
+// The clock case: a string rasterized once and never asked for again must not occupy the cache. Admission is what separates "drawn" from "worth keeping", and only a second sighting proves the difference.
+#[test]
+fn a_string_seen_once_is_not_admitted_and_a_second_sighting_admits_it() {
+    let mut shaper = TextShaper::new();
+    assert!(!shaper.admit(1), "first sighting must not be cached");
+    assert!(shaper.admit(1), "second sighting earns a place");
+}
+
+#[test]
+fn admission_tracks_each_key_on_its_own() {
+    let mut shaper = TextShaper::new();
+    assert!(!shaper.admit(1));
+    assert!(!shaper.admit(2));
+    assert!(shaper.admit(2));
+    assert!(shaper.admit(1));
+}
+
+// Admission is consumed, not remembered: once a key is in the real cache it must not keep a slot in the seen-once table too, or the table fills with keys that will never be asked about again.
+#[test]
+fn admitting_a_key_clears_it_from_the_pending_table() {
+    let mut shaper = TextShaper::new();
+    shaper.admit(7);
+    assert!(shaper.admit(7));
+    assert!(!shaper.admit(7), "admission starts over after being spent");
+}

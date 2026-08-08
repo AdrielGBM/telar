@@ -8,6 +8,7 @@ use renderer_core::{TextAlign, TextRun, TextStyle};
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 mod atlas;
 mod cache;
@@ -22,16 +23,23 @@ pub use atlas::{ATLAS_SIZE, GlyphAtlas, GlyphInfo};
 pub use cache::{TextCacheKey, make_text_cache_key, text_style_bits};
 pub use colr::ColrGlyph;
 
-use cache::{AlphaCacheKey, AlphaCacheScale, PixelCacheScale, ShapingCacheKey, ShapingCacheScale};
+use cache::{
+    AlphaCacheKey, AlphaCacheScale, Cached, PixelCacheScale, ShapingCacheKey, ShapingCacheScale,
+};
 use clru::{CLruCache, CLruCacheConfig};
 
-/// Line height as a multiple of font size, applied uniformly at layout time. Exposed so widgets that
-/// vertically place text (e.g. centering a button label) center against the exact box the renderer uses.
+/// Line height as a multiple of font size, applied uniformly at layout time. Exposed so widgets that vertically place text (e.g. centering a button label) center against the exact box the renderer uses.
 pub const LINE_HEIGHT_FACTOR: f32 = 1.2;
 
 // Entry caps for the measure and has-COLR caches. Values are tiny (a few bytes each), so the cap trades negligible memory for a high hit rate.
 const MEASURE_CACHE_CAP: usize = 1000;
 const HAS_COLR_CACHE_CAP: usize = 1000;
+/// How many rasterized-once strings are remembered while waiting to see whether anything asks again. Keys only, so the whole table is a few tens of KB; past it the oldest are forgotten and their strings simply pay admission again.
+const SEEN_ONCE_CAP: usize = 4096;
+/// How long a raster survives with nothing drawing it.
+const IDLE_EVICT: Duration = Duration::from_secs(300);
+/// Lower bound between idle sweeps, so the check costs one `Instant::elapsed` on the frame path rather than a walk of every cache.
+const SWEEP_EVERY: Duration = Duration::from_secs(60);
 
 pub struct TextShaperConfig {
     pub pixel_cache_budget_bytes: usize,
@@ -55,8 +63,12 @@ pub struct TextShaper {
     font_system: FontSystem,
     swash_cache: SwashCache,
     pub atlas: GlyphAtlas,
-    pixel_cache: CLruCache<TextCacheKey, Arc<[u8]>, FxBuildHasher, PixelCacheScale>,
-    alpha_pixel_cache: CLruCache<AlphaCacheKey, Arc<[u8]>, FxBuildHasher, AlphaCacheScale>,
+    pixel_cache: CLruCache<TextCacheKey, Cached<Arc<[u8]>>, FxBuildHasher, PixelCacheScale>,
+    alpha_pixel_cache: CLruCache<AlphaCacheKey, Cached<Arc<[u8]>>, FxBuildHasher, AlphaCacheScale>,
+    // Strings rasterized once and not seen again since. Admission to the pixel caches costs a second sighting, so a clock at `%H:%M:%S` — a string a second that no later frame will ever ask for — rasterizes exactly as before but stops filling megabytes with its own past. Bounded, or it would become the leak it prevents.
+    seen_once: LruCache<u64, (), FxBuildHasher>,
+    // When the idle sweep last ran. See [`Self::sweep_idle`].
+    last_sweep: Instant,
     shaping_cache: CLruCache<
         ShapingCacheKey,
         Arc<Vec<(CacheKey, i32, i32)>>,
@@ -75,8 +87,7 @@ pub struct TextShaper {
     font_metrics_cache: Option<renderer_core::FontMetrics>,
 }
 
-/// The buffer line height in pixels for `style`: `line_height` (a multiple of font size) when set, else
-/// the natural `LINE_HEIGHT_FACTOR`. Shared by shaping and measuring so both reserve the same vertical space.
+/// The buffer line height in pixels for `style`: `line_height` (a multiple of font size) when set, else the natural `LINE_HEIGHT_FACTOR`. Shared by shaping and measuring so both reserve the same vertical space.
 pub(crate) fn effective_line_height(style: &TextStyle) -> f32 {
     style.font_size * style.line_height.unwrap_or(LINE_HEIGHT_FACTOR)
 }
@@ -118,10 +129,7 @@ fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Te
     buffer
 }
 
-/// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public
-/// ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and
-/// (with ellipsis) `…` is appended and characters are dropped until it fits. Single logical line per
-/// call is assumed for the cut offset (UI labels), which is the common clamp case.
+/// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and (with ellipsis) `…` is appended and characters are dropped until it fits. Single logical line per call is assumed for the cut offset (UI labels), which is the common clamp case.
 fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &TextStyle) -> Buffer {
     let buffer = shape_buffer(font_system, text, rect, style);
     let Some(max) = style.max_lines.map(usize::from).filter(|&n| n > 0) else {
@@ -161,9 +169,7 @@ fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Tex
     }
 }
 
-/// Shapes a rich-text paragraph (`runs`) into `rect` using the base metrics, giving each run its own weight,
-/// slant, and colour via a per-span `Attrs`. `max_lines`/`ellipsis` are not applied here — cosmic-text has no
-/// cross-run truncation, so the caller clamps by visual line instead.
+/// Shapes a rich-text paragraph (`runs`) into `rect` using the base metrics, giving each run its own weight, slant, and colour via a per-span `Attrs`. `max_lines`/`ellipsis` are not applied here — cosmic-text has no cross-run truncation, so the caller clamps by visual line instead.
 pub(crate) fn make_buffer_rich(
     font_system: &mut FontSystem,
     runs: &[TextRun],
@@ -287,7 +293,37 @@ impl TextShaper {
             colr_font_cache: FxHashMap::default(),
             blank_glyphs: FxHashSet::default(),
             font_metrics_cache: None,
+            seen_once: LruCache::with_hasher(
+                NonZeroUsize::new(SEEN_ONCE_CAP).unwrap(),
+                FxBuildHasher,
+            ),
+            last_sweep: Instant::now(),
         }
+    }
+
+    /// Whether a freshly rasterized string has earned a place in the pixel caches.
+    ///
+    /// `false` the first time a key is seen, `true` from the second on. The cost is rasterizing a string twice before it is kept, paid once per distinct string ever; what it buys is that text drawn once and never again — a clock's seconds, a byte counter, a download percentage — stops being stored at all. Text worth caching is text something asked for twice, which is the only text a cache can ever serve.
+    pub(super) fn admit(&mut self, key_hash: u64) -> bool {
+        if self.seen_once.pop(&key_hash).is_some() {
+            return true;
+        }
+        self.seen_once.put(key_hash, ());
+        false
+    }
+
+    /// Drops rasters nothing has drawn in [`IDLE_EVICT`], at most once per [`SWEEP_EVERY`].
+    ///
+    /// A byte budget bounds the cache but says nothing about *when* it lets go: an entry only leaves once newer entries crowd it out, so a cache that never fills holds its coldest raster for as long as the process lives. On a desktop shell that is measured in days — a folder name opened twice this morning still costs its pixels tonight. Sweeping by age is what makes idle memory come back at all.
+    fn sweep_idle(&mut self) {
+        if self.last_sweep.elapsed() < SWEEP_EVERY {
+            return;
+        }
+        self.last_sweep = Instant::now();
+        let cutoff = Instant::now() - IDLE_EVICT;
+        self.pixel_cache.retain(|_, v| v.last_used.get() > cutoff);
+        self.alpha_pixel_cache
+            .retain(|_, v| v.last_used.get() > cutoff);
     }
 }
 

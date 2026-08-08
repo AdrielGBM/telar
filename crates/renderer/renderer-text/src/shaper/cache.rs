@@ -2,20 +2,14 @@ use clru::WeightScale;
 use cosmic_text::CacheKey;
 use renderer_core::{Color, TextStyle};
 use rustc_hash::FxHasher;
+use std::cell::Cell;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+use std::time::Instant;
 
-/// Packs the shaping-relevant style axes into one `u32` so every cache key distinguishes e.g. bold from
-/// normal, or 2-line-clamped from unclamped, text of the same string — otherwise they would collide and
-/// one variant's glyphs/positions/truncation would be served for the other. Layout: `weight` bits 0-15,
-/// `italic` bit 16, `align` bits 17-18, `max_lines` bits 19-26 (0 = unlimited), `ellipsis` bit 27.
+/// Packs the shaping-relevant style axes into one `u32` so every cache key distinguishes e.g. bold from normal, or 2-line-clamped from unclamped, text of the same string — otherwise they would collide and one variant's glyphs/positions/truncation would be served for the other. Layout: `weight` bits 0-15, `italic` bit 16, `align` bits 17-18, `max_lines` bits 19-26 (0 = unlimited), `ellipsis` bit 27.
 ///
-/// `line_height`/`letter_spacing` shift glyph positions without changing which glyphs shape. They cannot
-/// fit the packed layout losslessly, so with default spacing (natural height, zero spacing) the packed
-/// value is returned verbatim — keeping existing keys and the byte-exact software golden untouched — and
-/// only non-default spacing folds all axes into a full 32-bit hash. This keeps `text_style_bits`'s `u32`
-/// contract so callers across crates (e.g. the software renderer's pixmap cache) distinguish spacing for
-/// free, without any signature change.
+/// `line_height`/`letter_spacing` shift glyph positions without changing which glyphs shape. They cannot fit the packed layout losslessly, so with default spacing (natural height, zero spacing) the packed value is returned verbatim — keeping existing keys and the byte-exact software golden untouched — and only non-default spacing folds all axes into a full 32-bit hash. This keeps `text_style_bits`'s `u32` contract so callers across crates (e.g. the software renderer's pixmap cache) distinguish spacing for free, without any signature change.
 pub fn text_style_bits(style: &TextStyle) -> u32 {
     let lines = style.max_lines.map_or(0, |n| n.min(255) as u32);
     let packed = (style.weight as u32)
@@ -91,18 +85,44 @@ pub fn make_text_cache_key(
     }
 }
 
+/// A cached raster with the moment it was last handed out.
+///
+/// LRU order alone cannot answer "has anything wanted this lately": it ranks entries against each other, so a cache that never fills keeps its coldest entry forever. In a shell that runs for days that is the difference between a bounded cache and one holding a folder name read twice last Tuesday. See [`TextShaper::sweep_idle`](super::TextShaper::sweep_idle).
+pub(super) struct Cached<T> {
+    pub(super) value: T,
+    pub(super) last_used: Cell<Instant>,
+}
+
+impl<T> Cached<T> {
+    pub(super) fn new(value: T) -> Self {
+        Self {
+            value,
+            last_used: Cell::new(Instant::now()),
+        }
+    }
+}
+
+/// A whole cache key as one `u64`, for the admission table to track without storing keys twice.
+///
+/// The full key, not its `text_hash` field: the same string at two sizes or colours is two rasters, and each has to earn admission on its own.
+pub(super) fn key_hash<K: Hash>(key: &K) -> u64 {
+    let mut hasher = FxHasher::default();
+    key.hash(&mut hasher);
+    hasher.finish()
+}
+
 // pub(super): referenced as field types by TextShaper in the parent `shaper` module.
 pub(super) struct PixelCacheScale;
-impl WeightScale<TextCacheKey, Arc<[u8]>> for PixelCacheScale {
-    fn weight(&self, _key: &TextCacheKey, value: &Arc<[u8]>) -> usize {
-        value.len().max(1)
+impl WeightScale<TextCacheKey, Cached<Arc<[u8]>>> for PixelCacheScale {
+    fn weight(&self, _key: &TextCacheKey, value: &Cached<Arc<[u8]>>) -> usize {
+        value.value.len().max(1)
     }
 }
 
 pub(super) struct AlphaCacheScale;
-impl WeightScale<AlphaCacheKey, Arc<[u8]>> for AlphaCacheScale {
-    fn weight(&self, _key: &AlphaCacheKey, value: &Arc<[u8]>) -> usize {
-        value.len().max(1)
+impl WeightScale<AlphaCacheKey, Cached<Arc<[u8]>>> for AlphaCacheScale {
+    fn weight(&self, _key: &AlphaCacheKey, value: &Cached<Arc<[u8]>>) -> usize {
+        value.value.len().max(1)
     }
 }
 

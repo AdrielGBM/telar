@@ -1,10 +1,13 @@
 use super::TextShaper;
-use super::cache::{AlphaCacheKey, hash_text, make_text_cache_key, text_style_bits};
+use super::cache::{
+    AlphaCacheKey, Cached, hash_text, key_hash, make_text_cache_key, text_style_bits,
+};
 use super::{make_buffer, make_buffer_rich};
 use cosmic_text::Color as CosmicColor;
 use geometry_core::Rect;
 use renderer_core::{TextRun, TextStyle, premultiply_rgba};
 use std::sync::Arc;
+use std::time::Instant;
 
 impl TextShaper {
     pub fn rasterize(
@@ -31,8 +34,10 @@ impl TextShaper {
             return (Arc::from([].as_slice()), 0, 0);
         }
 
+        self.sweep_idle();
         if let Some(cached) = self.pixel_cache.get(&key) {
-            return (Arc::clone(cached), width, height);
+            cached.last_used.set(Instant::now());
+            return (Arc::clone(&cached.value), width, height);
         }
 
         let rgba = color.to_rgba8();
@@ -73,7 +78,11 @@ impl TextShaper {
 
         premultiply_rgba(&mut pixels);
         let arc: Arc<[u8]> = Arc::from(pixels.into_boxed_slice());
-        let _ = self.pixel_cache.put_with_weight(key, arc.clone());
+        if self.admit(key_hash(&key)) {
+            let _ = self
+                .pixel_cache
+                .put_with_weight(key, Cached::new(arc.clone()));
+        }
 
         (arc, width, height)
     }
@@ -148,7 +157,8 @@ impl TextShaper {
         };
 
         if let Some(cached) = self.alpha_pixel_cache.get(&key) {
-            return (Arc::clone(cached), width, height);
+            cached.last_used.set(Instant::now());
+            return (Arc::clone(&cached.value), width, height);
         }
 
         let white = CosmicColor::rgba(255, 255, 255, 255);
@@ -181,7 +191,11 @@ impl TextShaper {
 
         premultiply_rgba(&mut pixels);
         let arc: Arc<[u8]> = Arc::from(pixels.into_boxed_slice());
-        let _ = self.alpha_pixel_cache.put_with_weight(key, arc.clone());
+        if self.admit(key_hash(&key)) {
+            let _ = self
+                .alpha_pixel_cache
+                .put_with_weight(key, Cached::new(arc.clone()));
+        }
 
         (arc, width, height)
     }
