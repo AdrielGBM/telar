@@ -1,8 +1,5 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use wide::u32x4;
-
-static NEXT_IMAGE_ID: AtomicU64 = AtomicU64::new(1);
+use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ImageFilter {
@@ -13,6 +10,9 @@ pub enum ImageFilter {
 
 #[derive(Debug, Clone)]
 pub struct ImageData {
+    /// Content address: equal pixels at equal dimensions give equal ids, whoever built them and whenever.
+    ///
+    /// The renderers key their texture caches on this and nothing else, so the id has to identify the *image*. A per-construction counter identified the allocation instead: a caller that rebuilt the same image each frame — which is what building an `ImageData` inside a widget body does — minted a fresh key every time, and every entry behind it became unreachable weight the cache could only shed by hitting its byte budget.
     pub id: u64,
     /// RGBA8 pixels with premultiplied alpha. Premultiplication is applied automatically in `new()`.
     pub pixels: Vec<u8>,
@@ -29,12 +29,7 @@ impl ImageData {
         );
         let mut pixels = pixels;
         premultiply_rgba(&mut pixels);
-        Self {
-            id: NEXT_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
-            pixels,
-            width,
-            height,
-        }
+        Self::addressed(pixels, width, height)
     }
 
     /// Builds from bytes that are ALREADY premultiplied (e.g. a resvg `Pixmap`), skipping the premultiply step `new()` performs.
@@ -44,8 +39,14 @@ impl ImageData {
             (width * height * 4) as usize,
             "pixels must be RGBA8: width * height * 4 bytes"
         );
+        Self::addressed(pixels, width, height)
+    }
+
+    // Hashed after premultiplication so both constructors address the same finished image alike. The dimensions ride in as the seed rather than as leading bytes: one buffer can be several images (a 4x1 and a 2x2 share their bytes), and seeding keeps that distinction while leaving the pixels a single one-shot pass.
+    fn addressed(pixels: Vec<u8>, width: u32, height: u32) -> Self {
+        let seed = ((width as u64) << 32) | height as u64;
         Self {
-            id: NEXT_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
+            id: xxh3_64_with_seed(&pixels, seed),
             pixels,
             width,
             height,
@@ -107,5 +108,60 @@ pub fn premultiply_rgba(pixels: &mut [u8]) {
         chunk[0] = ((chunk[0] as u32 * a + 128) >> 8) as u8;
         chunk[1] = ((chunk[1] as u32 * a + 128) >> 8) as u8;
         chunk[2] = ((chunk[2] as u32 * a + 128) >> 8) as u8;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opaque(pixels: &[[u8; 3]]) -> Vec<u8> {
+        pixels
+            .iter()
+            .flat_map(|[r, g, b]| [*r, *g, *b, 255])
+            .collect()
+    }
+
+    // The property the texture caches depend on: a widget body that rebuilds its image every frame must land on the entry it filled last frame, not mint a new one.
+    #[test]
+    fn the_same_image_built_twice_gets_the_same_id() {
+        let once = ImageData::new(opaque(&[[10, 20, 30], [40, 50, 60]]), 2, 1);
+        let again = ImageData::new(opaque(&[[10, 20, 30], [40, 50, 60]]), 2, 1);
+        assert_eq!(once.id, again.id);
+    }
+
+    #[test]
+    fn different_pixels_get_different_ids() {
+        let a = ImageData::new(opaque(&[[10, 20, 30], [40, 50, 60]]), 2, 1);
+        let b = ImageData::new(opaque(&[[10, 20, 30], [40, 50, 61]]), 2, 1);
+        assert_ne!(a.id, b.id);
+    }
+
+    // Same bytes, different shape: the dimensions have to be part of the address or a 4x1 would be served the 2x2's texture.
+    #[test]
+    fn the_same_bytes_at_different_dimensions_get_different_ids() {
+        let wide = ImageData::new(
+            opaque(&[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]),
+            4,
+            1,
+        );
+        let square = ImageData::new(
+            opaque(&[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]),
+            2,
+            2,
+        );
+        assert_ne!(wide.id, square.id);
+    }
+
+    // `new` premultiplies and `from_premultiplied` does not, so addressing has to happen after that step or the two would disagree about an image they both finished identically.
+    #[test]
+    fn both_constructors_address_the_same_finished_image_alike() {
+        let half_alpha = vec![200, 100, 50, 128];
+        let mut premultiplied = half_alpha.clone();
+        premultiply_rgba(&mut premultiplied);
+        assert_eq!(
+            ImageData::new(half_alpha, 1, 1).id,
+            ImageData::from_premultiplied(premultiplied, 1, 1).id
+        );
     }
 }

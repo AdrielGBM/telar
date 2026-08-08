@@ -18,6 +18,7 @@ smallvec = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 wide = { workspace = true }
+xxhash-rust = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.8.2"

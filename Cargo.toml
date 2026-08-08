@@ -92,6 +92,7 @@ tracing-subscriber = "0.3.23"
 bytemuck = "1.25.0"
 rustc-hash = "2.1.2"
 wide = "1.4"
+xxhash-rust = { version = "0.8.18", features = ["xxh3"] }
 clru = "0.6.3"
 smallvec = { version = "1.15.1", features = ["union"] }
 lru = "0.18.0"
