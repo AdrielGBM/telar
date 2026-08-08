@@ -34,10 +34,12 @@ pub(crate) struct TelarConfig {
     // Note: `[telar] auto_modules` is read directly by the `telar::app!` macro, not by cargo-telar; serde ignores the unknown key here so it needs no field.
 }
 
+// The field name is the table name in telar.toml. It was `rsx` before the rename and nothing caught it: the table is `#[serde(default)]`, so a file writing `[telar]` parsed clean and handed back a default config — every key in it silently ignored.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct TelarToml {
     #[serde(default)]
-    pub rsx: TelarConfig,
+    pub telar: TelarConfig,
 }
 
 #[derive(Deserialize, Default)]
@@ -239,7 +241,7 @@ fn read_toml_config(dir: &Path) -> TelarConfig {
                     );
                     TelarToml::default()
                 })
-                .rsx
+                .telar
         }
         Err(_) => TelarConfig::default(),
     }
@@ -342,7 +344,24 @@ mod tests {
     }
 
     #[test]
-    fn manifest_used_when_rsx_toml_absent() {
+    fn telar_table_is_the_one_read_from_telar_toml() {
+        let parsed: TelarToml =
+            toml::from_str("[telar]\nbackend = \"software\"\nauto_modules = true\n")
+                .expect("[telar] should parse, and `auto_modules` is the app macro's to read");
+        assert!(matches!(
+            parsed.telar.backend,
+            Some(RendererBackend::Software)
+        ));
+    }
+
+    // The rename that named this table `telar` left the field called `rsx`, and a `#[serde(default)]` table means a file writing `[telar]` still parsed clean — backend, dev window and devtools all dropped in silence. Rejecting the wrong name is what turns that into something a user can see.
+    #[test]
+    fn a_top_level_table_that_is_not_telar_is_rejected_rather_than_ignored() {
+        assert!(toml::from_str::<TelarToml>("[rsx]\nbackend = \"software\"\n").is_err());
+    }
+
+    #[test]
+    fn manifest_used_when_telar_toml_absent() {
         let manifest = TelarConfig {
             backend: Some(RendererBackend::Software),
             dev: None,
