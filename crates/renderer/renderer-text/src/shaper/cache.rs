@@ -1,11 +1,6 @@
-use clru::WeightScale;
-use cosmic_text::CacheKey;
 use renderer_core::{Color, TextStyle};
 use rustc_hash::FxHasher;
-use std::cell::Cell;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
-use std::time::Instant;
 
 /// Packs the shaping-relevant style axes into one `u32` so every cache key distinguishes e.g. bold from normal, or 2-line-clamped from unclamped, text of the same string — otherwise they would collide and one variant's glyphs/positions/truncation would be served for the other. Layout: `weight` bits 0-15, `italic` bit 16, `align` bits 17-18, `max_lines` bits 19-26 (0 = unlimited), `ellipsis` bit 27.
 ///
@@ -27,6 +22,9 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
     h.finish() as u32
 }
 
+/// One shaped run: every glyph's atlas key and its physical offset within the line box.
+pub(super) type GlyphPositions = std::sync::Arc<Vec<(cosmic_text::CacheKey, i32, i32)>>;
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ShapingCacheKey {
     pub text_hash: u64,
@@ -45,16 +43,6 @@ pub struct TextCacheKey {
     pub height: u32,
     pub color_packed: u32,
     pub style_bits: u32,
-}
-
-// pub(super): constructed from sibling submodules (layout, raster) that need the shaper's private cache-key types.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(super) struct AlphaCacheKey {
-    pub(super) text_hash: u64,
-    pub(super) font_size_bits: u32,
-    pub(super) width: u32,
-    pub(super) height: u32,
-    pub(super) style_bits: u32,
 }
 
 // pub(super): hashed by layout/raster/colr submodules to build their respective cache keys.
@@ -82,53 +70,5 @@ pub fn make_text_cache_key(
         height,
         color_packed,
         style_bits,
-    }
-}
-
-/// A cached raster with the moment it was last handed out.
-///
-/// LRU order alone cannot answer "has anything wanted this lately": it ranks entries against each other, so a cache that never fills keeps its coldest entry forever. In a shell that runs for days that is the difference between a bounded cache and one holding a folder name read twice last Tuesday. See [`TextShaper::sweep_idle`](super::TextShaper::sweep_idle).
-pub(super) struct Cached<T> {
-    pub(super) value: T,
-    pub(super) last_used: Cell<Instant>,
-}
-
-impl<T> Cached<T> {
-    pub(super) fn new(value: T) -> Self {
-        Self {
-            value,
-            last_used: Cell::new(Instant::now()),
-        }
-    }
-}
-
-/// A whole cache key as one `u64`, for the admission table to track without storing keys twice.
-///
-/// The full key, not its `text_hash` field: the same string at two sizes or colours is two rasters, and each has to earn admission on its own.
-pub(super) fn key_hash<K: Hash>(key: &K) -> u64 {
-    let mut hasher = FxHasher::default();
-    key.hash(&mut hasher);
-    hasher.finish()
-}
-
-// pub(super): referenced as field types by TextShaper in the parent `shaper` module.
-pub(super) struct PixelCacheScale;
-impl WeightScale<TextCacheKey, Cached<Arc<[u8]>>> for PixelCacheScale {
-    fn weight(&self, _key: &TextCacheKey, value: &Cached<Arc<[u8]>>) -> usize {
-        value.value.len().max(1)
-    }
-}
-
-pub(super) struct AlphaCacheScale;
-impl WeightScale<AlphaCacheKey, Cached<Arc<[u8]>>> for AlphaCacheScale {
-    fn weight(&self, _key: &AlphaCacheKey, value: &Cached<Arc<[u8]>>) -> usize {
-        value.value.len().max(1)
-    }
-}
-
-pub(super) struct ShapingCacheScale;
-impl WeightScale<ShapingCacheKey, Arc<Vec<(CacheKey, i32, i32)>>> for ShapingCacheScale {
-    fn weight(&self, _key: &ShapingCacheKey, value: &Arc<Vec<(CacheKey, i32, i32)>>) -> usize {
-        value.len().saturating_mul(24).max(1)
     }
 }

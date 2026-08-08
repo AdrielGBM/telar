@@ -212,7 +212,7 @@ where
             } = c;
             pending_shadows.retain(|key, rx| match rx.try_recv() {
                 Ok(pixmap) => {
-                    shadow_cache.put_with_weight(key.clone(), pixmap).ok();
+                    shadow_cache.insert(key.clone(), pixmap);
                     arrived = true;
                     false
                 }
@@ -221,7 +221,7 @@ where
             });
             pending_text_shadows.retain(|key, rx| match rx.try_recv() {
                 Ok(pixmap) => {
-                    text_shadow_cache.put_with_weight(key.clone(), pixmap).ok();
+                    text_shadow_cache.insert(key.clone(), pixmap);
                     arrived = true;
                     false
                 }
@@ -230,7 +230,7 @@ where
             });
             pending_path_shadows.retain(|key, rx| match rx.try_recv() {
                 Ok(pixmap) => {
-                    path_shadow_cache.put_with_weight(key.clone(), pixmap).ok();
+                    path_shadow_cache.insert(key.clone(), pixmap);
                     arrived = true;
                     false
                 }

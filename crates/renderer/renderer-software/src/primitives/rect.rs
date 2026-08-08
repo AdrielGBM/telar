@@ -162,8 +162,7 @@ fn draw_rect_shadow(
         blur_scratch,
         transform,
         clip,
-        draw_shadow,
-        draw_shadow,
+        || (draw_shadow, draw_shadow),
     );
 }
 

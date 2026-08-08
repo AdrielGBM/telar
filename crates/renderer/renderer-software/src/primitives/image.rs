@@ -1,42 +1,15 @@
-use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use clru::{CLruCache, CLruCacheConfig, WeightScale};
 use geometry_core::Rect;
+use renderer_cache::Cache;
 use renderer_core::{ImageData, ImageFilter};
-use rustc_hash::FxBuildHasher;
 
-pub(crate) struct PixmapByteScale;
-
-impl<K> WeightScale<K, tiny_skia::Pixmap> for PixmapByteScale {
-    fn weight(&self, _key: &K, value: &tiny_skia::Pixmap) -> usize {
-        value.data().len().max(1)
-    }
-}
-
-pub(crate) type ImageCache = CLruCache<u64, tiny_skia::Pixmap, FxBuildHasher, PixmapByteScale>;
+pub(crate) type ImageCache = Cache<u64, tiny_skia::Pixmap>;
 
 /// Composite cache key for shadow pixmaps: (width, height, spread, blur_radius, color_rgba8, radius_tl, radius_tr, radius_br, radius_bl). Bits are packed as `to_bits()` for floats so equality is byte-exact.
 pub(crate) type ShadowCacheKey = (u32, u32, u32, u32, u32, u32, u32, u32, u32);
 
-pub(crate) type ShadowCache =
-    CLruCache<ShadowCacheKey, tiny_skia::Pixmap, FxBuildHasher, PixmapByteScale>;
-
-pub(crate) fn new_image_cache(budget_bytes: usize) -> ImageCache {
-    CLruCache::with_config(
-        CLruCacheConfig::new(NonZeroUsize::new(budget_bytes).unwrap())
-            .with_hasher(FxBuildHasher::default())
-            .with_scale(PixmapByteScale),
-    )
-}
-
-pub(crate) fn new_shadow_cache(budget_bytes: usize) -> ShadowCache {
-    CLruCache::with_config(
-        CLruCacheConfig::new(NonZeroUsize::new(budget_bytes.max(1)).unwrap())
-            .with_hasher(FxBuildHasher::default())
-            .with_scale(PixmapByteScale),
-    )
-}
+pub(crate) type ShadowCache = Cache<ShadowCacheKey, tiny_skia::Pixmap>;
 
 pub(crate) fn draw_image(
     pixmap: &mut tiny_skia::Pixmap,
@@ -48,39 +21,38 @@ pub(crate) fn draw_image(
     clip: Option<&tiny_skia::Mask>,
 ) {
     let key = data.id;
-
-    if cache.get(&key).is_none() {
-        let size = tiny_skia::IntSize::from_wh(data.width, data.height);
-        let src_pixmap = size.and_then(|s| tiny_skia::Pixmap::from_vec(data.pixels.clone(), s));
-        let fallback = src_pixmap
-            .unwrap_or_else(|| tiny_skia::Pixmap::new(1, 1).expect("1x1 pixmap always valid"));
-        cache.put_with_weight(key, fallback).ok();
-    }
-
-    let Some(src_pixmap) = cache.get(&key) else {
-        return;
-    };
-
-    if src_pixmap.width() != data.width || src_pixmap.height() != data.height {
-        return;
-    }
-
-    let scale_x = rect.width / data.width as f32;
-    let scale_y = rect.height / data.height as f32;
-
     let quality = match filter {
         ImageFilter::Nearest => tiny_skia::FilterQuality::Nearest,
         ImageFilter::Linear => tiny_skia::FilterQuality::Bilinear,
     };
-
     let paint = tiny_skia::PixmapPaint {
         blend_mode: tiny_skia::BlendMode::SourceOver,
         quality,
         ..Default::default()
     };
+    let image_transform = tiny_skia::Transform::from_scale(
+        rect.width / data.width as f32,
+        rect.height / data.height as f32,
+    )
+    .post_translate(rect.x, rect.y)
+    .post_concat(transform);
 
-    let image_transform = tiny_skia::Transform::from_scale(scale_x, scale_y)
-        .post_translate(rect.x, rect.y)
-        .post_concat(transform);
-    pixmap.draw_pixmap(0, 0, src_pixmap.as_ref(), &paint, image_transform, clip);
+    if let Some(cached) = cache.get(&key) {
+        // A stale entry under a colliding content hash would blit the wrong pixels at the wrong stride.
+        if cached.width() == data.width && cached.height() == data.height {
+            pixmap.draw_pixmap(0, 0, cached.as_ref(), &paint, image_transform, clip);
+        }
+        return;
+    }
+
+    let Some(size) = tiny_skia::IntSize::from_wh(data.width, data.height) else {
+        return;
+    };
+    let Some(source) = tiny_skia::Pixmap::from_vec(data.pixels.clone(), size) else {
+        return;
+    };
+    // Drawn before it is offered, so an image the budget cannot fit still appears. The cache is a shortcut past the
+    // decode, never the only route to the pixels.
+    pixmap.draw_pixmap(0, 0, source.as_ref(), &paint, image_transform, clip);
+    cache.insert(key, source);
 }

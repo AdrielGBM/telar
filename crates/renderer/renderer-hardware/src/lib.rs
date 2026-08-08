@@ -1,4 +1,5 @@
 mod blur;
+mod caches;
 mod composite;
 mod config;
 pub mod limits;

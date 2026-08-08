@@ -20,19 +20,36 @@ use crate::config::HardwareRendererConfig;
 use crate::primitives::image::{ImageInstance, ImagePipeline};
 use crate::primitives::layer::LayerPipeline;
 use crate::primitives::line::{LineInstance, LinePipeline};
-use crate::primitives::path::{PathFillData, PathPipeline, PathTessCache, PathVertex};
+use crate::primitives::path::{PathFillData, PathPipeline, PathVertex};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
 use crate::primitives::{Viewport, create_viewport_bind_group_layout};
 
 mod frame;
 mod pool;
-mod shadow;
+pub(crate) mod shadow;
 mod steps;
 
 use pool::{PooledTexture, create_viewport_pool_slot, preferred_format};
 use shadow::{ShadowCacheKey, ShadowOp};
 use steps::{DrawStep, flush_batch, flush_image_batch};
+
+impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
+    /// Leaves this renderer's cache census where another thread can read it. Called once per frame, throttled.
+    ///
+    /// The GPU backend has to publish for itself: a census only the CPU backend filled would read "nothing cached"
+    /// on a machine rendering entirely on the GPU — silent, and wrong in exactly the case worth looking at.
+    fn publish_cache_stats(&self) {
+        if !renderer_cache::registry::publish_due() {
+            return;
+        }
+        // One set for the process however many render threads report it, so it publishes under a shared identity
+        // rather than each thread's own — otherwise every figure reads once per render thread.
+        if let Some(shared) = crate::caches::with_shared(|caches| caches.stats()) {
+            renderer_cache::registry::publish_shared("gpu", shared);
+        }
+    }
+}
 
 /// A hardware-accelerated renderer using wgpu. The `W: Send + Sync + 'static` bound is a wgpu requirement for surface creation, not an indication that this renderer is thread-safe. The renderer must only be used on the main thread alongside the reactive runtime; it is not safe to move between threads.
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
@@ -68,7 +85,6 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     text_pipeline: TextPipeline,
     line_pipeline: LinePipeline,
     image_pipeline: ImagePipeline,
-    text_shaper: renderer_text::TextShaper,
     // Real font ascender/line-height metrics for the default face, queried once at construction so dirty-rect computation does not under-estimate the text region.
     font_metrics: renderer_core::FontMetrics,
     surface_format: wgpu::TextureFormat,
@@ -100,7 +116,6 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_path_vertices: Vec<PathVertex>,
     pending_path_indices: Vec<u32>,
     pending_path_fill_data: Vec<PathFillData>,
-    path_tess_cache: PathTessCache,
     msaa_samples: u32,
     msaa_texture: Option<wgpu::Texture>,
     batch_rect_start: Option<u32>,
@@ -112,11 +127,8 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     draw_state: renderer_core::DrawState,
     layer_texture_pool: Vec<PooledTexture>,
     shadow_capture_pool: Vec<PooledTexture>,
-    shadow_resolved_cache: HashMap<ShadowCacheKey, (wgpu::Texture, wgpu::TextureView)>,
     // Retained frame-wide shadow instance buffer + bind group, keyed by a hash of all pending shadow instances. Reused across frames so unchanged shadows skip per-frame create_buffer_init + create_bind_group.
     shadow_instances_cache: Option<(u64, wgpu::Buffer, wgpu::BindGroup)>,
-    // LRU eviction order for shadow_resolved_cache: front is least-recently-used, back is most-recently-used.
-    shadow_resolved_cache_order: VecDeque<ShadowCacheKey>,
     // Resolved layer textures keyed by a hash of their draw commands + layer params. Value is (resolve_texture, resolve_view, pixel_count). Lets unchanged static layers skip their whole render pass and composite directly.
     layer_resolved_cache: HashMap<u64, (wgpu::Texture, wgpu::TextureView, u64)>,
     // LRU eviction order for layer_resolved_cache: front is least-recently-used, back is most-recently-used.
@@ -558,6 +570,19 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }],
         });
 
+        // Builds this thread's shared caches if this is its first renderer, and yields handles on the one glyph
+        // atlas every renderer on the thread samples. Taken before the scope below because the text pipeline is
+        // built on a spawned thread, which a thread-local borrow cannot cross.
+        let (atlas_bgl, atlas_bind_group) = crate::caches::atlas_handles(
+            &device,
+            font_config.font.clone(),
+            &crate::caches::HardwarePolicies {
+                path_tess: config.path_tess,
+                shadow: config.shadow,
+                image_texture: config.image_texture,
+            },
+        );
+
         // Create all Send-safe pipelines in parallel; on Vulkan/Metal this reduces startup from ~8 serial compilations to ~1 critical path, ImagePipeline (Rc<> cache) must be created on this thread, and `pc` must be defined here (not inside the scope closure) so its lifetime covers the spawned threads.
         let pc = pipeline_cache.as_ref();
         let (
@@ -586,6 +611,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     &viewport_bind_group_layout,
                     pc,
                     msaa_samples,
+                    &atlas_bgl,
+                    atlas_bind_group.clone(),
                 )
             });
             let t_line = s.spawn(|| {
@@ -632,16 +659,19 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 built(t_retained)?,
             ))
         })?;
-        // ImagePipeline holds an Rc<> cache and is not Send; create after the parallel scope.
+        // Built after the parallel scope because it needs the shared image layout, which the borrow of the shared
+        // set cannot cross a spawned thread to reach.
+        let image_bgl =
+            crate::caches::with_shared(|caches| caches.images.bind_group_layout.clone())
+                .expect("atlas_handles above built the shared caches");
         let image_pipeline = ImagePipeline::new(
             &device,
             surface_format,
             &viewport_bind_group_layout,
             pipeline_cache.as_ref(),
             msaa_samples,
-            config.image_gpu_max_age_frames,
+            &image_bgl,
         );
-        let path_tess_cache = PathTessCache::new(config.path_tess_max_age_frames);
 
         // Persist pipeline cache data so subsequent startups skip shader compilation.
         if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path) {
@@ -665,8 +695,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             ));
         }
 
-        let mut text_shaper = renderer_text::TextShaper::with_config(font_config);
-        let font_metrics = text_shaper.font_metrics();
+        // From the shared shaper, which `atlas_handles` above already built with this font config.
+        let font_metrics = crate::caches::with_shared(|caches| caches.text_shaper.font_metrics())
+            .expect("atlas_handles above built the shared caches");
 
         Ok(Self {
             instance,
@@ -698,7 +729,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_shadow_path_vertices: Vec::new(),
             pending_shadow_path_indices: Vec::new(),
             pending_shadow_path_fill_data: Vec::new(),
-            text_shaper,
             font_metrics,
             surface_format,
             present_mode,
@@ -717,7 +747,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             pending_path_vertices: Vec::new(),
             pending_path_indices: Vec::new(),
             pending_path_fill_data: Vec::new(),
-            path_tess_cache,
             msaa_samples,
             msaa_texture: None,
             batch_rect_start: None,
@@ -729,9 +758,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             draw_state: renderer_core::DrawState::new(),
             layer_texture_pool: Vec::new(),
             shadow_capture_pool: Vec::new(),
-            shadow_resolved_cache: HashMap::new(),
             shadow_instances_cache: None,
-            shadow_resolved_cache_order: VecDeque::new(),
             layer_resolved_cache: HashMap::new(),
             layer_resolved_cache_order: VecDeque::new(),
             layer_cache_pixel_budget: 0,

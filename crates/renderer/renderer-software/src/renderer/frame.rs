@@ -365,7 +365,6 @@ where
                             clip,
                             outer_clip,
                             blur_scratch,
-                            &mut c.text_pixmap_cache,
                             &mut c.text_shadow_cache,
                             &mut c.pending_text_shadows,
                         );
@@ -694,6 +693,7 @@ where
         if width != self.width || height != self.height {
             self.width = width;
             self.height = height;
+            crate::caches::note_surface_size(width, height);
             self.pixmap = Pixmap::new(width, height);
             self.clip_mask_buffer = tiny_skia::Mask::new(width, height);
             self.clip_mask_dirty = None;
@@ -716,6 +716,7 @@ where
                     .map_err(|e| RendererError::Resize(e.to_string()))?;
             }
         }
+        crate::caches::publish_stats();
         Ok(())
     }
 

@@ -47,11 +47,16 @@ pub(crate) fn spawn_shadow_async(
     rx
 }
 
-/// Like `blit_cached_shadow`, but offloads computation of large shadows to a background thread. On a cache miss for a shadow whose pixmap exceeds `ASYNC_SHADOW_THRESHOLD`, the work is spawned (or, if already spawned, its result is polled); the shadow is simply not drawn this frame and appears 1-2 frames later once the worker finishes and the result is cached. Small shadows fall back to the synchronous path. `draw_async_fn` is the `Send + 'static` variant of `draw_fn` used for the worker thread.
+/// Like `blit_cached_shadow`, but offloads computation of large shadows to a background thread. On a cache miss for a shadow whose pixmap exceeds `ASYNC_SHADOW_THRESHOLD`, the work is spawned (or, if already spawned, its result is polled); the shadow is simply not drawn this frame and appears 1-2 frames later once the worker finishes and the result is cached. Small shadows fall back to the synchronous path.
+///
+/// `make_draw` yields the shape-drawing closure and its `Send + 'static` twin for the worker, and is called only on
+/// the paths that actually need one — never on a cache hit, and never while a worker is already producing the same
+/// pixmap. Producing them lazily is what lets a caller put expensive work (rasterizing a string to an alpha mask)
+/// behind the cache lookup instead of ahead of it.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn blit_cached_shadow_async<K, H, S>(
+pub(crate) fn blit_cached_shadow_async<K, D, A>(
     pixmap: &mut tiny_skia::Pixmap,
-    cache: &mut clru::CLruCache<K, tiny_skia::Pixmap, H, S>,
+    cache: &mut renderer_cache::Cache<K, tiny_skia::Pixmap>,
     pending: &mut std::collections::HashMap<K, std::sync::mpsc::Receiver<tiny_skia::Pixmap>>,
     key: K,
     blit_x: i32,
@@ -62,12 +67,11 @@ pub(crate) fn blit_cached_shadow_async<K, H, S>(
     blur_scratch: &mut Vec<u8>,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
-    draw_fn: impl FnOnce(&mut tiny_skia::Pixmap),
-    draw_async_fn: impl FnOnce(&mut tiny_skia::Pixmap) + Send + 'static,
+    make_draw: impl FnOnce() -> (D, A),
 ) where
     K: std::hash::Hash + Eq + Clone,
-    H: std::hash::BuildHasher,
-    S: clru::WeightScale<K, tiny_skia::Pixmap>,
+    D: FnOnce(&mut tiny_skia::Pixmap),
+    A: FnOnce(&mut tiny_skia::Pixmap) + Send + 'static,
 {
     // Small shadows: the spawn/channel overhead outweighs the blur cost, so compute inline.
     if tmp_w.saturating_mul(tmp_h) <= ASYNC_SHADOW_THRESHOLD {
@@ -83,17 +87,17 @@ pub(crate) fn blit_cached_shadow_async<K, H, S>(
             blur_scratch,
             transform,
             clip,
-            draw_fn,
+            || make_draw().0,
         );
         return;
     }
 
-    if cache.get(&key).is_none() {
+    if !cache.contains(&key) {
         // Not cached yet. Either a worker is already computing it (poll for completion) or we need to spawn one.
         if let Some(rx) = pending.get(&key) {
             match rx.try_recv() {
                 Ok(tmp) => {
-                    cache.put_with_weight(key.clone(), tmp).ok();
+                    cache.insert(key.clone(), tmp);
                     pending.remove(&key);
                 }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -103,7 +107,7 @@ pub(crate) fn blit_cached_shadow_async<K, H, S>(
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
             }
         } else {
-            let rx = spawn_shadow_async(tmp_w, tmp_h, blur_radius, draw_async_fn);
+            let rx = spawn_shadow_async(tmp_w, tmp_h, blur_radius, make_draw().1);
             pending.insert(key.clone(), rx);
         }
     }
@@ -124,9 +128,9 @@ pub(crate) fn blit_cached_shadow_async<K, H, S>(
     }
 }
 
-pub(crate) fn blit_cached_shadow<K, H, S>(
+pub(crate) fn blit_cached_shadow<K, D>(
     pixmap: &mut tiny_skia::Pixmap,
-    cache: &mut clru::CLruCache<K, tiny_skia::Pixmap, H, S>,
+    cache: &mut renderer_cache::Cache<K, tiny_skia::Pixmap>,
     key: K,
     blit_x: i32,
     blit_y: i32,
@@ -136,29 +140,23 @@ pub(crate) fn blit_cached_shadow<K, H, S>(
     blur_scratch: &mut Vec<u8>,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
-    draw_fn: impl FnOnce(&mut tiny_skia::Pixmap),
+    make_draw: impl FnOnce() -> D,
 ) where
     K: std::hash::Hash + Eq + Clone,
-    H: std::hash::BuildHasher,
-    S: clru::WeightScale<K, tiny_skia::Pixmap>,
+    D: FnOnce(&mut tiny_skia::Pixmap),
 {
-    if cache.get(&key).is_none() {
-        if let Some(tmp) = render_shadow_pixmap(tmp_w, tmp_h, blur_radius, blur_scratch, draw_fn) {
-            cache.put_with_weight(key.clone(), tmp).ok();
-        }
-    }
+    let paint = tiny_skia::PixmapPaint {
+        blend_mode: tiny_skia::BlendMode::SourceOver,
+        ..Default::default()
+    };
     if let Some(cached) = cache.get(&key) {
-        pixmap.draw_pixmap(
-            blit_x,
-            blit_y,
-            cached.as_ref(),
-            &tiny_skia::PixmapPaint {
-                blend_mode: tiny_skia::BlendMode::SourceOver,
-                ..Default::default()
-            },
-            transform,
-            clip,
-        );
+        pixmap.draw_pixmap(blit_x, blit_y, cached.as_ref(), &paint, transform, clip);
+        return;
+    }
+    // Blurred, blitted, then offered: a shadow too large for the budget still draws rather than silently vanishing.
+    if let Some(tmp) = render_shadow_pixmap(tmp_w, tmp_h, blur_radius, blur_scratch, make_draw()) {
+        pixmap.draw_pixmap(blit_x, blit_y, tmp.as_ref(), &paint, transform, clip);
+        cache.insert(key, tmp);
     }
 }
 

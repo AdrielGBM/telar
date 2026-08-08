@@ -34,7 +34,7 @@ pub(super) enum ShadowCacheKind {
 }
 
 #[derive(Hash, PartialEq, Eq, Clone)]
-pub(super) struct ShadowCacheKey {
+pub(crate) struct ShadowCacheKey {
     pub(super) kind: ShadowCacheKind,
     pub(super) sigma_bits: u32,
     pub(super) texture_width: u32,

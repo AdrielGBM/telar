@@ -5,11 +5,6 @@
 //! addressed by *surface* — the framebuffer, the clip mask, the previous frame's commands — stays on the
 //! renderer, where it belongs.
 //!
-//! Per renderer, these cost what a surface never recovers. [`renderer_text::TextShaper`] alone opens a 2048×2048
-//! RGBA glyph atlas eagerly, 16 MiB zeroed before a single glyph is drawn; a shell with six surfaces paid that
-//! six times over for six atlases holding the same few hundred glyphs. Shared, the second surface to want a
-//! glyph the first already rasterized gets it for nothing.
-//!
 //! Thread-local rather than behind a lock because a [`crate::SoftwareRenderer`] is already thread-bound (it owns
 //! a softbuffer `Surface`, which is not `Send`), so a mutex would buy nothing but contention on the frame path.
 //! An app that renders surfaces on several threads gets one set per thread — no sharing across them, but no
@@ -17,24 +12,29 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::num::NonZeroUsize;
 use std::sync::mpsc;
 
+use renderer_cache::{Cache, CacheStat, limits};
 use renderer_text::{TextShaper, TextShaperConfig};
 use tiny_skia::Pixmap;
 
 use crate::SoftwareRendererConfig;
-use crate::primitives::image::{ImageCache, ShadowCache, ShadowCacheKey, new_image_cache};
-use crate::primitives::path::{PathShadowCache, PathShadowCacheKey, new_path_shadow_cache};
-use crate::primitives::text::{TextShadowCache, TextShadowCacheKey, new_text_shadow_cache};
+use crate::primitives::image::ShadowCacheKey;
+use crate::primitives::path::PathShadowCacheKey;
+use crate::primitives::text::TextShadowCacheKey;
+
+/// What one cached pixmap costs. The whole reason these caches are bounded by bytes and not by count: a 4K image is
+/// ~33 MiB, so an entry cap would let any of them grow into the gigabytes.
+pub(crate) fn pixmap_bytes(pixmap: &Pixmap) -> usize {
+    pixmap.data().len()
+}
 
 pub(crate) struct SharedCaches {
     pub(crate) text_shaper: TextShaper,
-    pub(crate) image_cache: ImageCache,
-    pub(crate) shadow_cache: ShadowCache,
-    pub(crate) text_pixmap_cache: lru::LruCache<renderer_text::TextCacheKey, Pixmap>,
-    pub(crate) text_shadow_cache: TextShadowCache,
-    pub(crate) path_shadow_cache: PathShadowCache,
+    pub(crate) image_cache: Cache<u64, Pixmap>,
+    pub(crate) shadow_cache: Cache<ShadowCacheKey, Pixmap>,
+    pub(crate) text_shadow_cache: Cache<TextShadowCacheKey, Pixmap>,
+    pub(crate) path_shadow_cache: Cache<PathShadowCacheKey, Pixmap>,
     // In-flight background shadow work. Kept beside the cache each one drains into: a worker spawned for a surface produces a pixmap keyed by geometry alone, so whichever surface asks next should get it.
     pub(crate) pending_shadows: HashMap<ShadowCacheKey, mpsc::Receiver<Pixmap>>,
     pub(crate) pending_text_shadows: HashMap<TextShadowCacheKey, mpsc::Receiver<Pixmap>>,
@@ -45,22 +45,27 @@ impl SharedCaches {
     fn new(config: &SoftwareRendererConfig) -> Self {
         Self {
             text_shaper: TextShaper::with_config(TextShaperConfig {
-                pixel_cache_budget_bytes: config.text_pixel_cache_bytes,
-                alpha_cache_budget_bytes: config.text_alpha_cache_bytes,
-                shaping_cache_budget_bytes: config.text_shaping_cache_bytes,
+                raster: config.text_raster,
+                shaping: config.text_shaping,
                 font: config.font.clone(),
             }),
-            image_cache: new_image_cache(config.image_cache_bytes.max(1)),
-            shadow_cache: crate::primitives::image::new_shadow_cache(config.shadow_cache_bytes),
-            text_pixmap_cache: lru::LruCache::new(
-                NonZeroUsize::new(config.text_pixmap_cache_entries).unwrap(),
-            ),
-            text_shadow_cache: new_text_shadow_cache(config.text_shadow_cache_bytes),
-            path_shadow_cache: new_path_shadow_cache(config.path_shadow_cache_bytes),
+            image_cache: Cache::new(config.image, pixmap_bytes),
+            shadow_cache: Cache::new(config.shadow, pixmap_bytes),
+            text_shadow_cache: Cache::new(config.text_shadow, pixmap_bytes),
+            path_shadow_cache: Cache::new(config.path_shadow, pixmap_bytes),
             pending_shadows: HashMap::new(),
             pending_text_shadows: HashMap::new(),
             pending_path_shadows: HashMap::new(),
         }
+    }
+
+    fn stats(&self) -> Vec<CacheStat> {
+        let mut stats = self.text_shaper.cache_stats();
+        stats.push(self.image_cache.stat("image"));
+        stats.push(self.shadow_cache.stat("shadow.rect"));
+        stats.push(self.text_shadow_cache.stat("shadow.text"));
+        stats.push(self.path_shadow_cache.stat("shadow.path"));
+        stats
     }
 }
 
@@ -75,6 +80,38 @@ pub(crate) fn init(config: &SoftwareRendererConfig) {
     CACHES.with_borrow_mut(|slot| {
         slot.get_or_insert_with(|| SharedCaches::new(config));
     });
+}
+
+/// Raises the surface-derived budgets to cover a surface of `width` × `height`.
+///
+/// Only ever raises, because these caches are shared: a budget that tracked whichever surface drew last would evict,
+/// on a bar's frame, the images a full-screen window still needs. So the thread ends up sized for its largest
+/// surface, which is the one that can actually demand the memory.
+pub(crate) fn note_surface_size(width: u32, height: u32) {
+    let budget = limits::surface_budget_bytes(width, height);
+    with_caches(|c| c.image_cache.grow_to(budget));
+}
+
+/// Drops everything no frame has asked for within each cache's idle horizon.
+///
+/// The caches sweep themselves as they are used, which is enough while frames keep coming. It is not enough for a
+/// shell that has drawn nothing for an hour: with no accesses there is no sweep, and the high-water mark stands.
+pub fn sweep_idle() {
+    with_caches(|c| {
+        c.text_shaper.sweep_idle();
+        c.image_cache.sweep();
+        c.shadow_cache.sweep();
+        c.text_shadow_cache.sweep();
+        c.path_shadow_cache.sweep();
+    });
+}
+
+/// Leaves this thread's cache census where another thread can read it. Called once per frame, throttled.
+pub(crate) fn publish_stats() {
+    if renderer_cache::registry::publish_due() {
+        let stats = with_caches(|c| c.stats());
+        renderer_cache::registry::publish(stats);
+    }
 }
 
 /// Opens this thread's caches, building them from defaults if no renderer did.

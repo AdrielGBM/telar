@@ -105,6 +105,10 @@ pub use renderer_core::{
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint, PathData, PathStyle, PathVerb,
     RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextAlign, TextRun, TextStyle,
 };
+/// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the
+/// memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
+#[cfg(feature = "runtime")]
+pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer_caches};
 pub use services_core::AppPathsProvider;
 // Available in every GUI build, not opt-in: `ui_core::Surface` composes the per-surface service scope, so
 // `runtime` pulls in ui-core which turns on services-core/di. A non-GUI build (the `cargo-telar` tool depends on

@@ -1,13 +1,10 @@
 use super::TextShaper;
-use super::cache::{
-    AlphaCacheKey, Cached, hash_text, key_hash, make_text_cache_key, text_style_bits,
-};
+use super::cache::{make_text_cache_key, text_style_bits};
 use super::{make_buffer, make_buffer_rich};
 use cosmic_text::Color as CosmicColor;
 use geometry_core::Rect;
 use renderer_core::{TextRun, TextStyle, premultiply_rgba};
 use std::sync::Arc;
-use std::time::Instant;
 
 impl TextShaper {
     pub fn rasterize(
@@ -34,10 +31,8 @@ impl TextShaper {
             return (Arc::from([].as_slice()), 0, 0);
         }
 
-        self.sweep_idle();
-        if let Some(cached) = self.pixel_cache.get(&key) {
-            cached.last_used.set(Instant::now());
-            return (Arc::clone(&cached.value), width, height);
+        if let Some(cached) = self.raster_cache.get(&key) {
+            return (Arc::clone(cached), width, height);
         }
 
         let rgba = color.to_rgba8();
@@ -78,11 +73,7 @@ impl TextShaper {
 
         premultiply_rgba(&mut pixels);
         let arc: Arc<[u8]> = Arc::from(pixels.into_boxed_slice());
-        if self.admit(key_hash(&key)) {
-            let _ = self
-                .pixel_cache
-                .put_with_weight(key, Cached::new(arc.clone()));
-        }
+        self.raster_cache.insert(key, arc.clone());
 
         (arc, width, height)
     }
@@ -134,31 +125,23 @@ impl TextShaper {
         (Arc::from(pixels.into_boxed_slice()), width, height)
     }
 
+    /// Rasterizes `text` white-on-transparent, for a caller that will tint and blur it into a shadow.
+    ///
+    /// Uncached, unlike [`rasterize`](Self::rasterize). The one caller keeps the *blurred* result, which is what a
+    /// later frame actually draws, so a cache here would hold the input to a computation whose output is already
+    /// kept — 64 MB of budget for an intermediate. That only worked out to a saving while the caller rasterized on
+    /// every frame before consulting its shadow cache; now it asks first and this runs on a miss.
     pub fn rasterize_alpha(
         &mut self,
         text: &str,
         rect: Rect,
         style: &TextStyle,
     ) -> (Arc<[u8]>, u32, u32) {
-        let font_size = style.font_size;
         let width = rect.width.ceil() as u32;
         let height = rect.height.ceil() as u32;
 
         if width == 0 || height == 0 {
             return (Arc::from([].as_slice()), 0, 0);
-        }
-
-        let key = AlphaCacheKey {
-            text_hash: hash_text(text),
-            font_size_bits: font_size.to_bits(),
-            width,
-            height,
-            style_bits: text_style_bits(style),
-        };
-
-        if let Some(cached) = self.alpha_pixel_cache.get(&key) {
-            cached.last_used.set(Instant::now());
-            return (Arc::clone(&cached.value), width, height);
         }
 
         let white = CosmicColor::rgba(255, 255, 255, 255);
@@ -190,13 +173,6 @@ impl TextShaper {
         );
 
         premultiply_rgba(&mut pixels);
-        let arc: Arc<[u8]> = Arc::from(pixels.into_boxed_slice());
-        if self.admit(key_hash(&key)) {
-            let _ = self
-                .alpha_pixel_cache
-                .put_with_weight(key, Cached::new(arc.clone()));
-        }
-
-        (arc, width, height)
+        (Arc::from(pixels.into_boxed_slice()), width, height)
     }
 }

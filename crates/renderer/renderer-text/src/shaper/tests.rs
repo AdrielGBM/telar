@@ -109,6 +109,7 @@ fn measure_text_empty_returns_zero() {
 #[test]
 fn measure_cache_keeps_hot_entry_past_cap() {
     // The old policy cleared the whole cache at 1000 entries, evicting even constantly-used keys. The LRU must keep a re-touched "hot" entry alive while cold ones flood past the cap. Pure cache bookkeeping: independent of whether fonts are installed.
+    let cap_entries = limits::TEXT_MEASURE.capacity / limits::SMALL_ENTRY_BYTES;
     let mut sh = TextShaper::new();
     let hot = "hot text that stays warm";
     let style = TextStyle::new(16.0, Color::BLACK);
@@ -119,13 +120,13 @@ fn measure_cache_keeps_hot_entry_past_cap() {
         text_style_bits(&style),
     );
     sh.measure_text(hot, 200.0, &style);
-    for i in 0..(MEASURE_CACHE_CAP as u32 + 50) {
+    for i in 0..(cap_entries as u32 + 50) {
         sh.measure_text(&format!("cold entry {i}"), 200.0, &style);
         // Keep the hot entry most-recently-used so the LRU never evicts it.
         sh.measure_text(hot, 200.0, &style);
     }
     assert!(sh.measure_cache.contains(&hot_key));
-    assert!(sh.measure_cache.len() <= MEASURE_CACHE_CAP);
+    assert!(sh.measure_cache.len() <= cap_entries);
 }
 
 #[test]
@@ -142,16 +143,16 @@ fn collect_colr_gating_records_and_skips() {
     };
     let flag_key = (hash_text(text), 16.0f32.to_bits(), text_style_bits(&style));
 
-    assert!(sh.has_colr_cache.peek(&flag_key).is_none());
+    assert!(!sh.has_colr_cache.contains(&flag_key));
     let mut out = Vec::new();
     sh.collect_colr_glyphs(text, rect, &style, &mut out);
     assert!(
-        sh.has_colr_cache.peek(&flag_key).is_some(),
+        sh.has_colr_cache.contains(&flag_key),
         "first call must record the COLR flag"
     );
 
     // Force the "no COLR glyphs" flag and confirm the next call short-circuits to an empty result.
-    sh.has_colr_cache.put(flag_key, false);
+    sh.has_colr_cache.insert(flag_key, false);
     let mut out2 = Vec::new();
     sh.collect_colr_glyphs(text, rect, &style, &mut out2);
     assert!(
@@ -160,28 +161,74 @@ fn collect_colr_gating_records_and_skips() {
     );
 }
 
-// The clock case: a string rasterized once and never asked for again must not occupy the cache. Admission is what separates "drawn" from "worth keeping", and only a second sighting proves the difference.
+// The clock case, end to end: admission itself is covered in `renderer-cache`, so what matters here is that
+// `rasterize` is actually wired to it — the previous arrangement applied admission in the shaper and then had the
+// software backend keep an unconditional second copy, which made the policy a no-op where it counted.
 #[test]
-fn a_string_seen_once_is_not_admitted_and_a_second_sighting_admits_it() {
+fn a_string_rasterized_once_is_not_kept_and_a_second_sighting_keeps_it() {
     let mut shaper = TextShaper::new();
-    assert!(!shaper.admit(1), "first sighting must not be cached");
-    assert!(shaper.admit(1), "second sighting earns a place");
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 120.0,
+        height: 24.0,
+    };
+
+    shaper.rasterize("14:32:07", rect, &style);
+    assert_eq!(
+        shaper.raster_cache.len(),
+        0,
+        "a clock's seconds are drawn once and never asked for again"
+    );
+
+    shaper.rasterize("14:32:07", rect, &style);
+    assert_eq!(
+        shaper.raster_cache.len(),
+        1,
+        "a string asked for twice is the only kind a cache can serve"
+    );
 }
 
+// Trimming the glyph rasters is all-or-nothing, so the risk is not that it fails to fire but that it fires when it
+// should not: clearing a shell's working set costs re-rasterizing every glyph still on screen.
 #[test]
-fn admission_tracks_each_key_on_its_own() {
-    let mut shaper = TextShaper::new();
-    assert!(!shaper.admit(1));
-    assert!(!shaper.admit(2));
-    assert!(shaper.admit(2));
-    assert!(shaper.admit(1));
+fn an_idle_sweep_keeps_the_glyph_rasters_a_shell_actually_uses() {
+    let mut sh = TextShaper::new();
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 24.0,
+    };
+    sh.rasterize("workspace 1", rect, &style);
+    let resident = sh.swash_cache.image_cache.len();
+
+    sh.sweep_idle();
+
+    assert_eq!(
+        sh.swash_cache.image_cache.len(),
+        resident,
+        "a glyph cache well under its ceiling must survive the sweep"
+    );
 }
 
-// Admission is consumed, not remembered: once a key is in the real cache it must not keep a slot in the seen-once table too, or the table fills with keys that will never be asked about again.
+// The shaping cache takes no admission: its entries are a couple of hundred bytes, so the budget bounds them without
+// help, and making a string shape twice to save those bytes would trade the expensive half of drawing text for the
+// cheap half.
 #[test]
-fn admitting_a_key_clears_it_from_the_pending_table() {
+fn shaped_positions_are_kept_on_the_first_sighting() {
     let mut shaper = TextShaper::new();
-    shaper.admit(7);
-    assert!(shaper.admit(7));
-    assert!(!shaper.admit(7), "admission starts over after being spent");
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 24.0,
+    };
+    let mut out = Vec::new();
+
+    shaper.layout_glyphs("ui label", rect, &style, 1.0, &mut out);
+    assert_eq!(shaper.shaping_cache.len(), 1);
 }

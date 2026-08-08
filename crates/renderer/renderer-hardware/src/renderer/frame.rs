@@ -115,8 +115,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.shader_clip_depth = 0;
         self.shader_clip_outer_scissor = None;
         self.clear_pending();
-        self.path_tess_cache.begin_frame();
-        self.image_pipeline.begin_frame();
+        self.publish_cache_stats();
         // Reclaim the previous frame's composite uniform buffers; the previous frame was already submitted/presented so they are no longer referenced by in-flight GPU work.
         self.composite_pipeline.recycle_params_buffers();
         self.retained_blit_pipeline.recycle_params_buffers();
@@ -567,15 +566,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             ..style
                         };
                         let instance_start = self.pending_shadow_instances.len() as u32;
-                        crate::primitives::text::prepare_text(
-                            &mut self.text_shaper,
-                            text,
-                            shadow_rect,
-                            &shadow_style,
-                            self.scale_factor,
-                            &mut self.pending_shadow_instances,
-                            &mut self.glyph_scratch,
-                        );
+                        crate::caches::with_shared(|caches| {
+                            crate::primitives::text::prepare_text(
+                                &mut caches.text_shaper,
+                                text,
+                                shadow_rect,
+                                &shadow_style,
+                                self.scale_factor,
+                                &mut self.pending_shadow_instances,
+                                &mut self.glyph_scratch,
+                            )
+                        });
                         let instance_end = self.pending_shadow_instances.len() as u32;
                         for inst in &mut self.pending_shadow_instances[instance_start as usize..] {
                             inst.dest_rect[0] -= origin_x;
@@ -604,15 +605,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     if self.batch_text_start.is_none() {
                         self.batch_text_start = Some(self.pending_text_instances.len() as u32);
                     }
-                    crate::primitives::text::prepare_text(
-                        &mut self.text_shaper,
-                        text,
-                        translated,
-                        &style,
-                        self.scale_factor,
-                        &mut self.pending_text_instances,
-                        &mut self.glyph_scratch,
-                    );
+                    crate::caches::with_shared(|caches| {
+                        crate::primitives::text::prepare_text(
+                            &mut caches.text_shaper,
+                            text,
+                            translated,
+                            &style,
+                            self.scale_factor,
+                            &mut self.pending_text_instances,
+                            &mut self.glyph_scratch,
+                        )
+                    });
                 }
                 DrawCommand::RichText { runs, rect, base } => {
                     let rect = *rect;
@@ -640,15 +643,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     if self.batch_text_start.is_none() {
                         self.batch_text_start = Some(self.pending_text_instances.len() as u32);
                     }
-                    crate::primitives::text::prepare_rich_text(
-                        &mut self.text_shaper,
-                        runs,
-                        translated,
-                        &base,
-                        self.scale_factor,
-                        &mut self.pending_text_instances,
-                        &mut self.glyph_scratch,
-                    );
+                    crate::caches::with_shared(|caches| {
+                        crate::primitives::text::prepare_rich_text(
+                            &mut caches.text_shaper,
+                            runs,
+                            translated,
+                            &base,
+                            self.scale_factor,
+                            &mut self.pending_text_instances,
+                            &mut self.glyph_scratch,
+                        )
+                    });
                 }
                 DrawCommand::Image { data, rect, filter } => {
                     if let Some(bounds) = renderer_core::culling::command_visual_rect(
@@ -671,13 +676,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         self.flush_image();
                         self.batch_image_key = Some(key);
                         self.batch_image_start = Some(self.pending_image_instances.len() as u32);
-                        self.batch_image_bind_group =
-                            Some(self.image_pipeline.get_or_create_bind_group(
-                                &self.device,
-                                &self.queue,
-                                &data,
-                                *filter,
-                            ));
+                        self.batch_image_bind_group = crate::caches::with_shared(|caches| {
+                            caches
+                                .images
+                                .bind_group(&self.device, &self.queue, &data, *filter)
+                        });
                     }
                     let (ix1, iy1) = self.draw_state.apply_point(rect.x, rect.y);
                     let (ix2, iy2) = self.draw_state.apply_point(rect.x + rect.width, rect.y);
@@ -758,14 +761,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
                         let sv_start = self.pending_shadow_path_vertices.len();
                         let si_start = self.pending_shadow_path_indices.len() as u32;
-                        crate::primitives::path::prepare_path(
-                            &mut self.path_tess_cache,
-                            data,
-                            &shadow_style,
-                            &mut self.pending_shadow_path_vertices,
-                            &mut self.pending_shadow_path_indices,
-                            &mut self.pending_shadow_path_fill_data,
-                        );
+                        crate::caches::with_shared(|caches| {
+                            crate::primitives::path::prepare_path(
+                                &mut caches.path_tess,
+                                data,
+                                &shadow_style,
+                                &mut self.pending_shadow_path_vertices,
+                                &mut self.pending_shadow_path_indices,
+                                &mut self.pending_shadow_path_fill_data,
+                            )
+                        });
                         let si_end = self.pending_shadow_path_indices.len() as u32;
 
                         if si_end > si_start {
@@ -833,14 +838,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         let vertex_start = self.pending_path_vertices.len();
                         let index_start = self.pending_path_indices.len() as u32;
                         let fill_data_start = self.pending_path_fill_data.len();
-                        crate::primitives::path::prepare_path(
-                            &mut self.path_tess_cache,
-                            data,
-                            &style,
-                            &mut self.pending_path_vertices,
-                            &mut self.pending_path_indices,
-                            &mut self.pending_path_fill_data,
-                        );
+                        crate::caches::with_shared(|caches| {
+                            crate::primitives::path::prepare_path(
+                                &mut caches.path_tess,
+                                data,
+                                &style,
+                                &mut self.pending_path_vertices,
+                                &mut self.pending_path_indices,
+                                &mut self.pending_path_fill_data,
+                            )
+                        });
                         for v in &mut self.pending_path_vertices[vertex_start..] {
                             let (wx, wy) =
                                 self.draw_state.apply_point(v.position[0], v.position[1]);
@@ -1347,8 +1354,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             self.viewport_dirty = false;
         }
 
-        self.text_pipeline
-            .sync_atlas(&self.queue, &mut self.text_shaper.atlas);
+        crate::caches::with_shared(|caches| {
+            caches
+                .atlas
+                .sync(&self.queue, &mut caches.text_shaper.atlas)
+        });
 
         if !self.pending_instances.is_empty() {
             let h = hash_pod_slice(&self.pending_instances);
@@ -1599,13 +1609,23 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     }
                 };
 
-                if let Some((_, cached_view)) = self.shadow_resolved_cache.get(&key) {
+                // Cloned out of the cache — a `TextureView` is an `Arc` handle, so this names the same GPU object —
+                // because the bind group is built from `self.composite_pipeline`, and the cache's borrow cannot be
+                // held across that.
+                let cached_view = crate::caches::with_shared(|caches| {
+                    caches
+                        .shadow_resolved
+                        .get(&key)
+                        .map(|(_, view)| view.clone())
+                })
+                .flatten();
+                if let Some(cached_view) = cached_view {
                     let cbw = bucket_size(op.texture_width);
                     let cbh = bucket_size(op.texture_height);
                     let bg = self.composite_pipeline.create_bind_group(
                         &self.device,
                         &self.queue,
-                        cached_view,
+                        &cached_view,
                         op.dest,
                         1.0,
                         0.0,
@@ -1615,14 +1635,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         ],
                     );
                     results.push(Some(bg));
-                    if let Some(pos) = self
-                        .shadow_resolved_cache_order
-                        .iter()
-                        .position(|k| *k == key)
-                    {
-                        self.shadow_resolved_cache_order.remove(pos);
-                    }
-                    self.shadow_resolved_cache_order.push_back(key);
                     continue;
                 }
 
@@ -1756,14 +1768,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     shadow_uv_scale,
                 );
                 results.push(Some(bg));
-                if self.shadow_resolved_cache.len() >= 128 {
-                    if let Some(oldest) = self.shadow_resolved_cache_order.pop_front() {
-                        self.shadow_resolved_cache.remove(&oldest);
-                    }
-                }
-                self.shadow_resolved_cache_order.push_back(key.clone());
-                self.shadow_resolved_cache
-                    .insert(key, (blurred_texture, blurred_view));
+                crate::caches::with_shared(|caches| {
+                    caches
+                        .shadow_resolved
+                        .insert(key, (blurred_texture, blurred_view))
+                });
                 self.shadow_capture_pool.push(PooledTexture {
                     msaa_texture: cap_msaa_texture,
                     msaa_view: cap_msaa_view,

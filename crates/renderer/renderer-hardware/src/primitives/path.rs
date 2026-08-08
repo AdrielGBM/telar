@@ -1,6 +1,6 @@
-use rustc_hash::FxHashMap;
-use std::collections::VecDeque;
 use std::sync::Arc;
+
+use renderer_cache::{Cache, Policy};
 
 use lyon::math::point;
 use lyon::path::LineCap as LyonLineCap;
@@ -141,74 +141,45 @@ struct StrokeGeomKey {
 struct CachedGeom {
     positions: Vec<[f32; 2]>,
     indices: Vec<u32>,
-    last_frame: u64,
 }
 
+fn geom_bytes(geom: &CachedGeom) -> usize {
+    geom.positions.len() * size_of::<[f32; 2]>() + geom.indices.len() * size_of::<u32>()
+}
+
+/// Tessellated fill and stroke geometry, keyed by the path and the options it was tessellated under.
+///
+/// Two [`Cache`]s where this used to be two maps, two `VecDeque`s of `(key, frame)`, a frame counter and a
+/// `last_frame` per entry — machinery that existed to answer "has anything used this lately", including the subtle
+/// part where a queued eviction had to be skipped if the entry had been touched since. It also bounded nothing but
+/// age: a frame full of complex paths could tessellate without limit.
 pub(crate) struct PathTessCache {
-    fill: FxHashMap<FillGeomKey, CachedGeom>,
-    stroke: FxHashMap<StrokeGeomKey, CachedGeom>,
-    fill_lru: VecDeque<(FillGeomKey, u64)>,
-    stroke_lru: VecDeque<(StrokeGeomKey, u64)>,
-    frame: u64,
-    max_age_frames: u64,
+    fill: Cache<FillGeomKey, CachedGeom>,
+    stroke: Cache<StrokeGeomKey, CachedGeom>,
 }
 
 impl PathTessCache {
-    pub(crate) fn new(max_age_frames: u64) -> Self {
+    pub(crate) fn new(policy: Policy) -> Self {
         Self {
-            fill: FxHashMap::default(),
-            stroke: FxHashMap::default(),
-            fill_lru: VecDeque::new(),
-            stroke_lru: VecDeque::new(),
-            frame: 0,
-            max_age_frames,
+            fill: Cache::new(policy, geom_bytes),
+            stroke: Cache::new(policy, geom_bytes),
         }
     }
 
-    pub(crate) fn begin_frame(&mut self) {
-        self.frame += 1;
-        let current = self.frame;
-
-        // queue is oldest-first; stop at first entry within threshold
-        while let Some(&(key, queued_frame)) = self.fill_lru.front() {
-            if current - queued_frame <= self.max_age_frames {
-                break;
-            }
-            self.fill_lru.pop_front();
-            if let Some(entry) = self.fill.get(&key) {
-                // stale if re-accessed since queued; a newer queue entry will handle eviction
-                if entry.last_frame == queued_frame {
-                    self.fill.remove(&key);
-                }
-            }
-        }
-
-        while let Some(&(key, queued_frame)) = self.stroke_lru.front() {
-            if current - queued_frame <= self.max_age_frames {
-                break;
-            }
-            self.stroke_lru.pop_front();
-            if let Some(entry) = self.stroke.get(&key) {
-                if entry.last_frame == queued_frame {
-                    self.stroke.remove(&key);
-                }
-            }
-        }
+    pub(crate) fn stats(&self) -> [renderer_cache::CacheStat; 2] {
+        [
+            self.fill.stat("gpu.path_fill"),
+            self.stroke.stat("gpu.path_stroke"),
+        ]
     }
 }
 
-// returns true on first touch this frame; caller pushes a fresh lru entry only then
 fn emit_cached_geom(
-    geom: &mut CachedGeom,
+    geom: &CachedGeom,
     fill_index: u32,
-    current_frame: u64,
     out_vertices: &mut Vec<PathVertex>,
     out_indices: &mut Vec<u32>,
-) -> bool {
-    let touched = geom.last_frame != current_frame;
-    if touched {
-        geom.last_frame = current_frame;
-    }
+) {
     let vertex_base = out_vertices.len() as u32;
     for &pos in &geom.positions {
         out_vertices.push(PathVertex {
@@ -220,7 +191,6 @@ fn emit_cached_geom(
     for &idx in &geom.indices {
         out_indices.push(vertex_base + idx);
     }
-    touched
 }
 
 fn build_lyon_path(data: &PathData) -> Path {
@@ -273,7 +243,6 @@ pub(crate) fn prepare_path(
     out_indices: &mut Vec<u32>,
     out_fill_data: &mut Vec<PathFillData>,
 ) {
-    let current_frame = cache.frame;
     let id = data.id;
 
     let mut lyon_path: Option<Path> = None;
@@ -284,9 +253,7 @@ pub(crate) fn prepare_path(
             even_odd: style.fill_rule == FillRule::EvenOdd,
         };
 
-        let fill_hit = cache.fill.contains_key(&fill_key);
-
-        if !fill_hit {
+        if !cache.fill.contains(&fill_key) {
             let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = FillTessellator::new();
@@ -309,10 +276,8 @@ pub(crate) fn prepare_path(
                         CachedGeom {
                             positions: geometry.vertices,
                             indices: geometry.indices,
-                            last_frame: current_frame,
                         },
                     );
-                    cache.fill_lru.push_back((fill_key, current_frame));
                 }
                 Err(e) => tracing::warn!("path fill tessellation failed: {e}"),
             }
@@ -322,10 +287,8 @@ pub(crate) fn prepare_path(
         out_fill_data.push(fill_data_entry);
         let fill_index = (out_fill_data.len() - 1) as u32;
 
-        if let Some(geom) = cache.fill.get_mut(&fill_key) {
-            if emit_cached_geom(geom, fill_index, current_frame, out_vertices, out_indices) {
-                cache.fill_lru.push_back((fill_key, current_frame));
-            }
+        if let Some(geom) = cache.fill.get(&fill_key) {
+            emit_cached_geom(geom, fill_index, out_vertices, out_indices);
         }
     }
 
@@ -337,9 +300,7 @@ pub(crate) fn prepare_path(
             join: s.join as u8,
         };
 
-        let stroke_hit = cache.stroke.contains_key(&stroke_key);
-
-        if !stroke_hit {
+        if !cache.stroke.contains(&stroke_key) {
             let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = StrokeTessellator::new();
@@ -363,28 +324,18 @@ pub(crate) fn prepare_path(
                         CachedGeom {
                             positions: geometry.vertices,
                             indices: geometry.indices,
-                            last_frame: current_frame,
                         },
                     );
-                    cache.stroke_lru.push_back((stroke_key, current_frame));
                 }
                 Err(e) => tracing::warn!("path stroke tessellation failed: {e}"),
             }
         }
 
-        if let Some(geom) = cache.stroke.get_mut(&stroke_key) {
+        if let Some(geom) = cache.stroke.get(&stroke_key) {
             let stroke_fill_index = out_fill_data.len() as u32;
             // The stroke gets its own fill-data entry, so it resolves its paint the same way the fill does. Flattening it to `solid_color()` here silently painted a gradient stroke in its first stop.
             out_fill_data.push(PathFillData::from_fill_style(s.paint));
-            if emit_cached_geom(
-                geom,
-                stroke_fill_index,
-                current_frame,
-                out_vertices,
-                out_indices,
-            ) {
-                cache.stroke_lru.push_back((stroke_key, current_frame));
-            }
+            emit_cached_geom(geom, stroke_fill_index, out_vertices, out_indices);
         }
     }
 }

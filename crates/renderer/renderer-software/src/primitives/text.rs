@@ -1,10 +1,9 @@
 use std::hash::{Hash, Hasher};
-use std::num::NonZeroUsize;
 
-use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
+use renderer_cache::Cache;
 use renderer_core::{Color, TextStyle};
-use rustc_hash::{FxBuildHasher, FxHasher};
+use rustc_hash::FxHasher;
 
 fn tint_premultiplied(pixels: &mut [u8], color: Color) {
     use wide::u32x8;
@@ -97,22 +96,13 @@ pub(crate) struct TextShadowCacheKey {
     pub texture_height: u32,
     pub shadow_color: u32,
     pub blur_radius_bits: u32,
+    /// Weight, slant, alignment, line clamp, ellipsis and spacing — everything past the string itself that moves a
+    /// glyph. The body raster keys on these; the shadow did not, so the same string set bold and regular, or
+    /// ellipsized and whole, shared one silhouette and whichever drew first was cast under both.
+    pub style_bits: u32,
 }
 
-pub(crate) type TextShadowCache = CLruCache<
-    TextShadowCacheKey,
-    tiny_skia::Pixmap,
-    FxBuildHasher,
-    crate::primitives::image::PixmapByteScale,
->;
-
-pub(crate) fn new_text_shadow_cache(budget_bytes: usize) -> TextShadowCache {
-    CLruCache::with_config(
-        CLruCacheConfig::new(NonZeroUsize::new(budget_bytes.max(1)).unwrap())
-            .with_hasher(FxBuildHasher::default())
-            .with_scale(crate::primitives::image::PixmapByteScale),
-    )
-}
+pub(crate) type TextShadowCache = Cache<TextShadowCacheKey, tiny_skia::Pixmap>;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_text(
@@ -125,7 +115,6 @@ pub(crate) fn draw_text(
     clip: Option<&tiny_skia::Mask>,
     current_clip_rect: Option<Rect>,
     blur_scratch: &mut Vec<u8>,
-    text_pixmap_cache: &mut lru::LruCache<renderer_text::TextCacheKey, tiny_skia::Pixmap>,
     text_shadow_cache: &mut TextShadowCache,
     pending_text_shadows: &mut std::collections::HashMap<
         TextShadowCacheKey,
@@ -133,7 +122,9 @@ pub(crate) fn draw_text(
     >,
 ) {
     if let Some(shadow) = style.shadow {
-        let (arc, texture_width, texture_height) = shaper.rasterize_alpha(text, rect, style);
+        // The same ceil the shaper applies, computed here so the shadow's key and geometry are known without paying for a raster the cache may already have made unnecessary.
+        let texture_width = rect.width.ceil() as u32;
+        let texture_height = rect.height.ceil() as u32;
         if texture_width > 0 && texture_height > 0 {
             let shadow_layout = renderer_core::ShadowLayout::compute(
                 shadow.blur_radius,
@@ -165,6 +156,7 @@ pub(crate) fn draw_text(
                     texture_height,
                     shadow_color: u32::from_le_bytes([sr, sg, sb, sa]),
                     blur_radius_bits: q_blur.to_bits(),
+                    style_bits: renderer_text::text_style_bits(style),
                 };
 
                 let tmp_w = texture_width + 2 * padding as u32 + 2;
@@ -192,11 +184,6 @@ pub(crate) fn draw_text(
                     }
                 };
 
-                let async_alpha = arc.clone();
-                let draw_async = move |tmp_pmap: &mut tiny_skia::Pixmap| {
-                    draw_text_shadow(tmp_pmap, &async_alpha);
-                };
-
                 crate::primitives::blit_cached_shadow_async(
                     pixmap,
                     text_shadow_cache,
@@ -210,32 +197,22 @@ pub(crate) fn draw_text(
                     blur_scratch,
                     transform,
                     clip,
-                    |tmp_pmap| draw_text_shadow(tmp_pmap, &arc),
-                    draw_async,
+                    // Rasterizing the alpha mask happens here, behind the cache lookup, because the blurred pixmap it feeds is the thing worth keeping — and once that is cached the mask is an intermediate nothing will read again.
+                    || {
+                        let (alpha, _, _) = shaper.rasterize_alpha(text, rect, style);
+                        let async_alpha = alpha.clone();
+                        (
+                            move |tmp_pmap: &mut tiny_skia::Pixmap| {
+                                draw_text_shadow(tmp_pmap, &alpha)
+                            },
+                            move |tmp_pmap: &mut tiny_skia::Pixmap| {
+                                draw_text_shadow(tmp_pmap, &async_alpha)
+                            },
+                        )
+                    },
                 );
             }
 
-            let body_key = renderer_text::make_text_cache_key(
-                text,
-                style.font_size,
-                texture_width,
-                texture_height,
-                style.paint.solid_color(),
-                renderer_text::text_style_bits(style),
-            );
-            let paint = tiny_skia::PixmapPaint {
-                blend_mode: tiny_skia::BlendMode::SourceOver,
-                ..Default::default()
-            };
-            if text_pixmap_cache.get(&body_key).is_none() {
-                // Use rasterize (not rasterize_alpha+tint) so color emoji preserve their natural colors instead of being multiplied by the text color.
-                let (colored_arc, _, _) = shaper.rasterize(text, rect, style);
-                if let Some(size) = tiny_skia::IntSize::from_wh(texture_width, texture_height) {
-                    if let Some(src) = tiny_skia::Pixmap::from_vec(colored_arc.to_vec(), size) {
-                        text_pixmap_cache.put(body_key.clone(), src);
-                    }
-                }
-            }
             if renderer_core::culling::overlaps(
                 rect.x + transform.tx,
                 rect.y + transform.ty,
@@ -243,16 +220,7 @@ pub(crate) fn draw_text(
                 rect.height,
                 current_clip_rect,
             ) {
-                if let Some(src) = text_pixmap_cache.get(&body_key) {
-                    pixmap.draw_pixmap(
-                        rect.x as i32,
-                        rect.y as i32,
-                        src.as_ref(),
-                        &paint,
-                        transform,
-                        clip,
-                    );
-                }
+                blit_body(pixmap, shaper, text, rect, style, transform, clip);
             }
         }
 
@@ -270,60 +238,42 @@ pub(crate) fn draw_text(
         return;
     }
 
-    let tex_width = rect.width.ceil() as u32;
-    let tex_height = rect.height.ceil() as u32;
-    if tex_width == 0 || tex_height == 0 {
-        return;
-    }
-    let cache_key = renderer_text::make_text_cache_key(
-        text,
-        style.font_size,
-        tex_width,
-        tex_height,
-        style.paint.solid_color(),
-        renderer_text::text_style_bits(style),
-    );
+    blit_body(pixmap, shaper, text, rect, style, transform, clip);
+    draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
+}
 
-    let paint = tiny_skia::PixmapPaint {
-        blend_mode: tiny_skia::BlendMode::SourceOver,
-        ..Default::default()
-    };
-
-    if let Some(src) = text_pixmap_cache.get(&cache_key) {
-        pixmap.draw_pixmap(
-            rect.x as i32,
-            rect.y as i32,
-            src.as_ref(),
-            &paint,
-            transform,
-            clip,
-        );
-        draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
-        return;
-    }
-
-    // Use rasterize (not rasterize_alpha+tint) so color emoji preserve their natural colors instead of being multiplied by the text color.
-    let (pixels_arc, w, h) = shaper.rasterize(text, rect, style);
-    if w == 0 || h == 0 {
-        return;
-    }
-    let Some(size) = tiny_skia::IntSize::from_wh(w, h) else {
-        return;
-    };
-    let Some(src) = tiny_skia::Pixmap::from_vec(pixels_arc.to_vec(), size) else {
+/// Blits the text body at `rect` from the shaper's raster.
+///
+/// Straight from the shaper's bytes, with no pixmap of its own. This used to keep a second cache here — the same
+/// premultiplied RGBA the shaper already held, copied into a `Pixmap` and stored again under the same key — which
+/// doubled what every cached label cost and, having neither a byte budget nor an admission rule, quietly kept the
+/// strings the shaper's admission had just decided were not worth keeping. `PixmapRef` borrows those bytes instead,
+/// so the copy and the cache both go.
+fn blit_body(
+    pixmap: &mut tiny_skia::Pixmap,
+    shaper: &mut renderer_text::TextShaper,
+    text: &str,
+    rect: Rect,
+    style: &TextStyle,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+) {
+    // rasterize, not rasterize_alpha + tint, so colour emoji keep their own colours instead of being multiplied by the text colour.
+    let (pixels, width, height) = shaper.rasterize(text, rect, style);
+    let Some(src) = tiny_skia::PixmapRef::from_bytes(&pixels, width, height) else {
         return;
     };
     pixmap.draw_pixmap(
         rect.x as i32,
         rect.y as i32,
-        src.as_ref(),
-        &paint,
+        src,
+        &tiny_skia::PixmapPaint {
+            blend_mode: tiny_skia::BlendMode::SourceOver,
+            ..Default::default()
+        },
         transform,
         clip,
     );
-    text_pixmap_cache.put(cache_key, src);
-
-    draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
 }
 
 /// Draws a rich-text paragraph: rasterizes the styled runs to one colour block (each run in its own colour)
@@ -347,25 +297,18 @@ pub(crate) fn draw_rich_text(
     ) {
         return;
     }
-    let (pixels_arc, w, h) = shaper.rasterize_rich(runs, rect, base);
-    if w == 0 || h == 0 {
+    let (pixels, width, height) = shaper.rasterize_rich(runs, rect, base);
+    let Some(src) = tiny_skia::PixmapRef::from_bytes(&pixels, width, height) else {
         return;
-    }
-    let Some(size) = tiny_skia::IntSize::from_wh(w, h) else {
-        return;
-    };
-    let Some(src) = tiny_skia::Pixmap::from_vec(pixels_arc.to_vec(), size) else {
-        return;
-    };
-    let paint = tiny_skia::PixmapPaint {
-        blend_mode: tiny_skia::BlendMode::SourceOver,
-        ..Default::default()
     };
     pixmap.draw_pixmap(
         rect.x as i32,
         rect.y as i32,
-        src.as_ref(),
-        &paint,
+        src,
+        &tiny_skia::PixmapPaint {
+            blend_mode: tiny_skia::BlendMode::SourceOver,
+            ..Default::default()
+        },
         transform,
         clip,
     );

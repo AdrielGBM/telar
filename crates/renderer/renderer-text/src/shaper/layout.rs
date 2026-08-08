@@ -51,7 +51,7 @@ impl TextShaper {
             }
             drop(buffer);
             let arc = std::sync::Arc::new(pos);
-            let _ = self.shaping_cache.put_with_weight(shaping_key, arc.clone());
+            self.shaping_cache.insert(shaping_key, arc.clone());
             arc
         };
 
@@ -326,7 +326,7 @@ impl TextShaper {
 
         // Round the wrap width up so sub-pixel rounding never re-wraps the last glyph.
         let result = (width.ceil(), height);
-        self.measure_cache.put(cache_key, result);
+        self.measure_cache.insert(cache_key, result);
         result
     }
 

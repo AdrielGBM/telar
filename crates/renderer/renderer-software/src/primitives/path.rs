@@ -1,12 +1,9 @@
-use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use clru::{CLruCache, CLruCacheConfig};
 use geometry_core::Rect;
+use renderer_cache::Cache;
 use renderer_core::{FillRule, PathData, PathStyle, PathVerb};
-use rustc_hash::FxBuildHasher;
 
-use crate::primitives::image::PixmapByteScale;
 use crate::primitives::{fill_to_paint, to_skia_line_cap, to_skia_line_join};
 
 fn hash_path_data(data: &renderer_core::PathData) -> u64 {
@@ -56,18 +53,16 @@ pub(crate) struct PathShadowCacheKey {
     blur_radius_bits: u32,
     spread_bits: u32,
     color: [u8; 4],
+    /// Whether the shadow fills, and under which rule. A path drawn only as a stroke casts a hollow shadow; the
+    /// same path filled casts a solid one, and the two used to share an entry.
+    has_fill: bool,
+    even_odd: bool,
+    /// The stroke's width, cap and join, or `None` when the path is not stroked. Width above all: a hairline and a
+    /// ten-pixel stroke cast visibly different shadows from identical geometry.
+    stroke: Option<(u32, u8, u8)>,
 }
 
-pub(crate) type PathShadowCache =
-    CLruCache<PathShadowCacheKey, tiny_skia::Pixmap, FxBuildHasher, PixmapByteScale>;
-
-pub(crate) fn new_path_shadow_cache(budget_bytes: usize) -> PathShadowCache {
-    CLruCache::with_config(
-        CLruCacheConfig::new(NonZeroUsize::new(budget_bytes.max(1)).unwrap())
-            .with_hasher(FxBuildHasher::default())
-            .with_scale(PixmapByteScale),
-    )
-}
+pub(crate) type PathShadowCache = Cache<PathShadowCacheKey, tiny_skia::Pixmap>;
 
 fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
     let mut pb = tiny_skia::PathBuilder::new();
@@ -140,6 +135,11 @@ pub(crate) fn draw_path(
                 blur_radius_bits: q_blur.to_bits(),
                 spread_bits: shadow.spread.to_bits(),
                 color: [sc_r, sc_g, sc_b, sc_a],
+                has_fill: style.fill.is_some(),
+                even_odd: style.fill_rule == FillRule::EvenOdd,
+                stroke: style
+                    .stroke
+                    .map(|s| (s.width.to_bits(), s.cap as u8, s.join as u8)),
             };
 
             let dx = -b.x() + padding as f32;
@@ -178,12 +178,6 @@ pub(crate) fn draw_path(
                     }
                 };
 
-            let async_path = path.clone();
-            let async_paint = shadow_paint.clone();
-            let draw_async = move |tmp_pmap: &mut tiny_skia::Pixmap| {
-                draw_path_shadow(tmp_pmap, &async_path, &async_paint);
-            };
-
             crate::primitives::blit_cached_shadow_async(
                 pixmap,
                 path_shadow_cache,
@@ -197,8 +191,19 @@ pub(crate) fn draw_path(
                 blur_scratch,
                 transform,
                 clip,
-                |tmp_pmap| draw_path_shadow(tmp_pmap, &path, &shadow_paint),
-                draw_async,
+                || {
+                    // The worker needs its own path and paint; the inline closure can borrow the ones the fill below still uses.
+                    let async_path = path.clone();
+                    let async_paint = shadow_paint.clone();
+                    (
+                        |tmp_pmap: &mut tiny_skia::Pixmap| {
+                            draw_path_shadow(tmp_pmap, &path, &shadow_paint)
+                        },
+                        move |tmp_pmap: &mut tiny_skia::Pixmap| {
+                            draw_path_shadow(tmp_pmap, &async_path, &async_paint)
+                        },
+                    )
+                },
             );
         }
     }

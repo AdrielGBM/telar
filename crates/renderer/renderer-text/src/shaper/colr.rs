@@ -66,7 +66,7 @@ impl TextShaper {
             }
         }
         // Record whether this text produced any COLR glyph so later calls can short-circuit.
-        self.has_colr_cache.put(flag_key, out.len() > start_len);
+        self.has_colr_cache.insert(flag_key, out.len() > start_len);
     }
 
     /// Rasterizes a COLR v1 color glyph swash could not handle, returning atlas-ready data

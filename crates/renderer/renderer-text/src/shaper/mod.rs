@@ -3,12 +3,10 @@ use cosmic_text::{
     SwashCache, Weight,
 };
 use geometry_core::{Color, Rect};
-use lru::LruCache;
+use renderer_cache::{Cache, CacheStat, Policy, limits};
 use renderer_core::{TextAlign, TextRun, TextStyle};
-use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
-use std::num::NonZeroUsize;
+use rustc_hash::FxHashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 mod atlas;
 mod cache;
@@ -23,37 +21,24 @@ pub use atlas::{ATLAS_SIZE, GlyphAtlas, GlyphInfo};
 pub use cache::{TextCacheKey, make_text_cache_key, text_style_bits};
 pub use colr::ColrGlyph;
 
-use cache::{
-    AlphaCacheKey, AlphaCacheScale, Cached, PixelCacheScale, ShapingCacheKey, ShapingCacheScale,
-};
-use clru::{CLruCache, CLruCacheConfig};
+use cache::{GlyphPositions, ShapingCacheKey};
 
 /// Line height as a multiple of font size, applied uniformly at layout time. Exposed so widgets that vertically place text (e.g. centering a button label) center against the exact box the renderer uses.
 pub const LINE_HEIGHT_FACTOR: f32 = 1.2;
 
-// Entry caps for the measure and has-COLR caches. Values are tiny (a few bytes each), so the cap trades negligible memory for a high hit rate.
-const MEASURE_CACHE_CAP: usize = 1000;
-const HAS_COLR_CACHE_CAP: usize = 1000;
-/// How many rasterized-once strings are remembered while waiting to see whether anything asks again. Keys only, so the whole table is a few tens of KB; past it the oldest are forgotten and their strings simply pay admission again.
-const SEEN_ONCE_CAP: usize = 4096;
-/// How long a raster survives with nothing drawing it.
-const IDLE_EVICT: Duration = Duration::from_secs(300);
-/// Lower bound between idle sweeps, so the check costs one `Instant::elapsed` on the frame path rather than a walk of every cache.
-const SWEEP_EVERY: Duration = Duration::from_secs(60);
-
 pub struct TextShaperConfig {
-    pub pixel_cache_budget_bytes: usize,
-    pub alpha_cache_budget_bytes: usize,
-    pub shaping_cache_budget_bytes: usize,
+    /// Bounds the composed-string raster cache. Whole [`Policy`] rather than a byte count so an app can also say how
+    /// long a raster may sit idle and whether one sighting is enough to keep it.
+    pub raster: Policy,
+    pub shaping: Policy,
     pub font: renderer_core::FontConfig,
 }
 
 impl Default for TextShaperConfig {
     fn default() -> Self {
         Self {
-            pixel_cache_budget_bytes: 64 * 1024 * 1024,
-            alpha_cache_budget_bytes: 64 * 1024 * 1024,
-            shaping_cache_budget_bytes: 24 * 1024 * 1024,
+            raster: limits::TEXT_RASTER,
+            shaping: limits::TEXT_SHAPING,
             font: renderer_core::FontConfig::default(),
         }
     }
@@ -62,26 +47,17 @@ impl Default for TextShaperConfig {
 pub struct TextShaper {
     font_system: FontSystem,
     swash_cache: SwashCache,
+    // Written only by the hardware backend, which is the only caller of `layout_glyphs`. Costs nothing until a glyph is packed; see `GlyphAtlas::insert`.
     pub atlas: GlyphAtlas,
-    pixel_cache: CLruCache<TextCacheKey, Cached<Arc<[u8]>>, FxBuildHasher, PixelCacheScale>,
-    alpha_pixel_cache: CLruCache<AlphaCacheKey, Cached<Arc<[u8]>>, FxBuildHasher, AlphaCacheScale>,
-    // Strings rasterized once and not seen again since. Admission to the pixel caches costs a second sighting, so a clock at `%H:%M:%S` — a string a second that no later frame will ever ask for — rasterizes exactly as before but stops filling megabytes with its own past. Bounded, or it would become the leak it prevents.
-    seen_once: LruCache<u64, (), FxBuildHasher>,
-    // When the idle sweep last ran. See [`Self::sweep_idle`].
-    last_sweep: Instant,
-    shaping_cache: CLruCache<
-        ShapingCacheKey,
-        Arc<Vec<(CacheKey, i32, i32)>>,
-        FxBuildHasher,
-        ShapingCacheScale,
-    >,
-    // Keyed by (text_hash, max_width_bits, font_size_bits, style_bits); LRU-evicted at MEASURE_CACHE_CAP so a hot subset survives the cap instead of a full clear dropping everything.
-    measure_cache: LruCache<(u64, u32, u32, u32), (f32, f32), FxBuildHasher>,
+    // Composed strings as premultiplied RGBA. Admission-gated: a clock at `%H:%M:%S` mints a string a second that no later frame will ever ask for, and text worth keeping is text something asked for twice.
+    raster_cache: Cache<TextCacheKey, Arc<[u8]>>,
+    shaping_cache: Cache<ShapingCacheKey, GlyphPositions>,
+    measure_cache: Cache<(u64, u32, u32, u32), (f32, f32)>,
     // Whether a (text_hash, font_size_bits) shapes to any COLR glyph. Lets the software COLR fallback skip make_buffer + per-glyph get_image for plain UI text after the first evaluation. Symmetric with `blank_glyphs`.
-    has_colr_cache: LruCache<(u64, u32, u32), bool, FxBuildHasher>,
-    // Raw font bytes + face index, cached by font id so COLR rasterization does not re-read the font file on every atlas miss.
-    colr_font_cache: FxHashMap<cosmic_text::fontdb::ID, Arc<(Vec<u8>, u32)>>,
-    // Glyphs that swash cannot rasterize and that are not COLR glyphs either (e.g. whitespace); skipped on later frames so we do not re-attempt COLR rasterization for them every frame.
+    has_colr_cache: Cache<(u64, u32, u32), bool>,
+    // Raw font bytes + face index, so COLR rasterization does not re-read the font file on every atlas miss.
+    colr_font_cache: Cache<cosmic_text::fontdb::ID, Arc<(Vec<u8>, u32)>>,
+    // Glyphs that swash cannot rasterize and that are not COLR glyphs either (e.g. whitespace); skipped on later frames so we do not re-attempt COLR rasterization for them every frame. Left unbounded where the caches above are not: an entry is one `CacheKey`, the set is bounded by the glyph repertoire actually attempted, and evicting one buys back 16 bytes in exchange for re-running a COLR rasterization that already failed.
     blank_glyphs: FxHashSet<CacheKey>,
     // Cached real font metrics for the default sans-serif face; computed lazily on first request and reused across frames.
     font_metrics_cache: Option<renderer_core::FontMetrics>,
@@ -267,63 +243,92 @@ impl TextShaper {
             font_system,
             swash_cache: SwashCache::new(),
             atlas: GlyphAtlas::new(),
-            pixel_cache: CLruCache::with_config(
-                CLruCacheConfig::new(NonZeroUsize::new(config.pixel_cache_budget_bytes).unwrap())
-                    .with_hasher(FxBuildHasher::default())
-                    .with_scale(PixelCacheScale),
-            ),
-            alpha_pixel_cache: CLruCache::with_config(
-                CLruCacheConfig::new(NonZeroUsize::new(config.alpha_cache_budget_bytes).unwrap())
-                    .with_hasher(FxBuildHasher::default())
-                    .with_scale(AlphaCacheScale),
-            ),
-            shaping_cache: CLruCache::with_config(
-                CLruCacheConfig::new(NonZeroUsize::new(config.shaping_cache_budget_bytes).unwrap())
-                    .with_hasher(FxBuildHasher::default())
-                    .with_scale(ShapingCacheScale),
-            ),
-            measure_cache: LruCache::with_hasher(
-                NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
-                FxBuildHasher,
-            ),
-            has_colr_cache: LruCache::with_hasher(
-                NonZeroUsize::new(HAS_COLR_CACHE_CAP).unwrap(),
-                FxBuildHasher,
-            ),
-            colr_font_cache: FxHashMap::default(),
+            raster_cache: Cache::new(config.raster, |pixels| pixels.len()),
+            shaping_cache: Cache::new(config.shaping, |positions| {
+                positions
+                    .len()
+                    .saturating_mul(size_of::<(CacheKey, i32, i32)>())
+            }),
+            measure_cache: Cache::new(limits::TEXT_MEASURE, |_| limits::SMALL_ENTRY_BYTES),
+            has_colr_cache: Cache::new(limits::TEXT_HAS_COLR, |_| limits::SMALL_ENTRY_BYTES),
+            colr_font_cache: Cache::new(limits::FONT_FILE, |font| font.0.len()),
             blank_glyphs: FxHashSet::default(),
             font_metrics_cache: None,
-            seen_once: LruCache::with_hasher(
-                NonZeroUsize::new(SEEN_ONCE_CAP).unwrap(),
-                FxBuildHasher,
-            ),
-            last_sweep: Instant::now(),
         }
     }
 
-    /// Whether a freshly rasterized string has earned a place in the pixel caches.
+    /// Drops every raster, shaped run and measurement nothing has asked for within its idle horizon, and the glyph
+    /// masks if they have outgrown their ceiling.
     ///
-    /// `false` the first time a key is seen, `true` from the second on. The cost is rasterizing a string twice before it is kept, paid once per distinct string ever; what it buys is that text drawn once and never again — a clock's seconds, a byte counter, a download percentage — stops being stored at all. Text worth caching is text something asked for twice, which is the only text a cache can ever serve.
-    pub(super) fn admit(&mut self, key_hash: u64) -> bool {
-        if self.seen_once.pop(&key_hash).is_some() {
-            return true;
-        }
-        self.seen_once.put(key_hash, ());
-        false
+    /// The caches sweep themselves as they are used, which covers a running shell but not one that has stopped
+    /// drawing — with no frames there are no accesses, and no access is a chance to reclaim. Call this when the app
+    /// knows it has gone quiet.
+    pub fn sweep_idle(&mut self) {
+        self.raster_cache.sweep();
+        self.shaping_cache.sweep();
+        self.measure_cache.sweep();
+        self.has_colr_cache.sweep();
+        self.colr_font_cache.sweep();
+        self.trim_glyph_rasters();
     }
 
-    /// Drops rasters nothing has drawn in [`IDLE_EVICT`], at most once per [`SWEEP_EVERY`].
+    /// What every cache this shaper owns is holding, for a census something outside the renderer can read.
     ///
-    /// A byte budget bounds the cache but says nothing about *when* it lets go: an entry only leaves once newer entries crowd it out, so a cache that never fills holds its coldest raster for as long as the process lives. On a desktop shell that is measured in days — a folder name opened twice this morning still costs its pixels tonight. Sweeping by age is what makes idle memory come back at all.
-    fn sweep_idle(&mut self) {
-        if self.last_sweep.elapsed() < SWEEP_EVERY {
-            return;
+    /// Counted from the caches themselves on each call, never tracked alongside them, so no number here can drift
+    /// from what is true. The atlas and `swash_cache` are measured by hand — neither is a [`Cache`] — and the atlas
+    /// reads zero on a software-only process, which is the point of it being lazy.
+    pub fn cache_stats(&self) -> Vec<CacheStat> {
+        let glyph_bytes: usize = self
+            .swash_cache
+            .image_cache
+            .values()
+            .flatten()
+            .map(|image| image.data.len())
+            .sum();
+        vec![
+            self.raster_cache.stat("text.raster"),
+            self.shaping_cache.stat("text.shaping"),
+            self.measure_cache.stat("text.measure"),
+            self.has_colr_cache.stat("text.has_colr"),
+            self.colr_font_cache.stat("text.font_file"),
+            CacheStat {
+                name: "text.glyph_raster",
+                bytes: glyph_bytes,
+                entries: self.swash_cache.image_cache.len(),
+                capacity: limits::GLYPH_RASTER_BUDGET_BYTES,
+            },
+            CacheStat {
+                name: "text.atlas",
+                // What the glyphs have written, not the plane they were written into: the plane is `mmap`'d zero pages that cost nothing until touched, and counting it made the census claim more memory than the whole process had.
+                bytes: self.atlas.packed_bytes(),
+                entries: self.atlas.glyph_count(),
+                capacity: self.atlas.reserved_bytes(),
+            },
+        ]
+    }
+
+    /// Empties cosmic-text's glyph caches once the rasterized masks pass [`limits::GLYPH_RASTER_BUDGET_BYTES`].
+    ///
+    /// `SwashCache` is two `HashMap`s cosmic-text never evicts from. The hardware backend prunes it in passing —
+    /// packing a glyph into a full atlas removes the evicted key — but the software backend, which reaches it
+    /// through `Buffer::draw`, has nothing that ever removes anything. Left alone it grows with every distinct
+    /// (glyph, size, subpixel bin) a session ever draws.
+    ///
+    /// All or nothing, because cosmic-text records no recency: with no way to tell a hot glyph from a cold one,
+    /// evicting a chosen few would be guessing. Clearing costs re-rasterizing the glyphs still in use, which is why
+    /// the ceiling sits far above what a shell actually holds and why this only ever runs from an idle sweep.
+    fn trim_glyph_rasters(&mut self) {
+        let resident: usize = self
+            .swash_cache
+            .image_cache
+            .values()
+            .flatten()
+            .map(|image| image.data.len())
+            .sum();
+        if resident > limits::GLYPH_RASTER_BUDGET_BYTES {
+            self.swash_cache.image_cache.clear();
+            self.swash_cache.outline_command_cache.clear();
         }
-        self.last_sweep = Instant::now();
-        let cutoff = Instant::now() - IDLE_EVICT;
-        self.pixel_cache.retain(|_, v| v.last_used.get() > cutoff);
-        self.alpha_pixel_cache
-            .retain(|_, v| v.last_used.get() > cutoff);
     }
 }
 
