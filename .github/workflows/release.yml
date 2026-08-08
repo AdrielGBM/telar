@@ -29,7 +29,7 @@ jobs:
             os: windows-latest
             binary: telar-analyzer.exe
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install stable Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -40,7 +40,7 @@ jobs:
         run: cargo build --release --package telar-analyzer --target ${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: telar-analyzer-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
@@ -53,10 +53,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts/
 
@@ -71,7 +71,7 @@ jobs:
           mv artifacts/telar-analyzer-x86_64-pc-windows-msvc/telar-analyzer.exe release/telar-analyzer-x86_64-pc-windows-msvc.exe
 
       - name: Create release and upload binaries
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: release/*
 
@@ -86,7 +86,7 @@ jobs:
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -125,10 +125,10 @@ jobs:
             artifact: telar-analyzer-x86_64-pc-windows-msvc
             binary: telar-analyzer.exe
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download binary for this platform
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           # Drop the binary into server/ so resolveServerPath() finds it in the installed extension.
@@ -138,7 +138,7 @@ jobs:
         if: matrix.vsce-target != 'win32-x64'
         run: chmod +x editors/vscode/telar/server/${{ matrix.binary }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
 
