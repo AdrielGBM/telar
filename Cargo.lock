@@ -4859,6 +4859,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-renderer-cache"
+version = "0.1.1"
+dependencies = [
+ "clru",
+ "rustc-hash 2.1.2",
+]
+
+[[package]]
 name = "telar-renderer-core"
 version = "0.1.1"
 dependencies = [
@@ -4885,6 +4893,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "telar-geometry-core",
  "telar-platform-headless",
+ "telar-renderer-cache",
  "telar-renderer-core",
  "telar-renderer-text",
  "tracing",
@@ -4895,10 +4904,8 @@ dependencies = [
 name = "telar-renderer-software"
 version = "0.1.1"
 dependencies = [
- "clru",
  "criterion",
  "image",
- "lru",
  "memmap2",
  "ndk",
  "raw-window-handle",
@@ -4912,6 +4919,7 @@ dependencies = [
  "telar-platform-core",
  "telar-platform-headless",
  "telar-reactive-core",
+ "telar-renderer-cache",
  "telar-renderer-core",
  "telar-renderer-text",
  "telar-ui-components",
@@ -4927,7 +4935,6 @@ dependencies = [
 name = "telar-renderer-text"
 version = "0.1.1"
 dependencies = [
- "clru",
  "cosmic-text",
  "criterion",
  "etagere",
@@ -4936,6 +4943,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "skrifa 0.43.2",
  "telar-geometry-core",
+ "telar-renderer-cache",
  "telar-renderer-core",
  "tiny-skia 0.12.0",
 ]

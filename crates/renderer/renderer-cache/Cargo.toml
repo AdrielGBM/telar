@@ -1,0 +1,15 @@
+[package]
+name = "telar-renderer-cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "One byte-budgeted cache with admission and idle eviction, shared by every Telar renderer backend."
+keywords = ["telar", "cache", "lru", "renderer", "memory"]
+categories = ["caching", "rendering", "memory-management"]
+readme.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+clru.workspace = true
+rustc-hash.workspace = true
