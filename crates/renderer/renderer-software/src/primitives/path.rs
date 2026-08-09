@@ -6,6 +6,15 @@ use renderer_core::{FillRule, PathData, PathStyle, PathVerb};
 
 use crate::primitives::{fill_to_paint, to_skia_line_cap, to_skia_line_join};
 
+/// Whether a path encloses any pixels, which is what makes filling it mean something.
+///
+/// A stroke of the same path is still worth drawing — that is what gives a flat chart its line — so this
+/// gates the fill alone.
+fn has_area(path: &tiny_skia::Path) -> bool {
+    let bounds = path.bounds();
+    bounds.width() > 0.0 && bounds.height() > 0.0
+}
+
 fn hash_path_data(data: &renderer_core::PathData) -> u64 {
     use rustc_hash::FxHasher;
     use std::hash::Hasher;
@@ -160,7 +169,7 @@ pub(crate) fn draw_path(
                 move |tmp_pmap: &mut tiny_skia::Pixmap,
                       path: &tiny_skia::Path,
                       shadow_paint: &tiny_skia::Paint<'static>| {
-                    if has_fill {
+                    if has_fill && has_area(path) {
                         let rule = match fill_rule {
                             FillRule::Winding => tiny_skia::FillRule::Winding,
                             FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
@@ -208,7 +217,13 @@ pub(crate) fn draw_path(
         }
     }
 
-    if let Some(fill_style) = style.fill {
+    // A path with no area covers no pixel, so filling it changes nothing — but tiny_skia treats being asked
+    // as a mistake and warns once per frame for as long as the shape stays flat. These paths come from data
+    // rather than from a stylesheet, so flat is ordinary: a chart over a run of equal readings, or a glyph
+    // whose outline is a single straight stroke.
+    if let Some(fill_style) = style.fill
+        && has_area(&path)
+    {
         let paint = fill_to_paint(fill_style);
         let rule = match style.fill_rule {
             FillRule::Winding => tiny_skia::FillRule::Winding,
