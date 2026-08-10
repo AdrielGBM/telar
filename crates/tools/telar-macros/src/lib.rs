@@ -133,6 +133,8 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_cleanup() {
                 // Drop in-flight animations alongside the signals they target so none outlive this dylib's reset runtime.
                 ::telar::motion::reset();
+                // Drop pending task callbacks too: they are code compiled into this dylib, so running — or even dropping — one after dlclose would jump into unmapped memory.
+                ::telar::reset_tasks();
                 ::telar::reset_runtime();
             }
         }
@@ -252,6 +254,19 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_drain_window_commands()
             -> ::std::vec::Vec<::telar::WindowCommand> {
                 ::telar::take_window_commands()
+            }
+            // Run the completions of tasks spawned inside this dylib: `spawn_task` registers its callback in
+            // this dylib's reactive-core thread-local, so the host must drain it across this boundary — its
+            // own copy is empty.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_drain_tasks() {
+                ::telar::drain_tasks();
+            }
+            // Give this dylib's reactive-core copy the loop wake, so a worker finishing in here runs a frame
+            // instead of waiting for the next input event.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_install_task_waker(waker: ::telar::RedrawWaker) {
+                ::telar::set_task_waker(move || waker.wake());
             }
         }
     } else {

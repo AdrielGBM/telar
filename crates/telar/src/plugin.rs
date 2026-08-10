@@ -146,6 +146,7 @@ pub struct PluginInstance {
     tree: ComponentList,
     root: NodeId,
     size: (f32, f32),
+    task_waker_installed: bool,
     // Declared last so it drops last: the content and segment tree free their state while this surface's
     // worlds (layout, overlay, focus) still exist.
     surface: Rc<Surface>,
@@ -169,6 +170,7 @@ impl PluginInstance {
             tree,
             root,
             size: (0.0, 0.0),
+            task_waker_installed: false,
         }
     }
 
@@ -260,6 +262,16 @@ impl PluginInstance {
     /// can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
     pub fn on_frame(&mut self, ctx: &mut AppCtx) {
         let _g = self.surface.enter();
+        // The plugin links its own reactive-core copy, so `spawn_task` inside it registers in a runtime the
+        // host cannot reach. Both halves of the bridge are wired here rather than through new FFI symbols:
+        // the host's wake goes in once, and the completions run on every frame it drives.
+        if !self.task_waker_installed {
+            if let Some(waker) = ctx.redraw_waker() {
+                reactive_core::set_task_waker(move || waker.wake());
+                self.task_waker_installed = true;
+            }
+        }
+        reactive_core::drain_tasks();
         // Batch so signals the hook writes (draining channels) flush after the `borrow_mut` releases, never
         // re-entering `view()` mid-borrow (see `relayout`).
         let embedded = &self.embedded;
@@ -298,6 +310,15 @@ impl PluginInstance {
 // --- Dylib-side shim helpers -------------------------------------------------------------------------------
 // The `plugin!` macro exports one thin `#[no_mangle]` wrapper per method; each forwards to one of these so all
 // logic stays here in rsx. `#[doc(hidden)]` — public only because macro expansion lands in the plugin crate.
+
+impl Drop for PluginInstance {
+    fn drop(&mut self) {
+        // Background work this plugin started must not outlive it: its callbacks close over this surface's
+        // state. Scoped to this instance's surface because two instances of the same plugin dylib share one
+        // task registry (dlopen refcounts the library), so a blanket reset would cancel the sibling's work.
+        reactive_core::cancel_tasks_for(self.surface.handle());
+    }
+}
 
 /// Build a plugin instance and leak it to a raw pointer the host owns (freed via [`__plugin_destroy`]).
 #[doc(hidden)]

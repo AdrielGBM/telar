@@ -9,6 +9,7 @@ mod runtime;
 mod signal;
 #[macro_use]
 mod surface_local;
+mod task;
 
 pub use effect::{Effect, effect};
 pub use memo::{Memo, memo};
@@ -17,6 +18,10 @@ pub use runtime::{
     end_batch, reset_runtime, set_current_surface, set_flush_notify, set_surface_enter_hook,
 };
 pub use signal::{ReadSignal, RwSignal, signal};
+pub use task::{
+    Emitter, Task, cancel_tasks_for, drain_tasks, pending_task_count, reset_tasks, set_task_waker,
+    spawn_stream, spawn_task,
+};
 
 #[cfg(test)]
 mod tests {

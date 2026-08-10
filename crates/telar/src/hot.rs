@@ -215,6 +215,31 @@ impl crate::app::App for HotApp {
             unsafe { set(dark) }
         }
     }
+
+    // Run the completions of tasks spawned inside the dylib: `spawn_task` registered their callbacks in the
+    // dylib's own reactive-core thread-local, so the host must drain it across this boundary — its own copy is
+    // empty. Missing symbol (dylib built before this existed) degrades to a no-op.
+    fn drain_tasks(&self) {
+        if let Ok(drain) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn()>(b"_rsx_hot_drain_tasks\0")
+        } {
+            unsafe { drain() }
+        }
+    }
+
+    // Install the loop wake in the dylib's own reactive-core copy, so a worker finishing inside it can run a
+    // frame. Missing symbol degrades to a no-op: results then wait for the next input event to be drained.
+    fn install_task_waker(&self, waker: crate::app_context::RedrawWaker) {
+        if let Ok(install) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(crate::app_context::RedrawWaker)>(
+                    b"_rsx_hot_install_task_waker\0",
+                )
+        } {
+            unsafe { install(waker) }
+        }
+    }
 }
 
 #[cfg(feature = "dev")]

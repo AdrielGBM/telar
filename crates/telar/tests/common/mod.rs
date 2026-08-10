@@ -2,6 +2,9 @@
 //! fills its whole window with one solid color (recomputing layout on the WindowResized that AppHandler
 //! synthesizes at mount).
 
+// Each test binary compiles this module whole but uses only the helpers it needs.
+#![allow(dead_code)]
+
 use telar::{
     App, AppPathsProvider, AvailableSpace, Color, Component, Event, EventResult, LayoutItem,
     LayoutStyle, NodeId, RectStyle, Rectangle, RenderNode, SizeDimension, compute_layout,

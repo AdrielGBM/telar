@@ -361,6 +361,12 @@ where
                 crate::app_context::RedrawWaker::new(move || window.request_redraw())
             }
         });
+        // Hand the same wake to the app's reactive runtime so `spawn_task` needs no waker ceremony from the
+        // app. Under the per-window fallback above this points at whichever surface resumed last, which is
+        // enough: any redraw runs a frame, and every surface's frame drains the whole task queue.
+        if let Some(waker) = self.redraw_waker.clone() {
+            self.app.install_task_waker(waker);
+        }
         self.tree = Some(self.app.mount());
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
@@ -590,6 +596,10 @@ where
             return;
         }
         self.last_tick = now;
+        // Deliver finished background work before the tick: the batch open here defers its flush to the
+        // `end_batch` below, so a task that dirties layout is picked up by the `relayout` that follows
+        // instead of waiting a frame.
+        self.app.drain_tasks();
         self.app.motion_tick(now);
         end_batch();
         // Runtime-driven relayout: a reactive change (e.g. a reactive list adding/removing items) mutated

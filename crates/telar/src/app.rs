@@ -105,6 +105,23 @@ pub trait App: 'static {
     fn set_system_dark(&self, dark: bool) {
         theme_core::set_system_dark(dark);
     }
+
+    /// Runs the completion callbacks of `spawn_task` work that finished since the last frame, writing their
+    /// results into signals on the UI thread. Only the dylib-backed `HotApp` overrides this — the pending
+    /// callbacks are registered in the dylib's own reactive-core copy (where app code called `spawn_task`),
+    /// so the host must drain it across the FFI boundary rather than its own (empty) copy.
+    #[doc(hidden)]
+    fn drain_tasks(&self) {
+        reactive_core::drain_tasks();
+    }
+
+    /// Gives the app's reactive runtime the wake a finishing `spawn_task` worker uses to run a frame. Only
+    /// the dylib-backed `HotApp` overrides this: without it a task spawned inside the dylib would deliver
+    /// its result into a runtime whose waker slot is empty, and nothing would run until the next input event.
+    #[doc(hidden)]
+    fn install_task_waker(&self, waker: crate::app_context::RedrawWaker) {
+        reactive_core::set_task_waker(move || waker.wake());
+    }
 }
 
 /// Lets [`crate::run_multi_with_platform`] (monomorphic over one `A: App`) drive surfaces of different app types via `Box<dyn App>`.
@@ -153,5 +170,11 @@ impl<A: App + ?Sized> App for Box<A> {
     }
     fn set_system_dark(&self, dark: bool) {
         (**self).set_system_dark(dark)
+    }
+    fn drain_tasks(&self) {
+        (**self).drain_tasks()
+    }
+    fn install_task_waker(&self, waker: crate::app_context::RedrawWaker) {
+        (**self).install_task_waker(waker)
     }
 }
