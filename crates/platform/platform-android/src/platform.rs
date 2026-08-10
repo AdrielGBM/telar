@@ -155,6 +155,30 @@ use platform_winit::WinitWindow as AndroidWindow;
 
 pub struct AndroidPlatform {
     event_loop: EventLoop<()>,
+    // winit's `theme()` is always `None` on Android and the `Window` never sees the activity's configuration, so the OS light/dark preference has to be read from here — the same role the freedesktop portal plays on Linux.
+    app: AndroidApp,
+}
+
+/// How often the OS light/dark preference is re-read. A theme flip is a human action, so half a second reads
+/// as instant, and it keeps a config copy out of every frame.
+const THEME_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// The OS light/dark preference, or `None` when the device expresses no opinion.
+///
+/// Read from the **asset manager**, not from `AndroidApp::config()`. That cached `ConfigurationRef` is only
+/// refreshed when android-activity receives NativeActivity's `onConfigurationChanged`, and that callback does
+/// not always arrive: on a Redmi/HyperOS device the system applied `night` to the activity — visible in
+/// `dumpsys activity activities` as `mLastReportedConfigurations` — while the cached config stayed on the
+/// value it had at launch for as long as the process lived. The asset manager tracks the change either way,
+/// and it is the same source the glue itself copies from when the callback does fire.
+fn prefers_dark(app: &AndroidApp) -> Option<bool> {
+    // Through android-activity's own re-export rather than a direct `ndk` dependency, so the types can never be a different version of the ones it uses internally.
+    use android_activity::ndk::configuration::{Configuration, UiModeNight};
+    match Configuration::from_asset_manager(&app.asset_manager()).ui_mode_night() {
+        UiModeNight::Yes => Some(true),
+        UiModeNight::No => Some(false),
+        _ => None,
+    }
 }
 
 impl AndroidPlatform {
@@ -168,10 +192,10 @@ impl AndroidPlatform {
         tracing_subscriber::registry().with(logcat).try_init().ok();
 
         let event_loop = EventLoop::builder()
-            .with_android_app(app)
+            .with_android_app(app.clone())
             .build()
             .map_err(|e| PlatformError(e.to_string()))?;
-        Ok(Self { event_loop })
+        Ok(Self { event_loop, app })
     }
 }
 
@@ -184,6 +208,10 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     cursor_position: (f64, f64),
     // Last position of an active touch finger, used to emit Scrolled deltas from drag gestures.
     last_touch_pos: Option<(f64, f64, u64)>,
+    app: AndroidApp,
+    // The preference last reported to the app, so a poll only produces an event when it actually changed.
+    last_dark: Option<bool>,
+    last_theme_poll: Option<std::time::Instant>,
     #[cfg(target_os = "android")]
     choreographer: Option<choreographer::Choreographer>,
     #[cfg(target_os = "android")]
@@ -193,6 +221,22 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
 impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H> {
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
         self.handler.new_events();
+        // Polled rather than pushed: the notification this would hang off (`onConfigurationChanged`) is the very thing that does not arrive — see `prefers_dark`. Done here so the event lands inside the batch `new_events` just opened, exactly like a real input event.
+        if self
+            .last_theme_poll
+            .is_none_or(|at| at.elapsed() >= THEME_POLL_INTERVAL)
+        {
+            self.last_theme_poll = Some(std::time::Instant::now());
+            let dark = prefers_dark(&self.app);
+            if dark != self.last_dark {
+                self.last_dark = dark;
+                // No window yet (or suspended) means nothing to tell: `resumed` re-reads and reports.
+                if let (Some(dark), Some(window)) = (dark, self.window.clone()) {
+                    self.handler
+                        .on_event(Event::ColorSchemeChanged { dark }, &window);
+                }
+            }
+        }
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
@@ -257,6 +301,13 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                     }
                 }
                 let window = AndroidWindow(Arc::new(w));
+                // Before the tree mounts, so its first layout is already in the right theme rather than building light and flipping on the next turn.
+                self.last_dark = prefers_dark(&self.app);
+                self.last_theme_poll = Some(std::time::Instant::now());
+                if let Some(dark) = self.last_dark {
+                    self.handler
+                        .on_event(Event::ColorSchemeChanged { dark }, &window);
+                }
                 if !self.handler.on_resume(&window) {
                     event_loop.exit();
                     return;
@@ -471,6 +522,9 @@ impl Platform for AndroidPlatform {
             modifiers: platform_core::ModifiersState::default(),
             cursor_position: (0.0, 0.0),
             last_touch_pos: None,
+            app: self.app,
+            last_dark: None,
+            last_theme_poll: None,
             #[cfg(target_os = "android")]
             choreographer,
             #[cfg(target_os = "android")]
