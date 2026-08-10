@@ -26,6 +26,8 @@ export async function activate(
     return;
   }
 
+  warnIfToolchainMissing();
+
   const serverOptions: ServerOptions = {
     command: serverPath,
     transport: TransportKind.stdio,
@@ -271,6 +273,38 @@ function findOnPath(binary: string): string | undefined {
     if (fs.existsSync(full)) return full;
   }
   return undefined;
+}
+
+// The embedded rust-analyzer shells out to `cargo metadata` and to `rustc` for the sysroot, so with no toolchain on the editor's PATH the server still starts but loads an empty workspace — no diagnostics and nothing pointing at why.
+function warnIfToolchainMissing(): void {
+  // A configured serverPath may be a wrapper that carries its own PATH (the Nix package is one), and the editor's PATH says nothing about what that wrapper injects.
+  const configured = vscode.workspace
+    .getConfiguration("telar")
+    .get<string>("serverPath");
+  if (configured && configured.trim().length > 0) return;
+
+  const missing = (["cargo", "rustc"] as const).filter(
+    (tool) => !findToolchainTool(tool),
+  );
+  if (missing.length === 0) return;
+
+  void vscode.window.showWarningMessage(
+    `telar-analyzer cannot find ${missing.join(" or ")}, so the Rust workspace will not load: expect no diagnostics, hover or go-to-definition. Launch the editor from a shell that has the toolchain on its PATH, or install one under $CARGO_HOME/bin.`,
+  );
+}
+
+// Mirrors the lookup order the embedded rust-analyzer itself uses (ra_ap_toolchain: $CARGO/$RUSTC, then PATH, then $CARGO_HOME/bin — rustup's default install lands in the last one, which a GUI-launched editor rarely has on its PATH), so the warning fires exactly when the server would come up empty.
+function findToolchainTool(tool: "cargo" | "rustc"): string | undefined {
+  const fromEnv = process.env[tool.toUpperCase()];
+  if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
+
+  const onPath = findOnPath(tool);
+  if (onPath) return onPath;
+
+  const cargoHome = process.env.CARGO_HOME ?? path.join(os.homedir(), ".cargo");
+  const ext = process.platform === "win32" ? ".exe" : "";
+  const proxy = path.join(cargoHome, "bin", tool + ext);
+  return fs.existsSync(proxy) ? proxy : undefined;
 }
 
 // A platform VSIX ships a binary linked against the generic /lib64/ld-linux-x86-64.so.2, which NixOS answers with a stub loader that refuses to run it. The extension directory may be read-only (it is a store path under nix-vscode-extensions), so relink a private copy, mirroring rust-analyzer's bootstrap.
