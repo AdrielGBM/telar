@@ -47,7 +47,9 @@ pub(crate) fn spawn_shadow_async(
     rx
 }
 
-/// Like `blit_cached_shadow`, but offloads computation of large shadows to a background thread. On a cache miss for a shadow whose pixmap exceeds `ASYNC_SHADOW_THRESHOLD`, the work is spawned (or, if already spawned, its result is polled); the shadow is simply not drawn this frame and appears 1-2 frames later once the worker finishes and the result is cached. Small shadows fall back to the synchronous path.
+/// Like `blit_cached_shadow`, but offloads computation of large shadows to a background thread. On a cache miss for a shadow whose pixmap exceeds `ASYNC_SHADOW_THRESHOLD`, the work is spawned (or, if already spawned, its result is polled) and the result lands 1-2 frames later. Small shadows fall back to the synchronous path.
+///
+/// While a blur is pending, the **previous shadow of the same size** is drawn in its place (`recent`). Without that stand-in the shadow blinks out for those frames: a desktop clock re-keys its shadow every minute (the text is part of the key) and its pixmap lands just past the threshold, so it took the async path and left a hole under the glyphs once a minute. A stand-in whose silhouette is one glyph stale for ~30 ms is not visible; its absence is.
 ///
 /// `make_draw` yields the shape-drawing closure and its `Send + 'static` twin for the worker, and is called only on
 /// the paths that actually need one — never on a cache hit, and never while a worker is already producing the same
@@ -58,6 +60,7 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
     pixmap: &mut tiny_skia::Pixmap,
     cache: &mut renderer_cache::Cache<K, tiny_skia::Pixmap>,
     pending: &mut std::collections::HashMap<K, std::sync::mpsc::Receiver<tiny_skia::Pixmap>>,
+    recent: &mut Option<(K, u32, u32)>,
     key: K,
     blit_x: i32,
     blit_y: i32,
@@ -112,8 +115,19 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
         }
     }
 
-    // Render the shadow this frame only if it is already cached; otherwise it appears once the worker result is inserted on a later frame.
-    if let Some(cached) = cache.get(&key) {
+    // Matching size is what makes the stand-in safe to blit at these coordinates.
+    let drawn = if cache.contains(&key) {
+        Some(key.clone())
+    } else {
+        recent
+            .as_ref()
+            .filter(|(_, w, h)| *w == tmp_w && *h == tmp_h)
+            .map(|(k, _, _)| k.clone())
+    };
+    let Some(draw_key) = drawn else {
+        return;
+    };
+    if let Some(cached) = cache.get(&draw_key) {
         pixmap.draw_pixmap(
             blit_x,
             blit_y,
@@ -125,6 +139,10 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
             transform,
             clip,
         );
+        // Only a real hit updates the stand-in, or a stale one would keep re-electing itself.
+        if draw_key == key {
+            *recent = Some((key, tmp_w, tmp_h));
+        }
     }
 }
 

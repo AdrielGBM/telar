@@ -84,6 +84,7 @@ fn draw_rect_shadow(
     clip: Option<&tiny_skia::Mask>,
     shadow_cache: &mut ShadowCache,
     pending_shadows: &mut HashMap<ShadowCacheKey, mpsc::Receiver<tiny_skia::Pixmap>>,
+    recent_shadow: &mut Option<(ShadowCacheKey, u32, u32)>,
     blur_scratch: &mut Vec<u8>,
 ) {
     let spread = shadow.spread;
@@ -162,6 +163,7 @@ fn draw_rect_shadow(
         pixmap,
         shadow_cache,
         pending_shadows,
+        recent_shadow,
         cache_key,
         tmp_x,
         tmp_y,
@@ -184,6 +186,7 @@ pub(crate) fn draw_rect(
     clip: Option<&tiny_skia::Mask>,
     shadow_cache: &mut ShadowCache,
     pending_shadows: &mut HashMap<ShadowCacheKey, mpsc::Receiver<tiny_skia::Pixmap>>,
+    recent_shadow: &mut Option<(ShadowCacheKey, u32, u32)>,
     blur_scratch: &mut Vec<u8>,
 ) {
     if let Some(shadow) = style.shadow {
@@ -196,6 +199,7 @@ pub(crate) fn draw_rect(
             clip,
             shadow_cache,
             pending_shadows,
+            recent_shadow,
             blur_scratch,
         );
     }

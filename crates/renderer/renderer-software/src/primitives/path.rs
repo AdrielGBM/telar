@@ -103,6 +103,7 @@ pub(crate) fn draw_path(
         PathShadowCacheKey,
         std::sync::mpsc::Receiver<tiny_skia::Pixmap>,
     >,
+    recent_path_shadow: &mut Option<(PathShadowCacheKey, u32, u32)>,
 ) {
     let path_hash = hash_path_data(data);
     let Some(path) = build_skia_path(data) else {
@@ -191,6 +192,7 @@ pub(crate) fn draw_path(
                 pixmap,
                 path_shadow_cache,
                 pending_path_shadows,
+                recent_path_shadow,
                 cache_key,
                 draw_x,
                 draw_y,

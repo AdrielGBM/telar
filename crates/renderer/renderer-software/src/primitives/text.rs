@@ -120,6 +120,7 @@ pub(crate) fn draw_text(
         TextShadowCacheKey,
         std::sync::mpsc::Receiver<tiny_skia::Pixmap>,
     >,
+    recent_text_shadow: &mut Option<(TextShadowCacheKey, u32, u32)>,
 ) {
     if let Some(shadow) = style.shadow {
         // The same ceil the shaper applies, computed here so the shadow's key and geometry are known without paying for a raster the cache may already have made unnecessary.
@@ -188,6 +189,7 @@ pub(crate) fn draw_text(
                     pixmap,
                     text_shadow_cache,
                     pending_text_shadows,
+                    recent_text_shadow,
                     shadow_key,
                     rect.x as i32 + shadow.offset_x as i32 - padding,
                     rect.y as i32 + shadow.offset_y as i32 - padding,

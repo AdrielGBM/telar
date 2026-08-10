@@ -322,6 +322,7 @@ where
                             clip,
                             &mut c.shadow_cache,
                             &mut c.pending_shadows,
+                            &mut c.recent_shadow,
                             blur_scratch,
                         );
                     });
@@ -367,6 +368,7 @@ where
                             blur_scratch,
                             &mut c.text_shadow_cache,
                             &mut c.pending_text_shadows,
+                            &mut c.recent_text_shadow,
                         );
                     });
                 }
@@ -506,6 +508,7 @@ where
                             blur_scratch,
                             &mut c.path_shadow_cache,
                             &mut c.pending_path_shadows,
+                            &mut c.recent_path_shadow,
                         );
                     });
                 }

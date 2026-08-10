@@ -38,6 +38,10 @@ pub(crate) struct SharedCaches {
     pub(crate) pending_shadows: HashMap<ShadowCacheKey, mpsc::Receiver<Pixmap>>,
     pub(crate) pending_text_shadows: HashMap<TextShadowCacheKey, mpsc::Receiver<Pixmap>>,
     pub(crate) pending_path_shadows: HashMap<PathShadowCacheKey, mpsc::Receiver<Pixmap>>,
+    // The last shadow of each kind actually drawn, with the size it was drawn at, so a re-keyed one can stand in with it while its blur is in flight instead of leaving a hole (see `blit_cached_shadow_async`).
+    pub(crate) recent_shadow: Option<(ShadowCacheKey, u32, u32)>,
+    pub(crate) recent_text_shadow: Option<(TextShadowCacheKey, u32, u32)>,
+    pub(crate) recent_path_shadow: Option<(PathShadowCacheKey, u32, u32)>,
 }
 
 impl SharedCaches {
@@ -54,6 +58,9 @@ impl SharedCaches {
             pending_shadows: HashMap::new(),
             pending_text_shadows: HashMap::new(),
             pending_path_shadows: HashMap::new(),
+            recent_shadow: None,
+            recent_text_shadow: None,
+            recent_path_shadow: None,
         }
     }
 
