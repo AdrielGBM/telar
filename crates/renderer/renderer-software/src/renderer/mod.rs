@@ -21,13 +21,18 @@ use present::{FrameOp, plan_present};
 use present::{extract_native_window, present_to_native_window};
 
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
+    // Kept so the caches can be built on whichever thread ends up driving this renderer: they live in a
+    // thread-local, and that is not necessarily the thread the constructor ran on.
+    config: crate::SoftwareRendererConfig,
+    // Building the caches loads fonts, so it is deferred out of the constructor — see `ensure_caches`.
+    caches_ready: bool,
     // None in headless mode: no window means no softbuffer context/surface; the frame lives only in `pixmap`.
     _context: Option<Context<D>>,
     surface: Option<Surface<D, W>>,
     width: u32,
     height: u32,
     pub(crate) pixmap: Option<Pixmap>,
-    // Real font ascender/line-height metrics for the default face, queried once at construction so dirty-rect computation does not under-estimate the text region.
+    // Real font ascender/line-height metrics for the default face, read off the shaper by `ensure_caches` so dirty-rect computation does not under-estimate the text region. Holds conservative defaults until then.
     font_metrics: renderer_core::FontMetrics,
     blur_scratch: Vec<u8>,
     pixmap_pool: Vec<tiny_skia::Pixmap>,
@@ -123,15 +128,17 @@ where
             );
         }
 
-        crate::caches::init(&config);
-        let font_metrics = crate::caches::with_caches(|c| c.text_shaper.font_metrics());
         Ok(Self {
+            config,
+            caches_ready: false,
+            // A conservative placeholder until `ensure_caches` reads the real thing off the shaper. Nothing
+            // reads it before the first frame, and the first frame runs `ensure_caches` before it draws.
+            font_metrics: renderer_core::FontMetrics::default(),
             _context: context,
             surface,
             width: 0,
             height: 0,
             pixmap: None,
-            font_metrics,
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
             clip_mask_buffer: None,
@@ -153,18 +160,33 @@ where
         })
     }
 
+    /// Builds this thread's glyph shaper and shadow caches, and reads the real font metrics off the shaper.
+    ///
+    /// Deferred out of the constructors on purpose: the caches are a thread-local and building one loads
+    /// fonts, so doing it in `new` would build them on the thread that *made* the renderer rather than the
+    /// one that will draw with it. For an on-screen surface those are different threads, and the UI thread's
+    /// copy would then sit unused for the life of the process.
+    fn ensure_caches(&mut self) {
+        if self.caches_ready {
+            return;
+        }
+        crate::caches::init(&self.config);
+        self.font_metrics = crate::caches::with_caches(|c| c.text_shaper.font_metrics());
+        self.caches_ready = true;
+    }
+
     /// Builds an offscreen renderer with no window: rendering targets an in-memory `Pixmap` only, so no display server, softbuffer context, or surface is required (snapshot tests, server-side render, benchmarks). The `D`/`W` type parameters are never instantiated — the caller picks any concrete types. Read the result back with [`read_rgba`](Self::read_rgba) or [`pixmap`](Self::pixmap).
     pub fn new_headless(width: u32, height: u32, config: crate::SoftwareRendererConfig) -> Self {
-        crate::caches::init(&config);
-        let font_metrics = crate::caches::with_caches(|c| c.text_shaper.font_metrics());
         Self {
+            config,
+            caches_ready: false,
+            font_metrics: renderer_core::FontMetrics::default(),
             _context: None,
             surface: None,
             // Pre-sized so a `begin_frame` at the same dimensions reuses these buffers instead of reallocating.
             width,
             height,
             pixmap: Pixmap::new(width, height),
-            font_metrics,
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
             clip_mask_buffer: tiny_skia::Mask::new(width, height),
@@ -303,5 +325,43 @@ where
                 .map_err(|e| RendererError::Present(e.to_string()))?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use platform_headless::HeadlessWindow;
+    use renderer_core::RenderBackend;
+
+    use super::SoftwareRenderer;
+    use crate::SoftwareRendererConfig;
+
+    // The caches are a thread-local, so *which* thread builds them decides whether the renderer ever sees its
+    // own fonts. Building them in the constructor furnished the UI thread for a renderer that draws on
+    // another one — a shaper nobody uses here, and none at all over there. Run on a fresh thread because the
+    // test binary's main thread may already have caches from another case.
+    #[test]
+    fn the_drawing_thread_builds_the_caches_not_the_constructing_one() {
+        std::thread::spawn(|| {
+            assert!(!crate::caches::initialised(), "a fresh thread starts empty");
+
+            let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+                8,
+                8,
+                SoftwareRendererConfig::default(),
+            );
+            assert!(
+                !crate::caches::initialised(),
+                "constructing must not load fonts on this thread"
+            );
+
+            renderer.begin_frame(8, 8, 1.0, 0).unwrap();
+            assert!(
+                crate::caches::initialised(),
+                "the first frame builds them, on the thread that draws"
+            );
+        })
+        .join()
+        .unwrap();
     }
 }

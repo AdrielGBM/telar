@@ -673,6 +673,21 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
+    // Build the caches up front on the thread that will draw, so the first frame doesn't pay for loading
+    // fonts mid-frame. `begin_frame` covers the same ground for a renderer nobody binds (the offscreen one).
+    fn bind_to_render_thread(&mut self) {
+        self.ensure_caches();
+    }
+
+    // Matches the horizon its own entries are bound by, so a sweep any earlier would evict nothing.
+    fn idle_sweep_after(&self) -> Option<std::time::Duration> {
+        Some(renderer_cache::limits::CPU_IDLE)
+    }
+
+    fn sweep_idle_caches(&mut self) {
+        crate::caches::sweep_idle();
+    }
+
     fn begin_frame(
         &mut self,
         width: u32,
@@ -681,6 +696,7 @@ where
         _generation: u64,
     ) -> Result<(), RendererError> {
         // `scale_factor` and `generation` are ignored because draw commands arrive pre-scaled by the caller; software backend does not need to track them.
+        self.ensure_caches();
 
         if width != self.width || height != self.height {
             self.width = width;

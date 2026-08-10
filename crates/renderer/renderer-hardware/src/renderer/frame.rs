@@ -72,6 +72,12 @@ fn confine_to_dirty(scissor: Option<Rect>, dirty: Option<Rect>) -> Option<Rect> 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
     for HardwareRenderer<W>
 {
+    // Scaling is folded into the shader's transform, so this path wants logical-pixel commands and must not
+    // be handed the CPU-scaled ones the software rasteriser needs.
+    fn applies_scale_factor(&self) -> bool {
+        true
+    }
+
     fn begin_frame(
         &mut self,
         width: u32,

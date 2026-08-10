@@ -20,6 +20,11 @@ const HW_KEEPALIVE_GRACE: std::time::Duration = std::time::Duration::from_secs(3
 // The cadence of those keepalive blits. Enforced in `on_redraw` as well as reported by `about_to_wait`, because a platform may call `on_redraw` on every loop turn rather than only when a frame is due.
 const HW_KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
+// F2: how many command buffers the UI thread keeps to refill instead of allocating a fresh Vec per frame.
+// Only the in-flight frame plus the one the render thread is consuming are ever live, so the free-list
+// stays tiny; a larger cap would only hold memory.
+const COMMAND_BUF_POOL_CAP: usize = 3;
+
 #[cfg(target_os = "android")]
 pub use android::run_android_app_with_name;
 #[cfg(all(feature = "desktop", not(target_os = "android")))]

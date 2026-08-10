@@ -72,17 +72,29 @@ thread_local! {
 
 /// Builds this thread's caches if no renderer has yet, using `config`'s budgets and fonts.
 ///
-/// Called from every [`crate::SoftwareRenderer`] constructor, so by the time a frame runs the caches exist and carry the first surface's settings. Later surfaces do not resize them: budgets that grew per surface are the thing this module exists to stop, and a shared cache sized by whoever happened to be built first is the predictable choice. Fonts are already process-wide in the runtime (see `set_measure_font_config`), so a second surface asking for different ones is not a case telar produces.
+/// Called by every [`crate::SoftwareRenderer`] before its first frame — from `bind_to_render_thread` when a render thread will drive it, and from `begin_frame` otherwise. Deliberately *not* from the constructors: these are thread-local, and an on-screen renderer is built on the UI thread but draws on its own, so seeding them at construction would furnish the wrong thread. Later surfaces sharing the thread do not resize them: budgets that grew per surface are the thing this module exists to stop, and a shared cache sized by whoever drew first is the predictable choice. Fonts are already process-wide in the runtime (see `set_measure_font_config`), so a second surface asking for different ones is not a case telar produces.
 pub(crate) fn init(config: &SoftwareRendererConfig) {
     CACHES.with_borrow_mut(|slot| {
         slot.get_or_insert_with(|| SharedCaches::new(config));
     });
 }
 
+/// Whether this thread has built its caches yet. Lets a test tell "the constructor seeded the wrong thread"
+/// apart from "the drawing thread seeded itself", which is the whole point of deferring [`init`].
+#[cfg(test)]
+pub(crate) fn initialised() -> bool {
+    CACHES.with_borrow(|slot| slot.is_some())
+}
+
 /// Drops everything no frame has asked for within each cache's idle horizon.
 ///
 /// The caches sweep themselves as they are used, which is enough while frames keep coming. It is not enough for a
 /// shell that has drawn nothing for an hour: with no accesses there is no sweep, and the high-water mark stands.
+///
+/// Sweeps **the calling thread's** caches, since that is where they live. An on-screen surface's caches belong to
+/// its render thread, which sweeps itself once it has been idle (`RenderBackend::sweep_idle_caches`) — calling
+/// this from the UI thread would not reach them. What it is for is the caches a thread built by rasterising
+/// directly: `telar::rasterize`, previews, offscreen renderers.
 pub fn sweep_idle() {
     with_caches(|c| {
         c.text_shaper.sweep_idle();
