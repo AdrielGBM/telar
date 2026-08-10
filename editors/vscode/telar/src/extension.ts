@@ -273,15 +273,14 @@ function findOnPath(binary: string): string | undefined {
   return undefined;
 }
 
-// A platform VSIX ships a binary whose ELF interpreter (/lib64/ld-linux-x86-64.so.2) does not exist on NixOS, so exec fails with a misleading ENOENT. Patch a private copy instead, mirroring rust-analyzer's bootstrap.
+// A platform VSIX ships a binary linked against the generic /lib64/ld-linux-x86-64.so.2, which NixOS answers with a stub loader that refuses to run it. The extension directory may be read-only (it is a store path under nix-vscode-extensions), so relink a private copy, mirroring rust-analyzer's bootstrap.
 async function prepareBundled(
   context: vscode.ExtensionContext,
   bundled: string,
 ): Promise<string> {
   if (process.platform !== "linux" || !(await isNixOs())) return bundled;
 
-  // A Nix-built extension bundles a store path that is already linked correctly, so patching it would be redundant work on every version bump.
-  if (fs.realpathSync(bundled).startsWith("/nix/store/")) return bundled;
+  if (!needsRelinking(bundled)) return bundled;
 
   const storageDir = context.globalStorageUri.fsPath;
   const dest = path.join(storageDir, path.basename(bundled));
@@ -303,7 +302,7 @@ async function prepareBundled(
     return dest;
   } catch (err) {
     vscode.window.showWarningMessage(
-      `Could not patch the bundled telar-analyzer for NixOS (${err}). Set telar.serverPath to a locally built binary.`,
+      `Could not patch the bundled telar-analyzer for NixOS (${err}). Patching builds a derivation, so it needs nix-build and a resolvable <nixpkgs> on NIX_PATH; on a pure-flakes system with no nixpkgs channel entry, set telar.serverPath to a locally built binary instead.`,
     );
     return bundled;
   }
@@ -316,6 +315,67 @@ async function isNixOs(): Promise<boolean> {
     return (id ?? "").includes("nixos");
   } catch {
     return false;
+  }
+}
+
+/// Whether `binary` has to be relinked before it can exec here.
+// Neither naive check works: `nix-vscode-extensions` unpacks the marketplace VSIX into /nix/store verbatim, so living in the store proves nothing; and NixOS ships a stub at the generic `/lib64/ld-linux-*` whose whole job is to refuse these binaries, so the interpreter existing proves nothing either. Only a loader inside the store does.
+function needsRelinking(binary: string): boolean {
+  const interpreter = elfInterpreter(binary);
+  if (interpreter === undefined) return false;
+  return !(interpreter.startsWith("/nix/store/") && fs.existsSync(interpreter));
+}
+
+const PT_INTERP = 3;
+
+/// Reads an ELF's interpreter (`PT_INTERP`) from its program headers, so asking needs no toolchain. `undefined` when the file is not an ELF, is statically linked, or is too malformed to read — none of which are patchable anyway.
+function elfInterpreter(file: string): string | undefined {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(file, "r");
+    const header = Buffer.alloc(64);
+    if (fs.readSync(fd, header, 0, header.length, 0) < header.length)
+      return undefined;
+    if (header.readUInt32BE(0) !== 0x7f454c46) return undefined;
+
+    const wide = header[4] === 2;
+    const little = header[5] === 1;
+    const read = (buf: Buffer, offset: number, bytes: number): number => {
+      if (bytes === 8)
+        return Number(
+          little ? buf.readBigUInt64LE(offset) : buf.readBigUInt64BE(offset),
+        );
+      if (bytes === 4)
+        return little ? buf.readUInt32LE(offset) : buf.readUInt32BE(offset);
+      return little ? buf.readUInt16LE(offset) : buf.readUInt16BE(offset);
+    };
+
+    const phoff = wide ? read(header, 0x20, 8) : read(header, 0x1c, 4);
+    const phentsize = wide ? read(header, 0x36, 2) : read(header, 0x2a, 2);
+    const phnum = wide ? read(header, 0x38, 2) : read(header, 0x2c, 2);
+    if (phentsize < (wide ? 0x38 : 0x20)) return undefined;
+
+    const entry = Buffer.alloc(phentsize);
+    for (let i = 0; i < phnum; i++) {
+      if (
+        fs.readSync(fd, entry, 0, phentsize, phoff + i * phentsize) < phentsize
+      )
+        return undefined;
+      if (read(entry, 0, 4) !== PT_INTERP) continue;
+
+      const offset = wide ? read(entry, 0x08, 8) : read(entry, 0x04, 4);
+      const size = wide ? read(entry, 0x20, 8) : read(entry, 0x10, 4);
+      if (size === 0 || size > 4096) return undefined;
+      const interpreter = Buffer.alloc(size);
+      if (fs.readSync(fd, interpreter, 0, size, offset) < size)
+        return undefined;
+      return interpreter.toString("utf8").replace(/\0.*$/s, "");
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
 }
 
