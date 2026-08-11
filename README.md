@@ -121,7 +121,7 @@ Everything is published under the `telar-` prefix. Most users only need the `tel
 
 ## Minimum supported Rust version
 
-Rust **1.89**. Bumping it is a minor-version change.
+Rust **1.95**. Bumping it is a minor-version change.
 
 ## License
 
