@@ -14,10 +14,10 @@ repository.workspace = true
 renderer-core = { workspace = true }
 geometry-core = { workspace = true }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"], optional = true }
-resvg = { version = "0.47", optional = true }
+resvg = { version = "0.48", optional = true }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }
-usvg = { version = "0.47", optional = true }
+usvg = { version = "0.48", optional = true }
 
 [features]
 # usvg/resvg. Enables the runtime dynamic SVG path (`from_str`) AND the build-time baker (`bake_to_source`); the transpiler turns this on host-side so baking is always available without putting usvg in the app binary.

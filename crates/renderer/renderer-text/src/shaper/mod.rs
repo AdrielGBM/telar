@@ -1,6 +1,6 @@
 use cosmic_text::{
     Align, Attrs, Buffer, CacheKey, Color as CosmicColor, FontSystem, Metrics, Shaping, Style,
-    SwashCache, Weight,
+    SwashCache, Weight, fontdb,
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
@@ -56,7 +56,7 @@ pub struct TextShaper {
     // Whether a (text_hash, font_size_bits) shapes to any COLR glyph. Lets the software COLR fallback skip make_buffer + per-glyph get_image for plain UI text after the first evaluation. Symmetric with `blank_glyphs`.
     has_colr_cache: Cache<(u64, u32, u32), bool>,
     // Raw font bytes + face index, so COLR rasterization does not re-read the font file on every atlas miss.
-    colr_font_cache: Cache<cosmic_text::fontdb::ID, Arc<(Vec<u8>, u32)>>,
+    colr_font_cache: Cache<fontdb::ID, Arc<(Vec<u8>, u32)>>,
     // Glyphs that swash cannot rasterize and that are not COLR glyphs either (e.g. whitespace); skipped on later frames so we do not re-attempt COLR rasterization for them every frame. Left unbounded where the caches above are not: an entry is one `CacheKey`, the set is bounded by the glyph repertoire actually attempted, and evicting one buys back 16 bytes in exchange for re-running a COLR rasterization that already failed.
     blank_glyphs: FxHashSet<CacheKey>,
     // Cached real font metrics for the default sans-serif face; computed lazily on first request and reused across frames.

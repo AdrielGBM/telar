@@ -277,7 +277,7 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
-            force_fallback_adapter: false,
+            ..Default::default()
         })
         .await
         .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
@@ -844,7 +844,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .poll(wgpu::PollType::wait_indefinitely())
             .map_err(|e| RendererError::Backend(format!("readback poll failed: {e:?}")))?;
 
-        let data = slice.get_mapped_range();
+        let data = slice
+            .get_mapped_range()
+            .map_err(|e| RendererError::Backend(format!("readback map failed: {e:?}")))?;
         let mut out = Vec::with_capacity((unpadded_bytes_per_row * height) as usize);
         for row in 0..height {
             let start = (row * padded_bytes_per_row) as usize;
@@ -907,6 +909,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let config = SurfaceConfiguration {
             usage: surface_usage,
             format: self.surface_format,
+            // `Auto` is wgpu's pre-30 behavior: sRGB for our 8-bit formats, chosen by the backend.
+            color_space: wgpu::SurfaceColorSpace::Auto,
             width,
             height,
             present_mode: self.present_mode,

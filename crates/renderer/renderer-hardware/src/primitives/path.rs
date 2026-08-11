@@ -412,7 +412,7 @@ impl PathPipeline {
             "path",
             &shader_source,
             &[viewport_bgl, &fill_data.bind_group_layout],
-            &[path_vertex_layout],
+            &[Some(path_vertex_layout)],
             surface_format,
             msaa_samples,
             cache,

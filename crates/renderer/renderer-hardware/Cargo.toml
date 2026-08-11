@@ -13,8 +13,8 @@ repository.workspace = true
 [dependencies]
 renderer-core = { workspace = true }
 raw-window-handle = { workspace = true }
-wgpu = "29.0.3"
-pollster = "0.4"
+wgpu = "30"
+pollster = "1.0.1"
 bytemuck = { workspace = true, features = ["derive"] }
 renderer-text = { workspace = true }
 lyon = "1.0.19"

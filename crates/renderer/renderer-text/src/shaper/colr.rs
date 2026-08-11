@@ -1,7 +1,7 @@
 use super::TextShaper;
 use super::cache::{hash_text, text_style_bits};
 use super::make_buffer;
-use cosmic_text::CacheKey;
+use cosmic_text::{CacheKey, fontdb};
 use geometry_core::Rect;
 use renderer_core::{Color, TextStyle};
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// A COLR color glyph swash could not rasterize (commonly emoji, but COLR v1 also covers colored
 /// icons and decorative glyphs). Collected by the software renderer for skrifa COLR fallback rendering.
 pub struct ColrGlyph {
-    pub font_id: cosmic_text::fontdb::ID,
+    pub font_id: fontdb::ID,
     pub glyph_id: u32,
     pub x: f32,
     pub y: f32,
@@ -100,24 +100,18 @@ impl TextShaper {
     /// Cached raw font bytes + face index for `font_id`, for the software COLR fallback. Routes the
     /// software path through the same per-font cache the GPU atlas path uses, so emoji bytes (often
     /// several MB, e.g. NotoColorEmoji) are read once instead of re-read and copied on every frame.
-    pub fn colr_font_bytes(
-        &mut self,
-        font_id: cosmic_text::fontdb::ID,
-    ) -> Option<Arc<(Vec<u8>, u32)>> {
+    pub fn colr_font_bytes(&mut self, font_id: fontdb::ID) -> Option<Arc<(Vec<u8>, u32)>> {
         self.colr_font_bytes_impl(font_id)
     }
 
     /// Bench/test helper: id of the default sans-serif face, or `None` if the font system resolved none.
     #[doc(hidden)]
-    pub fn default_face_id(&self) -> Option<cosmic_text::fontdb::ID> {
+    pub fn default_face_id(&self) -> Option<fontdb::ID> {
         self.default_font_id()
     }
 
     /// Returns cached raw font bytes + face index for `font_id`, reading them from the font db on first use.
-    fn colr_font_bytes_impl(
-        &mut self,
-        font_id: cosmic_text::fontdb::ID,
-    ) -> Option<Arc<(Vec<u8>, u32)>> {
+    fn colr_font_bytes_impl(&mut self, font_id: fontdb::ID) -> Option<Arc<(Vec<u8>, u32)>> {
         if let Some(b) = self.colr_font_cache.get(&font_id) {
             return Some(b.clone());
         }

@@ -136,7 +136,6 @@ pub(super) fn diagnostics_config() -> DiagnosticsConfig {
         prefer_prelude: true,
         prefer_absolute: false,
         term_search_fuel: 0,
-        term_search_borrowck: false,
         show_rename_conflicts: false,
     }
 }

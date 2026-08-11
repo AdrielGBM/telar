@@ -3,7 +3,7 @@ pub(crate) fn create_render_pipeline(
     label: &str,
     shader_source: &str,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
-    vertex_buffers: &[wgpu::VertexBufferLayout<'_>],
+    vertex_buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
     surface_format: wgpu::TextureFormat,
     msaa_samples: u32,
     cache: Option<&wgpu::PipelineCache>,

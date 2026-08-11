@@ -1,4 +1,5 @@
 use super::TextShaper;
+use cosmic_text::fontdb;
 
 impl TextShaper {
     /// Returns real ascender/line-height metrics for the default sans-serif face, expressed as
@@ -19,7 +20,7 @@ impl TextShaper {
 
     /// Resolves the font db id of the configured sans-serif family (the default for unstyled text).
     // pub(super): called from `shaper::colr`, a sibling module, via `default_face_id`.
-    pub(super) fn default_font_id(&self) -> Option<cosmic_text::fontdb::ID> {
+    pub(super) fn default_font_id(&self) -> Option<fontdb::ID> {
         let db = self.font_system.db();
         db.query(&fontdb::Query {
             families: &[fontdb::Family::SansSerif],
@@ -56,12 +57,12 @@ impl TextShaper {
         })
     }
 
-    pub fn font_data_for(&self, font_id: cosmic_text::fontdb::ID) -> Option<(Vec<u8>, u32)> {
+    pub fn font_data_for(&self, font_id: fontdb::ID) -> Option<(Vec<u8>, u32)> {
         let (source, index) = self.font_system.db().face_source(font_id)?;
         let bytes = match source {
-            cosmic_text::fontdb::Source::Binary(arc) => arc.as_ref().as_ref().to_vec(),
-            cosmic_text::fontdb::Source::File(path) => std::fs::read(path).ok()?,
-            cosmic_text::fontdb::Source::SharedFile(path, _) => std::fs::read(path).ok()?,
+            fontdb::Source::Binary(arc) => arc.as_ref().as_ref().to_vec(),
+            fontdb::Source::File(path) => std::fs::read(path).ok()?,
+            fontdb::Source::SharedFile(path, _) => std::fs::read(path).ok()?,
         };
         Some((bytes, index))
     }

@@ -337,7 +337,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             tracing::debug!("hw idle-blit: presenting");
             {
                 let _swapchain = super::swapchain_lock();
-                output.present();
+                self.queue.present(output);
             }
             self.clear_pending();
             return Ok(true);
@@ -2759,7 +2759,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             let present_start = renderer_core::perf::now_if_enabled();
             {
                 let _swapchain = super::swapchain_lock();
-                output.present();
+                self.queue.present(output);
             }
             renderer_core::perf::record_since(renderer_core::perf::Phase::Present, present_start);
         }

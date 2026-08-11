@@ -12,13 +12,12 @@ repository.workspace = true
 
 [dependencies]
 cosmic-text = { version = "0.19.0", features = ["shape-run-cache"] }
-fontdb = "0.23"
 etagere = "0.3.0"
 geometry-core = { workspace = true }
 lru = { workspace = true }
 renderer-core = { workspace = true }
 rustc-hash = { workspace = true }
-skrifa = "0.43"
+skrifa = "0.45"
 tiny-skia = { workspace = true }
 renderer-cache.workspace = true
 
