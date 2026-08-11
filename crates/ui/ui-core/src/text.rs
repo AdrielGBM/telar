@@ -5,9 +5,11 @@ use std::sync::Arc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
+use reactive_core::{Effect, effect};
 use renderer_core::TextStyle;
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::context::mark_dirty;
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
@@ -19,6 +21,8 @@ pub struct Text {
     cached_ink: RefCell<Option<(String, u32, f32, f32)>>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
+    // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and `view` shapes the new one into that box — a label that grew soft-wraps into a slot built for the old text. `None` for `Text::new`, whose size is its style.
+    _remeasure: Option<Effect>,
 }
 
 impl Text {
@@ -35,6 +39,7 @@ impl Text {
             cached_ink: RefCell::new(None),
             style: Rc::new(style_fn),
             leaf,
+            _remeasure: None,
         })
     }
 
@@ -58,12 +63,24 @@ impl Text {
 
         let (node, rect) =
             crate::context::new_measured_leaf(layout_style.align_self_stretch(), measure)?;
+        // Reads through the measure closure so it subscribes to exactly the signals the measure depends on, and keeps the string it last dirtied for: a signal re-set to its own value would otherwise cost a shaping pass and a relayout of the surface for nothing.
+        let dirty_content = Rc::clone(&content_fn);
+        let measured = RefCell::new(Option::<String>::None);
+        let remeasure = effect(move || {
+            let next = (dirty_content)();
+            if measured.borrow().as_deref() == Some(next.as_str()) {
+                return;
+            }
+            *measured.borrow_mut() = Some(next);
+            mark_dirty(node).ok();
+        });
         Ok(Self {
             content: content_fn,
             cached_content: RefCell::new((String::new(), Arc::from(""))),
             cached_ink: RefCell::new(None),
             style,
             leaf: LayoutLeaf { node, rect },
+            _remeasure: Some(remeasure),
         })
     }
 
@@ -137,3 +154,59 @@ impl Component for Text {
 }
 
 impl_leaf_widget!(Text);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::{compute_layout, new_container, relayout_if_dirty, reset_layout_runtime};
+    use crate::layout_item::LayoutItem;
+    use layout_core::AvailableSpace;
+    use reactive_core::signal;
+    use renderer_core::Color;
+
+    /// A label that grows re-measures, instead of being shaped into the width the previous string wanted.
+    ///
+    /// The regression it guards is invisible in the widget tree and obvious on screen: a measured leaf is
+    /// dirtied by the layout runtime, never by a content closure, so a bar chip whose title went from
+    /// "Desktop" to a full window title kept the narrow box the short one had measured — and `view` soft-wrapped
+    /// the long title into it, spilling several lines out of a chip one line tall.
+    #[test]
+    fn a_measured_label_re_measures_when_its_content_changes() {
+        reset_layout_runtime();
+        let title = signal(String::from("Desktop"));
+        let read = title.read_only();
+        let label = Text::auto(
+            move || read.get(),
+            LayoutStyle::new(),
+            || TextStyle::new(13.0, Color::BLACK),
+        )
+        .unwrap();
+        let node = label.layout_node();
+        let root = new_container(
+            LayoutStyle::new().flex_row().width(1920.0).height(32.0),
+            &[node],
+        )
+        .unwrap();
+        let space = || {
+            compute_layout(
+                root,
+                AvailableSpace::Definite(1920.0),
+                AvailableSpace::Definite(32.0),
+            )
+            .unwrap()
+        };
+
+        space();
+        let short = label.leaf.rect.get().width;
+
+        title.set("hyprshell - Rust - Visual Studio Code".to_string());
+        relayout_if_dirty();
+        let long = label.leaf.rect.get().width;
+
+        assert!(
+            long > short,
+            "a title five times longer still measured {long}px, the width \"Desktop\" wanted ({short}px) — \
+             it will be wrapped into a box built for the old text"
+        );
+    }
+}
