@@ -68,6 +68,12 @@ pub trait LayoutItem: Component {
 /// collapses to a zero rect (e.g. a section hidden via `display:none`), the clip is empty, so nothing
 /// inside draws — even a widget left with a stale rect or one that paints at fixed coordinates. Layout
 /// is unchanged: `layout_node` passes through to the wrapped child.
+///
+/// The pointer stops at the same edge. A press or a move landing outside the clip never reaches the subtree,
+/// so a widget cut off by the clip cannot take the click that visually belongs to whatever is drawn over it —
+/// clipped away is *gone*, not merely invisible. Everything else passes through: a release or a `CursorLeft`
+/// is how a widget that was pressed or hovered inside the clip settles again, and swallowing those would leave
+/// it stuck in a state the pointer has already left.
 pub struct ClippedItem {
     inner: Box<dyn LayoutItem>,
     rect: RwSignal<Rect>,
@@ -132,7 +138,15 @@ impl Component for ClippedItem {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        self.inner.on_event(event)
+        let outside = |x: f64, y: f64| !self.clip().contains(x as f32, y as f32);
+        match event {
+            Event::PointerPressed { x, y, .. } | Event::PointerMoved { x, y, .. }
+                if outside(*x, *y) =>
+            {
+                EventResult::Ignored
+            }
+            _ => self.inner.on_event(event),
+        }
     }
 
     fn debug_name(&self) -> &'static str {
@@ -193,4 +207,82 @@ macro_rules! impl_leaf_widget {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::StyledContainer;
+    use crate::context::{compute_layout, reset_layout_runtime};
+    use layout_core::AvailableSpace;
+    use platform_core::{PointerButton, PointerSource};
+    use renderer_core::RectStyle;
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    fn press(x: f64, y: f64) -> Event {
+        Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        }
+    }
+
+    fn release(x: f64, y: f64) -> Event {
+        Event::PointerReleased {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        }
+    }
+
+    /// A press outside the clip does not reach the subtree, and one inside it still does.
+    ///
+    /// The case this exists for: a row of items wider than the box it is clipped to. The overflow is not drawn,
+    /// so whatever is painted over that strip looks like the only thing there — and a hidden item that still
+    /// answered a click there would be stealing it from the visible one.
+    #[test]
+    fn a_press_outside_the_clip_never_reaches_what_it_hides() {
+        let pressed = Rc::new(Cell::new(false));
+        let sink = Rc::clone(&pressed);
+        reset_layout_runtime();
+        let inner = StyledContainer::new(
+            LayoutStyle::new().flex_row().width(100.0).height(20.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || sink.set(true));
+        // The clip is the child's own rect, so it is cut to a 40px window by laying it out in one.
+        let mut clipped = ClippedItem::new(Box::new(
+            StyledContainer::new(
+                LayoutStyle::new().flex_row().width(40.0).height(20.0),
+                |_r| RectStyle::default(),
+                vec![Box::new(inner)],
+            )
+            .unwrap(),
+        ));
+        compute_layout(
+            clipped.layout_node(),
+            AvailableSpace::Definite(40.0),
+            AvailableSpace::Definite(20.0),
+        )
+        .unwrap();
+
+        clipped.on_event(&press(80.0, 10.0));
+        clipped.on_event(&release(80.0, 10.0));
+        assert!(
+            !pressed.get(),
+            "a tap 40px past the clip's edge reached the item hidden behind it"
+        );
+
+        clipped.on_event(&press(10.0, 10.0));
+        clipped.on_event(&release(10.0, 10.0));
+        assert!(
+            pressed.get(),
+            "and a tap on the part that is actually drawn still has to land"
+        );
+    }
 }
