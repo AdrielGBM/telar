@@ -53,7 +53,7 @@ pub use image::Image;
 pub use input::Input;
 pub use input_region::{interactive_rects, register_interactive, unregister_interactive};
 pub use kept::kept;
-pub use layout_item::{ClippedItem, LayoutItem, box_item};
+pub use layout_item::{ClipAxis, ClippedItem, LayoutItem, box_item};
 pub use layout_leaf::LayoutLeaf;
 pub use lazy::Lazy;
 pub use line::Line;

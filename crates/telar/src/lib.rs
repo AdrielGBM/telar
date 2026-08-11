@@ -132,7 +132,7 @@ pub use ui_core::Svg;
 pub use ui_core::{AssetSource, AssetState};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Canvas, ChildSlot, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
+    Canvas, ChildSlot, ClipAxis, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
     EventResult, Image, Input, KeyboardMode, LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter,
     MIN_FRAME_SIZE, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText,
     ScrollViewport, ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor,

@@ -71,12 +71,48 @@ pub trait LayoutItem: Component {
 pub struct ClippedItem {
     inner: Box<dyn LayoutItem>,
     rect: RwSignal<Rect>,
+    axis: ClipAxis,
 }
+
+/// Which of a [`ClippedItem`]'s own edges do the cutting.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ClipAxis {
+    /// The node's rect, both ways — a viewport.
+    Both,
+    /// Its left and right edges; whatever sits above or below is left alone.
+    Horizontal,
+    /// Its top and bottom edges; whatever sits left or right of it is left alone.
+    Vertical,
+}
+
+/// Half the extent of the free axis of a one-way clip: past any window a platform hands out, and small enough
+/// to stay exact in an `f32`, so the axis bounds nothing without being an infinity the renderer has to
+/// special-case.
+const UNBOUNDED: f32 = 1.0e6;
 
 impl ClippedItem {
     pub fn new(inner: Box<dyn LayoutItem>) -> Self {
+        Self::along(inner, ClipAxis::Both)
+    }
+
+    /// A clip that cuts along `axis` only, leaving the other free.
+    ///
+    /// What a strip of items wants when it has to stop at its ends but not across its thickness: a tab bar or a
+    /// toolbar cut where the room runs out, whose items still carry a focus ring, a badge or a shadow past the
+    /// strip's own edge. CSS cannot express this — one axis set to `hidden` forces the other out of `visible` —
+    /// so a row that only wanted its ends cut has to clip the overflow it meant to keep.
+    pub fn along(inner: Box<dyn LayoutItem>, axis: ClipAxis) -> Self {
         let rect = track_layout(inner.layout_node()).expect("clipped item's node not registered");
-        Self { inner, rect }
+        Self { inner, rect, axis }
+    }
+
+    fn clip(&self) -> Rect {
+        let rect = self.rect.get();
+        match self.axis {
+            ClipAxis::Both => rect,
+            ClipAxis::Horizontal => Rect::new(rect.x, -UNBOUNDED, rect.width, UNBOUNDED * 2.0),
+            ClipAxis::Vertical => Rect::new(-UNBOUNDED, rect.y, UNBOUNDED * 2.0, rect.height),
+        }
     }
 }
 
@@ -89,7 +125,7 @@ impl LayoutItem for ClippedItem {
 impl Component for ClippedItem {
     fn view(&self) -> RenderNode {
         RenderNode::Clip {
-            rect: self.rect.get(),
+            rect: self.clip(),
             radius: renderer_core::BorderRadius::zero(),
             children: ui_tree::NodeVec::collect([self.inner.view()]),
         }
