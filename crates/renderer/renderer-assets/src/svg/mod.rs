@@ -213,13 +213,14 @@ fn fit_params(
 ) -> (f32, f32, f32, f32) {
     match fit {
         ObjectFit::Fill => (width / vb_w, height / vb_h, 0.0, 0.0),
-        ObjectFit::Contain | ObjectFit::Cover => {
+        // `ContainInteger` fits like `Contain` here: it exists to keep a bitmap's pixel grid even, and a vector has no grid to keep — flooring the scale would only shrink the drawing for nothing.
+        ObjectFit::Contain | ObjectFit::Cover | ObjectFit::ContainInteger => {
             let sx = width / vb_w;
             let sy = height / vb_h;
-            let s = if fit == ObjectFit::Contain {
-                sx.min(sy)
-            } else {
+            let s = if fit == ObjectFit::Cover {
                 sx.max(sy)
+            } else {
+                sx.min(sy)
             };
             (s, s, (width - vb_w * s) * 0.5, (height - vb_h * s) * 0.5)
         }

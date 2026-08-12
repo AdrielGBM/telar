@@ -10,6 +10,16 @@ pub enum ObjectFit {
     Contain,
     /// Scale uniformly to cover the box, centered; the overflow must be clipped to the box.
     Cover,
+    /// Like [`Contain`](Self::Contain) but by a whole number, centered.
+    ///
+    /// The variant CSS has no name for, and the only one a pixel-art image can use: at a fractional scale
+    /// some source pixels land on four screen pixels and their neighbours on five, so the grid the artist
+    /// drew stops being a grid. Flooring the scale keeps every pixel the same size and spends the remainder
+    /// on a wider letterbox.
+    ///
+    /// Falls back to `Contain` when the content does not fit even once, since there is no whole number
+    /// below one to floor to.
+    ContainInteger,
 }
 
 /// Places `intrinsic`-sized content into `container` per `fit`.
@@ -24,13 +34,13 @@ pub fn fit_rect(intrinsic: (f32, f32), container: Rect, fit: ObjectFit) -> (Rect
     }
     match fit {
         ObjectFit::Fill => (container, false),
-        ObjectFit::Contain | ObjectFit::Cover => {
+        ObjectFit::Contain | ObjectFit::Cover | ObjectFit::ContainInteger => {
             let sx = container.width / iw;
             let sy = container.height / ih;
-            let (s, clip) = if fit == ObjectFit::Contain {
-                (sx.min(sy), false)
-            } else {
-                (sx.max(sy), true)
+            let (s, clip) = match fit {
+                ObjectFit::Cover => (sx.max(sy), true),
+                ObjectFit::ContainInteger => (sx.min(sy).floor().max(1.0).min(sx.min(sy)), false),
+                _ => (sx.min(sy), false),
             };
             let w = iw * s;
             let h = ih * s;
@@ -89,5 +99,32 @@ mod tests {
     #[test]
     fn default_is_contain() {
         assert_eq!(ObjectFit::default(), ObjectFit::Contain);
+    }
+
+    /// The case `Contain` gets wrong for pixel art: at a fractional scale the source grid stops being a
+    /// grid, because some pixels round to one screen pixel more than their neighbours.
+    #[test]
+    fn contain_integer_floors_the_scale_and_widens_the_letterbox() {
+        // 320x180 into 1300x740: Contain would take min(4.06, 4.11) and smear the grid; flooring to 4 gives 1280x720 centred, spending the remainder on the border instead.
+        let c = Rect::new(0.0, 0.0, 1300.0, 740.0);
+        let (rect, clip) = fit_rect((320.0, 180.0), c, ObjectFit::ContainInteger);
+        assert_eq!(rect, Rect::new(10.0, 10.0, 1280.0, 720.0));
+        assert!(!clip);
+    }
+
+    /// An exact multiple has nothing to floor, so it must not lose a step to rounding.
+    #[test]
+    fn contain_integer_fills_an_exact_multiple() {
+        let c = Rect::new(0.0, 0.0, 1280.0, 720.0);
+        let (rect, _) = fit_rect((320.0, 180.0), c, ObjectFit::ContainInteger);
+        assert_eq!(rect, Rect::new(0.0, 0.0, 1280.0, 720.0));
+    }
+
+    /// Below one there is no whole number to floor to, so it behaves as `Contain` rather than vanishing.
+    #[test]
+    fn contain_integer_below_one_falls_back_to_fitting() {
+        let c = Rect::new(0.0, 0.0, 160.0, 90.0);
+        let (rect, _) = fit_rect((320.0, 180.0), c, ObjectFit::ContainInteger);
+        assert_eq!(rect, Rect::new(0.0, 0.0, 160.0, 90.0));
     }
 }

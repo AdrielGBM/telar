@@ -13,6 +13,7 @@ fn fit_closure(attributes: &[Attr]) -> &'static str {
         Some(a) => match a.value.trim().to_ascii_lowercase().as_str() {
             "fill" => "move || ObjectFit::Fill",
             "cover" => "move || ObjectFit::Cover",
+            "contain-integer" => "move || ObjectFit::ContainInteger",
             _ => "move || ObjectFit::Contain",
         },
         None => "move || ObjectFit::Contain",
