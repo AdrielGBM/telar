@@ -232,3 +232,29 @@ fn shaped_positions_are_kept_on_the_first_sighting() {
     shaper.layout_glyphs("ui label", rect, &style, 1.0, &mut out);
     assert_eq!(shaper.shaping_cache.len(), 1);
 }
+
+// N lines measure N line heights. The box used to be anchored on the last line's *baseline*, which counted the ascent on top of the line height and left every text block reserving a constant slab it never drew into — nearly half the box at UI sizes. Read as a ratio so it holds for whatever face the machine resolves, and skipped where no font draws at all.
+#[test]
+fn a_text_box_measures_its_line_heights_and_nothing_more() {
+    let mut sh = TextShaper::new();
+    let style = TextStyle::new(16.0, Color::BLACK).with_line_height(1.5);
+    let line_height = 16.0 * 1.5;
+    let (_, one) = sh.measure_text("Una línea", 400.0, &style);
+    if one <= 0.0 {
+        return;
+    }
+    assert!(
+        (one - line_height).abs() < 0.01,
+        "one line should measure one line height ({line_height}), not {one}"
+    );
+
+    // A width narrow enough to force a wrap, so the second line's contribution is the line height too.
+    let (_, two) = sh.measure_text("Una línea que no cabe entera", 60.0, &style);
+    let lines = (two / line_height).round();
+    assert!(lines >= 2.0, "the text did not wrap: {two}");
+    assert!(
+        (two - lines * line_height).abs() < 0.01,
+        "{lines} lines should measure {} , not {two}",
+        lines * line_height
+    );
+}

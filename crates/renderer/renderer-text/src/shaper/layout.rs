@@ -135,7 +135,7 @@ impl TextShaper {
             if max_lines.is_some_and(|max| line >= max) {
                 break;
             }
-            height = (run.line_y + line_height) as f32;
+            height = run.line_top + line_height;
             width = width.max(run.line_w);
         }
         (width.ceil(), height)
@@ -319,7 +319,8 @@ impl TextShaper {
         let line_height = effective_line_height(style);
 
         for run in buffer.layout_runs() {
-            height = (run.line_y + line_height) as f32;
+            // From the line's TOP, not its baseline. `line_y` is where the letters sit on, so adding a line height to it counted the ascent twice and every text box reserved that much more than it draws — a constant overshoot per block, near half the box at UI sizes. `line_top` is what the last line's bottom edge is measured from, so N lines now measure N line heights, which is exactly what a caller asking for `line_height` expects to get.
+            height = run.line_top + line_height;
             // Use the line's advance width, not the glyph ink boxes: the last glyph's advance extends past its ink, so an ink-based width leaves the box a hair too narrow and the renderer wraps the final glyph onto a new line.
             width = width.max(run.line_w);
         }

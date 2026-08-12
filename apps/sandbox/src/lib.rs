@@ -227,7 +227,8 @@ mod smoke {
                         }
                         telar::DrawCommand::Rect { rect, style } => {
                             let cy = ty.last().unwrap() + rect.y + rect.height / 2.0;
-                            if (25.0..45.0).contains(&rect.height) && keep(rect.width, cy) {
+                            // Button-shaped: tall enough to be a control, short enough not to be the panel behind them. Deliberately loose — the exact height is padding plus a line box, and the line box moves with the face the machine resolves.
+                            if (18.0..45.0).contains(&rect.height) && keep(rect.width, cy) {
                                 if let Some(p) = style.fill.as_ref() {
                                     let cx = tx.last().unwrap() + rect.x + rect.width / 2.0;
                                     out.push((cx, cy, p.solid_color()));
