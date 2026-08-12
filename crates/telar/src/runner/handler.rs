@@ -54,6 +54,8 @@ where
     pub(super) generation_base: u64,
     /// The highest generation handed to a renderer for this surface, so the next tree can start past it.
     pub(super) last_generation: u64,
+    /// How many frames have gone out under a live continuous region. See [`frame_generation`](Self::frame_generation).
+    pub(super) continuous_frames: u64,
     pub(super) backend: RendererBackend,
     pub(super) prefs: UserPrefs,
     pub(super) paths: Box<dyn AppPathsProvider>,
@@ -148,6 +150,7 @@ where
         renderer_transparent: false,
         generation_base: 0,
         last_generation: 0,
+        continuous_frames: 0,
         backend,
         prefs,
         pending_restart: false,
@@ -231,7 +234,14 @@ where
     /// has had before it. See [`generation_base`](Self::generation_base) for why the offset has to exist.
     fn frame_generation(&mut self) -> u64 {
         let composed = self.tree.as_ref().map(|t| t.generation()).unwrap_or(0);
-        let generation = self.generation_base.saturating_add(composed);
+        // A continuous region breaks the invariant this number stands for: its commands are identical every frame while the picture they point at is not, so equal generations would stop meaning an equal frame and the renderer would re-present the texture it retained. Stepping it per frame while one is alive restores what the invariant is actually for — skip work only when the output cannot have changed. Monotonic, so `generation_base` still steps past every tree this surface has had.
+        if self.app.motion_has_continuous() {
+            self.continuous_frames = self.continuous_frames.saturating_add(1);
+        }
+        let generation = self
+            .generation_base
+            .saturating_add(composed)
+            .saturating_add(self.continuous_frames);
         self.last_generation = self.last_generation.max(generation);
         generation
     }
@@ -770,13 +780,15 @@ where
             }
         }
 
-        let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
+        // A continuous region carries new content the tree cannot report: the application repaints its own texture and the draw commands naming it never change. Counting only `is_dirty` here drops such a frame through to the 1 fps keepalive below, which shows a region refilled at sixty once a second.
+        let has_content = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
+            || self.app.motion_has_continuous();
         // Keepalive is a GPU power policy, not a property of running on a render thread: hardware keeps
         // taking frames while idle so an idle blit holds the device in an active state (see `about_to_wait`),
         // whereas re-rasterising an unchanged frame on the CPU buys nothing. Both backends now have a render
         // thread, so this must key off the backend, not off `render_tx`.
         let needs_keepalive = self.renderer_is_hardware || self.dev.keepalive_interval().is_some();
-        if !tree_dirty && !needs_keepalive {
+        if !has_content && !needs_keepalive {
             return;
         }
 
@@ -785,23 +797,23 @@ where
             .dev
             .keepalive_interval()
             .unwrap_or(HW_KEEPALIVE_INTERVAL);
-        if !tree_dirty && now.duration_since(self.last_submit) < keepalive_interval {
+        if !has_content && now.duration_since(self.last_submit) < keepalive_interval {
             return;
         }
         self.last_submit = now;
         // Only update last_frame for content frames; keepalive blits must not reset the budget clock (would delay next content render by up to 16ms).
-        if tree_dirty {
+        if has_content {
             self.last_frame = now;
         }
 
         let (w, h) = (window.width(), window.height());
         let generation = self.frame_generation();
         tracing::debug!(
-            "on_redraw: window {}x{} scale={} tree_dirty={}",
+            "on_redraw: window {}x{} scale={} has_content={}",
             w,
             h,
             self.scale_factor,
-            tree_dirty
+            has_content
         );
 
         // Flush reactive effects so clear_color and draw commands come from the same reactive pass. Without
@@ -829,7 +841,7 @@ where
         let logical_h = h as f32 / self.scale_factor;
         let frame_commands = self
             .dev
-            .on_frame(base_slice, logical_w, logical_h, tree_dirty);
+            .on_frame(base_slice, logical_w, logical_h, has_content);
         renderer_core::perf::record_since(renderer_core::perf::Phase::Build, build_start);
         let clone_start = renderer_core::perf::now_if_enabled();
         // F2: refill a recycled buffer instead of allocating a fresh Vec every frame.
@@ -889,7 +901,7 @@ where
         end_batch();
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
         // An unsettled animation must keep the loop scheduling frames even while the tree itself is momentarily clean (e.g. the tick that only established t0); once it settles, has_active() drops out and this falls through to the existing idle/keepalive branch below.
-        if tree_dirty || self.app.motion_has_active() {
+        if tree_dirty || self.app.motion_has_active() || self.app.motion_has_continuous() {
             // Against `last_tick`, the clock `on_redraw` actually gates on: reporting a deadline the pass would decline to act on wakes the loop early and it spins re-asking. The two disagree whenever a tick leaves the tree clean, advancing `last_tick` but not `last_frame`.
             Some(FRAME_BUDGET.saturating_sub(self.last_tick.elapsed()))
         } else {
@@ -1005,6 +1017,82 @@ mod tests {
             handler.frame_generation(),
             second,
             "an unchanged tree must keep reporting the same generation, or every idle frame re-renders"
+        );
+    }
+
+    /// A region filled from outside must not be caught by the idle-frame fast path.
+    ///
+    /// The trap is that everything looks right: the application renders into its texture at its own pace and
+    /// Telar schedules frames for it, but the draw commands pointing at that texture are identical every time
+    /// — the id addresses the view, not its contents, deliberately. Equal generations then tell the renderer
+    /// it may re-present what it retained, and the window shows one frozen frame while the application keeps
+    /// repainting behind it at full speed.
+    #[test]
+    fn a_continuous_region_moves_the_generation_though_its_commands_never_change() {
+        let mut handler = handler();
+        let window = HeadlessWindow::new(120, 80);
+        handler.tree = Some(handler.app.mount());
+
+        let at_rest = handler.frame_generation();
+        assert_eq!(
+            handler.frame_generation(),
+            at_rest,
+            "this app's commands are fixed, so without a region nothing should move"
+        );
+
+        let region = motion_core::Continuous::new();
+        let first = handler.frame_generation();
+        let second = handler.frame_generation();
+        assert!(
+            first > at_rest && second > first,
+            "the generation stalled at {at_rest}/{first}/{second}, so the renderer would blit a stale frame"
+        );
+
+        drop(region);
+        let after = handler.frame_generation();
+        assert_eq!(
+            handler.frame_generation(),
+            after,
+            "with the region gone the surface must go back to skipping idle frames"
+        );
+        let _ = window;
+    }
+
+    /// A continuous region has to survive **three** gates, and the third is the one that bites hardest.
+    ///
+    /// `about_to_wait` must keep scheduling frames, `frame_generation` must keep moving so the renderer
+    /// cannot re-present what it retained — and this one: a frame whose tree is clean falls through to the
+    /// keepalive branch, which runs at **1 fps**. A region that cleared the first two and not this one is
+    /// composed once a second while the application refills it at sixty, which reads as a renderer that is
+    /// merely slow.
+    #[test]
+    fn a_clean_tree_with_a_continuous_region_is_still_worth_a_frame() {
+        let mut handler = handler();
+        let window = HeadlessWindow::new(120, 80);
+        assert!(handler.on_resume(&window), "a headless resume builds one");
+        // The platform opens a batch before dispatching, and `on_redraw` closes and reopens it; without one already open it closes a batch that was never begun.
+        begin_batch();
+
+        // Forced open before each pass: this is about what counts as content, not about the frame clock.
+        let opened = || std::time::Instant::now() - FRAME_BUDGET * 2;
+
+        handler.last_tick = opened();
+        handler.on_redraw(&window);
+        let first = handler.last_submit;
+
+        handler.last_tick = opened();
+        handler.on_redraw(&window);
+        assert_eq!(
+            handler.last_submit, first,
+            "a clean tree with nothing else to say must not submit a frame"
+        );
+
+        let _awake = motion_core::Continuous::new();
+        handler.last_tick = opened();
+        handler.on_redraw(&window);
+        assert!(
+            handler.last_submit > first,
+            "the region says the picture changed even though the tree cannot, so this frame had to go out"
         );
     }
 }

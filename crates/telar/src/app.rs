@@ -51,6 +51,12 @@ pub trait App: 'static {
         motion_core::has_active()
     }
 
+    /// Reports whether any region redraws itself outside Telar's knowledge. Same dylib-boundary reason as `motion_has_active`.
+    #[doc(hidden)]
+    fn motion_has_continuous(&self) -> bool {
+        motion_core::has_continuous()
+    }
+
     /// Re-lays out any dirtied layout root so a reactive change (e.g. a reactive list adding an item)
     /// is reflected before the frame is composed. Only the dylib-backed `HotApp` overrides this — in dev
     /// mode the app's layout tree lives in the dylib's runtime, so the host must relayout across the FFI
@@ -152,6 +158,9 @@ impl<A: App + ?Sized> App for Box<A> {
     }
     fn motion_has_active(&self) -> bool {
         (**self).motion_has_active()
+    }
+    fn motion_has_continuous(&self) -> bool {
+        (**self).motion_has_continuous()
     }
     fn relayout(&self) {
         (**self).relayout()

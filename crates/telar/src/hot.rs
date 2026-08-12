@@ -143,6 +143,16 @@ impl crate::app::App for HotApp {
         unsafe { active() }
     }
 
+    fn motion_has_continuous(&self) -> bool {
+        let Ok(continuous) = (unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn() -> bool>(b"_rsx_hot_motion_continuous\0")
+        }) else {
+            return false;
+        };
+        unsafe { continuous() }
+    }
+
     // Batch the dylib's own reactive runtime (separate from the host's) across event dispatch. Missing symbol (dylib built before this existed) degrades to a no-op: without it the app runs as before, just without the mid-dispatch flush protection.
     fn begin_event_batch(&self) {
         if let Ok(begin) = unsafe {
