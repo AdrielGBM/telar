@@ -129,6 +129,23 @@ fn asking_an_unchanged_tree_for_its_frame_allocates_nothing() {
     );
 }
 
+/// Two values, alternated, and only ever these two. Same digit count so the text box never changes width,
+/// and both strings are in every cache after the second frame — so nothing measured later can be the first
+/// of anything.
+///
+/// Counting up instead minted a new string every frame. The caches therefore never stopped growing, and
+/// which frame paid for a resize — or for the first three-digit box, the one the text gets wider on — came
+/// out of the platform's font metrics. On macOS both landed on the frame being measured: 3 KB over the
+/// steady cost, which the test could only read as a leak.
+const EVEN: i32 = 2424;
+const ODD: i32 = 4242;
+
+fn advance(tree: &LocalTree, ticks: &telar::RwSignal<i32>, value: i32) {
+    ticks.set(value);
+    telar::relayout_if_dirty();
+    let _ = tree.frame();
+}
+
 /// The real guard: a frame whose content changed costs the same every time. Compared against a later frame
 /// rather than a constant, so it survives a compiler that lays the tree out differently and still fails on
 /// a per-frame allocation nobody meant to keep.
@@ -137,30 +154,20 @@ fn a_changing_frame_costs_the_same_every_time() {
     let (root, ticks) = chrome();
     let tree = LocalTree::new(root);
 
-    // Warm up: the first frames grow the caches and the shaping tables they will then reuse, and that one-time cost is not what this measures.
-    for tick in 0..32 {
-        ticks.set(tick);
-        telar::relayout_if_dirty();
-        let _ = tree.frame();
+    // Every pair leaves the tree on ODD, so both measured frames are the same transition, ODD -> EVEN.
+    for _ in 0..16 {
+        advance(&tree, &ticks, EVEN);
+        advance(&tree, &ticks, ODD);
     }
 
-    let early = measure(|| {
-        ticks.set(100);
-        telar::relayout_if_dirty();
-        let _ = tree.frame();
-    });
+    let early = measure(|| advance(&tree, &ticks, EVEN));
 
-    for tick in 101..200 {
-        ticks.set(tick);
-        telar::relayout_if_dirty();
-        let _ = tree.frame();
+    for _ in 0..50 {
+        advance(&tree, &ticks, EVEN);
+        advance(&tree, &ticks, ODD);
     }
 
-    let late = measure(|| {
-        ticks.set(200);
-        telar::relayout_if_dirty();
-        let _ = tree.frame();
-    });
+    let late = measure(|| advance(&tree, &ticks, EVEN));
 
     // Printed rather than asserted against: the number is the point of the file, and `--nocapture` is how you read it. Only its stability is a pass/fail matter.
     eprintln!("cost per changed frame: {early} bytes");
