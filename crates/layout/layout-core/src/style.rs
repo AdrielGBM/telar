@@ -67,6 +67,14 @@ pub struct LayoutStyle {
 }
 
 impl LayoutStyle {
+    /// A **block** box, as in CSS: children stack vertically and the flex properties do nothing.
+    ///
+    /// Worth saying out loud because the ones that do nothing do it silently. [`gap`](Self::gap),
+    /// [`justify_content`](Self::justify_content) and [`align_items`](Self::align_items) all belong to
+    /// flex layout, so on a box that never called [`flex_row`](Self::flex_row) or
+    /// [`flex_column`](Self::flex_column) they are accepted and ignored — a row written without
+    /// `flex_row` comes out as a column, and the reading on screen is not "that row is a column" but
+    /// "why is this panel twice as tall as it should be".
     pub fn new() -> Self {
         Self {
             inner: Style {
