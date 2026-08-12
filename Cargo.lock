@@ -4936,6 +4936,7 @@ dependencies = [
 name = "telar-ui-core"
 version = "0.1.2"
 dependencies = [
+ "rustc-hash 2.1.3",
  "telar-geometry-core",
  "telar-layout-core",
  "telar-layout-reactive",

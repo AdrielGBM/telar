@@ -509,6 +509,8 @@ where
 
     fn on_event(&mut self, event: Event, window: &W) {
         let _surface = self.enter_surface();
+        // Before dispatch, so a handler running on this very event already sees the state it establishes: a `Shift`-click's press handler has to read the modifiers the click arrived under.
+        ui_core::observe_keyboard(&event);
         if let Event::ScaleFactorChanged { scale_factor } = &event {
             self.scale_factor = *scale_factor as f32;
         }
@@ -701,6 +703,8 @@ where
             };
             self.app.on_frame(&mut ctx);
         }
+        // After `on_frame`, which is where an app reads them: a press has to answer true for the whole frame it arrived in, and stop answering in the next.
+        ui_core::end_keyboard_frame();
         // Apply commands enqueued during on_frame (e.g. raising this window on a routed handoff): on_event's
         // drain only runs on input events, so a frame-driven command would otherwise wait for the next one.
         self.apply_window_commands(window);
@@ -1094,5 +1098,43 @@ mod tests {
             handler.last_submit > first,
             "the region says the picture changed even though the tree cannot, so this frame had to go out"
         );
+    }
+
+    /// The keyboard registry is wired into the runner, not just into `ui-core`.
+    ///
+    /// Its own unit tests drive `observe` directly, so they would pass just as well with the runner never
+    /// calling it — and a modifier state nobody feeds is worse than none, because it answers confidently
+    /// with whatever it last saw.
+    #[test]
+    fn the_runner_feeds_the_keyboard_registry() {
+        ui_core::reset_keyboard();
+        let mut handler = handler();
+        let window = HeadlessWindow::new(120, 80);
+
+        assert!(!ui_core::modifiers().is_shift);
+        handler.on_event(
+            Event::ModifiersChanged {
+                modifiers: platform_core::ModifiersState {
+                    is_shift: true,
+                    ..Default::default()
+                },
+            },
+            &window,
+        );
+        assert!(
+            ui_core::modifiers().is_shift,
+            "a bare Shift must reach the registry, since it maps to no Key at all"
+        );
+
+        handler.on_event(
+            Event::KeyPressed {
+                key: platform_core::Key::Named(platform_core::NamedKey::ArrowUp),
+                modifiers: Default::default(),
+            },
+            &window,
+        );
+        let up = platform_core::Key::Named(platform_core::NamedKey::ArrowUp);
+        assert!(ui_core::key_held(&up));
+        assert!(ui_core::key_pressed(&up));
     }
 }

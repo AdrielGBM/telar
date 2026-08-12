@@ -285,7 +285,9 @@ fn map_window_event(
         }
         WindowEvent::ModifiersChanged(mods) => {
             *modifiers = platform_winit::map_modifiers(&mods);
-            SurfaceIntent::Ignore
+            SurfaceIntent::Event(Event::ModifiersChanged {
+                modifiers: *modifiers,
+            })
         }
         WindowEvent::KeyboardInput { event, .. } => {
             let key = match &event.logical_key {

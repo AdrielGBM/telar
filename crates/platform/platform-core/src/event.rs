@@ -73,6 +73,15 @@ pub enum Event {
         key: Key,
         modifiers: ModifiersState,
     },
+    /// The held modifier keys changed, and this is the authoritative reading.
+    ///
+    /// It has to be its own event because the key events cannot carry the news: a bare `Shift` press maps
+    /// to no [`Key`] at all, so a chord that never types a character would be invisible. The platform also
+    /// re-sends this when the window regains focus, which is what makes it safe to trust — a state
+    /// reconstructed from presses and releases goes wrong exactly when the user alt-tabs mid-chord.
+    ModifiersChanged {
+        modifiers: ModifiersState,
+    },
     PointerMoved {
         x: f64,
         y: f64,

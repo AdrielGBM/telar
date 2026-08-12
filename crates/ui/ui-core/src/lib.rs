@@ -11,6 +11,7 @@ mod image;
 mod input;
 mod input_region;
 mod kept;
+mod keyboard;
 mod layout_item;
 mod layout_leaf;
 mod lazy;
@@ -53,6 +54,10 @@ pub use image::Image;
 pub use input::Input;
 pub use input_region::{interactive_rects, register_interactive, unregister_interactive};
 pub use kept::kept;
+pub use keyboard::{
+    end_frame as end_keyboard_frame, key_held, key_pressed, modifiers, observe as observe_keyboard,
+    reset as reset_keyboard,
+};
 pub use layout_item::{ClipAxis, ClippedItem, LayoutItem, box_item};
 pub use layout_leaf::LayoutLeaf;
 pub use lazy::Lazy;

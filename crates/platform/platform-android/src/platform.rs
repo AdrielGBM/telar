@@ -412,6 +412,12 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
             }
             WindowEvent::ModifiersChanged(mods) => {
                 self.modifiers = platform_winit::map_modifiers(&mods);
+                self.handler.on_event(
+                    Event::ModifiersChanged {
+                        modifiers: self.modifiers,
+                    },
+                    window,
+                );
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 let key = match &event.logical_key {

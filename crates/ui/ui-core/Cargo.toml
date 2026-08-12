@@ -23,6 +23,7 @@ theme-core = { workspace = true }
 ui-tree = { workspace = true }
 motion-core.workspace = true
 services-core = { workspace = true, features = ["di"] }
+rustc-hash.workspace = true
 
 [features]
 # Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.
