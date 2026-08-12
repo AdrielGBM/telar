@@ -24,19 +24,39 @@ pub enum WindowCommand {
     Focus,
 }
 
+type CommandQueue = *mut RefCell<Vec<WindowCommand>>;
+
+// The live queue and the ambient one it started as. Both, because "restore what was active" and "activate the queue of a surface-less caller" are different questions and only the second needs the saved ambient.
+#[derive(Clone, Copy)]
+struct QueueSlot {
+    live: CommandQueue,
+    ambient: CommandQueue,
+}
+
 thread_local! {
     // The live per-surface queue sits behind a swappable pointer (the same idiom as the reactive runtime's
     // cell); the cell holds a raw pointer and has no Drop, so no TLS destructor runs on thread exit. This
     // crate has no reactive-core dependency, so the swap is hand-written here rather than via `surface_local!`.
-    static WINDOW_COMMANDS: Cell<*mut RefCell<Vec<WindowCommand>>> =
-        Cell::new(Box::into_raw(Box::new(RefCell::new(Vec::new()))));
+    static WINDOW_COMMANDS: Cell<QueueSlot> = {
+        let ambient: CommandQueue = Box::into_raw(Box::new(RefCell::new(Vec::new())));
+        Cell::new(QueueSlot { live: ambient, ambient })
+    };
 }
 
 fn with_commands<R>(f: impl FnOnce(&mut Vec<WindowCommand>) -> R) -> R {
     // SAFETY: the pointer always addresses a live `RefCell<Vec<WindowCommand>>` (the leaked ambient queue or
     // a `WindowCommandContext` box that outlives every guard pointing the cell at it); the borrow is released
     // before the closure returns.
-    WINDOW_COMMANDS.with(|cell| unsafe { f(&mut *(*cell.get()).borrow_mut()) })
+    WINDOW_COMMANDS.with(|cell| unsafe { f(&mut (*cell.get().live).borrow_mut()) })
+}
+
+fn swap_live(next: CommandQueue) -> CommandQueue {
+    WINDOW_COMMANDS.with(|cell| {
+        let mut slot = cell.get();
+        let prev = std::mem::replace(&mut slot.live, next);
+        cell.set(slot);
+        prev
+    })
 }
 
 /// Enqueue a window-management command from UI code (e.g. a title-bar button's `on_press`). The runner drains
@@ -67,8 +87,19 @@ impl WindowCommandContext {
 
     #[must_use = "the surface context is only active while this guard is alive"]
     pub fn enter(&self) -> WindowCommandGuard {
-        let prev = WINDOW_COMMANDS.with(|cell| cell.replace(self.ptr));
-        WindowCommandGuard { prev }
+        WindowCommandGuard {
+            prev: swap_live(self.ptr),
+        }
+    }
+
+    /// Activates the ambient queue — the one a caller that never built a surface pushes to. See
+    /// `Surface::enter_ambient` in `ui-core` for why the reactive flush needs it.
+    #[must_use = "the ambient queue is only active while this guard is alive"]
+    pub fn enter_ambient() -> WindowCommandGuard {
+        let ambient = WINDOW_COMMANDS.with(|cell| cell.get().ambient);
+        WindowCommandGuard {
+            prev: swap_live(ambient),
+        }
     }
 }
 
@@ -92,7 +123,7 @@ pub struct WindowCommandGuard {
 
 impl Drop for WindowCommandGuard {
     fn drop(&mut self) {
-        WINDOW_COMMANDS.with(|cell| cell.set(self.prev));
+        swap_live(self.prev);
     }
 }
 

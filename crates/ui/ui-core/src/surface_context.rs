@@ -85,6 +85,29 @@ impl Surface {
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
+
+    /// Activates the ambient world — the one that exists before any [`Surface`] is built.
+    ///
+    /// A single-window app never builds a surface, so its whole tree is owned by
+    /// [`SurfaceHandle::NONE`] and its effects have to re-enter *this*. Without it they run against
+    /// whichever surface happened to be entered when the signal fired, which is a live case as soon as one
+    /// app has both — a window tree that never built a surface and a [`TextureUi`] that did.
+    ///
+    /// [`TextureUi`]: https://docs.rs/telar/latest/telar/struct.TextureUi.html
+    #[must_use = "the ambient world is only active while this guard is alive"]
+    fn enter_ambient() -> SurfaceGuard {
+        let prev_surface = set_current_surface(SurfaceHandle::NONE);
+        SurfaceGuard {
+            _layout: LayoutContext::enter_ambient(),
+            _overlay: OverlayContext::enter_ambient(),
+            _focus: FocusContext::enter_ambient(),
+            _input_region: InputRegionContext::enter_ambient(),
+            _force_tick: ForceTickContext::enter_ambient(),
+            _window_commands: WindowCommandContext::enter_ambient(),
+            _services: ServiceContext::enter_ambient(),
+            _prev_surface: RestoreSurface(prev_surface),
+        }
+    }
 }
 
 impl Drop for Surface {
@@ -144,12 +167,17 @@ fn install_enter_hook() {
             return;
         }
         set_surface_enter_hook(|handle| {
+            if handle.is_none() {
+                let guard = Surface::enter_ambient();
+                return SurfaceEnterGuard::new(move || drop(guard));
+            }
             let surface = SURFACES.with(|s| s.borrow().get(&handle).and_then(Weak::upgrade));
             match surface {
                 Some(surface) => {
                     let guard = surface.enter();
                     SurfaceEnterGuard::new(move || drop(guard))
                 }
+                // Torn down while a stale effect was still scheduled: there is no world to enter, and guessing one would run it against a stranger's.
                 None => SurfaceEnterGuard::noop(),
             }
         });
@@ -228,6 +256,51 @@ mod tests {
                 "A's node must not exist in B's layout world"
             );
         }
+    }
+
+    // An effect that belongs to no surface has a world of its own — the ambient one — and must re-enter it when it fires. Every effect of a single-window app is one of these: the runner builds no `Surface` for one. Left un-restored they ran against whichever surface happened to be active, so a window widget re-rendering during another tree's event dispatch resolved its layout in that tree's world and found nothing there.
+    #[test]
+    fn an_effect_owned_by_no_surface_reenters_the_ambient_world() {
+        use layout_reactive::{
+            AvailableSpace, LayoutStyle, compute_layout, new_leaf, track_layout,
+        };
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        use super::Surface;
+
+        // Built with no surface active, so both the node and the effect below belong to the ambient world.
+        let (ambient_node, _) = new_leaf(LayoutStyle::new().width(42.0).height(10.0)).unwrap();
+        compute_layout(
+            ambient_node,
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let other = Surface::new();
+        let shared = signal(0i32);
+        let read = shared.read_only();
+        let seen: Rc<RefCell<Vec<Option<f32>>>> = Rc::new(RefCell::new(Vec::new()));
+        let seen_c = Rc::clone(&seen);
+        let watcher = effect(move || {
+            read.get();
+            seen_c
+                .borrow_mut()
+                .push(track_layout(ambient_node).map(|rect| rect.get().width));
+        });
+
+        seen.borrow_mut().clear();
+        {
+            let _g = other.enter();
+            shared.set(1);
+        }
+        assert_eq!(
+            seen.borrow().as_slice(),
+            &[Some(42.0)],
+            "an ambient effect must resolve against the ambient layout world, not the active surface's"
+        );
+        drop(watcher);
     }
 
     // Per-surface DI/context (services-core `provide`/`inject`): each surface resolves its own value, and an

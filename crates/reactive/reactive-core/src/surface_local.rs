@@ -29,10 +29,12 @@ macro_rules! surface_local {
         context $ctx:ident, $guard:ident;
     ) => {
         thread_local! {
-            static $slot: ::std::cell::Cell<*mut ::std::cell::RefCell<$ty>> =
-                ::std::cell::Cell::new(::std::boxed::Box::into_raw(::std::boxed::Box::new(
+            static $slot: ::std::cell::Cell<$crate::SurfaceSlot<$ty>> = {
+                let ambient = ::std::boxed::Box::into_raw(::std::boxed::Box::new(
                     ::std::cell::RefCell::new($init),
-                )));
+                ));
+                ::std::cell::Cell::new($crate::SurfaceSlot { live: ambient, ambient })
+            };
         }
 
         #[allow(dead_code)]
@@ -40,13 +42,13 @@ macro_rules! surface_local {
             // SAFETY: the pointer always addresses a live, heap-allocated `RefCell<$ty>` — either the
             // leaked ambient instance or a per-surface `Context`'s box that outlives every guard pointing
             // the slot at it. The borrow is released before the closure returns, so swaps never race a borrow.
-            $slot.with(|cell| unsafe { f(&mut *(*cell.get()).borrow_mut()) })
+            $slot.with(|cell| unsafe { f(&mut *(*cell.get().live).borrow_mut()) })
         }
 
         #[allow(dead_code)]
         fn $with_ref<R>(f: impl ::std::ops::FnOnce(&$ty) -> R) -> R {
             // SAFETY: see `$with`.
-            $slot.with(|cell| unsafe { f(&*(*cell.get()).borrow()) })
+            $slot.with(|cell| unsafe { f(&*(*cell.get().live).borrow()) })
         }
 
         $(#[$ctx_meta])*
@@ -68,8 +70,34 @@ macro_rules! surface_local {
             /// previously-active instance. Nest by keeping guards in scope; they restore in reverse order.
             #[must_use = "the surface context is only active while this guard is alive"]
             pub fn enter(&self) -> $guard {
-                let prev = $slot.with(|cell| cell.replace(self.ptr));
-                $guard { prev }
+                $guard {
+                    prev: $slot.with(|cell| {
+                        let mut slot = cell.get();
+                        let prev = ::std::mem::replace(&mut slot.live, self.ptr);
+                        cell.set(slot);
+                        prev
+                    }),
+                }
+            }
+
+            /// Makes the *ambient* instance — the one that exists before any surface is built, and the only
+            /// world a single-surface app ever has — live until the returned guard drops.
+            ///
+            /// What the reactive flush needs for an effect owned by [`SurfaceHandle::NONE`](crate::SurfaceHandle::NONE):
+            /// it was registered outside any surface, so its world is this one, and running it against
+            /// whichever surface happened to be entered when the signal fired would resolve its layout,
+            /// overlays and focus in somebody else's. Reachable as soon as one app has both — a window tree
+            /// that never built a surface and a second tree that did.
+            #[must_use = "the surface context is only active while this guard is alive"]
+            pub fn enter_ambient() -> $guard {
+                $guard {
+                    prev: $slot.with(|cell| {
+                        let mut slot = cell.get();
+                        let prev = ::std::mem::replace(&mut slot.live, slot.ambient);
+                        cell.set(slot);
+                        prev
+                    }),
+                }
             }
         }
 
@@ -93,8 +121,36 @@ macro_rules! surface_local {
 
         impl ::std::ops::Drop for $guard {
             fn drop(&mut self) {
-                $slot.with(|cell| cell.set(self.prev));
+                $slot.with(|cell| {
+                    let mut slot = cell.get();
+                    slot.live = self.prev;
+                    cell.set(slot);
+                });
             }
         }
     };
 }
+
+/// The live instance of a [`surface_local!`] world plus the ambient one it started as.
+///
+/// Both are kept because "restore what was active before" and "activate the world of an effect that
+/// belongs to no surface" are different questions, and only the second one can be answered from a saved
+/// pointer that no guard is holding.
+///
+/// `#[doc(hidden)]` — public only because macro expansion lands in the calling crate, which has to be able
+/// to name it. Nothing outside the macro should construct one: the fields are raw pointers the expansion
+/// dereferences under a SAFETY note that only holds for the ones it makes itself.
+#[doc(hidden)]
+pub struct SurfaceSlot<T> {
+    pub live: *mut std::cell::RefCell<T>,
+    pub ambient: *mut std::cell::RefCell<T>,
+}
+
+// Hand-written so the derives do not require `T: Copy`; a pair of raw pointers is `Copy` whatever they point at, which is what the `Cell` holding them needs.
+impl<T> Clone for SurfaceSlot<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for SurfaceSlot<T> {}
