@@ -1,10 +1,10 @@
 use cosmic_text::{
-    Align, Attrs, Buffer, CacheKey, Color as CosmicColor, FontSystem, Metrics, Shaping, Style,
-    SwashCache, Weight, fontdb,
+    Align, Attrs, Buffer, CacheKey, CacheKeyFlags, Color as CosmicColor, FontSystem, LayoutGlyph,
+    Metrics, PhysicalGlyph, Shaping, Style, SwashCache, Weight, fontdb,
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
-use renderer_core::{TextAlign, TextRun, TextStyle};
+use renderer_core::{GlyphRaster, TextAlign, TextRun, TextStyle};
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
@@ -68,6 +68,60 @@ pub(crate) fn effective_line_height(style: &TextStyle) -> f32 {
     style.font_size * style.line_height.unwrap_or(LINE_HEIGHT_FACTOR)
 }
 
+/// The cache-key flags `raster` implies. `PIXEL_FONT` makes swash round the fractional offset it bakes
+/// into the glyph image, and — because it rides in the [`CacheKey`] — keeps a pixel-grid glyph from
+/// sharing an atlas slot with the smooth raster of the same glyph at the same size.
+fn raster_flags(raster: GlyphRaster) -> CacheKeyFlags {
+    match raster {
+        GlyphRaster::Smooth => CacheKeyFlags::empty(),
+        GlyphRaster::Pixel => CacheKeyFlags::PIXEL_FONT,
+    }
+}
+
+/// Where one shaped glyph lands, on the grid `raster` asks for.
+///
+/// [`LayoutGlyph::physical`] bins the fractional x into a quarter-pixel offset the rasterizer bakes into
+/// the glyph image. Putting a glyph on a whole pixel therefore means rounding the position *before* it is
+/// binned, not moving the result: the offset is part of the cache key, so the same glyph at x.25 and at
+/// x.0 are two different rasters rather than one raster in two places.
+pub(crate) fn physical_glyph(
+    glyph: &LayoutGlyph,
+    offset: (f32, f32),
+    scale: f32,
+    raster: GlyphRaster,
+) -> PhysicalGlyph {
+    if raster == GlyphRaster::Smooth {
+        return glyph.physical(offset, scale);
+    }
+    let x_offset = glyph.font_size * glyph.x_offset;
+    let y_offset = glyph.font_size * glyph.y_offset;
+    let (cache_key, x, y) = CacheKey::new(
+        glyph.font_id,
+        glyph.glyph_id,
+        glyph.font_size * scale,
+        (
+            (glyph.x + x_offset).mul_add(scale, offset.0).round(),
+            (glyph.y - y_offset).mul_add(scale, offset.1).round(),
+        ),
+        glyph.font_weight,
+        glyph.cache_key_flags,
+    );
+    PhysicalGlyph { cache_key, x, y }
+}
+
+/// Coverage at or above this is ink, below it is background. Half, because a pixel the outline covers
+/// more than half of is one the artist would have filled.
+const PIXEL_COVERAGE_THRESHOLD: u8 = 128;
+
+/// Resolves one glyph pixel's coverage under `raster`: blended as the rasterizer produced it, or on/off.
+pub(crate) fn resolve_coverage(alpha: u8, raster: GlyphRaster) -> u8 {
+    match raster {
+        GlyphRaster::Smooth => alpha,
+        GlyphRaster::Pixel if alpha >= PIXEL_COVERAGE_THRESHOLD => u8::MAX,
+        GlyphRaster::Pixel => 0,
+    }
+}
+
 fn cosmic_align(align: TextAlign) -> Option<Align> {
     match align {
         // Start keeps cosmic-text's default (left in LTR), so no explicit per-line align is set.
@@ -93,6 +147,9 @@ fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Te
     // Only set letter spacing when non-default so unspaced text keeps cosmic-text's exact default shaping (and the byte-golden).
     if style.letter_spacing != 0.0 {
         attrs = attrs.letter_spacing(style.letter_spacing);
+    }
+    if style.raster != GlyphRaster::Smooth {
+        attrs = attrs.cache_key_flags(raster_flags(style.raster));
     }
     buffer.set_text(text, &attrs, Shaping::Advanced, None);
     // Alignment shifts glyph x within the line box; applied before shaping so positions bake it in.
@@ -166,6 +223,9 @@ pub(crate) fn make_buffer_rich(
             .color(to_cosmic_color(run.color));
         if base.letter_spacing != 0.0 {
             attrs = attrs.letter_spacing(base.letter_spacing);
+        }
+        if base.raster != GlyphRaster::Smooth {
+            attrs = attrs.cache_key_flags(raster_flags(base.raster));
         }
         (run.text.as_ref(), attrs)
     });

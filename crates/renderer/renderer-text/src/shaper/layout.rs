@@ -1,9 +1,12 @@
 use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
-use super::{effective_line_height, from_cosmic_color, make_buffer, make_buffer_rich};
+use super::{
+    effective_line_height, from_cosmic_color, make_buffer, make_buffer_rich, physical_glyph,
+    resolve_coverage,
+};
 use cosmic_text::{CacheKey, SwashContent};
 use geometry_core::{Color, Rect};
-use renderer_core::{TextRun, TextStyle};
+use renderer_core::{GlyphRaster, TextRun, TextStyle};
 
 use super::atlas::GlyphInfo;
 
@@ -35,29 +38,43 @@ impl TextShaper {
             style_bits: text_style_bits(style),
         };
 
-        let positions: std::sync::Arc<Vec<(CacheKey, i32, i32)>> = if let Some(cached) =
-            self.shaping_cache.get(&shaping_key)
-        {
-            cached.clone()
-        } else {
-            let buffer = make_buffer(&mut self.font_system, text, rect, style);
-            let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
-            for run in buffer.layout_runs() {
-                for glyph in run.glyphs.iter() {
-                    // cosmic-text's `physical` adds the offset WITHOUT scaling it (`y = glyph_y * scale + offset.1`), and `screen_y` below divides the whole thing by `scale_factor`. So `line_y` must be pre-scaled here or it collapses to `line_y / scale_factor`, packing every line onto the first one at high-DPI (e.g. Android).
-                    let physical = glyph.physical((0., run.line_y * scale_factor), scale_factor);
-                    pos.push((physical.cache_key, physical.x, physical.y));
+        let positions: std::sync::Arc<Vec<(CacheKey, i32, i32)>> =
+            if let Some(cached) = self.shaping_cache.get(&shaping_key) {
+                cached.clone()
+            } else {
+                let buffer = make_buffer(&mut self.font_system, text, rect, style);
+                let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
+                for run in buffer.layout_runs() {
+                    for glyph in run.glyphs.iter() {
+                        // cosmic-text's `physical` adds the offset WITHOUT scaling it (`y = glyph_y * scale + offset.1`), and `screen_y` below divides the whole thing by `scale_factor`. So `line_y` must be pre-scaled here or it collapses to `line_y / scale_factor`, packing every line onto the first one at high-DPI (e.g. Android).
+                        let physical = physical_glyph(
+                            glyph,
+                            (0., run.line_y * scale_factor),
+                            scale_factor,
+                            style.raster,
+                        );
+                        pos.push((physical.cache_key, physical.x, physical.y));
+                    }
                 }
-            }
-            drop(buffer);
-            let arc = std::sync::Arc::new(pos);
-            self.shaping_cache.insert(shaping_key, arc.clone());
-            arc
-        };
+                drop(buffer);
+                let arc = std::sync::Arc::new(pos);
+                self.shaping_cache.insert(shaping_key, arc.clone());
+                arc
+            };
 
         out.reserve(positions.len());
         for &(cache_key, px, py) in positions.iter() {
-            self.emit_glyph(cache_key, px, py, rect, font_size, scale_factor, color, out);
+            self.emit_glyph(
+                cache_key,
+                px,
+                py,
+                rect,
+                font_size,
+                scale_factor,
+                color,
+                style.raster,
+                out,
+            );
         }
     }
 
@@ -87,7 +104,12 @@ impl TextShaper {
                 break;
             }
             for glyph in run.glyphs.iter() {
-                let physical = glyph.physical((0., run.line_y * scale_factor), scale_factor);
+                let physical = physical_glyph(
+                    glyph,
+                    (0., run.line_y * scale_factor),
+                    scale_factor,
+                    base.raster,
+                );
                 let color = glyph.color_opt.map(from_cosmic_color).unwrap_or(base_color);
                 glyphs.push((physical.cache_key, physical.x, physical.y, color));
             }
@@ -103,6 +125,7 @@ impl TextShaper {
                 base.font_size,
                 scale_factor,
                 color,
+                base.raster,
                 out,
             );
         }
@@ -154,15 +177,24 @@ impl TextShaper {
         font_size: f32,
         scale_factor: f32,
         color: Color,
+        raster: GlyphRaster,
         out: &mut Vec<GlyphInfo>,
     ) {
         let tint = color.to_array();
         let identity_tint = [1.0, 1.0, 1.0, 1.0];
+        // px/py and the placement offsets are whole physical pixels; the text box's own origin is not, and under the pixel raster that is the last place a fraction can get in. It matters more here than it reads: the atlas is sampled with a linear filter, so a quad landing half a texel off smears every glyph edge back into the blend the raster exists to remove. Snapped in *physical* space, since that is the grid the sampler resolves against.
+        let (origin_x, origin_y) = match raster {
+            GlyphRaster::Smooth => (rect.x * scale_factor, rect.y * scale_factor),
+            GlyphRaster::Pixel => (
+                (rect.x * scale_factor).round(),
+                (rect.y * scale_factor).round(),
+            ),
+        };
 
         if let Some(entry) = self.atlas.fetch(&cache_key) {
             // px/py and placement offsets are in physical pixels; divide by scale_factor to get logical pixel screen coordinates expected by the viewport shader.
-            let screen_x = rect.x + (px as f32 + entry.placement_left as f32) / scale_factor;
-            let screen_y = rect.y + (py as f32 - entry.placement_top as f32) / scale_factor;
+            let screen_x = (origin_x + px as f32 + entry.placement_left as f32) / scale_factor;
+            let screen_y = (origin_y + py as f32 - entry.placement_top as f32) / scale_factor;
             let glyph_color = if entry.is_color_glyph {
                 identity_tint
             } else {
@@ -202,7 +234,7 @@ impl TextShaper {
                                 out[i * 4] = 255;
                                 out[i * 4 + 1] = 255;
                                 out[i * 4 + 2] = 255;
-                                out[i * 4 + 3] = mask;
+                                out[i * 4 + 3] = resolve_coverage(mask, raster);
                             }
                             (out, false)
                         }
@@ -215,7 +247,7 @@ impl TextShaper {
                                 out[i * 4] = 255;
                                 out[i * 4 + 1] = 255;
                                 out[i * 4 + 2] = 255;
-                                out[i * 4 + 3] = mask;
+                                out[i * 4 + 3] = resolve_coverage(mask, raster);
                             }
                             (out, false)
                         }
@@ -269,8 +301,8 @@ impl TextShaper {
             }
         };
 
-        let screen_x = rect.x + (px as f32 + pl as f32) / scale_factor;
-        let screen_y = rect.y + (py as f32 - pt as f32) / scale_factor;
+        let screen_x = (origin_x + px as f32 + pl as f32) / scale_factor;
+        let screen_y = (origin_y + py as f32 - pt as f32) / scale_factor;
         let glyph_color = if is_color_glyph { identity_tint } else { tint };
         out.push(GlyphInfo {
             dest_rect: [
@@ -358,7 +390,7 @@ impl TextShaper {
         let mut glyphs: Vec<(CacheKey, i32)> = Vec::new();
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {
-                let p = glyph.physical((0.0, run.line_y), 1.0);
+                let p = physical_glyph(glyph, (0.0, run.line_y), 1.0, style.raster);
                 glyphs.push((p.cache_key, p.y));
             }
         }

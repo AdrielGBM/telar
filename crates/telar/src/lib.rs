@@ -101,7 +101,7 @@ pub use reactive_core::{
 pub use renderer_assets::{SvgData, SvgError};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    BorderRadius, Color, DrawCommand, FillRule, Gradient, GradientKind, GradientStop,
+    BorderRadius, Color, DrawCommand, FillRule, GlyphRaster, Gradient, GradientKind, GradientStop,
     GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint, PathData, PathStyle, PathVerb,
     RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke, TextAlign, TextRun, TextStyle,
 };

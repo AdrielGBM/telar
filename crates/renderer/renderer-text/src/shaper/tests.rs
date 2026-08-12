@@ -61,6 +61,102 @@ fn text_style_bits_default_unchanged_and_spacing_perturbs() {
         "letter_spacing must perturb the bits"
     );
     assert_ne!(bits_lh, bits_ls, "the two axes must not alias each other");
+    let bits_pixel = text_style_bits(&base.with_raster(GlyphRaster::Pixel));
+    assert_ne!(
+        bits_pixel, bits_default,
+        "the raster grid must perturb the bits, or a smooth raster is served to a pixel style"
+    );
+}
+
+// Coverage under the pixel raster is ink or nothing: a glyph half-covering a pixel is the grid the artist drew being taken apart. Skipped rather than failed on a font-less machine, where nothing is inked at all.
+#[test]
+fn pixel_raster_leaves_no_partial_coverage() {
+    let mut sh = TextShaper::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 40.0,
+    };
+    let base = TextStyle::new(16.0, Color::WHITE);
+    let (smooth, _, _) = sh.rasterize("Hamburgefonstiv", rect, &base);
+    let partial = |pixels: &[u8]| {
+        pixels
+            .chunks_exact(4)
+            .filter(|px| px[3] > 0 && px[3] < 255)
+            .count()
+    };
+    if partial(&smooth) == 0 {
+        return;
+    }
+    let (pixel, _, _) = sh.rasterize(
+        "Hamburgefonstiv",
+        rect,
+        &base.with_raster(GlyphRaster::Pixel),
+    );
+    assert_eq!(
+        partial(&pixel),
+        0,
+        "pixel raster must resolve every glyph pixel to on or off"
+    );
+}
+
+// The other half of the grid, and the half that does not show in a `PhysicalGlyph`'s integer coordinates: the fractional part of a glyph's origin rides in its cache key as a quarter-pixel bin the rasterizer bakes into the image. Rounding before the binning is what collapses those four rasters into one, so the same glyph half a pixel further along is that glyph moved rather than a differently-offset one.
+#[test]
+fn pixel_raster_collapses_the_subpixel_bins_smooth_keeps() {
+    let mut sh = TextShaper::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 40.0,
+    };
+    let style = TextStyle::new(16.0, Color::WHITE);
+    let buffer = make_buffer(&mut sh.font_system, "Hi", rect, &style);
+    let Some(glyph) = buffer
+        .layout_runs()
+        .flat_map(|run| run.glyphs.iter())
+        .next()
+    else {
+        return;
+    };
+    let key_at = |dx: f32, raster| physical_glyph(glyph, (dx, 0.0), 1.0, raster).cache_key;
+    assert_eq!(
+        key_at(0.0, GlyphRaster::Pixel),
+        key_at(0.5, GlyphRaster::Pixel),
+        "a half-pixel shift must not mint a second raster of the same glyph"
+    );
+    assert_ne!(
+        key_at(0.0, GlyphRaster::Smooth),
+        key_at(0.5, GlyphRaster::Smooth),
+        "the smooth raster is supposed to keep subpixel positions; this test proves nothing without it"
+    );
+}
+
+// A pixel-raster glyph must not land in the atlas slot of the smooth raster of the same glyph at the same size — the two are different pictures, and the atlas is keyed by cosmic-text's `CacheKey`. Shaping with `PIXEL_FONT` is what keeps them apart, so it has to reach the shaped glyphs.
+#[test]
+fn pixel_raster_shapes_under_its_own_cache_key() {
+    let mut sh = TextShaper::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 40.0,
+    };
+    let base = TextStyle::new(16.0, Color::WHITE);
+    let flags = |style: &TextStyle, sh: &mut TextShaper| {
+        make_buffer(&mut sh.font_system, "Hi", rect, style)
+            .layout_runs()
+            .flat_map(|run| run.glyphs.iter())
+            .next()
+            .map(|glyph| glyph.cache_key_flags)
+    };
+    let Some(smooth) = flags(&base, &mut sh) else {
+        return;
+    };
+    let pixel = flags(&base.with_raster(GlyphRaster::Pixel), &mut sh).expect("same string shapes");
+    assert!(!smooth.contains(CacheKeyFlags::PIXEL_FONT));
+    assert!(pixel.contains(CacheKeyFlags::PIXEL_FONT));
 }
 
 #[test]

@@ -17,6 +17,25 @@ pub enum TextAlign {
     Justify,
 }
 
+/// Which grid the glyphs are rasterized onto.
+///
+/// An axis of the style, like weight or slant — not a mode the whole renderer enters. Shaping,
+/// wrapping, bidi and the font stack are the same either way; only where a glyph lands and how its
+/// coverage is resolved change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum GlyphRaster {
+    /// Subpixel origins and blended coverage: the sharpest text a screen can show at UI sizes.
+    #[default]
+    Smooth,
+    /// Whole-pixel origins and coverage resolved to on or off.
+    ///
+    /// What a font drawn on a pixel grid needs: a glyph shared between two columns, or an edge left
+    /// half-lit, is the grid the artist drew being taken apart. With a face designed at the size it is
+    /// used, this reproduces a bitmap font's output without Telar growing a second font format —
+    /// cosmic-text still shapes, wraps and falls back exactly as before.
+    Pixel,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextStyle {
     pub font_size: f32,
@@ -34,6 +53,8 @@ pub struct TextStyle {
     pub line_height: Option<f32>,
     /// Extra advance in logical pixels added after each glyph. `0.0` uses the font's natural advances.
     pub letter_spacing: f32,
+    /// Which grid the glyphs land on. See [`GlyphRaster`].
+    pub raster: GlyphRaster,
 }
 
 impl TextStyle {
@@ -49,6 +70,7 @@ impl TextStyle {
             ellipsis: false,
             line_height: None,
             letter_spacing: 0.0,
+            raster: GlyphRaster::Smooth,
         }
     }
 
@@ -97,6 +119,12 @@ impl TextStyle {
 
     pub fn with_letter_spacing(mut self, letter_spacing: f32) -> Self {
         self.letter_spacing = letter_spacing;
+        self
+    }
+
+    /// Puts the glyphs on whole pixels with coverage resolved to on or off. See [`GlyphRaster`].
+    pub fn with_raster(mut self, raster: GlyphRaster) -> Self {
+        self.raster = raster;
         self
     }
 }

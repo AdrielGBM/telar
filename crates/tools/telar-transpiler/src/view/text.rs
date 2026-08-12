@@ -39,6 +39,7 @@ impl ViewGen<'_> {
                     | "height"
                     | "line_height"
                     | "letter_spacing"
+                    | "raster"
             ) {
                 continue;
             }
@@ -249,6 +250,13 @@ impl ViewGen<'_> {
         {
             modifiers.push_str(&format!(".with_letter_spacing({})", format_f32(ls)));
         }
+        if let Some(variant) = attrs
+            .iter()
+            .find(|a| a.key == "raster")
+            .and_then(|a| parse_glyph_raster(&a.value))
+        {
+            modifiers.push_str(&format!(".with_raster(GlyphRaster::{variant})"));
+        }
 
         let closure = format!("move || TextStyle::new({size}, {color}){modifiers}");
         // `color_attr`'s raw value (not `color`, already substituted by `color_expr`) is scanned for `$ident` so a signal-backed color clones itself into this closure, leaving the outer binding usable by sibling widgets.
@@ -276,6 +284,15 @@ fn parse_weight(value: &str) -> Option<String> {
         _ => return None,
     };
     Some(n.to_string())
+}
+
+/// Maps a `raster:` value to a `GlyphRaster` variant name — which grid the glyphs land on.
+fn parse_glyph_raster(value: &str) -> Option<&'static str> {
+    Some(match value.trim() {
+        "smooth" | "subpixel" => "Smooth",
+        "pixel" => "Pixel",
+        _ => return None,
+    })
 }
 
 /// Maps an `align:` value to a `TextAlign` variant name.

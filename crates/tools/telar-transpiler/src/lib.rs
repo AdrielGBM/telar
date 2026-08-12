@@ -1787,6 +1787,26 @@ col @card
         );
     }
 
+    // `raster:pixel` reaches the style as the `GlyphRaster` axis, so a UI drawn on a pixel grid is writable in the DSL rather than only from Rust. An unknown value is ignored, like every other keyword attribute.
+    #[test]
+    fn text_raster_selects_the_glyph_grid() {
+        let code =
+            transpile_source_with_theme("[view]\ntext \"Hi\" raster:pixel\n", "demo", None, None)
+                .unwrap()
+                .rust_code;
+        assert!(
+            code.contains(".with_raster(GlyphRaster::Pixel)"),
+            "raster:pixel:\n{code}"
+        );
+        let smooth = transpile_source_with_theme("[view]\ntext \"Hi\"\n", "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !smooth.contains(".with_raster"),
+            "the default must not emit the axis at all:\n{smooth}"
+        );
+    }
+
     // A declarative `path d:"…"` compiles its SVG path-data into a `PathData` builder chain and draws it
     // as a `Path` inside a sized `Canvas` (the layout wrapper, since `Path` is not a `LayoutItem`).
     #[test]

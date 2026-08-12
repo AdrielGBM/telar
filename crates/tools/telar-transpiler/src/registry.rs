@@ -196,6 +196,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "ellipsis",
             "line_height",
             "letter_spacing",
+            "raster",
             "transition",
         ]),
         // Both splice a whole widget in, so neither takes layout or paint keys: the expression owns its style.
