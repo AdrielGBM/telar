@@ -29,6 +29,8 @@ runtime = [
     "dep:toml",
     "dep:tracing",
     "dep:platform-android",
+    # Unconditional because `TextureUi` composes without a window while `HardwareRenderer` is still generic over one, so it names the canonical offscreen marker; the `platform-headless` feature below gates `rasterize`, which stays a separate choice.
+    "dep:platform-headless",
     "dep:libc",
 ]
 desktop = ["runtime", "dep:platform-desktop"]

@@ -28,6 +28,8 @@ pub mod runner;
 #[cfg(feature = "runtime")]
 pub mod surface;
 #[cfg(feature = "runtime")]
+mod texture_ui;
+#[cfg(feature = "runtime")]
 pub mod tree;
 #[cfg(feature = "runtime")]
 pub mod window;
@@ -82,6 +84,12 @@ pub use platform_core::{
     Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand, WindowConfig, WindowPosition,
     push_window_command, take_window_commands,
 };
+// The seam for an application that renders its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on.
+#[cfg(feature = "runtime")]
+pub use renderer_hardware::gpu;
+// The same seam facing the other way: Telar composing into a texture the application owns.
+#[cfg(feature = "runtime")]
+pub use texture_ui::{TextureUi, TextureUiError};
 // Backend-author API: an out-of-tree `Platform` (e.g. a Wayland layer-shell backend) implements `Platform`
 // and `Window` against these, driving a full rsx app via `run_with_platform` without depending on
 // `platform-core` directly.

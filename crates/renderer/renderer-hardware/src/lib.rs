@@ -2,6 +2,7 @@ mod blur;
 mod caches;
 mod composite;
 mod config;
+pub mod gpu;
 pub mod limits;
 mod primitives;
 pub(crate) mod renderer;

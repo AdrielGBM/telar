@@ -4832,6 +4832,7 @@ version = "0.1.2"
 dependencies = [
  "bytemuck",
  "criterion",
+ "lru",
  "lyon",
  "pollster",
  "raw-window-handle",

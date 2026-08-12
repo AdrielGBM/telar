@@ -138,8 +138,10 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     // Non-MSAA presentation texture holding the last resolved frame. Used both as the idle-frame fast-path source (blit when commands are unchanged) and as the MSAA resolve target each active frame.
     retained_texture: Option<wgpu::Texture>,
     retained_view: Option<wgpu::TextureView>,
-    // Headless-only render target (Some iff `surface` is None). The final frame lands here (via direct draw, MSAA resolve-blit, or copy) so `read_rgba` can copy it back. Sized to the current width/height, recreated on resize in `reconfigure`.
+    // Windowless render target (Some iff `surface` is None). The final frame lands here (via direct draw, MSAA resolve-blit, or copy) so `read_rgba` can copy it back. Sized to the current width/height, recreated on resize in `reconfigure` — unless it belongs to the application, see `app_owned_target`.
     offscreen_output: Option<wgpu::Texture>,
+    // True when `offscreen_output` is a texture the application handed over (see `compose_into`) rather than one this renderer allocated. Two things follow: `reconfigure` must not replace it (it is not ours to size), and the final frame is *blended* into it rather than copied over it, so Telar composes into whatever the application already drew there.
+    app_owned_target: bool,
     prev_commands: Vec<DrawCommand>,
     // ComponentList generation of the last fully rendered frame. Initialized to u64::MAX so the first frame never matches and always renders. Set to the incoming generation after each successful render.
     prev_generation: u64,
@@ -211,14 +213,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for Har
 // VkInstance/VkDevice per window, destroyed when its window closes, corrupts the shared driver state and
 // segfaults a sibling window's in-flight `vkAcquireNextImageKHR` (reproduced on the NVIDIA driver). With a
 // shared device, closing a window drops only its swapchain — never a device — which the driver handles fine.
-struct SharedGpu {
-    instance: wgpu::Instance,
-    adapter: wgpu::Adapter,
-    device: Device,
-    queue: Queue,
+#[derive(Clone)]
+pub struct SharedGpu {
+    pub instance: wgpu::Instance,
+    pub adapter: wgpu::Adapter,
+    pub device: Device,
+    pub queue: Queue,
 }
 
-static SHARED_GPU: std::sync::OnceLock<SharedGpu> = std::sync::OnceLock::new();
+pub(crate) static SHARED_GPU: std::sync::OnceLock<SharedGpu> = std::sync::OnceLock::new();
 
 // Keeps a swapchain from being rebuilt while any window is advancing one. A single device is shared by every
 // window (see SharedGpu) and the WSI beneath it does not take being driven from several threads at once:
@@ -261,6 +264,16 @@ fn built<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> Result<T, RendererE
     handle
         .join()
         .map_err(|_| RendererError::Backend("a render pipeline could not be built".to_string()))
+}
+
+/// Opens the process-wide GPU objects, or hands back the ones a renderer already opened. Blocking, and
+/// serialized against every window's surface lifecycle for the same reason [`HardwareRenderer::new`] is.
+pub(crate) fn open_shared_gpu() -> Result<SharedGpu, RendererError> {
+    if let Some(gpu) = SHARED_GPU.get() {
+        return Ok(gpu.clone());
+    }
+    let _gpu = renderer_core::gpu_sync::lifecycle_guard();
+    pollster::block_on(shared_gpu(wgpu::Backends::all())).cloned()
 }
 
 async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, RendererError> {
@@ -528,16 +541,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         font_config: renderer_text::TextShaperConfig,
         config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
-        // device/queue are shared process-wide (see SharedGpu) and created there with the IMMEDIATES feature
-        // when the adapter supports it; recompute the flag here for the blur pipeline's push-constant path.
+        // Read off the device, not the adapter: an adopted device (see `crate::gpu`) may have been created without a feature its adapter advertises, and taking the immediates path against one that lacks it is a validation error rather than a slow path.
         const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<BlurParams>() as u32;
-        let supports_immediates = adapter.features().contains(wgpu::Features::IMMEDIATES)
-            && adapter.limits().max_immediate_size >= BLUR_PARAMS_SIZE;
+        let supports_immediates = device.features().contains(wgpu::Features::IMMEDIATES)
+            && device.limits().max_immediate_size >= BLUR_PARAMS_SIZE;
 
         // Returns None on non-Vulkan backends where pipeline caching is unsupported.
         let (pipeline_cache, cache_file_path) = {
             let adapter_info = adapter.get_info();
-            let key = wgpu::util::pipeline_cache_key(&adapter_info);
+            let key = wgpu::util::pipeline_cache_key(&adapter_info)
+                .filter(|_| device.features().contains(wgpu::Features::PIPELINE_CACHE));
             if let (Some(key), Some(base)) = (key, cache_path) {
                 let path = base.join(key);
                 let data = std::fs::read(&path).ok();
@@ -765,6 +778,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             retained_texture: None,
             retained_view: None,
             offscreen_output: None,
+            app_owned_target: false,
             prev_commands: Vec::new(),
             prev_generation: u64::MAX,
             incoming_generation: 0,
@@ -972,8 +986,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         });
         self.retained_view = Some(retained.create_view(&wgpu::TextureViewDescriptor::default()));
         self.retained_texture = Some(retained);
-        // Headless: (re)create the offscreen render target at the new size. The windowed path presents to the surface swapchain instead, so it has no offscreen target.
-        if self.surface.is_none() {
+        // Windowless: (re)create the offscreen render target at the new size. The windowed path presents to the surface swapchain instead, so it has no offscreen target; an app-owned target is sized by whoever owns it, and replacing it here would drop the picture on the floor.
+        if self.surface.is_none() && !self.app_owned_target {
             self.offscreen_output = Some(create_offscreen_texture(
                 &self.device,
                 self.surface_format,
@@ -1076,18 +1090,111 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         font_config: renderer_text::TextShaperConfig,
         config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
+        // Rgba8Unorm is a mandatory renderable format and the windowed path's first choice (see `pool::preferred_format`), so `read_rgba` yields straight R,G,B,A bytes.
+        let mut renderer = Self::new_offscreen(
+            wgpu::TextureFormat::Rgba8Unorm,
+            cache_path,
+            vulkan_only,
+            font_config,
+            config,
+        )
+        .await?;
+        // Allocate an initial offscreen target so read_rgba works even before the first begin_frame; begin_frame's reconfigure recreates it at the real frame size.
+        if width > 0 && height > 0 {
+            renderer.offscreen_output = Some(create_offscreen_texture(
+                &renderer.device,
+                renderer.surface_format,
+                width,
+                height,
+            ));
+        }
+        Ok(renderer)
+    }
+
+    /// [`new_for_texture`](Self::new_for_texture), blocking, and serialized against every other window's
+    /// surface lifecycle — the sibling of [`new`](Self::new), and what a caller building one of these
+    /// beside a live window needs: device and pipeline creation must not overlap another surface's
+    /// in-flight acquire/present (see `renderer_core::gpu_sync`).
+    pub fn for_texture(
+        target: wgpu::Texture,
+        cache_path: Option<&std::path::Path>,
+        vulkan_only: bool,
+        font_config: renderer_text::TextShaperConfig,
+        config: HardwareRendererConfig,
+    ) -> Result<Self, RendererError> {
+        let _gpu = renderer_core::gpu_sync::lifecycle_guard();
+        pollster::block_on(Self::new_for_texture(
+            target,
+            cache_path,
+            vulkan_only,
+            font_config,
+            config,
+        ))
+    }
+
+    /// Build a windowless renderer that composes its frames **into a texture the application owns**.
+    ///
+    /// The mirror of [`crate::gpu::image`]: there the application fills a texture and Telar places it in
+    /// its frame; here Telar draws its frame inside a picture the application is assembling. Neither
+    /// direction tells Telar what the rest of the picture is of.
+    ///
+    /// The frame is *blended* over what the texture already holds, premultiplied-alpha over, so a UI
+    /// composed with no `clear_color` lands on top of the application's own content rather than erasing
+    /// it. Rendering at the application's chosen resolution is the point — a UI at 320×180 inside a
+    /// window that is not, a viewport at half resolution while it is being dragged.
+    ///
+    /// Requirements on `target`: it must belong to the device Telar is drawing with (see
+    /// [`crate::gpu::shared`]) and carry `RENDER_ATTACHMENT` usage. Its format decides the format every
+    /// pipeline here is built against, so it must be renderable and blendable. Drive the renderer with
+    /// `begin_frame` at the target's own pixel size; [`compose_into`](Self::compose_into) swaps in a new
+    /// texture when the application resizes.
+    pub async fn new_for_texture(
+        target: wgpu::Texture,
+        cache_path: Option<&std::path::Path>,
+        vulkan_only: bool,
+        font_config: renderer_text::TextShaperConfig,
+        config: HardwareRendererConfig,
+    ) -> Result<Self, RendererError> {
+        let mut renderer = Self::new_offscreen(
+            target.format(),
+            cache_path,
+            vulkan_only,
+            font_config,
+            config,
+        )
+        .await?;
+        renderer.compose_into(target);
+        Ok(renderer)
+    }
+
+    /// Swaps the application-owned texture this renderer composes into — how an application resizes it.
+    ///
+    /// The new texture must match the format the renderer's pipelines were built against (that of the
+    /// one passed to [`new_for_texture`](Self::new_for_texture)); a different format needs a new
+    /// renderer.
+    pub fn compose_into(&mut self, target: wgpu::Texture) {
+        self.app_owned_target = true;
+        self.offscreen_output = Some(target);
+    }
+
+    // Everything `new_headless` and `new_for_texture` share: no window, no surface, no swapchain — only the format differs, and with it every pipeline built below.
+    async fn new_offscreen(
+        surface_format: wgpu::TextureFormat,
+        cache_path: Option<&std::path::Path>,
+        vulkan_only: bool,
+        font_config: renderer_text::TextShaperConfig,
+        config: HardwareRendererConfig,
+    ) -> Result<Self, RendererError> {
         let backends = if vulkan_only {
             wgpu::Backends::VULKAN
         } else {
             wgpu::Backends::all()
         };
-        // Share the process-wide instance/adapter/device (see SharedGpu); headless renders offscreen (no surface).
+        // Share the process-wide instance/adapter/device (see SharedGpu); this renderer draws offscreen (no surface).
         let gpu = shared_gpu(backends).await?;
         let instance = gpu.instance.clone();
         let adapter = gpu.adapter.clone();
 
-        // No surface to query, so pick the format the windowed path prefers (pool::preferred_format's first choice). Rgba8Unorm is a mandatory renderable format, so read_rgba yields straight R,G,B,A bytes.
-        let surface_format = wgpu::TextureFormat::Rgba8Unorm;
         let msaa_samples = if adapter
             .get_texture_format_features(surface_format)
             .flags
@@ -1097,18 +1204,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             1
         };
-        // present_mode/alpha_mode are only consumed when configuring a surface, which never happens headless; they still fill the shared SurfaceConfiguration built in reconfigure.
+        // present_mode/alpha_mode are only consumed when configuring a surface, which never happens without one; they still fill the shared SurfaceConfiguration built in reconfigure.
         let present_mode = wgpu::PresentMode::Fifo;
         let alpha_mode = wgpu::CompositeAlphaMode::Opaque;
         tracing::info!(
-            "hw init (headless): format={:?} msaa={} target={}x{}",
+            "hw init (offscreen): format={:?} msaa={}",
             surface_format,
             msaa_samples,
-            width,
-            height,
         );
 
-        let mut renderer = Self::from_parts(
+        Self::from_parts(
             instance,
             adapter,
             gpu.device.clone(),
@@ -1123,18 +1228,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             font_config,
             config,
         )
-        .await?;
-
-        // Allocate an initial offscreen target so read_rgba works even before the first begin_frame; begin_frame's reconfigure recreates it at the real frame size.
-        if width > 0 && height > 0 {
-            renderer.offscreen_output = Some(create_offscreen_texture(
-                &renderer.device,
-                surface_format,
-                width,
-                height,
-            ));
-        }
-
-        Ok(renderer)
+        .await
     }
 }

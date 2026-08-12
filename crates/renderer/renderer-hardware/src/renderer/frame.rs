@@ -160,10 +160,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         // which requires rendering through the offscreen rather than straight into the rotating
         // swapchain — so direct-to-surface is disabled whenever damage tracking is on. (TELAR_HW_DAMAGE=0
         // restores direct-to-surface + full repaints.)
+        // An app-owned target is never drawn into directly: the frame has to arrive there through a blend, and a direct draw would replace what the application put in the texture instead.
         let direct_to_surface = self.msaa_samples == 1
             && clear_color.is_some()
             && !frame_has_backdrop_blur
-            && !hw_damage_with_clear_enabled();
+            && !hw_damage_with_clear_enabled()
+            && !self.app_owned_target;
 
         if self.try_idle_blit(direct_to_surface)? {
             return Ok(());
@@ -686,7 +688,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             caches
                                 .images
                                 .bind_group(&self.device, &self.queue, &data, *filter)
-                        });
+                        })
+                        .flatten();
                     }
                     let (ix1, iy1) = self.draw_state.apply_point(rect.x, rect.y);
                     let (ix2, iy2) = self.draw_state.apply_point(rect.x + rect.width, rect.y);
@@ -2631,6 +2634,44 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         Ok(())
     }
 
+    /// Draws the composed frame onto the presentation target.
+    ///
+    /// Clears first when the target is Telar's — a swapchain image is recycled and whatever the last
+    /// frame left in it is not this frame's background — and loads when it belongs to the application,
+    /// which is what makes composing *into* its picture different from replacing it. The pipeline blends
+    /// premultiplied-alpha over either way, so the two differ only in what is underneath.
+    fn blit_to_target(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        source: &wgpu::BindGroup,
+    ) {
+        let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("telar-retained-blit"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: if self.app_owned_target {
+                        wgpu::LoadOp::Load
+                    } else {
+                        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                    },
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+            multiview_mask: None,
+        });
+        blit.set_pipeline(&self.retained_blit_pipeline.pipeline);
+        blit.set_bind_group(0, &self.viewport_bind_group, &[]);
+        blit.set_bind_group(1, source, &[]);
+        blit.draw(0..6, 0..1);
+    }
+
     fn present(
         &mut self,
         mut encoder: wgpu::CommandEncoder,
@@ -2686,28 +2727,29 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 0.0,
                 [1.0, 1.0],
             );
-            {
-                let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("telar-retained-blit"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &surface_view,
-                        resolve_target: None,
-                        depth_slice: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                    multiview_mask: None,
-                });
-                blit.set_pipeline(&self.retained_blit_pipeline.pipeline);
-                blit.set_bind_group(0, &self.viewport_bind_group, &[]);
-                blit.set_bind_group(1, &retained_bg, &[]);
-                blit.draw(0..6, 0..1);
-            }
+            self.blit_to_target(&mut encoder, &surface_view, &retained_bg);
+        } else if self.app_owned_target {
+            // The copy below would replace what the application drew in its texture; blend the frame over it instead. `msaa_texture` carries TEXTURE_BINDING on this single-sample path (see `reconfigure`), so it is sampleable without the resolve step the MSAA branch needs.
+            let msaa_source = self
+                .msaa_texture
+                .as_ref()
+                .ok_or_else(|| RendererError::Backend("msaa_texture missing for blit".into()))?
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            let source_bg = self.retained_blit_pipeline.create_bind_group(
+                &self.device,
+                &self.queue,
+                &msaa_source,
+                [
+                    0.0,
+                    0.0,
+                    self.width as f32 / self.scale_factor,
+                    self.height as f32 / self.scale_factor,
+                ],
+                1.0,
+                0.0,
+                [1.0, 1.0],
+            );
+            self.blit_to_target(&mut encoder, &surface_view, &source_bg);
         } else {
             // Android (msaa_samples==1): copy directly to surface to avoid alpha-compositing artifacts on Adreno drivers.
             let msaa_tex = self

@@ -22,6 +22,7 @@ tracing = { workspace = true }
 geometry-core = { workspace = true }
 rustc-hash = { workspace = true }
 renderer-cache.workspace = true
+lru.workspace = true
 
 [dev-dependencies]
 criterion = "0.8.2"

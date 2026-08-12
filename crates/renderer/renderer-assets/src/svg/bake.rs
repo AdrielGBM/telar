@@ -86,7 +86,7 @@ fn serialize(size: (f32, f32), baked: &BakedSvg) -> String {
         BakedSvg::Raster { image, raster_size } => format!(
             "SvgData::from_baked_raster({}, ImageData::from_premultiplied({}.to_vec(), {}, {}), {})",
             ser_size(size),
-            byte_string_literal(&image.pixels),
+            byte_string_literal(image.pixels()),
             image.width,
             image.height,
             ser_size(*raster_size),

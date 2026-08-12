@@ -42,6 +42,25 @@ pub(super) fn hardware_cache_path(
     paths.cache_dir().map(|d| d.join("telar").join(app_name))
 }
 
+/// What a hardware renderer built outside the runner starts from: the caller's own faces, the process-wide
+/// default family (see [`set_default_font_family`]) and the platform's stack behind it.
+///
+/// No paths provider, because there is no window whose platform would supply one — a renderer built for a
+/// texture is not a surface the OS knows about.
+pub(crate) fn offscreen_hardware_font_config(
+    font_paths: Vec<std::path::PathBuf>,
+    font_data: Vec<Vec<u8>>,
+) -> renderer_text::TextShaperConfig {
+    build_hardware_font_config(
+        font_paths,
+        font_data,
+        &SystemFonts {
+            dir: None,
+            sans_serif: Vec::new(),
+        },
+    )
+}
+
 pub(super) fn build_hardware_font_config(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,

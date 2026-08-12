@@ -120,7 +120,7 @@ pub(super) fn refit_raster(
     let data = match tint {
         None => Arc::clone(image),
         Some(tint) => {
-            let mut pixels = image.pixels.clone();
+            let mut pixels = image.pixels().to_vec();
             apply_tint_premultiplied(&mut pixels, tint);
             Arc::new(ImageData::from_premultiplied(
                 pixels,

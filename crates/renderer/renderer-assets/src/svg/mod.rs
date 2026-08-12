@@ -245,7 +245,7 @@ fn hash_baked(intrinsic: (f32, f32), baked: &BakedSvg) -> u64 {
             raster_size.1.to_bits().hash(&mut h);
             image.width.hash(&mut h);
             image.height.hash(&mut h);
-            image.pixels.hash(&mut h);
+            image.pixels().hash(&mut h);
         }
     }
     h.finish()

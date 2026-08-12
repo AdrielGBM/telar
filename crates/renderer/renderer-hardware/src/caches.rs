@@ -166,7 +166,18 @@ pub(crate) struct SharedImages {
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
     textures: Cache<(u64, renderer_core::ImageFilter), GpuImage>,
+    /// Bind groups over textures the application owns, kept apart from `textures` because neither of that
+    /// cache's rules holds here: it evicts by the bytes it is holding, and an app-owned texture costs it
+    /// none, while its entries keep their texture alive by RAII, which is not ours to do. A bind group does
+    /// keep the view it was built from alive, so an entry stays valid even if the application drops its
+    /// handle — leaving a plain count as the only bound needed. A `None` entry remembers a handle this
+    /// backend cannot read, so the refusal is decided and reported once rather than every frame.
+    external: lru::LruCache<(u64, renderer_core::ImageFilter), Option<wgpu::BindGroup>>,
 }
+
+/// How many app-owned handles are remembered at once, drawable or not. A window shows one or two
+/// viewports, not dozens; the cap exists so an application that mints a fresh id every frame leaks nothing.
+const EXTERNAL_BIND_GROUPS: usize = 8;
 
 pub(crate) struct GpuImage {
     // Keeps the GPU texture alive via RAII; held to ensure the texture is not dropped while the image is in use.
@@ -209,6 +220,9 @@ impl SharedImages {
             sampler_nearest: sampler(device, wgpu::FilterMode::Nearest),
             sampler_linear: sampler(device, wgpu::FilterMode::Linear),
             textures: Cache::new(policy, texture_bytes),
+            external: lru::LruCache::new(
+                std::num::NonZeroUsize::new(EXTERNAL_BIND_GROUPS).expect("non-zero"),
+            ),
         }
     }
 
@@ -218,10 +232,29 @@ impl SharedImages {
         queue: &Queue,
         image: &std::sync::Arc<renderer_core::ImageData>,
         filter: renderer_core::ImageFilter,
-    ) -> wgpu::BindGroup {
+    ) -> Option<wgpu::BindGroup> {
         let key = (image.id, filter);
+        if let Some(handle) = image.external_texture() {
+            if let Some(cached) = self.external.get(&key) {
+                return cached.clone();
+            }
+            let bind_group = match handle.as_any().downcast_ref::<crate::gpu::AppTexture>() {
+                Some(app) => Some(self.view_bind_group(device, &app.view, filter)),
+                // Built elsewhere and handed to a backend that cannot read it — another renderer's handle, or a hand-rolled `ExternalTexture`. Drawing nothing is the honest outcome, but doing it quietly is not: the command is well-formed and the region simply stays empty.
+                None => {
+                    tracing::warn!(
+                        image_id = image.id,
+                        "external texture handle did not come from `telar::gpu::image`; nothing will be drawn for it"
+                    );
+                    None
+                }
+            };
+            // The failure is cached too, which is what keeps the warning to once per handle instead of once per frame, and leaves the LRU's cap as the bound on both.
+            self.external.put(key, bind_group.clone());
+            return bind_group;
+        }
         if let Some(cached) = self.textures.get(&key) {
-            return cached.bind_group.clone();
+            return Some(cached.bind_group.clone());
         }
 
         let gpu_image = self.upload(device, queue, image, filter);
@@ -230,7 +263,32 @@ impl SharedImages {
         self.textures
             .grow_to(texture_bytes(&gpu_image).saturating_mul(2));
         self.textures.insert(key, gpu_image);
-        bind_group
+        Some(bind_group)
+    }
+
+    fn view_bind_group(
+        &self,
+        device: &Device,
+        view: &wgpu::TextureView,
+        filter: renderer_core::ImageFilter,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("telar-image-texture-bg"),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(match filter {
+                        renderer_core::ImageFilter::Nearest => &self.sampler_nearest,
+                        renderer_core::ImageFilter::Linear => &self.sampler_linear,
+                    }),
+                },
+            ],
+        })
     }
 
     fn upload(
@@ -262,7 +320,7 @@ impl SharedImages {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &image.pixels,
+            image.pixels(),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * image.width),
@@ -276,23 +334,7 @@ impl SharedImages {
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("telar-image-texture-bg"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(match filter {
-                        renderer_core::ImageFilter::Nearest => &self.sampler_nearest,
-                        renderer_core::ImageFilter::Linear => &self.sampler_linear,
-                    }),
-                },
-            ],
-        });
+        let bind_group = self.view_bind_group(device, &view, filter);
 
         GpuImage {
             texture,

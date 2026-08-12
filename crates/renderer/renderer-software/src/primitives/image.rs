@@ -24,7 +24,7 @@ pub(crate) fn draw_image(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
 ) {
-    let Some(source) = tiny_skia::PixmapRef::from_bytes(&data.pixels, data.width, data.height)
+    let Some(source) = tiny_skia::PixmapRef::from_bytes(data.pixels(), data.width, data.height)
     else {
         return;
     };
