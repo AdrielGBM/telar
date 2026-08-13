@@ -2071,6 +2071,17 @@ col @card
         assert!(code.contains(".disabled(|| true)"), "{code}");
     }
 
+    /// The ring, spelled like the state paints beside it but composed rather than swapped — and declaring one
+    /// is what makes the box focusable, or it would be a style nothing could ever satisfy.
+    #[test]
+    fn a_focus_style_reaches_the_box() {
+        let src = "[view]\nbox width:20 fill:#ffffff focus_style(stroke:#0066ff)\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(".on_focus_style("), "{code}");
+    }
+
     /// And the paint for the state, spelled like the two states beside it.
     #[test]
     fn a_disabled_style_reaches_the_box() {

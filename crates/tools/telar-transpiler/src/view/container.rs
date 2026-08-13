@@ -80,6 +80,7 @@ impl ViewGen<'_> {
         let active_call = self.active_style_call(el, &pattrs);
         let disabled_call = self.disabled_style_call(el, &pattrs);
         let disabled = self.disabled_call(el);
+        let focus_ring = self.focus_style_call(el, &pattrs);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_pointer_move = self.closure_attr_call(el, "on_pointer_move", "on_pointer_move");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
@@ -95,7 +96,7 @@ impl ViewGen<'_> {
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
         let styling = format!(
-            "{hover_call}{active_call}{disabled_call}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}"
+            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}"
         );
         let pieces = if always_style || has_paint(&pattrs) || !styling.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
@@ -142,7 +143,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}{styled_by}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}{styled_by}{terminator}"
                 );
             }
             None => {
@@ -232,6 +233,20 @@ impl ViewGen<'_> {
         let mut hoists: Vec<String> = Vec::new();
         let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
         format!(".on_disabled_style({closure})")
+    }
+
+    /// Builds the trailing `.on_focus_style(...)` from a `focus_style(...)` attribute — the ring, which the
+    /// box lays over whichever state won instead of swapping to.
+    fn focus_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "focus_style") else {
+            return String::new();
+        };
+        // Not merged with the base, unlike the hover and active variants: what the ring does not name comes from the state underneath it at paint time, not from the base style at build time.
+        let pieces = parse_inline_paint_attrs(&attr.value);
+        let _ = base_pattrs;
+        let mut hoists: Vec<String> = Vec::new();
+        let (closure, _opacity) = self.rect_style_pieces(&pieces, &HashMap::new(), &mut hoists);
+        format!(".on_focus_style({closure})")
     }
 
     /// Builds the trailing `.disabled(...)` from a `disabled:` attribute.

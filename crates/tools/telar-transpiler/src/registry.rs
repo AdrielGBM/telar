@@ -175,6 +175,8 @@ const CONTAINER_PAINT: &[&str] = &[
     // Not a paint prop: the framework reads it to close the pointer, the hover tracking and the cursor, which is what stops each author re-deriving a different subset by hand.
     "disabled",
     "disabled_style",
+    // The focus ring. Composed over whichever state won rather than replacing it, so it survives a hover.
+    "focus_style",
     "transition",
 ];
 
