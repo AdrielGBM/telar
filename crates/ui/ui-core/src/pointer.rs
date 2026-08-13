@@ -62,11 +62,8 @@ pub fn observe_pointer(event: &Event) {
         match event {
             Event::PointerPressed { button, .. } => *held.slot(button) = true,
             Event::PointerReleased { button, .. } => *held.slot(button) = false,
-            // A window that loses the pointer or the focus never sends the releases for what was down, so
-            // letting them rot would leave a gesture armed for as long as the process lived.
-            Event::CursorLeft | Event::FocusChanged { is_focused: false } => {
-                held = PointerButtons::default()
-            }
+            // A window that loses focus never sends the releases for what was down. `CursorLeft` is deliberately not here: crossing the border does not lift a button, and forgetting it would leave a live drag unable to say which button started it.
+            Event::FocusChanged { is_focused: false } => held = PointerButtons::default(),
             _ => return,
         }
         b.set(held);
@@ -514,5 +511,30 @@ mod tests {
             Some((30.0, 15.0)),
             "and the pane under it goes on tracking"
         );
+    }
+
+    /// Crossing the window border does not lift a button. A drag that outlives the border — which is the
+    /// point of measuring one from its press — asks this registry which button started it on every move, and
+    /// clearing here would answer "none" in the middle of the gesture. Losing the *focus* is the case where
+    /// the release genuinely never arrives, and that one still clears.
+    #[test]
+    fn cursor_leaving_the_window_does_not_forget_a_held_button() {
+        use platform_core::{PointerButton, PointerSource};
+
+        reset_pointer();
+        observe_pointer(&Event::PointerPressed {
+            x: 10.0,
+            y: 10.0,
+            button: PointerButton::Secondary,
+            source: PointerSource::Mouse,
+        });
+        observe_pointer(&Event::CursorLeft);
+        assert!(
+            pointer_buttons().secondary,
+            "the button that armed the drag is still down"
+        );
+
+        observe_pointer(&Event::FocusChanged { is_focused: false });
+        assert!(!pointer_buttons().any());
     }
 }

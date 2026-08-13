@@ -187,6 +187,21 @@ impl StyledContainer {
         }
     }
 
+    /// Drops everything that meant *the pointer is inside this box*: hover, the pressed look, and a tap
+    /// still waiting for a release within the bounds. Deliberately not the drag — that one is measured from
+    /// the press and does not care where the pointer has wandered to.
+    fn end_containment(&mut self) {
+        self.press.cancel();
+        self.set_active(false);
+        let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
+        if tracks_hover && self.is_hovered.get() {
+            self.is_hovered.set(false);
+            if let Some(cb) = &self.on_hover {
+                cb(false);
+            }
+        }
+    }
+
     /// Shows `cursor` while the pointer is over this box, and restores the default when it leaves.
     ///
     /// The shape is the app's statement of what the next press will do — orbit, resize a panel, place a
@@ -611,17 +626,15 @@ impl Component for StyledContainer {
                     EventResult::Ignored
                 }
             }
+            // Crossing the window border says nothing about a gesture in flight: a drag is measured from the press, and ending it here cuts an orbit short at the edge of a full-window viewport. What leaving does invalidate is containment.
             Event::CursorLeft => {
-                self.press.cancel();
+                self.end_containment();
+                self.dispatch_children(event)
+            }
+            // Where a live gesture really does have to end: a window that loses focus never sends the release for what was held, and Alt-Tab never crosses the border.
+            Event::FocusChanged { is_focused: false } => {
+                self.end_containment();
                 self.drag.end(None);
-                self.set_active(false);
-                let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
-                if tracks_hover && self.is_hovered.get() {
-                    self.is_hovered.set(false);
-                    if let Some(cb) = &self.on_hover {
-                        cb(false);
-                    }
-                }
                 self.dispatch_children(event)
             }
             // Children (e.g. a nested scroll area) get first refusal; only then does an `on_scroll` box under the wheel consume it.
@@ -1035,8 +1048,8 @@ mod tests {
         });
         assert!(crate::pointer_buttons().secondary);
         assert!(!crate::pointer_buttons().primary);
-        // Losing the pointer is where a reconstructed state goes wrong: the release never comes.
-        crate::observe_pointer(&Event::CursorLeft);
+        // Losing the focus is where a reconstructed state goes wrong: the release never comes.
+        crate::observe_pointer(&Event::FocusChanged { is_focused: false });
         assert!(!crate::pointer_buttons().any());
     }
 
@@ -1761,10 +1774,71 @@ mod tests {
         assert_eq!(ends.borrow().len(), 1);
     }
 
-    // A drag also ends when the pointer leaves the window, which carries no position. It must still end —
-    // otherwise the gesture is stuck armed — reporting the last place it reached.
+    /// The pointer reaching the edge of the window is not the end of the gesture, and treating it as one is
+    /// what makes an orbit stop dead against the border of a viewport that fills its window. The drag was
+    /// armed by a press this widget took; it ends when that press is released, or when the window loses the
+    /// focus that would have carried the release ([`losing_window_focus_ends_a_live_drag`]).
     #[test]
-    fn on_drag_end_still_fires_when_the_cursor_leaves() {
+    fn a_drag_survives_the_cursor_leaving_the_window() {
+        use std::cell::RefCell;
+        let moves: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
+        let ends: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
+        let move_sink = moves.clone();
+        let end_sink = ends.clone();
+        reset_layout_runtime();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_drag(move |x, y| move_sink.borrow_mut().push((x, y)))
+        .on_drag_end(move |x, y| end_sink.borrow_mut().push((x, y)));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        card.on_event(&press(20.0, 20.0, PointerSource::Mouse));
+        card.on_event(&Event::PointerMoved {
+            x: 60.0,
+            y: 25.0,
+            source: PointerSource::Mouse,
+        });
+        card.on_event(&Event::CursorLeft);
+        assert!(
+            ends.borrow().is_empty(),
+            "leaving the window does not finish the drag"
+        );
+
+        // Past the border the coordinates go negative, which is what a local drag reports once the pointer is outside the bounds.
+        card.on_event(&Event::PointerMoved {
+            x: -15.0,
+            y: 25.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(
+            moves.borrow().last().copied(),
+            Some((-15.0, 25.0)),
+            "the drag is still reporting after the pointer left"
+        );
+
+        card.on_event(&release(-15.0, 25.0, PointerSource::Mouse));
+        assert_eq!(
+            *ends.borrow(),
+            vec![(-15.0, 25.0)],
+            "the release is what ends it, wherever it lands"
+        );
+    }
+
+    /// The other half of [`a_drag_survives_the_cursor_leaving_the_window`], and the reason the two have to
+    /// land together: a window that loses focus never sends the release for what was held, and Alt-Tab with a
+    /// button down never crosses the border. Before `CursorLeft` stopped ending drags this was latent — it
+    /// only looked safe because leaving was aggressive enough to usually coincide.
+    #[test]
+    fn losing_window_focus_ends_a_live_drag() {
         use std::cell::RefCell;
         let ends: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = ends.clone();
@@ -1789,12 +1863,21 @@ mod tests {
             y: 25.0,
             source: PointerSource::Mouse,
         });
-        card.on_event(&Event::CursorLeft);
+        card.on_event(&Event::FocusChanged { is_focused: false });
         assert_eq!(
             *ends.borrow(),
             vec![(60.0, 25.0)],
-            "the last position the drag reached"
+            "the last position the drag reached, since the loss carries none of its own"
         );
+
+        // And exactly once: the gesture is disarmed, so regaining focus and moving reports nothing more.
+        card.on_event(&Event::FocusChanged { is_focused: true });
+        card.on_event(&Event::PointerMoved {
+            x: 70.0,
+            y: 30.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(ends.borrow().len(), 1);
     }
 
     // `on_drag_end` alone is enough to make a box draggable: a gesture that only cares about the outcome

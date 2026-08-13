@@ -145,7 +145,8 @@ impl Component for Container {
                 }
                 self.press.release(event, rect)
             }
-            Event::CursorLeft => {
+            // Neither will ever deliver the release a tap needs, and a press left armed pairs with whatever release arrives next and fires a click the user never made.
+            Event::CursorLeft | Event::FocusChanged { is_focused: false } => {
                 self.press.cancel();
                 self.dispatch_children(event)
             }
