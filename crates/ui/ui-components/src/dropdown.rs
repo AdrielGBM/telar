@@ -9,7 +9,8 @@ use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_theme_tokens;
 use ui_core::{
-    Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item, track_layout,
+    Children, Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item,
+    track_layout,
 };
 
 use crate::shared;
@@ -42,7 +43,10 @@ pub(crate) fn panel_pad() -> f32 {
 /// a call site — and the two shape flags are the *caller's* to make rather than the component's.
 pub(crate) struct Dropdown {
     pub label: Box<dyn Fn() -> String>,
-    pub rows: Vec<&'static str>,
+    /// The panel's rows, as the recipe for making them rather than the rows themselves — see
+    /// [`Children`](ui_core::Children). Two things need it that way: the rows are remade on every open, and
+    /// each one has to be built inside the [`ListContext`](crate::list::ListContext) this scaffold provides.
+    pub rows: Children,
     pub color: Box<dyn Fn() -> Color>,
     pub on_pick: Option<Box<dyn Fn(u32)>>,
     pub selected: Option<RwSignal<u32>>,
@@ -72,7 +76,6 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     let on_pick: Option<Rc<dyn Fn(u32)>> = on_pick.map(|f| -> Rc<dyn Fn(u32)> { Rc::from(f) });
     let open = signal(false);
     let dismiss_open = open.clone();
-    let row_count = rows.len() as u32;
     // Not the same thing as what is selected: a bound `select` opens with its value under the cursor, and moving off it must not commit anything.
     let highlighted: RwSignal<Option<u32>> = signal(None);
     // Committing a row, built once so Enter and a tap take the same path instead of two that drift.
@@ -90,6 +93,14 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             open.set(false);
         })
     };
+    // What the rows are built inside, and what they register themselves with. Made here rather than per open
+    // so the key handler — which lives as long as the trigger — asks the same registry the last build filled.
+    let list = crate::list::ListContext::new(
+        pick.clone(),
+        highlighted.clone(),
+        selected.clone(),
+        color.clone(),
+    );
 
     // Trigger: a bordered button with the label; a tap toggles `open`.
     // `auto` (measured) so the label has width in this row; `single_line` only sets height → width 0 → invisible.
@@ -143,20 +154,13 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         let pick = pick.clone();
         let toggle = toggle.clone();
         let trigger_focused = trigger_focused.clone();
+        let list = list.clone();
         move |key: &Key| {
             let is_open = open.peek();
-            let step = |from: Option<u32>, delta: i64| -> Option<u32> {
-                if row_count == 0 {
-                    return None;
-                }
-                let n = row_count as i64;
-                Some(match from {
-                    Some(i) => ((i as i64 + delta).rem_euclid(n)) as u32,
-                    // Downward starts at the top and upward at the bottom, so one press lands somewhere useful either way.
-                    None if delta > 0 => 0,
-                    None => row_count - 1,
-                })
-            };
+            // The registry the last build filled, so the cursor walks the rows that exist and steps over the
+            // ones it may not stop on — a disabled row, a separator, a group heading.
+            let step = |from: Option<u32>, delta: i64| list.step(from, delta);
+            let row_count = list.len();
             match key {
                 // `dispatch_overlays` only dismisses when nothing holds focus — right for a field, which blurs itself first, and wrong here, where the focused thing *is* the control the dropdown belongs to.
                 Key::Named(NamedKey::Escape) if is_open => open.set(false),
@@ -166,9 +170,13 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 Key::Named(NamedKey::ArrowUp) if is_open => {
                     highlighted.set(step(highlighted.peek(), -1))
                 }
-                Key::Named(NamedKey::Home) if is_open && row_count > 0 => highlighted.set(Some(0)),
+                // The ends of the list are the first and last rows the cursor may stop on, which is not the
+                // same as the first and last rows: a menu that opens with a group heading has neither at 0.
+                Key::Named(NamedKey::Home) if is_open && row_count > 0 => {
+                    highlighted.set(list.edge(1))
+                }
                 Key::Named(NamedKey::End) if is_open && row_count > 0 => {
-                    highlighted.set(Some(row_count - 1))
+                    highlighted.set(list.edge(-1))
                 }
                 Key::Named(NamedKey::Enter) if is_open => {
                     if let Some(idx) = highlighted.peek() {
@@ -181,11 +189,12 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 {
                     toggle();
                     // Opening *downward* lands on the first row, as a native control does. `toggle` only seeds from an existing selection, because opening with the mouse must highlight nothing — a cursor nobody moved reads as a hover that is not happening.
+                    // Asked for rather than set: the rows do not exist yet — the panel is built on the flush
+                    // after this handler returns — so the first one that can take the cursor claims it there.
                     if matches!(key, Key::Named(NamedKey::ArrowDown))
                         && highlighted.peek().is_none()
-                        && row_count > 0
                     {
-                        highlighted.set(Some(0));
+                        list.seed_cursor();
                     }
                 }
                 _ => {}
@@ -219,51 +228,11 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 // Closed: an empty placeholder (no overlay registered, so nothing blocks the page).
                 return Ok(box_item(Container::new(LayoutStyle::new(), vec![])?));
             }
-            let mut row_items: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(rows.len());
-            for (i, label) in rows.iter().enumerate() {
-                let idx = i as u32;
-                let label = *label;
-                let row_style = {
-                    let selected = selected.clone();
-                    let color = color.clone();
-                    let highlighted = highlighted.clone();
-                    // Read `selected` at view time (not here in the builder) so re-highlighting a new
-                    // selection re-renders the row instead of subscribing the list effect and rebuilding.
-                    move |_r: Rect| {
-                        // The keyboard cursor wears the hover paint because it is the same statement — this is the row a commit would take — and a look of its own would have the list say two different things about where the user is.
-                        if highlighted.get() == Some(idx) {
-                            return option_row_hover_style(color.as_ref());
-                        }
-                        let is_selected = selected.as_ref().is_some_and(|s| s.get() == idx);
-                        option_row_style(is_selected, color.as_ref())
-                    }
-                };
-                let hover_style = {
-                    let color = color.clone();
-                    move |_r: Rect| option_row_hover_style(color.as_ref())
-                };
-                let on_press = {
-                    let pick = pick.clone();
-                    move || pick(idx)
-                };
-                let text = Text::auto(
-                    move || label.to_string(),
-                    LayoutStyle::new(),
-                    || TextStyle::new(shared::font_size(), shared::ink()),
-                )?;
-                let row = StyledContainer::new(
-                    LayoutStyle::new()
-                        .flex_row()
-                        .align_items(AlignItems::CENTER)
-                        .height(ROW_HEIGHT)
-                        .padding_horizontal(10.0),
-                    row_style,
-                    vec![box_item(text)],
-                )?
-                .on_hover_style(hover_style)
-                .on_press(on_press);
-                row_items.push(box_item(row));
-            }
+            // The rows make themselves, inside the context that tells each one where it sits and what to
+            // commit. The registry is cleared first: this builder runs again on every open, and rows left
+            // over from the last one would leave the keyboard walking positions that no longer exist.
+            list.begin();
+            let row_items = rows.build_with(list.clone())?.take_default();
             // Place the definite-width panel at the trigger's bottom-left via layout margins; positioning by
             // layout keeps the panel's hit rects in world space so the rows dispatch correctly. The trigger's
             // rect is window-absolute (the overlay hoists to the window), falling back to the local rect.
@@ -403,7 +372,7 @@ fn panel_rect_style() -> RectStyle {
 
 // A menu row (`selected: None` → always `is_selected == false`) yields the plain radius-only style; a select
 // row highlights the bound choice with a faint accent fill.
-fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> RectStyle {
+pub(crate) fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> RectStyle {
     let radius = BorderRadius::all(shared::radius_sm());
     if is_selected {
         let accent = shared::resolve(color, || {
@@ -419,7 +388,7 @@ fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> RectStyle {
     }
 }
 
-fn option_row_hover_style(color: &dyn Fn() -> Color) -> RectStyle {
+pub(crate) fn option_row_hover_style(color: &dyn Fn() -> Color) -> RectStyle {
     let accent = shared::resolve(color, || {
         use_theme_tokens()
             .map(|t| t.primary())

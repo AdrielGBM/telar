@@ -1,13 +1,13 @@
 use layout_core::LayoutError;
 use renderer_core::Color;
-use ui_core::LayoutItem;
+use ui_core::{Children, LayoutItem};
 
 use crate::dropdown;
 // Re-exported for the test module below, which reads these via `use super::*` to compute click points.
 #[cfg(test)]
 use crate::dropdown::{PANEL_WIDTH, ROW_HEIGHT, TRIGGER_HEIGHT, panel_pad};
 #[cfg(test)]
-use ui_core::track_layout;
+use ui_core::{Slots, track_layout};
 
 /// A click-triggered list of action items: a labelled trigger button that opens an anchored list; picking an
 /// item fires `on_select` with its index and closes. Unlike `select`, a menu holds no bound selection state —
@@ -16,8 +16,6 @@ use ui_core::track_layout;
 pub struct MenuProps {
     /// The trigger button's label.
     pub label: Box<dyn Fn() -> String>,
-    /// The action items, listed in the panel in order.
-    pub items: Vec<&'static str>,
     /// Fired with the index of the chosen item when it is picked.
     pub on_select: Option<Box<dyn Fn(u32)>>,
     /// Accent colour (trigger border, hover highlight). `Color::TRANSPARENT` (the default) means "unset" and
@@ -43,7 +41,6 @@ impl Default for MenuProps {
     fn default() -> Self {
         Self {
             label: Box::new(String::new),
-            items: Vec::new(),
             on_select: None,
             color: Box::new(|| Color::TRANSPARENT),
             fill: false,
@@ -56,10 +53,10 @@ impl Default for MenuProps {
 
 // A menu carries no bound selection (`selected: None`), so its rows are one-shot actions: no index is written
 // back and no row is highlighted. The reactive `label` closure is handed straight to the dropdown trigger.
-pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn menu(props: MenuProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     dropdown::dropdown(dropdown::Dropdown {
         label: props.label,
-        rows: props.items,
+        rows: children,
         color: props.color,
         on_pick: props.on_select,
         selected: None,
@@ -67,6 +64,28 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         bordered: props.bordered,
         caret: props.caret,
         style: props.style,
+    })
+}
+
+/// A plain row per label, which is what the markup `menu … item label:"…"` compiles to. Enough for the tests
+/// that care about the trigger and the panel rather than about what a row can be.
+#[cfg(test)]
+fn rows(labels: &'static [&'static str]) -> Children {
+    Children::new(move || {
+        let mut slots = Slots::new();
+        for label in labels {
+            slots.push(
+                None,
+                crate::list::item(
+                    crate::list::ItemProps {
+                        label: Box::new(move || label.to_string()),
+                        ..Default::default()
+                    },
+                    Slots::new(),
+                )?,
+            );
+        }
+        Ok(slots)
     })
 }
 
@@ -84,13 +103,15 @@ fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
 
     let strokes = |bordered: bool, caret: bool| {
         reset_layout_runtime();
-        let item = menu(MenuProps {
-            label: Box::new(|| "File".to_string()),
-            items: vec!["New"],
-            bordered,
-            caret,
-            ..Default::default()
-        })
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "File".to_string()),
+                bordered,
+                caret,
+                ..Default::default()
+            },
+            rows(&["New"]),
+        )
         .unwrap();
         // Laid out first: the caret is drawn by a `Canvas`, which has nothing to draw into until it has a rect.
         let root = ui_core::new_container(
@@ -146,16 +167,18 @@ fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
     use ui_core::{ComponentList, LayoutItem, reset_layout_runtime};
 
     reset_layout_runtime();
-    let item = menu(MenuProps {
-        label: Box::new(|| "File".to_string()),
-        items: vec!["New"],
-        bordered: true,
-        style: Some(Box::new(|s| {
-            s.with_radius(BorderRadius::all(0.0))
-                .with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))
-        })),
-        ..Default::default()
-    })
+    let item = menu(
+        MenuProps {
+            label: Box::new(|| "File".to_string()),
+            bordered: true,
+            style: Some(Box::new(|s| {
+                s.with_radius(BorderRadius::all(0.0))
+                    .with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))
+            })),
+            ..Default::default()
+        },
+        rows(&["New"]),
+    )
     .unwrap();
     let root = ui_core::new_container(
         layout_core::LayoutStyle::new().width(300.0).height(80.0),
@@ -239,12 +262,14 @@ mod tests {
     #[test]
     fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
         reset_layout_runtime();
-        let item = menu(MenuProps {
-            label: Box::new(|| "File".to_string()),
-            items: vec!["New", "Open…", "Save", "Import STEP…"],
-            fill: true,
-            ..Default::default()
-        })
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "File".to_string()),
+                fill: true,
+                ..Default::default()
+            },
+            rows(&["New", "Open…", "Save", "Import STEP…"]),
+        )
         .unwrap();
         // A row 44px wide: what a compact menu button gets in a header.
         let root_node = item.layout_node();
@@ -288,11 +313,13 @@ mod tests {
     #[test]
     fn builds_and_lays_out() {
         reset_layout_runtime();
-        let item = menu(MenuProps {
-            label: Box::new(|| "Actions".to_string()),
-            items: vec!["Rename", "Duplicate", "Delete"],
-            ..Default::default()
-        })
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "Actions".to_string()),
+                ..Default::default()
+            },
+            rows(&["Rename", "Duplicate", "Delete"]),
+        )
         .unwrap();
         let root_node = item.layout_node();
         let root_rect = track_layout(root_node).unwrap();
@@ -330,12 +357,14 @@ mod tests {
         ui_core::focus::clear();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
-        let item = menu(MenuProps {
-            label: Box::new(|| "Actions".to_string()),
-            items: vec!["Rename", "Duplicate", "Delete"],
-            on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-            ..Default::default()
-        })
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "Actions".to_string()),
+                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+                ..Default::default()
+            },
+            rows(&["Rename", "Duplicate", "Delete"]),
+        )
         .unwrap();
         let root_node = item.layout_node();
         compute_layout(
@@ -372,12 +401,14 @@ mod tests {
         ui_core::focus::clear();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
-        let item = menu(MenuProps {
-            label: Box::new(|| "Actions".to_string()),
-            items: vec!["Rename", "Duplicate"],
-            on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-            ..Default::default()
-        })
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "Actions".to_string()),
+                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+                ..Default::default()
+            },
+            rows(&["Rename", "Duplicate"]),
+        )
         .unwrap();
         let root_node = item.layout_node();
         compute_layout(
@@ -405,12 +436,14 @@ mod tests {
         reset_layout_runtime();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
-        let item = menu(MenuProps {
-            label: Box::new(|| "Actions".to_string()),
-            items: vec!["Rename", "Duplicate", "Delete"],
-            on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-            ..Default::default()
-        })
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "Actions".to_string()),
+                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+                ..Default::default()
+            },
+            rows(&["Rename", "Duplicate", "Delete"]),
+        )
         .unwrap();
         // The widget's own root is the parent-less layout host, laid out at the origin: the trigger sits at
         // (0,0) and the panel anchors directly below it, so click points are computable from the constants.
@@ -447,5 +480,128 @@ mod tests {
             EventResult::Ignored,
             "the menu closes after a pick"
         );
+    }
+    /// What a menu could not say before, said end to end: a disabled row, a separator, and a heading are all
+    /// *in* the list and none of them is a place the keyboard stops.
+    ///
+    /// The three used to be inexpressible for the same reason — the rows were `Vec<&str>`, and a string
+    /// carries no state — and they are testable together now for the same reason: each row builds itself
+    /// inside the menu, so it can register what it is rather than being told.
+    #[test]
+    fn the_keyboard_steps_over_what_it_cannot_commit() {
+        use platform_core::NamedKey;
+
+        reset_layout_runtime();
+        ui_core::focus::clear();
+        let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        // Rename · [disabled] Duplicate · ─── · "Danger" · Delete.
+        let structured = Children::new(|| {
+            let mut slots = Slots::new();
+            let row = |label: &'static str, disabled: bool| {
+                crate::list::item(
+                    crate::list::ItemProps {
+                        label: Box::new(move || label.to_string()),
+                        disabled: Box::new(move || disabled),
+                        ..Default::default()
+                    },
+                    Slots::new(),
+                )
+            };
+            slots.push(None, row("Rename", false)?);
+            slots.push(None, row("Duplicate", true)?);
+            slots.push(None, crate::list::separator()?);
+            slots.push(
+                None,
+                crate::list::group(crate::list::GroupProps {
+                    label: Box::new(|| "Danger".to_string()),
+                })?,
+            );
+            slots.push(None, row("Delete", false)?);
+            Ok(slots)
+        });
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "Actions".to_string()),
+                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+                ..Default::default()
+            },
+            structured,
+        )
+        .unwrap();
+        compute_layout(
+            item.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(item);
+
+        ui_core::focus::focus_next();
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        relayout_if_dirty();
+        // One step down from "Rename" is "Delete" at index 4: the disabled row, the rule and the heading are
+        // all passed over rather than stopped on.
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        route(&mut tree, &key(NamedKey::Enter));
+        assert_eq!(
+            seen.get(),
+            Some(4),
+            "three unreachable rows sit between the two that are not"
+        );
+    }
+
+    /// A disabled row does not commit when it is clicked either, which is the half a keyboard test cannot see.
+    #[test]
+    fn a_disabled_row_does_not_commit_on_a_tap() {
+        reset_layout_runtime();
+        let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let structured = Children::new(|| {
+            let mut slots = Slots::new();
+            for (label, disabled) in [("Rename", false), ("Duplicate", true)] {
+                slots.push(
+                    None,
+                    crate::list::item(
+                        crate::list::ItemProps {
+                            label: Box::new(move || label.to_string()),
+                            disabled: Box::new(move || disabled),
+                            ..Default::default()
+                        },
+                        Slots::new(),
+                    )?,
+                );
+            }
+            Ok(slots)
+        });
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "Actions".to_string()),
+                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+                ..Default::default()
+            },
+            structured,
+        )
+        .unwrap();
+        compute_layout(
+            item.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(item);
+        let _ = tree.commands();
+
+        let tx = (PANEL_WIDTH / 2.0) as f64;
+        let ty = (TRIGGER_HEIGHT / 2.0) as f64;
+        route(&mut tree, &press(tx, ty));
+        route(&mut tree, &release(tx, ty));
+        relayout_if_dirty();
+
+        // The second row, which is the disabled one.
+        let oy = (TRIGGER_HEIGHT + panel_pad() + ROW_HEIGHT + ROW_HEIGHT / 2.0) as f64;
+        route(&mut tree, &press(tx, oy));
+        route(&mut tree, &release(tx, oy));
+        assert_eq!(seen.get(), None, "a disabled row commits nothing");
     }
 }

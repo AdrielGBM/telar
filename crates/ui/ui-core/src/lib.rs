@@ -81,7 +81,7 @@ pub use rect::Rectangle;
 pub use rich_text::RichText;
 pub use scroll_area::{LayoutScrollArea, ScrollViewport, ScrollbarStyle};
 pub use scroll_region::visible_rect;
-pub use slots::Slots;
+pub use slots::{Children, Slots, use_context, with_context};
 pub use styled_container::{StyledContainer, box_transform, style_follows};
 pub use surface::{
     DEFAULT_SCRIM, KeyboardMode, MIN_FRAME_SIZE, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,

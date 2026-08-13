@@ -1260,6 +1260,8 @@ mod tests {
             text_fields: Vec::new(),
             optional_fields: Vec::new(),
             string_fields: Vec::new(),
+            bool_fields: Vec::new(),
+            defers_children: false,
         }
     }
 

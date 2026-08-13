@@ -31,12 +31,20 @@ impl ViewGen<'_> {
         // Pass a `Slots` arg when there are markup children, or when the callee declares a slot (so a
         // childless call still matches its 3-arg signature). Unknown callee → the old "children ⇒ slots".
         let pass_slots = has_children || sig.as_ref().is_some_and(|s| s.has_slot);
+        // A compound callee takes the *recipe* for its children rather than the children, so it can build
+        // them inside its own context. See `Children` in ui-core for why the order has to invert.
+        let defers = sig.as_ref().is_some_and(|s| s.defers_children);
 
         let props_arg = self.component_props_arg(tag, &props_attrs, &el.classes, sig.as_ref());
 
-        // No children: flat call form. A childless slotted callee still gets `Slots::new()`.
+        // No children: flat call form. A childless slotted callee still gets an empty second argument.
         if !has_children {
-            let args = Self::call_args(props_arg.as_deref(), pass_slots.then_some("Slots::new()"));
+            let empty = if defers {
+                "Children::default()"
+            } else {
+                "Slots::new()"
+            };
+            let args = Self::call_args(props_arg.as_deref(), pass_slots.then_some(empty));
             let code = format!("{pad}let {var} = {tag}({args})?;");
             return ChildEmit::Simple { name: var, code };
         }
@@ -46,13 +54,48 @@ impl ViewGen<'_> {
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
         self.indent += 1;
-        let slots_expr = self.emit_slots(&el.children, &mut code);
+        let slots_arg = if defers {
+            self.emit_deferred_children(&el.children, &mut code)
+        } else {
+            self.emit_slots(&el.children, &mut code)
+        };
         let inner_pad = self.indent_str();
-        let args = Self::call_args(props_arg.as_deref(), Some(&slots_expr));
+        let args = Self::call_args(props_arg.as_deref(), Some(&slots_arg));
         let _ = writeln!(code, "{inner_pad}{tag}({args})?");
         self.indent -= 1;
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
+    }
+
+    /// Emits a compound component's children as a `Children` recipe: the same slot-building body
+    /// [`Self::emit_slots`] produces, moved inside a closure the callee runs once it has a context to run it in.
+    ///
+    /// The closure is `Fn` rather than `FnOnce` — a dropdown remakes its rows on every open — so every signal
+    /// it reads is cloned in ahead of it, exactly as a reactive `if`/`for` branch does. Bound to a `let`
+    /// first, because the body is statements and a closure body cannot be spliced into an argument position.
+    fn emit_deferred_children(&mut self, children: &[ViewNode], code: &mut String) -> String {
+        let pad = self.indent_str();
+        let mut body = String::new();
+        self.indent += 2;
+        let slots_expr = self.emit_slots(children, &mut body);
+        let inner_pad = self.indent_str();
+        self.indent -= 2;
+
+        let closure = format!("{body}{inner_pad}Ok({slots_expr})");
+        let idents = super::signals::captured_idents(
+            &super::signals::subtree_snippets(children)
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            &self.loop_variables,
+        );
+        let inner = format!("{pad}    move || {{\n{closure}\n{pad}    }}");
+        let built = super::signals::clone_block_multiline(&idents, inner, &format!("{pad}    "));
+        let _ = writeln!(
+            code,
+            "{pad}let __deferred = Children::new(\n{built}\n{pad});"
+        );
+        "__deferred".to_string()
     }
 
     /// Assembles a component call's argument list: the optional `Props` literal, then the optional trailing
@@ -83,6 +126,7 @@ impl ViewGen<'_> {
         let field_count = sig.map(|s| s.prop_fields.len());
         let color_fields: &[String] = sig.map_or(&[], |s| s.color_fields.as_slice());
         let text_fields: &[String] = sig.map_or(&[], |s| s.text_fields.as_slice());
+        let bool_fields: &[String] = sig.map_or(&[], |s| s.bool_fields.as_slice());
         let string_fields: &[String] = sig.map_or(&[], |s| s.string_fields.as_slice());
         let optional_fields: &[String] = sig.map_or(&[], |s| s.optional_fields.as_slice());
         // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
@@ -96,6 +140,8 @@ impl ViewGen<'_> {
                         self.component_color_attr_expr(attr)
                     } else if text_fields.iter().any(|f| f == &attr.key) {
                         self.component_text_attr_expr(attr)
+                    } else if bool_fields.iter().any(|f| f == &attr.key) {
+                        self.component_bool_attr_expr(attr)
                     } else if attr.is_quoted && string_fields.iter().any(|f| f == &attr.key) {
                         // The conversion is what the markup cannot express: a value ends at the first space, so `name:"Box select".to_string()` parses as a second attribute, and the only way out was a `[logic]` local per label.
                         format!("{}.to_string()", rust_str(&attr.value))
@@ -241,6 +287,27 @@ impl ViewGen<'_> {
             format!("{}.to_string()", rust_str(&attr.value))
         } else {
             substitute_reads(attr.value.trim())
+        };
+        let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {body}"));
+        format!("Box::new({wrapped})")
+    }
+
+    /// The same for a `Box<dyn Fn() -> bool>` prop — `disabled:$cant_undo`, `checked:$is_on`.
+    ///
+    /// A predicate rather than a `bool` for the reason the paint props are closures: it is re-read, so a row
+    /// that becomes unusable while its menu is open stops being usable then, not at the next rebuild. Any
+    /// expression works, not just a bare signal — `!$on`, `$depth == 0` — since the value is spliced with its
+    /// `$` reads substituted, exactly as a `box`'s own `disabled:` is.
+    fn component_bool_attr_expr(&self, attr: &Attr) -> String {
+        if let Some(closure) = already_a_closure(attr) {
+            return closure;
+        }
+        let value = attr.value.trim();
+        // A bare flag (`disabled` with no value) is the attribute asserting itself, as `wrap` and `absolute` do.
+        let body = if value.is_empty() {
+            "true".to_string()
+        } else {
+            substitute_reads(value)
         };
         let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {body}"));
         format!("Box::new({wrapped})")

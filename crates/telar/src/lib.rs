@@ -143,20 +143,20 @@ pub use ui_core::Svg;
 pub use ui_core::{AssetSource, AssetState};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Canvas, ChildSlot, ClipAxis, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
-    EventResult, Holding, Image, Input, KeyboardMode, LayoutItem, LayoutScrollArea, Lazy, Line,
-    LineGutter, MIN_FRAME_SIZE, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle,
-    RenderNode, RichText, ScrollViewport, ScrollbarStyle, Slots, StyledContainer, SurfaceAlign,
-    SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold,
-    SurfaceSize, SurfaceTransition, Text, TextArea, VirtualList, anchor_rect, box_item,
-    box_transform, close_overlay, compute_layout, current_direction, dismiss_depth, dismiss_top,
-    focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects,
-    kept, key_held, key_pressed, logical_border_radius, logical_border_widths, mark_dirty,
-    modifiers, named_overlay, new_container, new_leaf, observe_keyboard, observe_pointer,
-    open_overlay, overlay_open, overlay_state, pointer_buttons, relayout_if_dirty, remove_node,
-    reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
-    set_overlay_host, surface_frame, toggle_overlay, track_layout, transform_pointer,
-    use_direction, use_dismiss_depth, use_overlay_open, visible_window,
+    Canvas, ChildSlot, Children, ClipAxis, ClippedItem, Component, ComponentList, Container,
+    DEFAULT_SCRIM, EventResult, Holding, Image, Input, KeyboardMode, LayoutItem, LayoutScrollArea,
+    Lazy, Line, LineGutter, MIN_FRAME_SIZE, NodeId, NodeVec, Overlay, Path, ReactiveList,
+    Rectangle, RenderNode, RichText, ScrollViewport, ScrollbarStyle, Slots, StyledContainer,
+    SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot,
+    SurfaceScaffold, SurfaceSize, SurfaceTransition, Text, TextArea, VirtualList, anchor_rect,
+    box_item, box_transform, close_overlay, compute_layout, current_direction, dismiss_depth,
+    dismiss_top, focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
+    interactive_rects, kept, key_held, key_pressed, logical_border_radius, logical_border_widths,
+    mark_dirty, modifiers, named_overlay, new_container, new_leaf, observe_keyboard,
+    observe_pointer, open_overlay, overlay_open, overlay_state, pointer_buttons, relayout_if_dirty,
+    remove_node, reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
+    set_overlay_host, surface_frame, toggle_overlay, track_layout, transform_pointer, use_context,
+    use_direction, use_dismiss_depth, use_overlay_open, visible_window, with_context,
 };
 
 #[cfg(feature = "navigate")]
@@ -167,11 +167,12 @@ pub use navigate_core::{
 
 #[cfg(feature = "components")]
 pub use ui_components::{
-    AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, DrawerProps, HeadingProps,
-    MenuProps, ModalProps, ProgressProps, RadioProps, SectionProps, SelectProps, SliderProps,
-    SpinnerProps, StepperProps, TabsProps, TextFieldProps, ToggleProps, TooltipProps, accordion,
-    badge, button, checkbox, chip, drawer, heading, hover_reveal, menu, modal, progress, radio,
-    section, select, slider, spinner, stepper, tabs, text_field, toggle, tooltip,
+    AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, DrawerProps, GroupProps,
+    HeadingProps, ItemProps, MenuProps, ModalProps, ProgressProps, RadioProps, SectionProps,
+    SelectProps, SliderProps, SpinnerProps, StepperProps, TabsProps, TextFieldProps, ToggleProps,
+    TooltipProps, accordion, badge, button, checkbox, chip, drawer, group, heading, hover_reveal,
+    item, menu, modal, progress, radio, section, select, separator, slider, spinner, stepper, tabs,
+    text_field, toggle, tooltip,
 };
 
 #[cfg(feature = "runtime")]

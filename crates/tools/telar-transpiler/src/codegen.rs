@@ -46,6 +46,15 @@ pub struct ComponentSig {
     /// `.to_string()` on it, six lines of preamble for three buttons. Knowing the type, the transpiler can
     /// convert the literal itself.
     pub string_fields: Vec<String>,
+    /// Prop fields whose value is a reactive predicate (`Box<dyn Fn() -> bool>`): the caller emits them as a
+    /// closure, so `disabled:$cant_undo` re-reads. Mirrors [`Self::text_fields`]; the same shape a `box`'s own
+    /// `disabled:` already has, which is why a row in a menu can be written the same way as any other widget.
+    pub bool_fields: Vec<String>,
+    /// The component takes its children as a `Children` recipe rather than a built `Slots`, so the caller
+    /// emits a closure instead of widgets. What makes a *compound* component possible: the callee runs the
+    /// recipe inside a context of its own, and its pieces reach it with `use_context` rather than through
+    /// props threaded down by hand. See `Children` in ui-core.
+    pub defers_children: bool,
 }
 
 impl ComponentSig {
@@ -53,6 +62,12 @@ impl ComponentSig {
     /// component catalogue.
     fn with_text(mut self, fields: &[&str]) -> Self {
         self.text_fields = fields.iter().map(|f| f.to_string()).collect();
+        self
+    }
+
+    /// Marks `fields` as reactive predicate props (`Box<dyn Fn() -> bool>`).
+    fn with_bools(mut self, fields: &[&str]) -> Self {
+        self.bool_fields = fields.iter().map(|f| f.to_string()).collect();
         self
     }
 }
@@ -74,6 +89,14 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         string_fields: Vec::new(),
         text_fields: Vec::new(),
         optional_fields: optional.iter().map(|f| f.to_string()).collect(),
+        bool_fields: Vec::new(),
+        defers_children: false,
+    };
+    // A compound component: its pieces are built inside its own context rather than handed to it already made.
+    let compound = |fields: &[&str], color: &[&str], optional: &[&str]| ComponentSig {
+        defers_children: true,
+        has_slot: true,
+        ..s(fields, true, color, optional)
     };
     vec![
         (
@@ -173,12 +196,13 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 &["selected", "on_select"],
             ),
         ),
+        // Compound: its rows are written as `item`/`separator`/`group` children and built inside the
+        // `ListContext` it provides, which is why they arrive as a recipe rather than as widgets.
         (
             "menu",
-            s(
+            compound(
                 &[
                     "label",
-                    "items",
                     "on_select",
                     "color",
                     "fill",
@@ -186,11 +210,28 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                     "caret",
                     "style",
                 ],
-                false,
                 &["color"],
                 &["on_select"],
             )
             .with_text(&["label"]),
+        ),
+        // The pieces a `menu` is written with. Each reads the enclosing list from context, so they take no
+        // prop naming their parent and none of them has to be spelled `menu_item`.
+        (
+            "item",
+            s(
+                &["label", "disabled", "checked", "hint", "on_press"],
+                true,
+                &[],
+                &["checked", "hint", "on_press"],
+            )
+            .with_text(&["label", "hint"])
+            .with_bools(&["disabled", "checked"]),
+        ),
+        ("separator", ComponentSig::default()),
+        (
+            "group",
+            s(&["label"], false, &[], &[]).with_text(&["label"]),
         ),
         (
             "modal",
@@ -300,6 +341,14 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
         text_fields: props.text,
         optional_fields: props.optional,
         string_fields: props.owned_text,
+        bool_fields: Vec::new(),
+        // Always eager for a scanned `.rsx`. Deferring is only worth anything to a component that has a
+        // context to build its children *in*, and a `.rsx` has no way to declare one — `provide` takes a Rust
+        // type, and the `children` placeholder splices widgets rather than running a recipe. So compound
+        // components are catalogue components for now, and every `.rsx` keeps the eager slots it has always
+        // had. Opening this to `.rsx` means giving the markup a way to name a context type, which is its own
+        // design and not something to half-answer here.
+        defers_children: false,
     }
 }
 

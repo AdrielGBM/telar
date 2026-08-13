@@ -1751,6 +1751,91 @@ col @card
         );
     }
 
+    /// A compound callee gets the *recipe* for its children, not the children: they are built inside its
+    /// context, which is the whole reason a row can ask which menu it is in.
+    #[test]
+    fn a_compound_component_receives_its_children_as_a_recipe() {
+        let code = paint_code("menu label:\"Edit\"\n    item label:\"Undo\"\n    separator");
+        assert!(
+            code.contains("Children::new(") && code.contains("Ok(__slots)"),
+            "the children are a closure returning the slots:\n{code}"
+        );
+        assert!(
+            code.contains("menu(MenuProps { label: Box::new(move || \"Edit\".to_string()), ..Default::default() }, __deferred)"),
+            "and the recipe is what the callee is handed:\n{code}"
+        );
+    }
+
+    /// The recipe runs again on every open, so a signal it reads is cloned into it rather than moved — the
+    /// same treatment a reactive `if`/`for` branch gets, and for the same reason.
+    #[test]
+    fn a_recipe_clones_the_signals_it_reads_instead_of_moving_them() {
+        let code = transpile_source_with_theme(
+            "[logic]\nlet busy = signal(false);\n[view]\nmenu label:\"Edit\"\n    item label:\"Undo\" disabled:$busy\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(
+            code.contains("let busy = busy.clone();"),
+            "the recipe owns its own handle:\n{code}"
+        );
+        assert!(
+            code.contains("disabled: Box::new({ let busy = busy.clone(); move || busy.get() })"),
+            "and a reactive predicate reaches the row as a closure, not a resolved bool:\n{code}"
+        );
+    }
+
+    /// A childless compound call still passes the second argument, or it would not match the callee's arity.
+    #[test]
+    fn a_childless_compound_call_still_passes_a_recipe() {
+        let code = paint_code("menu label:\"Edit\"");
+        assert!(
+            code.contains("Children::default()"),
+            "an empty recipe, not an empty Slots:\n{code}"
+        );
+    }
+
+    #[test]
+    fn fill_signal_reads_reactively_and_clones_into_the_closure() {
+        // No `transition:`: `fill:$accent` must still re-evaluate every time the styling closure runs, and must clone `accent` into that closure so the outer binding (declared in `[logic]`) stays usable elsewhere.
+        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("compile_error!"),
+            "a signal fill must not error:\n{code}"
+        );
+        assert!(
+            code.contains("{ let accent = accent.clone(); move |_| RectStyle::default().with_fill(accent.get()).with_radius(BorderRadius::zero()) }"),
+            "fill should reactively read the cloned signal:\n{code}"
+        );
+    }
+
+    #[test]
+    fn fill_signal_with_spring_transition_seeds_and_retargets_from_the_same_read() {
+        // The `Animated`'s initial value and every `retarget` call must both read through the same `accent.get()` expression — the transition mechanism wraps a `$signal` fill exactly like it already does theme colors.
+        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent transition:fill spring(170, 26)\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(
+                "let __transition_0 = motion::Animated::new(accent.get(), motion::spring(170.0, 26.0));"
+            ),
+            "missing hoisted Animated seeded from accent.get():\n{code}"
+        );
+        assert!(
+            code.contains(
+                "{ let accent = accent.clone(); move |_| RectStyle::default().with_fill({ __transition_0.retarget(accent.get()); __transition_0.get() }).with_radius(BorderRadius::zero()) }"
+            ),
+            "fill retarget+get should read accent.get() through the cloned signal:\n{code}"
+        );
+    }
+
     #[test]
     fn stroke_signal_reads_reactively_and_clones_into_the_closure() {
         // `stroke:` shares `color_expr`/`rect_style_pieces` with `fill:`, so `$ident` must work identically.

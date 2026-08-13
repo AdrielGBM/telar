@@ -1,7 +1,7 @@
 use layout_core::LayoutError;
 use reactive_core::{RwSignal, signal};
 use renderer_core::Color;
-use ui_core::LayoutItem;
+use ui_core::{Children, LayoutItem, Slots};
 
 use crate::dropdown;
 // Re-exported for the test module below, which reads these via `use super::*` to compute click points.
@@ -59,10 +59,33 @@ pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .to_string()
         }
     };
+    // A select's rows are its `options`, turned into the same `item` pieces a menu is written with. It keeps
+    // the flat prop because its *trigger* has to name the current choice before the panel has ever been
+    // opened — and the rows only exist once it has, so their labels cannot be where that name comes from.
+    let rows = {
+        let options = options.clone();
+        Children::new(move || {
+            let mut slots = Slots::new();
+            for label in &options {
+                let label = *label;
+                slots.push(
+                    None,
+                    crate::list::item(
+                        crate::list::ItemProps {
+                            label: Box::new(move || label.to_string()),
+                            ..Default::default()
+                        },
+                        Slots::new(),
+                    )?,
+                );
+            }
+            Ok(slots)
+        })
+    };
     dropdown::dropdown(dropdown::Dropdown {
         style: None,
         label: Box::new(trigger_label),
-        rows: options,
+        rows,
         color: props.color,
         on_pick: props.on_select,
         selected: Some(selected),
