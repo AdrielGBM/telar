@@ -44,8 +44,9 @@ impl Input {
         let leaf = LayoutLeaf::register(layout_style)?;
         let caret = value.with(|s| s.len());
         let id = focus::next_id();
-        // Join the tab order so Tab/Shift-Tab can reach this field.
-        focus::register(id);
+        // Join the tab order so Tab/Shift-Tab can reach this field, as the kind that takes keys as text — so
+        // an app-level shortcut table can stand aside while the caret is here.
+        focus::register_as(id, focus::FocusKind::TextEntry);
         Ok(Self {
             value,
             caret: signal(caret),
@@ -347,6 +348,50 @@ mod tests {
         .unwrap();
         focus::request(input.id);
         (input, value)
+    }
+
+    /// The guard a global shortcut handler consults ([`focus::text_entry_takes_key`]) is a second list of
+    /// what this editor eats, kept apart from `edit` because it has to answer without running the edit. A key
+    /// added here and not there re-opens the bug it exists for: typing that also fires the app's shortcuts.
+    #[test]
+    fn the_shortcut_guard_covers_every_key_this_field_edits() {
+        let plain = ModifiersState::default();
+        let named = [
+            NamedKey::Space,
+            NamedKey::Backspace,
+            NamedKey::Delete,
+            NamedKey::ArrowLeft,
+            NamedKey::ArrowRight,
+            NamedKey::ArrowUp,
+            NamedKey::ArrowDown,
+            NamedKey::Home,
+            NamedKey::End,
+            NamedKey::Enter,
+            NamedKey::Escape,
+            NamedKey::Tab,
+            NamedKey::PageUp,
+            NamedKey::PageDown,
+            NamedKey::F5,
+            NamedKey::Insert,
+        ];
+        let keys: Vec<Key> = std::iter::once(Key::Char('3'))
+            .chain(std::iter::once(Key::Char('s')))
+            .chain(named.into_iter().map(Key::Named))
+            .collect();
+        for k in keys {
+            // A fresh field per key: Escape and Tab move focus, and an edit changes what the next key does.
+            let (mut input, _value) = focused_input("hello");
+            input.caret.set(2);
+            // Asked first, as dispatch does: a global handler decides before the field acts, and Escape is
+            // the key that proves it — the field answers it by giving up the focus the guard reads.
+            let guarded = focus::text_entry_takes_key(&k, plain);
+            let edited = input.edit(&k, &plain) == EventResult::Handled;
+            assert!(
+                !edited || guarded,
+                "{k:?} is edited by the field but the shortcut guard lets it through"
+            );
+            focus::clear();
+        }
     }
 
     #[test]

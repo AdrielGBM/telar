@@ -61,7 +61,7 @@ impl TextArea {
         let (node, rect) = new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         let caret = value.with(|s| s.len());
         let id = focus::next_id();
-        focus::register(id);
+        focus::register_as(id, focus::FocusKind::TextEntry);
         let remeasure = {
             let value = value.clone();
             effect(move || {
@@ -414,6 +414,45 @@ mod tests {
         .unwrap();
         focus::request(area.id);
         (area, value)
+    }
+
+    /// The multi-line twin of `Input`'s guard test: this editor takes Enter and the vertical arrows as text,
+    /// so a global shortcut on any of them must stand aside while the caret is here.
+    #[test]
+    fn the_shortcut_guard_covers_every_key_this_editor_edits() {
+        let plain = ModifiersState::default();
+        let named = [
+            NamedKey::Space,
+            NamedKey::Backspace,
+            NamedKey::Delete,
+            NamedKey::ArrowLeft,
+            NamedKey::ArrowRight,
+            NamedKey::ArrowUp,
+            NamedKey::ArrowDown,
+            NamedKey::Home,
+            NamedKey::End,
+            NamedKey::Enter,
+            NamedKey::Escape,
+            NamedKey::Tab,
+            NamedKey::PageUp,
+            NamedKey::F5,
+        ];
+        let keys: Vec<Key> = std::iter::once(Key::Char('x'))
+            .chain(named.into_iter().map(Key::Named))
+            .collect();
+        let style = TextStyle::new(14.0, Color::BLACK);
+        for k in keys {
+            let (mut area, _value) = focused("one\ntwo");
+            area.caret.set(5);
+            // Asked first, as dispatch does — Escape answers by giving up the focus the guard reads.
+            let guarded = focus::text_entry_takes_key(&k, plain);
+            let edited = area.edit(&k, &plain, &style) == EventResult::Handled;
+            assert!(
+                !edited || guarded,
+                "{k:?} is edited by the editor but the shortcut guard lets it through"
+            );
+            focus::clear();
+        }
     }
 
     #[test]

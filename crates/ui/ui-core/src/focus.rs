@@ -8,10 +8,25 @@
 //! [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a
 //! hot-reload dylib swap is out of scope.
 
+use platform_core::{Key, ModifiersState, NamedKey};
 use reactive_core::{RwSignal, signal};
+use rustc_hash::FxHashSet;
 
 /// An opaque focus identity, one per focusable widget. Allocate with [`next_id`].
 pub type FocusId = u64;
+
+/// What kind of widget a focusable is, as far as the keyboard is concerned.
+///
+/// The distinction exists for one question: whether the keys arriving now are *text*. Key events are
+/// broadcast, so an app-level shortcut handler and a focused field see the same press, and without this the
+/// `3` typed into a dimension field also fires the app's `3` shortcut.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FocusKind {
+    /// Takes keys as commands: a button, a tab, a slider.
+    Widget,
+    /// Takes keys as text: a field, an editor.
+    TextEntry,
+}
 
 /// A cheap, `Copy` handle to a focusable widget's identity, so a caller that has moved the widget into a
 /// container (and no longer holds a reference to it) can still drive its focus — e.g. autofocus a hosted
@@ -47,6 +62,9 @@ struct FocusState {
     focused: RwSignal<Option<FocusId>>,
     // Registered focusables in tab order (registration order ≈ document order). Drives Tab/Shift-Tab.
     order: Vec<FocusId>,
+    // The subset of `order` that takes keys as text. A set rather than a field on each entry because it is
+    // the minority and the only kind anyone asks about.
+    text_entries: FxHashSet<FocusId>,
 }
 
 impl FocusState {
@@ -55,6 +73,7 @@ impl FocusState {
             next_id: 1,
             focused: signal(None),
             order: Vec::new(),
+            text_entries: FxHashSet::default(),
         }
     }
 }
@@ -126,9 +145,18 @@ pub fn clear() {
 /// Adds `id` to the tab order (at the end), if not already present. A focusable widget calls this on
 /// creation; registration order is the traversal order.
 pub fn register(id: FocusId) {
+    register_as(id, FocusKind::Widget);
+}
+
+/// [`register`] for a widget that says what it does with the keyboard. A text field registers as
+/// [`FocusKind::TextEntry`], which is what makes [`text_entry_focused`] answerable.
+pub fn register_as(id: FocusId, kind: FocusKind) {
     with_focus(|s| {
         if !s.order.contains(&id) {
             s.order.push(id);
+        }
+        if kind == FocusKind::TextEntry {
+            s.text_entries.insert(id);
         }
     });
 }
@@ -136,8 +164,55 @@ pub fn register(id: FocusId) {
 /// Removes `id` from the tab order and drops its focus if it held it. A focusable widget calls this on
 /// drop, so a destroyed widget never lingers in traversal or as the focused id.
 pub fn unregister(id: FocusId) {
-    with_focus(|s| s.order.retain(|&x| x != id));
+    with_focus(|s| {
+        s.order.retain(|&x| x != id);
+        s.text_entries.remove(&id);
+    });
     release(id);
+}
+
+/// Whether the focused widget takes keys as text. Reactive, like [`current`].
+///
+/// The guard an app-level shortcut table needs: without it, typing into a field also runs the shortcuts
+/// that share its letters. Prefer [`text_entry_takes_key`], which lets through the presses no editor wants.
+pub fn text_entry_focused() -> bool {
+    match current() {
+        Some(id) => with_focus_ref(|s| s.text_entries.contains(&id)),
+        None => false,
+    }
+}
+
+/// Whether a focused text entry would take this press as text — the guard for a global shortcut handler.
+///
+/// Narrower than [`text_entry_focused`] on purpose: a field claims the letters and the caret keys, and
+/// nothing else. `⌘S` still saves while the caret sits in a field, and so do the function keys, because no
+/// editor here does anything with them. The list mirrors what [`crate::Input`] and [`crate::TextArea`]
+/// actually consume, and their own tests hold it to that.
+pub fn text_entry_takes_key(key: &Key, modifiers: ModifiersState) -> bool {
+    text_entry_focused() && edits_text(key, modifiers)
+}
+
+fn edits_text(key: &Key, modifiers: ModifiersState) -> bool {
+    match key {
+        // A chord is a command, not text: the editors ignore it too.
+        Key::Char(_) if modifiers.is_ctrl || modifiers.is_meta => false,
+        Key::Char(c) => !c.is_control(),
+        Key::Named(named) => matches!(
+            named,
+            NamedKey::Space
+                | NamedKey::Backspace
+                | NamedKey::Delete
+                | NamedKey::ArrowLeft
+                | NamedKey::ArrowRight
+                | NamedKey::ArrowUp
+                | NamedKey::ArrowDown
+                | NamedKey::Home
+                | NamedKey::End
+                | NamedKey::Enter
+                | NamedKey::Escape
+                | NamedKey::Tab
+        ),
+    }
 }
 
 /// Moves focus to the next registered focusable in tab order (wrapping); with nothing focused, focuses
