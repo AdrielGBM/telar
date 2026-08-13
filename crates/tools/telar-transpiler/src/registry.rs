@@ -145,6 +145,27 @@ const CONTAINER_PAINT: &[&str] = &[
     "stroke_width",
     "radius",
     "shadow_x",
+    // Per-edge names for the two properties that have one number per edge. Both also take the CSS shorthand
+    // on their base key (`stroke_width:"0 0 1 0"`, `radius:"8 8 0 0"`); these are for naming one edge, and for
+    // `start`/`end`, which is the only form that can follow the writing direction.
+    "stroke_top",
+    "stroke_right",
+    "stroke_bottom",
+    "stroke_left",
+    "stroke_x",
+    "stroke_y",
+    "stroke_start",
+    "stroke_end",
+    "radius_top",
+    "radius_bottom",
+    "radius_left",
+    "radius_right",
+    "radius_top_left",
+    "radius_top_right",
+    "radius_bottom_right",
+    "radius_bottom_left",
+    "radius_start",
+    "radius_end",
     "shadow_y",
     "shadow_blur",
     "shadow_color",
@@ -264,8 +285,12 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             keys.extend_from_slice(&["span", "row_span"]);
             keys
         }
-        // `radius` rounds the picture itself; a leaf takes no other paint key.
-        "img" | "image" => with(&["src", "fit", "filter", "radius"]),
+        // `radius` rounds the picture itself, in every form a `box` takes it; a leaf takes no other paint key.
+        "img" | "image" => {
+            let mut keys = with(&["src", "fit", "filter", "radius"]);
+            keys.extend(CONTAINER_PAINT.iter().filter(|k| k.starts_with("radius_")));
+            keys
+        }
         // `keep:` names the surface-kept position of this viewport, so a remounted tree reopens where it was.
         "scroll" => with(&["keep"]),
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.

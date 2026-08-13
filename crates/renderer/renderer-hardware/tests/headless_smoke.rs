@@ -724,3 +724,79 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
     let pixels = renderer.read_rgba().expect("read_rgba");
     assert_eq!(pixels.len(), (W * H * 4) as usize);
 }
+
+/// The GPU's half of the per-side border, asserted on the same box and the same four points the rasterizer's
+/// `border_sides` test uses.
+///
+/// Written twice on purpose. The two backends derive their border from one shared function
+/// (`renderer_core::border_inner_shape`), but only the rasterizer *calls* it — the shader re-derives the same
+/// inner shape in WGSL, because an SDF cannot be handed a path. So the guarantee that a rule under a header
+/// lands in the same place on both is exactly a guarantee that these two tests agree, and nothing else
+/// enforces it.
+#[test]
+fn a_bottom_border_paints_only_the_bottom_edge_on_the_gpu() {
+    let (w, h) = (40u32, 40u32);
+    let Some(mut renderer) = headless(w, h) else {
+        return;
+    };
+
+    let cmds = vec![DrawCommand::Rect {
+        rect: Rect::new(0.0, 0.0, 40.0, 40.0),
+        style: Arc::new(
+            RectStyle::default()
+                .with_stroke(Stroke::new(Color::RED, 1.0))
+                .with_border_widths(renderer_core::BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)),
+        ),
+    }];
+
+    renderer.begin_frame(w, h, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::BLACK))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+    let red_at = |x: u32, y: u32| pixels[((y * w + x) * 4) as usize];
+
+    assert!(
+        red_at(20, 39) > 150,
+        "the bottom row carries the rule, got {}",
+        red_at(20, 39)
+    );
+    for (x, y, edge) in [(20, 0, "top"), (39, 20, "right"), (0, 20, "left")] {
+        assert!(
+            red_at(x, y) < 40,
+            "the {edge} edge was never asked for, got {}",
+            red_at(x, y)
+        );
+    }
+}
+
+/// Sides keep their own thicknesses on the GPU too — the shader's inner rect is off-centre when they differ,
+/// which is the part an offset of the outer SDF could not have expressed.
+#[test]
+fn sides_keep_their_own_thicknesses_on_the_gpu() {
+    let (w, h) = (40u32, 40u32);
+    let Some(mut renderer) = headless(w, h) else {
+        return;
+    };
+
+    let cmds = vec![DrawCommand::Rect {
+        rect: Rect::new(0.0, 0.0, 40.0, 40.0),
+        style: Arc::new(
+            RectStyle::default()
+                .with_stroke(Stroke::new(Color::RED, 1.0))
+                .with_border_widths(renderer_core::BorderWidths::per_side(4.0, 0.0, 1.0, 0.0)),
+        ),
+    }];
+
+    renderer.begin_frame(w, h, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::BLACK))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+    let red_at = |x: u32, y: u32| pixels[((y * w + x) * 4) as usize];
+
+    assert!(red_at(20, 3) > 150, "the top is four rows deep");
+    assert!(red_at(20, 6) < 40, "and stops well before the sixth");
+    assert!(red_at(20, 39) > 150, "the bottom is its own single row");
+    assert!(red_at(20, 36) < 40, "which does not reach four rows up");
+}

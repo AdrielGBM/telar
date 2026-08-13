@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use telar_parser::{Attr, Element};
 
 use crate::naming::style_function_name;
-use crate::style::{format_f32, format_number, layout_prop_call};
+use crate::style::{format_f32, layout_prop_call};
 
 use super::ViewGen;
 use super::signals::{
@@ -69,21 +69,18 @@ impl ViewGen<'_> {
             .find(|a| a.key == "stroke_width")
             .and_then(|a| a.value.parse::<f32>().ok())
             .unwrap_or(1.0);
-        // `format_number` keeps a numeric literal (`radius:8`) but forwards a variable/const (`radius:rad`)
-        // verbatim, so a dynamic radius works like `fill`/`pad` do — not silently dropped to zero.
-        let radius = pattrs
-            .iter()
-            .find(|a| a.key == "radius")
-            .map(|a| {
-                format!(
-                    "BorderRadius::all({})",
-                    format_number(&a.value, self.theme_type.as_deref())
-                )
-            })
-            .unwrap_or_else(|| "BorderRadius::zero()".to_string());
+        let border_widths = self.border_widths_expr(pattrs);
+        let radius = self.radius_expr(pattrs);
         let param = if gradient.is_some() { "r" } else { "_" };
-        let rect_style =
-            build_rect_style(gradient, solid_fill, stroke, stroke_width, shadow, &radius);
+        let rect_style = build_rect_style(
+            gradient,
+            solid_fill,
+            stroke,
+            stroke_width,
+            border_widths,
+            shadow,
+            &radius,
+        );
         let opacity_call = match pattrs.iter().find(|a| a.key == "opacity") {
             Some(a) => format!(
                 ".with_opacity({})",
@@ -91,13 +88,70 @@ impl ViewGen<'_> {
             ),
             None => String::new(),
         };
-        let raw_colors: Vec<&str> = pattrs
+        // Every paint value, not just the colours: a `$signal` reaching the closure through a radius or a
+        // border side has to be cloned into it for the same reason a fill does, or the `move` takes the
+        // author's binding with it and the next use of the signal will not compile.
+        let raw_values: Vec<&str> = pattrs
             .iter()
-            .filter(|a| crate::registry::color_attr_keys().contains(&a.key.as_str()))
+            .filter(|a| is_paint_key(&a.key))
             .map(|a| a.value.as_str())
             .collect();
-        let closure = wrap_signal_clones(&raw_colors, format!("move |{param}| {rect_style}"));
+        let closure = wrap_signal_clones(&raw_values, format!("move |{param}| {rect_style}"));
         (closure, opacity_call)
+    }
+
+    /// The `BorderWidths` for a box, or `None` when the plain `stroke_width` says all it needs to.
+    ///
+    /// `None` is not "no border": it is [`BorderWidths::Uniform`], which takes its number from the stroke
+    /// itself. Only a box that named an edge carries four.
+    pub(super) fn border_widths_expr(&self, pattrs: &[Attr]) -> Option<String> {
+        let edges = crate::edges::collect(
+            pattrs,
+            "stroke_width",
+            "stroke_",
+            crate::edges::side_target,
+            self.theme_type.as_deref(),
+        );
+        if edges.uniform.is_some() || edges.is_empty() {
+            return None;
+        }
+        let [top, right, bottom, left] = edges.resolved("0.0");
+        Some(if edges.has_logical() {
+            let (start, end) = edges.logical_args();
+            format!("logical_border_widths({top}, {right}, {bottom}, {left}, {start}, {end})")
+        } else {
+            format!("BorderWidths::per_side({top}, {right}, {bottom}, {left})")
+        })
+    }
+
+    /// The `BorderRadius` for a box: the one-value form while that is all the author wrote, and the four
+    /// corners `BorderRadius` has always had as soon as one of them is named on its own.
+    pub(super) fn radius_expr(&self, pattrs: &[Attr]) -> String {
+        let edges = crate::edges::collect(
+            pattrs,
+            "radius",
+            "radius_",
+            crate::edges::corner_target,
+            self.theme_type.as_deref(),
+        );
+        // `format_number` keeps a numeric literal (`radius:8`) but forwards a variable/const (`radius:rad`)
+        // verbatim, so a dynamic radius works like `fill`/`pad` do — not silently dropped to zero.
+        if let Some(all) = edges.uniform {
+            return format!("BorderRadius::all({all})");
+        }
+        if edges.is_empty() {
+            return "BorderRadius::zero()".to_string();
+        }
+        let [top_left, top_right, bottom_right, bottom_left] = edges.resolved("0.0");
+        if edges.has_logical() {
+            let (start, end) = edges.logical_args();
+            return format!(
+                "logical_border_radius({top_left}, {top_right}, {bottom_right}, {bottom_left}, {start}, {end})"
+            );
+        }
+        format!(
+            "BorderRadius {{ top_left: {top_left}, top_right: {top_right}, bottom_right: {bottom_right}, bottom_left: {bottom_left} }}"
+        )
     }
 
     /// Resolves the `.with_opacity(..)` closure argument for a `StyledContainer`. Opacity is now a closure (T-3.1) so it re-reads reactively: a `$signal` becomes `move || sig.get()` (cloning captured signals), a bare number stays a static `|| 0.5`, and a `transition:opacity` wraps the value in the animation retarget+get block backed by a hoisted `Animated`.

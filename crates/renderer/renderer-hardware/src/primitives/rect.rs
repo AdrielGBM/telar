@@ -20,8 +20,8 @@ pub(crate) struct RectInstance {
     pub grad_positions: [f32; 4],
     pub grad_colors: [[f32; 4]; 4],
     pub stroke_color: [f32; 4],
-    pub stroke_width: f32,
-    pub _pad: [f32; 3],
+    // `[top, right, bottom, left]`, resolved from `RectStyle::border` — it fills exactly the slot the single width plus its three padding floats used to take.
+    pub stroke_widths: [f32; 4],
     // Always-present shadow fields using analytical GPU/SDF fast-path, zeroed when no shadow; unlike text/path shadows which use CPU capture+blur+composite
     pub shadow_color: [f32; 4],
     pub shadow_offset: [f32; 2],
@@ -85,9 +85,9 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         .unwrap_or_else(super::EncodedFill::none);
 
     // Encoded the same way as the fill, so a gradient stroke keeps its whole ramp instead of collapsing to its first stop. For a solid stroke the encoder puts the colour in `fill_color`, which is what `stroke_color` uploads; for a gradient it leaves that transparent and fills the gradient slots.
-    let (stroke, stroke_width) = match style.stroke {
-        Some(s) => (encode_fill_style::<4>(&s.paint, matrix), s.width),
-        None => (super::EncodedFill::none(), 0.0),
+    let (stroke, stroke_widths) = match style.border() {
+        Some((paint, widths)) => (encode_fill_style::<4>(&paint, matrix), widths),
+        None => (super::EncodedFill::none(), [0.0; 4]),
     };
     let stroke_color = stroke.fill_color;
 
@@ -122,8 +122,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         grad_positions: encoded.grad_positions,
         grad_colors: encoded.grad_colors,
         stroke_color,
-        stroke_width,
-        _pad: [0.0; 3],
+        stroke_widths,
         shadow_color,
         shadow_offset,
         shadow_blur,

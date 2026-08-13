@@ -17,10 +17,7 @@ struct RectInstance {
     grad_colors_2: vec4<f32>,
     grad_colors_3: vec4<f32>,
     stroke_color: vec4<f32>,
-    stroke_width: f32,
-    _pad_0: f32,
-    _pad_1: f32,
-    _pad_2: f32,
+    stroke_widths: vec4<f32>,
     shadow_color: vec4<f32>,
     shadow_offset: vec2<f32>,
     shadow_blur: f32,
@@ -213,13 +210,30 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // A gradient stroke leaves `stroke_color` transparent in the instance data (its colour lives in the stop slots), so presence is decided by the paint type, not by that alpha.
-    let has_stroke = inst.stroke_width > 0.0 && (inst.stroke_type != 0u || inst.stroke_color.a > 0.0);
+    let bw = inst.stroke_widths;
+    let has_stroke = any(bw > vec4<f32>(0.0)) && (inst.stroke_type != 0u || inst.stroke_color.a > 0.0);
 
     var fill_mask: f32;
     var stroke_mask: f32;
 
     if has_stroke {
-        let inner_mask = smoothstep(-inst.stroke_width + aa, -inst.stroke_width - aa, dist);
+        // The border's inner edge, derived exactly as `renderer_core::border_inner_shape` derives it for the
+        // rasterizer: the box pulled in by each side, and every corner tightened by the thicker of the two
+        // sides meeting there. A second SDF rather than an offset of the first, because with four different
+        // insets the inner shape is no longer concentric with the outer one.
+        let inner_half = max(in.half_size - vec2<f32>(bw.w + bw.y, bw.x + bw.z) * 0.5, vec2<f32>(0.0));
+        let inner_center = vec2<f32>((bw.w - bw.y) * 0.5, (bw.x - bw.z) * 0.5);
+        let max_r = min(inner_half.x, inner_half.y);
+        // radii and the widths below are both in the shader's corner order: top-left, top-right, bottom-right, bottom-left.
+        let corner_inset = vec4<f32>(
+            max(bw.x, bw.w),
+            max(bw.x, bw.y),
+            max(bw.z, bw.y),
+            max(bw.z, bw.w),
+        );
+        let inner_radii = clamp(inst.radii - corner_inset, vec4<f32>(0.0), vec4<f32>(max_r));
+        let inner_dist = sdf_rounded_rect(local_pos - inner_center, inner_half, inner_radii);
+        let inner_mask = smoothstep(aa, -aa, inner_dist);
         fill_mask = rect_mask * inner_mask * fill_color.a;
         stroke_mask = rect_mask * (1.0 - inner_mask) * stroke_color.a;
     } else {

@@ -45,14 +45,20 @@ impl Image {
     /// A `StyledContainer` around it cannot do this — its radius rounds the *fill* it paints, and a bitmap child
     /// draws over that — so a thumbnail, an avatar or a cover in a rounded UI had no way to be anything but a
     /// square. The clip primitive already carries a radius; this is the widget passing one through.
-    pub fn with_radius(mut self, radius: f32) -> Self {
-        self.radius = BorderRadius::all(radius.max(0.0));
-        self
+    pub fn with_radius(self, radius: f32) -> Self {
+        self.with_border_radius(BorderRadius::all(radius))
     }
 
     /// Rounds each corner separately, for a picture that meets an edge on one side only.
     pub fn with_border_radius(mut self, radius: BorderRadius) -> Self {
-        self.radius = radius;
+        // A negative corner is not a shape the clip can answer, and it reaches here from a `radius:` the
+        // author typed rather than from anything the widget controls.
+        self.radius = BorderRadius {
+            top_left: radius.top_left.max(0.0),
+            top_right: radius.top_right.max(0.0),
+            bottom_right: radius.bottom_right.max(0.0),
+            bottom_left: radius.bottom_left.max(0.0),
+        };
         self
     }
 }

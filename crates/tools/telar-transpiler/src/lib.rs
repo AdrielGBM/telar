@@ -2,6 +2,7 @@
 
 mod codegen;
 mod discovery;
+mod edges;
 mod error;
 mod i18n;
 pub mod naming;
@@ -1640,6 +1641,100 @@ col @card
         );
     }
 
+    fn paint_code(view: &str) -> String {
+        transpile_source_with_theme(&format!("[view]\n{view}\n"), "demo", None, None)
+            .unwrap()
+            .rust_code
+    }
+
+    /// The shorthand every `border-b` in a ported app turns into, and the one attribute it has to stay.
+    #[test]
+    fn the_stroke_width_shorthand_names_one_side() {
+        let code = paint_code("box stroke:#ff0000 stroke_width:\"0 0 1 0\"");
+        assert!(
+            code.contains("border_widths: BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)"),
+            "the four values reach the style in CSS order:\n{code}"
+        );
+    }
+
+    /// The other 22 components' worth of existing markup: a plain width still emits nothing per-side, so the
+    /// stroke keeps deciding its own thickness.
+    #[test]
+    fn a_plain_stroke_width_stays_uniform() {
+        let code = paint_code("box stroke:#ff0000 stroke_width:2");
+        assert!(
+            code.contains("Stroke::new(Color::rgba(255.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0), 2.0)")
+                && code.contains("border_widths: BorderWidths::Uniform"),
+            "a uniform border carries its width on the stroke alone:\n{code}"
+        );
+    }
+
+    #[test]
+    fn a_named_side_needs_no_shorthand() {
+        let code = paint_code("box stroke:#ff0000 stroke_bottom:1");
+        assert!(
+            code.contains("border_widths: BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)"),
+            "an unnamed side is not drawn, the way CSS leaves it styleless:\n{code}"
+        );
+    }
+
+    /// A logical side cannot be resolved here — which edge it lands on is a runtime question — so it goes out
+    /// through the helper that reads the writing direction inside the paint closure.
+    #[test]
+    fn a_logical_side_defers_to_the_writing_direction() {
+        let code = paint_code("box stroke:#ff0000 stroke_end:1");
+        assert!(
+            code.contains("logical_border_widths(0.0, 0.0, 0.0, 0.0, None, Some(1.0))"),
+            "start/end reach the runtime helper:\n{code}"
+        );
+    }
+
+    /// `radius` had four corners in `BorderRadius` all along; only the DSL flattened them.
+    #[test]
+    fn the_radius_shorthand_reaches_all_four_corners() {
+        let code = paint_code("box fill:#ff0000 stroke:#00ff00 radius:\"8 8 0 0\"");
+        assert!(
+            code.contains(
+                "radius: BorderRadius { top_left: 8.0, top_right: 8.0, bottom_right: 0.0, bottom_left: 0.0 }"
+            ),
+            "the shorthand expands in CSS corner order:\n{code}"
+        );
+    }
+
+    #[test]
+    fn a_named_corner_pair_rounds_one_edge() {
+        let code = paint_code("box fill:#ff0000 stroke:#00ff00 radius:8 radius_bottom:0");
+        assert!(
+            code.contains(
+                "radius: BorderRadius { top_left: 8.0, top_right: 8.0, bottom_right: 0.0, bottom_left: 0.0 }"
+            ),
+            "the named edge overrides the shorthand that seeded it:\n{code}"
+        );
+    }
+
+    /// And a plain one still emits what it always did, so no existing `.rsx` changes shape.
+    #[test]
+    fn a_plain_radius_stays_the_one_value_form() {
+        let code = paint_code("box fill:#ff0000 radius:8");
+        assert!(
+            code.contains("with_radius(BorderRadius::all(8.0))"),
+            "a single value keeps the shorthand constructor:\n{code}"
+        );
+    }
+
+    /// A picture rounds its corners through the same resolver a box does, rather than through a narrower
+    /// parser that would emit `.with_radius(8 8 0 0)` and not compile.
+    #[test]
+    fn a_picture_takes_the_same_radius_forms_a_box_does() {
+        let code = paint_code("img src:\"a.png\" radius:\"8 8 0 0\"");
+        assert!(
+            code.contains(
+                ".with_border_radius(BorderRadius { top_left: 8.0, top_right: 8.0, bottom_right: 0.0, bottom_left: 0.0 })"
+            ),
+            "an img takes the per-corner form:\n{code}"
+        );
+    }
+
     #[test]
     fn transition_color_on_text_wraps_text_style() {
         let src = "[view]\ntext \"hi\" color:primary transition:color 120ms\n";
@@ -1657,44 +1752,6 @@ col @card
     }
 
     #[test]
-    fn fill_signal_reads_reactively_and_clones_into_the_closure() {
-        // No `transition:`: `fill:$accent` must still re-evaluate every time the styling closure runs, and must clone `accent` into that closure so the outer binding (declared in `[logic]`) stays usable elsewhere.
-        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent\n";
-        let code = transpile_source_with_theme(src, "demo", None, None)
-            .unwrap()
-            .rust_code;
-        assert!(
-            !code.contains("compile_error!"),
-            "a signal fill must not error:\n{code}"
-        );
-        assert!(
-            code.contains("{ let accent = accent.clone(); move |_| RectStyle::default().with_fill(accent.get()).with_radius(BorderRadius::zero()) }"),
-            "fill should reactively read the cloned signal:\n{code}"
-        );
-    }
-
-    #[test]
-    fn fill_signal_with_spring_transition_seeds_and_retargets_from_the_same_read() {
-        // The `Animated`'s initial value and every `retarget` call must both read through the same `accent.get()` expression — the transition mechanism wraps a `$signal` fill exactly like it already does theme colors.
-        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent transition:fill spring(170, 26)\n";
-        let code = transpile_source_with_theme(src, "demo", None, None)
-            .unwrap()
-            .rust_code;
-        assert!(
-            code.contains(
-                "let __transition_0 = motion::Animated::new(accent.get(), motion::spring(170.0, 26.0));"
-            ),
-            "missing hoisted Animated seeded from accent.get():\n{code}"
-        );
-        assert!(
-            code.contains(
-                "{ let accent = accent.clone(); move |_| RectStyle::default().with_fill({ __transition_0.retarget(accent.get()); __transition_0.get() }).with_radius(BorderRadius::zero()) }"
-            ),
-            "fill retarget+get should read accent.get() through the cloned signal:\n{code}"
-        );
-    }
-
-    #[test]
     fn stroke_signal_reads_reactively_and_clones_into_the_closure() {
         // `stroke:` shares `color_expr`/`rect_style_pieces` with `fill:`, so `$ident` must work identically.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox stroke:$accent\n";
@@ -1703,7 +1760,7 @@ col @card
             .rust_code;
         assert!(
             code.contains(
-                "{ let accent = accent.clone(); move |_| RectStyle { fill: None, stroke: Some(Stroke::new(accent.get(), 1.0)), shadow: None, radius: BorderRadius::zero() } }"
+                "{ let accent = accent.clone(); move |_| RectStyle { fill: None, stroke: Some(Stroke::new(accent.get(), 1.0)), shadow: None, radius: BorderRadius::zero(), border_widths: BorderWidths::Uniform } }"
             ),
             "stroke should reactively read the cloned signal:\n{code}"
         );

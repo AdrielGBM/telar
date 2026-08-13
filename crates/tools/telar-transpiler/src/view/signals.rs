@@ -382,6 +382,20 @@ pub(super) fn is_paint_key(key: &str) -> bool {
             | "mid_pos"
             | "radial_radius"
     ) || key.starts_with("shadow")
+        || is_side_key(key)
+        || is_corner_key(key)
+}
+
+/// A name for one side of the border — `stroke_bottom`, `stroke_x`, `stroke_end`.
+pub(super) fn is_side_key(key: &str) -> bool {
+    key.strip_prefix("stroke_")
+        .is_some_and(|s| crate::edges::side_target(s).is_some())
+}
+
+/// A name for one corner, or one edge's pair of them — `radius_top_left`, `radius_top`, `radius_start`.
+pub(super) fn is_corner_key(key: &str) -> bool {
+    key.strip_prefix("radius_")
+        .is_some_and(|s| crate::edges::corner_target(s).is_some())
 }
 
 /// Writes a styled widget's `transition:` prelude into its construction block: `compile_error!` lines for any diagnostics, then the hoisted `let __transition_N = motion::Animated::new(...)` handles. Both are emitted before the widget constructor so the animation handles are in scope for the closures that capture them, and the block runs once per instance (F7) so the animations persist across `view()` re-runs.
@@ -406,6 +420,9 @@ pub(super) fn has_paint(pattrs: &[Attr]) -> bool {
             a.key.as_str(),
             "fill" | "stroke" | "radius" | "opacity" | "gradient"
         ) || a.key.starts_with("shadow")
+            // A corner counts the way `radius` does; a side does not, the way `stroke_width` does not — a
+            // thickness with no colour to paint is not yet anything to see.
+            || is_corner_key(&a.key)
     })
 }
 
@@ -415,6 +432,7 @@ pub(super) fn build_rect_style(
     solid_fill: Option<String>,
     stroke: Option<String>,
     stroke_width: f32,
+    border_widths: Option<String>,
     shadow: Option<String>,
     radius: &str,
 ) -> String {
@@ -427,8 +445,10 @@ pub(super) fn build_rect_style(
             .map(|s| format!("Some(Stroke::new({s}, {}))", format_f32(stroke_width)))
             .unwrap_or_else(|| "None".to_string());
         let shadow_s = shadow.unwrap_or_else(|| "None".to_string());
+        // Named only when the box named an edge, so every box that wants a plain frame emits exactly what it did before.
+        let widths_s = border_widths.unwrap_or_else(|| "BorderWidths::Uniform".to_string());
         format!(
-            "RectStyle {{ fill: {fill_s}, stroke: {stroke_s}, shadow: {shadow_s}, radius: {radius} }}"
+            "RectStyle {{ fill: {fill_s}, stroke: {stroke_s}, shadow: {shadow_s}, radius: {radius}, border_widths: {widths_s} }}"
         )
     } else {
         match solid_fill {

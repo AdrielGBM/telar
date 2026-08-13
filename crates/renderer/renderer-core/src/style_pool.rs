@@ -3,8 +3,8 @@ use std::hash::Hasher;
 use rustc_hash::FxHasher;
 
 use crate::{
-    BorderRadius, FillRule, Gradient, GradientKind, Paint, PathStyle, RectStyle, Shadow, Stroke,
-    TextStyle,
+    BorderRadius, BorderWidths, FillRule, Gradient, GradientKind, Paint, PathStyle, RectStyle,
+    Shadow, Stroke, TextStyle,
 };
 
 // Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`; each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
@@ -14,7 +14,25 @@ pub fn hash_rect_style(s: &RectStyle) -> u64 {
     hash_opt_stroke(s.stroke.as_ref(), &mut h);
     hash_opt_shadow(s.shadow.as_ref(), &mut h);
     hash_border_radius(&s.radius, &mut h);
+    hash_border_widths(&s.border_widths, &mut h);
     h.finish()
+}
+
+fn hash_border_widths(w: &BorderWidths, h: &mut FxHasher) {
+    match w {
+        BorderWidths::Uniform => h.write_u8(0),
+        BorderWidths::PerSide {
+            top,
+            right,
+            bottom,
+            left,
+        } => {
+            h.write_u8(1);
+            for v in [top, right, bottom, left] {
+                h.write_u32(v.to_bits());
+            }
+        }
+    }
 }
 
 pub fn hash_text_style(s: &TextStyle) -> u64 {

@@ -554,6 +554,14 @@ impl Component for StyledContainer {
                     shadow: ring.shadow.or(base.shadow),
                     // The ring sits on the box's shape rather than choosing one of its own.
                     radius: base.radius,
+                    // Sides travel with whichever stroke won, and a ring goes all the way round: a box
+                    // wearing its border on one edge must not lend that edge to the ring and leave the
+                    // keyboard pointing at three sides of nothing.
+                    border_widths: if ring.stroke.is_some() {
+                        ring.border_widths
+                    } else {
+                        base.border_widths
+                    },
                 }
             }
             _ => style(r),

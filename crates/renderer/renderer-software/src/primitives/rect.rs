@@ -6,9 +6,18 @@ use renderer_core::{BorderRadius, RectStyle, Shadow};
 
 use crate::primitives::fill_to_paint;
 use crate::primitives::image::{ShadowCache, ShadowCacheKey};
-use crate::primitives::{to_skia_line_cap, to_skia_line_join};
 
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
+    let mut pb = tiny_skia::PathBuilder::new();
+    push_rect_path(&mut pb, rect, radius);
+    pb.finish()
+}
+
+/// Appends the box's outline as one closed subpath, or nothing at all if it has no area.
+///
+/// Separate from [`build_rect_path`] so a border can put its outer and inner outlines in the *same* path and
+/// let the even-odd rule punch one out of the other.
+fn push_rect_path(pb: &mut tiny_skia::PathBuilder, rect: Rect, radius: BorderRadius) {
     let x = rect.x;
     let y = rect.y;
     let w = rect.width;
@@ -20,14 +29,14 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     // line. Either way tiny_skia declines to fill what it is handed, and says so once per frame for as long
     // as the box stays flat.
     if !(w > 0.0 && h > 0.0) {
-        return None;
+        return;
     }
 
     if radius.is_zero() {
-        let r = tiny_skia::Rect::from_xywh(x, y, w, h)?;
-        let mut pb = tiny_skia::PathBuilder::new();
-        pb.push_rect(r);
-        return pb.finish();
+        if let Some(r) = tiny_skia::Rect::from_xywh(x, y, w, h) {
+            pb.push_rect(r);
+        }
+        return;
     }
 
     let tl = radius.top_left.min(w / 2.0).min(h / 2.0);
@@ -36,8 +45,6 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     let bl = radius.bottom_left.min(w / 2.0).min(h / 2.0);
 
     let k = renderer_core::BEZIER_CIRCLE_K;
-
-    let mut pb = tiny_skia::PathBuilder::new();
 
     pb.move_to(x + tl, y);
     pb.line_to(x + w - tr, y);
@@ -70,7 +77,26 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
     pb.line_to(x, y + tl);
     pb.cubic_to(x, y + tl - k * tl, x + tl - k * tl, y, x + tl, y);
     pb.close();
+}
 
+/// The border as one filled ring: the box's own outline with its inner edge punched out of it under the
+/// even-odd rule.
+///
+/// One path rather than one stroke per side, and that is what makes the partial cases fall out instead of
+/// needing to be handled. A side of zero leaves the two outlines coincident there, so the ring has no area
+/// along it and covers nothing — no seam to hide, no mask to intersect. A corner where two thicknesses meet
+/// tapers between them, rather than being painted twice by two strokes that overlap.
+fn build_border_path(
+    rect: Rect,
+    radius: BorderRadius,
+    widths: [f32; 4],
+) -> Option<tiny_skia::Path> {
+    let mut pb = tiny_skia::PathBuilder::new();
+    push_rect_path(&mut pb, rect, radius);
+    // No interior means the border swallowed the box, and the outer outline alone is the whole of it.
+    if let Some((inner, inner_radius)) = renderer_core::border_inner_shape(rect, radius, widths) {
+        push_rect_path(&mut pb, inner, inner_radius);
+    }
     pb.finish()
 }
 
@@ -204,38 +230,19 @@ pub(crate) fn draw_rect(
         );
     }
 
-    if let Some(fill_style) = style.fill {
-        if let Some(path) = build_rect_path(rect, style.radius) {
-            let paint = fill_to_paint(fill_style);
-            pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, clip);
-        }
+    if let Some(fill_style) = style.fill
+        && let Some(path) = build_rect_path(rect, style.radius)
+    {
+        let paint = fill_to_paint(fill_style);
+        pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, clip);
     }
 
-    if let Some(s) = style.stroke {
-        let half = s.width / 2.0;
-        let inset = Rect::new(
-            rect.x + half,
-            rect.y + half,
-            rect.width - s.width,
-            rect.height - s.width,
-        );
-        let inset_radius = BorderRadius {
-            top_left: (style.radius.top_left - half).max(0.0),
-            top_right: (style.radius.top_right - half).max(0.0),
-            bottom_right: (style.radius.bottom_right - half).max(0.0),
-            bottom_left: (style.radius.bottom_left - half).max(0.0),
-        };
-        if let Some(path) = build_rect_path(inset, inset_radius) {
-            let mut paint = fill_to_paint(s.paint);
-            paint.anti_alias = true;
-            let stroke = tiny_skia::Stroke {
-                width: s.width,
-                line_cap: to_skia_line_cap(s.cap),
-                line_join: to_skia_line_join(s.join),
-                ..Default::default()
-            };
-            pixmap.stroke_path(&path, &paint, &stroke, transform, clip);
-        }
+    if let Some((border_paint, widths)) = style.border()
+        && let Some(path) = build_border_path(rect, style.radius, widths)
+    {
+        let mut paint = fill_to_paint(border_paint);
+        paint.anti_alias = true;
+        pixmap.fill_path(&path, &paint, tiny_skia::FillRule::EvenOdd, transform, clip);
     }
 }
 

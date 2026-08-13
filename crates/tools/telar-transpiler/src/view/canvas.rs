@@ -95,13 +95,10 @@ impl ViewGen<'_> {
         let w = self.canvas_dim("w", &el.attributes);
         let h = self.canvas_dim("h", &el.attributes);
 
-        let radius = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "radius")
-            .and_then(|a| a.value.parse::<f32>().ok())
-            .map(|r| format!("BorderRadius::all({})", format_f32(r)))
-            .unwrap_or_else(|| "BorderRadius::zero()".to_string());
+        // Through the same resolver a `box` uses, so a canvas rect gets the per-corner and per-side forms
+        // without a second parser drifting from the first.
+        let radius = self.radius_expr(&el.attributes);
+        let border_widths = self.border_widths_expr(&el.attributes);
 
         let shadow = self.canvas_shadow(&el.attributes);
         let stroke = el
@@ -122,8 +119,15 @@ impl ViewGen<'_> {
             .find(|a| a.key == "fill")
             .map(|a| self.color_expr(&a.value));
 
-        let rect_style =
-            build_rect_style(gradient, solid_fill, stroke, stroke_width, shadow, &radius);
+        let rect_style = build_rect_style(
+            gradient,
+            solid_fill,
+            stroke,
+            stroke_width,
+            border_widths,
+            shadow,
+            &radius,
+        );
 
         format!(
             "RenderNode::rect(Rect {{ x: {x}, y: {y}, width: {w}, height: {h} }}, {rect_style})"

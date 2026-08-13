@@ -35,7 +35,8 @@ pub use preprocess::{
 pub use renderer::RenderBackend;
 pub use shadow::ShadowLayout;
 pub use style::{
-    FillRule, GlyphRaster, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineJoin,
-    Paint, PathStyle, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextAlign, TextStyle,
+    BorderWidths, FillRule, GlyphRaster, Gradient, GradientKind, GradientStop, GradientStops,
+    LineCap, LineJoin, Paint, PathStyle, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextAlign,
+    TextStyle, border_inner_shape,
 };
 pub use style_pool::{hash_path_style, hash_rect_style, hash_text_style};

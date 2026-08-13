@@ -40,6 +40,26 @@ col gap:20
                 box stroke:success stroke_width:2 radius:8 width:120 height:56
                 box stroke:success stroke_width:4 radius:8 width:120 height:56
         code_line code:"box stroke:success stroke_width:4"
+    example title:"One side at a time — a rule, a divider, a seam"
+        card
+            row gap:14 wrap align:center
+                box @center fill:surface_alt stroke:success stroke_width:"0 0 2 0" width:150 height:70
+                    text "bottom" size:13 color:ink align:center
+                box @center fill:surface_alt stroke:success stroke_end:2 width:150 height:70
+                    text "end" size:13 color:ink align:center
+                box @center fill:surface_alt stroke:success stroke_width:"3 0 1 0" width:150 height:70
+                    text "3 top · 1 bottom" size:13 color:ink align:center
+        code_line code:"box stroke:success stroke_width:'0 0 2 0'   ·   stroke_end:2   (start/end follow RTL)"
+    example title:"Corners one at a time — a panel that meets an edge"
+        card
+            row gap:14 wrap align:center
+                box @center fill:purple radius:"16 16 0 0" width:130 height:64
+                    text "top only" size:13 color:on_primary align:center
+                box @center fill:purple radius:16 radius_bottom:0 width:130 height:64
+                    text "radius_bottom:0" size:13 color:on_primary align:center
+                box @center fill:purple radius_start:20 width:130 height:64
+                    text "start" size:13 color:on_primary align:center
+        code_line code:"box radius:'16 16 0 0'   ·   radius:16 radius_bottom:0   ·   radius_start:20"
     example title:"Content alignment inside a box"
         card
             box @center fill:surface_alt radius:10 width:100% height:96
@@ -55,6 +75,8 @@ col gap:20
         col gap:6
             prop_row name:"fill" values:"token · #hex · $signal" about:"Solid background color."
             prop_row name:"stroke" values:"token · #hex" about:"Border color (pair with stroke_width)."
-            prop_row name:"stroke_width" values:"number" about:"Border thickness (default 1)."
-            prop_row name:"radius" values:"number" about:"Corner radius on all four corners."
+            prop_row name:"stroke_width" values:"number · \"t r b l\"" about:"Border thickness: one value for all four sides, or the CSS shorthand for one per side."
+            prop_row name:"stroke_*" values:"number" about:"One side: top · right · bottom · left · x · y, plus start/end, which follow the writing direction."
+            prop_row name:"radius" values:"number · \"tl tr br bl\"" about:"Corner radius: one value for all four corners, or the CSS shorthand."
+            prop_row name:"radius_*" values:"number" about:"One edge's corners: top · bottom · left · right · start · end, or one corner: top_left · top_right · bottom_right · bottom_left."
             prop_row name:"opacity" values:"0–1 · $signal" about:"Fades the box and its children as a layer."
