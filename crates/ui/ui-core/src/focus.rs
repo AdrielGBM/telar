@@ -366,9 +366,9 @@ fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
     }
 }
 
-fn step(dir: isize) {
-    // Snapshot, then release the slot borrow: `showing` is the author's closure and the reachability queries borrow the layout runtime, and neither may run under this one — nor may `request`, which flushes.
-    let (order, scopes) = with_focus_ref(|s| {
+/// The tab order and the scopes, copied out from under the slot borrow — see [`step`] for why that matters.
+fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
+    with_focus_ref(|s| {
         let order: Vec<(FocusId, Option<NodeId>)> =
             s.order.iter().map(|e| (e.id, e.node)).collect();
         let scopes: Vec<ScopeView> = s
@@ -377,7 +377,37 @@ fn step(dir: isize) {
             .map(|sc| (sc.node, sc.showing.clone(), sc.traps))
             .collect();
         (order, scopes)
+    })
+}
+
+/// Moves focus to the first reachable focusable inside `node`, reporting whether it found one.
+///
+/// What a dialog needs on open: the keyboard has to arrive somewhere inside it, or the user is left tabbing
+/// from wherever they were — which, now that a modal traps focus, means tabbing nowhere at all.
+pub fn focus_first_in(node: NodeId) -> bool {
+    let (order, scopes) = snapshot();
+    let found = order.into_iter().find(|(_, widget)| {
+        widget.is_some_and(|widget| layout_reactive::is_descendant_of(widget, node))
+            && reachable(*widget, &scopes)
     });
+    match found {
+        Some((id, _)) => {
+            request(id);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Whether `id` is still registered, so a caller restoring remembered focus does not aim at a widget that has
+/// since been dropped.
+pub fn is_registered(id: FocusId) -> bool {
+    with_focus_ref(|s| s.order.iter().any(|e| e.id == id))
+}
+
+fn step(dir: isize) {
+    // Snapshot, then release the slot borrow: `showing` is the author's closure and the reachability queries borrow the layout runtime, and neither may run under this one — nor may `request`, which flushes.
+    let (order, scopes) = snapshot();
     let order: Vec<FocusId> = order
         .into_iter()
         .filter(|(_, node)| reachable(*node, &scopes))

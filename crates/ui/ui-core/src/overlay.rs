@@ -365,6 +365,15 @@ impl Overlay {
     }
 }
 
+impl Overlay {
+    /// The node its content actually hangs from, which is the portaled one when it has a host and the in-tree
+    /// node before that. What a caller asks for to reason about the content by ancestry — autofocusing what is
+    /// inside it, say — since [`layout_node`](LayoutItem::layout_node) is a 0×0 placeholder once portaled.
+    pub fn content_node(&self) -> NodeId {
+        self.portaled_content.unwrap_or(self.layout_node)
+    }
+}
+
 impl LayoutItem for Overlay {
     fn layout_node(&self) -> NodeId {
         self.layout_node

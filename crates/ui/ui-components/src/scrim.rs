@@ -24,11 +24,12 @@ pub(crate) const DEFAULT_BORDER: Color = Color::rgba(0.12, 0.12, 0.16, 0.15);
 /// affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.
 pub(crate) type DismissFn = Rc<dyn Fn()>;
 
-/// Carries the dismiss-stack registration effect alongside the overlay subtree, so the registration lives
-/// exactly as long as the overlay is mounted and is released with it.
+/// Carries the overlay subtree's effects alongside it, so the dismiss-stack registration and the focus
+/// handover live exactly as long as the overlay is mounted and are released with it.
 struct Dismissible {
     inner: Box<dyn LayoutItem>,
     _registration: Effect,
+    _focus: Effect,
 }
 
 impl Component for Dismissible {
@@ -59,6 +60,32 @@ fn track_dismissible(open: RwSignal<bool>, dismiss: DismissFn) -> Effect {
             }
         } else if let Some(id) = registered.take() {
             unregister_dismiss(id);
+        }
+    })
+}
+
+/// Hands the keyboard to the dialog on open and gives it back on close.
+///
+/// Both halves matter and only together: now that a modal traps focus, opening one without moving the
+/// keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on
+/// a widget the user can no longer see. The remembered id is checked before being restored, because the thing
+/// that opened the dialog may not have survived it.
+fn track_focus_handover(open: RwSignal<bool>, content: layout_core::NodeId) -> Effect {
+    let previous: Cell<Option<ui_core::focus::FocusId>> = Cell::new(None);
+    let was_open = Cell::new(false);
+    effect(move || {
+        let is_open = open.get();
+        if is_open == was_open.get() {
+            return;
+        }
+        was_open.set(is_open);
+        if is_open {
+            previous.set(ui_core::focus::current());
+            ui_core::focus::focus_first_in(content);
+        } else if let Some(id) = previous.take()
+            && ui_core::focus::is_registered(id)
+        {
+            ui_core::focus::request(id);
         }
     })
 }
@@ -132,14 +159,16 @@ pub(crate) fn scrim_overlay(
             // Kept mounted; shown only while `open`. So the pre-built body survives a close/reopen (not rebuilt).
             let registration = track_dismissible(open.clone(), dismiss.clone());
             let open = open.clone();
-            let overlay = Overlay::toggleable(
-                LayoutStyle::new().flex_column(),
-                vec![box_item(inner)],
-                move || open.get(),
-            )?;
+            let overlay =
+                Overlay::toggleable(LayoutStyle::new().flex_column(), vec![box_item(inner)], {
+                    let open = open.clone();
+                    move || open.get()
+                })?;
+            let focus_handover = track_focus_handover(open, overlay.content_node());
             Ok(box_item(Dismissible {
                 inner: box_item(overlay),
                 _registration: registration,
+                _focus: focus_handover,
             }))
         },
     )?;
