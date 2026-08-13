@@ -2004,4 +2004,76 @@ col @card
             "a `d` that does not start with a moveto is a compile_error:\n{code}"
         );
     }
+
+    /// The `for` that reads reactive state without the sigil that makes the loop follow it. It compiles to a
+    /// one-shot Rust loop, so the rows are built from whatever the memo held at construction and never hear
+    /// about the next value — a list that silently stops updating, with nothing in the source to point at.
+    ///
+    /// The clause diagnostics next to this one did not catch it: they need a `key`/`gap`/`virtual` to fire,
+    /// and this shape carries none.
+    #[test]
+    fn a_for_that_reads_a_signal_without_the_sigil_is_a_compile_error() {
+        let src = "[logic]\nlet rows = memo(move || vec![1, 2]);\n\n[view]\ncolumn\n    for r in rows.get().to_vec()\n        text \"{r}\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!") && code.contains("reads `rows`"),
+            "the error names the signal the loop reads:\n{code}"
+        );
+    }
+
+    /// The counterweight, and the reason this cannot simply reject every `for` without a `$`: a loop over a
+    /// genuine constant is correctly non-reactive and must stay silent.
+    #[test]
+    fn a_for_over_a_static_iterable_is_left_alone() {
+        let src = "[logic]\nconst HINTS: [&str; 2] = [\"a\", \"b\"];\nlet rows = memo(move || vec![1]);\n\n[view]\ncolumn\n    for h in HINTS\n        text \"{h}\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("compile_error!"),
+            "a constant iterable names no signal, even with one declared beside it:\n{code}"
+        );
+    }
+
+    /// A prop takes its value by ownership, so a `[logic]` binding named at two call sites used to be moved
+    /// by the first and unavailable to the second — answered, in every `.rsx` that hit it, by the author
+    /// writing `.clone()` at each one. The `$signal` arm has always done this for them; a binding without the
+    /// sigil is the same situation and now gets the same answer.
+    #[test]
+    fn a_logic_binding_passed_to_a_component_is_cloned_for_the_author() {
+        let src = "[logic]\nlet items = vec![\"a\"];\n\n[view]\ncolumn\n    menu label:\"File\" items:items\n    menu label:\"Edit\" items:items\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert_eq!(
+            code.matches("items.clone()").count(),
+            2,
+            "both call sites get their own copy:\n{code}"
+        );
+    }
+
+    /// And only bindings: a name the logic zone never bound is a path, a constant or an ambient token, and
+    /// cloning it would be inventing a value rather than copying one.
+    #[test]
+    fn a_name_the_logic_zone_never_bound_is_still_passed_verbatim() {
+        let src = "[logic]\nconst ITEMS: [&str; 1] = [\"a\"];\n\n[view]\ncolumn\n    menu label:\"File\" items:ITEMS\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("ITEMS.clone()"), "{code}");
+        assert!(code.contains("ITEMS"), "{code}");
+    }
+
+    /// And the form the diagnostic is asking for compiles clean.
+    #[test]
+    fn a_reactive_for_is_not_flagged() {
+        let src = "[logic]\nlet rows = memo(move || vec![1, 2]);\n\n[view]\ncolumn\n    for r in $rows\n        text \"{r}\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("compile_error!"), "{code}");
+        assert!(code.contains("ReactiveList::"), "{code}");
+    }
 }

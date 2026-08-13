@@ -397,10 +397,18 @@ impl ViewGen<'_> {
         if in_style || (self.theme_type.is_some() && looks_like_color_name) {
             return self.color_expr(v);
         }
+        let lead = attr.value.len() - attr.value.trim_start().len();
+        // A lone `[logic]` binding gets the same handle-clone a lone `$signal` does, one arm above: a prop takes its value by ownership, and inside a reactive branch the closure is called again and cannot consume its capture.
+        // Same bet as the `$` arm, which has always cloned without knowing the type: a binding that is not `Clone` is a loud error here, and was already unusable in the reactive case where the move is what fails.
+        if self.is_local(v) {
+            return format!(
+                "{}{v}.clone()",
+                expr_marker(attr.value_start + lead, v.len())
+            );
+        }
         // Verbatim pass-through: tag the value with its source span so the analyzer can complete in it. The
         // delimiting parens are dropped here rather than at the call, so the span still covers the expression
         // itself and nothing wider.
-        let lead = attr.value.len() - attr.value.trim_start().len();
         match Self::redundant_parens(v) {
             Some(inner) => format!(
                 "{}{inner}",

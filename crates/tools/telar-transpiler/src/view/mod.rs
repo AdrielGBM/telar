@@ -20,6 +20,8 @@ use std::path::{Path, PathBuf};
 
 use telar_parser::{Element, IfBlock, StyleClass, StyleConstant, ViewNode};
 
+use crate::naming::contains_ident;
+
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
 const SRC_PUSH: &str = "//@RSX@PUSH:";
 const SRC_POP: &str = "//@RSX@POP";
@@ -171,6 +173,10 @@ pub struct ViewGen<'a> {
     /// is consulted, so a local shadows a same-named token rather than the other way round — see
     /// [`crate::signal_scan::scan_locals`].
     locals: Vec<String>,
+    /// Names the `[logic]` zone bound to a `signal(…)` or `memo(…)`. Read to tell a genuinely static iterable
+    /// from one that reads reactive state without the `$` that would make the loop follow it — see
+    /// [`ViewGen::signal_named_in`].
+    signals: Vec<String>,
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,
     /// Loop-variable identifiers currently in scope, cloned per closure like signals.
@@ -212,6 +218,7 @@ impl<'a> ViewGen<'a> {
             counters: HashMap::new(),
             theme_type: theme_type.map(str::to_string),
             locals: Vec::new(),
+            signals: Vec::new(),
             indent: 1,
             loop_variables: Vec::new(),
             transition_count: 0,
@@ -323,10 +330,27 @@ impl<'a> ViewGen<'a> {
         self
     }
 
+    pub(crate) fn with_signals(mut self, signals: Vec<String>) -> Self {
+        self.signals = signals;
+        self
+    }
+
     /// Whether `name` is a binding the logic zone made, which a bare reference in the view means before any
     /// same-named theme token.
     pub(super) fn is_local(&self, name: &str) -> bool {
         self.locals.iter().any(|local| local == name)
+    }
+
+    /// The first signal `code` mentions by name, skipping strings and comments.
+    ///
+    /// Names, not types: `[logic]` is spliced through verbatim and never type-checked here, so the only thing
+    /// this can honestly say is *this text refers to something the author declared reactive*. Enough for the
+    /// one question it is asked — whether an expression that looks static is reading state that moves.
+    pub(super) fn signal_named_in(&self, code: &str) -> Option<&str> {
+        self.signals
+            .iter()
+            .find(|name| contains_ident(code, name))
+            .map(String::as_str)
     }
 
     /// Attaches the workspace component registry so `emit_component_call` can consult callee signatures.

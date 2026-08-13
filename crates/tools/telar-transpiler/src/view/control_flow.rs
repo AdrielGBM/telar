@@ -270,6 +270,17 @@ impl ViewGen<'_> {
         }
         let pad = self.indent_str();
         let mut code = String::new();
+        let iterable = block.iterable.trim();
+        // A plain `for` that reads a signal builds its rows once and never hears about the next value; the clauses below cannot catch it because a bare `for` carries none of them.
+        if let Some(signal) = self.signal_named_in(iterable) {
+            let _ = writeln!(
+                code,
+                "{pad}compile_error!({});",
+                rust_str(&format!(
+                    "`for … in {iterable}` reads `{signal}`, which is reactive, but the loop is not: without a `$` on the iterable it builds its items once and never rebuilds them. Write `$` before the iterable to reconcile the list as it changes — or, if reading it once is what you meant, bind the value in `[logic]` and iterate that."
+                ))
+            );
+        }
         // Both clauses parse on any `for`, and neither means anything here: a construction loop runs once, so it
         // reconciles nothing to key and lays out no reconciled items to space. They used to be read and dropped
         // in silence, which reads as "my key is being honoured" right up until a row goes wrong.
@@ -295,12 +306,7 @@ impl ViewGen<'_> {
                 );
             }
         }
-        let _ = writeln!(
-            code,
-            "{pad}for {} in {} {{",
-            block.pattern.trim(),
-            block.iterable.trim()
-        );
+        let _ = writeln!(code, "{pad}for {} in {iterable} {{", block.pattern.trim());
         self.indent += 1;
         // Loop variables are often borrowed (`items.iter()`), but widget closures require `'static` captures; bind owned copies so they can be moved in.
         let body_pad = self.indent_str();

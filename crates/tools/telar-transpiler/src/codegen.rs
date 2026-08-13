@@ -705,6 +705,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         input.base_dir,
     )
     .with_locals(scan_locals(logic_source))
+    .with_signals(signals.iter().map(|s| s.name.clone()).collect())
     .with_registry(input.registry);
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
