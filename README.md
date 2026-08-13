@@ -77,6 +77,44 @@ cargo telar doctor     # check the toolchain
 
 `apps/sandbox` in this repo is the reference app and covers most of the surface. (`cargo telar new` is stubbed out and not implemented yet.)
 
+## Build profiles
+
+Copy these into your **workspace root** `Cargo.toml` — Cargo ignores `[profile.*]` in a member crate. `cargo telar build` always implies `--release`.
+
+```toml
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+# Dependencies compile once and are not rebuilt as you edit, so this is paid for on the first build
+# and buys a renderer and a layout engine that run at a usable speed in dev.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3        # "s" or "z" for a smaller binary instead — matters most on Android
+lto = "fat"          # "thin" keeps most of the win for a fraction of the build time
+codegen-units = 1    # better codegen, no parallelism left in that stage
+strip = "symbols"    # smaller binary; release backtraces lose function names
+```
+
+`debug` decides how much the link has to write: `false` (addresses only), `"line-tables-only"` (file and line, no debugger) or `true` (full, debugger-ready). The middle one is worth keeping as the default — a panic still names the line it came from, without carrying what only a debugger reads.
+
+**Do not set `panic = "abort"`.** Telar recovers from two kinds of panic and both need unwinding: a widget handler, effect or render that panics unmounts *only that surface* and leaves the rest of the application running; and a wgpu validation error or lost device — a transient swapchain mismatch while a compositor resizes a just-opened window is the common case — is caught on the render thread, which drops that one frame and recovers on the next. Under `abort` both are process death. If binary size is the goal, `opt-level = "z"` and `strip` give you more of it with nothing load-bearing attached.
+
+### Faster rebuilds
+
+A hot reload is rustc on the crate you edited plus a full relink of the `cdylib`, and only the first half gets cheaper the smaller your edit is. On `apps/sandbox` (155 MB `cdylib`) the rebuild is ~2.0 s, of which ~0.86 s is the link.
+
+The default linker on Linux (GNU `ld`) works single-threaded; `mold` and `lld` parallelise it and take that link to ~0.70 s — about 8 % of the rebuild. Install one (`apt install mold`, `dnf install mold`, `pacman -S mold`, …) and point Cargo at it in `<your-project>/.cargo/config.toml`:
+
+```toml
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+```
+
+Scope it to the host triple rather than to `build.rustflags`, or an Android build will try to link with the host's linker instead of the NDK's. `lld` works the same way with `-fuse-ld=lld`, and needs `ld.lld` on `PATH` — the driver's name, not the package's. macOS has shipped a parallel linker of its own since Xcode 15 and needs none of this; MSVC takes no `-fuse-ld=` at all. `cargo telar doctor` reports whether one is installed; it never selects or installs anything.
+
 ## What's in the box
 
 - **Reactive signals** — a fine-grained graph of signals, memos and effects; no virtual DOM, no diffing.
