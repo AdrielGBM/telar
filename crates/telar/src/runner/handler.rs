@@ -707,6 +707,11 @@ where
         }
         // After `on_frame`, which is where an app reads them: a press has to answer true for the whole frame it arrived in, and stop answering in the next.
         ui_core::end_keyboard_frame();
+        // And again on the tree's own side, which is a different set of registries whenever the tree lives
+        // behind a dylib boundary; a no-op for a tree in this process.
+        if let Some(ref tree) = self.tree {
+            tree.end_frame();
+        }
         // Apply commands enqueued during on_frame (e.g. raising this window on a routed handoff): on_event's
         // drain only runs on input events, so a frame-driven command would otherwise wait for the next one.
         self.apply_window_commands(window);

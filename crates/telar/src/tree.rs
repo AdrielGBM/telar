@@ -57,6 +57,10 @@ pub trait UiTree {
     /// Re-run every segment's view effect. Only a tree whose signals live in another runtime than its effects
     /// needs this; one that owns both re-renders from its own subscriptions and leaves it a no-op.
     fn bump_force_ticks(&self) {}
+
+    /// Closes the frame for the input registries this tree's widgets read. A tree in this process shares the
+    /// runner's, so the runner's own call covers it; one behind a dylib boundary has a second set of them.
+    fn end_frame(&self) {}
 }
 
 /// A tree mounted in this process, on top of a [`ComponentList`].
@@ -126,7 +130,27 @@ impl HotTree {
     /// `ptr` must be a live pointer from [`HotTree::mount`].
     pub unsafe fn on_event(ptr: *mut HotTree, event: &Event) -> bool {
         let this = unsafe { &mut *ptr };
+        // The input registries are read by widgets, and in hot mode those widgets live **here** — so this is
+        // where the reading has to be fed. The runner also observes, but on the host side of the boundary,
+        // and a `cdylib` carries its own copy of every `thread_local` in `ui-core`: the host was filling one
+        // registry while the app read another, empty one. Nothing failed loudly. `modifiers()` answered "no
+        // modifiers" and `pointer_buttons()` answered "nothing held", confidently, for the entire life of a
+        // `cargo telar dev` session — so a ⇧-click was a plain click and a right-drag was a left-drag, and
+        // every gesture built on either silently did the wrong thing while its own tests passed.
+        ui_core::observe_keyboard(event);
+        ui_core::observe_pointer(event);
         this.tree.on_event(event) == EventResult::Handled
+    }
+
+    /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event)
+    /// observes on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose
+    /// widgets asked.
+    ///
+    /// # Safety
+    /// `ptr` must be a live pointer from [`HotTree::mount`].
+    pub unsafe fn end_frame(ptr: *mut HotTree) {
+        let _ = ptr;
+        ui_core::end_keyboard_frame();
     }
 
     /// Copies this frame's commands out to the host: the segment cache cannot be lent across the boundary,
@@ -184,5 +208,79 @@ impl devtools_core::DevTreeView for TreeView<'_> {
                 depth: node.depth,
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Blank;
+
+    impl crate::app::App for Blank {
+        fn root(&self) -> Box<dyn Component> {
+            ui_core::reset_layout_runtime();
+            Box::new(
+                ui_core::Rectangle::new(
+                    layout_core::LayoutStyle::new().width(10.0).height(10.0),
+                    || renderer_core::RectStyle::filled(renderer_core::Color::BLACK, 0.0),
+                )
+                .expect("a rectangle builds"),
+            )
+        }
+    }
+
+    /// A tree behind the hot-reload boundary has to feed the input registries **its own** widgets read.
+    ///
+    /// A `cdylib` carries its own copy of every `thread_local` in `ui-core`, so the runner observing on the
+    /// host side filled a registry nothing in the app ever looked at: `modifiers()` answered "none held" and
+    /// `pointer_buttons()` answered "nothing pressed", confidently, for a whole `cargo telar dev` session.
+    /// A ⇧-click was a plain click and a right-drag was a left-drag, and every gesture built on either did
+    /// the wrong thing in the window while passing its own tests — which is exactly the shape of failure a
+    /// state registry has, because it never says it does not know.
+    ///
+    /// The boundary itself cannot be built in a unit test; the property that fixes it can: whoever dispatches
+    /// an event observes it.
+    #[test]
+    fn the_hot_tree_feeds_the_registries_its_own_widgets_read() {
+        ui_core::reset_keyboard();
+        ui_core::reset_pointer();
+        let tree = HotTree::mount(&Blank);
+
+        assert!(!ui_core::modifiers().is_shift);
+        unsafe {
+            HotTree::on_event(
+                tree,
+                &Event::ModifiersChanged {
+                    modifiers: platform_core::ModifiersState {
+                        is_shift: true,
+                        ..Default::default()
+                    },
+                },
+            );
+        }
+        assert!(
+            ui_core::modifiers().is_shift,
+            "the side that dispatched has to be the side that knows"
+        );
+
+        unsafe {
+            HotTree::on_event(
+                tree,
+                &Event::PointerPressed {
+                    x: 5.0,
+                    y: 5.0,
+                    button: platform_core::PointerButton::Secondary,
+                    source: platform_core::PointerSource::Mouse,
+                },
+            );
+        }
+        assert!(
+            ui_core::pointer_buttons().secondary,
+            "and the same for which button is down"
+        );
+        unsafe { HotTree::release(tree) };
+        ui_core::reset_keyboard();
+        ui_core::reset_pointer();
     }
 }

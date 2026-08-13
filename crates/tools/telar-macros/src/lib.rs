@@ -181,6 +181,10 @@ pub fn app(input: TokenStream) -> TokenStream {
                 unsafe { ::telar::HotTree::on_event(tree, event) }
             }
             #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_end_frame(tree: *mut ::telar::HotTree) {
+                unsafe { ::telar::HotTree::end_frame(tree) }
+            }
+            #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_tree_paint(
                 tree: *mut ::telar::HotTree,
             ) -> ::std::vec::Vec<::telar::DrawCommand> {

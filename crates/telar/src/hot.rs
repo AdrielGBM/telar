@@ -18,6 +18,9 @@ struct HotTreeHandle {
     generation: unsafe extern "Rust" fn(*mut crate::tree::HotTree) -> u64,
     walk: unsafe extern "Rust" fn(*mut crate::tree::HotTree) -> Vec<ui_tree::SegmentNodeInfo>,
     release: unsafe extern "Rust" fn(*mut crate::tree::HotTree),
+    /// Absent in a dylib built before the input registries were fed on this side; the tree still runs, it
+    /// just leaves `key_pressed` answering for longer than a frame.
+    end_frame: Option<unsafe extern "Rust" fn(*mut crate::tree::HotTree)>,
 }
 
 #[cfg(feature = "dev")]
@@ -37,6 +40,10 @@ impl HotTreeHandle {
                 generation: *lib.get(b"_rsx_hot_tree_generation\0").ok()?,
                 walk: *lib.get(b"_rsx_hot_tree_walk\0").ok()?,
                 release: *lib.get(b"_rsx_hot_tree_release\0").ok()?,
+                end_frame: lib
+                    .get(b"_rsx_hot_tree_end_frame\0")
+                    .ok()
+                    .map(|symbol| *symbol),
             };
             Some(handle)
         }
@@ -55,6 +62,12 @@ impl crate::tree::UiTree for HotTreeHandle {
 
     fn frame(&self) -> crate::tree::Frame<'_> {
         crate::tree::Frame::Owned(unsafe { (self.paint)(self.ptr) })
+    }
+
+    fn end_frame(&self) {
+        if let Some(end) = self.end_frame {
+            unsafe { end(self.ptr) }
+        }
     }
 
     fn is_dirty(&self) -> bool {
