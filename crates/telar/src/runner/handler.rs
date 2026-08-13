@@ -217,6 +217,7 @@ where
                 WindowCommand::SetMaximized(v) => window.set_maximized(v),
                 WindowCommand::SetTitle(title) => window.set_title(&title),
                 WindowCommand::Focus => window.focus_window(),
+                WindowCommand::SetCursor(cursor) => window.set_cursor(cursor),
                 WindowCommand::Close => self.exit_requested = true,
             }
         }

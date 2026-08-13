@@ -67,4 +67,21 @@ impl PlatformWindow for WinitWindow {
     fn focus_window(&self) {
         self.0.focus_window();
     }
+
+    fn set_cursor(&self, cursor: platform_core::Cursor) {
+        use platform_core::Cursor;
+        use winit::window::CursorIcon;
+        self.0.set_cursor(match cursor {
+            Cursor::Default => CursorIcon::Default,
+            Cursor::Pointer => CursorIcon::Pointer,
+            Cursor::Crosshair => CursorIcon::Crosshair,
+            Cursor::Grab => CursorIcon::Grab,
+            Cursor::Grabbing => CursorIcon::Grabbing,
+            Cursor::ColResize => CursorIcon::ColResize,
+            Cursor::RowResize => CursorIcon::RowResize,
+            Cursor::Text => CursorIcon::Text,
+            Cursor::NotAllowed => CursorIcon::NotAllowed,
+            Cursor::Wait => CursorIcon::Wait,
+        });
+    }
 }

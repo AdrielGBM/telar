@@ -25,9 +25,41 @@ pub enum NamedKey {
     F10,
     F11,
     F12,
+    F13,
+    F14,
+    F15,
+    F16,
+    F17,
+    F18,
+    F19,
+    F20,
+    F21,
+    F22,
+    F23,
+    F24,
     Space,
     Insert,
     CapsLock,
+    /// The numeric keypad, kept apart from the row of digits above the letters because an application that
+    /// binds it (a modeller's orthographic views, a till, a calculator) means *that* key and not the digit.
+    /// Only reported while Num Lock is on: with it off the OS says the key is `End`/`ArrowDown`/…, and
+    /// overriding that would steal the arrows from someone navigating a list with the keypad.
+    Numpad0,
+    Numpad1,
+    Numpad2,
+    Numpad3,
+    Numpad4,
+    Numpad5,
+    Numpad6,
+    Numpad7,
+    Numpad8,
+    Numpad9,
+    NumpadAdd,
+    NumpadSubtract,
+    NumpadMultiply,
+    NumpadDivide,
+    NumpadDecimal,
+    NumpadEnter,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -87,7 +119,7 @@ pub enum Event {
         y: f64,
         source: PointerSource,
     },
-    // Note: pointer events intentionally omit ModifiersState. Detecting modifier chords (e.g. Shift+Click) requires tracking modifier state from KeyPressed / KeyReleased events externally. Add a `modifiers` field here if that becomes a first-class requirement.
+    // Pointer events carry no modifiers on purpose: a handler that needs to tell a click from a Shift-click reads the authoritative state (`ui_core::modifiers()`), which `ModifiersChanged` feeds. Widening these three signatures would have made every widget in the catalogue pay for a question two of them ask.
     PointerPressed {
         x: f64,
         y: f64,
@@ -100,8 +132,17 @@ pub enum Event {
         button: PointerButton,
         source: PointerSource,
     },
+    /// A wheel turn or a scroll gesture, at the pointer position it happened over.
+    ///
+    /// The position is not in the OS event — neither winit's `MouseWheel` nor a touch drag carries one — so
+    /// the platform layer fills it from the cursor it is already tracking. It belongs here rather than in
+    /// each widget because every consumer needs it and every consumer would otherwise reconstruct it from
+    /// the last move it happened to see: that is one guess per widget, all of them wrong for a wheel that
+    /// arrives before the pointer has moved at all, and none of them able to say *zoom towards this point*.
     Scrolled {
         delta: ScrollDelta,
+        x: f64,
+        y: f64,
     },
     // OS light/dark color-scheme preference changed (or was first reported at window creation). `dark` is
     // true for a dark preference. On Linux this is surfaced only when the compositor exposes it (Wayland +

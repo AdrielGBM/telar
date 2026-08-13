@@ -9,6 +9,33 @@ pub enum FullscreenMode {
     Exclusive,
 }
 
+/// The pointer shape over a window. In a modeller the cursor *is* the mode indicator — whether the next
+/// press orbits, resizes a panel or places a point — so the set covers the gestures a desktop app arms
+/// rather than the platform's full catalogue.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Cursor {
+    #[default]
+    Default,
+    /// Over something clickable.
+    Pointer,
+    /// Over a target being aimed at — placing a point, picking an entity.
+    Crosshair,
+    /// Over a surface that can be dragged.
+    Grab,
+    /// While dragging it.
+    Grabbing,
+    /// Over a vertical splitter (drag left/right).
+    ColResize,
+    /// Over a horizontal splitter (drag up/down).
+    RowResize,
+    /// Over a text field.
+    Text,
+    /// Over a target that refuses the current gesture.
+    NotAllowed,
+    /// While something is in flight.
+    Wait,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub enum WindowPosition {
     #[default]
@@ -73,6 +100,8 @@ pub trait Window: HasWindowHandle + HasDisplayHandle {
     /// Brings the window to the front and requests input focus. No-op where unsupported or where the window
     /// manager forbids programmatic activation (e.g. some Wayland compositors).
     fn focus_window(&self) {}
+    /// Sets the pointer shape over this window. No-op where unsupported (headless).
+    fn set_cursor(&self, _cursor: Cursor) {}
     /// The OS light/dark preference, if the platform can report it: `Some(true)` = prefer dark. `None` when
     /// undetectable (e.g. X11, or a compositor without the settings portal). Defaults to `None`.
     fn prefers_dark(&self) -> Option<bool> {

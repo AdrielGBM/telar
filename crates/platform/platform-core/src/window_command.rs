@@ -22,6 +22,9 @@ pub enum WindowCommand {
     /// Bring the window to the front and give it input focus. Honored where the window manager allows
     /// programmatic activation (some Wayland compositors ignore it).
     Focus,
+    /// Set the pointer shape. Pushed from a hover handler, which is why it is a command rather than a
+    /// property: the widget under the pointer decides, and it changes many times per second.
+    SetCursor(crate::Cursor),
 }
 
 type CommandQueue = *mut RefCell<Vec<WindowCommand>>;

@@ -8,8 +8,8 @@ pub use error::PlatformError;
 pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta};
 pub use loop_waker::{loop_waker, set_loop_waker};
 pub use window::{
-    EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, SurfaceId, Window, WindowConfig,
-    WindowPosition,
+    Cursor, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, SurfaceId, Window,
+    WindowConfig, WindowPosition,
 };
 pub use window_command::{
     WindowCommand, WindowCommandContext, WindowCommandGuard, push_window_command,

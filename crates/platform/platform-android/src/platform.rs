@@ -147,7 +147,6 @@ mod choreographer {
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseScrollDelta, StartCause, Touch, TouchPhase, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::Key as WinitKey;
 use winit::platform::android::EventLoopBuilderExtAndroid;
 use winit::window::{WindowAttributes, WindowId};
 
@@ -378,6 +377,8 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                                             x: dx as f32,
                                             y: dy as f32,
                                         },
+                                        x,
+                                        y,
                                     },
                                     window,
                                 );
@@ -420,21 +421,8 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 );
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                let key = match &event.logical_key {
-                    WinitKey::Character(c) => {
-                        if let Some(ch) = c.as_str().chars().next() {
-                            platform_core::Key::Char(ch)
-                        } else {
-                            return;
-                        }
-                    }
-                    WinitKey::Named(named) => {
-                        let Some(nk) = platform_winit::map_named_key(*named) else {
-                            return;
-                        };
-                        platform_core::Key::Named(nk)
-                    }
-                    _ => return,
+                let Some(key) = platform_winit::map_key(&event.logical_key, event.location) else {
+                    return;
                 };
                 let modifiers = self.modifiers;
                 let ev = match event.state {
@@ -491,9 +479,12 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                         y: (pos.y / self.scale_factor) as f32,
                     },
                 };
+                let (x, y) = self.cursor_position;
                 self.handler.on_event(
                     Event::Scrolled {
                         delta: scroll_delta,
+                        x,
+                        y,
                     },
                     window,
                 );

@@ -8,7 +8,6 @@ use platform_core::{
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseScrollDelta, StartCause, Touch, TouchPhase, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::Key as WinitKey;
 use winit::window::{Fullscreen, WindowAttributes, WindowId, WindowLevel};
 
 use platform_winit::WinitWindow;
@@ -279,8 +278,11 @@ fn map_window_event(
                     y: (pos.y / *scale_factor) as f32,
                 },
             };
+            let (x, y) = *cursor_position;
             SurfaceIntent::Event(Event::Scrolled {
                 delta: scroll_delta,
+                x,
+                y,
             })
         }
         WindowEvent::ModifiersChanged(mods) => {
@@ -290,16 +292,8 @@ fn map_window_event(
             })
         }
         WindowEvent::KeyboardInput { event, .. } => {
-            let key = match &event.logical_key {
-                WinitKey::Character(c) => match c.as_str().chars().next() {
-                    Some(ch) => platform_core::Key::Char(ch),
-                    None => return SurfaceIntent::Ignore,
-                },
-                WinitKey::Named(named) => match platform_winit::map_named_key(*named) {
-                    Some(nk) => platform_core::Key::Named(nk),
-                    None => return SurfaceIntent::Ignore,
-                },
-                _ => return SurfaceIntent::Ignore,
+            let Some(key) = platform_winit::map_key(&event.logical_key, event.location) else {
+                return SurfaceIntent::Ignore;
             };
             let mods = *modifiers;
             SurfaceIntent::Event(match event.state {
