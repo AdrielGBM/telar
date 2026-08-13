@@ -287,6 +287,29 @@ mod tests {
         );
         assert_eq!(replace_whole_word("vim::set()", "vim", "v2"), "v2::set()");
     }
+
+    #[test]
+    fn replace_whole_word_leaves_a_field_of_the_same_name_alone() {
+        // An application store whose fields are named after the locals reading them is the normal shape, not
+        // an odd one: `let tool = memo(move || store().tool.get())` renamed the FIELD and produced a
+        // `no field tool_rsx_mv` against generated code.
+        assert_eq!(
+            replace_whole_word("store().tool.get()", "tool", "tool_rsx_mv"),
+            "store().tool.get()"
+        );
+        assert_eq!(
+            replace_whole_word("tool.set(s.tool.get())", "tool", "t2"),
+            "t2.set(s.tool.get())"
+        );
+        // A method call by the same name is a method, not the binding.
+        assert_eq!(replace_whole_word("x.count()", "count", "c2"), "x.count()");
+        // A spread and a range really do read the binding, so `..` is not a field access.
+        assert_eq!(
+            replace_whole_word("Config { ..base }", "base", "b2"),
+            "Config { ..b2 }"
+        );
+        assert_eq!(replace_whole_word("0..count", "count", "c2"), "0..c2");
+    }
 }
 
 /// Replaces every whole-word occurrence of identifier `from` with `to`, leaving string/char literals and
@@ -307,6 +330,7 @@ pub(crate) fn replace_whole_word(s: &str, from: &str, to: &str) -> String {
             && (i == 0 || !is_ident_byte(bytes[i - 1]))
             && bytes.get(i + from.len()).is_none_or(|&b| !is_ident_byte(b))
             && !is_struct_field_name(bytes, i, from.len())
+            && !is_field_access(bytes, i)
         {
             result.push_str(to);
             i += from.len();
@@ -322,6 +346,18 @@ pub(crate) fn replace_whole_word(s: &str, from: &str, to: &str) -> String {
 /// Whether the identifier at `start` names a field in a struct literal (`Config { volume: volume.peek() }`)
 /// rather than a binding. Renaming it there produces a struct that has no such field — which is what a form's
 /// save closure writes on nearly every line, since a field and the signal holding it want the same name.
+/// Whether this identifier sits behind a `.`, which makes it a field or a method and never a variable.
+///
+/// The clone rewrite renames a captured binding wherever it is *read*, and a read is a name standing on its
+/// own — `store().tool` names a field of whatever `store()` returned, not the local called `tool`. Renaming
+/// it produced a `no field \`tool_rsx_mv\`` pointing at generated code the author never wrote, and it took a
+/// local and a field merely sharing a name, which in an application store is the normal case rather than the
+/// odd one. `..` is excluded because a struct-update spread (`Config { ..base }`) or a range really does read
+/// the binding.
+fn is_field_access(bytes: &[u8], start: usize) -> bool {
+    start > 0 && bytes[start - 1] == b'.' && !(start > 1 && bytes[start - 2] == b'.')
+}
+
 fn is_struct_field_name(bytes: &[u8], start: usize, len: usize) -> bool {
     let mut after = start + len;
     while bytes.get(after).is_some_and(u8::is_ascii_whitespace) {

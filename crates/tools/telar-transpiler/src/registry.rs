@@ -64,12 +64,16 @@ pub fn layout_attr_keys() -> &'static [&'static str] {
         "margin_end",
         "inset_start",
         "inset_end",
+        "inset_top",
+        "inset_bottom",
+        "absolute",
         "gap",
         "gap_x",
         "gap_y",
         "grow",
         "shrink",
         "wrap",
+        "cursor",
         "self",
         "direction",
         "align",
@@ -152,6 +156,8 @@ const CONTAINER_PAINT: &[&str] = &[
     "on_press",
     "on_long_press",
     "on_hover",
+    // The continuous half of `on_hover`: where the pointer is, not just whether it is in.
+    "on_pointer_move",
     "on_key",
     "on_drag",
     // A drag the markup can start but never finish is half a gesture: the release is where a pull-to-open, a
@@ -159,9 +165,41 @@ const CONTAINER_PAINT: &[&str] = &[
     "on_drag_end",
     "on_scroll",
     "on_focus",
+    "cursor",
+    // Which other buttons may start this box's drag; the primary one always can.
+    "drag_button",
+    // A box that is drawn over something without standing between it and the pointer.
+    "click_through",
     "hover_style",
     "active_style",
     "transition",
+];
+
+/// The colour names `ThemeTokens` defines, which a bare `color:`/`fill:`/`stroke:`/`tint:` value resolves
+/// through the **trait method** rather than through a field of the same name.
+///
+/// Because the trait is the contract: `set_theme` requires it, and every catalogue component reads its
+/// colours from it. A theme shaped like shadcn calls its quiet *surface* `muted` and its quiet *ink*
+/// `muted-foreground`, and maps `ThemeTokens::muted()` to the latter — so a `.rsx` reading the field got a
+/// background where the catalogue beside it got an ink, and the text came out invisible with nothing to
+/// diagnose. A theme's own tokens (`card`, `accent`, `popover`) are not in the trait and stay field reads,
+/// and `theme.name` remains the escape hatch for a field this list shadows.
+pub const THEME_COLOR_TOKENS: &[&str] = &[
+    "primary",
+    "on_primary",
+    "muted",
+    "scrollbar",
+    "ink",
+    "surface",
+    "surface_alt",
+    "border",
+    "success",
+    "warning",
+    "error",
+    "info",
+    "highlight_low",
+    "highlight_med",
+    "highlight_high",
 ];
 
 /// Declarative affine transform attribute keys (see `container::transform_call`, which gates
@@ -194,6 +232,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "align",
             "lines",
             "ellipsis",
+            "nowrap",
             "line_height",
             "letter_spacing",
             "raster",

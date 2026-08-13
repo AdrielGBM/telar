@@ -163,6 +163,15 @@ pub fn layout_prop_call(key: &str, value: &str, theme: Option<&str>) -> Option<S
         "margin_end" => format!(".margin_end({})", format_number(value, theme)),
         "inset_start" => format!(".inset_start({})", format_number(value, theme)),
         "inset_end" => format!(".inset_end({})", format_number(value, theme)),
+        "inset_top" => format!(".inset_top({})", format_number(value, theme)),
+        "inset_bottom" => format!(".inset_bottom({})", format_number(value, theme)),
+        // Out of flow, pinned only by the insets the author names. `absolute_fill` is the all-four-at-zero
+        // shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
+        "absolute" => match value {
+            "" | "true" => ".absolute()".to_string(),
+            "fill" => ".absolute_fill()".to_string(),
+            _ => return None,
+        },
         "gap" => format!(".gap({})", format_number(value, theme)),
         "gap_x" => format!(".gap_x({})", format_number(value, theme)),
         "gap_y" => format!(".gap_y({})", format_number(value, theme)),
@@ -260,6 +269,12 @@ fn parse_track_token(s: &str) -> Option<String> {
 
 /// Renders a numeric literal as a float suffix-free Rust expression. Non-numeric values are passed through verbatim (e.g. references to other constants).
 pub fn format_number(value: &str, theme: Option<&str>) -> String {
+    // A `$signal` sizes the node from reactive state. The read is emitted inline, which is correct in both
+    // places the style expression lands: once at construction, and again inside the `styled_by` effect the
+    // container grows when any of its layout props is reactive.
+    if let Some(read) = signal_read(value) {
+        return read;
+    }
     if let Some(expr) = theme_field_expr(value, theme) {
         return expr;
     }
@@ -267,6 +282,17 @@ pub fn format_number(value: &str, theme: Option<&str>) -> String {
         Ok(n) => format_f32(n),
         Err(_) => value.to_string(),
     }
+}
+
+/// `$name` -> `name.get()`, for a lone signal identifier. Anything more complex is left to the caller.
+pub fn signal_read(value: &str) -> Option<String> {
+    let ident = value.trim().strip_prefix('$')?;
+    let mut chars = ident.chars();
+    let head_ok = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+    let tail_ok = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+    (head_ok && tail_ok).then(|| format!("{ident}.get()"))
 }
 
 /// Renders a sizing value: `%` becomes `SizeDimension::Percent` (`100%` == `1.0`), a bare number stays an

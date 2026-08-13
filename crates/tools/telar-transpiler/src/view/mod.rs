@@ -190,6 +190,9 @@ pub struct ViewGen<'a> {
     /// generated may run more than once for the same content, which is what makes a one-shot `widget`
     /// reference unsound there — see [`ViewGen::in_reactive_region`].
     reactive_depth: usize,
+    /// Whether each enclosing container lays its children out horizontally. A boxed reactive region reads
+    /// the top to build its own node the same way round — an `if`/`for` inside a `row` runs horizontally.
+    host_rows: Vec<bool>,
     /// The in-scope binding holding the enclosing scroll's live viewport, when the node being emitted sits
     /// inside one that exposed it. `VirtualList` needs it to know which rows are on screen, and only a `scroll`
     /// can supply it — so a `virtual` loop outside one is an error rather than a surprise at runtime.
@@ -216,6 +219,7 @@ impl<'a> ViewGen<'a> {
             baked_asset_count: 0,
             registry: None,
             child_sinks: Vec::new(),
+            host_rows: Vec::new(),
             reactive_depth: 0,
             scroll_viewport: None,
         }
@@ -232,6 +236,19 @@ impl<'a> ViewGen<'a> {
         self.reactive_depth += 1;
         let result = emit(self);
         self.reactive_depth -= 1;
+        result
+    }
+
+    /// Whether the container the node being emitted sits directly inside lays its children horizontally.
+    pub(super) fn host_is_row(&self) -> bool {
+        self.host_rows.last().copied().unwrap_or(false)
+    }
+
+    /// Runs `emit` with `is_row` recorded as the enclosing container's axis.
+    pub(super) fn within_host<R>(&mut self, is_row: bool, emit: impl FnOnce(&mut Self) -> R) -> R {
+        self.host_rows.push(is_row);
+        let result = emit(self);
+        self.host_rows.pop();
         result
     }
 
@@ -1259,7 +1276,7 @@ mod tests {
             "binds the value signal (cloned):\n{code}"
         );
         assert!(
-            code.contains("TextStyle::new(16.0, use_theme::<SandboxTheme>().primary)"),
+            code.contains("TextStyle::new(16.0, use_theme::<SandboxTheme>().primary())"),
             "size + reactive colour style:\n{code}"
         );
         assert!(
@@ -1539,6 +1556,38 @@ mod tests {
         assert!(code.contains(".on_key("), "emits on_key:\n{code}");
     }
 
+    // `on_pointer_move` carries the pointer position, so a viewport can answer *where* rather than *whether*.
+    #[test]
+    fn on_pointer_move_emits_the_container_method() {
+        let src = "[logic]\nlet at = signal((0.0f32, 0.0f32));\n[view]\ncol\n    box on_pointer_move(|x, y| $at.set((x, y)))\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".on_pointer_move("),
+            "emits on_pointer_move:\n{code}"
+        );
+        assert!(
+            code.contains("move |x, y| at.set((x, y))"),
+            "with the $signal cloned in:\n{code}"
+        );
+    }
+
+    // `drag_button` widens which buttons may start the box's drag; the primary one always can.
+    #[test]
+    fn drag_button_emits_the_extra_buttons() {
+        let src = "[view]\ncol\n    box drag_button:secondary,auxiliary on_drag(|_x, _y| ())\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(
+                ".drag_button(PointerButton::Secondary).drag_button(PointerButton::Auxiliary)"
+            ),
+            "emits one call per button:\n{code}"
+        );
+    }
+
     // An event callback upgrades a plain col/row to a StyledContainer (only it carries the callbacks).
     #[test]
     fn on_hover_promotes_plain_container() {
@@ -1645,7 +1694,7 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("use_theme::<MyTheme>().primary"),
+            code.contains("use_theme::<MyTheme>().primary()"),
             "a bare token resolves via the theme:\n{code}"
         );
     }

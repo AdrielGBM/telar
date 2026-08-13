@@ -36,6 +36,52 @@ mod tests {
     use super::*;
     use std::path::{Path, PathBuf};
 
+    /// A class on a component call used to compile to nothing.
+    ///
+    /// `[style]` is the DSL's vocabulary for paint, and until now it stopped at the component boundary: a
+    /// `box @squared` came out square and a `menu @squared` came out exactly as the catalogue drew it, with
+    /// no diagnostic to say the class had been read and thrown away. The only remaining lever was the theme's
+    /// radius, which moves every rounded thing in the application — so an app wanting one square trigger
+    /// either restyled everything or edited the catalogue.
+    ///
+    /// The class now lands on the callee's principal surface, and only the properties it names: what it does
+    /// not mention, the component still decides for itself.
+    #[test]
+    fn a_class_on_a_component_call_reaches_the_surface_it_paints() {
+        let out = transpile_source_with_theme(
+            "[style]\n@squared\n    radius: 0\n\n[view]\nmenu @squared label:\"File\" items:items\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            out.rust_code
+                .contains(".with_radius(BorderRadius::all(0.0))"),
+            "the class's radius reaches the menu's trigger:\n{}",
+            out.rust_code
+        );
+        assert!(
+            !out.rust_code.contains("RectStyle {"),
+            "as an amendment, not a wholesale style that would cost the trigger its border:\n{}",
+            out.rust_code
+        );
+
+        // A callee with no principal surface has nothing the class could honestly mean, so it is still dropped.
+        let plain = transpile_source_with_theme(
+            "[style]\n@squared\n    radius: 0\n\n[view]\nspinner @squared\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            !plain.rust_code.contains("with_radius"),
+            "a spinner declares no style prop, so its class is not guessed onto some box:\n{}",
+            plain.rust_code
+        );
+    }
+
     /// `keep:` is what turns a viewport into one whose position survives its tree being rebuilt; without it
     /// the emission must not change at all, since every scroll that never asked to be kept is one whose
     /// position belongs to the tree it was built with.
@@ -601,7 +647,7 @@ col @card
         let code = out.rust_code;
         assert!(code.contains("use telar::use_theme;"));
         assert!(code.contains("use_theme::<SandboxTheme>().dark"));
-        assert!(code.contains("use_theme::<SandboxTheme>().primary"));
+        assert!(code.contains("use_theme::<SandboxTheme>().primary()"));
         // No COLOR_* consts should be referenced inside the function body.
         let fn_start = code.find("pub fn counter").unwrap();
         assert!(!code[fn_start..].contains("COLOR_DARK"));
@@ -614,7 +660,7 @@ col @card
         let out =
             transpile_source_with_theme(COUNTER, "counter", Some("SandboxTheme"), None).unwrap();
         let code = out.rust_code;
-        assert!(code.contains("use_theme::<SandboxTheme>().primary"));
+        assert!(code.contains("use_theme::<SandboxTheme>().primary()"));
         assert!(code.contains("use_theme::<SandboxTheme>().dark"));
         // The now-unused color consts are not emitted.
         assert!(!code.contains("const COLOR_PRIMARY"));
@@ -941,6 +987,68 @@ col @card
             out.rust_code.contains("needs an enclosing `scroll`"),
             "the requirement is named:\n{}",
             out.rust_code
+        );
+    }
+
+    /// A reactive branch with several children was wrapped in a hard-coded `flex_column`, so a tab strip
+    /// written as `row > if $ws > icon icon icon` stacked its icons and overflowed the 30px row it lived in.
+    /// The cell now runs the way its host does.
+    #[test]
+    fn a_reactive_branch_cell_inherits_its_host_axis() {
+        let body = "\n    if $open\n        text \"a\"\n        text \"b\"\n";
+        let in_row =
+            transpile_source_with_theme(&format!("[view]\nrow{body}"), "demo", None, None).unwrap();
+        assert!(
+            in_row.rust_code.contains("LayoutStyle::new().flex_row()"),
+            "a branch inside a row lays its children out horizontally:\n{}",
+            in_row.rust_code
+        );
+
+        let in_col =
+            transpile_source_with_theme(&format!("[view]\ncol{body}"), "demo", None, None).unwrap();
+        assert!(
+            in_col
+                .rust_code
+                .contains("LayoutStyle::new().flex_column()"),
+            "and stacks them inside a column, as before:\n{}",
+            in_col.rust_code
+        );
+    }
+
+    /// A layout prop reading a signal makes the whole style reactive: the node keeps an effect that
+    /// re-resolves it, because a `LayoutStyle` is a value handed to the tree once — unlike paint, which is a
+    /// closure the renderer re-runs. Without this a dragged panel width changed the signal and nothing moved.
+    #[test]
+    fn a_signal_sized_container_follows_its_signal() {
+        let out = transpile_source_with_theme(
+            "[view]\ncol width:$panel_w\n    text \"body\"\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            out.rust_code.contains(".styled_by("),
+            "the container keeps a style effect:\n{}",
+            out.rust_code
+        );
+        assert!(
+            out.rust_code.contains("panel_w.get()"),
+            "and the effect reads the signal:\n{}",
+            out.rust_code
+        );
+
+        let constant = transpile_source_with_theme(
+            "[view]\ncol width:300\n    text \"body\"\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            !constant.rust_code.contains(".styled_by("),
+            "a constant size costs no effect:\n{}",
+            constant.rust_code
         );
     }
 
@@ -1332,11 +1440,11 @@ col @card
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("let __transition_0 = motion::Animated::new(use_theme::<SandboxTheme>().primary, motion::tween(std::time::Duration::from_millis(150), motion::Easing::CubicBezier(0.4, 0.0, 0.2, 1.0)));"),
+            code.contains("let __transition_0 = motion::Animated::new(use_theme::<SandboxTheme>().primary(), motion::tween(std::time::Duration::from_millis(150), motion::Easing::CubicBezier(0.4, 0.0, 0.2, 1.0)));"),
             "missing cubic-bezier Animated:\n{code}"
         );
         assert!(
-            code.contains(".with_fill({ __transition_0.retarget(use_theme::<SandboxTheme>().primary); __transition_0.get() })"),
+            code.contains(".with_fill({ __transition_0.retarget(use_theme::<SandboxTheme>().primary()); __transition_0.get() })"),
             "missing fill retarget+get:\n{code}"
         );
     }
@@ -1539,11 +1647,11 @@ col @card
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("let __transition_0 = motion::Animated::new(use_theme::<SandboxTheme>().primary, motion::tween(std::time::Duration::from_millis(120), motion::Easing::EaseOut));"),
+            code.contains("let __transition_0 = motion::Animated::new(use_theme::<SandboxTheme>().primary(), motion::tween(std::time::Duration::from_millis(120), motion::Easing::EaseOut));"),
             "missing hoisted color Animated:\n{code}"
         );
         assert!(
-            code.contains("TextStyle::new(14.0, { __transition_0.retarget(use_theme::<SandboxTheme>().primary); __transition_0.get() })"),
+            code.contains("TextStyle::new(14.0, { __transition_0.retarget(use_theme::<SandboxTheme>().primary()); __transition_0.get() })"),
             "text color should be wrapped in the transition block:\n{code}"
         );
     }
@@ -1628,7 +1736,7 @@ col @card
             code.contains("Color::rgba(61.0 / 255.0, 120.0 / 255.0, 250.0 / 255.0, 255.0 / 255.0)")
         );
         assert!(code.contains("Color::WHITE"));
-        assert!(code.contains("use_theme::<SandboxTheme>().primary"));
+        assert!(code.contains("use_theme::<SandboxTheme>().primary()"));
         assert!(
             !code.contains(".clone()"),
             "no signal clone should appear for static/theme colors:\n{code}"

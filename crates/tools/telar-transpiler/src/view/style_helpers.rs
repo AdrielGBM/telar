@@ -251,6 +251,47 @@ impl ViewGen<'_> {
         expr
     }
 
+    /// The raw values of this element's layout attributes that read a signal, so the caller can wrap the
+    /// style expression in an effect. Empty means the style is a constant and the node needs none.
+    pub(super) fn reactive_layout_values(&self, attrs: &[Attr]) -> Vec<String> {
+        attrs
+            .iter()
+            .filter(|a| !a.is_quoted && a.value.contains('$'))
+            .filter(|a| layout_prop_call(&a.key, &a.value, self.theme_type.as_deref()).is_some())
+            .map(|a| a.value.clone())
+            .collect()
+    }
+
+    /// Whether this container lays its children out horizontally, resolved the same way
+    /// [`Self::make_layout_style`] resolves the direction: an inline or class `direction:` wins, then the
+    /// tag's own default.
+    pub(super) fn container_is_row(&self, tag: &str, classes: &[String], attrs: &[Attr]) -> bool {
+        let from_direction = |value: &str| match value {
+            "row" => Some(true),
+            "col" | "column" | "row_reverse" => Some(false),
+            _ => None,
+        };
+        if let Some(is_row) = attrs
+            .iter()
+            .find(|a| a.key == "direction")
+            .and_then(|a| from_direction(a.value.trim()))
+        {
+            return is_row;
+        }
+        for name in classes.iter().rev() {
+            if let Some(is_row) = self
+                .classes
+                .iter()
+                .find(|c| &c.name == name)
+                .and_then(|c| c.props.iter().find(|p| p.key == "direction"))
+                .and_then(|p| from_direction(p.value.trim()))
+            {
+                return is_row;
+            }
+        }
+        matches!(tag, "row" | "grid")
+    }
+
     /// Whether the named class declares a flex `direction`, so the tag should not override it.
     fn class_has_direction(&self, class_name: &str) -> bool {
         self.classes

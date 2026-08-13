@@ -36,6 +36,7 @@ impl ViewGen<'_> {
                     | "align"
                     | "lines"
                     | "ellipsis"
+                    | "nowrap"
                     | "height"
                     | "line_height"
                     | "letter_spacing"
@@ -234,6 +235,13 @@ impl ViewGen<'_> {
             let v = a.value.trim();
             if v.is_empty() || v == "true" {
                 modifiers.push_str(".with_ellipsis(true)");
+            }
+        }
+        // `nowrap`: the label is a token and not prose, so it keeps one line whatever box it is given.
+        if let Some(a) = attrs.iter().find(|a| a.key == "nowrap") {
+            let v = a.value.trim();
+            if v.is_empty() || v == "true" {
+                modifiers.push_str(".with_no_wrap(true)");
             }
         }
         if let Some(lh) = attrs

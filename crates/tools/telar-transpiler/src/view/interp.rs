@@ -113,7 +113,15 @@ impl ViewGen<'_> {
             return v.to_string();
         }
         if let Some(theme) = &self.theme_type {
-            return format!("use_theme::<{theme}>().{}", to_snake_case(v));
+            let name = to_snake_case(v);
+            // A name the trait defines resolves through the trait, so the DSL and the catalogue cannot mean
+            // two different colours by one word (see `THEME_COLOR_TOKENS`); anything else is the theme's own
+            // vocabulary and stays a field.
+            let call = crate::registry::THEME_COLOR_TOKENS.contains(&name.as_str());
+            return match call {
+                true => format!("use_theme::<{theme}>().{name}()"),
+                false => format!("use_theme::<{theme}>().{name}"),
+            };
         }
         constant_name("COLOR_", v)
     }

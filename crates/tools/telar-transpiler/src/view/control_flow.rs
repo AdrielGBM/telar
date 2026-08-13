@@ -213,7 +213,7 @@ impl ViewGen<'_> {
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
         let _ = writeln!(code, "{branches},");
-        let _ = write!(code, "{pad})?;");
+        let _ = write!(code, "{pad})?{};", self.boxed_list_axis());
         ChildEmit::Simple { name: var, code }
     }
 
@@ -513,8 +513,15 @@ impl ViewGen<'_> {
         if let Some(gap_expr) = gap_expr {
             let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
         }
-        let _ = write!(code, "{pad})?;");
+        let _ = write!(code, "{pad})?{};", self.boxed_list_axis());
         ChildEmit::Simple { name: var, code }
+    }
+
+    /// The tail that turns a boxed `ReactiveList` into a row when it sits inside one. Every constructor
+    /// builds a column, which is right everywhere except here: a reactive region that owns a node of its
+    /// own inherits nothing from the container it is about to be attached to.
+    fn boxed_list_axis(&self) -> &'static str {
+        if self.host_is_row() { ".as_row()" } else { "" }
     }
 
     /// Emits `body` as one content item. A single plain widget is returned bare so its parent (not an
@@ -535,7 +542,14 @@ impl ViewGen<'_> {
         } else {
             "new"
         };
-        format!("Container::{ctor}(LayoutStyle::new().flex_column(), {expr})?")
+        // The cell runs the way its host does. A branch with several children inside a `row` used to be
+        // wrapped in a hard-coded column, so the items stacked and overflowed the row they were written in.
+        let axis = if self.host_is_row() {
+            "flex_row"
+        } else {
+            "flex_column"
+        };
+        format!("Container::{ctor}(LayoutStyle::new().{axis}(), {expr})?")
     }
 
     /// Emits a control-flow branch's nodes, pushing each into the child accumulator in scope (its shape —

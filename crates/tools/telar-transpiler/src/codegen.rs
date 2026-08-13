@@ -169,7 +169,16 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "menu",
             s(
-                &["label", "items", "on_select", "color", "fill"],
+                &[
+                    "label",
+                    "items",
+                    "on_select",
+                    "color",
+                    "fill",
+                    "bordered",
+                    "caret",
+                    "style",
+                ],
                 false,
                 &["color"],
                 &["on_select"],
@@ -197,7 +206,21 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         ),
         (
             "tooltip",
-            s(&["text", "color"], true, &["color"], &[]).with_text(&["text"]),
+            s(
+                &[
+                    "text",
+                    "shortcut",
+                    "description",
+                    "side",
+                    "color",
+                    "fill",
+                    "style",
+                ],
+                true,
+                &["color"],
+                &[],
+            )
+            .with_text(&["text", "shortcut", "description"]),
         ),
         // Presentation & indicators.
         (

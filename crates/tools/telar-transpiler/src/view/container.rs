@@ -6,6 +6,7 @@ use std::fmt::Write;
 use telar_parser::format::is_closure_value;
 use telar_parser::{Attr, Element};
 
+use crate::naming::to_pascal_case;
 use crate::style::format_f32;
 
 use super::signals::{
@@ -31,12 +32,54 @@ impl ViewGen<'_> {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
+        // A layout prop reading a signal (`width:$dock_w`) makes the whole style reactive: the node keeps an
+        // effect that re-resolves it, because a `LayoutStyle` is a value handed to the tree once, not a
+        // closure the renderer re-runs. Paint needs no equivalent — see `StyledContainer::styled_by`.
+        let reactive = self.reactive_layout_values(&el.attributes);
+        let styled_by = if reactive.is_empty() {
+            String::new()
+        } else {
+            let raw: Vec<&str> = reactive.iter().map(String::as_str).collect();
+            format!(
+                ".styled_by({})",
+                wrap_signal_clones(&raw, format!("move || {style}"))
+            )
+        };
+        let cursor = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "cursor")
+            .map(|a| format!(".cursor(Cursor::{})", to_pascal_case(a.value.trim())))
+            .unwrap_or_default();
+        // `drag_button:secondary,auxiliary` — the buttons that may start this box's drag, on top of the
+        // primary one that always can. Comma-separated because an attribute value stops at the first space.
+        let drag_button = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "drag_button")
+            .map(|a| {
+                a.value
+                    .split(',')
+                    .filter(|b| !b.trim().is_empty())
+                    .map(|b| format!(".drag_button(PointerButton::{})", to_pascal_case(b.trim())))
+                    .collect::<String>()
+            })
+            .unwrap_or_default();
+        // A bare flag, like `absolute`: an attribute with no value is the assertion itself.
+        let click_through = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "click_through")
+            .filter(|a| !matches!(a.value.trim(), "false"))
+            .map(|_| ".click_through(true)".to_string())
+            .unwrap_or_default();
         let on_press = self.on_press_call(el);
 
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
         let active_call = self.active_style_call(el, &pattrs);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
+        let on_pointer_move = self.closure_attr_call(el, "on_pointer_move", "on_pointer_move");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
         let on_drag = self.closure_attr_call(el, "on_drag", "on_drag");
         let on_drag_end = self.closure_attr_call(el, "on_drag_end", "on_drag_end");
@@ -50,7 +93,7 @@ impl ViewGen<'_> {
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
         let styling = format!(
-            "{hover_call}{active_call}{transform_call}{on_hover}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}"
+            "{hover_call}{active_call}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}"
         );
         let pieces = if always_style || has_paint(&pattrs) || !styling.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
@@ -60,10 +103,13 @@ impl ViewGen<'_> {
 
         let mode = Self::child_mode(&el.children);
 
+        let is_row = self.container_is_row(&el.tag, &el.classes, &el.attributes);
         self.indent += 1;
         let inner_pad = self.indent_str();
-        let child_emits: Vec<ChildEmit> = self.with_child_sink(mode, |g| {
-            el.children.iter().map(|child| g.emit_node(child)).collect()
+        let child_emits: Vec<ChildEmit> = self.within_host(is_row, |g| {
+            g.with_child_sink(mode, |g| {
+                el.children.iter().map(|child| g.emit_node(child)).collect()
+            })
         });
         self.indent -= 1;
 
@@ -94,13 +140,13 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{on_press}{transform_call}{on_hover}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}{styled_by}{terminator}"
                 );
             }
             None => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{terminator}"
+                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{styled_by}{terminator}"
                 );
             }
         }

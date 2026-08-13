@@ -5,7 +5,7 @@ use std::fmt::Write;
 use telar_parser::{Attr, Element, ViewNode};
 
 use crate::naming::{is_ident, to_pascal_case, to_snake_case};
-use crate::style::{format_f32, hex_to_color_expr};
+use crate::style::{format_f32, format_number, hex_to_color_expr};
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
@@ -32,7 +32,7 @@ impl ViewGen<'_> {
         // childless call still matches its 3-arg signature). Unknown callee → the old "children ⇒ slots".
         let pass_slots = has_children || sig.as_ref().is_some_and(|s| s.has_slot);
 
-        let props_arg = self.component_props_arg(tag, &props_attrs, sig.as_ref());
+        let props_arg = self.component_props_arg(tag, &props_attrs, &el.classes, sig.as_ref());
 
         // No children: flat call form. A childless slotted callee still gets `Slots::new()`.
         if !has_children {
@@ -75,6 +75,7 @@ impl ViewGen<'_> {
         &self,
         tag: &str,
         props_attrs: &[&Attr],
+        classes: &[String],
         sig: Option<&crate::codegen::ComponentSig>,
     ) -> Option<String> {
         let callee_has_props = sig.map(|s| s.has_props);
@@ -86,8 +87,8 @@ impl ViewGen<'_> {
         // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
         // `use super::*` glob at crate root) or in a component library re-exported through `use telar::*`.
         let props_type = to_pascal_case(tag) + "Props";
-        if !props_attrs.is_empty() {
-            let fields: Vec<String> = props_attrs
+        {
+            let mut fields: Vec<String> = props_attrs
                 .iter()
                 .map(|attr| {
                     let value = if color_fields.iter().any(|f| f == &attr.key) {
@@ -107,19 +108,92 @@ impl ViewGen<'_> {
                     format!("{}: {}", attr.key, value)
                 })
                 .collect();
-            let omits = field_count.is_some_and(|n| props_attrs.len() < n);
+            if let Some(amendment) = self.class_surface_style(classes, sig) {
+                fields.push(format!("style: Some({amendment})"));
+            }
+            if fields.is_empty() {
+                // No props passed but the callee has a `Props`: default them all (works when it derives Default).
+                return (callee_has_props == Some(true))
+                    .then(|| format!("{props_type} {{ ..Default::default() }}"));
+            }
+            let omits = field_count.is_some_and(|n| fields.len() < n);
             let tail = if props_default && omits {
                 ", ..Default::default()"
             } else {
                 ""
             };
             Some(format!("{props_type} {{ {}{tail} }}", fields.join(", ")))
-        } else if callee_has_props == Some(true) {
-            // No props passed but the callee has a `Props`: default them all (works when it derives Default).
-            Some(format!("{props_type} {{ ..Default::default() }}"))
-        } else {
-            None
         }
+    }
+
+    /// A `@class` on a component call, compiled onto the callee's **principal surface**.
+    ///
+    /// This is the half of styling the DSL used to drop on the floor. An inline attr on a component call is a
+    /// prop — that meaning is settled and stays. A class was the one thing you could write there that the
+    /// transpiler parsed, accepted, and then silently ignored: `box @squared` reshapes the box and
+    /// `menu @squared` reshaped nothing at all, with no error to say why.
+    ///
+    /// Only the properties the class actually names are applied, as an amendment to the style the component
+    /// worked out for itself. A class saying `radius:0` must not cost a menu its border, its shadow or its
+    /// hover fill — rebuilding the whole `RectStyle` the way a `box` does would do exactly that, because a
+    /// box's style has no author but the class.
+    ///
+    /// Gated on the callee declaring a `style` prop. A component with no principal surface — a layout, a
+    /// fragment, a thing that paints three boxes and can't say which one you meant — has nothing a class
+    /// could honestly mean, so the class is still dropped there rather than guessed at.
+    fn class_surface_style(
+        &self,
+        classes: &[String],
+        sig: Option<&crate::codegen::ComponentSig>,
+    ) -> Option<String> {
+        if !sig.is_some_and(|s| s.prop_fields.iter().any(|f| f == "style")) {
+            return None;
+        }
+        // Reverse order so a later class wins the `find`, matching how `paint_attrs` resolves a box's classes.
+        let props: Vec<&telar_parser::StyleProp> = classes
+            .iter()
+            .rev()
+            .filter_map(|name| self.classes.iter().find(|c| &c.name == name))
+            .flat_map(|c| c.props.iter())
+            .collect();
+        let find = |key: &str| {
+            props
+                .iter()
+                .find(|p| p.key == key)
+                .map(|p| p.value.as_str())
+        };
+
+        let mut chain = String::new();
+        if let Some(fill) = find("fill") {
+            let _ = write!(chain, ".with_fill({})", self.color_expr(fill));
+        }
+        if let Some(stroke) = find("stroke") {
+            let width = find("stroke_width")
+                .and_then(|w| w.parse::<f32>().ok())
+                .unwrap_or(1.0);
+            let _ = write!(
+                chain,
+                ".with_stroke(Stroke::new({}, {}))",
+                self.color_expr(stroke),
+                format_f32(width)
+            );
+        }
+        if let Some(radius) = find("radius") {
+            let _ = write!(
+                chain,
+                ".with_radius(BorderRadius::all({}))",
+                format_number(radius, self.theme_type.as_deref())
+            );
+        }
+        if chain.is_empty() {
+            return None;
+        }
+        let raw: Vec<&str> = [find("fill"), find("stroke")]
+            .into_iter()
+            .flatten()
+            .collect();
+        let closure = wrap_signal_clones(&raw, format!("move |__s: RectStyle| __s{chain}"));
+        Some(format!("Box::new({closure})"))
     }
 
     /// Looks up a callee's signature: the workspace registry first, then the built-in component catalogue
@@ -185,52 +259,57 @@ impl ViewGen<'_> {
         // Component call-site children flow into a `Slots` (then the component's own `children` placeholder),
         // so there is no container here to host a transparent fragment: a `Vec` sink named `__children`
         // keeps a reactive `for`/`if` on the boxed path and any nested static control flow pushing there.
-        self.with_child_sink(ChildMode::Vec, |g| {
-            for child in children {
-                let slot_name = match child {
-                    ViewNode::Element(el) => el
-                        .attributes
-                        .iter()
-                        .find(|a| a.key == "slot")
-                        .map(|a| a.value.clone()),
-                    _ => None,
-                };
-                // Strip the `slot` attr before emitting a named child, so a component child doesn't receive
-                // it as a prop and a builtin doesn't see a stray attribute.
-                let emit = match (child, &slot_name) {
-                    (ViewNode::Element(el), Some(_)) => {
-                        let mut stripped = el.clone();
-                        stripped.attributes.retain(|a| a.key != "slot");
-                        g.emit_node(&ViewNode::Element(stripped))
-                    }
-                    _ => g.emit_node(child),
-                };
-                match emit {
-                    ChildEmit::Simple { name, code: c } => {
-                        let _ = writeln!(code, "{c}");
-                        match &slot_name {
-                            Some(n) => {
-                                let _ = writeln!(
-                                    code,
-                                    "{pad}__slots.push(Some({}), box_item({name}));",
-                                    rust_str(n)
-                                );
-                            }
-                            None => {
-                                let _ = writeln!(code, "{pad}__children.push(box_item({name}));");
+        // The callee decides where its `children` placeholder sits, so the caller's axis says nothing about
+        // how these will run: don't leak it into the slot bodies.
+        self.within_host(false, |g| {
+            g.with_child_sink(ChildMode::Vec, |g| {
+                for child in children {
+                    let slot_name = match child {
+                        ViewNode::Element(el) => el
+                            .attributes
+                            .iter()
+                            .find(|a| a.key == "slot")
+                            .map(|a| a.value.clone()),
+                        _ => None,
+                    };
+                    // Strip the `slot` attr before emitting a named child, so a component child doesn't receive
+                    // it as a prop and a builtin doesn't see a stray attribute.
+                    let emit = match (child, &slot_name) {
+                        (ViewNode::Element(el), Some(_)) => {
+                            let mut stripped = el.clone();
+                            stripped.attributes.retain(|a| a.key != "slot");
+                            g.emit_node(&ViewNode::Element(stripped))
+                        }
+                        _ => g.emit_node(child),
+                    };
+                    match emit {
+                        ChildEmit::Simple { name, code: c } => {
+                            let _ = writeln!(code, "{c}");
+                            match &slot_name {
+                                Some(n) => {
+                                    let _ = writeln!(
+                                        code,
+                                        "{pad}__slots.push(Some({}), box_item({name}));",
+                                        rust_str(n)
+                                    );
+                                }
+                                None => {
+                                    let _ =
+                                        writeln!(code, "{pad}__children.push(box_item({name}));");
+                                }
                             }
                         }
-                    }
-                    ChildEmit::Dynamic { code: c } => {
-                        let _ = writeln!(code, "{c}");
-                    }
-                    // Shielded above (`Vec` sink), so a reactive region here is a boxed `ReactiveList`
-                    // (a `Simple`), never a fragment.
-                    ChildEmit::Fragment { .. } => {
-                        unreachable!("component-slot children never enter a slot host")
+                        ChildEmit::Dynamic { code: c } => {
+                            let _ = writeln!(code, "{c}");
+                        }
+                        // Shielded above (`Vec` sink), so a reactive region here is a boxed `ReactiveList`
+                        // (a `Simple`), never a fragment.
+                        ChildEmit::Fragment { .. } => {
+                            unreachable!("component-slot children never enter a slot host")
+                        }
                     }
                 }
-            }
+            })
         });
         let _ = writeln!(
             code,
