@@ -4,7 +4,8 @@ use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
+use platform_core::{Key, NamedKey};
+use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_theme_tokens;
 use ui_core::{
@@ -70,6 +71,25 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     let color: shared::ReactiveColor = Rc::from(color);
     let on_pick: Option<Rc<dyn Fn(u32)>> = on_pick.map(|f| -> Rc<dyn Fn(u32)> { Rc::from(f) });
     let open = signal(false);
+    let dismiss_open = open.clone();
+    let row_count = rows.len() as u32;
+    // Not the same thing as what is selected: a bound `select` opens with its value under the cursor, and moving off it must not commit anything.
+    let highlighted: RwSignal<Option<u32>> = signal(None);
+    // Committing a row, built once so Enter and a tap take the same path instead of two that drift.
+    let pick: Rc<dyn Fn(u32)> = {
+        let selected = selected.clone();
+        let on_pick = on_pick.clone();
+        let open = open.clone();
+        Rc::new(move |idx: u32| {
+            if let Some(sel) = &selected {
+                sel.set(idx);
+            }
+            if let Some(cb) = &on_pick {
+                cb(idx);
+            }
+            open.set(false);
+        })
+    };
 
     // Trigger: a bordered button with the label; a tap toggles `open`.
     // `auto` (measured) so the label has width in this row; `single_line` only sets height → width 0 → invisible.
@@ -83,9 +103,20 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         let surface = surface.clone();
         move |_r: Rect| shared::amend(trigger_rect_style(color.as_ref(), bordered), &surface)
     };
-    let toggle = {
+    // Key events are broadcast, so without this a bare Enter or Down would open every dropdown on the page rather than this one.
+    let trigger_focused = signal(false);
+    let toggle: Rc<dyn Fn()> = {
         let open = open.clone();
-        move || open.update(|o| *o = !*o)
+        let highlighted = highlighted.clone();
+        let selected = selected.clone();
+        Rc::new(move || {
+            let opening = !open.peek();
+            if opening {
+                // The cursor starts on what is already chosen, so the first arrow moves from there rather than from the top of a list the user is partway down.
+                highlighted.set(selected.as_ref().map(|s| s.peek()));
+            }
+            open.set(opening);
+        })
     };
     let trigger_box = LayoutStyle::new()
         .flex_row()
@@ -105,8 +136,70 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     if with_caret {
         trigger_children.push(caret()?);
     }
-    let trigger =
-        StyledContainer::new(trigger_box, trigger_style, trigger_children)?.on_press(toggle);
+    // One handler on the trigger, which lives for the widget's whole life and asks `open` what state it is in — the panel is rebuilt on every open and would lose a handler hung on it.
+    let on_key = {
+        let open = open.clone();
+        let highlighted = highlighted.clone();
+        let pick = pick.clone();
+        let toggle = toggle.clone();
+        let trigger_focused = trigger_focused.clone();
+        move |key: &Key| {
+            let is_open = open.peek();
+            let step = |from: Option<u32>, delta: i64| -> Option<u32> {
+                if row_count == 0 {
+                    return None;
+                }
+                let n = row_count as i64;
+                Some(match from {
+                    Some(i) => ((i as i64 + delta).rem_euclid(n)) as u32,
+                    // Downward starts at the top and upward at the bottom, so one press lands somewhere useful either way.
+                    None if delta > 0 => 0,
+                    None => row_count - 1,
+                })
+            };
+            match key {
+                // `dispatch_overlays` only dismisses when nothing holds focus — right for a field, which blurs itself first, and wrong here, where the focused thing *is* the control the dropdown belongs to.
+                Key::Named(NamedKey::Escape) if is_open => open.set(false),
+                Key::Named(NamedKey::ArrowDown) if is_open => {
+                    highlighted.set(step(highlighted.peek(), 1))
+                }
+                Key::Named(NamedKey::ArrowUp) if is_open => {
+                    highlighted.set(step(highlighted.peek(), -1))
+                }
+                Key::Named(NamedKey::Home) if is_open && row_count > 0 => highlighted.set(Some(0)),
+                Key::Named(NamedKey::End) if is_open && row_count > 0 => {
+                    highlighted.set(Some(row_count - 1))
+                }
+                Key::Named(NamedKey::Enter) if is_open => {
+                    if let Some(idx) = highlighted.peek() {
+                        pick(idx);
+                    }
+                }
+                // Shut, and the trigger is where the keyboard is: the openers a native control answers to.
+                Key::Named(NamedKey::ArrowDown | NamedKey::Enter | NamedKey::Space)
+                    if !is_open && trigger_focused.peek() =>
+                {
+                    toggle();
+                    // Opening *downward* lands on the first row, as a native control does. `toggle` only seeds from an existing selection, because opening with the mouse must highlight nothing — a cursor nobody moved reads as a hover that is not happening.
+                    if matches!(key, Key::Named(NamedKey::ArrowDown))
+                        && highlighted.peek().is_none()
+                        && row_count > 0
+                    {
+                        highlighted.set(Some(0));
+                    }
+                }
+                _ => {}
+            }
+        }
+    };
+    let trigger = StyledContainer::new(trigger_box, trigger_style, trigger_children)?
+        .on_press({
+            let toggle = toggle.clone();
+            move || toggle()
+        })
+        // Focusable so Tab reaches it at all, which is what makes every key above addressable.
+        .on_focus(move |now| trigger_focused.set(now))
+        .on_key(on_key);
     let trigger_node = trigger.layout_node();
     // The trigger's laid-out rect positions the panel; `track_layout` returns the signal now (default rect)
     // and layout fills it in, so by the time the panel is built (on open) the trigger's rect is known.
@@ -133,9 +226,14 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 let row_style = {
                     let selected = selected.clone();
                     let color = color.clone();
+                    let highlighted = highlighted.clone();
                     // Read `selected` at view time (not here in the builder) so re-highlighting a new
                     // selection re-renders the row instead of subscribing the list effect and rebuilding.
                     move |_r: Rect| {
+                        // The keyboard cursor wears the hover paint because it is the same statement — this is the row a commit would take — and a look of its own would have the list say two different things about where the user is.
+                        if highlighted.get() == Some(idx) {
+                            return option_row_hover_style(color.as_ref());
+                        }
                         let is_selected = selected.as_ref().is_some_and(|s| s.get() == idx);
                         option_row_style(is_selected, color.as_ref())
                     }
@@ -145,18 +243,8 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                     move |_r: Rect| option_row_hover_style(color.as_ref())
                 };
                 let on_press = {
-                    let selected = selected.clone();
-                    let on_pick = on_pick.clone();
-                    let open = open.clone();
-                    move || {
-                        if let Some(sel) = &selected {
-                            sel.set(idx);
-                        }
-                        if let Some(cb) = &on_pick {
-                            cb(idx);
-                        }
-                        open.set(false);
-                    }
+                    let pick = pick.clone();
+                    move || pick(idx)
                 };
                 let text = Text::auto(
                     move || label.to_string(),
@@ -228,6 +316,27 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         },
     )?;
 
+    // On the dismiss stack while up, so Escape and the platform Back gesture reach it in the order the user opened things — a menu over a dialog closes the menu first.
+    // The stack is keyed by open/close rather than by build order for exactly that reason, and this widget was never on it: the only way to shut a dropdown was a click on its backdrop.
+    let dismiss_tracker = {
+        let open = dismiss_open;
+        let close: Rc<dyn Fn()> = {
+            let open = open.clone();
+            Rc::new(move || open.set(false))
+        };
+        let registered: std::cell::Cell<Option<ui_core::dismiss::DismissId>> =
+            std::cell::Cell::new(None);
+        effect(move || {
+            if open.get() {
+                if registered.get().is_none() {
+                    registered.set(Some(ui_core::dismiss::register_dismiss(close.clone())));
+                }
+            } else if let Some(id) = registered.take() {
+                ui_core::dismiss::unregister_dismiss(id);
+            }
+        })
+    };
+
     // The widget owns both the trigger and the (portaling) overlay holder; the holder's placeholder takes no
     // space in the column, so only the trigger participates in flow layout.
     // `fill` has to reach the root as well as the trigger: the trigger grows inside *this* box, and this box
@@ -238,7 +347,8 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     } else {
         root_box
     };
-    let root = Container::new(root_box, vec![box_item(trigger), box_item(overlay_holder)])?;
+    let root = Container::new(root_box, vec![box_item(trigger), box_item(overlay_holder)])?
+        .keeping(dismiss_tracker);
     Ok(box_item(root))
 }
 

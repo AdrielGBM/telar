@@ -311,6 +311,94 @@ mod tests {
         let _ = tree.commands();
     }
 
+    fn key(named: platform_core::NamedKey) -> Event {
+        Event::KeyPressed {
+            key: platform_core::Key::Named(named),
+            modifiers: platform_core::ModifiersState::default(),
+        }
+    }
+
+    /// A menu was reachable by mouse and by nothing else: the trigger took no focus, so Tab passed it by, and
+    /// the panel answered to no key at all. Radix gives arrows, Home/End and Escape away for free; here every
+    /// one of them was absent, which is the difference between a control a keyboard user can operate and one
+    /// they cannot.
+    #[test]
+    fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
+        use platform_core::NamedKey;
+
+        reset_layout_runtime();
+        ui_core::focus::clear();
+        let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let item = menu(MenuProps {
+            label: Box::new(|| "Actions".to_string()),
+            items: vec!["Rename", "Duplicate", "Delete"],
+            on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+            ..Default::default()
+        })
+        .unwrap();
+        let root_node = item.layout_node();
+        compute_layout(
+            root_node,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(item);
+
+        // Tab reaches the trigger at all, which is what makes the rest addressable.
+        ui_core::focus::focus_next();
+        assert!(
+            ui_core::focus::current().is_some(),
+            "the trigger joined the tab order"
+        );
+
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        relayout_if_dirty();
+        // Down from the trigger opens, Down again steps to the second row, Enter commits it.
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        route(&mut tree, &key(NamedKey::Enter));
+        assert_eq!(seen.get(), Some(1), "the highlighted row is what commits");
+    }
+
+    /// Escape closes it even though the trigger holds focus. `dispatch_overlays` only dismisses when nothing
+    /// is focused — right for a field, which blurs itself first, and wrong here, where the focused thing *is*
+    /// the control the menu belongs to.
+    #[test]
+    fn escape_closes_a_menu_whose_trigger_holds_focus() {
+        use platform_core::NamedKey;
+
+        reset_layout_runtime();
+        ui_core::focus::clear();
+        let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let item = menu(MenuProps {
+            label: Box::new(|| "Actions".to_string()),
+            items: vec!["Rename", "Duplicate"],
+            on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+            ..Default::default()
+        })
+        .unwrap();
+        let root_node = item.layout_node();
+        compute_layout(
+            root_node,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(item);
+
+        ui_core::focus::focus_next();
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        relayout_if_dirty();
+        route(&mut tree, &key(NamedKey::Escape));
+        relayout_if_dirty();
+
+        // Shut: Enter commits nothing, because there is no list to commit from.
+        route(&mut tree, &key(NamedKey::Enter));
+        assert_eq!(seen.get(), None, "Escape shut it before Enter could pick");
+    }
+
     // Picking an item fires on_select with its index and closes the menu.
     #[test]
     fn selecting_an_item_fires_on_select_and_closes() {
