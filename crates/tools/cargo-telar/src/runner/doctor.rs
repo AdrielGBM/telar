@@ -53,6 +53,16 @@ fn command_first_line(program: &str, args: &[&str]) -> Option<String> {
     Some(text.lines().next().unwrap_or("").trim().to_string())
 }
 
+/// Whether a linker faster than the default is installed. The name probed is the driver's, not the
+/// package's — `-fuse-ld=lld` makes the C compiler look for `ld.lld` on PATH, so probing `lld` would report
+/// one that the link would then fail to find.
+fn fast_linker() -> Option<&'static str> {
+    [("mold", "mold"), ("lld", "ld.lld")]
+        .into_iter()
+        .find(|(_, program)| command_first_line(program, &["--version"]).is_some())
+        .map(|(flavor, _)| flavor)
+}
+
 fn rustup_has_target(target: &str) -> Option<bool> {
     let output = Command::new("rustup")
         .args(["target", "list", "--installed"])
@@ -77,6 +87,16 @@ pub(crate) fn run_doctor_cmd() -> ! {
     match command_first_line("rustc", &["--version"]) {
         Some(v) => doc.ok("rustc", &v),
         None => doc.fail("rustc", "not found on PATH"),
+    }
+    // Reported, never imposed: the linker a machine builds with belongs to its own cargo config, and swapping it here would be choosing for the whole workspace.
+    if cfg!(target_os = "linux") {
+        match fast_linker() {
+            Some(found) => doc.info("fast linker installed", found),
+            None => doc.info(
+                "fast linker installed",
+                "none — `mold` or `lld` shortens the relink in front of every hot reload (see \"Build profiles\" in the README)",
+            ),
+        }
     }
 
     doc.section("Project");
