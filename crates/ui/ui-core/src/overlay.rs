@@ -404,6 +404,11 @@ impl Component for Overlay {
         ) {
             return EventResult::Ignored;
         }
+        // `view` draws nothing while hidden and `content_rect` is an empty barrier; this was the one path that stayed open, so a shut dialog's field still received every key press.
+        // The settling events keep passing, or content hidden mid-gesture holds a hover with no event able to reach it and clear one.
+        if !(self.visible)() && !matches!(event, Event::CursorLeft | Event::FocusChanged { .. }) {
+            return EventResult::Ignored;
+        }
         dispatch_container_event(&mut self.children, event)
     }
 
@@ -442,6 +447,52 @@ mod tests {
 
     use super::*;
     use crate::ComponentList;
+
+    /// `view` draws nothing while hidden and `content_rect` is an empty barrier, but the in-tree walk stayed
+    /// open — so every key press still reached the children of a dialog that was shut. The settling events
+    /// are the exception, or content hidden mid-gesture keeps a hover it has no way left to clear.
+    #[test]
+    fn a_hidden_overlay_does_not_take_the_keyboard() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        reset_layout_runtime();
+        let keys = Rc::new(Cell::new(0u32));
+        let counted = keys.clone();
+        let showing = signal(false);
+        let flag = showing.clone();
+        let field = crate::StyledContainer::new(
+            LayoutStyle::new().width(50.0).height(20.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_key(move |_| counted.set(counted.get() + 1));
+        let mut overlay =
+            Overlay::toggleable(LayoutStyle::new(), vec![Box::new(field)], move || {
+                flag.get()
+            })
+            .unwrap();
+
+        let press = Event::KeyPressed {
+            key: platform_core::Key::Char('a'),
+            modifiers: platform_core::ModifiersState::default(),
+        };
+        overlay.on_event(&press);
+        assert_eq!(keys.get(), 0, "a shut dialog takes no keys");
+
+        showing.set(true);
+        overlay.on_event(&press);
+        assert_eq!(keys.get(), 1, "and takes them again once it is up");
+
+        // Hidden mid-gesture: the settling events still get through, or the content keeps the look it had with nothing able to reach it.
+        showing.set(false);
+        assert_eq!(
+            overlay.on_event(&Event::CursorLeft),
+            crate::EventResult::Ignored,
+            "CursorLeft reaches the children (they simply had nothing to settle)"
+        );
+    }
 
     /// A panel is placed from its trigger and then kept on screen. Without the second half, a tooltip on the
     /// rightmost button of a toolbar is laid out past the window edge and its text wraps into a column — the
