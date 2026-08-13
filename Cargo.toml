@@ -75,14 +75,18 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/AdrielGBM/telar"
 
-[profile.release]
-lto = "thin"
-codegen-units = 1
-panic = "abort"
-strip = "symbols"
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
 
 [workspace.dependencies]
 thiserror = "2"

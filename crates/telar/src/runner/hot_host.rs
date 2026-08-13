@@ -118,10 +118,7 @@ where
                 // this render thread. Catch it and drop the frame so the app survives and recovers on the
                 // next, correctly-sized frame.
                 //
-                // This only recovers under `panic=unwind`, and the workspace release profile sets
-                // `panic = "abort"` — so in a release build such an error still takes the process down. That
-                // is a deliberate trade (binary size and codegen over recovering from a driver-level bug);
-                // what this buys is a debuggable dev and test run rather than an instant abort.
+                // Recovery needs `panic=unwind`, which the consuming binary's profile decides: an app built with `panic="abort"` still goes down on a driver-level bug here.
                 let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let commands: &[renderer_core::DrawCommand] =
                         if scales_itself || msg.scale_factor == 1.0 {

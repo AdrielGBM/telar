@@ -37,7 +37,7 @@ pub(super) fn map_severity(severity: Severity) -> Option<DiagnosticSeverity> {
     })
 }
 
-/// A generated-file byte `offset` → LSP `(line, UTF-16 col)`, via the file's `LineIndex`. rust-analyzer columns are UTF-8; LSP wants UTF-16, so `to_wide` converts. An invalid offset collapses to the file start rather than panicking (the release binary is `panic="abort"`).
+/// A generated-file byte `offset` → LSP `(line, UTF-16 col)`, via the file's `LineIndex`. rust-analyzer columns are UTF-8; LSP wants UTF-16, so `to_wide` converts. An invalid offset collapses to the file start rather than panicking, so a stale index cannot take the language server down mid-session.
 pub(super) fn lsp_position(line_index: &LineIndex, offset: TextSize) -> Position {
     let Some(line_col) = line_index.try_line_col(offset) else {
         return Position {

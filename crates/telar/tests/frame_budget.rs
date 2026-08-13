@@ -9,23 +9,31 @@
 //! Its own test binary because a counting global allocator is process-wide.
 
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::cell::Cell;
 
 use telar::{
     Color, Component, LayoutStyle, LocalTree, RectStyle, Rectangle, SizeDimension, Text, TextStyle,
     UiTree, new_container, reset_layout_runtime, signal,
 };
 
-static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
-static COUNTING: AtomicUsize = AtomicUsize::new(0);
+// Per thread, not per process: the allocator is global but the tests in this binary run concurrently, and a
+// shared counter charges one test's frames to whichever other one happens to be measuring. That reads as a
+// clean tree recomposing — the very bug this file exists to catch — at random.
+thread_local! {
+    static ALLOCATED: Cell<usize> = const { Cell::new(0) };
+    static COUNTING: Cell<bool> = const { Cell::new(false) };
+}
 
 struct Counting;
 
 // Counts bytes rather than calls: a Vec that doubles once is one call and a real cost, while a handful of small boxes are several calls and almost none. Bytes is what turns into a hitch.
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if COUNTING.load(Ordering::Relaxed) == 1 {
-            ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed);
+        // `try_with`, because an allocation during this thread's TLS teardown must not panic — and the flags
+        // are `const`-initialised `Cell`s, so reading them allocates nothing and cannot recurse.
+        let counting = COUNTING.try_with(Cell::get).unwrap_or(false);
+        if counting {
+            let _ = ALLOCATED.try_with(|a| a.set(a.get() + layout.size()));
         }
         unsafe { System.alloc(layout) }
     }
@@ -39,11 +47,11 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOC: Counting = Counting;
 
 fn measure(mut body: impl FnMut()) -> usize {
-    ALLOCATED.store(0, Ordering::Relaxed);
-    COUNTING.store(1, Ordering::Relaxed);
+    ALLOCATED.with(|a| a.set(0));
+    COUNTING.with(|c| c.set(true));
     body();
-    COUNTING.store(0, Ordering::Relaxed);
-    ALLOCATED.load(Ordering::Relaxed)
+    COUNTING.with(|c| c.set(false));
+    ALLOCATED.with(Cell::get)
 }
 
 /// A game's chrome: a few static panels around a counter that changes every frame. Deliberately not big —
