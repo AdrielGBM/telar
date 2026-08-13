@@ -55,6 +55,13 @@ pub struct TextStyle {
     pub letter_spacing: f32,
     /// Which grid the glyphs land on. See [`GlyphRaster`].
     pub raster: GlyphRaster,
+    /// Keep the text on one line whatever width it is given, instead of wrapping into the box.
+    ///
+    /// What a label in a toolbar, a status bar or a table cell wants: it is a *name*, and a name broken
+    /// across two lines to fit a column reads as two things. Wrapping is the right default for prose and the
+    /// wrong one for everything that is really a token, so it is a property of the style rather than of the
+    /// box — the same text is a label in one place and a paragraph in another.
+    pub no_wrap: bool,
 }
 
 impl TextStyle {
@@ -71,7 +78,14 @@ impl TextStyle {
             line_height: None,
             letter_spacing: 0.0,
             raster: GlyphRaster::Smooth,
+            no_wrap: false,
         }
+    }
+
+    /// Keeps the text on one line; see [`no_wrap`](Self::no_wrap).
+    pub fn with_no_wrap(mut self, no_wrap: bool) -> Self {
+        self.no_wrap = no_wrap;
+        self
     }
 
     pub fn with_weight(mut self, weight: u16) -> Self {

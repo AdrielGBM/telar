@@ -11,7 +11,8 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
         | ((style.italic as u32) << 16)
         | ((style.align as u32) << 17)
         | (lines << 19)
-        | ((style.ellipsis as u32) << 27);
+        | ((style.ellipsis as u32) << 27)
+        | ((style.no_wrap as u32) << 28);
     if style.line_height.is_none()
         && style.letter_spacing == 0.0
         && style.raster == GlyphRaster::Smooth

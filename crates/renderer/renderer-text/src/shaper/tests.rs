@@ -354,3 +354,21 @@ fn a_text_box_measures_its_line_heights_and_nothing_more() {
         lines * line_height
     );
 }
+
+/// A label that is a token, not prose: it keeps one line whatever width the box offers, and measures the
+/// width it actually needs. Wrapping it is how a status bar turns "object mode" into two stacked words.
+#[test]
+fn a_no_wrap_style_measures_one_line_however_narrow_the_box() {
+    let style = TextStyle::new(14.0, Color::BLACK);
+    let text = "Frame selected";
+    let (wrapped_w, wrapped_h) = crate::measure_text(text, 40.0, &style);
+    let (flat_w, flat_h) = crate::measure_text(text, 40.0, &style.clone().with_no_wrap(true));
+    assert!(
+        flat_h < wrapped_h,
+        "wrapping stacks lines ({wrapped_h}) that no-wrap does not ({flat_h})"
+    );
+    assert!(
+        flat_w > wrapped_w,
+        "and it reports the width it needs ({flat_w}) rather than the box it was offered ({wrapped_w})"
+    );
+}

@@ -136,7 +136,10 @@ fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Te
     let font_size = style.font_size;
     let metrics = Metrics::new(font_size, effective_line_height(style));
     let mut buffer = Buffer::new(font_system, metrics);
-    buffer.set_size(Some(rect.width), Some(rect.height));
+    // `None` width is cosmic-text for "do not wrap": the line grows past the box instead of breaking, which
+    // is what a label that is really a token wants.
+    let wrap_width = (!style.no_wrap).then_some(rect.width);
+    buffer.set_size(wrap_width, Some(rect.height));
     let mut attrs = Attrs::new()
         .weight(Weight(style.weight))
         .style(if style.italic {

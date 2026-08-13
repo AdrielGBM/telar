@@ -322,8 +322,10 @@ impl TextShaper {
             return (0.0, 0.0);
         }
 
+        // A no-wrap style has no wrap width to be zero: it measures its natural width whatever box it was
+        // offered, which is the whole point of asking for one line.
         let width_u32 = max_width.ceil() as u32;
-        if width_u32 == 0 {
+        if width_u32 == 0 && !style.no_wrap {
             return (0.0, 0.0);
         }
 
