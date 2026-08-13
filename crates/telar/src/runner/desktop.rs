@@ -63,6 +63,7 @@ fn parse_dev_window_position(value: &str) -> platform_core::WindowPosition {
 
 fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
     let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
+    platform_desktop::DesktopFileDialogs::install();
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,
         Err(e) => {
@@ -243,6 +244,7 @@ impl SurfaceControl for WinitSurfaceControl {
 pub fn open_window<A: App>(app: A) -> SurfaceToken {
     let window_config = app.window_config().unwrap_or_default();
     let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
+    platform_desktop::DesktopFileDialogs::install();
     let prefs = crate::prefs::UserPrefs::load("telar-window", paths.as_ref());
     // Same backend convention as the primary window (resolved preference, else the compile-time default —
     // `Auto` = hardware with a software fallback): a secondary window is a first-class window.

@@ -444,6 +444,7 @@ pub fn run_hot_reload_host(
     };
     let hot_rx = crate::hot::listen_hot_reload(port);
     let paths: Box<dyn services_core::AppPathsProvider> = Box::new(DesktopPathsProvider);
+    platform_desktop::DesktopFileDialogs::install();
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let platform = match WinitPlatform::try_new() {

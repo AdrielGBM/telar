@@ -1,9 +1,11 @@
+pub mod dialogs;
 pub mod paths;
 #[cfg(feature = "di")]
 mod registry;
 #[cfg(feature = "di")]
 mod scope;
 
+pub use dialogs::{FileDialog, FileDialogs, FileFilter, file_dialogs, set_file_dialogs};
 pub use paths::AppPathsProvider;
 #[cfg(feature = "di")]
 pub use registry::ServiceError;

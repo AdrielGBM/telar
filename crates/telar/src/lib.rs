@@ -9,6 +9,8 @@ pub mod app_context;
 #[cfg(feature = "runtime")]
 mod direction;
 #[cfg(feature = "runtime")]
+pub mod files;
+#[cfg(feature = "runtime")]
 pub mod prefs;
 #[cfg(feature = "runtime")]
 pub mod window_signals;
@@ -81,8 +83,8 @@ pub use i18n_core as i18n;
 pub use i18n_core::{current_locale, detect_system_locale, init_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand, WindowConfig, WindowPosition,
-    push_window_command, take_window_commands,
+    Cursor, Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand, WindowConfig,
+    WindowPosition, push_window_command, take_window_commands,
 };
 // The seam for an application that renders its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on.
 #[cfg(feature = "runtime")]
@@ -148,11 +150,11 @@ pub use ui_core::{
     SurfaceTransition, Text, TextArea, VirtualList, anchor_rect, box_item, box_transform,
     close_overlay, compute_layout, current_direction, dismiss_depth, dismiss_top, focus, fragment,
     fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects, kept, key_held,
-    key_pressed, mark_dirty, modifiers, named_overlay, new_container, new_leaf, open_overlay,
-    overlay_open, overlay_state, relayout_if_dirty, remove_node, reset_layout_runtime,
-    set_children, set_direction, set_display, set_min_height, set_overlay_host, surface_frame,
-    toggle_overlay, track_layout, transform_pointer, use_direction, use_dismiss_depth,
-    use_overlay_open, visible_window,
+    key_pressed, mark_dirty, modifiers, named_overlay, new_container, new_leaf, observe_keyboard,
+    observe_pointer, open_overlay, overlay_open, overlay_state, pointer_buttons, relayout_if_dirty,
+    remove_node, reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
+    set_overlay_host, surface_frame, toggle_overlay, track_layout, transform_pointer,
+    use_direction, use_dismiss_depth, use_overlay_open, visible_window,
 };
 
 #[cfg(feature = "navigate")]
