@@ -160,14 +160,19 @@ fn label_color(
     hovered: bool,
 ) -> Color {
     if ghost {
-        return Color::rgba(0.15, 0.15, 0.2, 1.0);
+        return shared::ink();
     }
     let outline_c = outline();
     if outline_c != Color::TRANSPARENT {
-        return if hovered { Color::WHITE } else { outline_c };
+        return if hovered {
+            shared::ink_on(outline_c)
+        } else {
+            outline_c
+        };
     }
-    if fill() != Color::TRANSPARENT {
-        return Color::WHITE;
+    let fill_c = fill();
+    if fill_c != Color::TRANSPARENT {
+        return shared::ink_on(fill_c);
     }
     use_theme_tokens()
         .map(|t| t.on_primary())

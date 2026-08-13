@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
-use renderer_core::{Color, TextStyle};
+use renderer_core::{Color, RectStyle, TextStyle};
 use theme_core::use_theme_tokens;
 use ui_core::{Container, LayoutItem, Text, box_item};
 
@@ -14,6 +14,30 @@ pub(crate) type ReactiveColor = Rc<dyn Fn() -> Color>;
 
 /// A reactive human-text prop re-erased to a shareable handle: a `Box<dyn Fn>` isn't `Clone`, but a widget that reuses the same label/title in several places (or rebuilds it on each mount) re-erases to this `Rc`.
 pub(crate) type ReactiveText = Rc<dyn Fn() -> String>;
+
+/// An amendment to the paint a component worked out for its **principal surface** — the one a caller means
+/// when they point at the control: a button's box, a menu's trigger, a tooltip's bubble.
+///
+/// It takes the finished [`RectStyle`] and hands back another, rather than being a `radius` or a `fill` prop,
+/// and that is the whole point. A component resolves its surface *per state* — hovered, pressed, bordered,
+/// themed — so a prop naming one property would have to be threaded through every one of those branches and
+/// would still only cover the property it named. Amending the result composes with the states instead of
+/// competing with them: `|s| s.with_radius(BorderRadius::all(2.0))` re-rounds the hovered style too, and
+/// nothing about the component's own logic has to know it happened.
+///
+/// This is the per-instance half of styling. The other two halves already exist and are not this: **theme
+/// tokens** for what a whole application should agree on (how round anything is), and **props** for what
+/// changes the shape rather than the paint (whether a menu wears a field's border). Reaching for this to say
+/// something every menu should say is how a design system comes apart one call site at a time.
+pub(crate) type SurfaceStyle = Option<Rc<dyn Fn(RectStyle) -> RectStyle>>;
+
+/// Applies a caller's amendment, if there is one.
+pub(crate) fn amend(style: RectStyle, over: &SurfaceStyle) -> RectStyle {
+    match over {
+        Some(f) => f(style),
+        None => style,
+    }
+}
 
 /// Fallback accent when no reactive `color` is supplied and no theme is active (matches `Button`'s default primary).
 pub(crate) const DEFAULT_ACCENT: Color = Color::rgba(0.24, 0.47, 0.98, 1.0);
@@ -34,6 +58,35 @@ pub(crate) const BORDER: Color = Color::rgba(0.5, 0.5, 0.55, 0.35);
 pub(crate) fn ink() -> Color {
     use_theme_tokens().map(|t| t.ink()).unwrap_or(INK)
 }
+/// Readable ink for a label sitting on `fill`: whichever of the theme's `ink` and `on_primary` contrasts
+/// with it more.
+///
+/// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A
+/// neutral palette (shadcn's "zinc", say) makes `primary` a near-white in dark mode, and the label
+/// disappeared into its own button. Reading both ends of the theme and picking by luminance keeps a caller
+/// free to pass any colour at all — which the `fill:` prop already lets them do.
+pub(crate) fn ink_on(fill: Color) -> Color {
+    let dark = ink();
+    let light = use_theme_tokens()
+        .map(|t| t.on_primary())
+        .unwrap_or(Color::rgba(1.0, 1.0, 1.0, 1.0));
+    if contrast(fill, dark) >= contrast(fill, light) {
+        dark
+    } else {
+        light
+    }
+}
+
+/// Difference in perceived luminance, the cheap stand-in for a full WCAG contrast ratio: enough to choose
+/// between two candidate inks, and it needs no gamma round-trip.
+fn contrast(a: Color, b: Color) -> f32 {
+    (luminance(a) - luminance(b)).abs()
+}
+
+fn luminance(c: Color) -> f32 {
+    0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+}
+
 /// Theme-resolved panel surface (`surface`), falling back to [`DEFAULT_SURFACE`].
 pub(crate) fn surface() -> Color {
     use_theme_tokens()
@@ -55,6 +108,15 @@ pub(crate) fn border() -> Color {
 /// declaring its own constant, so one theme number still moves it.
 pub(crate) fn radius() -> f32 {
     use_theme_tokens().map(|t| t.radius()).unwrap_or(4.0)
+}
+/// The steps either side of [`radius`], for the shapes that are not a card: a chip or a row rounds less, a
+/// panel or a bubble sits between. Every one of these was a literal in the component that drew it, which
+/// meant a theme could move its base radius and watch half the catalogue ignore it.
+pub(crate) fn radius_sm() -> f32 {
+    use_theme_tokens().map(|t| t.radius_sm()).unwrap_or(2.4)
+}
+pub(crate) fn radius_md() -> f32 {
+    use_theme_tokens().map(|t| t.radius_md()).unwrap_or(3.2)
 }
 /// Base spacing unit from the theme, and what a component derives its own padding from.
 ///

@@ -141,6 +141,15 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     Ok(box_item(row))
 }
 
+/// The − / + button's accent: the caller's `color` when set, else the theme's `primary`.
+fn button_fill(color: &shared::ReactiveColor) -> Color {
+    shared::resolve(color.as_ref(), || {
+        use_theme_tokens()
+            .map(|t| t.primary())
+            .unwrap_or(shared::DEFAULT_ACCENT)
+    })
+}
+
 /// A small square pressable box with a centred glyph — the − / + buttons, built on the same
 /// box + on_press + centred-label shape as `button.rs`'s `ButtonProps` filled variant.
 fn stepper_button(
@@ -148,23 +157,19 @@ fn stepper_button(
     color: shared::ReactiveColor,
     on_press: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    // The glyph reads the same fill the box paints, so a light accent (a neutral palette's `primary` in
+    // dark mode) gets a dark glyph instead of a white one lost in its own button.
+    let glyph_fill = color.clone();
     let glyph_widget = Text::auto(
         move || glyph.to_string(),
         LayoutStyle::new(),
-        // Always the filled variant (never ghost/outline), so the glyph is always white, per `button.rs`'s
-        // `label_color` filled case.
-        || TextStyle::new(glyph_size(), Color::WHITE),
+        move || TextStyle::new(glyph_size(), shared::ink_on(button_fill(&glyph_fill))),
     )?;
     let container = StyledContainer::new(
         button_box(),
         move |_r| {
-            let fill = shared::resolve(color.as_ref(), || {
-                use_theme_tokens()
-                    .map(|t| t.primary())
-                    .unwrap_or(shared::DEFAULT_ACCENT)
-            });
             RectStyle::default()
-                .with_fill(fill)
+                .with_fill(button_fill(&color))
                 .with_radius(BorderRadius::all(radius()))
         },
         vec![box_item(glyph_widget)],

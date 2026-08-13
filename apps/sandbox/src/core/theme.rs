@@ -51,8 +51,20 @@ impl ThemeTokens for SandboxTheme {
     fn ink(&self) -> Color {
         self.ink
     }
+    fn surface(&self) -> Color {
+        self.surface
+    }
     fn surface_alt(&self) -> Color {
         self.surface_alt
+    }
+    fn success(&self) -> Color {
+        self.success
+    }
+    fn warning(&self) -> Color {
+        self.warning
+    }
+    fn error(&self) -> Color {
+        self.danger
     }
     fn border(&self) -> Color {
         self.border

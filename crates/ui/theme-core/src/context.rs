@@ -29,10 +29,30 @@ pub trait ThemeTokens: 'static {
         Color::rgba(1.0, 1.0, 1.0, 1.0)
     }
 
-    /// Base corner radius in px. A component rounds by this, or by a multiple of it where its shape asks for
-    /// one (a pill is not a card).
+    /// Base corner radius in px. A component rounds by this, or by a step of the scale below where its shape
+    /// asks for one (a pill is not a card).
     fn radius(&self) -> f32 {
         4.0
+    }
+
+    /// The steps either side of [`radius`](Self::radius), so a theme owns **how round everything is** instead
+    /// of each component keeping its own literal.
+    ///
+    /// This is the axis an application actually restyles: shadcn ships exactly this scale
+    /// (`--radius-sm/md/lg` derived from `--radius`), with these very factors.
+    /// A component that hardcodes `BorderRadius::all(8.0)` is not themeable at all — the caller can change the
+    /// base radius and watch nothing move — and the fix is not a prop per component but a token they all read.
+    ///
+    /// A theme that wants a flat scale returns the same number from all three; one that wants a rounder
+    /// language moves the base and the steps follow.
+    fn radius_sm(&self) -> f32 {
+        self.radius() * 0.6
+    }
+    fn radius_md(&self) -> f32 {
+        self.radius() * 0.8
+    }
+    fn radius_lg(&self) -> f32 {
+        self.radius()
     }
     /// Base gap between adjacent things in px, and the unit a component derives its own padding from.
     fn spacing(&self) -> f32 {
@@ -55,15 +75,24 @@ pub trait ThemeTokens: 'static {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
 
-    /// Primary text ink for component labels/titles/values. Defaults to a near-black; a theme should override
-    /// it (e.g. a dark theme returns a light ink) so component text stays legible on its surface.
+    /// Primary text ink for component labels/titles/values. A theme should override it, but the default
+    /// follows the active light/dark mode rather than assuming light: a theme that overrides `surface` and
+    /// forgets `ink` used to paint near-black text on its own dark panel.
     fn ink(&self) -> Color {
-        Color::rgba(0.15, 0.15, 0.2, 1.0)
+        if crate::is_dark() {
+            Color::rgba(0.98, 0.98, 1.0, 1.0)
+        } else {
+            Color::rgba(0.15, 0.15, 0.2, 1.0)
+        }
     }
     /// The background a floating panel sits on — a menu, a dropdown, a dialog. Opaque by default, because the
-    /// thing it covers must not read through it.
+    /// thing it covers must not read through it, and mode-following for the same reason as [`ink`](Self::ink).
     fn surface(&self) -> Color {
-        Color::rgba(1.0, 1.0, 1.0, 1.0)
+        if crate::is_dark() {
+            Color::rgba(0.09, 0.09, 0.11, 1.0)
+        } else {
+            Color::rgba(1.0, 1.0, 1.0, 1.0)
+        }
     }
     /// A quiet, low-contrast surface tone for chip/tag backgrounds. Defaults to a faint neutral wash.
     fn surface_alt(&self) -> Color {
