@@ -177,6 +177,10 @@ pub struct ViewGen<'a> {
     /// from one that reads reactive state without the `$` that would make the loop follow it — see
     /// [`ViewGen::signal_named_in`].
     signals: Vec<String>,
+    /// Names the `[logic]` zone bound to an `effect(…)`, handed to the root widget so the subscription lives
+    /// as long as the tree instead of dying when the component function returns — see
+    /// [`ViewGen::keeping_effects`].
+    effects: Vec<String>,
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,
     /// Loop-variable identifiers currently in scope, cloned per closure like signals.
@@ -219,6 +223,7 @@ impl<'a> ViewGen<'a> {
             theme_type: theme_type.map(str::to_string),
             locals: Vec::new(),
             signals: Vec::new(),
+            effects: Vec::new(),
             indent: 1,
             loop_variables: Vec::new(),
             transition_count: 0,
@@ -335,6 +340,27 @@ impl<'a> ViewGen<'a> {
         self
     }
 
+    pub(crate) fn with_effects(mut self, effects: Vec<String>) -> Self {
+        self.effects = effects;
+        self
+    }
+
+    /// Hands the root widget every `Effect` the logic zone bound, so the subscription lives as long as the
+    /// tree rather than being dropped — and deregistered — when the component function returns.
+    ///
+    /// Applied at the root rather than at whichever container happens to be nearest, so a `.rsx` whose root is
+    /// a bare leaf is covered by the same path as one that opens with a `column`. A `Holding` adds no layout
+    /// node and delegates everything, so the wrapper is invisible to layout, painting and the devtools tree.
+    fn keeping_effects(&self, content: String) -> String {
+        if self.effects.is_empty() {
+            return content;
+        }
+        format!(
+            "Holding::new(box_item({content}), vec![{}])",
+            self.effects.join(", ")
+        )
+    }
+
     /// Whether `name` is a binding the logic zone made, which a bare reference in the view means before any
     /// same-named theme token.
     pub(super) fn is_local(&self, name: &str) -> bool {
@@ -414,6 +440,7 @@ impl<'a> ViewGen<'a> {
             } else {
                 format!("Container::column({expr})?")
             };
+            let content = self.keeping_effects(content);
             let _ = write!(out, "{pad}Ok(Box::new({content}))");
             return out;
         }
@@ -434,7 +461,7 @@ impl<'a> ViewGen<'a> {
         }
 
         let pad = self.indent_str();
-        let content = wrap_as_single_content(&roots);
+        let content = self.keeping_effects(wrap_as_single_content(&roots));
         let _ = write!(out, "{pad}Ok(Box::new({content}))");
 
         out

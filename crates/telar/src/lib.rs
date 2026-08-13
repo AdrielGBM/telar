@@ -143,18 +143,18 @@ pub use ui_core::{AssetSource, AssetState};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Canvas, ChildSlot, ClipAxis, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
-    EventResult, Image, Input, KeyboardMode, LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter,
-    MIN_FRAME_SIZE, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle, RenderNode, RichText,
-    ScrollViewport, ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor,
-    SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize,
-    SurfaceTransition, Text, TextArea, VirtualList, anchor_rect, box_item, box_transform,
-    close_overlay, compute_layout, current_direction, dismiss_depth, dismiss_top, focus, fragment,
-    fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects, kept, key_held,
-    key_pressed, mark_dirty, modifiers, named_overlay, new_container, new_leaf, observe_keyboard,
-    observe_pointer, open_overlay, overlay_open, overlay_state, pointer_buttons, relayout_if_dirty,
-    remove_node, reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
-    set_overlay_host, surface_frame, toggle_overlay, track_layout, transform_pointer,
-    use_direction, use_dismiss_depth, use_overlay_open, visible_window,
+    EventResult, Holding, Image, Input, KeyboardMode, LayoutItem, LayoutScrollArea, Lazy, Line,
+    LineGutter, MIN_FRAME_SIZE, NodeId, NodeVec, Overlay, Path, ReactiveList, Rectangle,
+    RenderNode, RichText, ScrollViewport, ScrollbarStyle, Slots, StyledContainer, SurfaceAlign,
+    SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold,
+    SurfaceSize, SurfaceTransition, Text, TextArea, VirtualList, anchor_rect, box_item,
+    box_transform, close_overlay, compute_layout, current_direction, dismiss_depth, dismiss_top,
+    focus, fragment, fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects,
+    kept, key_held, key_pressed, mark_dirty, modifiers, named_overlay, new_container, new_leaf,
+    observe_keyboard, observe_pointer, open_overlay, overlay_open, overlay_state, pointer_buttons,
+    relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_direction, set_display,
+    set_min_height, set_overlay_host, surface_frame, toggle_overlay, track_layout,
+    transform_pointer, use_direction, use_dismiss_depth, use_overlay_open, visible_window,
 };
 
 #[cfg(feature = "navigate")]

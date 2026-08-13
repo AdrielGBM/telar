@@ -29,7 +29,7 @@ pub use registry::{
     TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, color_keywords, is_builtin_tag,
     is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, tag_attr_keys,
 };
-pub use signal_scan::{SignalInfo, scan_locals, scan_signals};
+pub use signal_scan::{SignalInfo, scan_effects, scan_locals, scan_signals};
 
 #[cfg(test)]
 mod tests {
@@ -2035,6 +2035,44 @@ col @card
             !code.contains("compile_error!"),
             "a constant iterable names no signal, even with one declared beside it:\n{code}"
         );
+    }
+
+    /// An `Effect` deregisters on drop, so one bound in `[logic]` used to stop the moment the component
+    /// function returned: the closure ran exactly once and then never again, with nothing in the source to
+    /// see. Handing it to the root widget makes its life the tree's.
+    #[test]
+    fn an_effect_bound_in_logic_outlives_the_function_that_made_it() {
+        let src = "[logic]\nlet count = signal(0);\nlet watch = effect(move || { let _ = count.get(); });\n\n[view]\ncolumn\n    text \"hi\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("Holding::new(box_item(") && code.contains("vec![watch]"),
+            "the root keeps the effect alive:\n{code}"
+        );
+    }
+
+    /// The case that decided where this hooks in: a `.rsx` whose root is a bare leaf has no container to hang
+    /// an effect on, and wrapping the root covers it by the same path as one that opens with a `column`.
+    #[test]
+    fn a_leaf_root_keeps_its_effects_too() {
+        let src = "[logic]\nlet count = signal(0);\nlet watch = effect(move || { let _ = count.get(); });\n\n[view]\ntext \"hi\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains("Holding::new(box_item("), "{code}");
+        assert!(code.contains("vec![watch]"), "{code}");
+    }
+
+    /// And a view with no effects is not wrapped: the indirection would be pure cost on every component that
+    /// never had this problem.
+    #[test]
+    fn a_view_without_effects_is_not_wrapped() {
+        let src = "[logic]\nlet count = signal(0);\n\n[view]\ncolumn\n    text \"hi\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("Holding::new"), "{code}");
     }
 
     /// A prop takes its value by ownership, so a `[logic]` binding named at two call sites used to be moved
