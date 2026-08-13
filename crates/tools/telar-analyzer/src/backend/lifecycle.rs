@@ -64,11 +64,13 @@ impl Backend {
             path: gen_path,
             code: gen_text,
             map,
-            ..
+            expr_spans,
         }) = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())
         else {
             return;
         };
+        // Kept back for the reverse map: the analyzer query takes ownership of the generated text.
+        let gen_code = gen_text.clone();
         let Some(root) = crate::build_sync::crate_root(&rsx_path) else {
             return;
         };
@@ -123,18 +125,13 @@ impl Backend {
 
             let mut merged = native;
             merged.extend(raw.into_iter().filter_map(|mut diag| {
-                let rsx_line = (*map.get(diag.range.start.line as usize)?)?;
-                // The line map is line-granular, so highlight the whole `.rsx` line.
-                diag.range = Range {
-                    start: Position {
-                        line: rsx_line,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: rsx_line,
-                        character: u32::MAX,
-                    },
-                };
+                diag.range = super::mapping::diagnostic_range(
+                    diag.range,
+                    &gen_code,
+                    &map,
+                    &expr_spans,
+                    &source,
+                )?;
                 Some(diag)
             }));
             outgoing.publish_diagnostics(uri, merged);

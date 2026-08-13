@@ -93,6 +93,52 @@ pub(crate) fn reverse_map_rust_refs(
     (out, unmapped)
 }
 
+/// Reverse-maps a diagnostic's generated-file range onto the `.rsx`, narrowing it to the exact columns when
+/// they can be trusted and widening it to the whole line when they cannot.
+///
+/// The exact mapping was built for go-to-definition and rename, and was never wired here — so every
+/// diagnostic underlined its whole line, however precise rustc had been. The distinction the reference path
+/// already draws is the one that matters: a `[view]` verbatim expression maps byte for byte through its
+/// `ExprSpan`, and `[logic]` maps by line plus the indent delta because it is transpiled 1:1. Anything else
+/// in `[view]` — an attribute value the transpiler rewrote into something else entirely — has no column
+/// correspondence, and a narrow range there would underline the wrong text, which is worse than the line.
+pub(crate) fn diagnostic_range(
+    gen_range: Range,
+    gen_code: &str,
+    map: &[Option<u32>],
+    expr_spans: &[ExprSpan],
+    rsx_source: &str,
+) -> Option<Range> {
+    let rsx_line = (*map.get(gen_range.start.line as usize)?)?;
+    let whole_line = Range {
+        start: Position {
+            line: rsx_line,
+            character: 0,
+        },
+        end: Position {
+            line: rsx_line,
+            character: u32::MAX,
+        },
+    };
+    let Some(byte_start) =
+        crate::text::byte_offset(gen_code, gen_range.start.line, gen_range.start.character)
+    else {
+        return Some(whole_line);
+    };
+    let byte_end = crate::text::byte_offset(gen_code, gen_range.end.line, gen_range.end.character)
+        .unwrap_or(byte_start);
+    let target = crate::ra::RefTarget {
+        path: std::path::PathBuf::new(),
+        byte_start: byte_start as u32,
+        byte_end: byte_end as u32,
+        range: gen_range,
+    };
+    Some(
+        reverse_map_current_file(&target, gen_code, map, expr_spans, rsx_source)
+            .unwrap_or(whole_line),
+    )
+}
+
 /// Reverse-maps one generated-file reference span back onto the current `.rsx`. `[view]` verbatim expressions map byte-for-byte through their `ExprSpan`; everything else is line-mapped, with the column shifted by the leading-whitespace delta between the generated and `.rsx` lines (`+4` for `[logic]`, `0` for the verbatim Props struct). Returns `None` when the generated line has no `.rsx` origin (boilerplate / transpiler-injected).
 fn reverse_map_current_file(
     target: &RefTarget,
@@ -314,5 +360,59 @@ mod tests {
             reverse_map_rust_refs(vec![t], &gen_path, gen_src, &map, &[], rsx, &uri);
         assert!(locs.is_empty());
         assert_eq!(unmapped, 1);
+    }
+
+    /// A diagnostic in `[logic]` lands on the columns rustc named, shifted by the indent the transpiler adds.
+    /// Before this, every diagnostic underlined its whole line however precise rustc had been — the exact
+    /// mapping existed, but only go-to-definition and rename ever used it.
+    #[test]
+    fn a_logic_diagnostic_keeps_the_columns_rustc_gave_it() {
+        let rsx = "[logic]\nlet count = signal(0);\n\n[view]\ncolumn\n";
+        // The generated line is the same text under four spaces of indent.
+        let generated = "fn demo() {\n    let count = signal(0);\n}\n";
+        let map = vec![None, Some(1), None];
+        let range = Range {
+            start: Position {
+                line: 1,
+                character: 8,
+            },
+            end: Position {
+                line: 1,
+                character: 13,
+            },
+        };
+
+        let mapped = diagnostic_range(range, generated, &map, &[], rsx).expect("the line maps");
+        assert_eq!(mapped.start.line, 1);
+        assert_eq!(
+            (mapped.start.character, mapped.end.character),
+            (4, 9),
+            "the four spaces the transpiler added come back off"
+        );
+    }
+
+    /// And the case that has to stay wide: a `[view]` line the transpiler rewrote has no column
+    /// correspondence at all, so a narrowed range would underline text that has nothing to do with the error.
+    #[test]
+    fn a_view_diagnostic_still_takes_the_whole_line() {
+        let rsx = "[logic]\nlet x = 1;\n\n[view]\ntext \"hi\"\n";
+        let generated = "fn demo() {\n    Text::new(\"hi\")\n}\n";
+        let map = vec![None, Some(4), None];
+        let range = Range {
+            start: Position {
+                line: 1,
+                character: 4,
+            },
+            end: Position {
+                line: 1,
+                character: 8,
+            },
+        };
+
+        let mapped = diagnostic_range(range, generated, &map, &[], rsx).expect("the line maps");
+        assert_eq!(
+            (mapped.start.character, mapped.end.character),
+            (0, u32::MAX)
+        );
     }
 }
