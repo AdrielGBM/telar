@@ -62,6 +62,18 @@ pub(crate) trait LeafWidget {
 
 pub trait LayoutItem: Component {
     fn layout_node(&self) -> NodeId;
+
+    /// Whether this widget stands in front of whatever its siblings drew underneath it, for a pointer event
+    /// its parent is hit-testing.
+    ///
+    /// True for anything that occupies its box, which is everything that draws: the topmost child under the
+    /// pointer takes the event whether or not it wants it, exactly as a browser hit-tests — otherwise a
+    /// floating panel lets the wheel through to the pane it covers. The one thing that is not there for this
+    /// purpose is an [`Overlay`](crate::Overlay): the registry routes positioned events to it *before* the
+    /// tree walk, so its in-tree node must not shadow the siblings it was portaled away from.
+    fn pointer_opaque(&self) -> bool {
+        true
+    }
 }
 
 /// Wraps a child so its rendered output is clipped to the child's own layout rect. When the child
@@ -126,6 +138,10 @@ impl LayoutItem for ClippedItem {
     fn layout_node(&self) -> NodeId {
         self.inner.layout_node()
     }
+
+    fn pointer_opaque(&self) -> bool {
+        self.inner.pointer_opaque()
+    }
 }
 
 impl Component for ClippedItem {
@@ -178,6 +194,10 @@ impl Component for Box<dyn LayoutItem> {
 impl LayoutItem for Box<dyn LayoutItem> {
     fn layout_node(&self) -> NodeId {
         (**self).layout_node()
+    }
+
+    fn pointer_opaque(&self) -> bool {
+        (**self).pointer_opaque()
     }
 }
 

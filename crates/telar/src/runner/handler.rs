@@ -510,8 +510,9 @@ where
 
     fn on_event(&mut self, event: Event, window: &W) {
         let _surface = self.enter_surface();
-        // Before dispatch, so a handler running on this very event already sees the state it establishes: a `Shift`-click's press handler has to read the modifiers the click arrived under.
+        // Before dispatch, so a handler running on this very event already sees the state it establishes: a `Shift`-click's press handler has to read the modifiers the click arrived under, and a drag handler has to read the button that started it.
         ui_core::observe_keyboard(&event);
+        ui_core::observe_pointer(&event);
         if let Event::ScaleFactorChanged { scale_factor } = &event {
             self.scale_factor = *scale_factor as f32;
         }
@@ -1137,5 +1138,36 @@ mod tests {
         let up = platform_core::Key::Named(platform_core::NamedKey::ArrowUp);
         assert!(ui_core::key_held(&up));
         assert!(ui_core::key_pressed(&up));
+    }
+
+    /// The same for the pointer's buttons, and for the same reason: a drag handler asks which button is
+    /// doing the dragging, and a registry nobody feeds answers confidently with nothing.
+    #[test]
+    fn the_runner_feeds_the_pointer_button_registry() {
+        ui_core::reset_pointer();
+        let mut handler = handler();
+        let window = HeadlessWindow::new(120, 80);
+
+        assert!(!ui_core::pointer_buttons().any());
+        handler.on_event(
+            Event::PointerPressed {
+                x: 10.0,
+                y: 10.0,
+                button: platform_core::PointerButton::Secondary,
+                source: platform_core::PointerSource::Mouse,
+            },
+            &window,
+        );
+        assert!(ui_core::pointer_buttons().secondary);
+        handler.on_event(
+            Event::PointerReleased {
+                x: 10.0,
+                y: 10.0,
+                button: platform_core::PointerButton::Secondary,
+                source: platform_core::PointerSource::Mouse,
+            },
+            &window,
+        );
+        assert!(!ui_core::pointer_buttons().any());
     }
 }

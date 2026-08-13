@@ -1,6 +1,8 @@
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::{Event, Key, NamedKey, PointerButton, PointerSource, ScrollDelta};
+use platform_core::{
+    Cursor, Event, Key, NamedKey, PointerButton, PointerSource, ScrollDelta, WindowCommand,
+};
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::RectStyle;
 use ui_tree::{Component, EventResult, RenderNode};
@@ -51,7 +53,9 @@ pub struct StyledContainer {
     drag: DragGesture,
     // Fires with `true`/`false` as the mouse enters/leaves the box (mouse only, like the hover style).
     on_hover: Option<Box<dyn Fn(bool)>>,
-    // Fires with the wheel delta while the pointer is over the box. Scroll events carry no position, so the box's own hover state is what targets them — setting this therefore turns hover tracking on.
+    // Fires with the pointer position, local to the box, on every move over it. The continuous half of `on_hover`, which only reports the crossings.
+    on_pointer_move: Option<Box<dyn Fn(f32, f32)>>,
+    // Fires with the wheel delta while the pointer is over the box.
     on_scroll: Option<Box<dyn Fn(f32, f32)>>,
     // Fires on every key press. Key events carry no pointer position, so they are broadcast to every widget
     // — this is a GLOBAL shortcut handler (there is no per-widget focus), not focused text input.
@@ -61,6 +65,11 @@ pub struct StyledContainer {
     focus_id: Option<FocusId>,
     // Watches focus transitions for `on_focus`; dropping it (with the box) tears the subscription down.
     _focus_effect: Option<Effect>,
+    // Pointer shape while the box is hovered; restored to the default on leave. Set from `cursor:` in the DSL.
+    cursor: Option<Cursor>,
+    // Whether the box declines to shadow what it is drawn over (`pointer-events: none`). Set from
+    // `click_through` in the DSL; see `LayoutItem::pointer_opaque`.
+    click_through: bool,
 }
 
 impl StyledContainer {
@@ -86,10 +95,13 @@ impl StyledContainer {
             kept_effects: Vec::new(),
             drag: DragGesture::default(),
             on_hover: None,
+            on_pointer_move: None,
             on_scroll: None,
             on_key: None,
             focus_id: None,
             _focus_effect: None,
+            cursor: None,
+            click_through: false,
         })
     }
 
@@ -120,10 +132,13 @@ impl StyledContainer {
             kept_effects: Vec::new(),
             drag: DragGesture::default(),
             on_hover: None,
+            on_pointer_move: None,
             on_scroll: None,
             on_key: None,
             focus_id: None,
             _focus_effect: None,
+            cursor: None,
+            click_through: false,
         })
     }
 
@@ -170,6 +185,32 @@ impl StyledContainer {
         if self.active_style.is_some() && self.is_active.get() != active {
             self.is_active.set(active);
         }
+    }
+
+    /// Shows `cursor` while the pointer is over this box, and restores the default when it leaves.
+    ///
+    /// The shape is the app's statement of what the next press will do — orbit, resize a panel, place a
+    /// point — so it belongs to the widget that would handle that press, not to a mode the app tracks.
+    pub fn cursor(mut self, cursor: Cursor) -> Self {
+        self.cursor = Some(cursor);
+        self
+    }
+
+    /// Declares that this box does not stand between the pointer and whatever it is drawn over — CSS's
+    /// `pointer-events: none`, and the second consumer of the hook [`Overlay`] opened.
+    ///
+    /// A box covers what is behind it: since the hit-test walks in paint order, the topmost child under the
+    /// pointer takes the event whether or not it wants it. That is right for a panel and wrong for a *label*
+    /// — a readout floating over a canvas, a badge over a photo, a drag ghost — which is drawn on top
+    /// precisely so it can be read, and whose whole contract is that the thing underneath still works. A
+    /// modeller's transform readout sits across the top of the viewport it reports on; without this, moving
+    /// the pointer under it stops the operation it is describing.
+    ///
+    /// It is a property of *this* box only. Children still hit-test normally, so a click-through bar can
+    /// hold a real button — the same split CSS makes with `pointer-events: auto` on a child.
+    pub fn click_through(mut self, through: bool) -> Self {
+        self.click_through = through;
+        self
     }
 
     /// Give this widget ownership of an [`Effect`], so it runs for exactly as long as the widget exists.
@@ -282,6 +323,17 @@ impl StyledContainer {
         self
     }
 
+    /// Let `button` start the drag too, on top of the primary one that always does.
+    ///
+    /// A slider or a splitter wants exactly one button and gets it by default. A surface with more than one
+    /// thing to drag needs the others: a modeller orbits with the primary button and pans with the secondary,
+    /// which is what the OS and every 3D application call those gestures. The handler is the same one — read
+    /// [`crate::pointer_buttons`] inside it to tell which button is doing the dragging.
+    pub fn drag_button(mut self, button: platform_core::PointerButton) -> Self {
+        self.drag.arm_with(&button);
+        self
+    }
+
     /// Records this box as a pointer target in the per-surface interactive registry, so a surface that carves
     /// its input region from its content (a click-through overlay) receives input over it. See
     /// [`crate::interactive_rects`].
@@ -307,13 +359,32 @@ impl StyledContainer {
         self
     }
 
-    /// Fire `f(dx, dy)` with the wheel delta while the mouse is over the box — scroll-to-adjust on a control
-    /// (a volume or brightness chip, a stepper). Deltas are normalised to pixels, matching
-    /// [`ScrollArea`](crate::ScrollArea): a line delta counts as 20px, so one wheel notch is roughly ±60.
+    /// Fire `f(x, y)` with the pointer position — local to the box, as [`on_drag`](Self::on_drag) reports it —
+    /// on every move over it.
     ///
-    /// Scroll events carry no pointer position, so the box's hover state is what targets them; this enables
-    /// hover tracking on its own, without needing an `on_hover_style`. A scrollable child (a scroll area
-    /// inside the box) hit-tests first and keeps the event.
+    /// The continuous half of [`on_hover`](Self::on_hover), which reports only the crossings. It is what a
+    /// surface that answers to *where* the pointer is needs: highlighting the face under the cursor, previewing
+    /// a snap, stretching a dimension line. Fires for touch as well as mouse, since a drag on a touchscreen
+    /// asks the same question.
+    pub fn on_pointer_move(self, f: impl Fn(f32, f32) + 'static) -> Self {
+        self.maybe_on_pointer_move(Some(f))
+    }
+
+    /// [`on_pointer_move`](Self::on_pointer_move) for a handler the caller may not have supplied.
+    pub fn maybe_on_pointer_move(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
+        let Some(f) = f else { return self };
+        self.on_pointer_move = Some(Box::new(f));
+        self.mark_interactive();
+        self
+    }
+
+    /// Fire `f(dx, dy)` with the wheel delta while the pointer is over the box — scroll-to-adjust on a control
+    /// (a volume or brightness chip, a stepper), or zoom on a viewport. Deltas are normalised to pixels,
+    /// matching [`ScrollArea`](crate::ScrollArea): a line delta counts as 20px, so one wheel notch is roughly
+    /// ±60.
+    ///
+    /// Targeted by hit-testing the wheel's own position, so it answers a wheel that arrives before the pointer
+    /// has moved at all. A scrollable child (a scroll area inside the box) gets first refusal and keeps it.
     pub fn on_scroll(self, f: impl Fn(f32, f32) + 'static) -> Self {
         self.maybe_on_scroll(Some(f))
     }
@@ -328,6 +399,11 @@ impl StyledContainer {
 
     /// Fire `f(&key)` on every key press. This is a GLOBAL handler (key events reach every widget; there is
     /// no per-widget focus), so it suits app-level shortcuts, not focused text entry.
+    ///
+    /// It stands aside while a text entry holds focus and the press is text it would take
+    /// ([`focus::text_entry_takes_key`]) — so a shortcut on `3` does not also fire when the user types `3`
+    /// into a field, while `⌘S` still reaches it. Read the modifiers with [`crate::modifiers`]: key events
+    /// carry them, but pointer events do not, so the state registry is the one answer that works everywhere.
     pub fn on_key(self, f: impl Fn(&Key) + 'static) -> Self {
         self.maybe_on_key(Some(f))
     }
@@ -361,6 +437,10 @@ impl StyledContainer {
 impl LayoutItem for StyledContainer {
     fn layout_node(&self) -> NodeId {
         self.node
+    }
+
+    fn pointer_opaque(&self) -> bool {
+        !self.click_through
     }
 }
 
@@ -417,6 +497,7 @@ impl Component for StyledContainer {
             && self.hover_style.is_none()
             && self.active_style.is_none()
             && self.on_hover.is_none()
+            && self.on_pointer_move.is_none()
             && self.on_scroll.is_none()
             && self.on_key.is_none()
             && self.focus_id.is_none()
@@ -432,19 +513,31 @@ impl Component for StyledContainer {
                 self.press.track_move(event);
                 let dragged = self.drag.moved(event, rect) == EventResult::Handled;
                 let child = self.dispatch_children(event);
-                let inside = rect.contains(*x as f32, *y as f32);
+                // Inside the box AND nothing drawn in front of it there: a move is broadcast for the sake of
+                // gestures already running, and only the topmost box under the pointer is *hovered*.
+                let inside =
+                    rect.contains(*x as f32, *y as f32) && !crate::pointer::pointer_occluded();
                 // Pressed clears once the pointer drags off the box (mouse or touch) so it never sticks.
                 if !inside {
                     self.set_active(false);
                 }
-                let tracks_hover = self.hover_style.is_some()
-                    || self.on_hover.is_some()
-                    || self.on_scroll.is_some();
+                if inside && let Some(cb) = &self.on_pointer_move {
+                    cb(*x as f32 - rect.x, *y as f32 - rect.y);
+                }
+                let tracks_hover =
+                    self.hover_style.is_some() || self.on_hover.is_some() || self.cursor.is_some();
                 if tracks_hover
                     && matches!(source, PointerSource::Mouse)
                     && inside != self.is_hovered.get()
                 {
                     self.is_hovered.set(inside);
+                    if let Some(cursor) = self.cursor {
+                        platform_core::push_window_command(WindowCommand::SetCursor(if inside {
+                            cursor
+                        } else {
+                            Cursor::Default
+                        }));
+                    }
                     if let Some(cb) = &self.on_hover {
                         cb(inside);
                     }
@@ -454,10 +547,10 @@ impl Component for StyledContainer {
             }
             // A child (e.g. an inner button) hit-tests first and wins; only a press on the bare box arms our tap/drag.
             Event::PointerPressed { x, y, button, .. } => {
-                // Pressed state, focus and drag are primary-only gestures. A box that asked for other buttons
-                // gets them routed to its press gesture; every other box lets them fall through untouched.
+                // Pressed state and focus are primary-only. A box that asked for other buttons gets them
+                // routed to its press or drag gesture; every other box lets them fall through untouched.
                 let primary = *button == PointerButton::Primary;
-                if !primary && !self.press.wants_alt() {
+                if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
                     return self.dispatch_children(event);
                 }
                 if self.dispatch_children(event) == EventResult::Handled {
@@ -479,9 +572,8 @@ impl Component for StyledContainer {
                 };
                 let tapped =
                     self.press.is_set() && self.press.arm(event, rect) == EventResult::Handled;
-                let dragged = primary
-                    && self.drag.is_set()
-                    && self.drag.press(event, rect) == EventResult::Handled;
+                let dragged =
+                    self.drag.is_set() && self.drag.press(event, rect) == EventResult::Handled;
                 if tapped || dragged || focused {
                     EventResult::Handled
                 } else {
@@ -490,7 +582,7 @@ impl Component for StyledContainer {
             }
             Event::PointerReleased { button, .. } => {
                 let primary = *button == PointerButton::Primary;
-                if !primary && !self.press.wants_alt() {
+                if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
                     return self.dispatch_children(event);
                 }
                 // A release always ends the pressed state, wherever it lands.
@@ -510,7 +602,7 @@ impl Component for StyledContainer {
                     }
                     _ => None,
                 };
-                let dragged = primary && self.drag.end(released_at);
+                let dragged = self.drag.arms(button) && self.drag.end(released_at);
                 let tapped =
                     self.press.is_set() && self.press.release(event, rect) == EventResult::Handled;
                 if tapped || dragged {
@@ -523,9 +615,7 @@ impl Component for StyledContainer {
                 self.press.cancel();
                 self.drag.end(None);
                 self.set_active(false);
-                let tracks_hover = self.hover_style.is_some()
-                    || self.on_hover.is_some()
-                    || self.on_scroll.is_some();
+                let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
                 if tracks_hover && self.is_hovered.get() {
                     self.is_hovered.set(false);
                     if let Some(cb) = &self.on_hover {
@@ -534,15 +624,15 @@ impl Component for StyledContainer {
                 }
                 self.dispatch_children(event)
             }
-            // Scroll carries no position, so the box's hover state targets it. Children (e.g. a nested scroll area) get first refusal; only then does an `on_scroll` box consume the wheel.
-            Event::Scrolled { delta } => {
+            // Children (e.g. a nested scroll area) get first refusal; only then does an `on_scroll` box under the wheel consume it.
+            Event::Scrolled { delta, x, y } => {
                 if self.dispatch_children(event) == EventResult::Handled {
                     return EventResult::Handled;
                 }
                 let Some(cb) = &self.on_scroll else {
                     return EventResult::Ignored;
                 };
-                if !self.is_hovered.get() {
+                if !rect.contains(*x as f32, *y as f32) {
                     return EventResult::Ignored;
                 }
                 let (dx, dy) = match delta {
@@ -566,7 +656,11 @@ impl Component for StyledContainer {
                     }
                     return EventResult::Handled;
                 }
-                if let Some(cb) = &self.on_key {
+                // Not while a field has the caret: the press is the user typing, and this handler is the app's
+                // shortcut table, which would otherwise fire on every letter of what they type.
+                if let Some(cb) = &self.on_key
+                    && !focus::text_entry_takes_key(key, *modifiers)
+                {
                     cb(key);
                 }
                 self.dispatch_children(event)
@@ -721,8 +815,10 @@ mod tests {
         assert_eq!(seen.get(), Some(false), "leaving fires on_hover(false)");
     }
 
+    /// The wheel is targeted by where it happened, not by a hover the box had to have seen first — so the
+    /// very first wheel over a box lands, and one over a sibling never does.
     #[test]
-    fn on_scroll_fires_only_while_hovered_and_normalises_lines() {
+    fn on_scroll_targets_by_position_and_normalises_lines() {
         let seen: Rc<Cell<(f32, f32)>> = Rc::new(Cell::new((0.0, 0.0)));
         let sink = seen.clone();
         reset_layout_runtime();
@@ -742,46 +838,35 @@ mod tests {
         )
         .unwrap();
 
-        // The pointer has never entered, so the wheel is not ours to consume.
         assert_eq!(
             card.on_event(&Event::Scrolled {
                 delta: ScrollDelta::Pixels { x: 0.0, y: -30.0 },
+                x: 300.0,
+                y: 300.0,
             }),
             EventResult::Ignored,
             "a wheel event outside the box is ignored"
         );
         assert_eq!(seen.get(), (0.0, 0.0));
 
-        card.on_event(&Event::PointerMoved {
-            x: 50.0,
-            y: 50.0,
-            source: PointerSource::Mouse,
-        });
         assert_eq!(
             card.on_event(&Event::Scrolled {
                 delta: ScrollDelta::Pixels { x: 0.0, y: -30.0 },
+                x: 50.0,
+                y: 50.0,
             }),
             EventResult::Handled,
-            "hovering makes the wheel ours"
+            "a wheel over the box is ours, with no move having preceded it"
         );
         assert_eq!(seen.get(), (0.0, -30.0));
 
         // Line deltas are normalised to pixels the same way ScrollArea does it.
         card.on_event(&Event::Scrolled {
             delta: ScrollDelta::Lines { x: 0.0, y: 3.0 },
+            x: 50.0,
+            y: 50.0,
         });
         assert_eq!(seen.get(), (0.0, 60.0));
-
-        // Leaving clears hover, so the wheel stops reaching the handler.
-        card.on_event(&Event::CursorLeft);
-        assert_eq!(
-            card.on_event(&Event::Scrolled {
-                delta: ScrollDelta::Pixels { x: 0.0, y: -10.0 },
-            }),
-            EventResult::Ignored,
-            "the wheel is released once the pointer leaves"
-        );
-        assert_eq!(seen.get(), (0.0, 60.0), "the handler did not fire again");
     }
 
     #[test]
@@ -802,6 +887,203 @@ mod tests {
             modifiers: platform_core::ModifiersState::default(),
         });
         assert_eq!(count.get(), 1, "a key press fires on_key");
+    }
+
+    /// The bug this closes: an app-level shortcut table sharing letters with what the user types. `3` selects
+    /// a mode until a field has the caret, and `⌘S` saves either way because no editor here wants it.
+    #[test]
+    fn a_global_key_handler_stands_aside_while_a_field_has_the_caret() {
+        let count = Rc::new(Cell::new(0u32));
+        let sink = count.clone();
+        reset_layout_runtime();
+        focus::clear();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column(),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_key(move |_k| sink.set(sink.get() + 1));
+        let press = |key, modifiers| Event::KeyPressed { key, modifiers };
+        let plain = platform_core::ModifiersState::default();
+        let meta = platform_core::ModifiersState {
+            is_meta: true,
+            ..Default::default()
+        };
+
+        card.on_event(&press(Key::Char('3'), plain));
+        assert_eq!(count.get(), 1, "with nothing focused the shortcut fires");
+
+        let field = focus::next_id();
+        focus::register_as(field, focus::FocusKind::TextEntry);
+        focus::request(field);
+        card.on_event(&press(Key::Char('3'), plain));
+        assert_eq!(count.get(), 1, "typing into a field is not a shortcut");
+        card.on_event(&press(Key::Char('s'), meta));
+        assert_eq!(count.get(), 2, "a chord is a command, not text");
+        card.on_event(&press(Key::Named(NamedKey::F5), plain));
+        assert_eq!(count.get(), 3, "no editor takes F5");
+
+        focus::unregister(field);
+        card.on_event(&press(Key::Char('3'), plain));
+        assert_eq!(count.get(), 4, "the caret left, the shortcut is back");
+    }
+
+    /// A focusable that is not a text entry — a button, a tab — leaves the shortcut table alone.
+    #[test]
+    fn a_focused_button_does_not_swallow_shortcuts() {
+        let count = Rc::new(Cell::new(0u32));
+        let sink = count.clone();
+        reset_layout_runtime();
+        focus::clear();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column(),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_key(move |_k| sink.set(sink.get() + 1));
+        let button = focus::next_id();
+        focus::register(button);
+        focus::request(button);
+        card.on_event(&Event::KeyPressed {
+            key: Key::Char('3'),
+            modifiers: platform_core::ModifiersState::default(),
+        });
+        assert_eq!(count.get(), 1);
+        focus::unregister(button);
+    }
+
+    /// A box drags from the primary button and no other, until it says otherwise — a slider must not slide
+    /// on a right-click. A surface with more than one thing to drag opts the others in, and tells them apart
+    /// through the button registry rather than through a wider callback.
+    #[test]
+    fn a_drag_starts_only_from_the_buttons_the_box_asked_for() {
+        let seen = Rc::new(Cell::new(0u32));
+        let sink = seen.clone();
+        reset_layout_runtime();
+        let mut plain = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_drag(move |_x, _y| sink.set(sink.get() + 1));
+        compute_layout(
+            plain.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let press = |button: PointerButton| Event::PointerPressed {
+            x: 50.0,
+            y: 50.0,
+            button,
+            source: PointerSource::Mouse,
+        };
+        plain.on_event(&press(PointerButton::Secondary));
+        assert_eq!(seen.get(), 0, "a secondary press is not this box's drag");
+        plain.on_event(&press(PointerButton::Primary));
+        assert_eq!(seen.get(), 1, "the primary one always is");
+
+        let count = Rc::new(Cell::new(0u32));
+        let sink = count.clone();
+        reset_layout_runtime();
+        let mut viewport = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_drag(move |_x, _y| sink.set(sink.get() + 1))
+        .drag_button(PointerButton::Secondary);
+        compute_layout(
+            viewport.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        assert_eq!(
+            viewport.on_event(&press(PointerButton::Secondary)),
+            EventResult::Handled
+        );
+        assert_eq!(count.get(), 1, "the box asked for this button");
+        // And the drag it started ends on that button's release, or it would stay armed for ever.
+        assert_eq!(
+            viewport.on_event(&Event::PointerReleased {
+                x: 60.0,
+                y: 60.0,
+                button: PointerButton::Secondary,
+                source: PointerSource::Mouse,
+            }),
+            EventResult::Handled
+        );
+    }
+
+    /// The registry that tells the buttons apart, since the drag callback reports where the pointer is and
+    /// not what pressed it.
+    #[test]
+    fn the_button_registry_holds_what_is_down() {
+        crate::reset_pointer();
+        assert!(!crate::pointer_buttons().any());
+        crate::observe_pointer(&Event::PointerPressed {
+            x: 0.0,
+            y: 0.0,
+            button: PointerButton::Secondary,
+            source: PointerSource::Mouse,
+        });
+        assert!(crate::pointer_buttons().secondary);
+        assert!(!crate::pointer_buttons().primary);
+        // Losing the pointer is where a reconstructed state goes wrong: the release never comes.
+        crate::observe_pointer(&Event::CursorLeft);
+        assert!(!crate::pointer_buttons().any());
+    }
+
+    #[test]
+    fn on_pointer_move_reports_the_position_local_to_the_box() {
+        let seen: Rc<Cell<Option<(f32, f32)>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        reset_layout_runtime();
+        // A 20px spacer above the box, so its own origin is not the window's and a raw position would show.
+        let spacer = Container::new(LayoutStyle::new().width(100.0).height(20.0), vec![]).unwrap();
+        let card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_pointer_move(move |x, y| sink.set(Some((x, y))));
+        let mut root = Container::new(
+            LayoutStyle::new().flex_column().width(100.0).height(120.0),
+            vec![Box::new(spacer), Box::new(card)],
+        )
+        .unwrap();
+        compute_layout(
+            root.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(120.0),
+        )
+        .unwrap();
+
+        root.on_event(&Event::PointerMoved {
+            x: 30.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(
+            seen.get(),
+            Some((30.0, 30.0)),
+            "the box starts 20px down, so the y arrives 20 less — as on_drag reports it"
+        );
+
+        seen.set(None);
+        root.on_event(&Event::PointerMoved {
+            x: 300.0,
+            y: 300.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(seen.get(), None, "a move outside the box is not its move");
     }
 
     #[derive(Clone)]

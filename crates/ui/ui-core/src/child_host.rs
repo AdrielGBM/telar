@@ -384,6 +384,32 @@ mod tests {
         assert_eq!(group_len(&container.view()), 6, "2 static + 4 dynamic");
     }
 
+    /// A fragment whose host node is gone must go quiet, not take the process down.
+    ///
+    /// The real shape of this is a reactive branch holding a reactive list — `if $has_active { for p in
+    /// $params }` — where one write changes both: the branch tears its content down (freeing the very node
+    /// the fragment reconciles into, since a fragment host *is* its container's node) and the list's own
+    /// effect still has a run scheduled. The effect outlives the node because a `Segment` holds the widget
+    /// so a re-render mid-dispatch can still flatten it, so this is not a lifetime that can simply be
+    /// tightened. Clearing the selection in a properties panel did exactly this.
+    #[test]
+    fn a_fragment_whose_node_is_gone_reconciles_into_nothing() {
+        reset_layout_runtime();
+        let items = signal(vec![1u32, 2, 3]);
+        let src = items.clone();
+        let container = Container::from_slots(
+            LayoutStyle::new().flex_row(),
+            vec![fragment(move || src.get(), |n: &u32| *n, |_n| Ok(leaf10()))],
+        )
+        .unwrap();
+        assert_eq!(group_len(&container.view()), 3);
+
+        // What the branch teardown does to it, without the branch.
+        crate::context::remove_node(container.layout_node());
+        items.set(vec![9]);
+        items.set(Vec::new());
+    }
+
     // The load-bearing property of C: the fragment's items are laid out as real siblings of the static
     // children, IN THE HOST'S ROW DIRECTION and BETWEEN the two statics — not stacked in a private column.
     #[test]

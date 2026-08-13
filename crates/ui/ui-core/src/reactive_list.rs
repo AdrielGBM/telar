@@ -47,6 +47,17 @@ pub struct ReactiveList {
 }
 
 impl ReactiveList {
+    /// Runs the reconciled items along the horizontal axis instead of stacking them.
+    ///
+    /// Every constructor builds a column, because a list's own node exists before it is attached and
+    /// cannot ask a parent it does not have yet. A `for` written inside a `row` reconciles into that row
+    /// as a transparent fragment and never reaches here; one that *cannot* — inside a reactive `if`, say,
+    /// which owns a node of its own — is boxed, and this is how it learns which way its items run.
+    pub fn as_row(self) -> Self {
+        crate::context::set_container_row(self.node);
+        self
+    }
+
     /// `source` reads the reactive item collection; `key` extracts a stable identity per item; `build`
     /// constructs one widget per item, creating its nodes against the live (thread-local) layout tree
     /// from inside the reconcile effect.

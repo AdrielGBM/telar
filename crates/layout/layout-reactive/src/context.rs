@@ -133,6 +133,14 @@ pub fn set_display(node: NodeId, visible: bool) {
     with_runtime(|rt| rt.set_display(node, visible))
 }
 
+/// Lays `node`'s children along the horizontal axis, after the node was built as a column. A reconciling
+/// list boxed inside a `row` calls this: its own node exists before it is attached, so the direction it
+/// should have cannot be known at construction.
+pub fn set_container_row(node: NodeId) {
+    with_runtime(|rt| rt.engine.make_flex_row(node));
+    mark_dirty(node).ok();
+}
+
 /// Whether `node` is a flex row (main axis horizontal). A transparent `for … gap:N` fragment reads its host
 /// container's axis to know which edge the per-item gap margin sits on.
 pub fn container_is_row(node: NodeId) -> bool {
@@ -170,6 +178,19 @@ pub fn remove_node(node: NodeId) {
 /// computed after the main one, which the auto-detection would otherwise pick as the host). Call it each
 /// relayout with the current main root (it survives hot-reload rebuilds, which mint a new root node). Once
 /// pinned, auto-detection no longer overrides the host.
+/// The area an overlay may occupy: the laid-out rect of the host its content is attached to, which is the
+/// window (or the surface) it will be composed into.
+///
+/// What a panel needs to stay on screen. Without it an anchored bubble is placed from its trigger alone and
+/// runs off whichever edge the trigger happens to be near — which is not a rare case but the common one, a
+/// tooltip on the rightmost button of a toolbar.
+pub fn overlay_viewport() -> Option<geometry_core::Rect> {
+    with_runtime(|rt| {
+        let host = rt.overlay_host?;
+        rt.engine.layout(host).ok()
+    })
+}
+
 pub fn set_overlay_host(node: NodeId) {
     with_runtime(|rt| {
         rt.overlay_host = Some(node);

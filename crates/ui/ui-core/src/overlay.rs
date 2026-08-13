@@ -22,6 +22,11 @@ pub enum Placement {
     Below,
     /// Content's bottom-left at the trigger's top-left — a menu opening upward.
     Above,
+    /// Beside the trigger on its leading side, centred on it — where a tooltip goes when the trigger sits in
+    /// a vertical rail and the room is sideways.
+    Start,
+    /// Beside the trigger on its trailing side, centred on it.
+    End,
 }
 
 /// The world-vs-local anchor fallback shared by the anchored menu/select/tooltip panels.
@@ -54,15 +59,71 @@ fn panel_rect(children: &TrackedChildren, read: impl Fn(&RwSignal<Rect>) -> Rect
     acc.unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0))
 }
 
+/// Gap kept between an anchored panel and the edge it was pushed off, so a shifted bubble does not sit flush
+/// against the window.
+const EDGE_MARGIN: f32 = 4.0;
+
+/// Gap kept between an anchored panel and the thing it is anchored to — Radix's `sideOffset`, which shadcn
+/// sets to 4 on every menu and which its tooltip gets from the arrow it reserves room for.
+///
+/// A panel flush against its trigger reads as *part of* the trigger, which is exactly what it is not: it is
+/// a separate surface that appeared because of it. The gap is what makes a menu look attached to its button
+/// rather than grown out of it, and it is the difference every one of these had against the original.
+const ANCHOR_GAP: f32 = 4.0;
+
+/// The area an anchored panel has to stay inside. Falls back to an unbounded box before the host has been
+/// laid out (the very first frame), where clamping to nothing is the same as not clamping.
+fn anchor_viewport() -> Rect {
+    crate::context::overlay_viewport().unwrap_or(Rect::new(0.0, 0.0, f32::MAX, f32::MAX))
+}
+
 /// The translate that moves `panel` from where it was laid out (near the host origin) to its anchored spot
 /// next to `trigger`. Placement picks the target top-left; the offset is that target minus the panel origin.
-/// On-screen clamping is left to the caller for now (it needs the viewport size, which is not plumbed here).
-fn anchor_translate(trigger: Rect, panel: Rect, placement: Placement) -> (f32, f32) {
-    let (target_x, target_y) = match placement {
-        Placement::Below => (trigger.x, trigger.y + trigger.height),
-        Placement::Above => (trigger.x, trigger.y - panel.height),
+///
+/// Then the panel is kept on screen, which is the half that was missing: **flip** to the other side of the
+/// trigger when the asked-for one does not fit and the opposite does, and **shift** along the trigger's edge
+/// when it overflows sideways. Without it the placement is read off the trigger alone, so a tooltip on the
+/// rightmost button of a toolbar runs past the window and the text wraps into a column — which is not a rare
+/// case but the common one. The trigger is never covered: a flip moves the panel to its other side, and a
+/// shift only slides along the edge it is already on.
+fn anchor_translate(
+    trigger: Rect,
+    panel: Rect,
+    placement: Placement,
+    viewport: Rect,
+) -> (f32, f32) {
+    let fits_below =
+        trigger.y + trigger.height + ANCHOR_GAP + panel.height <= viewport.y + viewport.height;
+    let fits_above = trigger.y - ANCHOR_GAP - panel.height >= viewport.y;
+    let fits_after =
+        trigger.x + trigger.width + ANCHOR_GAP + panel.width <= viewport.x + viewport.width;
+    let fits_before = trigger.x - ANCHOR_GAP - panel.width >= viewport.x;
+    let placement = match placement {
+        Placement::Below if !fits_below && fits_above => Placement::Above,
+        Placement::Above if !fits_above && fits_below => Placement::Below,
+        Placement::Start if !fits_before && fits_after => Placement::End,
+        Placement::End if !fits_after && fits_before => Placement::Start,
+        other => other,
     };
-    (target_x - panel.x, target_y - panel.y)
+    // Sideways placement centres on the trigger; the vertical ones align to its leading edge. LTR throughout,
+    // as `Below` has always been — flipping the whole function for RTL is one place to change.
+    let centre_y = trigger.y + (trigger.height - panel.height) / 2.0;
+    let (target_x, target_y) = match placement {
+        Placement::Below => (trigger.x, trigger.y + trigger.height + ANCHOR_GAP),
+        Placement::Above => (trigger.x, trigger.y - panel.height - ANCHOR_GAP),
+        Placement::Start => (trigger.x - panel.width - ANCHOR_GAP, centre_y),
+        Placement::End => (trigger.x + trigger.width + ANCHOR_GAP, centre_y),
+    };
+    // Slide along the edge rather than clamping blindly: a panel wider than the viewport keeps its left edge
+    // visible, which is where its content starts.
+    let max_x = viewport.x + viewport.width - panel.width - EDGE_MARGIN;
+    let target_x = target_x.min(max_x).max(viewport.x + EDGE_MARGIN);
+    let max_y = viewport.y + viewport.height - panel.height - EDGE_MARGIN;
+    let target_y = target_y.min(max_y.max(viewport.y)).max(viewport.y);
+    // On the pixel grid. A sideways placement centres on the trigger, so it lands on a half pixel whenever
+    // the panel and the trigger differ by an odd height — and a surface at a half pixel has soft edges and
+    // softer text inside it. Rounding a translate cannot move anything anywhere it should not be.
+    ((target_x - panel.x).round(), (target_y - panel.y).round())
 }
 
 /// The content rect an anchored overlay actually occupies on screen: its panel translated to the trigger.
@@ -74,7 +135,12 @@ fn anchored_content_rect(
     read: impl Fn(&RwSignal<Rect>) -> Rect,
 ) -> Rect {
     let panel = panel_rect(children, &read);
-    let (dx, dy) = anchor_translate(read(&anchor.trigger), panel, anchor.placement);
+    let (dx, dy) = anchor_translate(
+        read(&anchor.trigger),
+        panel,
+        anchor.placement,
+        anchor_viewport(),
+    );
     Rect::new(panel.x + dx, panel.y + dy, panel.width, panel.height)
 }
 
@@ -112,7 +178,12 @@ impl OverlaySink for OverlaySinkImpl {
         // so map the world event back into the children's local space by the inverse translate first.
         let offset = self.anchor.as_ref().map(|anchor| {
             let panel = panel_rect(&self.children.borrow(), |s| s.peek());
-            anchor_translate(anchor.trigger.peek(), panel, anchor.placement)
+            anchor_translate(
+                anchor.trigger.peek(),
+                panel,
+                anchor.placement,
+                anchor_viewport(),
+            )
         });
         match offset {
             Some((dx, dy)) => {
@@ -215,6 +286,23 @@ impl Overlay {
         )
     }
 
+    /// [`anchored`](Self::anchored) for a panel that must not take the pointer: a tooltip bubble, a hint,
+    /// anything that appears because the pointer is *near* it and would be dismissed by touching it.
+    pub fn anchored_click_through(
+        layout_style: LayoutStyle,
+        children: Vec<Box<dyn LayoutItem>>,
+        trigger: RwSignal<Rect>,
+        placement: Placement,
+    ) -> Result<Self, LayoutError> {
+        Self::build(
+            layout_style,
+            children,
+            false,
+            Some(Anchor { trigger, placement }),
+            Rc::new(|| true),
+        )
+    }
+
     fn build(
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
@@ -268,6 +356,13 @@ impl LayoutItem for Overlay {
     fn layout_node(&self) -> NodeId {
         self.layout_node
     }
+
+    /// An overlay is reached through the registry, before the tree walk, so its in-tree node must not
+    /// hit-test at all. Normally it is a 0×0 placeholder and the question never comes up; on the first frame,
+    /// before a host exists, the content is laid out in place and would otherwise cover its own siblings.
+    fn pointer_opaque(&self) -> bool {
+        false
+    }
 }
 
 impl Component for Overlay {
@@ -282,7 +377,12 @@ impl Component for Overlay {
             Some(anchor) => {
                 // `get` (not peek) so the transform re-runs when the trigger or the panel's size changes.
                 let panel = panel_rect(&self.children, |s| s.get());
-                let (dx, dy) = anchor_translate(anchor.trigger.get(), panel, anchor.placement);
+                let (dx, dy) = anchor_translate(
+                    anchor.trigger.get(),
+                    panel,
+                    anchor.placement,
+                    anchor_viewport(),
+                );
                 // Translate matrix `[1,0,0,1,dx,dy]`: the content is laid out at the origin, drawn at the trigger.
                 RenderNode::overlay([RenderNode::transform_with(
                     [1.0, 0.0, 0.0, 1.0, dx, dy],
@@ -342,6 +442,74 @@ mod tests {
 
     use super::*;
     use crate::ComponentList;
+
+    /// A panel is placed from its trigger and then kept on screen. Without the second half, a tooltip on the
+    /// rightmost button of a toolbar is laid out past the window edge and its text wraps into a column — the
+    /// shape of the bug, not a cosmetic offset.
+    #[test]
+    fn an_anchored_panel_shifts_and_flips_to_stay_on_screen() {
+        let viewport = Rect::new(0.0, 0.0, 400.0, 300.0);
+        let panel = Rect::new(0.0, 0.0, 120.0, 60.0);
+
+        // Comfortably inside: under the trigger, a gap short of touching it.
+        let trigger = Rect::new(100.0, 100.0, 40.0, 20.0);
+        assert_eq!(
+            anchor_translate(trigger, panel, Placement::Below, viewport),
+            (100.0, 120.0 + ANCHOR_GAP)
+        );
+
+        // Against the right edge: slid left just enough to fit, still below the trigger.
+        let right = Rect::new(380.0, 100.0, 20.0, 20.0);
+        let (dx, dy) = anchor_translate(right, panel, Placement::Below, viewport);
+        assert_eq!((dx, dy), (400.0 - 120.0 - EDGE_MARGIN, 120.0 + ANCHOR_GAP));
+
+        // Against the bottom edge, with room above: flipped over the trigger rather than clamped onto it.
+        let low = Rect::new(100.0, 270.0, 40.0, 20.0);
+        let (_, dy) = anchor_translate(low, panel, Placement::Below, viewport);
+        assert_eq!(dy, 270.0 - 60.0 - ANCHOR_GAP, "opens upward instead");
+
+        // Nowhere to flip to (a panel taller than the viewport): pinned to the top, so its start is visible.
+        let tall = Rect::new(0.0, 0.0, 120.0, 400.0);
+        let (_, dy) = anchor_translate(low, tall, Placement::Below, viewport);
+        assert_eq!(dy, 0.0);
+    }
+
+    /// Beside the trigger, the panel centres on it and flips across it when its own side runs out — the same
+    /// two rules the vertical placements follow, on the other axis. A control in a vertical rail has no room
+    /// below it and all the room in the world beside it, which is why the sideways pair exists at all.
+    #[test]
+    fn a_panel_placed_beside_its_trigger_centres_on_it_and_flips_when_it_has_to() {
+        let viewport = Rect::new(0.0, 0.0, 400.0, 300.0);
+        let panel = Rect::new(0.0, 0.0, 120.0, 60.0);
+        let trigger = Rect::new(200.0, 100.0, 40.0, 20.0);
+
+        let (dx, dy) = anchor_translate(trigger, panel, Placement::End, viewport);
+        assert_eq!(
+            dx,
+            240.0 + ANCHOR_GAP,
+            "starts a gap past where the trigger ends"
+        );
+        assert_eq!(dy, 100.0 + (20.0 - 60.0) / 2.0, "centred on the trigger");
+
+        let (dx, _) = anchor_translate(trigger, panel, Placement::Start, viewport);
+        assert_eq!(
+            dx,
+            80.0 - ANCHOR_GAP,
+            "ends a gap before the trigger starts"
+        );
+
+        // A rail down the left edge: there is no room before the trigger, so the panel takes the other side.
+        let rail = Rect::new(4.0, 100.0, 40.0, 20.0);
+        let (dx, _) = anchor_translate(rail, panel, Placement::Start, viewport);
+        assert_eq!(dx, 44.0 + ANCHOR_GAP, "flipped to the trailing side");
+
+        // Centring on a trigger of a different height lands on a half pixel, and a surface at a half pixel
+        // has soft edges and softer text: a tooltip beside a 36px button was crisp and the same one under a
+        // 28px tab was blurred, from nothing but the fraction each placement contributed.
+        let odd = Rect::new(200.0, 100.0, 40.0, 21.0);
+        let (dx, dy) = anchor_translate(odd, panel, Placement::End, viewport);
+        assert_eq!((dx, dy), (dx.round(), dy.round()), "on the pixel grid");
+    }
     use crate::container::Container;
     use crate::context::compute_layout;
 
@@ -599,15 +767,15 @@ mod tests {
         .unwrap();
         relayout_if_dirty();
 
-        // Below: the content's top-left sits at the trigger's bottom-left (50, 20 + 30) with the panel's size.
+        // Below: the content sits at the trigger's bottom-left (50, 20 + 30), a gap short of touching it.
         let rect = overlay.anchored_barrier();
-        assert_eq!((rect.x, rect.y), (50.0, 50.0));
+        assert_eq!((rect.x, rect.y), (50.0, 50.0 + ANCHOR_GAP));
         assert_eq!((rect.width, rect.height), (120.0, 60.0));
 
         // Move the trigger; the anchored content origin follows it (no relayout needed — it is a transform).
         trigger.set(Rect::new(200.0, 100.0, 80.0, 30.0));
         let rect = overlay.anchored_barrier();
-        assert_eq!((rect.x, rect.y), (200.0, 130.0));
+        assert_eq!((rect.x, rect.y), (200.0, 130.0 + ANCHOR_GAP));
         assert_eq!((rect.width, rect.height), (120.0, 60.0));
     }
 }

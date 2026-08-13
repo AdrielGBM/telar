@@ -93,18 +93,25 @@ fn handle_scroll_event(
     scroll_y: RwSignal<f32>,
     content_rect_signal: RwSignal<Rect>,
     content: &Rc<RefCell<Box<dyn LayoutItem>>>,
-    last_pointer: Option<(f32, f32)>,
 ) -> EventResult {
-    if let Event::Scrolled { delta } = event {
-        // Nested scroll: offer the wheel to the content first, so an inner scroll area under the pointer
-        // consumes it before this (outer) one does.
-        if content.borrow_mut().on_event(event) == EventResult::Handled {
-            return EventResult::Handled;
-        }
-        // A wheel event carries no position, so only scroll here if the last pointer move was inside this
-        // viewport; otherwise leave it Ignored for an ancestor scroll area to handle.
-        if last_pointer.is_some_and(|(px, py)| !viewport.contains(px, py)) {
+    if let Event::Scrolled { delta, x, y } = event {
+        // The wheel belongs to whatever is under it: outside this viewport it is an ancestor's to handle.
+        if !viewport.contains(*x as f32, *y as f32) {
             return EventResult::Ignored;
+        }
+        // Nested scroll: offer the wheel to the content first (in content space, like every other pointer
+        // event that crosses this boundary), so an inner scroll area under the pointer consumes it first.
+        let inner = offset_pointer(
+            event,
+            viewport.x as f64 - scroll_x.get() as f64,
+            viewport.y as f64 - scroll_y.get() as f64,
+        );
+        if content
+            .borrow_mut()
+            .on_event(inner.as_ref().unwrap_or(event))
+            == EventResult::Handled
+        {
+            return EventResult::Handled;
         }
         let (delta_x, delta_y) = match delta {
             ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
@@ -148,9 +155,6 @@ pub(crate) struct ScrollCore {
     press_active: bool,
     gesture_scroll: f32,
     tap_cancelled: bool,
-    // Last pointer position seen (this area's own coordinate space). A wheel `Scrolled` event carries no
-    // position, so nested scroll routing uses this to decide whether the pointer is over this viewport.
-    last_pointer: Option<(f32, f32)>,
 }
 
 /// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll
@@ -178,7 +182,6 @@ impl ScrollCore {
             press_active: false,
             gesture_scroll: 0.0,
             tap_cancelled: false,
-            last_pointer: None,
         }
     }
 
@@ -246,13 +249,10 @@ impl ScrollCore {
                 self.tap_cancelled = false;
             }
             Event::PointerReleased { .. } => self.press_active = false,
-            // Remember where the pointer is so a subsequent (position-less) wheel `Scrolled` can tell
-            // whether it belongs to this viewport or an ancestor's.
-            Event::PointerMoved { x, y, .. } => self.last_pointer = Some((*x as f32, *y as f32)),
             // While a pointer is down (a touch drag, not a mouse wheel), once the finger has travelled past
             // the slop this gesture is a scroll, not a tap: cancel the pending press on the content once (it
             // sees pinned content-space coords and can't tell on its own).
-            Event::Scrolled { delta } if self.press_active && !self.tap_cancelled => {
+            Event::Scrolled { delta, .. } if self.press_active && !self.tap_cancelled => {
                 let (dx, dy) = match delta {
                     ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
                     ScrollDelta::Pixels { x, y } => (*x, *y),
@@ -272,7 +272,6 @@ impl ScrollCore {
             self.scroll_y.clone(),
             self.content_rect_signal.clone(),
             &self.content,
-            self.last_pointer,
         )
     }
 }
@@ -950,6 +949,15 @@ mod tests {
         sa
     }
 
+    /// A wheel turn in the middle of the 400×300 viewport every fixture here uses.
+    fn wheel_over(delta: ScrollDelta) -> Event {
+        Event::Scrolled {
+            delta,
+            x: 100.0,
+            y: 100.0,
+        }
+    }
+
     fn make_scroll_area_small() -> ScrollArea {
         reset_layout_runtime();
         let content = Canvas::new(LayoutStyle::new().width(400.0).height(200.0), |_| {
@@ -1098,6 +1106,8 @@ mod tests {
         for _ in 0..5 {
             sa.on_event(&Event::Scrolled {
                 delta: ScrollDelta::Pixels { x: 0.0, y: -20.0 },
+                x: cx,
+                y: cy,
             });
             sa.on_event(&Event::PointerMoved {
                 x: cx,
@@ -1203,44 +1213,34 @@ mod tests {
     #[test]
     fn scroll_lines_updates_offset() {
         let mut sa = make_scroll_area();
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Lines { x: 0.0, y: -3.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Lines { x: 0.0, y: -3.0 }));
         assert_eq!(sa.core.scroll_y.get(), 60.0);
     }
 
-    // Nested scroll: a wheel event is ignored when the pointer is outside this viewport (it belongs to an
+    // Nested scroll: a wheel event is ignored when it happened outside this viewport (it belongs to an
     // ancestor, or to an inner scroll that already consumed it), so the outer area does not steal it.
     #[test]
     fn wheel_outside_viewport_does_not_scroll() {
         let mut sa = make_scroll_area(); // viewport 400x300
-        sa.on_event(&Event::PointerMoved {
-            x: 500.0,
-            y: 500.0,
-            source: PointerSource::Mouse,
-        });
         let result = sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Lines { x: 0.0, y: -3.0 },
+            x: 500.0,
+            y: 500.0,
         });
         assert_eq!(result, EventResult::Ignored);
         assert_eq!(
             sa.core.scroll_y.get(),
             0.0,
-            "must not scroll when the pointer is elsewhere"
+            "must not scroll when the wheel turned elsewhere"
         );
     }
 
+    /// The wheel carries where it happened, so the first one lands correctly even though the pointer has
+    /// never moved — the case a viewport that tracked moves itself could only guess at.
     #[test]
-    fn wheel_inside_viewport_scrolls() {
+    fn wheel_inside_viewport_scrolls_without_a_prior_move() {
         let mut sa = make_scroll_area();
-        sa.on_event(&Event::PointerMoved {
-            x: 100.0,
-            y: 100.0,
-            source: PointerSource::Mouse,
-        });
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Lines { x: 0.0, y: -3.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Lines { x: 0.0, y: -3.0 }));
         assert!(
             sa.core.scroll_y.get() > 0.0,
             "wheel over the viewport scrolls it"
@@ -1250,27 +1250,21 @@ mod tests {
     #[test]
     fn scroll_pixels_updates_offset() {
         let mut sa = make_scroll_area();
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Pixels { x: 0.0, y: -80.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Pixels { x: 0.0, y: -80.0 }));
         assert_eq!(sa.core.scroll_y.get(), 80.0);
     }
 
     #[test]
     fn scroll_clamps_to_max() {
         let mut sa = make_scroll_area();
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Pixels { x: 0.0, y: -9999.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Pixels { x: 0.0, y: -9999.0 }));
         assert_eq!(sa.core.scroll_y.get(), 700.0);
     }
 
     #[test]
     fn scroll_clamps_to_zero() {
         let mut sa = make_scroll_area();
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Pixels { x: 0.0, y: 9999.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Pixels { x: 0.0, y: 9999.0 }));
         assert_eq!(sa.core.scroll_y.get(), 0.0);
     }
 
@@ -1360,6 +1354,8 @@ mod tests {
 
         sa.on_event(&Event::Scrolled {
             delta: ScrollDelta::Pixels { x: 0.0, y: -100.0 },
+            x: 150.0,
+            y: 200.0,
         });
 
         sa.on_event(&Event::PointerMoved {
@@ -1391,36 +1387,28 @@ mod tests {
     #[test]
     fn scroll_x_lines_updates_offset() {
         let mut sa = make_scroll_area_wide();
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Lines { x: -3.0, y: 0.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Lines { x: -3.0, y: 0.0 }));
         assert_eq!(sa.core.scroll_x.get(), 60.0);
     }
 
     #[test]
     fn scroll_x_pixels_updates_offset() {
         let mut sa = make_scroll_area_wide();
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Pixels { x: -80.0, y: 0.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Pixels { x: -80.0, y: 0.0 }));
         assert_eq!(sa.core.scroll_x.get(), 80.0);
     }
 
     #[test]
     fn scroll_x_clamps_to_max() {
         let mut sa = make_scroll_area_wide();
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Pixels { x: -9999.0, y: 0.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Pixels { x: -9999.0, y: 0.0 }));
         assert_eq!(sa.core.scroll_x.get(), 600.0);
     }
 
     #[test]
     fn scroll_x_clamps_to_zero() {
         let mut sa = make_scroll_area_wide();
-        sa.on_event(&Event::Scrolled {
-            delta: ScrollDelta::Pixels { x: 9999.0, y: 0.0 },
-        });
+        sa.on_event(&wheel_over(ScrollDelta::Pixels { x: 9999.0, y: 0.0 }));
         assert_eq!(sa.core.scroll_x.get(), 0.0);
     }
 
