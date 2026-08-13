@@ -15,11 +15,11 @@ const DEFAULT_BUBBLE: Color = Color::rgba(0.12, 0.12, 0.16, 0.96);
 /// Bubble text colour (always light, on the dark chip).
 const BUBBLE_INK: Color = Color::rgba(0.98, 0.98, 1.0, 1.0);
 /// How wide a bubble may get before its text wraps. A hint is read at a glance, and a sentence stretched
-/// across the window is not; the same 240px shadcn's `TooltipContent` uses.
+/// across the window is not: 240px is about a dozen words, which is as much as a hint should ever say.
 const BUBBLE_MAX_WIDTH: f32 = 240.0;
 /// A bubble is the smallest surface in the app and a corner is read against the size it turns, so it takes
-/// the middle step of the theme's radius scale — the one shadcn calls `--radius-md` and its `TooltipContent`
-/// asks for by name. It was one and a half times the *base* radius, half as round again as the button that
+/// the middle step of the theme's radius scale, and moves when a theme moves its base radius. It was one and
+/// a half times the *base* radius, half as round again as the button that
 /// opened it, and a literal here besides: a theme could change how round everything was and this would not
 /// have moved.
 fn bubble_radius() -> f32 {
@@ -420,7 +420,7 @@ mod tests {
     /// At the default 1.2 the two lines of a long hint sit almost on top of each other, and it reads as the
     /// *text* being squashed rather than as the leading being short — which is why it only showed up on the
     /// hints long enough to need a second line, and looked like a placement bug rather than a type one.
-    /// `leading-snug` is what the original asks for on this line and on no other.
+    /// The looser leading is set on this line and on no other: the name and the shortcut never wrap.
     #[test]
     fn the_description_line_is_set_with_room_to_wrap_into() {
         reset_layout_runtime();

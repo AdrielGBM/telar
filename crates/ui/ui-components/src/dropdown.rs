@@ -185,8 +185,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             // A filled trigger widens the panel to match — it opens under a control the row sized, so a
             // narrower list would read as a different control — but only ever *widens* it. Taking the
             // trigger's width outright is what turned a compact `File` button into a 40px sheet with one
-            // character per line; the trigger is a floor, never a ceiling. Radix says the same thing with
-            // `--radix-dropdown-menu-trigger-width` as a `min-width`.
+            // character per line; the trigger is a floor, never a ceiling.
             let width = if fill {
                 anchor.width.max(PANEL_WIDTH)
             } else {
@@ -243,9 +242,9 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     Ok(box_item(root))
 }
 
-/// A select is a form control and wears a border; a **menu** is a button that happens to open a list, and
-/// the original gives it `variant="ghost"` for exactly that reason. A bordered menu trigger reads as a field
-/// with the caret in it — or, sitting alone in a header, as a button stuck in its focused state.
+/// A select is a form control and wears a border; a **menu** is a button that happens to open a list, so it
+/// wears none. A bordered menu trigger reads as a field with the caret in it — or, sitting alone in a header,
+/// as a button stuck in its focused state. `bordered` is there for the caller who wants the other reading.
 fn trigger_rect_style(color: &dyn Fn() -> Color, bordered: bool) -> RectStyle {
     let radius = BorderRadius::all(shared::radius_md());
     if !bordered {
@@ -263,7 +262,8 @@ fn trigger_rect_style(color: &dyn Fn() -> Color, bordered: bool) -> RectStyle {
 }
 
 /// The caret every trigger carries, drawn rather than spelled: a glyph would depend on the face having it
-/// and on it being the size the label is. Two strokes, 11px across, as the original asks for.
+/// and on it being the size the label is. Two strokes, 11px across: wide enough to read beside a label at the
+/// body size, narrow enough not to compete with it.
 fn caret() -> Result<Box<dyn LayoutItem>, LayoutError> {
     const W: f32 = 11.0;
     const H: f32 = 5.5;

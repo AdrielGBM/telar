@@ -63,12 +63,12 @@ fn panel_rect(children: &TrackedChildren, read: impl Fn(&RwSignal<Rect>) -> Rect
 /// against the window.
 const EDGE_MARGIN: f32 = 4.0;
 
-/// Gap kept between an anchored panel and the thing it is anchored to — Radix's `sideOffset`, which shadcn
-/// sets to 4 on every menu and which its tooltip gets from the arrow it reserves room for.
+/// Gap kept between an anchored panel and the thing it is anchored to.
 ///
 /// A panel flush against its trigger reads as *part of* the trigger, which is exactly what it is not: it is
 /// a separate surface that appeared because of it. The gap is what makes a menu look attached to its button
-/// rather than grown out of it, and it is the difference every one of these had against the original.
+/// rather than grown out of it — 4px is enough to separate the two surfaces and small enough that they still
+/// read as one gesture, which is why it is the offset most anchored-panel libraries settle on.
 const ANCHOR_GAP: f32 = 4.0;
 
 /// The area an anchored panel has to stay inside. Falls back to an unbounded box before the host has been

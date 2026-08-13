@@ -179,8 +179,8 @@ const CONTAINER_PAINT: &[&str] = &[
 /// through the **trait method** rather than through a field of the same name.
 ///
 /// Because the trait is the contract: `set_theme` requires it, and every catalogue component reads its
-/// colours from it. A theme shaped like shadcn calls its quiet *surface* `muted` and its quiet *ink*
-/// `muted-foreground`, and maps `ThemeTokens::muted()` to the latter — so a `.rsx` reading the field got a
+/// colours from it. A theme shaped like shadcn's, for instance, calls its quiet *surface* `muted` and its
+/// quiet *ink* `muted-foreground`, and maps `ThemeTokens::muted()` to the latter — so a `.rsx` reading the field got a
 /// background where the catalogue beside it got an ink, and the text came out invisible with nothing to
 /// diagnose. A theme's own tokens (`card`, `accent`, `popover`) are not in the trait and stay field reads,
 /// and `theme.name` remains the escape hatch for a field this list shadows.

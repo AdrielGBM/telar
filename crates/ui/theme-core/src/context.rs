@@ -38,10 +38,10 @@ pub trait ThemeTokens: 'static {
     /// The steps either side of [`radius`](Self::radius), so a theme owns **how round everything is** instead
     /// of each component keeping its own literal.
     ///
-    /// This is the axis an application actually restyles: shadcn ships exactly this scale
-    /// (`--radius-sm/md/lg` derived from `--radius`), with these very factors.
-    /// A component that hardcodes `BorderRadius::all(8.0)` is not themeable at all — the caller can change the
-    /// base radius and watch nothing move — and the fix is not a prop per component but a token they all read.
+    /// This is the axis an application actually restyles, and a scale of three steps derived from one base is
+    /// what a design system needs to be reachable from outside. A component that hardcodes
+    /// `BorderRadius::all(8.0)` is not themeable at all — the caller can change the base radius and watch
+    /// nothing move — and the fix is not a prop per component but a token they all read.
     ///
     /// A theme that wants a flat scale returns the same number from all three; one that wants a rounder
     /// language moves the base and the steps follow.

@@ -62,8 +62,8 @@ pub(crate) fn ink() -> Color {
 /// with it more.
 ///
 /// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A
-/// neutral palette (shadcn's "zinc", say) makes `primary` a near-white in dark mode, and the label
-/// disappeared into its own button. Reading both ends of the theme and picking by luminance keeps a caller
+/// neutral palette — the greys a shadcn-style theme builds on, say — makes `primary` a near-white in dark
+/// mode, and the label disappeared into its own button. Reading both ends of the theme and picking by luminance keeps a caller
 /// free to pass any colour at all — which the `fill:` prop already lets them do.
 pub(crate) fn ink_on(fill: Color) -> Color {
     let dark = ink();

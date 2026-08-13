@@ -26,8 +26,7 @@ pub struct MenuProps {
     /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::fill`].
     pub fill: bool,
     /// Draw the trigger as a field, with the border a `select` carries. Off by default, because a menu is a
-    /// *button* that happens to open a list — which is what shadcn says by giving `DropdownMenuTrigger` a
-    /// ghost button and `SelectTrigger` a bordered one.
+    /// *button* that happens to open a list, and a button wears no frame until it is pressed.
     ///
     /// A prop and not a decision settled inside the component, because both readings are legitimate: a menu
     /// standing alone in a header wants no frame, and one sitting in a row of fields wants to match them.
@@ -73,9 +72,9 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 /// The shape of a trigger is the caller's call, not the component's.
 ///
-/// The default is what the original does — a menu is a ghost button, a select is a field — but a menu
-/// dropped into a row of inputs wants to match them, and there has to be a way to say so that is not
-/// editing the catalogue. Guards the props rather than the pixels: what matters is that they *reach*
+/// The default splits them by what they are — a menu is a button, a select is a field — but a menu dropped
+/// into a row of inputs wants to match them, and there has to be a way to say so that is not editing the
+/// catalogue. Guards the props rather than the pixels: what matters is that they *reach*
 /// the trigger's paint at all.
 #[cfg(test)]
 #[test]
