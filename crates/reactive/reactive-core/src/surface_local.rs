@@ -33,22 +33,57 @@ macro_rules! surface_local {
                 let ambient = ::std::boxed::Box::into_raw(::std::boxed::Box::new(
                     ::std::cell::RefCell::new($init),
                 ));
-                ::std::cell::Cell::new($crate::SurfaceSlot { live: ambient, ambient })
+                ::std::cell::Cell::new($crate::SurfaceSlot {
+                    live: ambient,
+                    ambient,
+                    last_borrow: ::std::option::Option::None,
+                })
             };
         }
 
+        // `#[track_caller]` so the recorded site is the caller that reached this world, not this generated accessor.
         #[allow(dead_code)]
+        #[track_caller]
         fn $with<R>(f: impl ::std::ops::FnOnce(&mut $ty) -> R) -> R {
             // SAFETY: the pointer always addresses a live, heap-allocated `RefCell<$ty>` — either the
             // leaked ambient instance or a per-surface `Context`'s box that outlives every guard pointing
             // the slot at it. The borrow is released before the closure returns, so swaps never race a borrow.
-            $slot.with(|cell| unsafe { f(&mut *(*cell.get().live).borrow_mut()) })
+            $slot.with(|cell| {
+                let slot = cell.get();
+                let borrowed = unsafe { (*slot.live).try_borrow_mut() };
+                match borrowed {
+                    ::std::result::Result::Ok(mut guard) => {
+                        cell.set(slot.borrowed_at(::std::panic::Location::caller()));
+                        f(&mut *guard)
+                    }
+                    ::std::result::Result::Err(_) => $crate::reentry::borrow_collision(
+                        ::std::stringify!($slot),
+                        slot.last_borrow,
+                        ::std::panic::Location::caller(),
+                    ),
+                }
+            })
         }
 
         #[allow(dead_code)]
+        #[track_caller]
         fn $with_ref<R>(f: impl ::std::ops::FnOnce(&$ty) -> R) -> R {
             // SAFETY: see `$with`.
-            $slot.with(|cell| unsafe { f(&*(*cell.get().live).borrow()) })
+            $slot.with(|cell| {
+                let slot = cell.get();
+                let borrowed = unsafe { (*slot.live).try_borrow() };
+                match borrowed {
+                    ::std::result::Result::Ok(guard) => {
+                        cell.set(slot.borrowed_at(::std::panic::Location::caller()));
+                        f(&*guard)
+                    }
+                    ::std::result::Result::Err(_) => $crate::reentry::borrow_collision(
+                        ::std::stringify!($slot),
+                        slot.last_borrow,
+                        ::std::panic::Location::caller(),
+                    ),
+                }
+            })
         }
 
         $(#[$ctx_meta])*
@@ -144,6 +179,17 @@ macro_rules! surface_local {
 pub struct SurfaceSlot<T> {
     pub live: *mut std::cell::RefCell<T>,
     pub ambient: *mut std::cell::RefCell<T>,
+    /// Where the last borrow of this slot to succeed was taken, so a collision names what it collided with
+    /// rather than only itself. See [`crate::reentry`].
+    pub last_borrow: Option<&'static std::panic::Location<'static>>,
+}
+
+impl<T> SurfaceSlot<T> {
+    #[doc(hidden)]
+    pub fn borrowed_at(mut self, at: &'static std::panic::Location<'static>) -> Self {
+        self.last_borrow = Some(at);
+        self
+    }
 }
 
 // Hand-written so the derives do not require `T: Copy`; a pair of raw pointers is `Copy` whatever they point at, which is what the `Cell` holding them needs.
@@ -154,3 +200,75 @@ impl<T> Clone for SurfaceSlot<T> {
 }
 
 impl<T> Copy for SurfaceSlot<T> {}
+
+#[cfg(test)]
+// The macro generates a whole Context/Guard API; this probe exercises the borrow paths and not all of it.
+#[allow(dead_code)]
+mod tests {
+    crate::surface_local! {
+        slot PROBE: u32 = 0;
+        access with_probe, with_probe_ref;
+        context ProbeContext, ProbeGuard;
+    }
+
+    /// The shape every `surface_local!` world has hit at least once, and the reason six of them carry a
+    /// hand-written "copy out, drop the borrow, write after" dance: a closure holding the slot reaches back
+    /// into it. The panic now points at the two lines instead of at the `RefCell` that noticed.
+    #[test]
+    fn a_reentrant_slot_borrow_names_both_call_sites() {
+        let quiet = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_probe(|_| with_probe(|_| ()));
+        }));
+        std::panic::set_hook(quiet);
+
+        let payload = outcome.expect_err("the inner borrow cannot succeed");
+        let message = payload
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .unwrap_or_default();
+        assert!(message.contains("`PROBE` is already borrowed"), "{message}");
+        assert_eq!(
+            message.matches(file!()).count(),
+            2,
+            "both sites are named, and `#[track_caller]` put them in the caller's file rather than in the macro:\n{message}"
+        );
+    }
+
+    /// And the case that must keep working: two surfaces are two worlds, so reaching the second from inside
+    /// the first is not reentrancy at all. The recorded site is per slot rather than per instance, which is
+    /// why this is worth pinning — the check itself has to stay on the `RefCell`, not on the record.
+    #[test]
+    fn entering_another_surface_is_not_a_collision() {
+        let other = ProbeContext::new();
+        with_probe(|outer| {
+            *outer = 1;
+            let _entered = other.enter();
+            with_probe(|inner| {
+                assert_eq!(*inner, 0, "the second surface has its own value");
+                *inner = 2;
+            });
+        });
+        with_probe_ref(|ambient| assert_eq!(*ambient, 1, "and the first kept its own"));
+    }
+
+    /// A shared borrow blocks a mutable one just the same, and that pairing is the one a reader would least
+    /// expect to be a collision at all.
+    #[test]
+    fn a_read_that_blocks_a_write_is_reported_too() {
+        let quiet = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_probe_ref(|_| with_probe(|_| ()));
+        }));
+        std::panic::set_hook(quiet);
+
+        let payload = outcome.expect_err("a write cannot join a live read");
+        let message = payload
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .unwrap_or_default();
+        assert!(message.contains("`PROBE` is already borrowed"), "{message}");
+    }
+}

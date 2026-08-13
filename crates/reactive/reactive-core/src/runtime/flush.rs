@@ -1,8 +1,7 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::effects::run_effect;
-use super::{EffectId, FlushNotifyHandle, RUNTIME, Runtime};
+use super::{EffectId, FlushNotifyHandle, RUNTIME};
 
 const MAX_FLUSH_ITERATIONS: usize = 1_000;
 
@@ -132,10 +131,8 @@ pub fn end_batch() {
 
 pub fn reset_runtime() {
     RUNTIME.with(|cell| {
-        let old_ptr = cell.0.get();
+        let old_ptr = cell.take_ptr();
         // Install a fresh runtime BEFORE dropping the old one. Any re-entrant RUNTIME access during the old runtime's drop glue (drop_signal, etc.) will see the new empty runtime and return early — no borrow conflict, no double-free.
-        cell.0
-            .set(Box::into_raw(Box::new(RefCell::new(Runtime::new()))));
         if !old_ptr.is_null() {
             unsafe { drop(Box::from_raw(old_ptr)) };
         }

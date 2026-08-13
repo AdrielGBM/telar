@@ -5,6 +5,7 @@
 
 mod effect;
 mod memo;
+pub mod reentry;
 mod runtime;
 mod signal;
 #[macro_use]
