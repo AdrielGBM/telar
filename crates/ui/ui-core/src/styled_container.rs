@@ -37,6 +37,10 @@ pub struct StyledContainer {
     // taking precedence over `hover_style`. Mouse and touch; cleared on release, leave, or drag-off.
     active_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     is_active: RwSignal<bool>,
+    // Swapped in ahead of every other state: a control that cannot be used must not also look pressable.
+    disabled_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    // A closure (like `opacity`) so `view()` and the pointer path both re-read it: whether a control is usable is state that moves.
+    is_disabled: Box<dyn Fn() -> bool>,
     // A closure (not a plain f32) so `view()` re-reads it every run: a reactive opacity or a `transition:opacity` animation resolves to its current value on each re-render.
     opacity: Box<dyn Fn() -> f32>,
     // Resolved per `view()` (like `opacity`) so a `$signal`-driven transform re-reads its current value. Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity (no wrapping node).
@@ -87,6 +91,8 @@ impl StyledContainer {
             is_hovered: signal(false),
             active_style: None,
             is_active: signal(false),
+            disabled_style: None,
+            is_disabled: Box::new(|| false),
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
             children,
@@ -124,6 +130,8 @@ impl StyledContainer {
             is_hovered: signal(false),
             active_style: None,
             is_active: signal(false),
+            disabled_style: None,
+            is_disabled: Box::new(|| false),
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
             children: Vec::new(),
@@ -179,6 +187,26 @@ impl StyledContainer {
         self
     }
 
+    /// Marks the box unusable while `f` reads true: it stops taking the pointer, stops tracking hover and
+    /// the pressed state, stops showing its [`cursor`](Self::cursor), and paints its
+    /// [`on_disabled_style`](Self::on_disabled_style) ahead of every other state.
+    ///
+    /// Closed here rather than left to each widget because the web never asks anyone to write it: `disabled`
+    /// is platform semantics that a selector and the hit-tester read for free, and a catalogue that made every
+    /// component re-implement it would get a different subset right in each one. The failure it prevents is
+    /// small and immediate — a control the application has already disabled still lighting up under the
+    /// pointer and still showing a hand cursor, which says "press me" about something that will do nothing.
+    pub fn disabled(mut self, f: impl Fn() -> bool + 'static) -> Self {
+        self.is_disabled = Box::new(f);
+        self
+    }
+
+    /// The paint for the disabled state, which wins over the pressed and hover ones.
+    pub fn on_disabled_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+        self.disabled_style = Some(Box::new(f));
+        self
+    }
+
     /// Whether the box is currently pressed (a primary pointer is held down inside it). Set only when an
     /// `active_style` is present; drives its paint swap and clears on release/leave/drag-off.
     fn set_active(&self, active: bool) {
@@ -193,9 +221,14 @@ impl StyledContainer {
     fn end_containment(&mut self) {
         self.press.cancel();
         self.set_active(false);
-        let tracks_hover = self.hover_style.is_some() || self.on_hover.is_some();
+        let tracks_hover =
+            self.hover_style.is_some() || self.on_hover.is_some() || self.cursor.is_some();
         if tracks_hover && self.is_hovered.get() {
             self.is_hovered.set(false);
+            // The shape was this box's claim about what a press would do here, and nothing else restores it while the pointer is still inside the window.
+            if self.cursor.is_some() {
+                platform_core::push_window_command(WindowCommand::SetCursor(Cursor::Default));
+            }
             if let Some(cb) = &self.on_hover {
                 cb(false);
             }
@@ -462,9 +495,12 @@ impl LayoutItem for StyledContainer {
 impl Component for StyledContainer {
     fn view(&self) -> RenderNode {
         let r = self.rect.get();
-        // Pressed wins over hover wins over base. Each `is_*` signal is only read when its style exists, so
-        // a plain box's view() stays inert and subscribes to neither.
-        let style = if let Some(active) = &self.active_style
+        // Disabled wins over pressed wins over hover wins over base. Each state is only read when its style exists, so a plain box's view() stays inert and subscribes to none of them.
+        let style = if let Some(disabled) = &self.disabled_style
+            && (self.is_disabled)()
+        {
+            disabled
+        } else if let Some(active) = &self.active_style
             && self.is_active.get()
         {
             active
@@ -506,6 +542,21 @@ impl Component for StyledContainer {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
+        // `disabled` on a region means the region, as a `fieldset` does — hence ahead of the pure-routing bail below, which a wrapper with no handlers of its own would otherwise take.
+        // The state it was showing goes with it, or a box disabled mid-hover keeps the highlight and the hand cursor it can no longer honour.
+        if (self.is_disabled)() {
+            return match event {
+                Event::PointerMoved { .. }
+                | Event::PointerPressed { .. }
+                | Event::PointerReleased { .. }
+                | Event::Scrolled { .. } => {
+                    self.end_containment();
+                    self.drag.end(None);
+                    EventResult::Ignored
+                }
+                _ => self.dispatch_children(event),
+            };
+        }
         // No tap/drag handler, hover style, or event callbacks: behave exactly as a plain container (pure routing).
         if !self.press.is_set()
             && !self.drag.is_set()
@@ -516,6 +567,8 @@ impl Component for StyledContainer {
             && self.on_scroll.is_none()
             && self.on_key.is_none()
             && self.focus_id.is_none()
+            // A box whose only claim is a pointer shape still has to see the moves that set and clear it; `tracks_hover` below counts `cursor` for exactly that, and bailing here skipped past it.
+            && self.cursor.is_none()
         {
             return self.dispatch_children(event);
         }
@@ -1418,6 +1471,278 @@ mod tests {
     }
 
     // A hover style swaps the box's fill while the mouse is over it (mouse only), and clears on leave.
+    #[test]
+    /// The bug this exists to make unwritable, taken from a real port: a control the application had already
+    /// disabled still lit up with the accent under the pointer and still showed a hand cursor, because the
+    /// author remembered to guard the callback and the tint but not the hover and the cursor. Three places to
+    /// remember is three places to get wrong, so the box reads one flag and closes all of them.
+    fn a_disabled_box_neither_lights_up_nor_fires() {
+        reset_layout_runtime();
+        let presses = Rc::new(Cell::new(0u32));
+        let sink = presses.clone();
+        let enabled = signal(false);
+        let flag = enabled.clone();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
+            vec![],
+        )
+        .unwrap()
+        .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
+        .on_press(move || sink.set(sink.get() + 1))
+        .disabled(move || !flag.get());
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let base = fill_color(&card.view());
+        card.on_event(&Event::PointerMoved {
+            x: 100.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(
+            fill_color(&card.view()),
+            base,
+            "a disabled box does not take the hover paint"
+        );
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        card.on_event(&release(100.0, 50.0, PointerSource::Mouse));
+        assert_eq!(presses.get(), 0, "and its press callback never fires");
+
+        // Enabling it needs nothing else: the flag is re-read, not sampled at construction.
+        enabled.set(true);
+        card.on_event(&Event::PointerMoved {
+            x: 100.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        });
+        assert_ne!(fill_color(&card.view()), base, "now it hovers");
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        card.on_event(&release(100.0, 50.0, PointerSource::Mouse));
+        assert_eq!(presses.get(), 1);
+    }
+
+    /// The shape a `surface_local!` world was supposed to be unable to survive: a style closure reading the
+    /// very rect the layout pass that runs it is about to write. `styled_by` makes it reachable from any
+    /// widget, since `style()` is an arbitrary closure the author wrote.
+    ///
+    /// It settles instead of panicking, and the reason is worth pinning: `compute_layout_root` collects the
+    /// `(signal, rect)` updates *while* holding the layout-runtime borrow and applies them only after
+    /// releasing it, so the flush that re-runs this closure never re-enters a live borrow. The remaining
+    /// failure mode of this shape is a re-layout cycle, which has its own named assert.
+    #[test]
+    fn a_style_effect_that_reads_the_rect_its_own_layout_pass_just_wrote_settles_instead_of_panicking()
+     {
+        reset_layout_runtime();
+        let card = StyledContainer::new(
+            LayoutStyle::new().width(200.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap();
+        let node = card.layout_node();
+        let seen = track_layout(node).expect("the container registers a rect signal");
+        let settled = seen.clone();
+        let runs = Rc::new(Cell::new(0u32));
+        let counted = runs.clone();
+        // Half of its own laid-out width — the port's shape, and unlike deriving height from height it has a fixed point worth asserting.
+        let card = card.styled_by(move || {
+            counted.set(counted.get() + 1);
+            let width = seen.get().width;
+            LayoutStyle::new()
+                .width(200.0)
+                .height((width * 0.5).max(1.0))
+        });
+
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        assert!(runs.get() >= 1, "the style closure ran");
+        assert_eq!(
+            settled.peek().height,
+            100.0,
+            "and the rect it derives itself from came to rest instead of running away"
+        );
+    }
+
+    /// The other half of the port's bug, and the one that used to be a wall rather than an oversight:
+    /// `cursor:` compiles from a literal and never passed through the signal path, so `cursor:$enabled` was
+    /// not expressible at all. It does not need to be — the box suppresses the shape while disabled, so the
+    /// attribute stays a literal and the framework answers the question.
+    #[test]
+    fn a_disabled_box_does_not_claim_the_pointer_shape() {
+        use platform_core::take_window_commands;
+
+        reset_layout_runtime();
+        let enabled = signal(false);
+        let flag = enabled.clone();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .cursor(Cursor::Pointer)
+        .disabled(move || !flag.get());
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let over = Event::PointerMoved {
+            x: 100.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        };
+        let _ = take_window_commands();
+        card.on_event(&over);
+        assert!(
+            take_window_commands().is_empty(),
+            "a disabled box asks for no cursor at all"
+        );
+
+        enabled.set(true);
+        card.on_event(&over);
+        assert!(
+            take_window_commands()
+                .iter()
+                .any(|c| matches!(c, WindowCommand::SetCursor(Cursor::Pointer))),
+            "and asks for it again once it can be used"
+        );
+
+        // Disabled again with the pointer still inside: nothing else hands the shape back while it never leaves.
+        enabled.set(false);
+        card.on_event(&over);
+        assert!(
+            take_window_commands()
+                .iter()
+                .any(|c| matches!(c, WindowCommand::SetCursor(Cursor::Default))),
+            "the shape is given back when the box stops accepting the pointer"
+        );
+    }
+
+    /// Disabling a box while the pointer is inside it has to take back what it was already showing — nothing
+    /// else will, since the pointer never leaves and the box stops accepting the moves that would settle it.
+    #[test]
+    fn disabling_a_hovered_box_takes_the_hover_back() {
+        reset_layout_runtime();
+        let enabled = signal(true);
+        let flag = enabled.clone();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
+            vec![],
+        )
+        .unwrap()
+        .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
+        .disabled(move || !flag.get());
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let base = fill_color(&card.view());
+        let moved = Event::PointerMoved {
+            x: 100.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        };
+        card.on_event(&moved);
+        assert_ne!(fill_color(&card.view()), base, "hovered while enabled");
+
+        enabled.set(false);
+        card.on_event(&moved);
+        assert_eq!(
+            fill_color(&card.view()),
+            base,
+            "the highlight goes with the ability to act on it"
+        );
+    }
+
+    /// The disabled paint wins over the pressed one, which already won over hover — so a box cannot be shown
+    /// mid-press and unusable at the same time.
+    #[test]
+    fn the_disabled_paint_wins_over_every_other_state() {
+        reset_layout_runtime();
+        let off = Color::rgba(0.5, 0.5, 0.5, 1.0);
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
+            vec![],
+        )
+        .unwrap()
+        .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
+        .on_active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.7, 0.7, 0.7, 1.0)))
+        .on_disabled_style(move |_r| RectStyle::default().with_fill(off))
+        .disabled(|| true);
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        card.on_event(&Event::PointerMoved {
+            x: 100.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        });
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        assert_eq!(fill_color(&card.view()), off);
+    }
+
+    /// `disabled` on a region means the region, as an HTML `fieldset` does: a wrapper with no handlers of its
+    /// own still has to stop the pointer reaching what is inside it, or a disabled panel is disabled only in
+    /// the places nobody put a control.
+    #[test]
+    fn a_disabled_wrapper_shields_its_children() {
+        reset_layout_runtime();
+        let presses = Rc::new(Cell::new(0u32));
+        let sink = presses.clone();
+        let inner = StyledContainer::new(
+            LayoutStyle::new().width(200.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || sink.set(sink.get() + 1));
+        let mut wrapper = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![Box::new(inner)],
+        )
+        .unwrap()
+        .disabled(|| true);
+        compute_layout(
+            wrapper.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        wrapper.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        wrapper.on_event(&release(100.0, 50.0, PointerSource::Mouse));
+        assert_eq!(presses.get(), 0);
+    }
+
     #[test]
     fn hover_style_swaps_on_mouse_move() {
         reset_layout_runtime();

@@ -78,6 +78,8 @@ impl ViewGen<'_> {
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
         let active_call = self.active_style_call(el, &pattrs);
+        let disabled_call = self.disabled_style_call(el, &pattrs);
+        let disabled = self.disabled_call(el);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_pointer_move = self.closure_attr_call(el, "on_pointer_move", "on_pointer_move");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
@@ -93,7 +95,7 @@ impl ViewGen<'_> {
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
         let styling = format!(
-            "{hover_call}{active_call}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}"
+            "{hover_call}{active_call}{disabled_call}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}"
         );
         let pieces = if always_style || has_paint(&pattrs) || !styling.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
@@ -140,7 +142,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}{styled_by}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}{styled_by}{terminator}"
                 );
             }
             None => {
@@ -217,6 +219,40 @@ impl ViewGen<'_> {
         let mut hoists: Vec<String> = Vec::new();
         let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
         format!(".on_active_style({closure})")
+    }
+
+    /// Builds the trailing `.on_disabled_style(...)` from a `disabled_style(...)` attribute — the same shape
+    /// as [`active_style_call`](Self::active_style_call), for the state that wins over it.
+    fn disabled_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "disabled_style") else {
+            return String::new();
+        };
+        let mut merged = parse_inline_paint_attrs(&attr.value);
+        merged.extend(base_pattrs.iter().cloned());
+        let mut hoists: Vec<String> = Vec::new();
+        let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
+        format!(".on_disabled_style({closure})")
+    }
+
+    /// Builds the trailing `.disabled(...)` from a `disabled:` attribute.
+    ///
+    /// A closure rather than a value, so a `$signal` is re-read instead of frozen at construction — the same
+    /// treatment a reactive colour or string prop gets, and deliberately *not* the layout path: `width:$sig`
+    /// re-runs the whole `LayoutStyle`, and whether a control is usable is not a layout property.
+    fn disabled_call(&self, el: &Element) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "disabled") else {
+            return String::new();
+        };
+        let value = attr.value.trim();
+        // A bare `disabled` flag with no value is the HTML spelling, and means it always is.
+        if value.is_empty() || value == "true" {
+            return ".disabled(|| true)".to_string();
+        }
+        let read = substitute_reads(value);
+        format!(
+            ".disabled({})",
+            wrap_signal_clones(&[value], format!("move || {read}"))
+        )
     }
 
     /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`/

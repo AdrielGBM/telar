@@ -172,6 +172,9 @@ const CONTAINER_PAINT: &[&str] = &[
     "click_through",
     "hover_style",
     "active_style",
+    // Not a paint prop: the framework reads it to close the pointer, the hover tracking and the cursor, which is what stops each author re-deriving a different subset by hand.
+    "disabled",
+    "disabled_style",
     "transition",
 ];
 

@@ -2037,6 +2037,50 @@ col @card
         );
     }
 
+    /// `disabled:$signal` is threaded as a closure, not as a layout value: `width:$sig` re-runs the whole
+    /// `LayoutStyle` through `styled_by`, and whether a control is usable is not a layout property. The
+    /// closure is what lets the box re-read the flag instead of sampling it once at construction.
+    #[test]
+    fn a_reactive_disabled_flag_is_re_read_rather_than_sampled() {
+        let src = "[logic]\nlet ready = signal(false);\n\n[view]\nbox width:20 disabled:$ready on_press(|| ())\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".disabled(") && code.contains("ready.get()"),
+            "the flag is read inside the closure:\n{code}"
+        );
+        assert!(
+            code.contains("let ready = ready.clone();"),
+            "and cloned in, so the caller's binding stays usable:\n{code}"
+        );
+        assert!(
+            !code.contains(".styled_by"),
+            "`disabled` is not a layout prop and must not drag the style into an effect:\n{code}"
+        );
+    }
+
+    /// The HTML spelling: an attribute with no value is the assertion itself, as `absolute` and
+    /// `click_through` already are.
+    #[test]
+    fn a_bare_disabled_flag_means_always() {
+        let src = "[view]\nbox width:20 disabled on_press(|| ())\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(".disabled(|| true)"), "{code}");
+    }
+
+    /// And the paint for the state, spelled like the two states beside it.
+    #[test]
+    fn a_disabled_style_reaches_the_box() {
+        let src = "[view]\nbox width:20 fill:#ffffff disabled_style(fill:#808080)\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(".on_disabled_style("), "{code}");
+    }
+
     /// An `Effect` deregisters on drop, so one bound in `[logic]` used to stop the moment the component
     /// function returned: the closure ran exactly once and then never again, with nothing in the source to
     /// see. Handing it to the root widget makes its life the tree's.
