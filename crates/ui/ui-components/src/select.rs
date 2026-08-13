@@ -59,14 +59,19 @@ pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .to_string()
         }
     };
-    dropdown::dropdown(
-        trigger_label,
-        options,
-        props.color,
-        props.on_select,
-        Some(selected),
-        props.fill,
-    )
+    dropdown::dropdown(dropdown::Dropdown {
+        style: None,
+        label: Box::new(trigger_label),
+        rows: options,
+        color: props.color,
+        on_pick: props.on_select,
+        selected: Some(selected),
+        fill: props.fill,
+        // A select *is* a field: it wears the border and the caret, and neither is up for discussion the way
+        // a menu's are — a bare select is indistinguishable from a label.
+        bordered: true,
+        caret: true,
+    })
 }
 
 #[cfg(test)]

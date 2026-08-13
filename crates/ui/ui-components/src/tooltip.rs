@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
-use layout_core::{AlignItems, LayoutError, LayoutStyle};
+use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::signal;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::{
-    Container, LayoutItem, Overlay, ReactiveList, Slots, StyledContainer, Text, box_item,
-    track_layout,
+    Container, LayoutItem, Overlay, Placement, ReactiveList, Slots, StyledContainer, Text,
+    box_item, track_layout,
 };
 
 use crate::shared;
@@ -14,8 +14,16 @@ use crate::shared;
 const DEFAULT_BUBBLE: Color = Color::rgba(0.12, 0.12, 0.16, 0.96);
 /// Bubble text colour (always light, on the dark chip).
 const BUBBLE_INK: Color = Color::rgba(0.98, 0.98, 1.0, 1.0);
+/// How wide a bubble may get before its text wraps. A hint is read at a glance, and a sentence stretched
+/// across the window is not; the same 240px shadcn's `TooltipContent` uses.
+const BUBBLE_MAX_WIDTH: f32 = 240.0;
+/// A bubble is the smallest surface in the app and a corner is read against the size it turns, so it takes
+/// the middle step of the theme's radius scale — the one shadcn calls `--radius-md` and its `TooltipContent`
+/// asks for by name. It was one and a half times the *base* radius, half as round again as the button that
+/// opened it, and a literal here besides: a theme could change how round everything was and this would not
+/// have moved.
 fn bubble_radius() -> f32 {
-    shared::radius() * 1.5
+    shared::radius_md()
 }
 fn bubble_pad_x() -> f32 {
     shared::spacing()
@@ -33,33 +41,78 @@ fn bubble_text_size() -> f32 {
 /// blocks). High-level sugar; lives in `ui-components`, not the kernel.
 pub struct TooltipProps {
     pub text: Box<dyn Fn() -> String>,
+    /// The binding that does the same thing, pushed to the far side of the first line. Empty means none.
+    ///
+    /// A hint that names its own shortcut is how a keyboard gets learned — the pointer finds the control, and
+    /// the bubble says which key would have got there first. Separate from `text` because it is *placed*, not
+    /// worded: folded into the sentence it wraps with it and stops lining up down a toolbar.
+    pub shortcut: Box<dyn Fn() -> String>,
+    /// A sentence under the name, saying what the control does rather than what it is called. Empty means
+    /// none, which is the right shape for a control whose name already says everything.
+    pub description: Box<dyn Fn() -> String>,
+    /// Which side of the trigger the bubble takes: `"bottom"` (the default), `"top"`, `"start"`/`"left"` or
+    /// `"end"`/`"right"`. It still flips when that side has no room.
+    pub side: &'static str,
     /// Bubble surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `DEFAULT_BUBBLE`. A closure
     /// (re-read every frame) so a theme token or `$signal` colour re-colours live.
     pub color: Box<dyn Fn() -> Color>,
+    /// Amends the paint of the bubble — this component's **principal surface**, the thing a caller means when
+    /// they point at a tooltip. See [`shared::SurfaceStyle`] for why it takes the finished style rather than
+    /// naming one property, and for when a theme token is the right instrument instead.
+    pub style: Option<Box<dyn Fn(RectStyle) -> RectStyle>>,
+    /// Let the trigger take the space its parent offers instead of hugging its content.
+    ///
+    /// The wrapper the tooltip puts around the trigger is a real node in the parent's flow, so without this
+    /// a tooltipped child cannot be a `flex-1` cell: wrapping it collapses the row it was sharing. Set on a
+    /// tab, a toolbar segment, or anything else whose whole point is to divide the space evenly.
+    pub fill: bool,
 }
 
 impl Default for TooltipProps {
     fn default() -> Self {
         Self {
             text: Box::new(String::new),
+            shortcut: Box::new(String::new),
+            description: Box::new(String::new),
+            side: "",
             color: Box::new(|| Color::TRANSPARENT),
+            style: None,
+            fill: false,
         }
     }
 }
 
+fn placement_of(side: &str) -> Placement {
+    match side {
+        "top" | "above" => Placement::Above,
+        "start" | "left" => Placement::Start,
+        "end" | "right" => Placement::End,
+        _ => Placement::Below,
+    }
+}
+
 pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let TooltipProps { text, color } = props;
+    let TooltipProps {
+        text,
+        shortcut,
+        description,
+        side,
+        color,
+        style,
+        fill,
+    } = props;
+    let placement = placement_of(side);
     let trigger_content = slots.take_default();
     // Reflects whether the mouse is over the trigger; drives the bubble's show/hide.
     let hovered = signal(false);
 
+    let mut trigger_style = LayoutStyle::new().flex_row();
+    if fill {
+        trigger_style = trigger_style.flex_grow(1.0).align_self_stretch();
+    }
     let hover_sink = hovered.clone();
-    let trigger = StyledContainer::new(
-        LayoutStyle::new().flex_row(),
-        |_r| RectStyle::default(),
-        trigger_content,
-    )?
-    .on_hover(move |over| hover_sink.set(over));
+    let trigger = StyledContainer::new(trigger_style, |_r| RectStyle::default(), trigger_content)?
+        .on_hover(move |over| hover_sink.set(over));
     let trigger_node = trigger.layout_node();
     // The trigger's laid-out rect (a fresh runtime handle, not the borrowed `ctx`): the anchored overlay
     // reads it to position the bubble below the trigger.
@@ -69,7 +122,11 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
     // cell here; keying on `hovered` mounts/disposes the anchored overlay like a reactive `if`. Both `text`
     // and `color` are re-erased to `Rc` so each remount can clone them into a fresh bubble.
     let text: shared::ReactiveText = Rc::from(text);
+    let shortcut: shared::ReactiveText = Rc::from(shortcut);
+    let description: shared::ReactiveText = Rc::from(description);
     let color: shared::ReactiveColor = Rc::from(color);
+    let style: shared::SurfaceStyle =
+        style.map(|f| -> Rc<dyn Fn(RectStyle) -> RectStyle> { Rc::from(f) });
     let key_hovered = hovered.clone();
     let bubble = ReactiveList::new(
         move || vec![key_hovered.get()],
@@ -82,8 +139,14 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
                 )?));
             }
             build_bubble(
-                text.clone(),
+                Content {
+                    text: text.clone(),
+                    shortcut: shortcut.clone(),
+                    description: description.clone(),
+                },
                 color.clone(),
+                style.clone(),
+                placement,
                 trigger_node,
                 trigger_rect.clone(),
             )
@@ -91,8 +154,14 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
     )?;
 
     // The trigger sits in flow; the bubble node is a 0-size portal placeholder, so it never shifts the trigger.
+    // `fill` has to reach this root as well as the trigger — the root is what the parent actually lays out,
+    // so growing only the inner node would leave the pair hugging its content anyway.
+    let mut root_style = LayoutStyle::new().flex_column();
+    if fill {
+        root_style = root_style.flex_grow(1.0).align_self_stretch();
+    }
     Ok(box_item(Container::new(
-        LayoutStyle::new().flex_column(),
+        root_style,
         vec![box_item(trigger), box_item(bubble)],
     )?))
 }
@@ -101,46 +170,130 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
 /// below the trigger (via `absolute_rect`, so it works even when the trigger is in a separately-computed
 /// sub-root) inside a NON-blocking overlay (a tooltip must not eat clicks on the page).
 fn build_bubble(
-    text: shared::ReactiveText,
+    content: Content,
     color: shared::ReactiveColor,
+    style: shared::SurfaceStyle,
+    placement: Placement,
     trigger_node: ui_core::NodeId,
     trigger_rect: reactive_core::RwSignal<geometry_core::Rect>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    // Window-absolute trigger position (the overlay hoists to the window); fall back to the local rect.
-    let anchor = ui_core::overlay::anchor_rect(trigger_node, &trigger_rect);
-    // `auto` (measured) so the bubble text gets its intrinsic WIDTH in the row chip; a plain `Text::new`
-    // only stretches its cross-axis (height in a row), leaving width 0 and the tooltip empty.
-    let label = Text::auto(
-        move || text(),
-        LayoutStyle::new(),
-        || TextStyle::new(bubble_text_size(), BUBBLE_INK),
-    )?;
-    // The anchor is the trigger's rect as it stands now: a re-resolve on a theme switch keeps it, which is
-    // what the bubble is anchored to either way.
+    let _ = trigger_node;
+    // Laid out at the origin and *translated* to the trigger by the anchored overlay, rather than pushed
+    // there with a left margin: a margin eats the width the bubble had to lay out in, so a trigger near the
+    // right edge left it a 50px column and the text wrapped one word per line. The translate happens after
+    // layout, when the bubble's real size is known — which is also what lets it flip and slide to stay on
+    // screen (see `anchor_translate`).
     let bubble = move || {
         LayoutStyle::new()
-            .flex_row()
+            .flex_column()
+            .max_width(BUBBLE_MAX_WIDTH)
             .padding_horizontal(bubble_pad_x())
             .padding_vertical(bubble_pad_y())
-            .margin_left(anchor.x)
-            .margin_top(anchor.y + anchor.height)
     };
     let chip = StyledContainer::new(
         bubble(),
         move |_r| {
-            RectStyle::default()
-                .with_fill(shared::resolve(color.as_ref(), || DEFAULT_BUBBLE))
-                .with_radius(BorderRadius::all(bubble_radius()))
+            shared::amend(
+                RectStyle::default()
+                    .with_fill(shared::resolve(color.as_ref(), || DEFAULT_BUBBLE))
+                    .with_radius(BorderRadius::all(bubble_radius())),
+                &style,
+            )
         },
-        vec![box_item(label)],
+        content.rows()?,
     )?
     .styled_by(bubble);
-    // `align_items(START)` so the chip sizes to its content instead of stretching to the full-viewport fill.
-    let overlay = Overlay::new_click_through(
-        LayoutStyle::new().align_items(AlignItems::START),
+    // The content layer has to be a FLEX row for the chip to hug: a `LayoutStyle::new()` is a CSS block, and
+    // a block child fills its containing block whatever `align_items` says — so every bubble came out at its
+    // 240px cap however little it had to say, and the `align_items(START)` here was doing nothing at all.
+    // Click-through because a tooltip must not eat clicks on the page it is describing.
+    let overlay = Overlay::anchored_click_through(
+        LayoutStyle::new().flex_row().align_items(AlignItems::START),
         vec![box_item(chip)],
+        trigger_rect,
+        placement,
     )?;
     Ok(box_item(overlay))
+}
+
+/// What the bubble says, in the one shape every hint in an application takes.
+struct Content {
+    text: shared::ReactiveText,
+    shortcut: shared::ReactiveText,
+    description: shared::ReactiveText,
+}
+
+impl Content {
+    /// The name line, with its shortcut pushed to the far edge, over an optional sentence.
+    ///
+    /// The two optional parts are mounted reactively rather than decided here, because the strings are
+    /// closures: a hint whose shortcut arrives with a signal would otherwise be built once, empty, and stay
+    /// that way.
+    fn rows(self) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+        let Content {
+            text,
+            shortcut,
+            description,
+        } = self;
+        // `auto` (measured) so each line gets its intrinsic WIDTH in the row; a plain `Text::new` only
+        // stretches its cross-axis, leaving width 0 and the bubble empty.
+        let name = Text::auto(
+            move || text(),
+            LayoutStyle::new(),
+            || TextStyle::new(bubble_text_size(), BUBBLE_INK).with_no_wrap(true),
+        )?;
+        let key = optional_line(shortcut, || {
+            TextStyle::new(bubble_text_size() * 0.9, dim(0.6)).with_no_wrap(true)
+        })?;
+        // The shortcut is pushed apart with `SPACE_BETWEEN` and not with a growing spacer: a spacer wants all
+        // the width there is, so the bubble took its 240px maximum whatever it said. This way the row
+        // stretches to the column — which is as wide as the longest line — and the key lands on that edge.
+        let title = Container::new(
+            LayoutStyle::new()
+                .flex_row()
+                .align_items(AlignItems::CENTER)
+                .justify_content(JustifyContent::SPACE_BETWEEN)
+                .align_self_stretch()
+                .gap(bubble_pad_x() * 1.5),
+            vec![box_item(name), box_item(key)],
+        )?;
+        let body = optional_line(description, || {
+            TextStyle::new(bubble_text_size() * 0.92, dim(0.72))
+        })?;
+        Ok(vec![box_item(title), box_item(body)])
+    }
+}
+
+/// A line that is there only while its text is non-empty. Zero-sized otherwise, so the bubble keeps the
+/// height of what it actually says.
+fn optional_line(
+    text: shared::ReactiveText,
+    style: impl Fn() -> TextStyle + Clone + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let present = text.clone();
+    Ok(box_item(ReactiveList::new(
+        move || vec![!present().is_empty()],
+        |shown: &bool| *shown,
+        move |shown| -> Result<Box<dyn LayoutItem>, LayoutError> {
+            if !shown {
+                return Ok(box_item(Container::new(
+                    LayoutStyle::new().width(0.0).height(0.0),
+                    vec![],
+                )?));
+            }
+            let text = text.clone();
+            Ok(box_item(Text::auto(
+                move || text(),
+                LayoutStyle::new(),
+                style.clone(),
+            )?))
+        },
+    )?))
+}
+
+/// The bubble ink at reduced strength, for the parts that are not the name.
+fn dim(alpha: f32) -> Color {
+    Color::rgba(BUBBLE_INK.r, BUBBLE_INK.g, BUBBLE_INK.b, alpha)
 }
 
 #[cfg(test)]
@@ -219,6 +372,187 @@ mod tests {
         assert!(
             !find_text(&tree.commands(), "Helpful hint"),
             "bubble hidden on leave"
+        );
+    }
+
+    /// The shape every hint in an application takes: the name, its binding pushed to the far edge, and a
+    /// sentence under both. All three have to reach the bubble, because the reason the shortcut is a prop of
+    /// its own is that folding it into the name loses exactly this arrangement.
+    #[test]
+    fn a_hint_shows_its_name_its_shortcut_and_its_description() {
+        reset_layout_runtime();
+        let tooltip = tooltip(
+            TooltipProps {
+                text: Box::new(|| "Move".to_string()),
+                shortcut: Box::new(|| "G".to_string()),
+                description: Box::new(|| "Drag the selection along the ground".to_string()),
+                ..Default::default()
+            },
+            slot_with_trigger(),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[tooltip.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(tooltip);
+        tree.on_event(&moved(40.0, 15.0));
+        relayout_if_dirty();
+
+        let cmds = tree.commands();
+        assert!(find_text(&cmds, "Move"), "the name");
+        assert!(find_text(&cmds, "G"), "its binding");
+        assert!(
+            find_text(&cmds, "Drag the selection along the ground"),
+            "and what it does"
+        );
+    }
+
+    /// The description line is set with room to breathe, because it is the only part of a bubble that wraps.
+    ///
+    /// At the default 1.2 the two lines of a long hint sit almost on top of each other, and it reads as the
+    /// *text* being squashed rather than as the leading being short — which is why it only showed up on the
+    /// hints long enough to need a second line, and looked like a placement bug rather than a type one.
+    /// `leading-snug` is what the original asks for on this line and on no other.
+    #[test]
+    fn the_description_line_is_set_with_room_to_wrap_into() {
+        reset_layout_runtime();
+        let tooltip = tooltip(
+            TooltipProps {
+                text: Box::new(|| "Setup".to_string()),
+                description: Box::new(|| "Name regions and say what it is made of".to_string()),
+                ..Default::default()
+            },
+            slot_with_trigger(),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[tooltip.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(tooltip);
+        tree.on_event(&moved(40.0, 15.0));
+        relayout_if_dirty();
+
+        let leading = tree
+            .commands()
+            .iter()
+            .find_map(|c| match c {
+                DrawCommand::Text { text, rect, style } if text.starts_with("Name regions") => {
+                    Some(rect.height / style.font_size)
+                }
+                _ => None,
+            })
+            .expect("the description is drawn");
+        assert!(
+            leading >= 1.3,
+            "a wrapping line needs more than the default leading, got {leading}"
+        );
+    }
+
+    /// A bubble is as wide as what it says, up to its cap. It was taking the cap whatever it had to say,
+    /// because the layer its chip sits in was a `LayoutStyle::new()` — a CSS **block**, where a child fills
+    /// its containing block and `align_items` means nothing. A two-word hint in a 240px box does not read as
+    /// a hint, and nothing about it looks like a layout mode being wrong.
+    #[test]
+    fn a_bubble_is_as_wide_as_what_it_says() {
+        reset_layout_runtime();
+        let tooltip = tooltip(
+            TooltipProps {
+                text: Box::new(|| "Object".to_string()),
+                shortcut: Box::new(|| "1".to_string()),
+                description: Box::new(|| "Pick whole bodies".to_string()),
+                ..Default::default()
+            },
+            slot_with_trigger(),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[tooltip.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(tooltip);
+        tree.on_event(&moved(40.0, 15.0));
+        relayout_if_dirty();
+
+        let widest = tree
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                DrawCommand::Text { rect, .. } => Some(rect.width),
+                _ => None,
+            })
+            .fold(0.0f32, f32::max);
+        assert!(
+            widest > 0.0 && widest < BUBBLE_MAX_WIDTH * 0.75,
+            "the bubble hugged its text instead of taking its cap, got {widest}"
+        );
+    }
+
+    /// A hint with nothing but a name is the common case, and it must not pay for the parts it left out with
+    /// a taller bubble than it has words for.
+    #[test]
+    fn an_absent_shortcut_and_description_take_no_room() {
+        reset_layout_runtime();
+        let height_of = |props: TooltipProps| {
+            let tooltip = tooltip(props, slot_with_trigger()).unwrap();
+            let root = new_container(
+                LayoutStyle::new().flex_column().width(400.0).height(400.0),
+                &[tooltip.layout_node()],
+            )
+            .unwrap();
+            compute_layout(
+                root,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::Definite(400.0),
+            )
+            .unwrap();
+            let mut tree = ComponentList::new(tooltip);
+            tree.on_event(&moved(40.0, 15.0));
+            relayout_if_dirty();
+            tree.commands()
+                .iter()
+                .filter_map(|c| match c {
+                    DrawCommand::Text { rect, .. } => Some(rect.height),
+                    _ => None,
+                })
+                .sum::<f32>()
+        };
+        let bare = height_of(TooltipProps {
+            text: Box::new(|| "Move".to_string()),
+            ..Default::default()
+        });
+        reset_layout_runtime();
+        let full = height_of(TooltipProps {
+            text: Box::new(|| "Move".to_string()),
+            description: Box::new(|| "Drag the selection".to_string()),
+            ..Default::default()
+        });
+        assert!(bare > 0.0, "the name is drawn either way");
+        assert!(
+            full > bare,
+            "a described hint is taller than a bare one: {bare} vs {full}"
         );
     }
 

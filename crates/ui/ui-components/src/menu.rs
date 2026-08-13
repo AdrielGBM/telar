@@ -25,6 +25,19 @@ pub struct MenuProps {
     pub color: Box<dyn Fn() -> Color>,
     /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::fill`].
     pub fill: bool,
+    /// Draw the trigger as a field, with the border a `select` carries. Off by default, because a menu is a
+    /// *button* that happens to open a list — which is what shadcn says by giving `DropdownMenuTrigger` a
+    /// ghost button and `SelectTrigger` a bordered one.
+    ///
+    /// A prop and not a decision settled inside the component, because both readings are legitimate: a menu
+    /// standing alone in a header wants no frame, and one sitting in a row of fields wants to match them.
+    pub bordered: bool,
+    /// Show the caret that says the trigger opens something. On by default.
+    pub caret: bool,
+    /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means
+    /// when they point at a menu. See `shared::SurfaceStyle` for why it takes the finished style rather than
+    /// naming one property, and for when a theme token is the right instrument instead.
+    pub style: Option<Box<dyn Fn(renderer_core::RectStyle) -> renderer_core::RectStyle>>,
 }
 
 impl Default for MenuProps {
@@ -35,6 +48,9 @@ impl Default for MenuProps {
             on_select: None,
             color: Box::new(|| Color::TRANSPARENT),
             fill: false,
+            bordered: false,
+            caret: true,
+            style: None,
         }
     }
 }
@@ -42,14 +58,141 @@ impl Default for MenuProps {
 // A menu carries no bound selection (`selected: None`), so its rows are one-shot actions: no index is written
 // back and no row is highlighted. The reactive `label` closure is handed straight to the dropdown trigger.
 pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    dropdown::dropdown(
-        props.label,
-        props.items,
-        props.color,
-        props.on_select,
-        None,
-        props.fill,
+    dropdown::dropdown(dropdown::Dropdown {
+        label: props.label,
+        rows: props.items,
+        color: props.color,
+        on_pick: props.on_select,
+        selected: None,
+        fill: props.fill,
+        bordered: props.bordered,
+        caret: props.caret,
+        style: props.style,
+    })
+}
+
+/// The shape of a trigger is the caller's call, not the component's.
+///
+/// The default is what the original does — a menu is a ghost button, a select is a field — but a menu
+/// dropped into a row of inputs wants to match them, and there has to be a way to say so that is not
+/// editing the catalogue. Guards the props rather than the pixels: what matters is that they *reach*
+/// the trigger's paint at all.
+#[cfg(test)]
+#[test]
+fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
+    use renderer_core::DrawCommand;
+    use ui_core::{ComponentList, LayoutItem, reset_layout_runtime};
+
+    let strokes = |bordered: bool, caret: bool| {
+        reset_layout_runtime();
+        let item = menu(MenuProps {
+            label: Box::new(|| "File".to_string()),
+            items: vec!["New"],
+            bordered,
+            caret,
+            ..Default::default()
+        })
+        .unwrap();
+        // Laid out first: the caret is drawn by a `Canvas`, which has nothing to draw into until it has a rect.
+        let root = ui_core::new_container(
+            layout_core::LayoutStyle::new().width(300.0).height(80.0),
+            &[item.layout_node()],
+        )
+        .unwrap();
+        ui_core::compute_layout(
+            root,
+            layout_core::AvailableSpace::Definite(300.0),
+            layout_core::AvailableSpace::Definite(80.0),
+        )
+        .unwrap();
+        let tree = ComponentList::new(item);
+        let cmds = tree.commands().to_vec();
+        let bordered_boxes = cmds
+            .iter()
+            .filter(|c| matches!(c, DrawCommand::Rect { style, .. } if style.stroke.is_some()))
+            .count();
+        let paths = cmds
+            .iter()
+            .filter(|c| matches!(c, DrawCommand::Path { .. }))
+            .count();
+        (bordered_boxes, paths)
+    };
+
+    let (plain_border, plain_caret) = strokes(false, true);
+    assert_eq!(
+        plain_border, 0,
+        "a menu is a button, so no frame by default"
+    );
+    assert_eq!(plain_caret, 1, "and it says it opens something");
+
+    let (asked_border, _) = strokes(true, true);
+    assert_eq!(asked_border, 1, "a caller that wants the field gets it");
+
+    let (_, no_caret) = strokes(false, false);
+    assert_eq!(no_caret, 0, "and one that wants no caret gets none");
+}
+
+/// A caller can restyle the surface without editing the catalogue.
+///
+/// The pressure this relieves is real: an app wanted its menu trigger squared off, and the only lever the
+/// catalogue offered was the theme's radius — which moves every rounded thing in the application. Editing
+/// `dropdown.rs` to hold one app's opinion is how a shared component stops being shared.
+///
+/// The amendment must *compose*, not replace: the component still decides that a bordered trigger wears a
+/// stroke, and the caller only says what they came to say.
+#[cfg(test)]
+#[test]
+fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
+    use renderer_core::{BorderRadius, DrawCommand, ShapeStyle};
+    use ui_core::{ComponentList, LayoutItem, reset_layout_runtime};
+
+    reset_layout_runtime();
+    let item = menu(MenuProps {
+        label: Box::new(|| "File".to_string()),
+        items: vec!["New"],
+        bordered: true,
+        style: Some(Box::new(|s| {
+            s.with_radius(BorderRadius::all(0.0))
+                .with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))
+        })),
+        ..Default::default()
+    })
+    .unwrap();
+    let root = ui_core::new_container(
+        layout_core::LayoutStyle::new().width(300.0).height(80.0),
+        &[item.layout_node()],
     )
+    .unwrap();
+    ui_core::compute_layout(
+        root,
+        layout_core::AvailableSpace::Definite(300.0),
+        layout_core::AvailableSpace::Definite(80.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(item);
+    let trigger = tree
+        .commands()
+        .iter()
+        .find_map(|c| match c {
+            DrawCommand::Rect { style, .. } if style.stroke.is_some() => Some(style.clone()),
+            _ => None,
+        })
+        .expect("a bordered trigger is painted");
+
+    assert_eq!(
+        trigger.radius,
+        BorderRadius::all(0.0),
+        "the caller's radius reaches the paint"
+    );
+    assert_eq!(
+        trigger.fill,
+        Some(renderer_core::Paint::Solid(Color::rgba(1.0, 0.0, 0.0, 1.0))),
+        "and so does their fill"
+    );
+    assert!(
+        trigger.stroke.is_some(),
+        "while the component keeps the border it decided a field wears"
+    );
 }
 
 #[cfg(test)]
@@ -58,7 +201,7 @@ mod tests {
     use std::rc::Rc;
     use ui_core::reset_layout_runtime;
 
-    use layout_core::AvailableSpace;
+    use layout_core::{AvailableSpace, LayoutStyle};
     use platform_core::{Event, PointerButton, PointerSource};
     use ui_core::{
         ComponentList, EventResult, compute_layout, dispatch_overlays, relayout_if_dirty,
@@ -89,6 +232,57 @@ mod tests {
         if dispatch_overlays(event) == EventResult::Ignored {
             tree.on_event(event);
         }
+    }
+
+    /// A compact trigger does not squeeze the panel. `fill` means "be at least as wide as the control I sit
+    /// under", and taking that width outright turned a `File` button into a 40px sheet with one character per
+    /// line — every item wrapped down its own column.
+    #[test]
+    fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
+        reset_layout_runtime();
+        let item = menu(MenuProps {
+            label: Box::new(|| "File".to_string()),
+            items: vec!["New", "Open…", "Save", "Import STEP…"],
+            fill: true,
+            ..Default::default()
+        })
+        .unwrap();
+        // A row 44px wide: what a compact menu button gets in a header.
+        let root_node = item.layout_node();
+        let row = ui_core::new_container(
+            LayoutStyle::new().flex_row().width(44.0).height(400.0),
+            &[root_node],
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(item);
+        compute_layout(
+            row,
+            AvailableSpace::Definite(44.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let _ = tree.commands();
+
+        route(&mut tree, &press(20.0, 18.0));
+        route(&mut tree, &release(20.0, 18.0));
+        relayout_if_dirty();
+        let _ = tree.commands();
+
+        // The first item's row: it belongs to the panel, so its width is the panel's minus its padding.
+        let widths: Vec<f32> = tree
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                renderer_core::DrawCommand::Rect { rect, .. } => Some(rect.width),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            widths
+                .iter()
+                .any(|w| *w >= PANEL_WIDTH - panel_pad() * 2.0 - 0.5),
+            "the open panel should be at least {PANEL_WIDTH}px wide, got {widths:?}"
+        );
     }
 
     // Construction: a menu builds headless, lays out (the trigger takes its fixed size), and renders.
