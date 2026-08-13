@@ -86,10 +86,13 @@ Copy these into your **workspace root** `Cargo.toml` — Cargo ignores `[profile
 opt-level = 1
 debug = "line-tables-only"
 
-# Dependencies compile once and are not rebuilt as you edit, so this is paid for on the first build
-# and buys a renderer and a layout engine that run at a usable speed in dev.
+# Dependencies compile once and are not rebuilt as you edit, and they are not what you are stepping
+# through: optimising them is paid for on the first build and buys a renderer and a layout engine that
+# run at a usable speed in dev, and dropping their debug info takes 140 MB out of a cdylib that gets
+# rewritten on every reload. Your own crates keep theirs, so panics in your code still name a line.
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
 
 [profile.release]
 opt-level = 3        # "s" or "z" for a smaller binary instead — matters most on Android
@@ -98,7 +101,7 @@ codegen-units = 1    # better codegen, no parallelism left in that stage
 strip = "symbols"    # smaller binary; release backtraces lose function names
 ```
 
-`debug` decides how much the link has to write: `false` (addresses only), `"line-tables-only"` (file and line, no debugger) or `true` (full, debugger-ready). The middle one is worth keeping as the default — a panic still names the line it came from, without carrying what only a debugger reads.
+`debug` decides how much the link has to write: `false` (addresses only), `"line-tables-only"` (file and line, no debugger) or `true` (full, debugger-ready). `"line-tables-only"` is worth keeping for your own crates — a panic still names the line it came from, without carrying what only a debugger reads — and `false` is worth setting for everything else, which is why the two blocks above differ. Measured on a real app: the rebuild drops ~14 % and the `cdylib` goes from 154 MB to 15 MB, with panics in the app's own code unchanged. Setting `debug = false` on `[profile.dev]` as well takes it to 0.7 MB and saves another 15 ms, which is inside the noise and not worth the panic locations.
 
 **Do not set `panic = "abort"`.** Telar recovers from two kinds of panic and both need unwinding: a widget handler, effect or render that panics unmounts *only that surface* and leaves the rest of the application running; and a wgpu validation error or lost device — a transient swapchain mismatch while a compositor resizes a just-opened window is the common case — is caught on the render thread, which drops that one frame and recovers on the next. Under `abort` both are process death. If binary size is the goal, `opt-level = "z"` and `strip` give you more of it with nothing load-bearing attached.
 
