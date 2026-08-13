@@ -61,7 +61,7 @@ impl TextArea {
         let (node, rect) = new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         let caret = value.with(|s| s.len());
         let id = focus::next_id();
-        focus::register_as(id, focus::FocusKind::TextEntry);
+        focus::register_at(id, focus::FocusKind::TextEntry, node);
         let remeasure = {
             let value = value.clone();
             effect(move || {
@@ -258,7 +258,7 @@ impl Component for TextArea {
                 ..
             } => {
                 if rect.contains(*x as f32, *y as f32) {
-                    focus::request(self.id);
+                    focus::request_from_pointer(self.id);
                     let style = (self.style)();
                     let line_h = style.font_size * renderer_text::LINE_HEIGHT_FACTOR;
                     // Read the text out (borrow released) before setting the caret: `set` inside a `with`

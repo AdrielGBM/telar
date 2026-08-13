@@ -231,6 +231,8 @@ pub struct Overlay {
     children: TrackedChildren,
     // Registry id for priority pointer routing; removed on drop.
     overlay_id: u64,
+    // Focus-scope registration, withdrawn on drop alongside the pointer one.
+    focus_scope: crate::focus::ScopeId,
     // Set for `anchored`: translates the rendered content to the trigger's rect (see `view`).
     anchor: Option<Anchor>,
     // Read each `view()`: when false the overlay draws nothing (kept mounted so its content — e.g. a modal's
@@ -325,6 +327,15 @@ impl Overlay {
             visible: visible.clone(),
         });
         let overlay_id = register_overlay(sink);
+        // The keyboard's half of the same barrier, named by node rather than by the ids inside it: the children were built before this overlay existed, so ancestry has to answer at the moment Tab is pressed.
+        let focus_scope = crate::focus::register_scope(
+            content,
+            {
+                let visible = visible.clone();
+                move || visible()
+            },
+            blocking,
+        );
 
         if attach_overlay(content) {
             // Portaled: the DOM parent gets a 0×0 placeholder so the portal takes no space in the flow.
@@ -335,6 +346,7 @@ impl Overlay {
                 portaled_content: Some(content),
                 children,
                 overlay_id,
+                focus_scope,
                 anchor,
                 visible,
             })
@@ -345,6 +357,7 @@ impl Overlay {
                 portaled_content: None,
                 children,
                 overlay_id,
+                focus_scope,
                 anchor,
                 visible,
             })
@@ -420,6 +433,7 @@ impl Component for Overlay {
 impl Drop for Overlay {
     fn drop(&mut self) {
         unregister_overlay(self.overlay_id);
+        crate::focus::unregister_scope(self.focus_scope);
         // Detach the portaled content from the host and free it when the overlay is disposed (e.g. a
         // reactive `if` hiding a modal) — it lives outside the DOM subtree, so nothing else removes it.
         if let Some(content) = self.portaled_content {
@@ -447,6 +461,38 @@ mod tests {
 
     use super::*;
     use crate::ComponentList;
+
+    /// The other half of the same barrier, and what §1.1 of the audit actually asked for: while a modal is up,
+    /// Tab must not walk out to the content behind the scrim. The pointer has been blocked there all along;
+    /// the keyboard was not, because the tab order is a list and a list has no notion of in front or behind.
+    #[test]
+    fn a_modal_that_is_up_holds_tab_inside_itself() {
+        use crate::{StyledContainer, focus};
+
+        reset_layout_runtime();
+        let behind = focus::next_id();
+        focus::register(behind);
+
+        let below = focus::next_id();
+        let inside = StyledContainer::new(
+            LayoutStyle::new().width(50.0).height(20.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_focus(|_| {});
+        let _overlay =
+            Overlay::toggleable(LayoutStyle::new(), vec![Box::new(inside)], || true).unwrap();
+        let above = focus::next_id();
+
+        focus::request(behind);
+        focus::focus_next();
+        let landed = focus::current().expect("something took focus");
+        assert!(
+            landed > below && landed < above,
+            "Tab left the modal that is up and landed on the content behind it"
+        );
+    }
 
     /// `view` draws nothing while hidden and `content_rect` is an empty barrier, but the in-tree walk stayed
     /// open — so every key press still reached the children of a dialog that was shut. The settling events
@@ -491,6 +537,45 @@ mod tests {
             overlay.on_event(&Event::CursorLeft),
             crate::EventResult::Ignored,
             "CursorLeft reaches the children (they simply had nothing to settle)"
+        );
+    }
+
+    /// The pointer path already scopes itself to what is on screen: a kept-mounted overlay whose `visible`
+    /// reads false is inert, an empty barrier that blocks nothing. The keyboard path does not, and the two
+    /// disagreeing is the bug — a focusable joins the tab order when its widget is *built*, and `toggleable`
+    /// builds its subtree once and keeps it mounted, so a field inside a dialog that is shut is still a Tab
+    /// stop. Not merely reachable past a scrim, as first described: reachable when nothing is open at all.
+    ///
+    /// Closed by naming a *node* rather than a set of ids: the overlay's children are constructed before the
+    /// overlay that will host them, so it never learns which focusables are its own, and ancestry answers at
+    /// the moment Tab is pressed instead.
+    #[test]
+    fn tab_does_not_walk_into_an_overlay_that_is_not_showing() {
+        use crate::{StyledContainer, focus};
+
+        reset_layout_runtime();
+        let base = focus::next_id();
+        focus::register(base);
+
+        // Ids allocated between the two markers belong to whatever the overlay built.
+        let below = focus::next_id();
+        let field = StyledContainer::new(
+            LayoutStyle::new().width(50.0).height(20.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_focus(|_| {});
+        let _overlay =
+            Overlay::toggleable(LayoutStyle::new(), vec![Box::new(field)], || false).unwrap();
+        let above = focus::next_id();
+
+        focus::request(base);
+        focus::focus_next();
+        let landed = focus::current().expect("something took focus");
+        assert!(
+            !(landed > below && landed < above),
+            "Tab reached a focusable inside an overlay that is not showing"
         );
     }
 

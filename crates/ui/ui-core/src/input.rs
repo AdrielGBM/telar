@@ -46,7 +46,7 @@ impl Input {
         let id = focus::next_id();
         // Join the tab order so Tab/Shift-Tab can reach this field, as the kind that takes keys as text — so
         // an app-level shortcut table can stand aside while the caret is here.
-        focus::register_as(id, focus::FocusKind::TextEntry);
+        focus::register_at(id, focus::FocusKind::TextEntry, leaf.node);
         Ok(Self {
             value,
             caret: signal(caret),
@@ -256,7 +256,7 @@ impl Component for Input {
                 ..
             } => {
                 if rect.contains(*x as f32, *y as f32) {
-                    focus::request(self.id);
+                    focus::request_from_pointer(self.id);
                     // MVP: land the caret at the end. Click-to-position (measuring per glyph) is a follow-up.
                     self.caret.set(self.value.with(|s| s.len()));
                     EventResult::Handled

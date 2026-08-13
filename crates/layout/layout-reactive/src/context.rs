@@ -112,6 +112,15 @@ pub fn is_descendant_of(node: NodeId, ancestor: NodeId) -> bool {
     with_runtime(|rt| rt.is_in_subtree(node, ancestor))
 }
 
+/// Whether `node` is out of layout flow, by its own `display:none` or any ancestor's.
+///
+/// The climb is the point: taffy stops laying out under a hidden node, so a descendant keeps the size it had
+/// when it was last shown and looks perfectly ordinary to anyone reading its rect. Only the chain says it is
+/// gone. Follows the same parent links as [`is_descendant_of`], so it crosses into a portaled sub-root.
+pub fn is_hidden(node: NodeId) -> bool {
+    with_runtime(|rt| rt.is_hidden_by_display(node))
+}
+
 pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {
     with_runtime(|rt| rt.mark_dirty(node))
 }
@@ -499,6 +508,18 @@ impl LayoutRuntime {
                 return Some((node, w, h));
             }
             node = *self.parents.get(&node)?;
+        }
+    }
+
+    fn is_hidden_by_display(&self, mut node: NodeId) -> bool {
+        loop {
+            if self.engine.is_display_none(node) {
+                return true;
+            }
+            match self.parents.get(&node) {
+                Some(&parent) => node = parent,
+                None => return false,
+            }
         }
     }
 

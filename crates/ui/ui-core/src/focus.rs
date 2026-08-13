@@ -8,6 +8,9 @@
 //! [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a
 //! hot-reload dylib swap is out of scope.
 
+use std::rc::Rc;
+
+use layout_core::NodeId;
 use platform_core::{Key, ModifiersState, NamedKey};
 use reactive_core::{RwSignal, signal};
 use rustc_hash::FxHashSet;
@@ -56,12 +59,43 @@ pub fn handle(id: FocusId) -> FocusHandle {
     FocusHandle(id)
 }
 
+/// Identifies one registered [`Scope`], so a closing overlay can withdraw exactly its own.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct ScopeId(u64);
+
+/// A region of the tree whose focusables are only reachable while it is showing.
+///
+/// Declared by whatever can hide content without taking it out of the tree — an [`Overlay`](crate::Overlay)
+/// kept mounted across a close, today. It names a *node*, not a set of ids, and that is the whole trick: an
+/// overlay's children are built before the overlay that will host them, so it never learns which focusables
+/// are its own. Ancestry answers instead.
+struct Scope {
+    id: ScopeId,
+    node: NodeId,
+    showing: Rc<dyn Fn() -> bool>,
+    /// Whether the scope holds focus in while it shows — a modal, as against a tooltip layer.
+    traps: bool,
+}
+
+/// One entry in the tab order.
+struct Entry {
+    id: FocusId,
+    /// The widget's layout node, which is what makes reachability answerable. `None` for a focus id that
+    /// belongs to no widget (the dismiss stack takes one as a token).
+    node: Option<NodeId>,
+}
+
 /// Per-surface keyboard-focus state: the id allocator, the focused-widget signal, and the tab order.
 struct FocusState {
     next_id: FocusId,
+    next_scope: u64,
     focused: RwSignal<Option<FocusId>>,
+    // Whether the focus held now was taken by a pointer. A signal, not a plain flag: Tab onto the widget you just clicked moves it without moving `focused`, and a ring that missed that would be stale exactly when the keyboard took over.
+    pointer_focus: RwSignal<bool>,
     // Registered focusables in tab order (registration order ≈ document order). Drives Tab/Shift-Tab.
-    order: Vec<FocusId>,
+    order: Vec<Entry>,
+    // Regions that can hide their contents without unregistering them; consulted when stepping.
+    scopes: Vec<Scope>,
     // The subset of `order` that takes keys as text. A set rather than a field on each entry because it is
     // the minority and the only kind anyone asks about.
     text_entries: FxHashSet<FocusId>,
@@ -71,8 +105,11 @@ impl FocusState {
     fn new() -> Self {
         Self {
             next_id: 1,
+            next_scope: 1,
             focused: signal(None),
+            pointer_focus: signal(false),
             order: Vec::new(),
+            scopes: Vec::new(),
             text_entries: FxHashSet::default(),
         }
     }
@@ -119,9 +156,40 @@ pub fn is_focused(id: FocusId) -> bool {
 
 /// Gives focus to `id` (a no-op if it already holds it).
 pub fn request(id: FocusId) {
+    set_pointer_focus(false);
     let focused = focused_signal();
     if focused.peek() != Some(id) {
         focused.set(Some(id));
+    }
+}
+
+/// [`request`] for focus a *tap* is giving, which is the one case that should not draw a focus ring.
+///
+/// The distinction CSS spent years arriving at as `:focus-visible`. A ring on every click is noise — the user
+/// already knows where they clicked — and the ring drawn anyway is why so many stylesheets used to turn
+/// outlines off altogether, taking the keyboard's only cue with them. Focus taken any other way (Tab, or an
+/// application focusing something itself) shows it.
+pub fn request_from_pointer(id: FocusId) {
+    set_pointer_focus(true);
+    let focused = focused_signal();
+    if focused.peek() != Some(id) {
+        focused.set(Some(id));
+    }
+}
+
+/// Whether `id` holds focus *and* should show it. Reactive, like [`current`].
+pub fn is_focus_visible(id: FocusId) -> bool {
+    is_focused(id) && !pointer_focus_signal().get()
+}
+
+fn pointer_focus_signal() -> RwSignal<bool> {
+    with_focus_ref(|s| s.pointer_focus.clone())
+}
+
+fn set_pointer_focus(from_pointer: bool) {
+    let flag = pointer_focus_signal();
+    if flag.peek() != from_pointer {
+        flag.set(from_pointer);
     }
 }
 
@@ -151,9 +219,22 @@ pub fn register(id: FocusId) {
 /// [`register`] for a widget that says what it does with the keyboard. A text field registers as
 /// [`FocusKind::TextEntry`], which is what makes [`text_entry_focused`] answerable.
 pub fn register_as(id: FocusId, kind: FocusKind) {
+    register_node(id, kind, None);
+}
+
+/// [`register_as`] for a widget that can say which layout node it is, which is what lets Tab skip it while it
+/// is not on screen. Every focusable widget should use this; the node-less forms remain for a focus id that
+/// stands for something other than a widget.
+pub fn register_at(id: FocusId, kind: FocusKind, node: NodeId) {
+    register_node(id, kind, Some(node));
+}
+
+fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>) {
     with_focus(|s| {
-        if !s.order.contains(&id) {
-            s.order.push(id);
+        match s.order.iter_mut().find(|e| e.id == id) {
+            // Re-registering only ever adds knowledge: a widget that learns its node later keeps its place.
+            Some(existing) => existing.node = existing.node.or(node),
+            None => s.order.push(Entry { id, node }),
         }
         if kind == FocusKind::TextEntry {
             s.text_entries.insert(id);
@@ -161,11 +242,36 @@ pub fn register_as(id: FocusId, kind: FocusKind) {
     });
 }
 
+/// Declares a region whose focusables are only reachable while `showing` reads true, and — when `traps` — that
+/// holds focus inside itself while it is up.
+///
+/// The counterpart of the pointer barrier an overlay already puts up. Without it the tab order is a list built
+/// when widgets were *constructed*, which says nothing about what is on screen now: a dialog kept mounted
+/// across a close leaves its fields as Tab stops, and one that is open does not stop Tab walking out behind it.
+pub fn register_scope(node: NodeId, showing: impl Fn() -> bool + 'static, traps: bool) -> ScopeId {
+    with_focus(|s| {
+        let id = ScopeId(s.next_scope);
+        s.next_scope += 1;
+        s.scopes.push(Scope {
+            id,
+            node,
+            showing: Rc::new(showing),
+            traps,
+        });
+        id
+    })
+}
+
+/// Withdraws a scope registered with [`register_scope`].
+pub fn unregister_scope(id: ScopeId) {
+    with_focus(|s| s.scopes.retain(|scope| scope.id != id));
+}
+
 /// Removes `id` from the tab order and drops its focus if it held it. A focusable widget calls this on
 /// drop, so a destroyed widget never lingers in traversal or as the focused id.
 pub fn unregister(id: FocusId) {
     with_focus(|s| {
-        s.order.retain(|&x| x != id);
+        s.order.retain(|e| e.id != id);
         s.text_entries.remove(&id);
     });
     release(id);
@@ -226,9 +332,57 @@ pub fn focus_prev() {
     step(-1);
 }
 
+/// A [`Scope`] as [`step`] reads it, once copied out from under the slot borrow: where it is, whether it is
+/// showing, and whether it holds focus inside itself.
+type ScopeView = (NodeId, Rc<dyn Fn() -> bool>, bool);
+
+/// Whether Tab should be able to land on a focusable at `node`, given the scopes registered right now.
+///
+/// Three ways to be out of reach, and they are genuinely different mechanisms rather than one seen from three
+/// angles — which is why a rule aimed at any single one of them leaves the others open:
+/// - out of layout flow, by its own `display:none` or an ancestor's, which leaves the rect it last had;
+/// - inside a region kept mounted while not showing, which leaves the rect *and* the layout intact;
+/// - outside the modal that is currently up, which is about nothing on the node itself.
+fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
+    // A focus id that stands for no widget has no way to be off screen.
+    let Some(node) = node else { return true };
+    if layout_reactive::is_hidden(node) {
+        return false;
+    }
+    if scopes
+        .iter()
+        .any(|(scope, showing, _)| !showing() && layout_reactive::is_descendant_of(node, *scope))
+    {
+        return false;
+    }
+    // The topmost trapping scope that is up holds focus inside itself.
+    match scopes
+        .iter()
+        .rev()
+        .find(|(_, showing, traps)| *traps && showing())
+    {
+        Some((scope, _, _)) => layout_reactive::is_descendant_of(node, *scope),
+        None => true,
+    }
+}
+
 fn step(dir: isize) {
-    // Snapshot the tab order and release the slot borrow before `request` (which flushes) re-enters it.
-    let order = with_focus_ref(|s| s.order.clone());
+    // Snapshot, then release the slot borrow: `showing` is the author's closure and the reachability queries borrow the layout runtime, and neither may run under this one — nor may `request`, which flushes.
+    let (order, scopes) = with_focus_ref(|s| {
+        let order: Vec<(FocusId, Option<NodeId>)> =
+            s.order.iter().map(|e| (e.id, e.node)).collect();
+        let scopes: Vec<ScopeView> = s
+            .scopes
+            .iter()
+            .map(|sc| (sc.node, sc.showing.clone(), sc.traps))
+            .collect();
+        (order, scopes)
+    });
+    let order: Vec<FocusId> = order
+        .into_iter()
+        .filter(|(_, node)| reachable(*node, &scopes))
+        .map(|(id, _)| id)
+        .collect();
     if order.is_empty() {
         return;
     }
@@ -272,6 +426,97 @@ mod tests {
         // Releasing the focused one clears it.
         release(b);
         assert!(current().is_none());
+    }
+
+    /// A control the application has disabled is not a Tab stop — in HTML a `disabled` element is skipped
+    /// outright, and a keyboard user made to walk through controls that do nothing is being told less about
+    /// the interface than a mouse user, who at least sees them dimmed.
+    ///
+    /// Rides the same scope mechanism a hidden overlay uses rather than a second one, which is what gives a
+    /// disabled *wrapper* the `fieldset` reading for the keyboard as well as for the pointer.
+    #[test]
+    fn tab_skips_a_disabled_box() {
+        use crate::context::{compute_layout, reset_layout_runtime};
+        use crate::{LayoutItem, StyledContainer};
+        use layout_core::{AvailableSpace, LayoutStyle};
+
+        reset_layout_runtime();
+        let base = next_id();
+        register(base);
+
+        let below = next_id();
+        let off = StyledContainer::new(
+            LayoutStyle::new().width(50.0).height(20.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_focus(|_| {})
+        .disabled(|| true);
+        let above = next_id();
+        compute_layout(
+            off.layout_node(),
+            AvailableSpace::Definite(50.0),
+            AvailableSpace::Definite(20.0),
+        )
+        .unwrap();
+
+        request(base);
+        focus_next();
+        let landed = current().expect("something took focus");
+        assert!(
+            !(landed > below && landed < above),
+            "Tab landed on a box the application had disabled"
+        );
+    }
+
+    /// The case that showed an overlay-shaped fix would only ever be half of one: `display:none` hides content
+    /// without any overlay involved, and left it in the tab order just the same. The two mechanisms leave
+    /// opposite traces — a hidden overlay keeps its children's rects and stops painting, a `display:none`
+    /// subtree collapses to zero and keeps its place in the walk — so neither a paint test nor a rect test
+    /// catches both. Ancestry does.
+    #[test]
+    fn tab_skips_a_focusable_taken_out_of_layout_flow() {
+        use crate::context::{compute_layout, reset_layout_runtime, set_display};
+        use crate::{LayoutItem, StyledContainer};
+        use layout_core::{AvailableSpace, LayoutStyle};
+
+        reset_layout_runtime();
+        let base = next_id();
+        register(base);
+
+        let below = next_id();
+        let hidden = StyledContainer::new(
+            LayoutStyle::new().width(50.0).height(20.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_focus(|_| {});
+        let node = hidden.layout_node();
+        let root = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(100.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![Box::new(hidden)],
+        )
+        .unwrap();
+        let above = next_id();
+
+        set_display(node, false);
+        compute_layout(
+            root.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        request(base);
+        focus_next();
+        let landed = current().expect("something took focus");
+        assert!(
+            !(landed > below && landed < above),
+            "Tab landed on a focusable that is out of layout flow"
+        );
     }
 
     #[test]

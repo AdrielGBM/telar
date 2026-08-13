@@ -41,6 +41,10 @@ pub struct StyledContainer {
     disabled_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     // A closure (like `opacity`) so `view()` and the pointer path both re-read it: whether a control is usable is state that moves.
     is_disabled: Box<dyn Fn() -> bool>,
+    // Laid *over* whichever state won, not instead of it — see `on_focus_style`.
+    focus_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    // Registered when the box is given a `disabled` source; withdrawn on drop.
+    focus_scope: Option<focus::ScopeId>,
     // A closure (not a plain f32) so `view()` re-reads it every run: a reactive opacity or a `transition:opacity` animation resolves to its current value on each re-render.
     opacity: Box<dyn Fn() -> f32>,
     // Resolved per `view()` (like `opacity`) so a `$signal`-driven transform re-reads its current value. Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity (no wrapping node).
@@ -93,6 +97,8 @@ impl StyledContainer {
             is_active: signal(false),
             disabled_style: None,
             is_disabled: Box::new(|| false),
+            focus_style: None,
+            focus_scope: None,
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
             children,
@@ -132,6 +138,8 @@ impl StyledContainer {
             is_active: signal(false),
             disabled_style: None,
             is_disabled: Box::new(|| false),
+            focus_style: None,
+            focus_scope: None,
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
             children: Vec::new(),
@@ -197,13 +205,38 @@ impl StyledContainer {
     /// small and immediate — a control the application has already disabled still lighting up under the
     /// pointer and still showing a hand cursor, which says "press me" about something that will do nothing.
     pub fn disabled(mut self, f: impl Fn() -> bool + 'static) -> Self {
-        self.is_disabled = Box::new(f);
+        let f = std::rc::Rc::new(f);
+        self.is_disabled = {
+            let f = f.clone();
+            Box::new(move || f())
+        };
+        // Tab is the question the pointer already answers here, so it goes through the same mechanism a hidden overlay uses — which gives a disabled *wrapper* the `fieldset` reading for the keyboard too, rather than shielding the mouse and leaving Tab a way in.
+        self.focus_scope = Some(focus::register_scope(self.node, move || !f(), false));
         self
     }
 
     /// The paint for the disabled state, which wins over the pressed and hover ones.
     pub fn on_disabled_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         self.disabled_style = Some(Box::new(f));
+        self
+    }
+
+    /// The focus ring: drawn over whichever state won, while the box holds focus *and* should show it.
+    ///
+    /// Composed rather than swapped, unlike the other three, and the difference is the point. Hover, pressed
+    /// and disabled are answers to "what is this box doing", so one of them replaces the rest. A ring answers
+    /// a different question — where the keyboard is going — and a hovered box that lost its ring would hide
+    /// that answer at the exact moment the user reached for the mouse. Which is why CSS gives focus its own
+    /// property (`outline`) rather than another background.
+    ///
+    /// Only the properties the ring names are applied; `radius` always comes from the box, since a ring sits
+    /// on a shape it does not get to reshape. Shown on [`focus::is_focus_visible`](crate::focus), so a tap
+    /// takes focus without drawing one.
+    pub fn on_focus_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+        // Declaring a ring is declaring the box focusable, or it would join no tab order and the ring would be a style nothing could satisfy.
+        let id = *self.focus_id.get_or_insert_with(focus::next_id);
+        focus::register_at(id, focus::FocusKind::Widget, self.node);
+        self.focus_style = Some(Box::new(f));
         self
     }
 
@@ -468,7 +501,7 @@ impl StyledContainer {
     /// build a custom focusable widget on top of a `box`.
     pub fn on_focus(mut self, f: impl Fn(bool) + 'static) -> Self {
         let id = *self.focus_id.get_or_insert_with(focus::next_id);
-        focus::register(id);
+        focus::register_at(id, focus::FocusKind::Widget, self.node);
         // An effect fires the callback only on an actual transition (its first run seeds `last`, no fire).
         let last = std::rc::Rc::new(std::cell::Cell::new(focus::is_focused(id)));
         self._focus_effect = Some(effect(move || {
@@ -511,6 +544,20 @@ impl Component for StyledContainer {
         } else {
             &self.style
         };
+        let painted = match (&self.focus_style, self.focus_id) {
+            (Some(ring), Some(id)) if focus::is_focus_visible(id) => {
+                let base = style(r);
+                let ring = ring(r);
+                RectStyle {
+                    fill: ring.fill.or(base.fill),
+                    stroke: ring.stroke.or(base.stroke),
+                    shadow: ring.shadow.or(base.shadow),
+                    // The ring sits on the box's shape rather than choosing one of its own.
+                    radius: base.radius,
+                }
+            }
+            _ => style(r),
+        };
         let background = RenderNode::rect(
             Rect {
                 x: r.x,
@@ -518,7 +565,7 @@ impl Component for StyledContainer {
                 width: r.width,
                 height: r.height,
             },
-            style(r),
+            painted,
         );
         let content = match &self.dyn_host {
             Some(host) => {
@@ -633,7 +680,7 @@ impl Component for StyledContainer {
                 // A tap inside a focusable box takes focus (and consumes the press so focus sticks).
                 let focused = match self.focus_id {
                     Some(id) if primary && rect.contains(*x as f32, *y as f32) => {
-                        focus::request(id);
+                        focus::request_from_pointer(id);
                         true
                     }
                     _ => false,
@@ -746,6 +793,9 @@ impl Drop for StyledContainer {
         self._focus_effect.take();
         if let Some(id) = self.focus_id {
             focus::unregister(id);
+        }
+        if let Some(scope) = self.focus_scope {
+            focus::unregister_scope(scope);
         }
         crate::input_region::unregister_interactive(self.node);
     }
@@ -1470,12 +1520,94 @@ mod tests {
         );
     }
 
-    // A hover style swaps the box's fill while the mouse is over it (mouse only), and clears on leave.
+    /// A ring is not another state but a different question — where the keyboard is going — so it composes
+    /// with whichever state won instead of replacing it. A hovered box that lost its ring would hide that
+    /// answer exactly when the user reached for the mouse.
     #[test]
+    fn a_focus_ring_is_drawn_over_the_state_that_won_not_instead_of_it() {
+        reset_layout_runtime();
+        let hover_fill = Color::rgba(0.9, 0.9, 0.9, 1.0);
+        let ring = renderer_core::Stroke::new(Color::rgba(0.0, 0.4, 1.0, 1.0), 2.0);
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
+            vec![],
+        )
+        .unwrap()
+        .on_hover_style(move |_r| RectStyle::default().with_fill(hover_fill))
+        .on_focus_style(move |_r| RectStyle {
+            stroke: Some(ring),
+            ..RectStyle::default()
+        });
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let id = card.focus_id.expect("a ring makes the box focusable");
+        focus::request(id);
+        card.on_event(&Event::PointerMoved {
+            x: 100.0,
+            y: 50.0,
+            source: PointerSource::Mouse,
+        });
+
+        let painted = rect_style(&card.view()).expect("the box paints a rect");
+        assert_eq!(
+            painted.fill,
+            Some(renderer_core::Paint::Solid(hover_fill)),
+            "the hover fill survives the ring"
+        );
+        assert_eq!(painted.stroke, Some(ring), "and the ring is drawn over it");
+        focus::release(id);
+    }
+
+    /// `:focus-visible`, which CSS spent years arriving at: a ring on every click is noise, and the ring drawn
+    /// anyway is why so many stylesheets turned outlines off altogether and took the keyboard's only cue with
+    /// them. Focus taken by a tap shows none; focus taken any other way does.
+    #[test]
+    fn a_tap_takes_focus_without_drawing_a_ring() {
+        reset_layout_runtime();
+        let ring = renderer_core::Stroke::new(Color::rgba(0.0, 0.4, 1.0, 1.0), 2.0);
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_focus_style(move |_r| RectStyle {
+            stroke: Some(ring),
+            ..RectStyle::default()
+        });
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        let id = card.focus_id.expect("a ring makes the box focusable");
+
+        card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
+        assert!(focus::is_focused(id), "the tap did take focus");
+        assert_eq!(
+            rect_style(&card.view()).and_then(|s| s.stroke),
+            None,
+            "but drew no ring for it"
+        );
+
+        // Reached with the keyboard instead, and the ring is exactly what says so.
+        focus::request(id);
+        assert_eq!(rect_style(&card.view()).and_then(|s| s.stroke), Some(ring));
+        focus::release(id);
+    }
+
     /// The bug this exists to make unwritable, taken from a real port: a control the application had already
     /// disabled still lit up with the accent under the pointer and still showed a hand cursor, because the
     /// author remembered to guard the callback and the tint but not the hover and the cursor. Three places to
     /// remember is three places to get wrong, so the box reads one flag and closes all of them.
+    #[test]
     fn a_disabled_box_neither_lights_up_nor_fires() {
         reset_layout_runtime();
         let presses = Rc::new(Cell::new(0u32));
@@ -1743,6 +1875,7 @@ mod tests {
         assert_eq!(presses.get(), 0);
     }
 
+    // A hover style swaps the box's fill while the mouse is over it (mouse only), and clears on leave.
     #[test]
     fn hover_style_swaps_on_mouse_move() {
         reset_layout_runtime();
@@ -1922,6 +2055,19 @@ mod tests {
             normal,
             "dragging off the box clears the pressed state"
         );
+    }
+
+    // The background rect's whole style, for assertions about how the states composed rather than about one field.
+    fn rect_style(view: &RenderNode) -> Option<RectStyle> {
+        let RenderNode::Group { children, .. } = view else {
+            return None;
+        };
+        match children.first() {
+            Some(RenderNode::Primitive(renderer_core::DrawCommand::Rect { style, .. })) => {
+                Some(**style)
+            }
+            _ => None,
+        }
     }
 
     fn fill_color(view: &RenderNode) -> Color {

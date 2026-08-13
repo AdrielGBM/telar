@@ -334,6 +334,14 @@ impl LayoutEngine {
         let _ = self.tree.set_style(node, style);
     }
 
+    /// Whether this node is itself out of layout flow. Says nothing about its ancestors — [`walk`](Self::walk)
+    /// carries that down as it descends, and a caller asking about one node has to climb for itself.
+    pub fn is_display_none(&self, node: NodeId) -> bool {
+        self.style_of(node)
+            .map(|s| s.display == taffy::Display::None)
+            .unwrap_or(false)
+    }
+
     /// Toggles a node in or out of layout flow. A hidden node (`Display::None`) takes no space and lays out none of its subtree; a visible node is `Display::Flex`. Used for responsive show/hide (e.g. collapsing a sidebar on narrow windows).
     pub fn set_display(&mut self, node: NodeId, visible: bool) {
         if let Some(s) = self.style_of(node) {
