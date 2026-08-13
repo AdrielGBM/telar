@@ -43,6 +43,8 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
 pub fn layout_attr_keys() -> &'static [&'static str] {
     &[
         "track_rect",
+        // Cuts a node's rendered output to its own laid-out rect: bare for both axes, `clip:x` or `clip:y` for one.
+        "clip",
         "width",
         "height",
         "min_width",

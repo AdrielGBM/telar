@@ -2071,6 +2071,67 @@ col @card
         assert!(code.contains(".disabled(|| true)"), "{code}");
     }
 
+    /// A `String` prop could not take a literal, because a value ends at the first space — so
+    /// `name:"Box select".to_string()` parses as the prop plus an attribute called `.to_string`. The way out
+    /// was to bind every label to a `[logic]` local, six lines of preamble for three buttons. The transpiler
+    /// knows the field's type, so it can convert the literal itself.
+    #[test]
+    fn a_quoted_literal_fits_a_string_prop_without_a_preamble() {
+        let callee = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub name: String,\n}\n\n[view]\ntext \"{props.name}\"\n";
+        let sig = scan_component_sig(callee);
+        assert_eq!(sig.string_fields, vec!["name".to_string()]);
+
+        let mut registry = ComponentRegistry::default();
+        registry.insert("hint".to_string(), sig);
+        let code = transpile_source_full(
+            "[view]\nhint name:\"Box select\"\n",
+            "demo",
+            None,
+            None,
+            Some(&registry),
+        )
+        .unwrap()
+        .rust_code;
+        assert!(
+            code.contains("name: \"Box select\".to_string()"),
+            "the literal is converted at the call site:\n{code}"
+        );
+    }
+
+    /// The one escape hatch a 1069-line application needed: a canvas paints wherever its commands say, so
+    /// without a clip an axis line runs straight over the header. `ClippedItem` existed the whole time; the
+    /// markup had no way to ask for it, so the `.rsx` dropped into Rust and spliced the widget back in.
+    #[test]
+    fn a_clip_attribute_cuts_a_node_to_its_own_rect() {
+        let src = "[view]\ncol\n    canvas width:100 height:100 clip\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("ClippedItem::along(box_item(") && code.contains("ClipAxis::Both"),
+            "{code}"
+        );
+    }
+
+    /// The one-way forms, which are what CSS cannot say: `overflow: hidden` on one axis forces the other out
+    /// of `visible`, so a row that only wanted its ends cut has to clip the overflow it meant to keep.
+    #[test]
+    fn a_clip_can_cut_one_axis_and_leave_the_other() {
+        let src = "[view]\nrow width:100 clip:x\n    text \"a\"\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains("ClipAxis::Horizontal"), "{code}");
+
+        let bad = transpile_source_with_theme("[view]\nrow clip:sideways\n", "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            bad.contains("compile_error!") && bad.contains("is not an axis"),
+            "an axis it does not have is named rather than quietly clipping both:\n{bad}"
+        );
+    }
+
     /// The ring, spelled like the state paints beside it but composed rather than swapped — and declaring one
     /// is what makes the box focusable, or it would be a style nothing could ever satisfy.
     #[test]

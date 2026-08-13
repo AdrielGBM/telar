@@ -41,6 +41,11 @@ pub struct ComponentSig {
     /// still deriving `Default` for its other props. Scanned from a `.rsx`'s `Option<...>` fields; listed
     /// explicitly for the built-in component catalogue.
     pub optional_fields: Vec<String>,
+    /// Prop fields declared as an owned `String`. A quoted value at a call site is a `&str` literal, which
+    /// such a field does not take — so the caller had to bind every label to a `[logic]` local just to write
+    /// `.to_string()` on it, six lines of preamble for three buttons. Knowing the type, the transpiler can
+    /// convert the literal itself.
+    pub string_fields: Vec<String>,
 }
 
 impl ComponentSig {
@@ -65,6 +70,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         prop_fields: fields.iter().map(|f| f.to_string()).collect(),
         has_slot,
         color_fields: color.iter().map(|f| f.to_string()).collect(),
+        // The catalogue takes its owned-string props through `Box<dyn Fn() -> String>`, so it declares none.
+        string_fields: Vec::new(),
         text_fields: Vec::new(),
         optional_fields: optional.iter().map(|f| f.to_string()).collect(),
     };
@@ -292,6 +299,7 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
         color_fields: props.color,
         text_fields: props.text,
         optional_fields: props.optional,
+        string_fields: props.owned_text,
     }
 }
 
@@ -311,6 +319,8 @@ struct ScannedProps {
     text: Vec<String>,
     /// The same for `Box<dyn Fn() -> Color>`.
     color: Vec<String>,
+    /// The subset typed as a plain owned `String`.
+    owned_text: Vec<String>,
 }
 
 /// Scans the logic zone for `struct Props`. See [`ScannedProps`] for what each part is used for.
@@ -380,6 +390,7 @@ fn scan_props_struct(logic: &str) -> ScannedProps {
             match returned_closure_type(&field.ty) {
                 Some("String") => scanned.text.push(field.name.clone()),
                 Some("Color") => scanned.color.push(field.name.clone()),
+                _ if is_owned_string(&field.ty) => scanned.owned_text.push(field.name.clone()),
                 _ => {}
             }
             if field.default.is_some() {
@@ -397,6 +408,19 @@ fn scan_props_struct(logic: &str) -> ScannedProps {
 /// The type a `Box<dyn Fn() -> T>` prop returns, unqualified (`Color` for `telar::Color`), or `None` when the
 /// field is not a nullary closure. This is what marks a prop as taking live text or a live colour, so a call
 /// site can pass a literal or a `$signal` and have it boxed.
+/// Whether `ty` is a plain owned `String`, `Option<String>` included.
+///
+/// Deliberately narrow: only the exact type, never a `Vec<String>` or a `HashMap<_, String>`, because the
+/// conversion this enables applies to one value and would be wrong for a field that holds many.
+fn is_owned_string(ty: &str) -> bool {
+    let compact: String = ty.split_whitespace().collect::<Vec<_>>().join("");
+    let inner = compact
+        .strip_prefix("Option<")
+        .and_then(|rest| rest.strip_suffix('>'))
+        .unwrap_or(&compact);
+    matches!(inner, "String" | "std::string::String")
+}
+
 fn returned_closure_type(ty: &str) -> Option<&str> {
     let compact: String = ty.split_whitespace().collect::<Vec<_>>().join(" ");
     if !compact.contains("Fn()") {

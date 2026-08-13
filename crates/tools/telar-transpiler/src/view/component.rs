@@ -83,6 +83,7 @@ impl ViewGen<'_> {
         let field_count = sig.map(|s| s.prop_fields.len());
         let color_fields: &[String] = sig.map_or(&[], |s| s.color_fields.as_slice());
         let text_fields: &[String] = sig.map_or(&[], |s| s.text_fields.as_slice());
+        let string_fields: &[String] = sig.map_or(&[], |s| s.string_fields.as_slice());
         let optional_fields: &[String] = sig.map_or(&[], |s| s.optional_fields.as_slice());
         // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
         // `use super::*` glob at crate root) or in a component library re-exported through `use telar::*`.
@@ -95,6 +96,9 @@ impl ViewGen<'_> {
                         self.component_color_attr_expr(attr)
                     } else if text_fields.iter().any(|f| f == &attr.key) {
                         self.component_text_attr_expr(attr)
+                    } else if attr.is_quoted && string_fields.iter().any(|f| f == &attr.key) {
+                        // The conversion is what the markup cannot express: a value ends at the first space, so `name:"Box select".to_string()` parses as a second attribute, and the only way out was a `[logic]` local per label.
+                        format!("{}.to_string()", rust_str(&attr.value))
                     } else {
                         self.component_attr_expr(attr)
                     };

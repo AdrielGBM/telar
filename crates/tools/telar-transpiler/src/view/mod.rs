@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use telar_parser::{Element, IfBlock, StyleClass, StyleConstant, ViewNode};
 
 use crate::naming::contains_ident;
+use signals::rust_str;
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
 const SRC_PUSH: &str = "//@RSX@PUSH:";
@@ -521,6 +522,10 @@ impl<'a> ViewGen<'a> {
                 code: format!("{}{text}", self.indent_str()),
             },
         };
+        let emit = match node {
+            ViewNode::Element(el) => self.clip_tail(el, emit),
+            _ => emit,
+        };
         // Bracket this node's generated lines with source markers so the transpiler can map them back to the `.rsx` line. Nested nodes nest their own markers; `let` statements have no line of their own and inherit the enclosing node's mapping.
         match node {
             ViewNode::Element(el) => wrap_source_markers(emit, el.line),
@@ -528,6 +533,62 @@ impl<'a> ViewGen<'a> {
             ViewNode::ForBlock(block) => wrap_source_markers(emit, block.line),
             ViewNode::MatchBlock(block) => wrap_source_markers(emit, block.line),
             ViewNode::LetStmt(_) | ViewNode::Comment(_) => emit,
+        }
+    }
+
+    /// Wraps a node's widget in a [`ClippedItem`] when it carries `clip`, cutting its rendered output to its
+    /// own laid-out rect.
+    ///
+    /// `clip` cuts both ways, `clip:x` only the left and right edges, `clip:y` only the top and bottom — the
+    /// one-way forms being the thing CSS cannot say, since `overflow: hidden` on one axis forces the other out
+    /// of `visible`. The primitive has always existed; what was missing was any way to ask for it from the
+    /// markup, which is why the one escape hatch in a 1069-line application was a `.rsx` dropping into Rust to
+    /// stop a canvas painting over the header.
+    fn clip_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "clip") else {
+            return emit;
+        };
+        let axis = match attr.value.trim() {
+            "" | "both" => "Both",
+            "x" => "Horizontal",
+            "y" => "Vertical",
+            other => {
+                let pad = self.indent_str();
+                let code = format!(
+                    "{pad}compile_error!({});",
+                    rust_str(&format!(
+                        "`clip:{other}` is not an axis: write `clip` for both, `clip:x` for the left and right edges, or `clip:y` for the top and bottom"
+                    ))
+                );
+                return match emit {
+                    ChildEmit::Simple { name, code: c } => ChildEmit::Simple {
+                        name,
+                        code: format!("{c}\n{code}"),
+                    },
+                    ChildEmit::Fragment { name, code: c } => ChildEmit::Fragment {
+                        name,
+                        code: format!("{c}\n{code}"),
+                    },
+                    ChildEmit::Dynamic { code: c } => ChildEmit::Dynamic {
+                        code: format!("{c}\n{code}"),
+                    },
+                };
+            }
+        };
+        match emit {
+            ChildEmit::Simple { name, code } => {
+                let pad = self.indent_str();
+                let wrapped = self.next_variable_name("clipped");
+                let code = format!(
+                    "{code}\n{pad}let {wrapped} = ClippedItem::along(box_item({name}), ClipAxis::{axis});"
+                );
+                ChildEmit::Simple {
+                    name: wrapped,
+                    code,
+                }
+            }
+            // A control-flow block carries no attributes and a fragment has no single node to cut, so neither is reachable from the markup.
+            other => other,
         }
     }
 
@@ -1198,6 +1259,7 @@ mod tests {
             color_fields: Vec::new(),
             text_fields: Vec::new(),
             optional_fields: Vec::new(),
+            string_fields: Vec::new(),
         }
     }
 
