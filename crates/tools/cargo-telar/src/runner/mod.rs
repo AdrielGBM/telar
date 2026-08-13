@@ -7,6 +7,7 @@ mod android;
 mod check;
 mod cli;
 mod config;
+mod diagnostics;
 mod doctor;
 mod fmt;
 mod package;

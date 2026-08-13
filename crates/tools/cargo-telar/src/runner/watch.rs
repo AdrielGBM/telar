@@ -1,6 +1,7 @@
 use std::fs::OpenOptions;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -11,6 +12,7 @@ use super::config::{
     CargoManifest, TelarConfig, WindowConfig, backend_as_str, expand_member, resolve_package,
     split_android_flag,
 };
+use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
 
 fn inject_feature(args: &mut Vec<String>, feature: &str) {
@@ -22,6 +24,34 @@ fn inject_feature(args: &mut Vec<String>, feature: &str) {
     }
     args.push("--features".to_string());
     args.push(feature.to_string());
+}
+
+/// Runs a cargo build and re-points whatever it says about generated Rust back onto the `.rsx` it came from.
+///
+/// stdout carries the JSON diagnostic stream and is consumed here; stderr is cargo's own progress and is
+/// left on the terminal, so a build still looks like a build. Every build goes through this, not only the
+/// failing ones — warnings used to be captured into a `String` that was read on the failure path alone,
+/// which made them invisible for a whole development session.
+fn build_with_diagnostics(cmd: &mut Command) -> (bool, diagnostics::Report) {
+    cmd.arg("--color=always")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
+    let mut child = cmd.spawn().expect("[cargo-telar] failed to invoke cargo");
+    // Drained before `wait`, or a report larger than the pipe buffer deadlocks the build it is reading.
+    let report = match child.stdout.take() {
+        Some(stdout) => diagnostics::collect(BufReader::new(stdout)),
+        None => diagnostics::Report::default(),
+    };
+    let succeeded = child.wait().map(|status| status.success()).unwrap_or(false);
+    (succeeded, report)
+}
+
+/// Adds `--message-format=json` unless the caller already chose a format, which cargo would reject as two
+/// of them rather than honour the later one.
+fn with_json_messages(args: &mut Vec<String>) {
+    if !args.iter().any(|a| a.starts_with("--message-format")) {
+        args.push("--message-format=json".to_string());
+    }
 }
 
 fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
@@ -38,6 +68,7 @@ fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
     for feature in features {
         inject_feature(&mut lib_build_args, feature);
     }
+    with_json_messages(&mut lib_build_args);
     lib_build_args
 }
 
@@ -165,14 +196,42 @@ fn collect_src_dirs(workspace_root: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// The host triple's `CARGO_TARGET_<TRIPLE>_RUSTFLAGS`, which is where a direnv/flake shell usually puts a
+/// linker choice (target-scoped rather than global, so a cross build keeps its own toolchain's linker).
+fn host_target_rustflags() -> Option<String> {
+    let output = Command::new("rustc").arg("-vV").output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let host = text
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))?
+        .trim();
+    let key = format!(
+        "CARGO_TARGET_{}_RUSTFLAGS",
+        host.to_uppercase().replace('-', "_")
+    );
+    std::env::var(key).ok().filter(|v| !v.trim().is_empty())
+}
+
+/// The flags this loop must build with, on top of whatever the developer already configured.
+///
+/// Cargo reads rustflags from exactly one source and `RUSTFLAGS` outranks the rest, so setting it here
+/// silently discards the target-scoped tier — which is where a Nix shell or a `.envrc` puts `-fuse-ld=mold`.
+/// Folding that tier in when `RUSTFLAGS` is unset keeps the developer's choice instead of quietly undoing it.
 fn hot_reload_rustflags() -> String {
-    let existing = std::env::var("RUSTFLAGS").unwrap_or_default();
+    with_hot_reload_cfg(
+        std::env::var("RUSTFLAGS")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(host_target_rustflags),
+    )
+}
+
+fn with_hot_reload_cfg(inherited: Option<String>) -> String {
     // Adding --cfg=telar_hot_reload changes the Cargo fingerprint, forcing a recompile so the proc macro re-runs with TELAR_HOT_RELOAD_BUILD=1 and generates the hot reload code.
     let flag = "--cfg=telar_hot_reload";
-    if existing.is_empty() {
-        flag.to_string()
-    } else {
-        format!("{existing} {flag}")
+    match inherited {
+        Some(existing) => format!("{existing} {flag}"),
+        None => flag.to_string(),
     }
 }
 
@@ -212,9 +271,12 @@ impl HotChannel {
     }
 
     fn notify_build_error(&mut self, message: &str) {
-        // Flatten multi-line error to a single line for the simple line-based protocol
-        let single_line = message.replace('\n', " | ").replace('\r', "");
-        self.send(&format!("err:{single_line}"));
+        // Escaped rather than replaced: a code frame is full of `|`, so the ` | ` separator this used to substitute would be cut back apart at every gutter. Backslashes go first, or an escape in the message decodes as a line break.
+        let escaped = message
+            .replace('\\', "\\\\")
+            .replace('\n', "\\n")
+            .replace('\r', "");
+        self.send(&format!("err:{escaped}"));
     }
 
     fn send(&mut self, message: &str) {
@@ -300,21 +362,22 @@ fn watch_and_hot_reload(
             pending_rebuild = false;
             while rx.try_recv().is_ok() {}
             eprintln!("[cargo-telar] Change detected, rebuilding...");
-            let output = Command::new("cargo")
-                .args(&build_args)
+            let mut cmd = Command::new("cargo");
+            cmd.args(&build_args)
                 .env("TELAR_HOT_RELOAD_BUILD", "1")
                 .env("RUSTFLAGS", &rustflags)
-                .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
-                .output()
-                .expect("[cargo-telar] failed to invoke cargo");
-            if output.status.success() {
+                .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+            let (succeeded, report) = build_with_diagnostics(&mut cmd);
+            if !report.is_empty() {
+                eprintln!();
+                eprint!("{}", report.render(true));
+            }
+            if succeeded {
                 channel.notify_hot_reload(lib_path.to_str().unwrap_or_default());
                 eprintln!("[cargo-telar] Hot reloaded.");
             } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                eprintln!("{stderr}");
                 eprintln!("[cargo-telar] Build failed, waiting for changes...");
-                channel.notify_build_error(&stderr);
+                channel.notify_build_error(&report.render(false));
             }
         }
 
@@ -510,6 +573,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         for feature in features {
             inject_feature(&mut build_args, feature);
         }
+        with_json_messages(&mut build_args);
         eprintln!("[cargo-telar] Building...");
         let mut build_cmd = Command::new("cargo");
         build_cmd
@@ -521,10 +585,12 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         if is_preview {
             build_cmd.env("TELAR_PREVIEW_BUILD", "1");
         }
-        let status = build_cmd
-            .status()
-            .expect("[cargo-telar] failed to invoke cargo");
-        if !status.success() {
+        let (succeeded, report) = build_with_diagnostics(&mut build_cmd);
+        if !report.is_empty() {
+            eprintln!();
+            eprint!("{}", report.render(true));
+        }
+        if !succeeded {
             eprintln!("[cargo-telar] Initial build failed. Watching for changes...");
         }
 
@@ -550,4 +616,28 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     }
 
     watch_and_run(cargo_args, launch_envs, workspace_root);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The linker a Nix or direnv shell configures for the host target used to be dropped on the floor:
+    /// setting `RUSTFLAGS` here made Cargo stop reading the tier that carried it, so the one loop a developer
+    /// tunes their linker *for* was the one loop that ignored it. Choosing a linker is not this tool's call,
+    /// but discarding the choice already made is a bug.
+    #[test]
+    fn a_shell_configured_linker_survives_into_the_hot_reload_build() {
+        assert_eq!(
+            with_hot_reload_cfg(Some("-C link-arg=-fuse-ld=mold".to_string())),
+            "-C link-arg=-fuse-ld=mold --cfg=telar_hot_reload"
+        );
+    }
+
+    /// With nothing to inherit the cfg stands alone, so a bare shell does not get a leading space that would
+    /// read as an empty flag.
+    #[test]
+    fn nothing_to_inherit_leaves_the_cfg_alone() {
+        assert_eq!(with_hot_reload_cfg(None), "--cfg=telar_hot_reload");
+    }
 }

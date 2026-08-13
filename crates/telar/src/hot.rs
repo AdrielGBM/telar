@@ -337,7 +337,7 @@ pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
                 let event = if let Some(path_str) = line.strip_prefix("hot:") {
                     HotEvent::Reload(std::path::PathBuf::from(path_str))
                 } else if let Some(msg) = line.strip_prefix("err:") {
-                    HotEvent::BuildError(msg.replace(" | ", "\n"))
+                    HotEvent::BuildError(unescape_lines(msg))
                 } else {
                     // Legacy: bare path (no prefix) — treat as reload
                     HotEvent::Reload(std::path::PathBuf::from(line))
@@ -349,4 +349,59 @@ pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
         })
         .ok();
     rx
+}
+
+/// Undoes the escaping `cargo-telar` applies so a multi-line build error survives a protocol of one event
+/// per line. A trailing lone backslash cannot occur (the sender doubles them) and is passed through rather
+/// than dropped, so a malformed message is still shown.
+fn unescape_lines(message: &str) -> String {
+    let mut out = String::with_capacity(message.len());
+    let mut chars = message.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('\\') => out.push('\\'),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The build error shown in the window is a rustc-shaped code frame, and a frame is mostly `|` — which
+    /// is exactly what the old protocol substituted for a newline. Round-tripping one proves the frame
+    /// survives instead of being cut apart at every gutter.
+    #[test]
+    fn a_code_frame_survives_the_hot_reload_channel() {
+        let frame =
+            "error: mismatched types\n --> src/home.rsx:4\n  |\n4 | text \"{n}\" size:no\n  |\n";
+        let escaped = frame
+            .replace('\\', "\\\\")
+            .replace('\n', "\\n")
+            .replace('\r', "");
+        assert!(
+            !escaped.contains('\n'),
+            "the wire carries one line per event"
+        );
+        assert_eq!(unescape_lines(&escaped), frame);
+    }
+
+    /// A backslash in the message (a Windows path, an escaped quote rustc quoted back) is not a line break.
+    #[test]
+    fn a_literal_backslash_is_not_read_as_an_escape() {
+        let message = "cannot find `C:\\src\\home.rsx`";
+        let escaped = message.replace('\\', "\\\\").replace('\n', "\\n");
+        assert_eq!(unescape_lines(&escaped), message);
+    }
 }
