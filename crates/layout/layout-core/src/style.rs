@@ -131,6 +131,28 @@ impl LayoutStyle {
         self
     }
 
+    /// Takes the node out of normal flow (`position: absolute`) leaving every inset at `auto`, so the
+    /// edges it is pinned by are exactly the ones the caller names. [`absolute_fill`](Self::absolute_fill)
+    /// is this plus all four insets at 0; a floating panel wants three of them and its own size on the
+    /// fourth axis, which pinning everything would override.
+    pub fn absolute(mut self) -> Self {
+        self.inner.position = taffy::Position::Absolute;
+        self
+    }
+
+    /// Inset from the top edge, for a node already taken out of flow. Physical, not logical: `top` does not
+    /// swap under RTL the way [`inset_start`](Self::inset_start) does.
+    pub fn inset_top(mut self, px: f32) -> Self {
+        self.inner.inset.top = LengthPercentageAuto::length(px);
+        self
+    }
+
+    /// Inset from the bottom edge, for a node already taken out of flow.
+    pub fn inset_bottom(mut self, px: f32) -> Self {
+        self.inner.inset.bottom = LengthPercentageAuto::length(px);
+        self
+    }
+
     /// The node's `width` in pixels if it is a definite length, else `None` (e.g. percent or auto).
     /// Lets widgets with an intrinsic size (e.g. `<svg>`/`<img>`) inspect a caller-supplied width before registering their layout leaf.
     pub fn width_px(&self) -> Option<f32> {

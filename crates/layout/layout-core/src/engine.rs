@@ -25,6 +25,10 @@ pub struct LayoutEngine {
     /// Main-axis gap margins applied by [`set_leading_margin`](Self::set_leading_margin), which sit on the
     /// *leading* edge and so must move to the other side when a row reverses.
     leading_margins: FxHashMap<NodeId, (bool, f32)>,
+    /// Every node this engine currently owns. Kept because taffy has no total way to ask: `style()` indexes
+    /// its slot map and panics on a freed key rather than answering, so there is nothing to guard with. See
+    /// [`alive`](Self::alive) for why anything asks at all.
+    live: FxHashSet<NodeId>,
 }
 
 impl LayoutEngine {
@@ -35,6 +39,7 @@ impl LayoutEngine {
             logical: FxHashMap::default(),
             directional_rows: FxHashSet::default(),
             leading_margins: FxHashMap::default(),
+            live: FxHashSet::default(),
         }
     }
 
@@ -55,7 +60,7 @@ impl LayoutEngine {
         self.direction = direction;
         let rows = std::mem::take(&mut self.directional_rows);
         for &node in &rows {
-            if let Ok(current) = self.tree.style(node) {
+            if let Some(current) = self.style_of(node) {
                 let mut style = current.clone();
                 style.flex_direction = if direction.is_rtl() {
                     taffy::FlexDirection::RowReverse
@@ -82,6 +87,7 @@ impl LayoutEngine {
     /// Records whichever direction-dependent parts of `style` the node will need re-resolved on a flip, and
     /// drops any it no longer has — a restyled node must not keep the previous style's logical edges.
     fn track(&mut self, node: NodeId, style: LayoutStyle) {
+        self.live.insert(node);
         if style.logical.has_edges() {
             self.directional_rows.remove(&node);
             self.logical.insert(node, style);
@@ -96,6 +102,7 @@ impl LayoutEngine {
     }
 
     fn forget(&mut self, node: NodeId) {
+        self.live.remove(&node);
         self.logical.remove(&node);
         self.directional_rows.remove(&node);
         self.leading_margins.remove(&node);
@@ -132,6 +139,7 @@ impl LayoutEngine {
     }
 
     pub fn set_style(&mut self, node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
+        self.alive(node)?;
         self.tree.set_style(node, style.resolve(self.direction))?;
         self.track(node, style);
         Ok(())
@@ -140,6 +148,10 @@ impl LayoutEngine {
     /// Replaces `parent`'s children with `children`, in order. Used by reactive lists to insert, move,
     /// and drop item nodes as their source collection changes.
     pub fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
+        self.alive(parent)?;
+        for &child in children {
+            self.alive(child)?;
+        }
         self.tree
             .set_children(parent, children)
             .map_err(LayoutError::from)
@@ -148,6 +160,8 @@ impl LayoutEngine {
     /// Appends `child` to `parent`'s existing children (unlike [`set_children`], which replaces them). Used
     /// to attach an overlay's out-of-flow content to the layout root without touching the root's other children.
     pub fn add_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
+        self.alive(parent)?;
+        self.alive(child)?;
         self.tree
             .add_child(parent, child)
             .map_err(LayoutError::from)
@@ -155,10 +169,38 @@ impl LayoutEngine {
 
     /// Detaches `child` from `parent` (does not free it — call [`remove`] afterwards to release the node).
     pub fn remove_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
+        self.alive(parent)?;
+        self.alive(child)?;
         self.tree
             .remove_child(parent, child)
             .map(|_| ())
             .map_err(LayoutError::from)
+    }
+
+    /// The node's style, or `None` once it has been freed — the read-side twin of [`alive`](Self::alive).
+    fn style_of(&self, node: NodeId) -> Option<&taffy::Style> {
+        if !self.live.contains(&node) {
+            return None;
+        }
+        self.tree.style(node).ok()
+    }
+
+    /// An error, rather than a panic, for a node that has been freed.
+    ///
+    /// Every mutator goes through this because a widget can legitimately outlive its node: a `Segment` holds
+    /// the widget so a re-render mid-dispatch can still flatten it, so an effect the widget owns may fire
+    /// once after the list that held it dropped the node. Taffy indexes its slot map directly and would
+    /// panic on that id — and these all return `Result` already, so the honest answer to "attach a node that
+    /// is gone" is the error the signature promises. The read-only queries take the same view (`is_size_auto`
+    /// and friends already fall back rather than fail).
+    fn alive(&self, node: NodeId) -> Result<(), LayoutError> {
+        if self.live.contains(&node) {
+            Ok(())
+        } else {
+            Err(LayoutError::Engine(format!(
+                "node {node:?} no longer exists"
+            )))
+        }
     }
 
     /// Frees a node (and its measure context) from the tree. The caller must have already detached it from
@@ -169,20 +211,21 @@ impl LayoutEngine {
     }
 
     pub fn mark_dirty(&mut self, node: NodeId) -> Result<(), LayoutError> {
+        self.alive(node)?;
         self.tree.mark_dirty(node).map_err(LayoutError::from)
     }
 
     /// Whether the node's `width`/`height` are `auto` (i.e. content-sized).
     pub fn is_size_auto(&self, node: NodeId) -> (bool, bool) {
-        match self.tree.style(node) {
-            Ok(s) => (s.size.width.is_auto(), s.size.height.is_auto()),
-            Err(_) => (false, false),
+        match self.style_of(node) {
+            Some(s) => (s.size.width.is_auto(), s.size.height.is_auto()),
+            None => (false, false),
         }
     }
 
     /// Sets the node's width to a definite length, or back to `auto` when `None`.
     pub fn set_width(&mut self, node: NodeId, width: Option<f32>) {
-        if let Ok(s) = self.tree.style(node) {
+        if let Some(s) = self.style_of(node) {
             let mut style = s.clone();
             style.size.width = width.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
             let _ = self.tree.set_style(node, style);
@@ -191,7 +234,7 @@ impl LayoutEngine {
 
     /// Sets the node's height to a definite length, or back to `auto` when `None`.
     pub fn set_height(&mut self, node: NodeId, height: Option<f32>) {
-        if let Ok(s) = self.tree.style(node) {
+        if let Some(s) = self.style_of(node) {
             let mut style = s.clone();
             style.size.height = height.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
             let _ = self.tree.set_style(node, style);
@@ -201,12 +244,29 @@ impl LayoutEngine {
     /// Sets the node's minimum height to a definite length, or clears it (`auto`) when `None`. Lets a
     /// content-measured leaf (e.g. a code editor's text area) fill a viewport it would otherwise underflow.
     pub fn set_min_height(&mut self, node: NodeId, height: Option<f32>) {
-        if let Ok(s) = self.tree.style(node) {
+        if let Some(s) = self.style_of(node) {
             let mut style = s.clone();
             style.min_size.height =
                 height.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
             let _ = self.tree.set_style(node, style);
         }
+    }
+
+    /// Turns `node` into a flex row after construction, registering it as direction-following so a later
+    /// RTL flip reverses it like an authored `flex_row`. What a reconciling list calls when it learns —
+    /// from the container it is being attached to — that its items run horizontally.
+    pub fn make_flex_row(&mut self, node: NodeId) {
+        let Some(current) = self.style_of(node) else {
+            return;
+        };
+        let mut style = current.clone();
+        style.flex_direction = if self.direction.is_rtl() {
+            taffy::FlexDirection::RowReverse
+        } else {
+            taffy::FlexDirection::Row
+        };
+        let _ = self.tree.set_style(node, style);
+        self.directional_rows.insert(node);
     }
 
     /// Whether the node lays its children along the main (horizontal) axis — a flex row. A column, or any
@@ -235,9 +295,12 @@ impl LayoutEngine {
 
     /// Whether the node's host lays its children out from the right — an RTL row, or one explicitly reversed.
     fn leads_from_right(&self, node: NodeId) -> bool {
+        if !self.live.contains(&node) {
+            return false;
+        }
         self.tree
             .parent(node)
-            .and_then(|parent| self.tree.style(parent).ok())
+            .and_then(|parent| self.style_of(parent))
             .map(|s| s.flex_direction == taffy::FlexDirection::RowReverse)
             .unwrap_or(false)
     }
@@ -246,7 +309,7 @@ impl LayoutEngine {
     /// after a direction flip needs and a first application must not do (it would clobber an author's margin).
     fn apply_leading_margin(&mut self, node: NodeId, is_row: bool, px: f32, clear_opposite: bool) {
         let leading_right = is_row && self.leads_from_right(node);
-        let Ok(current) = self.tree.style(node) else {
+        let Some(current) = self.style_of(node) else {
             return;
         };
         let mut style = current.clone();
@@ -273,7 +336,7 @@ impl LayoutEngine {
 
     /// Toggles a node in or out of layout flow. A hidden node (`Display::None`) takes no space and lays out none of its subtree; a visible node is `Display::Flex`. Used for responsive show/hide (e.g. collapsing a sidebar on narrow windows).
     pub fn set_display(&mut self, node: NodeId, visible: bool) {
-        if let Ok(s) = self.tree.style(node) {
+        if let Some(s) = self.style_of(node) {
             let mut style = s.clone();
             style.display = if visible {
                 taffy::Display::Flex
@@ -290,6 +353,7 @@ impl LayoutEngine {
         available_width: AvailableSpace,
         available_height: AvailableSpace,
     ) -> Result<(), LayoutError> {
+        self.alive(root)?;
         self.tree
             .compute_layout_with_measure(
                 root,
@@ -318,10 +382,11 @@ impl LayoutEngine {
     }
 
     pub fn is_dirty(&self, node: NodeId) -> bool {
-        self.tree.dirty(node).unwrap_or(true)
+        self.live.contains(&node) && self.tree.dirty(node).unwrap_or(true)
     }
 
     pub fn layout(&self, node: NodeId) -> Result<geometry_core::Rect, LayoutError> {
+        self.alive(node)?;
         let layout = self.tree.layout(node).map_err(LayoutError::from)?;
         Ok(geometry_core::Rect::new(
             layout.location.x,
@@ -332,7 +397,7 @@ impl LayoutEngine {
     }
 
     pub fn is_fixed_size(&self, node: NodeId) -> Option<(f32, f32)> {
-        let style = self.tree.style(node).ok()?;
+        let style = self.style_of(node)?;
         let w = style.size.width.into_option()?;
         let h = style.size.height.into_option()?;
         if style.flex_grow > 0.0 {
@@ -428,6 +493,47 @@ mod tests {
                 AvailableSpace::Definite(100.0),
             )
             .unwrap();
+    }
+
+    /// Every mutator answers for a freed node instead of taking the process down with it.
+    ///
+    /// Taffy indexes its slot map directly — `style()` included, so there is nothing to guard with but our
+    /// own record — and a widget can outlive its node by design: a `Segment` holds it so a re-render
+    /// mid-dispatch can still flatten it, so an effect it owns may fire once after the node is gone. These
+    /// all return `Result`; an error is what the signature already promised.
+    #[test]
+    fn a_freed_node_is_an_error_and_never_a_panic() {
+        let mut engine = LayoutEngine::new();
+        let parent = engine.new_container(LayoutStyle::new(), &[]).unwrap();
+        let child = engine.new_leaf(LayoutStyle::new()).unwrap();
+        let ghost = engine.new_leaf(LayoutStyle::new()).unwrap();
+        engine.remove(ghost);
+
+        assert!(engine.set_children(ghost, &[]).is_err());
+        assert!(engine.set_children(parent, &[ghost]).is_err());
+        assert!(engine.set_style(ghost, LayoutStyle::new()).is_err());
+        assert!(engine.mark_dirty(ghost).is_err());
+        assert!(engine.add_child(parent, ghost).is_err());
+        assert!(engine.remove_child(parent, ghost).is_err());
+        assert!(engine.layout(ghost).is_err());
+        assert!(
+            engine
+                .compute_layout(
+                    ghost,
+                    AvailableSpace::MaxContent,
+                    AvailableSpace::MaxContent
+                )
+                .is_err()
+        );
+        assert_eq!(engine.is_size_auto(ghost), (false, false));
+        assert!(engine.is_fixed_size(ghost).is_none());
+        // The reads that cannot fail still have to answer without touching taffy.
+        engine.set_width(ghost, Some(10.0));
+        engine.set_height(ghost, None);
+        engine.set_leading_margin(ghost, true, 4.0);
+
+        // And the live node beside it is untouched by any of that.
+        assert!(engine.set_children(parent, &[child]).is_ok());
     }
 
     #[test]
