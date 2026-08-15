@@ -4,6 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
@@ -107,12 +108,19 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
     // The whole row is the tap target (ring + label); a tap selects this value and reports it.
     let select = selected.clone();
-    shared::labelled_control(box_item(ring), label, move || {
-        select.set(value);
-        if let Some(cb) = &on_select {
-            cb(value);
-        }
-    })
+    let announced = selected.clone();
+    shared::labelled_control(
+        box_item(ring),
+        label,
+        Role::Radio,
+        move || announced.get() == value,
+        move || {
+            select.set(value);
+            if let Some(cb) = &on_select {
+                cb(value);
+            }
+        },
+    )
 }
 
 #[cfg(test)]

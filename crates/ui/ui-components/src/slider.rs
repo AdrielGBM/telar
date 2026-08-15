@@ -5,6 +5,7 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{
     Container, LayoutItem, StyledContainer, Text, box_item, box_transform, style_follows,
 };
@@ -108,6 +109,10 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let width = if width > 0.0 { width } else { 220.0 };
     // Shared across the fill and thumb style closures (a `Box<dyn Fn>` is not `Clone`, an `Rc` handle is).
     let color: shared::ReactiveColor = Rc::from(color);
+    // The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
+    let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(|f| -> Rc<dyn Fn(f32)> { Rc::from(f) });
+    let key_on_change = on_change.clone();
+    let commit_value = value.clone();
 
     // The fill: an `absolute_fill` child (so it exactly overlays the track) scaled horizontally from the left
     // edge by `value` — cheaper than relaying out a narrower box on every drag move.
@@ -177,6 +182,29 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         vec![box_item(fill), box_item(thumb)],
     )?
     .styled_by(move || track_box(width))
+    // A slider you can reach but not move is not operable, so the arrows are half of what makes it a control.
+    // One step per press, or a twentieth of the range when the caller named no step — the granularity a
+    // continuous value has to invent for a keyboard, which only ever hands it whole presses.
+    .control(Role::Slider)
+    .on_key({
+        let value = commit_value.clone();
+        let on_change = key_on_change.clone();
+        move |key: &platform_core::Key| {
+            let delta = match key {
+                platform_core::Key::Named(platform_core::NamedKey::ArrowRight)
+                | platform_core::Key::Named(platform_core::NamedKey::ArrowUp) => 1.0,
+                platform_core::Key::Named(platform_core::NamedKey::ArrowLeft)
+                | platform_core::Key::Named(platform_core::NamedKey::ArrowDown) => -1.0,
+                _ => return,
+            };
+            let stride = if step > 0.0 { step } else { (max - min) / 20.0 };
+            let next = (value.peek() + delta * stride).clamp(min, max);
+            value.set(next);
+            if let Some(cb) = &on_change {
+                cb(next);
+            }
+        }
+    })
     .on_drag(move |px, _py| {
         // `px` is already local to the track (`on_drag` reports widget-local coords), so no rect subtraction here.
         let t = (px / width).clamp(0.0, 1.0);

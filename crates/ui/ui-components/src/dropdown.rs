@@ -8,6 +8,7 @@ use platform_core::{Key, NamedKey};
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{
     Children, Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item,
     track_layout,
@@ -250,7 +251,13 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             let toggle = toggle.clone();
             move || toggle()
         })
-        // Focusable so Tab reaches it at all, which is what makes every key above addressable.
+        // A control, which is what makes every key above addressable — and what a reader needs to say this
+        // opens a list. It answers its own keys, so the default Enter-activates-the-press is stood down.
+        .control(if selected.is_some() {
+            Role::ComboBox
+        } else {
+            Role::Button
+        })
         .on_focus(move |now| trigger_focused.set(now))
         .on_key(on_key);
     let trigger_node = trigger.layout_node();

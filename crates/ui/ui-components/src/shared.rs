@@ -7,7 +7,8 @@ use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
 use renderer_core::{Color, RectStyle, TextStyle};
 use theme_core::use_theme_tokens;
-use ui_core::{Container, LayoutItem, Text, box_item};
+use ui_core::focus::Role;
+use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 /// A reactive colour prop re-erased to a shareable handle: a `Box<dyn Fn>` isn't `Clone`, but widgets must hand the same colour closure to several style closures, so they re-erase to this `Rc`.
 pub(crate) type ReactiveColor = Rc<dyn Fn() -> Color>;
@@ -167,6 +168,8 @@ pub(crate) fn resolve_open(
 pub(crate) fn labelled_control(
     control: Box<dyn LayoutItem>,
     label: impl Fn() -> String + 'static,
+    role: Role,
+    toggled: impl Fn() -> bool + 'static,
     on_press: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut children: Vec<Box<dyn LayoutItem>> = vec![box_item(control)];
@@ -179,13 +182,18 @@ pub(crate) fn labelled_control(
         )?;
         children.push(box_item(text));
     }
-    let row = Container::new(
+    // The whole row is the control, label included: clicking the word beside a checkbox toggles it, and the
+    // ring goes round both — which is also what makes the label the thing a reader names it by.
+    let row = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
             .gap(10.0)
             .align_items(AlignItems::CENTER),
+        |_r| RectStyle::default(),
         children,
     )?
+    .control(role)
+    .toggled(toggled)
     .on_press(on_press);
     Ok(box_item(row))
 }

@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
@@ -111,6 +112,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             |_r| RectStyle::default(),
             vec![box_item(close_label)],
         )?
+        .control(Role::Button)
         .on_press(cb);
         children.push(box_item(close));
     }

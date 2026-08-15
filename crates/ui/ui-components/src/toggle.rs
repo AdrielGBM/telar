@@ -2,6 +2,7 @@ use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
@@ -101,13 +102,20 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
     // The whole row is the tap target (switch + label); a tap flips the bound signal and reports the new state.
     let toggle_on = checked.clone();
-    shared::labelled_control(box_item(track), label, move || {
-        let next = !toggle_on.get();
-        toggle_on.set(next);
-        if let Some(cb) = &on_toggle {
-            cb(next);
-        }
-    })
+    let announced = checked.clone();
+    shared::labelled_control(
+        box_item(track),
+        label,
+        Role::Switch,
+        move || announced.get(),
+        move || {
+            let next = !toggle_on.get();
+            toggle_on.set(next);
+            if let Some(cb) = &on_toggle {
+                cb(next);
+            }
+        },
+    )
 }
 
 #[cfg(test)]

@@ -4,7 +4,8 @@ use platform_core::{
     Cursor, Event, Key, NamedKey, PointerButton, PointerSource, ScrollDelta, WindowCommand,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
-use renderer_core::RectStyle;
+use renderer_core::{Color, RectStyle, ShapeStyle, Stroke};
+use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::child_host::{ChildSlot, DynHost};
@@ -43,6 +44,9 @@ pub struct StyledContainer {
     is_disabled: Box<dyn Fn() -> bool>,
     // Laid *over* whichever state won, not instead of it — see `on_focus_style`.
     focus_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    // Whether Enter and Space fire the press the way a tap does. Set by `control`, because a control that
+    // answers a mouse and not a keyboard is the failure this whole path exists to make unspellable.
+    activates: bool,
     // Registered when the box is given a `disabled` source; withdrawn on drop.
     focus_scope: Option<focus::ScopeId>,
     // A closure (not a plain f32) so `view()` re-reads it every run: a reactive opacity or a `transition:opacity` animation resolves to its current value on each re-render.
@@ -98,6 +102,7 @@ impl StyledContainer {
             disabled_style: None,
             is_disabled: Box::new(|| false),
             focus_style: None,
+            activates: false,
             focus_scope: None,
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
@@ -139,6 +144,7 @@ impl StyledContainer {
             disabled_style: None,
             is_disabled: Box::new(|| false),
             focus_style: None,
+            activates: false,
             focus_scope: None,
             opacity: Box::new(|| 1.0),
             transform: Box::new(|_| None),
@@ -211,7 +217,12 @@ impl StyledContainer {
             Box::new(move || f())
         };
         // Tab is the question the pointer already answers here, so it goes through the same mechanism a hidden overlay uses — which gives a disabled *wrapper* the `fieldset` reading for the keyboard too, rather than shielding the mouse and leaving Tab a way in.
-        self.focus_scope = Some(focus::register_scope(self.node, move || !f(), false));
+        self.focus_scope = Some(focus::register_scope_because(
+            self.node,
+            move || !f(),
+            false,
+            focus::ScopeReason::Disabled,
+        ));
         self
     }
 
@@ -232,6 +243,44 @@ impl StyledContainer {
     /// Only the properties the ring names are applied; `radius` always comes from the box, since a ring sits
     /// on a shape it does not get to reshape. Shown on [`focus::is_focus_visible`](crate::focus), so a tap
     /// takes focus without drawing one.
+    /// Declares this box a control, and is the way to build one.
+    ///
+    /// One call because the three halves are one fact, and each alone is a control that does not work: a box
+    /// that takes a tap but never a key, a ring on something Tab cannot reach, a thing announced to a screen
+    /// reader that cannot say what it is. Splitting them across three optional builders is how nine catalogue
+    /// components shipped answering the mouse and nothing else — every one of them compiled, and looked right.
+    ///
+    /// It joins the tab order at this node, answers Enter and Space the way it answers a tap, draws the
+    /// theme's focus ring while the keyboard is what reached it (see
+    /// [`focus::is_focus_visible`](crate::focus::is_focus_visible)), and reports `role` outwards. A caller
+    /// that wants a ring of its own still says so with [`on_focus_style`](Self::on_focus_style); this only
+    /// supplies one when nothing else has.
+    ///
+    /// Deliberately not implied by [`on_press`](Self::on_press): a scrim, a click-away backdrop and a drag
+    /// surface all take presses and none of them is a place the keyboard should stop.
+    pub fn control(mut self, role: focus::Role) -> Self {
+        let id = *self.focus_id.get_or_insert_with(focus::next_id);
+        focus::register_with_role(id, focus::FocusKind::Widget, self.node, role);
+        self.activates = true;
+        if self.focus_style.is_none() {
+            self.focus_style = Some(Box::new(|_r| default_focus_ring()));
+        }
+        self.mark_interactive();
+        self
+    }
+
+    /// Declares that this control carries a checked state, and how to read it.
+    ///
+    /// Only meaningful after [`control`](Self::control), and only for the roles that have one. Without it a
+    /// reader announces "checkbox" and stops — and a default of "unticked" would be worse, since it would be
+    /// confidently wrong for half of them.
+    pub fn toggled(self, state: impl Fn() -> bool + 'static) -> Self {
+        if let Some(id) = self.focus_id {
+            focus::set_toggled(id, state);
+        }
+        self
+    }
+
     pub fn on_focus_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         // Declaring a ring is declaring the box focusable, or it would join no tab order and the ring would be a style nothing could satisfy.
         let id = *self.focus_id.get_or_insert_with(focus::next_id);
@@ -797,6 +846,19 @@ impl Component for StyledContainer {
                     }
                     return EventResult::Handled;
                 }
+                // The keyboard half of a tap. Consumed only when there was something to fire, so Space on a
+                // focused box with no press handler still reaches whatever else wanted it — and skipped
+                // entirely for a box that handles its own keys, which is not second-guessed: a dropdown
+                // trigger answers Enter by confirming a highlighted row, not by re-opening itself.
+                if self.activates
+                    && self.on_key.is_none()
+                    && let Some(id) = self.focus_id
+                    && focus::is_focused(id)
+                    && matches!(key, Key::Named(NamedKey::Enter | NamedKey::Space))
+                    && self.press.activate()
+                {
+                    return EventResult::Handled;
+                }
                 // Not while a field has the caret: the press is the user typing, and this handler is the app's
                 // shortcut table, which would otherwise fire on every letter of what they type.
                 if let Some(cb) = &self.on_key
@@ -827,6 +889,19 @@ impl Drop for StyledContainer {
         }
         crate::input_region::unregister_interactive(self.node);
     }
+}
+
+/// The ring a control wears when the keyboard is what reached it, unless it asked for one of its own.
+///
+/// A ring and not a fill, because it answers a different question from hover or pressed — *where the keys are
+/// going*, not what the box is doing — and has to survive being layered over whichever of those won. Its
+/// radius is deliberately absent: the compositing path takes that from the box, since a ring sits on a shape
+/// it does not get to reshape.
+fn default_focus_ring() -> RectStyle {
+    let accent = use_theme_tokens()
+        .map(|t| t.primary())
+        .unwrap_or(Color::rgba(0.26, 0.38, 0.93, 1.0));
+    RectStyle::default().with_stroke(Stroke::new(accent, 2.0))
 }
 
 /// Builds the affine matrix for a box's declarative `rotate`/`scale`/`translate` attributes, pivoting
@@ -910,6 +985,81 @@ mod tests {
     }
     use crate::container::Container;
     use crate::context::{compute_layout, track_layout};
+
+    /// The three halves a control is made of, asserted together because that is the whole reason they are one
+    /// call: Tab reaches it, Enter fires it, and it says what it is. Nine catalogue components had none of the
+    /// three while compiling and looking correct, which is what a split API buys you.
+    #[test]
+    fn a_control_joins_the_tab_order_answers_enter_and_says_what_it_is() {
+        use std::cell::Cell;
+
+        reset_layout_runtime();
+        focus::clear();
+        let fired: Rc<Cell<u32>> = Rc::new(Cell::new(0));
+        let sink = fired.clone();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().width(80.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .control(focus::Role::CheckBox)
+        .on_press(move || sink.set(sink.get() + 1));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(80.0),
+            AvailableSpace::Definite(30.0),
+        )
+        .unwrap();
+
+        focus::focus_next();
+        assert!(focus::current().is_some(), "Tab reaches it");
+
+        let key = |named| Event::KeyPressed {
+            key: Key::Named(named),
+            modifiers: platform_core::ModifiersState::default(),
+        };
+        assert_eq!(card.on_event(&key(NamedKey::Enter)), EventResult::Handled);
+        assert_eq!(card.on_event(&key(NamedKey::Space)), EventResult::Handled);
+        assert_eq!(fired.get(), 2, "Enter and Space each fire the press");
+
+        let exposed = focus::exposed();
+        assert_eq!(exposed.len(), 1);
+        assert_eq!(exposed[0].role, focus::Role::CheckBox);
+        assert!(exposed[0].enabled);
+    }
+
+    /// And what it must *not* do. A scrim, a click-away backdrop and a drag surface all take presses, and none
+    /// of them is a place the keyboard should stop — so a press on its own still buys nothing.
+    #[test]
+    fn a_press_handler_alone_is_not_a_control() {
+        reset_layout_runtime();
+        focus::clear();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().width(80.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(|| {});
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(80.0),
+            AvailableSpace::Definite(30.0),
+        )
+        .unwrap();
+
+        focus::focus_next();
+        assert!(focus::exposed().is_empty(), "it is not a tab stop");
+        assert_eq!(
+            card.on_event(&Event::KeyPressed {
+                key: Key::Named(NamedKey::Enter),
+                modifiers: platform_core::ModifiersState::default(),
+            }),
+            EventResult::Ignored,
+            "and Enter is left for whoever else wanted it"
+        );
+    }
 
     fn press(x: f64, y: f64, source: PointerSource) -> Event {
         Event::PointerPressed {

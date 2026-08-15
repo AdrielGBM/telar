@@ -2,6 +2,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
@@ -93,13 +94,20 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
 
     // The whole row is the tap target (box + label); a tap flips the bound signal and reports the new state.
     let toggle_checked = checked.clone();
-    shared::labelled_control(box_item(control), label, move || {
-        let next = !toggle_checked.get();
-        toggle_checked.set(next);
-        if let Some(cb) = &on_toggle {
-            cb(next);
-        }
-    })
+    let announced = checked.clone();
+    shared::labelled_control(
+        box_item(control),
+        label,
+        Role::CheckBox,
+        move || announced.get(),
+        move || {
+            let next = !toggle_checked.get();
+            toggle_checked.set(next);
+            if let Some(cb) = &on_toggle {
+                cb(next);
+            }
+        },
+    )
 }
 
 #[cfg(test)]

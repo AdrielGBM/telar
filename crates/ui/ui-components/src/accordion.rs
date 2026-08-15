@@ -5,6 +5,7 @@ use platform_core::Event;
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, RectStyle, TextStyle};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{
     ClippedItem, Component, Container, EventResult, LayoutItem, RenderNode, Slots, StyledContainer,
     Text, box_item, mark_dirty, set_display,
@@ -111,6 +112,7 @@ pub fn accordion(
         vec![box_item(title_widget), box_item(caret)],
     )?
     .styled_by(header_box)
+    .control(Role::Disclosure)
     .on_press(move || toggle_open.update(|o| *o = !*o));
 
     // Body: built once from the slot children. Clipped to its own rect so a collapsed (zero-rect) body

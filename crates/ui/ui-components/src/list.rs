@@ -18,6 +18,7 @@ use std::time::{Duration, Instant};
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
 use renderer_core::{RectStyle, ShapeStyle, TextStyle};
+use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item, use_context};
 
 use crate::shared;
@@ -378,6 +379,15 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
         .on_hover_style(hover_style)
         .disabled(move || disabled())
         .on_press(commit);
+    // Announced without becoming a Tab stop: the list is driven by arrows and type-ahead from the trigger, so
+    // a reader has to be able to describe the open panel while Tab keeps treating it as one control.
+    if list.is_some() {
+        ui_core::focus::register_presented(
+            ui_core::focus::next_id(),
+            row.layout_node(),
+            Role::MenuItem,
+        );
+    }
     Ok(box_item(row))
 }
 

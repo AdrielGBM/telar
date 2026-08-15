@@ -31,6 +31,14 @@ pub enum FocusKind {
     TextEntry,
 }
 
+/// What a focusable *is*, for the reader that has to say it out loud — a separate question from [`FocusKind`],
+/// which asks what the widget does with a key.
+///
+/// Defined in `platform-core` because it is the vocabulary the UI and the platform share, the same way
+/// [`Key`] is. Re-exported here because this is where it is *authored*: a widget declares its role at the
+/// moment it declares itself focusable, and the two are one call.
+pub use platform_core::Role;
+
 /// A cheap, `Copy` handle to a focusable widget's identity, so a caller that has moved the widget into a
 /// container (and no longer holds a reference to it) can still drive its focus — e.g. autofocus a hosted
 /// editor when its tab activates. Obtain one from the widget (see [`crate::TextArea::focus_handle`]).
@@ -75,6 +83,18 @@ struct Scope {
     showing: Rc<dyn Fn() -> bool>,
     /// Whether the scope holds focus in while it shows — a modal, as against a tooltip layer.
     traps: bool,
+    reason: ScopeReason,
+}
+
+/// Why a scope's focusables are out of reach, which the keyboard does not care about and a screen reader does.
+///
+/// Tab treats the two the same — neither is a stop — but they are opposite things to say out loud. A control
+/// inside a closed dialog is *not there*; a disabled one is there and unavailable, and a reader that omitted
+/// it would leave the user wondering where the button went.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ScopeReason {
+    NotShowing,
+    Disabled,
 }
 
 /// One entry in the tab order.
@@ -83,6 +103,15 @@ struct Entry {
     /// The widget's layout node, which is what makes reachability answerable. `None` for a focus id that
     /// belongs to no widget (the dismiss stack takes one as a token).
     node: Option<NodeId>,
+    role: Role,
+    /// Whether Tab stops here. `false` for a control that is driven some other way and still has to be
+    /// announced: the rows of a menu answer to arrow keys, and putting each one in the tab order would make
+    /// Tab walk a list the user opened precisely so as not to.
+    tabbable: bool,
+    /// A checked state, for the controls that have one. A closure and not a flag, for the same reason
+    /// "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to
+    /// get the answer that is true then.
+    toggled: Option<Rc<dyn Fn() -> bool>>,
 }
 
 /// Per-surface keyboard-focus state: the id allocator, the focused-widget signal, and the tab order.
@@ -219,22 +248,57 @@ pub fn register(id: FocusId) {
 /// [`register`] for a widget that says what it does with the keyboard. A text field registers as
 /// [`FocusKind::TextEntry`], which is what makes [`text_entry_focused`] answerable.
 pub fn register_as(id: FocusId, kind: FocusKind) {
-    register_node(id, kind, None);
+    register_node(id, kind, None, default_role(kind), true);
 }
 
 /// [`register_as`] for a widget that can say which layout node it is, which is what lets Tab skip it while it
 /// is not on screen. Every focusable widget should use this; the node-less forms remain for a focus id that
 /// stands for something other than a widget.
 pub fn register_at(id: FocusId, kind: FocusKind, node: NodeId) {
-    register_node(id, kind, Some(node));
+    register_node(id, kind, Some(node), default_role(kind), true);
 }
 
-fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>) {
+/// [`register_at`] for a widget that is not simply "a thing you activate" — a checkbox, a tab, a slider. The
+/// role is what a screen reader says this is; see [`Role`].
+pub fn register_with_role(id: FocusId, kind: FocusKind, node: NodeId, role: Role) {
+    register_node(id, kind, Some(node), role, true);
+}
+
+/// Registers a control that is announced but is not a Tab stop, because something else drives it.
+///
+/// The rows of a menu are the case: they answer to arrow keys and type-ahead, and a reader that could not see
+/// them would be handed an open menu it could not describe — while a Tab order containing every row would
+/// walk the user through a list they opened in order to *avoid* walking it.
+pub fn register_presented(id: FocusId, node: NodeId, role: Role) {
+    register_node(id, FocusKind::Widget, Some(node), role, false);
+}
+
+/// What a widget is taken to be when it has not said: the reading that matches what the keyboard does with it.
+fn default_role(kind: FocusKind) -> Role {
+    match kind {
+        FocusKind::Widget => Role::Button,
+        FocusKind::TextEntry => Role::TextInput,
+    }
+}
+
+fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role, tabbable: bool) {
     with_focus(|s| {
         match s.order.iter_mut().find(|e| e.id == id) {
             // Re-registering only ever adds knowledge: a widget that learns its node later keeps its place.
-            Some(existing) => existing.node = existing.node.or(node),
-            None => s.order.push(Entry { id, node }),
+            Some(existing) => {
+                existing.node = existing.node.or(node);
+                if role != Role::default() {
+                    existing.role = role;
+                }
+                existing.tabbable &= tabbable;
+            }
+            None => s.order.push(Entry {
+                id,
+                node,
+                role,
+                tabbable,
+                toggled: None,
+            }),
         }
         if kind == FocusKind::TextEntry {
             s.text_entries.insert(id);
@@ -249,6 +313,16 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>) {
 /// when widgets were *constructed*, which says nothing about what is on screen now: a dialog kept mounted
 /// across a close leaves its fields as Tab stops, and one that is open does not stop Tab walking out behind it.
 pub fn register_scope(node: NodeId, showing: impl Fn() -> bool + 'static, traps: bool) -> ScopeId {
+    register_scope_because(node, showing, traps, ScopeReason::NotShowing)
+}
+
+/// [`register_scope`] for a region that says *why* its focusables are out of reach. See [`ScopeReason`].
+pub fn register_scope_because(
+    node: NodeId,
+    showing: impl Fn() -> bool + 'static,
+    traps: bool,
+    reason: ScopeReason,
+) -> ScopeId {
     with_focus(|s| {
         let id = ScopeId(s.next_scope);
         s.next_scope += 1;
@@ -257,6 +331,7 @@ pub fn register_scope(node: NodeId, showing: impl Fn() -> bool + 'static, traps:
             node,
             showing: Rc::new(showing),
             traps,
+            reason,
         });
         id
     })
@@ -369,8 +444,12 @@ fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
 /// The tab order and the scopes, copied out from under the slot borrow — see [`step`] for why that matters.
 fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
     with_focus_ref(|s| {
-        let order: Vec<(FocusId, Option<NodeId>)> =
-            s.order.iter().map(|e| (e.id, e.node)).collect();
+        let order: Vec<(FocusId, Option<NodeId>)> = s
+            .order
+            .iter()
+            .filter(|e| e.tabbable)
+            .map(|e| (e.id, e.node))
+            .collect();
         let scopes: Vec<ScopeView> = s
             .scopes
             .iter()
@@ -378,6 +457,76 @@ fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
             .collect();
         (order, scopes)
     })
+}
+
+/// Declares that `id` carries a checked state, and how to read it now.
+///
+/// Separate from registering the control because the two are known at different moments: a box declares what
+/// it *is* as it is built, and what it is *bound to* when the caller hands it a signal.
+pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
+    let state: Rc<dyn Fn() -> bool> = Rc::new(state);
+    with_focus(|s| {
+        if let Some(entry) = s.order.iter_mut().find(|e| e.id == id) {
+            entry.toggled = Some(state);
+        }
+    });
+}
+
+/// One focusable as the accessibility layer sees it: where it is, what it is, and whether it is available.
+pub struct Exposed {
+    pub id: FocusId,
+    pub node: NodeId,
+    pub role: Role,
+    /// Available to be activated. `false` is *announced*, not hidden — see [`ScopeReason`].
+    pub enabled: bool,
+    /// Its checked state, for the controls that carry one.
+    pub toggled: Option<bool>,
+}
+
+/// The focusables a screen reader should be told about, in tab order.
+///
+/// Deliberately the same [`reachable`] the keyboard walks, so the two can never disagree about what is on
+/// screen — with one distinction Tab has no use for: a control kept out of reach by being *disabled* is
+/// reported as present and unavailable, where one inside a closed dialog is not reported at all.
+pub fn exposed() -> Vec<Exposed> {
+    let (order, scopes) = with_focus_ref(|s| {
+        // The state closures come out with everything else and are called after the borrow drops: reading one
+        // can read a signal, and reading a signal can flush effects back through this very slot.
+        let order: Vec<(FocusId, Option<NodeId>, Role, Option<Rc<dyn Fn() -> bool>>)> = s
+            .order
+            .iter()
+            .map(|e| (e.id, e.node, e.role, e.toggled.clone()))
+            .collect();
+        let scopes: Vec<(NodeId, Rc<dyn Fn() -> bool>, bool, ScopeReason)> = s
+            .scopes
+            .iter()
+            .map(|sc| (sc.node, sc.showing.clone(), sc.traps, sc.reason))
+            .collect();
+        (order, scopes)
+    });
+    let hiding: Vec<ScopeView> = scopes
+        .iter()
+        .filter(|(_, _, _, reason)| *reason == ScopeReason::NotShowing)
+        .map(|(node, showing, traps, _)| (*node, showing.clone(), *traps))
+        .collect();
+
+    order
+        .into_iter()
+        .filter_map(|(id, node, role, toggled)| {
+            let node = node?;
+            reachable(Some(node), &hiding).then(|| Exposed {
+                id,
+                node,
+                role,
+                enabled: !scopes.iter().any(|(scope, showing, _, reason)| {
+                    *reason == ScopeReason::Disabled
+                        && !showing()
+                        && layout_reactive::is_descendant_of(node, *scope)
+                }),
+                toggled: toggled.as_ref().map(|read| read()),
+            })
+        })
+        .collect()
 }
 
 /// Moves focus to the first reachable focusable inside `node`, reporting whether it found one.

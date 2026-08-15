@@ -4,6 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
@@ -94,6 +95,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         )?
         .styled_by(tab_box)
         .on_hover_style(move |_r| tab_rect(hover_selected.get() == idx, hover_color.as_ref(), true))
+        .control(Role::Tab)
         .on_press(move || press_selected.set(idx));
         tab_items.push(box_item(tab));
     }

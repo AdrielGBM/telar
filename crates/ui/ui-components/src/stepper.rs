@@ -4,6 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
@@ -175,6 +176,7 @@ fn stepper_button(
         vec![box_item(glyph_widget)],
     )?
     .styled_by(button_box)
+    .control(Role::Button)
     .on_press(on_press);
     Ok(box_item(container))
 }

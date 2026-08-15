@@ -4,6 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::signal;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use theme_core::use_theme_tokens;
+use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
@@ -105,6 +106,7 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         variant_rect(hover_fill.as_ref(), hover_outline.as_ref(), ghost, true)
     })
     .on_hover(move |h| hovered.set(h))
+    .control(Role::Button)
     .on_press(on_press);
     Ok(box_item(container))
 }

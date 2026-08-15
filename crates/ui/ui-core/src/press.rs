@@ -32,6 +32,18 @@ impl PressGesture {
         self.on_press = Some(Box::new(f));
     }
 
+    /// Fires the press without a pointer, for a control activated from the keyboard. Reports whether there was
+    /// anything to fire, so a key that activated nothing is left for whoever else wants it.
+    pub(crate) fn activate(&self) -> bool {
+        match &self.on_press {
+            Some(cb) => {
+                cb();
+                true
+            }
+            None => false,
+        }
+    }
+
     pub(crate) fn set_long_press(&mut self, f: impl Fn() + 'static) {
         self.on_long_press = Some(Box::new(f));
     }
