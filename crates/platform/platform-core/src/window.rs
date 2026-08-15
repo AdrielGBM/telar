@@ -143,7 +143,9 @@ pub trait EventHandler<W: Window> {
     /// its renderer and its place on screen are kept, and only the tree is built again. A handler with no tree
     /// to rebuild leaves it a no-op.
     fn remount(&mut self, _window: &W) {}
+    /// Called by the platform at the start of each event-loop iteration, before dispatching any events. Pairs with [`about_to_wait`](Self::about_to_wait) to bracket all event processing within a reactive batch.
     fn new_events(&mut self) {}
+    /// Called by the platform after all events in the iteration have been dispatched, before idling. Must close the reactive batch opened by [`new_events`](Self::new_events); returning `Some(duration)` sets the idle timeout. Pairs with [`new_events`](Self::new_events) — the platform guarantees these are called in matching pairs for each iteration.
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
         None
     }
@@ -188,6 +190,12 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
     }
     fn on_suspend(&mut self) {
         (**self).on_suspend()
+    }
+    fn accessibility(&self) -> Vec<crate::AccessNode> {
+        (**self).accessibility()
+    }
+    fn on_accessibility_action(&mut self, id: u64, activate: bool) {
+        (**self).on_accessibility_action(id, activate)
     }
     fn remount(&mut self, window: &W) {
         (**self).remount(window)
@@ -245,4 +253,66 @@ pub trait MultiSurfacePlatform {
     where
         H: EventHandler<Self::Window> + 'static,
         F: Fn(SurfaceId) -> H + 'static;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use geometry_core::Rect;
+    use raw_window_handle::{
+        DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
+    };
+
+    struct TestWindow;
+    impl HasWindowHandle for TestWindow {
+        fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+            Err(HandleError::Unavailable)
+        }
+    }
+    impl HasDisplayHandle for TestWindow {
+        fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+            Err(HandleError::Unavailable)
+        }
+    }
+    impl Window for TestWindow {
+        fn width(&self) -> u32 {
+            800
+        }
+        fn height(&self) -> u32 {
+            600
+        }
+        fn request_redraw(&self) {}
+    }
+
+    struct TestHandler;
+    impl EventHandler<TestWindow> for TestHandler {
+        fn on_resume(&mut self, _window: &TestWindow) -> bool {
+            true
+        }
+        fn on_event(&mut self, _event: Event, _window: &TestWindow) {}
+        fn on_redraw(&mut self, _window: &TestWindow) {}
+        fn accessibility(&self) -> Vec<crate::AccessNode> {
+            vec![crate::AccessNode {
+                id: Some(1),
+                role: crate::Role::Button,
+                name: "test button".to_string(),
+                rect: Rect::default(),
+                focused: false,
+                enabled: true,
+                toggled: None,
+            }]
+        }
+    }
+
+    #[test]
+    fn boxed_handler_forwards_accessibility() {
+        let handler = TestHandler;
+        let boxed: Box<dyn EventHandler<TestWindow>> = Box::new(handler);
+        let tree = boxed.accessibility();
+        assert_eq!(
+            tree.len(),
+            1,
+            "boxed handler should forward accessibility() and return non-empty tree"
+        );
+    }
 }

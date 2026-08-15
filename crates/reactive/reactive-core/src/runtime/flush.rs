@@ -121,7 +121,8 @@ pub fn begin_batch() {
 pub fn end_batch() {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        rt.batch_depth -= 1;
+        debug_assert!(rt.batch_depth > 0, "end_batch without begin_batch");
+        rt.batch_depth = rt.batch_depth.saturating_sub(1);
         rt.batch_depth == 0 && (!rt.pending.is_empty() || !rt.memo_pending.is_empty())
     });
     if should_flush {
