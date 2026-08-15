@@ -604,4 +604,139 @@ mod tests {
         route(&mut tree, &release(tx, oy));
         assert_eq!(seen.get(), None, "a disabled row commits nothing");
     }
+
+    fn char_key(c: char) -> Event {
+        Event::KeyPressed {
+            key: platform_core::Key::Char(c),
+            modifiers: platform_core::ModifiersState::default(),
+        }
+    }
+
+    /// Rename · Duplicate · Delete · [disabled] Deploy. Three rows share a first letter and the fourth is out
+    /// of reach, which is the whole of what type-ahead has to tell apart.
+    fn typeahead_menu(sink: Rc<Cell<Option<u32>>>) -> Box<dyn LayoutItem> {
+        let structured = Children::new(|| {
+            let mut slots = Slots::new();
+            for (label, disabled) in [
+                ("Rename", false),
+                ("Duplicate", false),
+                ("Delete", false),
+                ("Deploy", true),
+            ] {
+                slots.push(
+                    None,
+                    crate::list::item(
+                        crate::list::ItemProps {
+                            label: Box::new(move || label.to_string()),
+                            disabled: Box::new(move || disabled),
+                            ..Default::default()
+                        },
+                        Slots::new(),
+                    )?,
+                );
+            }
+            Ok(slots)
+        });
+        let item = menu(
+            MenuProps {
+                label: Box::new(|| "Actions".to_string()),
+                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+                ..Default::default()
+            },
+            structured,
+        )
+        .unwrap();
+        compute_layout(
+            item.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        item
+    }
+
+    /// Opens a menu from the keyboard, types `typed`, commits, and reports the index that committed.
+    fn typed_pick(typed: &str) -> Option<u32> {
+        use platform_core::NamedKey;
+
+        reset_layout_runtime();
+        ui_core::focus::clear();
+        ui_core::reset_keyboard();
+        let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+        let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
+
+        ui_core::focus::focus_next();
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        // The rows are built on this flush, so nothing can be searched until it has run.
+        relayout_if_dirty();
+        for c in typed.chars() {
+            route(&mut tree, &char_key(c));
+        }
+        route(&mut tree, &key(NamedKey::Enter));
+        seen.get()
+    }
+
+    /// The plain case, and the one a list of more than a screenful is unusable without: a letter takes the
+    /// cursor to the row that starts with it instead of making the user arrow there.
+    #[test]
+    fn a_typed_letter_moves_the_cursor_to_the_row_it_names() {
+        assert_eq!(typed_pick("d"), Some(1), "`d` lands on Duplicate");
+    }
+
+    /// Refining holds still. `de` after `d` narrows towards a row rather than asking for the next one, which
+    /// is why a multi-character query does not skip where the cursor already is.
+    #[test]
+    fn a_longer_query_narrows_instead_of_advancing() {
+        assert_eq!(typed_pick("de"), Some(2), "`de` narrows past Duplicate");
+    }
+
+    /// A repeated letter cycles. `ddd` is not a query — no label could match it — it is "the next row starting
+    /// with d", and it is the only way to reach the second of two rows sharing a first letter. The third press
+    /// wraps back around, stepping over the disabled `Deploy` on the way: a row the keyboard may not stop on
+    /// is not a search result either.
+    #[test]
+    fn a_repeated_letter_cycles_through_the_rows_that_share_it() {
+        assert_eq!(
+            typed_pick("dd"),
+            Some(2),
+            "the second `d` advances to Delete"
+        );
+        assert_eq!(
+            typed_pick("ddd"),
+            Some(1),
+            "the third wraps past the disabled Deploy, back to Duplicate"
+        );
+    }
+
+    /// A chord is a command, not a query. Without this, an application-level `Ctrl+S` reaching an open menu
+    /// would silently walk its cursor to the first row starting with `s`.
+    #[test]
+    fn a_modified_character_is_not_a_search() {
+        use platform_core::NamedKey;
+
+        reset_layout_runtime();
+        ui_core::focus::clear();
+        ui_core::reset_keyboard();
+        let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+        let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
+
+        ui_core::focus::focus_next();
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        relayout_if_dirty();
+        ui_core::observe_keyboard(&Event::ModifiersChanged {
+            modifiers: platform_core::ModifiersState {
+                is_ctrl: true,
+                ..Default::default()
+            },
+        });
+        route(&mut tree, &char_key('d'));
+        route(&mut tree, &key(NamedKey::Enter));
+        ui_core::reset_keyboard();
+
+        assert_eq!(
+            seen.get(),
+            Some(0),
+            "the cursor stayed on Rename, where opening put it"
+        );
+    }
 }

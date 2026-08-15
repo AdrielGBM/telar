@@ -157,6 +157,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         let list = list.clone();
         move |key: &Key| {
             let is_open = open.peek();
+            let mods = ui_core::modifiers();
             // The registry the last build filled, so the cursor walks the rows that exist and steps over the
             // ones it may not stop on — a disabled row, a separator, a group heading.
             let step = |from: Option<u32>, delta: i64| list.step(from, delta);
@@ -181,6 +182,21 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 Key::Named(NamedKey::Enter) if is_open => {
                     if let Some(idx) = highlighted.peek() {
                         pick(idx);
+                    }
+                }
+                // Type-ahead. Ctrl or Meta makes a character a command rather than a query, so Ctrl+S must not
+                // walk to the first row starting with *s*. Alt is left out of that test as everywhere else
+                // here: on a good many layouts it is how you type a character in the first place.
+                Key::Char(c) if is_open && !c.is_control() && !mods.is_ctrl && !mods.is_meta => {
+                    if let Some(idx) = list.type_ahead(*c, highlighted.peek()) {
+                        highlighted.set(Some(idx));
+                    }
+                }
+                // A space is a character only inside a query already under way — `Show ruler` needs it to be
+                // one — and the opener above every other time, which is what a closed trigger answers to.
+                Key::Named(NamedKey::Space) if is_open && list.is_searching() => {
+                    if let Some(idx) = list.type_ahead(' ', highlighted.peek()) {
+                        highlighted.set(Some(idx));
                     }
                 }
                 // Shut, and the trigger is where the keyboard is: the openers a native control answers to.

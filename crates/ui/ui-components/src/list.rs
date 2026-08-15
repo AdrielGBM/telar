@@ -13,6 +13,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
@@ -40,12 +41,28 @@ struct ListState {
     /// A cursor asked for before there was anything to put it on. Opening with the down arrow happens in a
     /// key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
     seed: Cell<bool>,
+    search: RefCell<Search>,
 }
 
 struct Row {
     /// Whether the keyboard cursor may land here — a closure, not a flag, so a row that becomes disabled
     /// while the panel is open stops being a stop straight away instead of at the next rebuild.
     reachable: Rc<dyn Fn() -> bool>,
+    /// What type-ahead matches against, for the same reason a closure: a row whose label tracks a signal is
+    /// findable by what it says now. Empty for a piece that is not a destination, and for a row written with
+    /// markup children instead of a label — there is no text to match, so nothing claims to match it.
+    label: Rc<dyn Fn() -> String>,
+}
+
+/// How long a pause ends a type-ahead query. Past it the next character starts a fresh search rather than
+/// extending one the user has stopped thinking about — the same second every native list allows.
+const SEARCH_TIMEOUT: Duration = Duration::from_millis(1000);
+
+/// The type-ahead query and when it was last typed into.
+#[derive(Default)]
+struct Search {
+    query: String,
+    typed_at: Option<Instant>,
 }
 
 impl ListContext {
@@ -62,6 +79,7 @@ impl ListContext {
             color,
             rows: RefCell::new(Vec::new()),
             seed: Cell::new(false),
+            search: RefCell::new(Search::default()),
         }))
     }
 
@@ -74,15 +92,19 @@ impl ListContext {
     /// accumulated across opens would leave the keyboard walking through positions that no longer exist.
     pub(crate) fn begin(&self) {
         self.0.rows.borrow_mut().clear();
+        // A fresh open is a fresh search: a query left over from the last one would make the first keystroke
+        // land somewhere the user never typed towards.
+        *self.0.search.borrow_mut() = Search::default();
     }
 
     /// Registers a row and hands it the index it will commit. Called by each piece as it builds itself, so
     /// the order is the order they are written in.
-    fn claim(&self, reachable: Rc<dyn Fn() -> bool>) -> u32 {
+    fn claim(&self, reachable: Rc<dyn Fn() -> bool>, label: Rc<dyn Fn() -> String>) -> u32 {
         let index = {
             let mut rows = self.0.rows.borrow_mut();
             rows.push(Row {
                 reachable: reachable.clone(),
+                label,
             });
             rows.len() as u32 - 1
         };
@@ -92,6 +114,12 @@ impl ListContext {
             self.0.highlighted.set(Some(index));
         }
         index
+    }
+
+    /// Registers a piece that holds a position without being one — a rule, a heading. It takes an index so the
+    /// rows around it keep the ones they commit with, and the keyboard passes straight over it.
+    fn claim_unreachable(&self) {
+        self.claim(Rc::new(|| false), Rc::new(String::new));
     }
 
     pub(crate) fn len(&self) -> u32 {
@@ -131,6 +159,69 @@ impl ListContext {
 
     pub(crate) fn pick(&self, index: u32) {
         (self.0.pick)(index);
+    }
+
+    /// Whether a type-ahead query is still running, which is what makes a space a character rather than a key.
+    pub(crate) fn is_searching(&self) -> bool {
+        let search = self.0.search.borrow();
+        !search.query.is_empty()
+            && search
+                .typed_at
+                .is_some_and(|t| t.elapsed() < SEARCH_TIMEOUT)
+    }
+
+    /// Extends the type-ahead query with `c` and returns the row it now names, or `None` when nothing matches.
+    ///
+    /// Two behaviours that look like special cases and are the whole feature. **A repeated character cycles**:
+    /// `d`, `d`, `d` walks the rows starting with *d* rather than searching for "ddd", which no label has, and
+    /// it is the only way to reach the second of two rows sharing a first letter. **A refined query holds
+    /// still**: typing `de` after `d` may keep the row `d` landed on, because the user is narrowing towards it
+    /// rather than asking for the next one. That is why a one-character needle skips the current row and a
+    /// longer one does not.
+    pub(crate) fn type_ahead(&self, c: char, from: Option<u32>) -> Option<u32> {
+        let query = self.extend_query(c);
+        // Read off the query rather than off `c`, which is still in the case the user typed it in.
+        let first = query.chars().next()?;
+        let repeated = query.chars().count() > 1 && query.chars().all(|q| q == first);
+        let needle: &str = if repeated {
+            &query[..first.len_utf8()]
+        } else {
+            &query
+        };
+        let skip_current = needle.chars().count() == 1;
+
+        let rows = self.0.rows.borrow();
+        let n = rows.len();
+        if n == 0 {
+            return None;
+        }
+        // From wherever the cursor is, once round: a search that found nothing must not spin, and one that
+        // wraps has to be able to reach the rows above where it started.
+        let start = from.unwrap_or(0) as usize;
+        (0..n).find_map(|k| {
+            let i = (start + k) % n;
+            if skip_current && Some(i as u32) == from {
+                return None;
+            }
+            let row = &rows[i];
+            ((row.reachable)() && (row.label)().to_lowercase().starts_with(needle))
+                .then_some(i as u32)
+        })
+    }
+
+    /// Appends `c` to the query, starting a new one if the last keystroke has gone stale. Lowercased on the
+    /// way in so the match is case-insensitive without lowercasing the needle once per row.
+    fn extend_query(&self, c: char) -> String {
+        let mut search = self.0.search.borrow_mut();
+        if search
+            .typed_at
+            .is_none_or(|t| t.elapsed() >= SEARCH_TIMEOUT)
+        {
+            search.query.clear();
+        }
+        search.query.extend(c.to_lowercase());
+        search.typed_at = Some(Instant::now());
+        search.query.clone()
     }
 }
 
@@ -177,10 +268,11 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
         on_press,
     } = props;
     let disabled: Rc<dyn Fn() -> bool> = Rc::from(disabled);
+    let label: Rc<dyn Fn() -> String> = Rc::from(label);
     let list = use_context::<ListContext>();
     let index = list.as_ref().map(|ctx| {
         let disabled = disabled.clone();
-        ctx.claim(Rc::new(move || !disabled()))
+        ctx.claim(Rc::new(move || !disabled()), label.clone())
     });
 
     let mut content: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -202,9 +294,11 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
     let mut given = children;
     let supplied = given.take_default();
     if supplied.is_empty() {
-        content.push(box_item(Text::auto(label, LayoutStyle::new(), || {
-            TextStyle::new(shared::font_size(), shared::ink()).with_no_wrap(true)
-        })?));
+        content.push(box_item(Text::auto(
+            move || label(),
+            LayoutStyle::new(),
+            || TextStyle::new(shared::font_size(), shared::ink()).with_no_wrap(true),
+        )?));
     } else {
         content.extend(supplied);
     }
@@ -252,7 +346,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
 /// so the keyboard passes straight over it.
 pub fn separator() -> Result<Box<dyn LayoutItem>, LayoutError> {
     if let Some(ctx) = use_context::<ListContext>() {
-        ctx.claim(Rc::new(|| false));
+        ctx.claim_unreachable();
     }
     let rule = StyledContainer::new(
         LayoutStyle::new()
@@ -279,7 +373,7 @@ impl Default for GroupProps {
 
 pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     if let Some(ctx) = use_context::<ListContext>() {
-        ctx.claim(Rc::new(|| false));
+        ctx.claim_unreachable();
     }
     let text = Text::auto(props.label, LayoutStyle::new(), || {
         TextStyle::new(shared::font_size() * 0.85, shared::ink().with_alpha(0.65))
