@@ -158,7 +158,7 @@ pub enum PointerSource {
     Touch { id: u64 },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PointerButton {
     Primary,
     Secondary,

@@ -53,6 +53,7 @@ pub use context::{
     set_overlay_host, track_layout, use_direction,
 };
 pub use dismiss::{dismiss_depth, dismiss_top, use_dismiss_depth};
+pub use drag::{DragStart, drag_start, drag_travel};
 pub use image::Image;
 pub use input::Input;
 pub use input_region::{interactive_rects, register_interactive, unregister_interactive};

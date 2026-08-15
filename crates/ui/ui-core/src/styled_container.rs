@@ -415,6 +415,20 @@ impl StyledContainer {
         self
     }
 
+    /// How far the pointer must travel before this box counts as being dragged.
+    ///
+    /// Without it a press *is* a drag from its first instant, which is right for a slider — pressing the track
+    /// is how you set the value — and wrong for anything where a click and a drag mean different things on the
+    /// same button. A viewport is the case: a click picks what is under it, a drag orbits, and telling them
+    /// apart is the difference between selecting something and nudging the camera by a pixel.
+    ///
+    /// Set it and the two stop overlapping: a stroke that never travels this far fires only
+    /// [`on_press`](Self::on_press), one that does fires only the drag handlers, and neither fires both.
+    pub fn drag_threshold(mut self, px: f32) -> Self {
+        self.drag.set_threshold(px);
+        self
+    }
+
     /// Records this box as a pointer target in the per-surface interactive registry, so a surface that carves
     /// its input region from its content (a click-through overlay) receives input over it. See
     /// [`crate::interactive_rects`].
@@ -635,6 +649,12 @@ impl Component for StyledContainer {
             Event::PointerMoved { x, y, source } => {
                 self.press.track_move(event);
                 let dragged = self.drag.moved(event, rect) == EventResult::Handled;
+                // A stroke that has cleared its drag threshold has committed to being a drag, so it is no
+                // longer a tap. Only for a box that set one: without a threshold the two have always both
+                // fired, and a slider that also takes a press is entitled to keep that.
+                if self.drag.has_threshold() && self.drag.has_started() {
+                    self.press.cancel();
+                }
                 let child = self.dispatch_children(event);
                 // Inside the box AND nothing drawn in front of it there: a move is broadcast for the sake of
                 // gestures already running, and only the topmost box under the pointer is *hovered*.
@@ -2160,6 +2180,59 @@ mod tests {
             vec![(40.0, 40.0), (80.0, 90.0), (400.0, 400.0)],
             "drag reports the press point then each move until release"
         );
+    }
+
+    /// A click and a drag on the same button stop overlapping once a threshold is set: below it the stroke is
+    /// only a press, above it only a drag. A viewport is the case — a click picks what is under it and a drag
+    /// orbits — and without this a one-pixel wobble did both.
+    #[test]
+    fn a_threshold_splits_a_click_from_a_drag_on_the_same_button() {
+        use std::cell::Cell;
+        use std::cell::RefCell;
+
+        let build = || {
+            let clicks: Rc<Cell<u32>> = Rc::new(Cell::new(0));
+            let drags: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
+            reset_layout_runtime();
+            let (c, d) = (clicks.clone(), drags.clone());
+            let card = StyledContainer::new(
+                LayoutStyle::new().flex_column().width(200.0).height(200.0),
+                |_r| RectStyle::default(),
+                vec![],
+            )
+            .unwrap()
+            .drag_threshold(4.0)
+            .on_press(move || c.set(c.get() + 1))
+            .on_drag(move |x, y| d.borrow_mut().push((x, y)));
+            compute_layout(
+                card.layout_node(),
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(200.0),
+            )
+            .unwrap();
+            (card, clicks, drags)
+        };
+        let moved = |x: f64, y: f64| Event::PointerMoved {
+            x,
+            y,
+            source: PointerSource::Mouse,
+        };
+
+        // A hand that shifts a pixel between press and release still meant to click.
+        let (mut card, clicks, drags) = build();
+        card.on_event(&press(40.0, 40.0, PointerSource::Mouse));
+        card.on_event(&moved(41.0, 40.0));
+        card.on_event(&release(41.0, 40.0, PointerSource::Mouse));
+        assert_eq!(clicks.get(), 1, "the click survives the wobble");
+        assert!(drags.borrow().is_empty(), "and nothing was dragged");
+
+        // And one that travels is a drag, which is no longer also a click.
+        let (mut card, clicks, drags) = build();
+        card.on_event(&press(40.0, 40.0, PointerSource::Mouse));
+        card.on_event(&moved(90.0, 40.0));
+        card.on_event(&release(90.0, 40.0, PointerSource::Mouse));
+        assert_eq!(clicks.get(), 0, "a drag is not also a click");
+        assert_eq!(*drags.borrow(), vec![(90.0, 40.0)]);
     }
 
     // Regression: a drag released OUTSIDE the widget must still end. Dispatched through a parent (whose

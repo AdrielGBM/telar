@@ -65,6 +65,14 @@ impl ViewGen<'_> {
                     .collect::<String>()
             })
             .unwrap_or_default();
+        // `drag_threshold:4` — how far a press must travel before it is a drag rather than a click.
+        let drag_threshold = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "drag_threshold")
+            .and_then(|a| a.value.trim().parse::<f32>().ok())
+            .map(|px| format!(".drag_threshold({})", format_f32(px)))
+            .unwrap_or_default();
         // A bare flag, like `absolute`: an attribute with no value is the assertion itself.
         let click_through = el
             .attributes
@@ -96,7 +104,7 @@ impl ViewGen<'_> {
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
         let styling = format!(
-            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}"
+            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{drag_threshold}{click_through}"
         );
         let pieces = if always_style || has_paint(&pattrs) || !styling.is_empty() {
             Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
@@ -143,7 +151,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{click_through}{styled_by}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{drag_threshold}{click_through}{styled_by}{terminator}"
                 );
             }
             None => {

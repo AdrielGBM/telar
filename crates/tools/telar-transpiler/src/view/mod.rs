@@ -1688,6 +1688,21 @@ mod tests {
         );
     }
 
+    /// `drag_threshold` is how far a press must travel before it is a drag rather than a click on what sits
+    /// under it — the knob a viewport needs and a slider must not have.
+    #[test]
+    fn drag_threshold_emits_the_slop_distance() {
+        let src =
+            "[view]\ncol\n    box drag_threshold:4 on_drag(|_x, _y| ())\n        text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".drag_threshold(4.0)"),
+            "the threshold reaches the widget:\n{code}"
+        );
+    }
+
     // `drag_button` widens which buttons may start the box's drag; the primary one always can.
     #[test]
     fn drag_button_emits_the_extra_buttons() {

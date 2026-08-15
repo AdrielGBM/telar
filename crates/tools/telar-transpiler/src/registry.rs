@@ -191,6 +191,8 @@ const CONTAINER_PAINT: &[&str] = &[
     "cursor",
     // Which other buttons may start this box's drag; the primary one always can.
     "drag_button",
+    // How far a press must travel before it is a drag and not a click on what sits under it.
+    "drag_threshold",
     // A box that is drawn over something without standing between it and the pointer.
     "click_through",
     "hover_style",
