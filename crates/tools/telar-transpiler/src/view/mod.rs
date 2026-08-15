@@ -976,6 +976,25 @@ mod tests {
         );
     }
 
+    // `lazy` stacks its children like `col`. It used to get that from `set_display(true)` forcing `Display::Flex`; once that call started restoring the declared display, the tag had to declare it.
+    #[test]
+    fn lazy_declares_a_flex_column() {
+        let src = "[logic]\nlet open = signal(false);\n[view]\nlazy when:$open\n    text \"a\"\n    text \"b\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        let lazy_call = code
+            .split_once("Lazy::new(")
+            .expect("lazy must emit Lazy::new")
+            .1;
+        assert!(
+            lazy_call
+                .trim_start()
+                .starts_with("LayoutStyle::new().flex_column()"),
+            "lazy's container style must be a flex column, not the Display::Block default:\n{code}"
+        );
+    }
+
     #[test]
     fn compound_assign_sugar_rewrites_to_update() {
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    button on_press(|| $count += 1)\n    button on_press(|| $count -= 2)\n";

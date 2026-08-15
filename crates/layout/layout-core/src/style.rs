@@ -45,6 +45,14 @@ pub(crate) struct LogicalStyle {
     /// Set by [`LayoutStyle::flex_row`]: the main axis is the inline axis, so it reverses under RTL. An
     /// explicit [`LayoutStyle::flex_row_reverse`] leaves this clear — it means "reversed" in either direction.
     pub(crate) row_follows_direction: bool,
+    /// Set by `LayoutEngine::make_flex_row` for a node whose own declared style never called `flex_row`.
+    pub(crate) row_forced: bool,
+    /// Set by [`LayoutStyle::display_none`] or `LayoutEngine::set_display`: out of flow regardless of `inner.display`.
+    pub(crate) hidden: bool,
+    /// Set by `LayoutEngine::set_min_height`: overrides `inner.min_size.height`.
+    pub(crate) min_height_override: Option<f32>,
+    /// Set by `LayoutEngine::set_leading_margin`; `(is_row, px)`, placed by the engine since which physical edge is "leading" depends on the parent's axis.
+    pub(crate) leading_margin: Option<(bool, f32)>,
 }
 
 impl LogicalStyle {
@@ -57,6 +65,15 @@ impl LogicalStyle {
             || self.margin_end.is_some()
             || self.inset_start.is_some()
             || self.inset_end.is_some()
+    }
+
+    /// Whether the engine must keep this node's full style around: an edge, or out-of-band mutator state.
+    pub(crate) fn needs_tracking(&self) -> bool {
+        self.has_edges()
+            || self.row_forced
+            || self.hidden
+            || self.min_height_override.is_some()
+            || self.leading_margin.is_some()
     }
 }
 
@@ -113,6 +130,12 @@ impl LayoutStyle {
 
     pub fn flex_wrap(mut self) -> Self {
         self.inner.flex_wrap = FlexWrap::Wrap;
+        self
+    }
+
+    /// Declares the node out of layout flow (no space, not laid out) as part of its own style — e.g. a tab panel that should start inactive, as opposed to the out-of-band `LayoutEngine::set_display`.
+    pub fn display_none(mut self) -> Self {
+        self.logical.hidden = true;
         self
     }
 
@@ -474,11 +497,23 @@ impl LayoutStyle {
 
     /// The physical `taffy::Style` this describes under `direction`. Called by the engine at every point a
     /// style reaches a node, and again for each affected node when the direction flips.
+    ///
+    /// Does not place the leading margin ([`LogicalStyle::leading_margin`]) — the engine does that afterwards, since it needs the parent's axis to know which physical edge "leading" means.
     pub(crate) fn resolve(&self, direction: Direction) -> Style {
         let mut style = self.inner.clone();
         let logical = &self.logical;
-        if logical.row_follows_direction && direction.is_rtl() {
-            style.flex_direction = FlexDirection::RowReverse;
+        if logical.row_follows_direction || logical.row_forced {
+            style.flex_direction = if direction.is_rtl() {
+                FlexDirection::RowReverse
+            } else {
+                FlexDirection::Row
+            };
+        }
+        if logical.hidden {
+            style.display = Display::None;
+        }
+        if let Some(min_height) = logical.min_height_override {
+            style.min_size.height = Dimension::length(min_height);
         }
         let (start, end) = if direction.is_rtl() {
             (Edge::Right, Edge::Left)

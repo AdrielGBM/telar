@@ -684,6 +684,64 @@ mod tests {
         );
     }
 
+    // Regression: the resize undo pass used to overwrite a constrained node's whole style from its construction-time LayoutStyle, silently reverting an out-of-band set_display(false) along with the width pin.
+    #[test]
+    fn hidden_maxwidth_box_stays_hidden_after_a_resize() {
+        reset_layout_runtime();
+        let mut items = Vec::new();
+        for _ in 0..4 {
+            let (n, _) = new_leaf(
+                LayoutStyle::new()
+                    .width(200.0)
+                    .height(100.0)
+                    .min_width(200.0)
+                    .flex_grow(1.0),
+            )
+            .unwrap();
+            items.push(n);
+        }
+        let row =
+            new_container(LayoutStyle::new().flex_row().flex_wrap().gap(24.0), &items).unwrap();
+        let boxed = new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0))
+                .max_width(500.0),
+            &[row],
+        )
+        .unwrap();
+        let page = new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0)),
+            &[boxed],
+        )
+        .unwrap();
+
+        compute_layout(
+            page,
+            AvailableSpace::Definite(900.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+
+        set_display(boxed, false);
+        mark_dirty(page).unwrap();
+        assert!(is_hidden(boxed), "hidden right after set_display");
+
+        // The undo pass lifts boxed's previous width pin here (available space changed); must not also un-hide it.
+        compute_layout(
+            page,
+            AvailableSpace::Definite(700.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert!(
+            is_hidden(boxed),
+            "resize must not revert the out-of-band hide"
+        );
+    }
+
     // An auto-sized layout root fills the definite space it is computed in, so a page need not declare width:100% to avoid collapsing to its content width.
     #[test]
     fn auto_root_fills_definite_width() {
@@ -900,6 +958,43 @@ mod tests {
         assert!(
             (rect.get().height - 20.0).abs() < 0.5,
             "a zero floor restores the content height: {:?}",
+            rect.get()
+        );
+    }
+
+    // Regression: set_layout_style (what a styled_by closure calls on every reactive re-run) used to overwrite the node's whole style, discarding an unrelated out-of-band set_min_height. No max_width involved.
+    #[test]
+    fn min_height_survives_a_later_set_layout_style() {
+        reset_layout_runtime();
+        let (leaf, rect) = new_measured_leaf(
+            LayoutStyle::new().width(SizeDimension::Percent(1.0)),
+            Box::new(|_w| (0.0, 20.0)),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0)),
+            &[leaf],
+        )
+        .unwrap();
+        let space = (AvailableSpace::Definite(300.0), AvailableSpace::MaxContent);
+        compute_layout(root, space.0, space.1).unwrap();
+
+        set_min_height(leaf, 200.0);
+        compute_layout(root, space.0, space.1).unwrap();
+        assert!(
+            (rect.get().height - 200.0).abs() < 0.5,
+            "min_height applied: {:?}",
+            rect.get()
+        );
+
+        // A wholesale restyle unrelated to min_height must not discard the floor.
+        set_layout_style(leaf, LayoutStyle::new().width(SizeDimension::Percent(1.0))).unwrap();
+        compute_layout(root, space.0, space.1).unwrap();
+        assert!(
+            (rect.get().height - 200.0).abs() < 0.5,
+            "min_height survives a later set_layout_style: {:?}",
             rect.get()
         );
     }

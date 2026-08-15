@@ -15,16 +15,10 @@ pub type MeasureFn = Box<dyn FnMut(f32) -> (f32, f32)>;
 pub struct LayoutEngine {
     tree: TaffyTree<MeasureFn>,
     direction: Direction,
-    /// Nodes whose style holds logical edges, kept so a direction flip can re-resolve them from the original
-    /// intent. Only these nodes pay for the copy; a tree with no logical edges keeps the map empty.
-    logical: FxHashMap<NodeId, LayoutStyle>,
-    /// Rows whose main axis follows the writing direction. Held apart from `logical` because flipping one is
-    /// a flag toggle that needs no original style — and rows are common enough that a `NodeId` is worth the
-    /// saving over a whole `LayoutStyle`.
+    /// Every node's single current intent — a logical edge or out-of-band mutator state — that every path pushing a style to taffy resolves from; a node needing neither pays nothing (see [`LogicalStyle::needs_tracking`]).
+    styles: FxHashMap<NodeId, LayoutStyle>,
+    /// Plain direction-following rows, cheaper than a `styles` entry until one acquires other tracked state.
     directional_rows: FxHashSet<NodeId>,
-    /// Main-axis gap margins applied by [`set_leading_margin`](Self::set_leading_margin), which sit on the
-    /// *leading* edge and so must move to the other side when a row reverses.
-    leading_margins: FxHashMap<NodeId, (bool, f32)>,
     /// Every node this engine currently owns. Kept because taffy has no total way to ask: `style()` indexes
     /// its slot map and panics on a freed key rather than answering, so there is nothing to guard with. See
     /// [`alive`](Self::alive) for why anything asks at all.
@@ -36,9 +30,8 @@ impl LayoutEngine {
         Self {
             tree: TaffyTree::new(),
             direction: Direction::default(),
-            logical: FxHashMap::default(),
+            styles: FxHashMap::default(),
             directional_rows: FxHashSet::default(),
-            leading_margins: FxHashMap::default(),
             live: FxHashSet::default(),
         }
     }
@@ -71,29 +64,23 @@ impl LayoutEngine {
             }
         }
         self.directional_rows = rows;
-        let logical = std::mem::take(&mut self.logical);
-        for (&node, style) in &logical {
-            let _ = self.tree.set_style(node, style.resolve(direction));
+        let styles = std::mem::take(&mut self.styles);
+        for (&node, style) in &styles {
+            self.push_style(node, style);
         }
-        self.logical = logical;
-        let margins = std::mem::take(&mut self.leading_margins);
-        for (&node, &(is_row, px)) in &margins {
-            self.apply_leading_margin(node, is_row, px, true);
-        }
-        self.leading_margins = margins;
+        self.styles = styles;
         true
     }
 
-    /// Records whichever direction-dependent parts of `style` the node will need re-resolved on a flip, and
-    /// drops any it no longer has — a restyled node must not keep the previous style's logical edges.
+    /// Files `style` under `styles` or `directional_rows` depending on what it needs tracked for later.
     fn track(&mut self, node: NodeId, style: LayoutStyle) {
         self.live.insert(node);
-        if style.logical.has_edges() {
+        if style.logical.needs_tracking() {
             self.directional_rows.remove(&node);
-            self.logical.insert(node, style);
+            self.styles.insert(node, style);
             return;
         }
-        self.logical.remove(&node);
+        self.styles.remove(&node);
         if style.logical.row_follows_direction {
             self.directional_rows.insert(node);
         } else {
@@ -101,11 +88,54 @@ impl LayoutEngine {
         }
     }
 
+    /// The node's tracked style, or one reconstructed from its live taffy style if it never needed tracking.
+    fn current_style(&self, node: NodeId) -> LayoutStyle {
+        if let Some(style) = self.styles.get(&node) {
+            return style.clone();
+        }
+        LayoutStyle {
+            inner: self.tree.style(node).cloned().unwrap_or_default(),
+            logical: crate::style::LogicalStyle {
+                row_follows_direction: self.directional_rows.contains(&node),
+                ..Default::default()
+            },
+        }
+    }
+
+    /// Resolves `style` and pushes it to taffy, placing the leading margin — `resolve` cannot, since that needs the parent's axis to know which physical edge is "leading".
+    fn push_style(&mut self, node: NodeId, style: &LayoutStyle) {
+        let mut resolved = style.resolve(self.direction);
+        if let Some((is_row, px)) = style.logical.leading_margin {
+            let leading_right = is_row && self.leads_from_right(node);
+            let m = taffy::LengthPercentageAuto::length(px);
+            if is_row {
+                if leading_right {
+                    resolved.margin.right = m;
+                } else {
+                    resolved.margin.left = m;
+                }
+            } else {
+                resolved.margin.top = m;
+            }
+        }
+        let _ = self.tree.set_style(node, resolved);
+    }
+
+    /// Shared plumbing for every out-of-band mutator: mutate one field of the tracked style, push, re-track.
+    fn mutate_style(&mut self, node: NodeId, f: impl FnOnce(&mut LayoutStyle)) {
+        if !self.live.contains(&node) {
+            return;
+        }
+        let mut style = self.current_style(node);
+        f(&mut style);
+        self.push_style(node, &style);
+        self.track(node, style);
+    }
+
     fn forget(&mut self, node: NodeId) {
         self.live.remove(&node);
-        self.logical.remove(&node);
+        self.styles.remove(&node);
         self.directional_rows.remove(&node);
-        self.leading_margins.remove(&node);
     }
 
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
@@ -138,9 +168,22 @@ impl LayoutEngine {
         Ok(node)
     }
 
-    pub fn set_style(&mut self, node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
+    /// Replaces `node`'s declared style, carrying forward whatever the out-of-band mutators below set — a freshly-built `style` (e.g. from a `styled_by` closure reacting to an unrelated signal) has no way to know about them.
+    pub fn set_style(&mut self, node: NodeId, mut style: LayoutStyle) -> Result<(), LayoutError> {
         self.alive(node)?;
-        self.tree.set_style(node, style.resolve(self.direction))?;
+        if let Some(previous) = self.styles.get(&node) {
+            style.logical.hidden |= previous.logical.hidden;
+            style.logical.row_forced |= previous.logical.row_forced;
+            style.logical.min_height_override = style
+                .logical
+                .min_height_override
+                .or(previous.logical.min_height_override);
+            style.logical.leading_margin = style
+                .logical
+                .leading_margin
+                .or(previous.logical.leading_margin);
+        }
+        self.push_style(node, &style);
         self.track(node, style);
         Ok(())
     }
@@ -225,48 +268,35 @@ impl LayoutEngine {
 
     /// Sets the node's width to a definite length, or back to `auto` when `None`.
     pub fn set_width(&mut self, node: NodeId, width: Option<f32>) {
-        if let Some(s) = self.style_of(node) {
-            let mut style = s.clone();
-            style.size.width = width.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
-            let _ = self.tree.set_style(node, style);
-        }
+        self.mutate_style(node, |style| {
+            style.inner.size.width =
+                width.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
+        });
     }
 
     /// Sets the node's height to a definite length, or back to `auto` when `None`.
     pub fn set_height(&mut self, node: NodeId, height: Option<f32>) {
-        if let Some(s) = self.style_of(node) {
-            let mut style = s.clone();
-            style.size.height = height.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
-            let _ = self.tree.set_style(node, style);
-        }
+        self.mutate_style(node, |style| {
+            style.inner.size.height =
+                height.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
+        });
     }
 
     /// Sets the node's minimum height to a definite length, or clears it (`auto`) when `None`. Lets a
     /// content-measured leaf (e.g. a code editor's text area) fill a viewport it would otherwise underflow.
     pub fn set_min_height(&mut self, node: NodeId, height: Option<f32>) {
-        if let Some(s) = self.style_of(node) {
-            let mut style = s.clone();
-            style.min_size.height =
-                height.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
-            let _ = self.tree.set_style(node, style);
-        }
+        self.mutate_style(node, |style| {
+            style.logical.min_height_override = height;
+        });
     }
 
     /// Turns `node` into a flex row after construction, registering it as direction-following so a later
     /// RTL flip reverses it like an authored `flex_row`. What a reconciling list calls when it learns —
     /// from the container it is being attached to — that its items run horizontally.
     pub fn make_flex_row(&mut self, node: NodeId) {
-        let Some(current) = self.style_of(node) else {
-            return;
-        };
-        let mut style = current.clone();
-        style.flex_direction = if self.direction.is_rtl() {
-            taffy::FlexDirection::RowReverse
-        } else {
-            taffy::FlexDirection::Row
-        };
-        let _ = self.tree.set_style(node, style);
-        self.directional_rows.insert(node);
+        self.mutate_style(node, |style| {
+            style.logical.row_forced = true;
+        });
     }
 
     /// Whether the node lays its children along the main (horizontal) axis — a flex row. A column, or any
@@ -289,8 +319,9 @@ impl LayoutEngine {
     /// `for … gap:N` uses this to space its items by a gap without a container of its own: the item cell
     /// carries the gap as a margin instead.
     pub fn set_leading_margin(&mut self, node: NodeId, is_row: bool, px: f32) {
-        self.leading_margins.insert(node, (is_row, px));
-        self.apply_leading_margin(node, is_row, px, false);
+        self.mutate_style(node, |style| {
+            style.logical.leading_margin = Some((is_row, px));
+        });
     }
 
     /// Whether the node's host lays its children out from the right — an RTL row, or one explicitly reversed.
@@ -305,35 +336,6 @@ impl LayoutEngine {
             .unwrap_or(false)
     }
 
-    /// `clear_opposite` un-sets the horizontal edge this node's gap used to sit on, which a re-application
-    /// after a direction flip needs and a first application must not do (it would clobber an author's margin).
-    fn apply_leading_margin(&mut self, node: NodeId, is_row: bool, px: f32, clear_opposite: bool) {
-        let leading_right = is_row && self.leads_from_right(node);
-        let Some(current) = self.style_of(node) else {
-            return;
-        };
-        let mut style = current.clone();
-        let m = taffy::LengthPercentageAuto::length(px);
-        if is_row {
-            if leading_right {
-                style.margin.right = m;
-            } else {
-                style.margin.left = m;
-            }
-            if clear_opposite {
-                let zero = taffy::LengthPercentageAuto::length(0.0);
-                if leading_right {
-                    style.margin.left = zero;
-                } else {
-                    style.margin.right = zero;
-                }
-            }
-        } else {
-            style.margin.top = m;
-        }
-        let _ = self.tree.set_style(node, style);
-    }
-
     /// Whether this node is itself out of layout flow. Says nothing about its ancestors — [`walk`](Self::walk)
     /// carries that down as it descends, and a caller asking about one node has to climb for itself.
     pub fn is_display_none(&self, node: NodeId) -> bool {
@@ -342,17 +344,11 @@ impl LayoutEngine {
             .unwrap_or(false)
     }
 
-    /// Toggles a node in or out of layout flow. A hidden node (`Display::None`) takes no space and lays out none of its subtree; a visible node is `Display::Flex`. Used for responsive show/hide (e.g. collapsing a sidebar on narrow windows).
+    /// Toggles a node in or out of layout flow. A hidden node (`Display::None`) takes no space and lays out none of its subtree; a visible node returns to whichever `display` it declared. Used for responsive show/hide (e.g. collapsing a sidebar on narrow windows).
     pub fn set_display(&mut self, node: NodeId, visible: bool) {
-        if let Some(s) = self.style_of(node) {
-            let mut style = s.clone();
-            style.display = if visible {
-                taffy::Display::Flex
-            } else {
-                taffy::Display::None
-            };
-            let _ = self.tree.set_style(node, style);
-        }
+        self.mutate_style(node, |style| {
+            style.logical.hidden = !visible;
+        });
     }
 
     pub fn compute_layout(
