@@ -334,23 +334,22 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
         return ComponentSig::default();
     };
     let props = scan_props_struct(&doc.logic.source);
+    let has_slot = view_uses_slot(&doc.view.nodes);
     ComponentSig {
         has_props: props.has_props,
         props_default: props.props_default,
         prop_fields: props.fields,
-        has_slot: view_uses_slot(&doc.view.nodes),
+        has_slot,
         color_fields: props.color,
         text_fields: props.text,
         optional_fields: props.optional,
         string_fields: props.owned_text,
         bool_fields: Vec::new(),
-        // Always eager for a scanned `.rsx`. Deferring is only worth anything to a component that has a
-        // context to build its children *in*, and a `.rsx` has no way to declare one — `provide` takes a Rust
-        // type, and the `children` placeholder splices widgets rather than running a recipe. So compound
-        // components are catalogue components for now, and every `.rsx` keeps the eager slots it has always
-        // had. Opening this to `.rsx` means giving the markup a way to name a context type, which is its own
-        // design and not something to half-answer here.
-        defers_children: false,
+        // A `Context` struct in `[logic]` is what makes a `.rsx` compound: it is the type the component's
+        // children read, so the component takes the recipe for them and runs it inside one. Without somewhere
+        // to put children it declares a type nobody is handed, so the slot is half of the condition.
+        defers_children: has_slot
+            && struct_line_span(&doc.logic.source.lines().collect::<Vec<_>>(), "Context").is_some(),
     }
 }
 
@@ -728,18 +727,28 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         ));
     }
 
-    let (props_struct, props_default_impl, logic_no_props, struct_span) =
+    let (props_struct, props_default_impl, _, props_span) =
         extract_props_struct(&doc.logic.source, &fn_name);
+    let (context_struct, context_span) = extract_context_struct(&doc.logic.source, &fn_name);
     let has_props = props_struct.is_some();
     let props_type = if has_props {
         to_pascal_case(&fn_name) + "Props"
     } else {
         String::new()
     };
-    let logic_source = if has_props {
-        &logic_no_props
-    } else {
+    // Ascending, because the line-number reconstruction below restores them one after another.
+    let mut lifted: Vec<(usize, usize)> =
+        [props_span, context_span].into_iter().flatten().collect();
+    lifted.sort();
+    // The struct declarations move to module scope; what is left is the body, emitted byte for byte. The
+    // author still writes the bare `Context` to build one, and an alias in the body is what lets them —
+    // renaming it here instead would shift every column on the line, and `[logic]` diagnostics land on the
+    // columns rustc gave them precisely because it is transpiled 1:1.
+    let logic_lifted = without_line_spans(&doc.logic.source, &lifted);
+    let logic_source = if lifted.is_empty() {
         &doc.logic.source
+    } else {
+        &logic_lifted
     };
 
     let signals = scan_signals(logic_source);
@@ -763,27 +772,37 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
 
     // A `children` placeholder anywhere in the view makes the component take a `Slots` argument.
     let has_slot = view_uses_slot(&doc.view.nodes);
+    // A `Context` struct with nowhere to put children is not a compound component — it declares a type nobody
+    // is handed, and taking a recipe the body never runs would only produce an unused argument.
+    let is_compound = context_struct.is_some() && has_slot;
     let ret = "Result<Box<dyn LayoutItem>, LayoutError>";
+    // A compound component takes the *recipe* for its children, so it can build them inside the context it
+    // provides. Everything else takes them already built. See `Children` in ui-core for why the order inverts.
+    let children_arg = match is_compound {
+        true => "children: Children",
+        false => "mut __slots: Slots",
+    };
     let signature = match (has_props, has_slot) {
         (true, true) => {
-            format!("pub fn {fn_name}(props: {props_type}, mut __slots: Slots) -> {ret}")
+            format!("pub fn {fn_name}(props: {props_type}, {children_arg}) -> {ret}")
         }
         (true, false) => format!("pub fn {fn_name}(props: {props_type}) -> {ret}"),
-        (false, true) => format!("pub fn {fn_name}(mut __slots: Slots) -> {ret}"),
+        (false, true) => format!("pub fn {fn_name}({children_arg}) -> {ret}"),
         (false, false) => format!("pub fn {fn_name}() -> {ret}"),
     };
 
     // 0-based `.rsx` line of `logic_source` line 0, used to map generated lines back to the source.
     let logic_start0 = doc.logic.start_line.saturating_sub(1) as u32;
-    let struct_len = struct_span.map(|(s, e)| e - s + 1).unwrap_or(0);
-    let struct_start = struct_span.map(|(s, _)| s).unwrap_or(0);
-    // `logic_source` (props-struct removed when present) line index -> its 0-based `.rsx` line.
+    // `logic_source` (with the lifted structs removed) line index -> its 0-based `.rsx` line. The spans go back
+    // in ascending order, so each comparison is made against a line number the earlier ones have already
+    // restored.
     let logic_line_src = |j: usize| -> u32 {
-        let orig = if struct_span.is_some() && j >= struct_start {
-            j + struct_len
-        } else {
-            j
-        };
+        let mut orig = j;
+        for &(start, end) in &lifted {
+            if orig >= start {
+                orig += end - start + 1;
+            }
+        }
         logic_start0 + orig as u32
     };
 
@@ -820,8 +839,20 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     }
     code.push("\n", None);
 
+    // At file scope, not inside the fn body: a compound component's children name this type from other files,
+    // which is the whole reason it exists.
+    if let (Some(struct_code), Some((start, _))) = (&context_struct, context_span) {
+        for (k, line) in struct_code.lines().enumerate() {
+            let src = Some(logic_start0 + (start + k) as u32);
+            code.push(line, src);
+            code.push("\n", src);
+        }
+        code.push("\n", None);
+    }
+
     // Emit Props struct at file scope (not inside the fn body) so the type is reachable from the function signature and from other crate files.
     if let Some(struct_code) = &props_struct {
+        let struct_start = props_span.map(|(s, _)| s).unwrap_or(0);
         for (k, line) in struct_code.lines().enumerate() {
             let src = Some(logic_start0 + (struct_start + k) as u32);
             code.push(line, src);
@@ -851,6 +882,17 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     // use_theme inside the fn so multiple include!-ed files don't conflict at crate scope.
     if uses_theme {
         code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
+    }
+    // The lifted context type, back under the name the author wrote it as. Injected (no `.rsx` line of its
+    // own), which is what keeps the body's own lines identical to the source they came from.
+    if context_struct.is_some() {
+        code.push(
+            &format!(
+                "    #[allow(unused_imports)] use {} as Context;\n",
+                context_type_name(&fn_name)
+            ),
+            None,
+        );
     }
 
     if !logic.is_empty() {
@@ -903,6 +945,17 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             code.push(&format!("    {emitted_line}\n"), src);
         }
         code.push("\n", None);
+    }
+
+    // Run the children's recipe now that `[logic]` has built the context to run it in, and hand the result to
+    // the `children` placeholders as the same `__slots` an eager component receives — so a component with two
+    // slots drains one build rather than making one per placeholder.
+    if is_compound {
+        let build = match slot_context_expr(&doc.view.nodes) {
+            Some(ctx) => format!("children.build_with({ctx})?"),
+            None => "children.build()?".to_string(),
+        };
+        code.push(&format!("    let mut __slots = {build};\n"), None);
     }
 
     // The view body carries source markers from generation; resolve them into per-line origins (for diagnostics) plus the byte spans of verbatim expressions. `view_prefix_len` is the body's start offset in the final file, so each span's relative offset rebases onto the generated file.
@@ -1160,6 +1213,29 @@ fn node_uses_slot(node: &ViewNode) -> bool {
     }
 }
 
+/// The `in:` value of a `children` placeholder — the context a compound component builds its children inside.
+/// `None` when no placeholder names one, which means the children are built with nothing to read.
+///
+/// Read off the view rather than off the placeholder that emits it, because the build happens once for the
+/// whole component: two `children` placeholders drain one build, exactly as two eager slot placeholders drain
+/// one `Slots`.
+fn slot_context_expr(nodes: &[ViewNode]) -> Option<String> {
+    nodes.iter().find_map(|node| match node {
+        ViewNode::Element(el) if el.tag == "children" => el
+            .attributes
+            .iter()
+            .find(|a| a.key == "in")
+            .map(|a| a.value.trim().to_string())
+            .or_else(|| slot_context_expr(&el.children)),
+        ViewNode::Element(el) => slot_context_expr(&el.children),
+        ViewNode::IfBlock(b) => slot_context_expr(&b.then_branch)
+            .or_else(|| b.else_branch.as_deref().and_then(slot_context_expr)),
+        ViewNode::ForBlock(b) => slot_context_expr(&b.body),
+        ViewNode::MatchBlock(b) => b.arms.iter().find_map(|arm| slot_context_expr(&arm.body)),
+        ViewNode::LetStmt(_) | ViewNode::Comment(_) => None,
+    })
+}
+
 /// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone,
 /// renames it to `{PascalFnName}Props`, and returns `(struct_code, default_impl, logic_without_struct, span)`.
 /// `default_impl` is `Some` only when the struct uses inline `field: Type = expr` defaults (a synthesized
@@ -1174,17 +1250,21 @@ type ExtractedProps = (
     Option<(usize, usize)>,
 );
 
-fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
-    let lines: Vec<&str> = logic.lines().collect();
-
-    let Some(struct_line) = lines.iter().position(|l| l.trim().contains("struct Props")) else {
-        return (None, None, logic.to_string(), None);
+/// The inclusive line span of `struct <name> { … }` in `lines`, taking in any `#[…]` attribute and comment
+/// lines directly above it: a doc comment left behind would land on whatever statement follows, describing the
+/// wrong thing in the one place a reader of the generated crate would look. `None` when the struct is absent
+/// or its braces never close.
+fn struct_line_span(lines: &[&str], name: &str) -> Option<(usize, usize)> {
+    let needle = format!("struct {name}");
+    // The boundary matters: without it `struct Context` would also claim a `struct ContextMenu`.
+    let declares = |line: &str| {
+        line.find(&needle).is_some_and(|at| {
+            !line[at + needle.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+        })
     };
+    let declared = lines.iter().position(|l| declares(l.trim()))?;
 
-    // Include any preceding `#[…]` attribute lines (e.g. `#[derive(Props)]`) and the struct's own comment: a
-    // doc comment left behind lands on whatever statement follows it in the function body, describing the wrong
-    // thing in the one place a reader of the generated crate would look for the props.
-    let mut start = struct_line;
+    let mut start = declared;
     while start > 0 && {
         let above = lines[start - 1].trim();
         above.starts_with('#') || above.starts_with("//")
@@ -1192,32 +1272,64 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
         start -= 1;
     }
 
-    // Scan from the `struct Props` line, counting braces to find the closing `}`.
     let mut depth = 0i32;
-    let mut end = struct_line;
-    let mut found_close = false;
-    for (i, line) in lines[struct_line..].iter().enumerate() {
+    for (i, line) in lines[declared..].iter().enumerate() {
         for c in line.chars() {
             match c {
                 '{' => depth += 1,
                 '}' => {
                     depth -= 1;
                     if depth == 0 {
-                        found_close = true;
+                        return Some((start, declared + i));
                     }
                 }
                 _ => {}
             }
         }
-        if found_close {
-            end = struct_line + i;
-            break;
-        }
     }
+    None
+}
 
-    if !found_close {
+/// Lifts the `Context` struct of a compound component out of `[logic]`, renamed to `{PascalFnName}Context`.
+///
+/// Same lifting `Props` gets, and for the same reason plus one: a type declared inside the function body is
+/// not nameable from outside it, and a compound component's context exists precisely to be named by the
+/// children — which live in other files. The rename is what keeps two compound components in one crate from
+/// both re-exporting a type called `Context`.
+fn extract_context_struct(logic: &str, fn_name: &str) -> (Option<String>, Option<(usize, usize)>) {
+    let lines: Vec<&str> = logic.lines().collect();
+    let Some((start, end)) = struct_line_span(&lines, "Context") else {
+        return (None, None);
+    };
+    let renamed = lines[start..=end].join("\n").replace(
+        "struct Context",
+        &format!("struct {}", context_type_name(fn_name)),
+    );
+    (Some(renamed), Some((start, end)))
+}
+
+fn context_type_name(fn_name: &str) -> String {
+    to_pascal_case(fn_name) + "Context"
+}
+
+/// Removes the given inclusive line spans from `logic`, keeping every other line untouched.
+fn without_line_spans(logic: &str, spans: &[(usize, usize)]) -> String {
+    let lines: Vec<&str> = logic.lines().collect();
+    lines
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !spans.iter().any(|&(s, e)| *i >= s && *i <= e))
+        .map(|(_, l)| *l)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
+    let lines: Vec<&str> = logic.lines().collect();
+
+    let Some((start, end)) = struct_line_span(&lines, "Props") else {
         return (None, None, logic.to_string(), None);
-    }
+    };
 
     let struct_code = lines[start..=end].join("\n");
     let props_type = to_pascal_case(fn_name) + "Props";

@@ -1768,6 +1768,55 @@ col @card
         );
     }
 
+    /// A `.rsx` can be compound too, and the markup names its context type by declaring one: a `Context`
+    /// struct in `[logic]` is what turns the component's children from arguments into a recipe. It was the
+    /// last thing keeping compound components to the built-in catalogue.
+    #[test]
+    fn a_context_struct_makes_an_rsx_component_compound() {
+        let src = "[logic]\n#[derive(Clone)]\npub struct Context {\n    pub pick: u32,\n}\n\nlet ctx = Context { pick: 1 };\n\n[view]\ncol\n    children in:ctx\n";
+        let code = transpile_source_with_theme(src, "picker", None, None)
+            .unwrap()
+            .rust_code;
+
+        assert!(
+            code.contains("pub struct PickerContext"),
+            "the type is renamed and lifted to module scope, so children in other files can name it:\n{code}"
+        );
+        assert!(
+            code.contains("pub fn picker(children: Children)"),
+            "and the component takes the recipe rather than built children:\n{code}"
+        );
+        assert!(
+            code.contains("let mut __slots = children.build_with(ctx)?;"),
+            "run inside the context `[logic]` built, before the view drains it:\n{code}"
+        );
+        // The body keeps the author's own bytes — an alias, not a rewrite. `[logic]` diagnostics land on the
+        // columns rustc gave them only because it is transpiled 1:1, and renaming in place would shift every
+        // column on the line by the length difference.
+        assert!(
+            code.contains("use PickerContext as Context;")
+                && code.contains("    let ctx = Context { pick: 1 };"),
+            "the body is untouched and an injected alias carries the name:\n{code}"
+        );
+    }
+
+    /// The call site has to defer too, or the children would be built before the parent that provides their
+    /// context — which is the ordering the whole mechanism exists to invert.
+    #[test]
+    fn a_context_struct_makes_call_sites_defer() {
+        let src = "[logic]\npub struct Context {\n    pub pick: u32,\n}\nlet ctx = Context { pick: 1 };\n[view]\ncol\n    children in:ctx\n";
+        assert!(scan_component_sig(src).defers_children);
+
+        // Without somewhere to put children it is not compound: it declares a type nobody is handed.
+        let no_slot =
+            "[logic]\npub struct Context {\n    pub pick: u32,\n}\n[view]\ncol\n    text \"x\"\n";
+        assert!(!scan_component_sig(no_slot).defers_children);
+
+        // And a plain `.rsx` is untouched — every one of them keeps the eager slots it has always had.
+        let eager = "[view]\ncol\n    children\n";
+        assert!(!scan_component_sig(eager).defers_children);
+    }
+
     /// The recipe runs again on every open, so a signal it reads is cloned into it rather than moved — the
     /// same treatment a reactive `if`/`for` branch gets, and for the same reason.
     #[test]

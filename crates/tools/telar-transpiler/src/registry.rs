@@ -268,8 +268,9 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         ]),
         // Both splice a whole widget in, so neither takes layout or paint keys: the expression owns its style.
         "widget" | "build" => vec![],
-        // The `children` slot placeholder takes only an optional `name:` for a named slot.
-        "children" => vec!["name"],
+        // The `children` slot placeholder takes an optional `name:` for a named slot, and `in:` for the context
+        // a compound component builds them inside.
+        "children" => vec!["name", "in"],
         // box/col/row/grid share one paint+behavior set (the codegen treats them identically); grid adds its track keys.
         "grid" => {
             let mut keys = with(CONTAINER_PAINT);
