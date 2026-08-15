@@ -75,7 +75,7 @@ cargo telar build --format deb   # appimage | deb | dmg | nsis | apk | dir
 cargo telar doctor     # check the toolchain
 ```
 
-`apps/sandbox` in this repo is the reference app and covers most of the surface. (`cargo telar new` is stubbed out and not implemented yet.)
+`apps/sandbox` in this repo is the reference app and covers most of the surface.
 
 ## Build profiles
 

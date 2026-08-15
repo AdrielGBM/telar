@@ -21,11 +21,6 @@ pub(crate) enum TelarCommand {
     Build(BuildArgs),
     /// Render every preview component headlessly and report failures
     Test(TestArgs),
-    /// Create a new RSX project (not yet implemented)
-    New {
-        /// Project name
-        name: String,
-    },
     /// Type-check the project, reporting `.rsx` errors on their own lines
     Check(CheckArgs),
     /// Check the development environment

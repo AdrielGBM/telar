@@ -32,10 +32,6 @@ pub fn run(args: Vec<String>) {
         TelarCommand::Preview(args) => run_preview_cmd(args),
         TelarCommand::Build(args) => run_build_cmd(args),
         TelarCommand::Test(args) => run_test_cmd(args),
-        TelarCommand::New { name } => {
-            eprintln!("[cargo-telar] `cargo telar new {name}` is not yet implemented.");
-            std::process::exit(1);
-        }
         TelarCommand::Check(args) => run_check_cmd(args),
         TelarCommand::Doctor => run_doctor_cmd(),
         TelarCommand::Fmt(args) => run_fmt_cmd(args),

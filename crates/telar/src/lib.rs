@@ -170,9 +170,9 @@ pub use ui_components::{
     AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, DrawerProps, GroupProps,
     HeadingProps, ItemProps, MenuProps, ModalProps, ProgressProps, RadioProps, SectionProps,
     SelectProps, SliderProps, SpinnerProps, StepperProps, TabsProps, TextFieldProps, ToggleProps,
-    TooltipProps, accordion, badge, button, checkbox, chip, drawer, group, heading, hover_reveal,
-    item, menu, modal, progress, radio, section, select, separator, slider, spinner, stepper, tabs,
-    text_field, toggle, tooltip,
+    TooltipProps, accordion, badge, button, checkbox, chip, drawer, group, heading, item, menu,
+    modal, progress, radio, section, select, separator, slider, spinner, stepper, tabs, text_field,
+    toggle, tooltip,
 };
 
 #[cfg(feature = "runtime")]
