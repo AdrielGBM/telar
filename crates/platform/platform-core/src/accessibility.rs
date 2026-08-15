@@ -4,6 +4,8 @@
 //! two ends share. The UI declares roles and names; the platform's accessibility API — AccessKit on the
 //! desktop — is what turns them into something a screen reader can read. Neither end owns the words.
 
+use geometry_core::Rect;
+
 /// What a control *is*, for the reader that has to say it out loud.
 ///
 /// A separate question from what a widget does with a key: both a checkbox and a button take keys as
@@ -40,4 +42,22 @@ pub enum Role {
     /// Not a control at all: text the interface is showing. Never focusable — it is here because a reader
     /// given only the buttons cannot say what the buttons are for.
     Label,
+}
+
+/// One thing a screen reader can land on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccessNode {
+    /// A stable identity within this window for as long as the widget lives. `None` for text that is not a
+    /// control, which nothing needs to address.
+    pub id: Option<u64>,
+    pub role: Role,
+    pub name: String,
+    /// Window-absolute, which is the space every platform accessibility layer works in.
+    pub rect: Rect,
+    pub focused: bool,
+    /// `false` announces "unavailable"; a control that is genuinely not there is absent instead.
+    pub enabled: bool,
+    /// Whether a control that carries a checked state is in it. `None` for the roles that have no such state —
+    /// and never a default of `false` for the ones that do, which would announce every checkbox as unticked.
+    pub toggled: Option<bool>,
 }

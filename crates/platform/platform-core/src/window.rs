@@ -120,6 +120,22 @@ pub trait EventHandler<W: Window> {
     fn on_event(&mut self, event: Event, window: &W);
     fn on_redraw(&mut self, window: &W);
     fn on_suspend(&mut self) {}
+
+    /// The window's accessibility tree as it stands, for the platform to hand to whatever is listening.
+    ///
+    /// Asked for on demand rather than pushed every frame, because on every desktop accessibility API the
+    /// answer is only wanted while an assistive technology is attached — which is almost never. A handler
+    /// with no tree to describe leaves it empty and the platform publishes nothing.
+    fn accessibility(&self) -> Vec<crate::AccessNode> {
+        Vec::new()
+    }
+
+    /// A screen reader asked to move to a control, or to activate it — `id` being the one the handler put in
+    /// [`AccessNode::id`](crate::AccessNode::id).
+    ///
+    /// Routed to the same focus and press the keyboard reaches, deliberately: a second activation path is a
+    /// second thing to keep correct, and it is always the one nobody is testing that rots.
+    fn on_accessibility_action(&mut self, _id: u64, _activate: bool) {}
     /// Rebuilds this handler's UI from its app, on the surface it is already running on.
     ///
     /// For a backend whose surfaces outlive the state they were built from — a shell whose bars are described

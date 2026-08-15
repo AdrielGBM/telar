@@ -1,4 +1,5 @@
 #[cfg(target_os = "linux")]
+mod accessibility;
 mod color_scheme;
 mod dialogs;
 mod paths;

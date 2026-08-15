@@ -5,7 +5,7 @@ pub mod loop_waker;
 pub mod window;
 pub mod window_command;
 
-pub use accessibility::Role;
+pub use accessibility::{AccessNode, Role};
 pub use error::PlatformError;
 pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta};
 pub use loop_waker::{loop_waker, set_loop_waker};

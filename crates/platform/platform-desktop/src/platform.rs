@@ -14,11 +14,21 @@ use platform_winit::WinitWindow;
 
 // Winit user-event payloads injected from background threads (via EventLoopProxy) to wake the loop.
 enum UserEvent {
+    // A screen reader asked for the tree, asked to act on a node, or went away. Routed through the loop
+    // rather than answered where it arrives: AccessKit calls its handlers on a platform thread, and the UI
+    // that has to answer is `!Send` — it lives on this one.
+    Accessibility(accesskit_winit::Event),
     // The OS color-scheme flipped; carries the new dark (`true`) / light preference (Linux portal watch).
     ColorScheme(bool),
     // A background thread asked to wake the UI (via the app redraw waker); redraw every live surface so each
     // one's `on_frame` runs and drains its channels — wherever the waking app's content currently lives.
     Wake,
+}
+
+impl From<accesskit_winit::Event> for UserEvent {
+    fn from(event: accesskit_winit::Event) -> Self {
+        UserEvent::Accessibility(event)
+    }
 }
 
 pub struct WinitPlatform {
@@ -44,11 +54,54 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     modifiers: platform_core::ModifiersState,
     // True only on WaitUntil timer expiry; gates keepalive request_redraw() so it doesn't fire on every event queue drain.
     timer_has_fired: bool,
+    // Built at resume, before the window is shown, which the adapter requires. The tree behind it is only ever
+    // assembled while an assistive technology is attached — which `update_if_active` is the whole point of.
+    a11y: Option<accesskit_winit::Adapter>,
+    a11y_proxy: winit::event_loop::EventLoopProxy<UserEvent>,
+    // The nodes last published, so a request naming one can be mapped back to the control it means.
+    a11y_nodes: Vec<platform_core::AccessNode>,
+}
+
+impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
+    /// Answers a screen reader, on the thread the UI actually lives on.
+    fn on_accessibility(&mut self, event: accesskit_winit::WindowEvent) {
+        use accesskit_winit::WindowEvent as AkEvent;
+        match event {
+            AkEvent::InitialTreeRequested => self.publish_accessibility(),
+            AkEvent::ActionRequested(request) => {
+                let Some((id, activate)) =
+                    crate::accessibility::requested_focus_id(&request, &self.a11y_nodes)
+                else {
+                    return;
+                };
+                // Through the same door the keyboard uses. A reader activating a button takes the path a press
+                // takes, or the two grow apart and it is always the untested one that rots.
+                self.handler.on_accessibility_action(id, activate);
+                self.publish_accessibility();
+            }
+            // Nothing to tear down: the tree is only ever built on demand, so ceasing to be asked is the whole
+            // of stopping.
+            AkEvent::AccessibilityDeactivated => self.a11y_nodes.clear(),
+        }
+    }
+
+    /// Hands the current tree over, and only if something is listening — which is what keeps the cost of all
+    /// this at nothing for the overwhelmingly common case of nobody being.
+    fn publish_accessibility(&mut self) {
+        let Some(adapter) = &mut self.a11y else {
+            return;
+        };
+        let nodes = self.handler.accessibility();
+        let title = self.config.title.clone();
+        adapter.update_if_active(|| crate::accessibility::tree_update(&nodes, &title));
+        self.a11y_nodes = nodes;
+    }
 }
 
 impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner<H> {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
+            UserEvent::Accessibility(event) => self.on_accessibility(event.window_event),
             UserEvent::ColorScheme(dark) => {
                 if let Some(window) = &self.window {
                     self.handler
@@ -96,6 +149,14 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             event_loop.exit();
             return;
         }
+        // Attached before the window is ever visible, which the adapter requires — hence the window being
+        // created hidden. The proxy is what routes a reader's requests back onto this thread.
+        self.a11y = Some(accesskit_winit::Adapter::with_event_loop_proxy(
+            event_loop,
+            &window.0,
+            self.a11y_proxy.clone(),
+        ));
+        window.0.set_visible(true);
         window.request_redraw();
         self.window = Some(window);
     }
@@ -106,6 +167,12 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
         let Some(window) = self.window.clone() else {
             return;
         };
+        // The adapter tracks the window itself — focus, size, scale — so it sees the event before anything
+        // consumes it.
+        if let Some(adapter) = &mut self.a11y {
+            adapter.process_event(&window.0, &event);
+        }
+        let redrawn = matches!(event, WindowEvent::RedrawRequested);
         let outcome = dispatch_window_event(
             &mut self.handler,
             &window,
@@ -114,6 +181,10 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             &mut self.modifiers,
             event,
         );
+        // After the frame rather than before: what is announced is then the frame that was drawn.
+        if redrawn {
+            self.publish_accessibility();
+        }
         // A custom title-bar close button sets the handler's exit request during dispatch; honor it alongside
         // the OS close (window manager X / Alt-F4).
         if matches!(outcome, WindowEventOutcome::CloseRequested) || self.handler.take_exit_request()
@@ -134,6 +205,9 @@ fn create_window_from_config(
     config: &WindowConfig,
 ) -> Option<WinitWindow> {
     let mut attributes = WindowAttributes::default()
+        // Shown once the accessibility adapter is attached, which has to happen before the window is ever
+        // visible. Creating it hidden and revealing it a moment later is what that costs.
+        .with_visible(false)
         .with_title(config.title.as_str())
         .with_inner_size(winit::dpi::LogicalSize::new(config.width, config.height))
         .with_resizable(config.is_resizable)
@@ -356,6 +430,9 @@ impl Platform for WinitPlatform {
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
             timer_has_fired: false,
+            a11y: None,
+            a11y_proxy: self.event_loop.create_proxy(),
+            a11y_nodes: Vec::new(),
         };
         // The app-facing redraw waker (handed to background threads) wakes the loop through this proxy, not by
         // holding a window — so caching it can't pin a window open.
@@ -542,6 +619,11 @@ impl WinitMultiRunner {
 impl ApplicationHandler<UserEvent> for WinitMultiRunner {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
+            // The multi-surface runner attaches no adapter yet, so nothing sends these to it. Its windows are
+            // built by a factory after the loop is running, and the adapter has to exist before each is shown —
+            // a per-surface hook this backend does not have. Named rather than caught by a wildcard, so adding
+            // it is a compile error here and not a silent no-op.
+            UserEvent::Accessibility(_) => {}
             UserEvent::ColorScheme(dark) => {
                 // Bracket each surface's write on its own (this callback is not inside a shared batch bracket).
                 for surface in self.surfaces.values_mut() {

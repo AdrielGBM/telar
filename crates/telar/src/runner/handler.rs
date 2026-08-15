@@ -89,6 +89,10 @@ where
     // refills instead of allocating a fresh Vec each frame.
     pub(super) render_ret_rx: Option<std::sync::mpsc::Receiver<Vec<renderer_core::DrawCommand>>>,
     pub(super) command_buf_pool: Vec<Vec<renderer_core::DrawCommand>>,
+    /// Just the text of the last frame, kept so the accessibility tree can be built when it is asked for
+    /// rather than on every frame. A control is named by the text drawn inside it, and that is the only part
+    /// of a frame the naming needs — a handful of commands, held by refcounted `Arc<str>`.
+    pub(super) frame_text: Vec<renderer_core::DrawCommand>,
     pub(super) hw_renderer: Option<HardwareRenderer<W>>,
     #[cfg(all(feature = "dev", not(target_os = "android")))]
     pub(super) hot_reload_rx: Option<std::sync::mpsc::Receiver<crate::hot::HotEvent>>,
@@ -178,6 +182,7 @@ where
         render_tx: None,
         render_ret_rx: None,
         command_buf_pool: Vec::new(),
+        frame_text: Vec::new(),
         render_join: None,
         hw_renderer: None,
         #[cfg(all(feature = "dev", not(target_os = "android")))]
@@ -389,6 +394,28 @@ where
     W: Window + Clone + Send + Sync + 'static,
     D: DevPlugin,
 {
+    fn accessibility(&self) -> Vec<platform_core::AccessNode> {
+        let _surface = self.enter_surface();
+        ui_core::accessibility::snapshot(&self.frame_text)
+    }
+
+    fn on_accessibility_action(&mut self, id: u64, activate: bool) {
+        let _surface = self.enter_surface();
+        ui_core::focus::request(id);
+        // Activation goes out as the key a focused control already answers, rather than as a third path into
+        // the same commit. A reader pressing a button then travels the route the keyboard travels — the one
+        // that has tests, and that stays right because everyone uses it.
+        if activate {
+            let enter = platform_core::Event::KeyPressed {
+                key: platform_core::Key::Named(platform_core::NamedKey::Enter),
+                modifiers: platform_core::ModifiersState::default(),
+            };
+            if let Some(tree) = &mut self.tree {
+                tree.on_event(&enter);
+            }
+        }
+    }
+
     fn on_resume(&mut self, window: &W) -> bool {
         let _surface = self.enter_surface();
         let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
@@ -860,6 +887,21 @@ where
         commands.clear();
         commands.extend_from_slice(&frame_commands);
         renderer_core::perf::record_since(renderer_core::perf::Phase::Clone, clone_start);
+        // Kept before the frame is handed off, because naming a control means asking what text was drawn
+        // inside it, and by the time anything asks the frame belongs to the render thread.
+        self.frame_text.clear();
+        self.frame_text.extend(
+            frame_commands
+                .iter()
+                .filter(|c| {
+                    matches!(
+                        c,
+                        renderer_core::DrawCommand::Text { .. }
+                            | renderer_core::DrawCommand::RichText { .. }
+                    )
+                })
+                .cloned(),
+        );
         // The message owns its commands from here on; release the borrows of the tree and the dev plugin so
         // the offscreen branch below can take `&mut self`.
         drop(frame_commands);

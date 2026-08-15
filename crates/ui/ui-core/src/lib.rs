@@ -1,3 +1,4 @@
+pub mod accessibility;
 #[cfg(feature = "async-assets")]
 mod async_asset;
 mod border;
