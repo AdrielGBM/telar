@@ -412,6 +412,8 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
     let mut preview_const_idents: Vec<Ident> = Vec::new();
+    // Every path this run writes under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a toggled-off `auto_modules`/i18n catalog) can be told apart from live output and pruned.
+    let mut written_files: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
 
     for rsx_file in &rsx_files {
         let source = match std::fs::read_to_string(rsx_file) {
@@ -447,6 +449,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             continue;
         };
         let out_path = generated_dir.join(rel_out);
+        written_files.insert(out_path.clone());
         if let Some(parent) = out_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 let msg = format!("Failed to create {}: {e}", parent.display());
@@ -559,13 +562,15 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             let msg = format!("Failed to create {}: {e}", modtree_dir.display());
             return Err(quote! { compile_error!(#msg) });
         }
-        let modules_src = match telar_transpiler::discover_rust_modules(&src_dir, &modtree_dir) {
-            Ok(s) => s,
-            Err(e) => {
-                let msg = format!("Failed to write the auto-discovered module tree: {e}");
-                return Err(quote! { compile_error!(#msg) });
-            }
-        };
+        let (modules_src, modtree_written) =
+            match telar_transpiler::discover_rust_modules(&src_dir, &modtree_dir) {
+                Ok(s) => s,
+                Err(e) => {
+                    let msg = format!("Failed to write the auto-discovered module tree: {e}");
+                    return Err(quote! { compile_error!(#msg) });
+                }
+            };
+        written_files.extend(modtree_written);
         match modules_src.parse::<TokenStream2>() {
             Ok(tokens) => include_stmts.extend(tokens),
             Err(e) => {
@@ -582,6 +587,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         Ok(Some(catalog)) => {
             let src = telar_transpiler::bake_catalog_to_source(&catalog);
             let out_path = generated_dir.join("__i18n.rs");
+            written_files.insert(out_path.clone());
             let needs_write = std::fs::read_to_string(&out_path)
                 .map(|existing| existing != src)
                 .unwrap_or(true);
@@ -605,6 +611,9 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         Ok(None) => {}
         Err(msg) => return Err(quote! { compile_error!(#msg) }),
     }
+
+    // Only reached once the whole project transpiled without error, so `written_files` is complete: anything else under `generated_dir` is what an earlier run wrote for a `.rsx` (or a feature) that is gone now.
+    telar_transpiler::prune_stale_generated(&generated_dir, &written_files);
 
     Ok(TranspileOutput {
         include_stmts,

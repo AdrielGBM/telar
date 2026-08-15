@@ -1,5 +1,6 @@
 //! File-discovery utilities: walking a source tree for `.rsx`/`.rs` files and deriving their output stems and mirrored `.rs` paths.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Recursively collects files with `extension` under `dir`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
@@ -120,10 +121,17 @@ pub fn assets_root(package_root: &Path) -> PathBuf {
 /// semantics, so the absolute child path wins and it compiles — which is why the two disagreed. Routing every
 /// directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside
 /// that file) keeps the analyzer and the compiler in step.
-pub fn discover_rust_modules(src_dir: &Path, modtree_dir: &Path) -> std::io::Result<String> {
+///
+/// Returns the declarations alongside every generated file path it wrote under `modtree_dir`, so a caller that
+/// prunes stale build output can tell these apart from an orphaned directory's leftover file.
+pub fn discover_rust_modules(
+    src_dir: &Path,
+    modtree_dir: &Path,
+) -> std::io::Result<(String, Vec<PathBuf>)> {
     let mut out = String::new();
-    emit_children(src_dir, "", modtree_dir, &mut out)?;
-    Ok(out)
+    let mut written = Vec::new();
+    emit_children(src_dir, "", modtree_dir, &mut out, &mut written)?;
+    Ok((out, written))
 }
 
 /// Appends the `#[path] pub mod` declarations for the direct children of `dir` to `out`. A subdirectory's own
@@ -134,6 +142,7 @@ fn emit_children(
     flat_prefix: &str,
     modtree_dir: &Path,
     out: &mut String,
+    written: &mut Vec<PathBuf>,
 ) -> std::io::Result<()> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Ok(());
@@ -162,9 +171,10 @@ fn emit_children(
                     format!("{flat_prefix}__{name}")
                 };
                 let mut body = String::new();
-                emit_children(&path, &flat, modtree_dir, &mut body)?;
+                emit_children(&path, &flat, modtree_dir, &mut body, written)?;
                 let gen_file = modtree_dir.join(format!("{flat}.rs"));
                 write_if_changed(&gen_file, &body)?;
+                written.push(gen_file.clone());
                 out.push_str(&mod_decl(name, &gen_file));
             }
         } else if is_rust_module_file(&path) {
@@ -172,6 +182,34 @@ fn emit_children(
         }
     }
     Ok(())
+}
+
+/// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or
+/// deleted `.rsx`, an `auto_modules` directory that lost its last hand-written `.rs`, or a dropped i18n catalog.
+/// Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not
+/// followed), so every path it can act on is provably inside the generated tree; it never removes a directory
+/// or a non-`.rs` file. Best-effort: a removal failure just leaves that orphan for next time.
+pub fn prune_stale_generated(output_dir: &Path, written: &HashSet<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(output_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() {
+            continue;
+        }
+        let path = entry.path();
+        if file_type.is_dir() {
+            prune_stale_generated(&path, written);
+        } else if file_type.is_file()
+            && path.extension().and_then(|e| e.to_str()) == Some("rs")
+            && !written.contains(&path)
+        {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 }
 
 /// Writes `content` to `path` only when it differs, to avoid retriggering recompilation on unchanged output.
@@ -331,10 +369,17 @@ mod tests {
 
         let modtree = root.join("__modules");
         std::fs::create_dir_all(&modtree).unwrap();
-        let out = discover_rust_modules(&root, &modtree).unwrap();
+        let (out, written) = discover_rust_modules(&root, &modtree).unwrap();
         let core_rs = std::fs::read_to_string(modtree.join("core.rs")).unwrap_or_default();
         let shared_rs = std::fs::read_to_string(modtree.join("shared.rs")).unwrap_or_default();
         let _ = std::fs::remove_dir_all(&root);
+
+        // Every generated tree file it wrote is reported back, for a caller that prunes stale build output.
+        assert_eq!(
+            written,
+            vec![modtree.join("core.rs"), modtree.join("shared.rs")],
+            "{written:?}"
+        );
 
         // Every module is a file-based `#[path] pub mod` — never an inline `mod dir { … }` block (which breaks rust-analyzer's `#[path]` resolution).
         assert!(!out.contains('{'), "no inline module blocks:\n{out}");
