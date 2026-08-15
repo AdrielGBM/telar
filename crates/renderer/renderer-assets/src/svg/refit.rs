@@ -42,8 +42,11 @@ fn refit_command(
             data: Arc::new(data.refit_xy(sx, sy, dx, dy)),
             style: Arc::new(refit_style(style, sx, sy, dx, dy, tint)),
         },
-        // PushLayer/PopLayer carry no geometry; a baked vector list contains nothing else.
-        other => other.clone(),
+        DrawCommand::PushLayer { .. } | DrawCommand::PopLayer => cmd.clone(),
+        other => {
+            debug_assert!(false, "baked vector contains invalid command: {other:?}");
+            other.clone()
+        }
     }
 }
 

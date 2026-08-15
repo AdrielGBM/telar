@@ -90,7 +90,7 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 opacity.to_bits().hash(h);
                 backdrop_blur.to_bits().hash(h);
             }
-            DrawCommand::PopLayer => 10u8.hash(h),
+            DrawCommand::PopLayer => 11u8.hash(h),
         }
     }
 }
