@@ -18,7 +18,7 @@ pub trait NavPage: LayoutItem {
 }
 
 /// What a page's identity and lifetime are tied to — declared per destination via
-/// [`NavHost::with_policy_for`](crate::NavHost::with_policy_for), because one host commonly serves both kinds:
+/// [`NavHost::set_policy_for`](crate::NavHost::set_policy_for), because one host commonly serves both kinds:
 /// a fixed set of persistent destinations (a rail, a tab bar) plus screens pushed as a stack on top of them.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum PagePolicy {

@@ -12,22 +12,14 @@
 //! stack, which is the native model (`UITabBarController`, a nested `Navigator`, a nested nav graph) and what
 //! lets a tab you leave stay several screens deep until you come back to it.
 
-//!
-//! Routes are whatever type the app chooses — normally a small enum, which is what makes navigation
-//! type-safe and exhaustively matched. [`Routable`] and [`RouteTable`] are an *optional* layer on top for
-//! the places a route must survive as text (a deep link, a restored session); nothing in the runtime needs
-//! them.
-
 mod host;
 mod navigator;
 mod page;
-mod route;
 mod tabs;
 mod transition;
 
 pub use host::NavHost;
 pub use navigator::Navigator;
 pub use page::{NavPage, PagePolicy, SimplePage};
-pub use route::{Routable, RouteTable};
 pub use tabs::{TabHost, TabStacks};
 pub use transition::NavTransition;

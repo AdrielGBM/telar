@@ -314,7 +314,7 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
         self.with_policy_for(move |_| policy)
     }
 
-    /// Chooses the page policy per destination, as [`NavHost::with_policy_for`] does, applied inside every tab.
+    /// Chooses the page policy per destination, as [`NavHost::set_policy_for`](crate::NavHost::set_policy_for) does, applied inside every tab.
     pub fn with_policy_for(mut self, policy: impl Fn(&R) -> PagePolicy + 'static) -> Self {
         self.policy = Rc::new(policy);
         for built in &mut self.tabs {

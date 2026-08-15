@@ -98,12 +98,6 @@ impl<R: Clone + 'static> Navigator<R> {
             .with(|s| s.last().expect("navigator stack is never empty").clone())
     }
 
-    /// Non-subscribing read of the current (top) page, for use inside an event handler.
-    pub fn peek_current(&self) -> R {
-        self.stack
-            .peek_with(|s| s.last().expect("navigator stack is never empty").clone())
-    }
-
     /// Reactive read of the stack depth (`1` at the root).
     pub fn depth(&self) -> usize {
         self.stack.with(|s| s.len())

@@ -162,8 +162,7 @@ pub use ui_core::{
 
 #[cfg(feature = "navigate")]
 pub use navigate_core::{
-    NavHost, NavPage, NavTransition, Navigator, PagePolicy, Routable, RouteTable, SimplePage,
-    TabHost, TabStacks,
+    NavHost, NavPage, NavTransition, Navigator, PagePolicy, SimplePage, TabHost, TabStacks,
 };
 
 #[cfg(feature = "components")]

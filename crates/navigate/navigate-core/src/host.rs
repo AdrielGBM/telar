@@ -62,7 +62,7 @@ struct Entrance<R> {
 /// A container that renders the top of a [`Navigator`]'s stack as a page.
 ///
 /// Pages are built lazily from a factory on first visit; what happens to one afterwards is the destination's
-/// [`PagePolicy`], set with [`with_policy`](Self::with_policy) or [`with_policy_for`](Self::with_policy_for).
+/// [`PagePolicy`], set with [`set_policy_for`](Self::set_policy_for).
 /// A persistent destination is filed under its route and reused forever (a rail item, a tab); a stack
 /// destination is filed under its stack entry, so pushing builds and popping releases, and the same route
 /// pushed twice is two screens. All built pages live in one layout container; only the active one is
@@ -130,27 +130,15 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
         self.transition = transition;
     }
 
-    /// Applies one policy to every destination. Defaults to [`PagePolicy::KeepAlive`].
-    pub fn with_policy(mut self, policy: PagePolicy) -> Self {
-        self.set_policy_for(move |_| policy);
-        self
-    }
-
     /// Chooses the policy per destination, for the common host that serves both a fixed set of persistent
     /// destinations and screens pushed as a stack over them:
     ///
     /// ```ignore
-    /// host.with_policy_for(|route| match route {
+    /// host.set_policy_for(|route| match route {
     ///     Route::Section(_) => PagePolicy::KeepAlive, // a rail item, kept as the reader left it
     ///     Route::Source(_) => PagePolicy::Transient,  // pushed detail: fresh per push, released on pop
     /// })
     /// ```
-    pub fn with_policy_for(mut self, policy: impl Fn(&R) -> PagePolicy + 'static) -> Self {
-        self.set_policy_for(policy);
-        self
-    }
-
-    /// [`with_policy_for`](Self::with_policy_for) for a host that is already owned elsewhere.
     pub fn set_policy_for(&mut self, policy: impl Fn(&R) -> PagePolicy + 'static) {
         self.policy = Box::new(policy);
         self.reseat_current_key();
@@ -575,9 +563,8 @@ mod tests {
                 }) as Box<dyn NavPage>)
             }
         };
-        let mut host = NavHost::new(nav.clone(), factory)
-            .unwrap()
-            .with_policy(PagePolicy::Transient);
+        let mut host = NavHost::new(nav.clone(), factory).unwrap();
+        host.set_policy_for(|_| PagePolicy::Transient);
 
         nav.push(1);
         tick(&mut host);
@@ -624,9 +611,8 @@ mod tests {
                 }) as Box<dyn NavPage>)
             }
         };
-        let mut host = NavHost::new(nav.clone(), factory)
-            .unwrap()
-            .with_policy(PagePolicy::Transient);
+        let mut host = NavHost::new(nav.clone(), factory).unwrap();
+        host.set_policy_for(|_| PagePolicy::Transient);
 
         nav.push(1);
         tick(&mut host);
@@ -657,15 +643,14 @@ mod tests {
             }
         };
         // Even routes are rail destinations, odd routes are pushed details.
-        let mut host = NavHost::new(nav.clone(), factory)
-            .unwrap()
-            .with_policy_for(|route: &u8| {
-                if route % 2 == 0 {
-                    PagePolicy::KeepAlive
-                } else {
-                    PagePolicy::Transient
-                }
-            });
+        let mut host = NavHost::new(nav.clone(), factory).unwrap();
+        host.set_policy_for(|route: &u8| {
+            if route % 2 == 0 {
+                PagePolicy::KeepAlive
+            } else {
+                PagePolicy::Transient
+            }
+        });
 
         nav.push(1);
         tick(&mut host);
@@ -716,9 +701,8 @@ mod tests {
                 }) as Box<dyn NavPage>)
             }
         };
-        let mut host = NavHost::new(nav.clone(), factory)
-            .unwrap()
-            .with_policy(PagePolicy::Transient);
+        let mut host = NavHost::new(nav.clone(), factory).unwrap();
+        host.set_policy_for(|_| PagePolicy::Transient);
 
         nav.push(1);
         tick(&mut host);
@@ -765,9 +749,8 @@ mod tests {
                 Ok(Box::new(EffectPage { node, _held: held }) as Box<dyn NavPage>)
             }
         };
-        let mut host = NavHost::new(nav.clone(), factory)
-            .unwrap()
-            .with_policy(PagePolicy::Transient);
+        let mut host = NavHost::new(nav.clone(), factory).unwrap();
+        host.set_policy_for(|_| PagePolicy::Transient);
 
         nav.push(1);
         tick(&mut host);
