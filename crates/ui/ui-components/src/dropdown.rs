@@ -27,6 +27,17 @@ pub(crate) fn panel_pad() -> f32 {
     shared::spacing() * 0.5
 }
 
+/// What the trigger says, which is the one place a `menu` and a `select` genuinely differ. A menu commits
+/// actions, so its trigger is a name the caller fixes; a select holds a choice, so its trigger *is* that
+/// choice — and has to say it before the panel has ever been opened.
+pub(crate) enum TriggerLabel {
+    Fixed(Box<dyn Fn() -> String>),
+    /// Whatever the chosen row says it is, falling back to `placeholder` for an index naming no row.
+    Selected {
+        placeholder: &'static str,
+    },
+}
+
 /// The trigger + anchored-panel scaffold shared by `menu` and `select`: a bordered trigger button opens a
 /// blocking overlay whose transparent backdrop dismisses on click-away, and whose anchored panel lists `rows`;
 /// picking a row optionally writes into `selected`, fires `on_pick`, and closes.
@@ -39,10 +50,11 @@ pub(crate) fn panel_pad() -> f32 {
 /// opens at whatever width the trigger was laid out to. That is what a form row wants — a control 180px wide
 /// beside fields that span the row reads as a mistake — and it is the caller's choice because a dropdown
 /// standing on its own has no row to take a width from.
+///
 /// Everything the scaffold is told, as one value. It outgrew what a positional argument list can be read at
 /// a call site — and the two shape flags are the *caller's* to make rather than the component's.
 pub(crate) struct Dropdown {
-    pub label: Box<dyn Fn() -> String>,
+    pub label: TriggerLabel,
     /// The panel's rows, as the recipe for making them rather than the rows themselves — see
     /// [`Children`](ui_core::Children). Two things need it that way: the rows are remade on every open, and
     /// each one has to be built inside the [`ListContext`](crate::list::ListContext) this scaffold provides.
@@ -102,6 +114,22 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         color.clone(),
     );
 
+    let trigger_label: Box<dyn Fn() -> String> = match trigger_label {
+        TriggerLabel::Fixed(fixed) => fixed,
+        TriggerLabel::Selected { placeholder } => {
+            // Ask the rows what they say without asking them to be rows — the panel has not been opened, so
+            // there are none, and this trigger has to name the choice from the first frame.
+            list.declare(&rows)?;
+            let list = list.clone();
+            let selected = selected.clone();
+            Box::new(move || {
+                selected
+                    .as_ref()
+                    .and_then(|s| list.label_of(s.get()))
+                    .unwrap_or_else(|| placeholder.to_string())
+            })
+        }
+    };
     // Trigger: a bordered button with the label; a tap toggles `open`.
     // `auto` (measured) so the label has width in this row; `single_line` only sets height → width 0 → invisible.
     // `no_wrap`: a trigger's label is the *name* of a control, and splitting `File` across two lines to make

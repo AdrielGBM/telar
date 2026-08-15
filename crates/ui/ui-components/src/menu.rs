@@ -55,7 +55,7 @@ impl Default for MenuProps {
 // back and no row is highlighted. The reactive `label` closure is handed straight to the dropdown trigger.
 pub fn menu(props: MenuProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     dropdown::dropdown(dropdown::Dropdown {
-        label: props.label,
+        label: dropdown::TriggerLabel::Fixed(props.label),
         rows: children,
         color: props.color,
         on_pick: props.on_select,

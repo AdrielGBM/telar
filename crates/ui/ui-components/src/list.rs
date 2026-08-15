@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
 use renderer_core::{RectStyle, ShapeStyle, TextStyle};
-use ui_core::{LayoutItem, Slots, StyledContainer, Text, box_item, use_context};
+use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item, use_context};
 
 use crate::shared;
 
@@ -42,6 +42,9 @@ struct ListState {
     /// key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
     seed: Cell<bool>,
     search: RefCell<Search>,
+    /// Set while the list is being walked for what its rows *say* rather than for the rows. See
+    /// [`ListContext::declare`].
+    declaring: Cell<bool>,
 }
 
 struct Row {
@@ -80,7 +83,40 @@ impl ListContext {
             rows: RefCell::new(Vec::new()),
             seed: Cell::new(false),
             search: RefCell::new(Search::default()),
+            declaring: Cell::new(false),
         }))
+    }
+
+    /// Walks `rows` for their metadata alone: every piece registers what it is and hands back a bare node
+    /// instead of building itself.
+    ///
+    /// This exists for one thing a bound list needs and a menu does not. A `select`'s trigger has to name the
+    /// current choice *before the panel has ever been opened*, and the rows only exist once it has — so the
+    /// labels could not be where that name came from, and the component kept a flat `options` prop instead.
+    /// Asking the rows what they say, without asking them to be rows, is what removes that.
+    pub(crate) fn declare(&self, rows: &ui_core::Children) -> Result<(), LayoutError> {
+        self.begin();
+        self.0.declaring.set(true);
+        let declared = rows.build_with(self.clone());
+        self.0.declaring.set(false);
+        // Nothing frees a layout node on drop, and `remove` does not reach descendants — which is exactly why
+        // the pieces hand back a childless node rather than a built row.
+        for item in declared?.take_default() {
+            ui_core::remove_node(item.layout_node());
+        }
+        Ok(())
+    }
+
+    fn is_declaring(&self) -> bool {
+        self.0.declaring.get()
+    }
+
+    /// What the row at `index` says right now, for a trigger that names the chosen one.
+    pub(crate) fn label_of(&self, index: u32) -> Option<String> {
+        // Cloned out of the borrow before it is called: a label may read a signal, and reading one can flush
+        // effects that come back through the registry.
+        let label = self.0.rows.borrow().get(index as usize)?.label.clone();
+        Some(label())
     }
 
     /// Puts the cursor on the first row that can take it, as soon as such a row exists. See [`ListState::seed`].
@@ -274,6 +310,9 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
         let disabled = disabled.clone();
         ctx.claim(Rc::new(move || !disabled()), label.clone())
     });
+    if let Some(bare) = declared_placeholder(&list) {
+        return bare;
+    }
 
     let mut content: Vec<Box<dyn LayoutItem>> = Vec::new();
     if let Some(checked) = checked {
@@ -345,8 +384,12 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
 /// A rule between groups of rows. Registered like a row so it takes a position in the list, and unreachable
 /// so the keyboard passes straight over it.
 pub fn separator() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    if let Some(ctx) = use_context::<ListContext>() {
+    let list = use_context::<ListContext>();
+    if let Some(ctx) = &list {
         ctx.claim_unreachable();
+    }
+    if let Some(bare) = declared_placeholder(&list) {
+        return bare;
     }
     let rule = StyledContainer::new(
         LayoutStyle::new()
@@ -372,8 +415,12 @@ impl Default for GroupProps {
 }
 
 pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    if let Some(ctx) = use_context::<ListContext>() {
+    let list = use_context::<ListContext>();
+    if let Some(ctx) = &list {
         ctx.claim_unreachable();
+    }
+    if let Some(bare) = declared_placeholder(&list) {
+        return bare;
     }
     let text = Text::auto(props.label, LayoutStyle::new(), || {
         TextStyle::new(shared::font_size() * 0.85, shared::ink().with_alpha(0.65))
@@ -388,6 +435,16 @@ pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         vec![box_item(text)],
     )?;
     Ok(box_item(heading))
+}
+
+/// What a piece returns during [`ListContext::declare`]: a childless node and nothing else — no text shaped,
+/// no styles resolved, no focus or hit region registered. `None` when this is a real build.
+fn declared_placeholder(
+    list: &Option<ListContext>,
+) -> Option<Result<Box<dyn LayoutItem>, LayoutError>> {
+    list.as_ref()
+        .is_some_and(ListContext::is_declaring)
+        .then(|| Ok(box_item(Container::new(LayoutStyle::new(), vec![])?)))
 }
 
 fn row_layout() -> LayoutStyle {

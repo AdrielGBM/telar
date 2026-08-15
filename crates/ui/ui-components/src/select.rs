@@ -1,7 +1,9 @@
 use layout_core::LayoutError;
 use reactive_core::{RwSignal, signal};
 use renderer_core::Color;
-use ui_core::{Children, LayoutItem, Slots};
+#[cfg(test)]
+use ui_core::Slots;
+use ui_core::{Children, LayoutItem};
 
 use crate::dropdown;
 // Re-exported for the test module below, which reads these via `use super::*` to compute click points.
@@ -11,15 +13,18 @@ use crate::dropdown::{PANEL_WIDTH, ROW_HEIGHT, TRIGGER_HEIGHT, panel_pad};
 use ui_core::track_layout;
 
 /// A dropdown bound to a signal: a trigger button showing the currently-selected option, and a click-opened
-/// anchored panel listing the options. Picking one writes its index into `selected`, fires `on_select`, and
+/// anchored panel listing the choices. Picking one writes its index into `selected`, fires `on_select`, and
 /// closes. High-level sugar built on the overlay anchor + click-through primitives; lives in `ui-components`,
 /// not the kernel, so an app can drop it or ship its own.
+///
+/// Its choices are written as `item` children, the same pieces a `menu` is made of, so one can be disabled or
+/// carry an icon — which a list of strings could never say. What made that impossible for a select and not for
+/// a menu was the trigger: it has to name the current choice before the panel has ever been opened, and the
+/// rows only exist once it has. See [`ListContext::declare`](crate::list::ListContext).
 pub struct SelectProps {
     /// The bound selection index. `None` (the default) makes the select uncontrolled — it owns an internal
     /// signal so it still tracks a choice, just not one the caller can read.
     pub selected: Option<RwSignal<u32>>,
-    /// The option labels; the trigger shows `options[selected]` and the panel lists them in order.
-    pub options: Vec<&'static str>,
     /// Accent colour (trigger border, selected/hover highlight). `Color::TRANSPARENT` (the default) means
     /// "unset" and falls back to the theme accent. A closure so a theme token re-reads on every render.
     pub color: Box<dyn Fn() -> Color>,
@@ -34,7 +39,6 @@ impl Default for SelectProps {
     fn default() -> Self {
         Self {
             selected: None,
-            options: Vec::new(),
             color: Box::new(|| Color::TRANSPARENT),
             on_select: None,
             fill: false,
@@ -42,49 +46,16 @@ impl Default for SelectProps {
     }
 }
 
-pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn select(props: SelectProps, rows: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // `None` selection is uncontrolled: own an internal signal so the trigger still tracks a choice.
     let selected = props.selected.unwrap_or_else(|| signal(0u32));
-    let options = props.options;
-    // The trigger's label reactively tracks the selected option (a menu's is static); `Some(selected)` tells
-    // the dropdown to write the picked index back and highlight the selected row.
-    let trigger_label = {
-        let selected = selected.clone();
-        let options = options.clone();
-        move || {
-            options
-                .get(selected.get() as usize)
-                .copied()
-                .unwrap_or("Select")
-                .to_string()
-        }
-    };
-    // A select's rows are its `options`, turned into the same `item` pieces a menu is written with. It keeps
-    // the flat prop because its *trigger* has to name the current choice before the panel has ever been
-    // opened — and the rows only exist once it has, so their labels cannot be where that name comes from.
-    let rows = {
-        let options = options.clone();
-        Children::new(move || {
-            let mut slots = Slots::new();
-            for label in &options {
-                let label = *label;
-                slots.push(
-                    None,
-                    crate::list::item(
-                        crate::list::ItemProps {
-                            label: Box::new(move || label.to_string()),
-                            ..Default::default()
-                        },
-                        Slots::new(),
-                    )?,
-                );
-            }
-            Ok(slots)
-        })
-    };
     dropdown::dropdown(dropdown::Dropdown {
         style: None,
-        label: Box::new(trigger_label),
+        // `Some(selected)` below also tells the dropdown to write the picked index back and highlight the
+        // chosen row, which is the rest of what makes this a bound list rather than a menu.
+        label: dropdown::TriggerLabel::Selected {
+            placeholder: "Select",
+        },
         rows,
         color: props.color,
         on_pick: props.on_select,
@@ -108,6 +79,26 @@ mod tests {
     };
 
     use super::*;
+
+    /// Three choices as `item` rows, which is how a select is written now.
+    fn sizes() -> Children {
+        Children::new(|| {
+            let mut slots = Slots::new();
+            for label in ["Small", "Medium", "Large"] {
+                slots.push(
+                    None,
+                    crate::list::item(
+                        crate::list::ItemProps {
+                            label: Box::new(move || label.to_string()),
+                            ..Default::default()
+                        },
+                        Slots::new(),
+                    )?,
+                );
+            }
+            Ok(slots)
+        })
+    }
 
     fn press(x: f64, y: f64) -> Event {
         Event::PointerPressed {
@@ -139,11 +130,13 @@ mod tests {
     fn builds_and_lays_out() {
         reset_layout_runtime();
         let picked = signal(1u32);
-        let item = select(SelectProps {
-            selected: Some(picked.clone()),
-            options: vec!["Small", "Medium", "Large"],
-            ..Default::default()
-        })
+        let item = select(
+            SelectProps {
+                selected: Some(picked.clone()),
+                ..Default::default()
+            },
+            sizes(),
+        )
         .unwrap();
         let root_node = item.layout_node();
         let root_rect = track_layout(root_node).unwrap();
@@ -173,12 +166,14 @@ mod tests {
         let picked = signal(0u32);
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
-        let item = select(SelectProps {
-            selected: Some(picked.clone()),
-            options: vec!["Small", "Medium", "Large"],
-            on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-            ..Default::default()
-        })
+        let item = select(
+            SelectProps {
+                selected: Some(picked.clone()),
+                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+                ..Default::default()
+            },
+            sizes(),
+        )
         .unwrap();
         // The widget's own root is the parent-less layout host, laid out at the origin: the trigger sits at
         // (0,0) and the panel anchors directly below it, so click points are computable from the constants.
@@ -218,5 +213,106 @@ mod tests {
             EventResult::Ignored,
             "the panel closes after a selection"
         );
+    }
+
+    /// The constraint that kept a select on a flat `options` prop, met head on: the trigger says the chosen
+    /// row's own label *before the panel has ever been opened*, which is the only moment where there are no
+    /// rows to read it from. The declaring walk is what supplies it.
+    #[test]
+    fn the_trigger_names_the_chosen_row_before_the_panel_has_ever_opened() {
+        reset_layout_runtime();
+        let picked = signal(1u32);
+        let item = select(
+            SelectProps {
+                selected: Some(picked.clone()),
+                ..Default::default()
+            },
+            sizes(),
+        )
+        .unwrap();
+        compute_layout(
+            item.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let tree = ComponentList::new(item);
+
+        assert!(
+            drawn_text(&tree).iter().any(|t| t == "Medium"),
+            "the trigger reads the label off row 1 without the panel existing: {:?}",
+            drawn_text(&tree)
+        );
+    }
+
+    /// And what the flat prop could never say. A row is an ordinary component with ordinary props, so one of
+    /// them can be disabled — and a disabled row is not a place the keyboard stops or a tap commits.
+    #[test]
+    fn a_choice_can_be_disabled_which_a_list_of_strings_could_not_say() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        reset_layout_runtime();
+        let picked = signal(0u32);
+        let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let rows = Children::new(|| {
+            let mut slots = Slots::new();
+            for (label, disabled) in [("Small", false), ("Medium", true), ("Large", false)] {
+                slots.push(
+                    None,
+                    crate::list::item(
+                        crate::list::ItemProps {
+                            label: Box::new(move || label.to_string()),
+                            disabled: Box::new(move || disabled),
+                            ..Default::default()
+                        },
+                        Slots::new(),
+                    )?,
+                );
+            }
+            Ok(slots)
+        });
+        let item = select(
+            SelectProps {
+                selected: Some(picked.clone()),
+                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
+                ..Default::default()
+            },
+            rows,
+        )
+        .unwrap();
+        compute_layout(
+            item.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(item);
+        let _ = tree.commands();
+
+        let tx = (PANEL_WIDTH / 2.0) as f64;
+        route(&mut tree, &press(tx, (TRIGGER_HEIGHT / 2.0) as f64));
+        route(&mut tree, &release(tx, (TRIGGER_HEIGHT / 2.0) as f64));
+        relayout_if_dirty();
+
+        // The middle row, which is the disabled one.
+        let oy = (TRIGGER_HEIGHT + panel_pad() + ROW_HEIGHT + ROW_HEIGHT / 2.0) as f64;
+        route(&mut tree, &press(tx, oy));
+        route(&mut tree, &release(tx, oy));
+
+        assert_eq!(seen.get(), None, "a disabled choice commits nothing");
+        assert_eq!(picked.get(), 0, "and leaves the bound signal alone");
+    }
+
+    /// Every string the tree draws, for asserting on what a trigger says.
+    fn drawn_text(tree: &ComponentList) -> Vec<String> {
+        tree.commands()
+            .iter()
+            .filter_map(|c| match c {
+                renderer_core::DrawCommand::Text { text, .. } => Some(text.to_string()),
+                _ => None,
+            })
+            .collect()
     }
 }

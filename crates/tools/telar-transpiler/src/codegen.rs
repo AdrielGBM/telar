@@ -188,11 +188,12 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
             .with_text(&["placeholder", "label"]),
         ),
         // Overlay-backed (built on the `overlay` portal + anchor).
+        // Compound like `menu`, and for the same reason: its choices are `item` rows written as children. Its
+        // trigger names the chosen one through the declaring walk, not through a flat list of strings.
         (
             "select",
-            s(
-                &["selected", "options", "color", "on_select", "fill"],
-                false,
+            compound(
+                &["selected", "color", "on_select", "fill"],
                 &["color"],
                 &["selected", "on_select"],
             ),

@@ -196,17 +196,34 @@ fn modal_renders_over_a_page() {
 #[test]
 fn select_open_renders() {
     use platform_core::{Event, PointerButton, PointerSource};
-    use ui_components::{SelectProps, select};
-    use ui_core::{EventResult, dispatch_overlays, track_layout};
+    use ui_components::{ItemProps, SelectProps, item, select};
+    use ui_core::{Children, EventResult, Slots, dispatch_overlays, track_layout};
 
     let (w, h) = (300u32, 240u32);
     reset_layout_runtime();
     let picked = signal(1u32);
-    let sel = select(SelectProps {
-        selected: Some(picked.clone()),
-        options: vec!["Small", "Medium", "Large"],
-        ..Default::default()
-    })
+    let sel = select(
+        SelectProps {
+            selected: Some(picked.clone()),
+            ..Default::default()
+        },
+        Children::new(|| {
+            let mut slots = Slots::new();
+            for label in ["Small", "Medium", "Large"] {
+                slots.push(
+                    None,
+                    item(
+                        ItemProps {
+                            label: Box::new(move || label.to_string()),
+                            ..Default::default()
+                        },
+                        Slots::new(),
+                    )?,
+                );
+            }
+            Ok(slots)
+        }),
+    )
     .unwrap();
     let trigger_node = sel.layout_node();
     let trigger_rect = track_layout(trigger_node).unwrap();

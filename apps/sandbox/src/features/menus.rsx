@@ -11,9 +11,12 @@ col gap:20
     doc_header kicker:"INTERACTION" title:"Menus & Selects" desc:"select and menu are components (from the components feature, not base tags) built on the overlay anchor: a trigger button opens a panel positioned next to it, and only that panel blocks clicks — taps elsewhere fall through and dismiss it."
     example title:"select — a dropdown bound to a signal"
         card gap:10
-            select selected:$picked options:vec!["Small","Medium","Large"]
+            select selected:$picked
+                item label:"Small"
+                item label:"Medium"
+                item label:"Large"
             text "Size · {$picked}" size:14 color:muted
-        code_line code:"select selected:$picked options:vec!['Small','Medium','Large']"
+        code_line code:"select selected:$picked / item label:'Small' / item label:'Medium'"
     example title:"menu — a click-triggered list of one-shot actions"
         card gap:10
             menu label:"Actions" on_select(|i| $action.set(i))
