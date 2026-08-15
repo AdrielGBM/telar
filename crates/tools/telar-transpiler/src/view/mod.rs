@@ -976,6 +976,19 @@ mod tests {
         );
     }
 
+    // A forwarded (non-closure) `on_press` wires `.maybe_on_press`, which only StyledContainer has, so an unpainted `row` forwarding it must upgrade.
+    #[test]
+    fn a_forwarded_on_press_on_a_plain_row_upgrades_to_styled_container() {
+        let src = "[logic]\npub struct Props {\n    pub on_press: Box<dyn Fn()>,\n}\n\n[view]\nrow on_press(props.on_press)\n    text \"x\"\n";
+        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("StyledContainer::new(") && code.contains(".maybe_on_press("),
+            "a forwarded on_press must upgrade a plain row to StyledContainer:\n{code}"
+        );
+    }
+
     // `lazy` stacks its children like `col`. It used to get that from `set_display(true)` forcing `Display::Flex`; once that call started restoring the declared display, the tag had to declare it.
     #[test]
     fn lazy_declares_a_flex_column() {

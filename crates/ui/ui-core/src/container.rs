@@ -91,7 +91,13 @@ impl Container {
     /// a child widget that handles the press wins, and a scroll gesture started on it does not fire it.
     pub fn on_press(mut self, f: impl Fn() + 'static) -> Self {
         self.press.set(f);
+        self.mark_interactive();
         self
+    }
+
+    /// Registers this node in the interactive registry a click-through surface reads to carve its input region — see `StyledContainer::mark_interactive`.
+    fn mark_interactive(&self) {
+        crate::input_region::register_interactive(self.node, self.rect.read_only());
     }
 
     pub fn column(children: Vec<Box<dyn LayoutItem>>) -> Result<Self, LayoutError> {
@@ -156,6 +162,12 @@ impl Component for Container {
 
     fn debug_name(&self) -> &'static str {
         "Container"
+    }
+}
+
+impl Drop for Container {
+    fn drop(&mut self) {
+        crate::input_region::unregister_interactive(self.node);
     }
 }
 
@@ -322,6 +334,42 @@ mod tests {
         }
 
         assert_eq!(s.get(), 1, "click should have incremented the signal");
+    }
+
+    // A pressable plain Container must publish its rect to the same interactive registry StyledContainer uses, or a click-through surface never carves an input region for it.
+    #[test]
+    fn pressable_container_publishes_rect_to_interactive_registry_and_withdraws_on_drop() {
+        use crate::interactive_rects;
+
+        reset_layout_runtime();
+        let baseline = interactive_rects().len();
+        let container = Container::new(LayoutStyle::new().width(120.0).height(40.0), vec![])
+            .unwrap()
+            .on_press(|| {});
+        let node = container.layout_node();
+        assert_eq!(
+            interactive_rects().len(),
+            baseline,
+            "an unlaid-out pressable contributes no rect"
+        );
+        compute_layout(
+            node,
+            AvailableSpace::Definite(120.0),
+            AvailableSpace::Definite(40.0),
+        )
+        .unwrap();
+        let rects = interactive_rects();
+        assert_eq!(rects.len(), baseline + 1);
+        assert!(
+            rects.iter().any(|r| r.width == 120.0 && r.height == 40.0),
+            "a laid-out pressable reports its rect"
+        );
+        drop(container);
+        assert_eq!(
+            interactive_rects().len(),
+            baseline,
+            "dropping the pressable withdraws its rect"
+        );
     }
 
     #[test]

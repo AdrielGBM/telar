@@ -562,7 +562,13 @@ impl StyledContainer {
     /// Make the box focusable and fire `f(true)`/`f(false)` when it gains/loses keyboard focus. It joins
     /// the tab order (Tab/Shift-Tab reach it) and takes focus on tap. Use it to drive a focus ring or to
     /// build a custom focusable widget on top of a `box`.
-    pub fn on_focus(mut self, f: impl Fn(bool) + 'static) -> Self {
+    pub fn on_focus(self, f: impl Fn(bool) + 'static) -> Self {
+        self.maybe_on_focus(Some(f))
+    }
+
+    /// [`on_focus`](Self::on_focus) for a handler the caller may not have supplied.
+    pub fn maybe_on_focus(mut self, f: Option<impl Fn(bool) + 'static>) -> Self {
+        let Some(f) = f else { return self };
         let id = *self.focus_id.get_or_insert_with(focus::next_id);
         focus::register_at(id, focus::FocusKind::Widget, self.node);
         // An effect fires the callback only on an actual transition (its first run seeds `last`, no fire).
@@ -2636,6 +2642,49 @@ mod tests {
             vec![true, false],
             "on_focus fires true on gain then false on loss"
         );
+    }
+
+    // What a wrapper forwarding an optional `on_focus` needs: `None` must not join the tab order.
+    #[test]
+    fn maybe_on_focus_of_none_does_not_join_the_tab_order() {
+        reset_layout_runtime();
+        focus::clear();
+        let card = StyledContainer::new(
+            LayoutStyle::new().width(80.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .maybe_on_focus(None::<fn(bool)>);
+        assert!(card.focus_id.is_none(), "no handler, no focus id");
+
+        focus::focus_next();
+        assert!(focus::exposed().is_empty(), "and it is not a tab stop");
+    }
+
+    #[test]
+    fn maybe_on_focus_of_some_fires_like_on_focus() {
+        use std::cell::RefCell;
+        let seen: Rc<RefCell<Vec<bool>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink = seen.clone();
+        reset_layout_runtime();
+        let mut card = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(100.0).height(100.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .maybe_on_focus(Some(move |f| sink.borrow_mut().push(f)));
+        compute_layout(
+            card.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        card.on_event(&press(50.0, 50.0, PointerSource::Mouse));
+        crate::focus::clear();
+        assert_eq!(*seen.borrow(), vec![true, false]);
     }
 
     // A pressable box publishes its laid-out rect to the interactive registry (so a carved-input-region surface

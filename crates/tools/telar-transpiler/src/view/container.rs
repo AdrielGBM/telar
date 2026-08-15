@@ -82,6 +82,12 @@ impl ViewGen<'_> {
             .map(|_| ".click_through(true)".to_string())
             .unwrap_or_default();
         let on_press = self.on_press_call(el);
+        // A forwarded (non-closure) `on_press` wires `.maybe_on_press`, which only StyledContainer has.
+        let on_press_forwarded = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "on_press")
+            .is_some_and(|a| !is_closure_value(&a.value));
 
         let pattrs = self.paint_attrs(el);
         let hover_call = self.hover_style_call(el, &pattrs);
@@ -102,15 +108,16 @@ impl ViewGen<'_> {
         let mut hoists: Vec<String> = Vec::new();
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
 
-        // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded because it wires on a plain Container too. `box` (`always_style`) skips the check.
+        // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded here because its closure form wires on a plain Container too — `on_press_forwarded` above covers the other case. `box` (`always_style`) skips the check.
         let styling = format!(
             "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{drag_threshold}{click_through}"
         );
-        let pieces = if always_style || has_paint(&pattrs) || !styling.is_empty() {
-            Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
-        } else {
-            None
-        };
+        let pieces =
+            if always_style || has_paint(&pattrs) || !styling.is_empty() || on_press_forwarded {
+                Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
+            } else {
+                None
+            };
 
         let mode = Self::child_mode(&el.children);
 
