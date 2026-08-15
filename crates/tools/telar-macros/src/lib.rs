@@ -465,10 +465,13 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             }
         }
 
-        // Persist the per-line source map next to the build file so the editor extension can map
-        // rust-analyzer's diagnostics on the generated Rust back onto the original `.rsx` lines.
+        // Persist the source map next to the build file so the editor extension and `cargo telar check` can
+        // map rust-analyzer's and rustc's diagnostics on the generated Rust back onto the `.rsx` the author
+        // wrote — the lines, and the verbatim expression spans that make a column mean something.
         let map_path = out_path.with_extension("rs.map");
-        let map_json = telar_transpiler::source_map_to_json(&result.source_map);
+        let map_json =
+            telar_transpiler::SourceMap::new(result.source_map.clone(), result.expr_spans.clone())
+                .to_json();
         let map_stale = std::fs::read_to_string(&map_path)
             .map(|existing| existing != map_json)
             .unwrap_or(true);

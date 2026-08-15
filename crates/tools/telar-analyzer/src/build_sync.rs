@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use telar_transpiler::ExprSpan;
+use telar_transpiler::SourceMap;
 use telar_workspace::find_ancestor_dir;
 
 /// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`. Anchored on `Cargo.toml` (not `telar.toml`) so this works in crates without an rsx config too.
@@ -24,10 +24,9 @@ pub struct GeneratedTarget {
     pub path: PathBuf,
     /// Generated Rust code.
     pub code: String,
-    /// Line-based source map (`generated line → Some(.rsx line)`).
-    pub map: Vec<Option<u32>>,
-    /// Byte spans of verbatim `[view]` Rust expressions (empty for the `[logic]`/diagnostics paths).
-    pub expr_spans: Vec<ExprSpan>,
+    /// Where every part of [`Self::code`] came from — the lines, and the verbatim spans that make a column
+    /// mean something. One value rather than two halves, because the two are only ever right together.
+    pub map: SourceMap,
 }
 
 /// Transpiles `source` into a [`GeneratedTarget`] without touching disk. Shared by [`sync_build_file`] and the embedded-analyzer completion path so both see byte-identical generated text.
@@ -57,24 +56,18 @@ pub fn generated_target(
     Some(GeneratedTarget {
         path: out_path,
         code: result.rust_code,
-        map: result.source_map,
-        expr_spans: result.expr_spans,
+        map: SourceMap::new(result.source_map, result.expr_spans),
     })
 }
 
 /// Transpiles `source` and writes `<crate>/.telar/build/<rel>.rs` + `.rs.map`, mirroring the macro's output so rust-analyzer sees the live buffer. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/` or transpilation fails — the last good build stays, so IntelliSense keeps working against the last parseable state.
 pub fn sync_build_file(rsx_path: &Path, source: &str, theme_type: Option<&str>) {
-    let Some(GeneratedTarget {
-        path, code, map, ..
-    }) = generated_target(rsx_path, source, theme_type)
+    let Some(GeneratedTarget { path, code, map }) = generated_target(rsx_path, source, theme_type)
     else {
         return;
     };
     write_if_changed(&path, &code);
-    write_if_changed(
-        &path.with_extension("rs.map"),
-        &telar_transpiler::source_map_to_json(&map),
-    );
+    write_if_changed(&path.with_extension("rs.map"), &map.to_json());
 }
 
 /// Scans every `.rsx` under `src_dir` for its component signature, mirroring the macro's pre-pass so the
@@ -127,12 +120,11 @@ pub fn is_generated_build_file(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()) == Some("rs") && split_at_build_dir(path).is_some()
 }
 
-/// Inverse of [`generated_target`]'s path mapping: a generated `<crate>/.telar/build/<rel>.rs` → its source `<crate>/src/<rel>.rsx` plus the line-based source map read from the sibling `.rs.map` (`generated line → Some(.rsx line)`). `None` for paths outside a build dir or without a readable map.
-pub fn rsx_source_and_map(build_path: &Path) -> Option<(PathBuf, Vec<Option<u32>>)> {
+/// Inverse of [`generated_target`]'s path mapping: a generated `<crate>/.telar/build/<rel>.rs` → its source `<crate>/src/<rel>.rsx` plus the source map read from the sibling `.rs.map`. `None` for paths outside a build dir or without a readable map.
+pub fn rsx_source_and_map(build_path: &Path) -> Option<(PathBuf, SourceMap)> {
     let source = rsx_source_for(build_path)?;
     let map_json = std::fs::read_to_string(build_path.with_extension("rs.map")).ok()?;
-    let map = serde_json::from_str(&map_json).ok()?;
-    Some((source, map))
+    Some((source, SourceMap::from_json(&map_json)?))
 }
 
 /// `<crate>/.telar/build/<rel>.rs` → `<crate>/src/<rel>.rsx` (the macro's output mirroring, reversed).

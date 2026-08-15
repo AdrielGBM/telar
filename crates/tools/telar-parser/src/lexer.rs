@@ -53,6 +53,23 @@ pub fn header_section(trimmed: &str) -> Option<Section> {
     }
 }
 
+/// The [`Section`] a 0-based line of `source` belongs to. For tooling that has a line number and needs to
+/// know what kind of source is on it — which is a different question from lexing, since the caller is holding
+/// a coordinate rather than the text.
+pub fn find_section_at(source: &str, line: u32) -> Section {
+    let target = line as usize;
+    let mut current = Section::Unknown;
+    for (i, line) in source.lines().enumerate() {
+        if let Some(section) = header_section(line.trim()) {
+            current = section;
+        }
+        if i == target {
+            return current;
+        }
+    }
+    current
+}
+
 /// Splits `source` into classified lines, switching sections on `[logic]` / `[style]` / `[view]` headers.
 pub fn lex(source: &str) -> Vec<Line> {
     let mut lines = Vec::new();

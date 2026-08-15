@@ -660,7 +660,7 @@ impl Backend {
 
         let mut out = Vec::new();
         for raw in raws {
-            let Some(Some(rsx_line)) = target.map.get(raw.line as usize) else {
+            let Some(Some(rsx_line)) = target.map.lines.get(raw.line as usize) else {
                 continue;
             };
             let rsx_line = *rsx_line;

@@ -12,10 +12,16 @@
 //! Shared by `cargo telar check` and the `cargo telar dev` rebuild loop, which is the point: the mapping was
 //! built, tested and then wired only into the command almost nobody runs, while the loop everybody lives in
 //! printed raw paths into `.telar/`.
+//!
+//! The columns come from the same [`SourceMap::locate`] the editor uses, so the terminal and the editor
+//! cannot reach two conclusions about one error. Where it says a column cannot be trusted — a `[view]` line
+//! the transpiler rewrote into something else — the frame underlines nothing rather than the wrong thing.
 
 use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::{Component, Path, PathBuf};
+
+use telar_transpiler::{RsxSpan, SourceMap};
 
 /// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that
 /// says what to do about it.
@@ -29,6 +35,9 @@ pub(crate) struct Projected {
     source: PathBuf,
     /// 1-based, for display.
     line: usize,
+    /// Character offsets within [`Self::line`] to underline, or `None` when the transpiler rewrote this line
+    /// and its columns mean nothing. Characters and not bytes because this is for drawing.
+    underline: Option<(usize, usize)>,
     level: String,
     message: String,
     notes: Vec<Note>,
@@ -106,7 +115,14 @@ impl Projected {
                 paint("1;34", &number),
                 text.trim_end()
             ));
-            out.push_str(&format!("{gutter} {bar}\n"));
+            match self.underline {
+                Some((start, end)) => out.push_str(&format!(
+                    "{gutter} {bar} {}{}\n",
+                    " ".repeat(start),
+                    paint(level_color, &"^".repeat(end.saturating_sub(start).max(1)))
+                )),
+                None => out.push_str(&format!("{gutter} {bar}\n")),
+            }
         }
         for note in &self.notes {
             // rustc packs whole tables into one `help` (every impl of a trait, say), and without the indent the continuation reads as further diagnostics.
@@ -127,7 +143,7 @@ impl Projected {
 
 /// Reads cargo's `--message-format=json` stream, mapping every diagnostic it can onto its `.rsx`.
 pub(crate) fn collect(reader: impl BufRead) -> Report {
-    let mut maps: HashMap<PathBuf, Option<Vec<Option<usize>>>> = HashMap::new();
+    let mut origins: HashMap<PathBuf, Option<Origin>> = HashMap::new();
     let mut report = Report::default();
 
     for line in reader.lines().map_while(Result::ok) {
@@ -163,20 +179,19 @@ pub(crate) fn collect(reader: impl BufRead) -> Report {
             else {
                 continue;
             };
-            let Some(source) = generated_to_source(&generated) else {
+            let origin = origins
+                .entry(generated.clone())
+                .or_insert_with(|| Origin::read(&generated));
+            let Some(origin) = origin.as_ref() else {
                 continue;
             };
-            let map = maps
-                .entry(generated.clone())
-                .or_insert_with(|| read_line_map(&generated));
-            let Some(map) = map.as_ref() else { continue };
-            // rustc counts from 1, the map from 0.
-            let Some(Some(rsx_line)) = map.get(line_start as usize - 1) else {
+            let Some((line, underline)) = origin.locate(span, line_start as u32) else {
                 continue;
             };
             report.projected.push(Projected {
-                source,
-                line: rsx_line + 1,
+                source: origin.rsx_path.clone(),
+                line,
+                underline,
                 level: level.to_string(),
                 message: text.clone(),
                 notes: notes_of(message),
@@ -273,12 +288,84 @@ fn generated_to_source(generated: &Path) -> Option<PathBuf> {
     Some(source.with_extension("rsx"))
 }
 
-/// The sibling `.rs.map`: generated line (0-based index) to `.rsx` line (0-based value).
-fn read_line_map(generated: &Path) -> Option<Vec<Option<usize>>> {
-    let mut path = generated.as_os_str().to_os_string();
-    path.push(".map");
-    let text = std::fs::read_to_string(PathBuf::from(path)).ok()?;
-    serde_json::from_str(&text).ok()
+/// One generated file, everything needed to place a diagnostic in it, read once. A single broken component
+/// usually produces a run of diagnostics, so this is cached for the length of the stream.
+struct Origin {
+    rsx_path: PathBuf,
+    rsx_source: String,
+    generated: String,
+    map: SourceMap,
+}
+
+impl Origin {
+    fn read(generated: &Path) -> Option<Self> {
+        let rsx_path = generated_to_source(generated)?;
+        let mut map_path = generated.as_os_str().to_os_string();
+        map_path.push(".map");
+        Some(Self {
+            rsx_source: std::fs::read_to_string(&rsx_path).ok()?,
+            generated: std::fs::read_to_string(generated).ok()?,
+            map: SourceMap::from_json(&std::fs::read_to_string(PathBuf::from(map_path)).ok()?)?,
+            rsx_path,
+        })
+    }
+
+    /// Places one rustc span in the `.rsx`: its 1-based line, and the characters to underline when the
+    /// columns can be trusted.
+    fn locate(
+        &self,
+        span: &serde_json::Value,
+        line_start: u32,
+    ) -> Option<(usize, Option<(usize, usize)>)> {
+        // rustc counts lines from 1 and the map from 0.
+        let by_line = |line: u32| Some((line as usize + 1, None));
+        let Some((byte_start, byte_end)) = span_bytes(span) else {
+            return by_line((*self.map.lines.get(line_start as usize - 1)?)?);
+        };
+        // The generated file is read back from disk after rustc compiled it, so an edit in between would
+        // leave these offsets pointing at other text entirely. rustc's own line number is the check: if it
+        // disagrees with where the offset lands, the columns are not about this file any more.
+        if line_of(&self.generated, byte_start) != Some(line_start as usize - 1) {
+            return by_line((*self.map.lines.get(line_start as usize - 1)?)?);
+        }
+        match self
+            .map
+            .locate(&self.generated, byte_start, byte_end, &self.rsx_source)?
+        {
+            RsxSpan::Line(line) => by_line(line),
+            RsxSpan::Exact { start, end } => {
+                let line = line_of(&self.rsx_source, start)?;
+                let text = telar_transpiler::nth_line(&self.rsx_source, line)?;
+                let from = column_of(&self.rsx_source, start);
+                // A span running past this line — a multi-line `if` expression — underlines to its end.
+                let to = match line_of(&self.rsx_source, end) == Some(line) {
+                    true => column_of(&self.rsx_source, end),
+                    false => text.len(),
+                };
+                // Characters, not bytes: this is measured out in spaces under the quoted line.
+                let chars_to = |at: usize| text[..at.min(text.len())].chars().count();
+                Some((line + 1, Some((chars_to(from), chars_to(to)))))
+            }
+        }
+    }
+}
+
+/// rustc's byte offsets for a span, which are what the source map is written in.
+fn span_bytes(span: &serde_json::Value) -> Option<(u32, u32)> {
+    let at = |key| span.get(key).and_then(serde_json::Value::as_u64);
+    Some((at("byte_start")? as u32, at("byte_end")? as u32))
+}
+
+/// The 0-based line containing `offset`, or `None` past the end of `text`.
+fn line_of(text: &str, offset: u32) -> Option<usize> {
+    let offset = offset as usize;
+    (offset <= text.len()).then(|| text[..offset].matches('\n').count())
+}
+
+/// The byte offset of `offset` within its own line.
+fn column_of(text: &str, offset: u32) -> usize {
+    let offset = (offset as usize).min(text.len());
+    offset - text[..offset].rfind('\n').map_or(0, |at| at + 1)
 }
 
 fn read_lines(source: &Path) -> Option<Vec<String>> {
@@ -379,33 +466,47 @@ mod tests {
     }
 
     /// Lays out a package the way a hot-reload build leaves one: the `.rsx` the author wrote, the generated
-    /// `.rs` nobody wrote, and the line map between them. Returns the package root.
-    fn fake_package(tag: &str, rsx: &str, map: &[Option<usize>]) -> PathBuf {
+    /// `.rs` nobody wrote, and the map between them. Returns the package root.
+    fn fake_package(tag: &str, rsx: &str, generated: &str, map: SourceMap) -> PathBuf {
         let root = std::env::temp_dir().join(format!("telar_diag_{tag}_{}", std::process::id()));
         let build = root.join(".telar/build-hot");
         std::fs::create_dir_all(&build).unwrap();
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::write(root.join("src/home.rsx"), rsx).unwrap();
-        std::fs::write(
-            build.join("home.rs.map"),
-            serde_json::to_string(map).unwrap(),
-        )
-        .unwrap();
+        std::fs::write(build.join("home.rs"), generated).unwrap();
+        std::fs::write(build.join("home.rs.map"), map.to_json()).unwrap();
         root
     }
 
     fn message_line(root: &Path, level: &str, message: &str, line: u64) -> String {
+        message_span(root, level, message, line, None)
+    }
+
+    /// `bytes` is what rustc puts in every real span; `None` stands for the spans that arrive without one,
+    /// which fall back to the line.
+    fn message_span(
+        root: &Path,
+        level: &str,
+        message: &str,
+        line: u64,
+        bytes: Option<(u32, u32)>,
+    ) -> String {
+        let mut span = serde_json::json!({
+            "file_name": root.join(".telar/build-hot/home.rs").to_str().unwrap(),
+            "line_start": line,
+            "is_primary": true,
+        });
+        if let Some((start, end)) = bytes {
+            span["byte_start"] = start.into();
+            span["byte_end"] = end.into();
+        }
         serde_json::json!({
             "reason": "compiler-message",
             "message": {
                 "level": level,
                 "message": message,
                 "rendered": format!("{level}: {message}\n --> {}/.telar/build-hot/home.rs:{line}\n", root.display()),
-                "spans": [{
-                    "file_name": root.join(".telar/build-hot/home.rs").to_str().unwrap(),
-                    "line_start": line,
-                    "is_primary": true,
-                }],
+                "spans": [span],
             },
         })
         .to_string()
@@ -419,8 +520,9 @@ mod tests {
         let root = fake_package(
             "err",
             "[logic]\nlet n = signal(0);\n\n[view]\ntext \"{n}\"\n",
+            "1\n2\n3\n4\n5\n    let n = signal(0);\n",
             // Generated line 6 came from `.rsx` line 2 (both 0-based in the map).
-            &[None, None, None, None, None, Some(1)],
+            SourceMap::new(vec![None, None, None, None, None, Some(1)], vec![]),
         );
         let report = collect(message_line(&root, "error", "mismatched types", 6).as_bytes());
         let text = report.render(false);
@@ -446,7 +548,8 @@ mod tests {
         let root = fake_package(
             "warn",
             "[logic]\nlet unused = 1;\n\n[view]\ncolumn\n",
-            &[None, Some(1)],
+            "boilerplate\n    let unused = 1;\n",
+            SourceMap::new(vec![None, Some(1)], vec![]),
         );
         let report =
             collect(message_line(&root, "warning", "unused variable: `unused`", 2).as_bytes());
@@ -485,6 +588,7 @@ mod tests {
             projected: vec![Projected {
                 source: PathBuf::from("/nowhere/home.rsx"),
                 line: 4,
+                underline: None,
                 level: "error".to_string(),
                 message: "mismatched types".to_string(),
                 notes: vec![],
@@ -494,5 +598,99 @@ mod tests {
         let text = report.render(false);
         assert!(text.contains("error: mismatched types"), "{text}");
         assert!(text.contains("/nowhere/home.rsx:4"), "{text}");
+    }
+
+    /// A `[logic]` line is transpiled 1:1 under a fixed indent, so rustc's columns come back by subtracting
+    /// it — and the frame can point at the identifier rather than at the line it happens to sit on.
+    #[test]
+    fn a_logic_error_underlines_the_columns_rustc_gave_it() {
+        let generated = "fn home() {\n    let count = signal(0);\n}\n";
+        let at = generated.find("count").unwrap() as u32;
+        let root = fake_package(
+            "cols",
+            "[logic]\nlet count = signal(0);\n\n[view]\ncolumn\n",
+            generated,
+            SourceMap::new(vec![None, Some(1), None], vec![]),
+        );
+
+        let text = collect(
+            message_span(&root, "error", "mismatched types", 2, Some((at, at + 5))).as_bytes(),
+        )
+        .render(false);
+
+        assert!(text.contains("src/home.rsx:2"), "{text}");
+        assert!(
+            text.contains("    ^^^^^"),
+            "the carets sit under `count`, four columns in:\n{text}"
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// The case that was unreachable until the expression spans reached the sidecar: a verbatim `[view]`
+    /// fragment is the same bytes in both files, so an error inside it underlines exactly it. With only the
+    /// line map on disk, the CLI could say nothing narrower than the whole `text "{…}"` line.
+    #[test]
+    fn a_verbatim_view_expression_is_underlined_exactly() {
+        let rsx = "[view]\ncolumn\n    text \"{missing}\"\n";
+        let generated = "fn home() {\n    text(format!(\"{}\", missing))\n}\n";
+        let gen_at = generated.find("missing").unwrap() as u32;
+        let root = fake_package(
+            "verbatim",
+            rsx,
+            generated,
+            SourceMap::new(
+                vec![None, Some(2), None],
+                vec![telar_transpiler::ExprSpan {
+                    rsx_start: rsx.find("missing").unwrap() as u32,
+                    len: 7,
+                    gen_start: gen_at,
+                }],
+            ),
+        );
+
+        let text = collect(
+            message_span(
+                &root,
+                "error",
+                "cannot find value `missing`",
+                2,
+                Some((gen_at, gen_at + 7)),
+            )
+            .as_bytes(),
+        )
+        .render(false);
+
+        assert!(text.contains("src/home.rsx:3"), "{text}");
+        assert!(
+            text.contains(&format!("{}^^^^^^^", " ".repeat(11))),
+            "the carets sit under `missing`, past `    text \"{{`:\n{text}"
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// And the case that has to stay wide. A `[view]` line the transpiler rewrote into something else has no
+    /// column correspondence, so underlining *something* would point at text unrelated to the error.
+    #[test]
+    fn a_rewritten_view_line_is_not_underlined_at_all() {
+        let generated = "fn home() {\n    Text::new(\"hi\")\n}\n";
+        let at = generated.find("Text").unwrap() as u32;
+        let root = fake_package(
+            "wide",
+            "[logic]\nlet x = 1;\n\n[view]\ntext \"hi\"\n",
+            generated,
+            SourceMap::new(vec![None, Some(4), None], vec![]),
+        );
+
+        let text = collect(
+            message_span(&root, "error", "no method `new`", 2, Some((at, at + 4))).as_bytes(),
+        )
+        .render(false);
+
+        assert!(text.contains("src/home.rsx:5"), "{text}");
+        assert!(
+            !text.contains('^'),
+            "nothing is underlined when the columns mean nothing:\n{text}"
+        );
+        std::fs::remove_dir_all(&root).ok();
     }
 }

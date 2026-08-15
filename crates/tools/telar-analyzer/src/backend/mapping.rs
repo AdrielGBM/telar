@@ -1,9 +1,8 @@
 use lsp_types::*;
 
-use crate::position::{Section, find_section_at};
 use crate::ra::{DefinitionTarget, RefTarget};
 use crate::text::offset_to_position;
-use telar_transpiler::ExprSpan;
+use telar_transpiler::{RsxSpan, SourceMap};
 
 /// Maps rust-analyzer definition targets to `.rsx` `Location`s, handling three cases per target: (1) the generated `.rs` for *this* `.rsx` and (2) *another* component's `.telar/build/*.rs` are both reverse-mapped through that build file's line map (`generated line → .rsx line`) onto its `.rsx` source — a generated line with no originating `.rsx` line is dropped; (3) any other path (a dependency, std, or a hand-written `.rs`) is returned verbatim in its own coordinates.
 pub(crate) fn map_definition_targets(targets: Vec<DefinitionTarget>) -> Vec<Location> {
@@ -14,7 +13,7 @@ pub(crate) fn map_definition_targets(targets: Vec<DefinitionTarget>) -> Vec<Loca
             let Some((rsx_path, map)) = crate::build_sync::rsx_source_and_map(&target.path) else {
                 continue;
             };
-            let Some(Some(rsx_line)) = map.get(target.range.start.line as usize) else {
+            let Some(Some(rsx_line)) = map.lines.get(target.range.start.line as usize) else {
                 continue;
             };
             if let Some(uri) = crate::uri::from_path(&rsx_path) {
@@ -48,8 +47,7 @@ pub(crate) fn reverse_map_rust_refs(
     targets: Vec<RefTarget>,
     current_gen_path: &std::path::Path,
     gen_code: &str,
-    map: &[Option<u32>],
-    expr_spans: &[ExprSpan],
+    map: &SourceMap,
     rsx_source: &str,
     rsx_uri: &Uri,
 ) -> (Vec<Location>, usize) {
@@ -64,11 +62,9 @@ pub(crate) fn reverse_map_rust_refs(
                 range: target.range,
             })
         } else if target.path == current_gen_path {
-            reverse_map_current_file(&target, gen_code, map, expr_spans, rsx_source).map(|range| {
-                Location {
-                    uri: rsx_uri.clone(),
-                    range,
-                }
+            reverse_map_current_file(&target, gen_code, map, rsx_source).map(|range| Location {
+                uri: rsx_uri.clone(),
+                range,
             })
         } else {
             None
@@ -97,97 +93,72 @@ pub(crate) fn reverse_map_rust_refs(
 /// they can be trusted and widening it to the whole line when they cannot.
 ///
 /// The exact mapping was built for go-to-definition and rename, and was never wired here — so every
-/// diagnostic underlined its whole line, however precise rustc had been. The distinction the reference path
-/// already draws is the one that matters: a `[view]` verbatim expression maps byte for byte through its
-/// `ExprSpan`, and `[logic]` maps by line plus the indent delta because it is transpiled 1:1. Anything else
-/// in `[view]` — an attribute value the transpiler rewrote into something else entirely — has no column
-/// correspondence, and a narrow range there would underline the wrong text, which is worse than the line.
+/// diagnostic underlined its whole line, however precise rustc had been. Which columns can be trusted is
+/// [`SourceMap::locate`]'s answer, shared with `cargo telar check` so the terminal and the editor cannot
+/// come to two different conclusions about the same error.
 pub(crate) fn diagnostic_range(
     gen_range: Range,
     gen_code: &str,
-    map: &[Option<u32>],
-    expr_spans: &[ExprSpan],
+    map: &SourceMap,
     rsx_source: &str,
 ) -> Option<Range> {
-    let rsx_line = (*map.get(gen_range.start.line as usize)?)?;
-    let whole_line = Range {
-        start: Position {
-            line: rsx_line,
-            character: 0,
-        },
-        end: Position {
-            line: rsx_line,
-            character: u32::MAX,
-        },
-    };
-    let Some(byte_start) =
-        crate::text::byte_offset(gen_code, gen_range.start.line, gen_range.start.character)
-    else {
-        return Some(whole_line);
-    };
-    let byte_end = crate::text::byte_offset(gen_code, gen_range.end.line, gen_range.end.character)
-        .unwrap_or(byte_start);
-    let target = crate::ra::RefTarget {
-        path: std::path::PathBuf::new(),
-        byte_start: byte_start as u32,
-        byte_end: byte_end as u32,
-        range: gen_range,
-    };
-    Some(
-        reverse_map_current_file(&target, gen_code, map, expr_spans, rsx_source)
-            .unwrap_or(whole_line),
-    )
+    match locate(map, gen_range, gen_code, rsx_source)? {
+        RsxSpan::Exact { start, end } => Some(Range {
+            start: offset_to_position(rsx_source, start as usize),
+            end: offset_to_position(rsx_source, end as usize),
+        }),
+        RsxSpan::Line(line) => Some(Range {
+            start: Position { line, character: 0 },
+            end: Position {
+                line,
+                character: u32::MAX,
+            },
+        }),
+    }
 }
 
-/// Reverse-maps one generated-file reference span back onto the current `.rsx`. `[view]` verbatim expressions map byte-for-byte through their `ExprSpan`; everything else is line-mapped, with the column shifted by the leading-whitespace delta between the generated and `.rsx` lines (`+4` for `[logic]`, `0` for the verbatim Props struct). Returns `None` when the generated line has no `.rsx` origin (boilerplate / transpiler-injected).
+/// Reverse-maps one generated-file reference span back onto the current `.rsx`. Returns `None` for anything
+/// whose columns cannot be trusted — a `[view]` fragment the transpiler rewrote, or a generated line with no
+/// `.rsx` origin at all. A diagnostic widens to the line in those cases; a rename must not, because a bogus
+/// range here would edit the wrong text.
 fn reverse_map_current_file(
     target: &RefTarget,
     gen_code: &str,
-    map: &[Option<u32>],
-    expr_spans: &[ExprSpan],
+    map: &SourceMap,
     rsx_source: &str,
 ) -> Option<Range> {
-    if let Some(span) = expr_spans
-        .iter()
-        .find(|s| target.byte_start >= s.gen_start && target.byte_start < s.gen_start + s.len)
-    {
-        let span_end = span.gen_start + span.len;
-        let rsx_start = span.rsx_start + (target.byte_start - span.gen_start);
-        let rsx_end = span.rsx_start + (target.byte_end.min(span_end) - span.gen_start);
-        return Some(Range {
-            start: offset_to_position(rsx_source, rsx_start as usize),
-            end: offset_to_position(rsx_source, rsx_end as usize),
-        });
+    match map.locate(gen_code, target.byte_start, target.byte_end, rsx_source)? {
+        RsxSpan::Exact { start, end } => Some(Range {
+            start: offset_to_position(rsx_source, start as usize),
+            end: offset_to_position(rsx_source, end as usize),
+        }),
+        RsxSpan::Line(_) => None,
     }
-    let gen_line = target.range.start.line as usize;
-    let rsx_line = (*map.get(gen_line)?)?;
-    // The line-map + indent-delta column math only holds for `[logic]` (lines emitted verbatim under a fixed indent, incl. the Props struct). A `[view]`/`[preview]` reference that fell through the expr-span check above (e.g. an `img src:foo` attr value) has no column correspondence — drop it rather than emit a bogus range that would mis-highlight and corrupt a rename.
-    if find_section_at(rsx_source, rsx_line) != Section::Logic {
-        return None;
-    }
-    let gen_line_text = nth_line(gen_code, gen_line)?;
-    let rsx_line_text = nth_line(rsx_source, rsx_line as usize).unwrap_or("");
-    let delta = leading_ws_utf16(gen_line_text).saturating_sub(leading_ws_utf16(rsx_line_text));
-    Some(Range {
-        start: Position {
-            line: rsx_line,
-            character: target.range.start.character.saturating_sub(delta),
-        },
-        end: Position {
-            line: rsx_line,
-            character: target.range.end.character.saturating_sub(delta),
-        },
-    })
+}
+
+/// [`SourceMap::locate`] against an LSP range, which carries UTF-16 columns rather than the byte offsets the
+/// map is written in. A range whose start does not convert falls back to its line.
+fn locate(map: &SourceMap, gen_range: Range, gen_code: &str, rsx_source: &str) -> Option<RsxSpan> {
+    let Some(byte_start) =
+        crate::text::byte_offset(gen_code, gen_range.start.line, gen_range.start.character)
+    else {
+        return map
+            .lines
+            .get(gen_range.start.line as usize)?
+            .map(RsxSpan::Line);
+    };
+    let byte_end = crate::text::byte_offset(gen_code, gen_range.end.line, gen_range.end.character)
+        .unwrap_or(byte_start);
+    map.locate(gen_code, byte_start as u32, byte_end as u32, rsx_source)
 }
 
 /// The `n`-th line of `text` (0-based), without its trailing newline.
 pub(crate) fn nth_line(text: &str, n: usize) -> Option<&str> {
-    text.split_inclusive('\n')
-        .nth(n)
-        .map(|line| line.strip_suffix('\n').unwrap_or(line))
+    telar_transpiler::nth_line(text, n)
 }
 
-/// Width (UTF-16 code units) of the leading space/tab run of `line`.
+/// Width (UTF-16 code units) of the leading space/tab run of `line`. Used by the inlay-hint path, which
+/// carries a bare position rather than a range and so cannot go through [`SourceMap::locate`].
 pub(crate) fn leading_ws_utf16(line: &str) -> u32 {
     line.chars()
         .take_while(|c| *c == ' ' || *c == '\t')
@@ -261,10 +232,11 @@ mod tests {
         // Generated `[logic]` lines carry a +4 indent; the line map ties gen line 1 to .rsx line 1.
         let gen_src = "boilerplate\n    let total = x;\n";
         let rsx = "[logic]\nlet total = x;\n";
-        let map = vec![None, Some(1)];
+        let map = SourceMap::new(vec![None, Some(1)], vec![]);
         // `total` sits at gen col 8 (`    let `); expect rsx col 4 (`let `).
-        let t = target(1, 8, 13, (0, 0));
-        let range = reverse_map_current_file(&t, gen_src, &map, &[], rsx).unwrap();
+        let at = gen_src.find("total").unwrap() as u32;
+        let t = target(1, 8, 13, (at, at + 5));
+        let range = reverse_map_current_file(&t, gen_src, &map, rsx).unwrap();
         assert_eq!(range.start.line, 1);
         assert_eq!(range.start.character, 4);
         assert_eq!(range.end.character, 9);
@@ -277,13 +249,16 @@ mod tests {
         let rsx_name_byte = rsx.find("name").unwrap() as u32;
         let gen_src = "fn c() {\n    text(format!(\"{}\", name))\n}\n";
         let gen_name_byte = gen_src.find("name").unwrap() as u32;
-        let spans = vec![ExprSpan {
-            rsx_start: rsx_name_byte,
-            len: 4,
-            gen_start: gen_name_byte,
-        }];
+        let map = SourceMap::new(
+            vec![],
+            vec![telar_transpiler::ExprSpan {
+                rsx_start: rsx_name_byte,
+                len: 4,
+                gen_start: gen_name_byte,
+            }],
+        );
         let t = target(1, 0, 0, (gen_name_byte, gen_name_byte + 4));
-        let range = reverse_map_current_file(&t, gen_src, &[], &spans, rsx).unwrap();
+        let range = reverse_map_current_file(&t, gen_src, &map, rsx).unwrap();
         // `name` is on .rsx line 2 (`    text "{name}"`), at the `{`+1 column.
         assert_eq!(range.start.line, 2);
         let col = "    text \"{".encode_utf16().count() as u32;
@@ -294,9 +269,9 @@ mod tests {
     #[test]
     fn boilerplate_lines_have_no_origin() {
         let gen_src = "boilerplate\n";
-        let map = vec![None];
+        let map = SourceMap::new(vec![None], vec![]);
         let t = target(0, 0, 3, (0, 0));
-        assert!(reverse_map_current_file(&t, gen_src, &map, &[], "x\n").is_none());
+        assert!(reverse_map_current_file(&t, gen_src, &map, "x\n").is_none());
     }
 
     #[test]
@@ -321,8 +296,7 @@ mod tests {
             vec![real],
             &abs("/x/.telar/build/c.rs"),
             "",
-            &[],
-            &[],
+            &SourceMap::default(),
             "",
             &uri,
         );
@@ -340,7 +314,7 @@ mod tests {
         let rsx = "[view]\ncol\n    img src:foo\n";
         let gen_src = "fn c() {\n    let __src = foo.clone();\n}\n";
         // gen line 1 → rsx line 2 (`    img src:foo`, a `[view]` line).
-        let map = vec![None, Some(2), None];
+        let map = SourceMap::new(vec![None, Some(2), None], vec![]);
         let t = RefTarget {
             path: gen_path.to_path_buf(),
             byte_start: 0,
@@ -356,8 +330,7 @@ mod tests {
                 },
             },
         };
-        let (locs, unmapped) =
-            reverse_map_rust_refs(vec![t], &gen_path, gen_src, &map, &[], rsx, &uri);
+        let (locs, unmapped) = reverse_map_rust_refs(vec![t], &gen_path, gen_src, &map, rsx, &uri);
         assert!(locs.is_empty());
         assert_eq!(unmapped, 1);
     }
@@ -370,7 +343,7 @@ mod tests {
         let rsx = "[logic]\nlet count = signal(0);\n\n[view]\ncolumn\n";
         // The generated line is the same text under four spaces of indent.
         let generated = "fn demo() {\n    let count = signal(0);\n}\n";
-        let map = vec![None, Some(1), None];
+        let map = SourceMap::new(vec![None, Some(1), None], vec![]);
         let range = Range {
             start: Position {
                 line: 1,
@@ -382,7 +355,7 @@ mod tests {
             },
         };
 
-        let mapped = diagnostic_range(range, generated, &map, &[], rsx).expect("the line maps");
+        let mapped = diagnostic_range(range, generated, &map, rsx).expect("the line maps");
         assert_eq!(mapped.start.line, 1);
         assert_eq!(
             (mapped.start.character, mapped.end.character),
@@ -397,7 +370,7 @@ mod tests {
     fn a_view_diagnostic_still_takes_the_whole_line() {
         let rsx = "[logic]\nlet x = 1;\n\n[view]\ntext \"hi\"\n";
         let generated = "fn demo() {\n    Text::new(\"hi\")\n}\n";
-        let map = vec![None, Some(4), None];
+        let map = SourceMap::new(vec![None, Some(4), None], vec![]);
         let range = Range {
             start: Position {
                 line: 1,
@@ -409,7 +382,7 @@ mod tests {
             },
         };
 
-        let mapped = diagnostic_range(range, generated, &map, &[], rsx).expect("the line maps");
+        let mapped = diagnostic_range(range, generated, &map, rsx).expect("the line maps");
         assert_eq!(
             (mapped.start.character, mapped.end.character),
             (0, u32::MAX)

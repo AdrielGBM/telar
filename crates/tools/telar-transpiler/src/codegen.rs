@@ -9,6 +9,7 @@ use crate::naming::{
     contains_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
 };
 use crate::signal_scan::{scan_effects, scan_locals, scan_signals};
+use crate::source_map::ExprSpan;
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
 
@@ -663,37 +664,10 @@ pub struct TranspiledSource {
     pub preview_names: Vec<String>,
     /// Per generated line (0-based), the 0-based `.rsx` line it originated from, or `None` for boilerplate and transpiler-injected lines. Lets the analyzer map rust-analyzer's diagnostics on the generated code back onto the `.rsx` source.
     pub source_map: Vec<Option<u32>>,
-    /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the generated Rust. In-memory only (not serialized, not part of the `.rs.map`): the analyzer uses them to offer Rust completion inside `[view]` expressions. See [`ExprSpan`].
+    /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the generated Rust. The half of the map that makes a *column* mean something; persisted into the `.rs.map` beside [`Self::source_map`]. See [`ExprSpan`].
     pub expr_spans: Vec<ExprSpan>,
     /// Whether the component takes a `Props` argument, so callers can alias its `Props` type by base name.
     pub has_props: bool,
-}
-
-/// A `[view]` Rust expression that is copied byte-for-byte from the `.rsx` source into the generated Rust, so `gen_start + (cursor_byte - rsx_start)` maps a `.rsx` cursor onto the generated file on a UTF-8 char boundary. Only emitted for verbatim fragments (interpolation `{expr}`, `if`/`let` expressions, verbatim closure / pass-through attr values); non-verbatim ones (`for` re-tokenized patterns, transformed numeric/color attrs) produce no span.
-pub struct ExprSpan {
-    /// Byte offset of the fragment's start in the `.rsx` source.
-    pub rsx_start: u32,
-    /// Byte length of the fragment (identical in source and generated).
-    pub len: u32,
-    /// Byte offset of the fragment's start in the generated Rust.
-    pub gen_start: u32,
-}
-
-/// Serializes a [`TranspiledSource::source_map`] as a JSON array (`[null,3,3,...]`), the format the editor extension reads to map rust-analyzer's diagnostics on the generated Rust back to `.rsx`.
-pub fn source_map_to_json(map: &[Option<u32>]) -> String {
-    let mut out = String::with_capacity(map.len() * 3 + 2);
-    out.push('[');
-    for (i, entry) in map.iter().enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        match entry {
-            Some(line) => out.push_str(&line.to_string()),
-            None => out.push_str("null"),
-        }
-    }
-    out.push(']');
-    out
 }
 
 /// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect. `base_dir` is the directory of the `.rsx` (its parent), against which static `svg`/`img` asset paths are resolved and baked at build time.

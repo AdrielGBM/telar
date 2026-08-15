@@ -8,13 +8,14 @@ mod i18n;
 pub mod naming;
 mod registry;
 mod signal_scan;
+mod source_map;
 mod style;
 mod transition;
 mod view;
 
 pub use codegen::{
-    ComponentRegistry, ComponentSig, ExprSpan, TranspiledSource, external_component_sigs,
-    scan_component_sig, source_map_to_json, transpile_source_full, transpile_source_with_theme,
+    ComponentRegistry, ComponentSig, TranspiledSource, external_component_sigs, scan_component_sig,
+    transpile_source_full, transpile_source_with_theme,
 };
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, component_paths,
@@ -31,6 +32,7 @@ pub use registry::{
     is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, tag_attr_keys,
 };
 pub use signal_scan::{SignalInfo, scan_effects, scan_locals, scan_signals};
+pub use source_map::{ExprSpan, RsxSpan, SourceMap, nth_line};
 
 #[cfg(test)]
 mod tests {

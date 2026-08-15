@@ -31,7 +31,7 @@ impl Backend {
             ..
         } = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())?;
         // First generated line that originated from this `.rsx` line.
-        let gen_line = map.iter().position(|m| *m == Some(pos.line))? as u32;
+        let gen_line = map.lines.iter().position(|m| *m == Some(pos.line))? as u32;
         let gen_col = pos.character + crate::ra::logic_indent();
 
         let root = crate::build_sync::crate_root(&rsx_path)?;
@@ -85,12 +85,11 @@ impl Backend {
         let crate::build_sync::GeneratedTarget {
             path: gen_path,
             code: gen_text,
-            expr_spans,
-            ..
+            map,
         } = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())?;
         let rsx_byte = byte_offset(&source, pos.line, pos.character)?;
         // The containing expression span; the inclusive upper bound lets the cursor sit right after the last character (the common completion position, e.g. `count.|`).
-        let span = expr_spans.iter().find(|s| {
+        let span = map.exprs.iter().find(|s| {
             rsx_byte >= s.rsx_start as usize && rsx_byte <= (s.rsx_start + s.len) as usize
         })?;
         let gen_offset = span.gen_start as usize + (rsx_byte - span.rsx_start as usize);
@@ -202,7 +201,6 @@ impl Backend {
             &target.path,
             &target.code,
             &target.map,
-            &target.expr_spans,
             &source,
             uri,
         ))

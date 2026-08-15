@@ -164,10 +164,13 @@ function generatedToSource(genFsPath: string): string | undefined {
   return path.join(root, "src", rel);
 }
 
-/// Reads the sibling `.rs.map` (`generated line → Some(.rsx line)`, 0-based). `undefined` if missing.
+/// Reads the line half of the sibling `.rs.map` (`generated line → .rsx line`, 0-based). `undefined` if
+/// missing. The file also carries the verbatim expression spans that make a *column* meaningful, which the
+/// language server and `cargo telar check` both use; this path stays line-granular, and reimplementing the
+/// span mapping here would be a third answer to a question that already has one.
 function readLineMap(genFsPath: string): (number | null)[] | undefined {
   try {
-    return JSON.parse(fs.readFileSync(genFsPath + ".map", "utf8"));
+    return JSON.parse(fs.readFileSync(genFsPath + ".map", "utf8")).lines;
   } catch {
     return undefined;
   }
