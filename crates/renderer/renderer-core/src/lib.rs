@@ -29,8 +29,7 @@ pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
 pub use image::{ExternalTexture, ImageData, ImageFilter, premultiply_rgba};
 pub use path::{PathData, PathVerb};
 pub use preprocess::{
-    ScaleScratch, blur_padding, blur_sigma, expand_fill_layers, scale_commands,
-    would_expand_fill_layers,
+    ScaleScratch, blur_padding, blur_sigma, expand_fill_layers, would_expand_fill_layers,
 };
 pub use renderer::RenderBackend;
 pub use shadow::ShadowLayout;

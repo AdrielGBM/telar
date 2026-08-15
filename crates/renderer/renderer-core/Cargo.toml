@@ -20,9 +20,3 @@ tracing = { workspace = true }
 wide = { workspace = true }
 xxhash-rust = { workspace = true }
 
-[dev-dependencies]
-criterion = "0.8.2"
-
-[[bench]]
-name = "scale_commands"
-harness = false

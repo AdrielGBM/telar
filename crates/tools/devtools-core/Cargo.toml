@@ -14,4 +14,3 @@ repository.workspace = true
 platform-core = { workspace = true }
 renderer-core = { workspace = true }
 geometry-core = { workspace = true }
-ui-tree = { workspace = true }

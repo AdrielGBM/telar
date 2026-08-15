@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use platform_core::{
-    Event, EventHandler, MultiSurfacePlatform, Platform, PlatformError, SurfaceId, WindowConfig,
+    EventHandler, MultiSurfacePlatform, Platform, PlatformError, SurfaceId, WindowConfig,
 };
 
 use crate::window::HeadlessWindow;
@@ -23,60 +23,36 @@ pub type FrameSink = Arc<Mutex<Option<Vec<u8>>>>;
 pub type SurfaceFrameSink = Arc<Mutex<HashMap<SurfaceId, Vec<u8>>>>;
 
 /// A first-class, windowless [`Platform`] backend: it drives the exact same [`EventHandler`] seam as the winit
-/// backend (`on_resume` → scripted `on_event`s → `on_redraw`s → `on_suspend`) against a [`HeadlessWindow`],
-/// with no event loop, GPU swapchain, or display server. Because the handler builds an offscreen renderer for
-/// a headless window, this routes a *real* app end-to-end (event → reactive → layout → render → pixels) and is
-/// both the reference `Platform` impl and a deterministic integration-test harness.
+/// backend (`on_resume` → `on_redraw`s → `on_suspend`) against a [`HeadlessWindow`], with no event loop, GPU
+/// swapchain, or display server. Because the handler builds an offscreen renderer for a headless window, this
+/// routes a *real* app end-to-end (reactive → layout → render → pixels) and is both the reference `Platform`
+/// impl and a deterministic integration-test harness.
 ///
-/// Construct it with the surface size, optionally script input events and a frame count, and optionally
-/// capture the final frame's pixels; then drive it via [`crate::run`-style entry points] — e.g.
+/// Construct it with the surface size and optionally a frame count and a sink to capture the final frame's
+/// pixels; then drive it via [`crate::run`-style entry points] — e.g.
 /// `telar::run_with_platform(HeadlessPlatform::new(w, h).capture_into(sink), …)`.
 pub struct HeadlessPlatform {
     width: u32,
     height: u32,
-    scale_factor: f64,
-    prefers_dark: Option<bool>,
-    events: Vec<Event>,
     frames: u32,
     sink: Option<FrameSink>,
     surface_sink: Option<SurfaceFrameSink>,
 }
 
 impl HeadlessPlatform {
-    /// A `width`×`height` offscreen surface at scale 1.0, no scripted events, one render frame.
+    /// A `width`×`height` offscreen surface at scale 1.0, one render frame.
     pub fn new(width: u32, height: u32) -> Self {
         Self {
             width,
             height,
-            scale_factor: 1.0,
-            prefers_dark: None,
-            events: Vec::new(),
             frames: 1,
             sink: None,
             surface_sink: None,
         }
     }
 
-    /// Report a HiDPI scale factor to the app (drives logical-vs-physical sizing).
-    pub fn with_scale_factor(mut self, scale_factor: f64) -> Self {
-        self.scale_factor = scale_factor;
-        self
-    }
-
-    /// Report an OS light/dark preference (`Some(true)` = dark) before the tree mounts.
-    pub fn with_prefers_dark(mut self, prefers_dark: Option<bool>) -> Self {
-        self.prefers_dark = prefers_dark;
-        self
-    }
-
-    /// Scripted input events delivered (in order) after `on_resume`, each as its own loop iteration.
-    pub fn with_events(mut self, events: Vec<Event>) -> Self {
-        self.events = events;
-        self
-    }
-
-    /// How many render frames to drive after the scripted events. Defaults to 1. Use more to let animations or
-    /// multi-pass reactive settling converge before the final pixels are captured.
+    /// How many render frames to drive. Defaults to 1. Use more to let animations or multi-pass reactive
+    /// settling converge before the final pixels are captured.
     pub fn with_frames(mut self, frames: u32) -> Self {
         self.frames = frames;
         self
@@ -104,12 +80,7 @@ impl Platform for HeadlessPlatform {
         _config: WindowConfig,
         mut handler: H,
     ) -> Result<(), PlatformError> {
-        let window = HeadlessWindow::with_options(
-            self.width,
-            self.height,
-            self.scale_factor,
-            self.prefers_dark,
-        );
+        let window = HeadlessWindow::with_options(self.width, self.height, 1.0, None);
 
         // Mirror the winit loop's iteration shape (new_events → dispatch → about_to_wait) so the handler's
         // reactive batching brackets stay balanced exactly as they do under winit.
@@ -120,12 +91,6 @@ impl Platform for HeadlessPlatform {
             return Err(PlatformError(
                 "headless on_resume returned false (renderer initialization failed)".to_string(),
             ));
-        }
-
-        for event in self.events {
-            handler.new_events();
-            handler.on_event(event, &window);
-            handler.about_to_wait();
         }
 
         for _ in 0..self.frames.max(1) {

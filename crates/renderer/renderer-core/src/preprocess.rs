@@ -63,13 +63,6 @@ pub fn blur_padding(sigma: f32) -> i32 {
     (sigma * 3.0).ceil() as i32 + 1
 }
 
-pub fn scale_commands(commands: &[DrawCommand], sf: f32) -> Option<Vec<DrawCommand>> {
-    if (sf - 1.0).abs() < f32::EPSILON {
-        return None;
-    }
-    Some(commands.iter().map(|cmd| scale_command(cmd, sf)).collect())
-}
-
 fn scale_path_data(data: &crate::PathData, sf: f32) -> crate::PathData {
     let mut out = crate::PathData::new();
     for verb in data.verbs() {
@@ -261,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn scale_into_matches_scale_commands_and_shares_arcs() {
+    fn scale_into_correctly_scales_and_shares_arcs() {
         let style = Arc::new(RectStyle::default().with_radius(BorderRadius::all(4.0)));
         let cmds = vec![
             rect_cmd(&style, 0.0),
@@ -270,12 +263,21 @@ mod tests {
         ];
         let sf = 3.0;
 
-        let expected = scale_commands(&cmds, sf).unwrap();
         let mut scratch = ScaleScratch::new();
         let got = scratch.scale_into(&cmds, sf);
-        assert_eq!(got.len(), expected.len());
-        for (g, e) in got.iter().zip(expected.iter()) {
-            assert!(g == e);
+
+        assert_eq!(got.len(), 3);
+
+        for (i, cmd) in got.iter().enumerate() {
+            match cmd {
+                DrawCommand::Rect { rect, style: _ } => {
+                    assert_eq!(rect.x, (i as f32) * 20.0 * sf);
+                    assert_eq!(rect.y, 0.0);
+                    assert_eq!(rect.width, 30.0);
+                    assert_eq!(rect.height, 30.0);
+                }
+                other => panic!("expected Rect, got {other:?}"),
+            }
         }
 
         // The three commands shared one input style Arc, so the scaled output Arcs are shared too (one Arc::new instead of three).

@@ -4891,7 +4891,6 @@ dependencies = [
  "telar-geometry-core",
  "telar-platform-core",
  "telar-renderer-core",
- "telar-ui-tree",
 ]
 
 [[package]]
@@ -5065,7 +5064,6 @@ name = "telar-renderer-core"
 version = "0.1.3"
 dependencies = [
  "bytemuck",
- "criterion",
  "rustc-hash 2.1.3",
  "smallvec",
  "telar-geometry-core",
