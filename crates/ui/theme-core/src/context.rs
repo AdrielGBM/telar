@@ -79,7 +79,7 @@ pub trait ThemeTokens: 'static {
     /// follows the active light/dark mode rather than assuming light: a theme that overrides `surface` and
     /// forgets `ink` used to paint near-black text on its own dark panel.
     fn ink(&self) -> Color {
-        if crate::is_dark() {
+        if crate::mode::is_dark() {
             Color::rgba(0.98, 0.98, 1.0, 1.0)
         } else {
             Color::rgba(0.15, 0.15, 0.2, 1.0)
@@ -88,7 +88,7 @@ pub trait ThemeTokens: 'static {
     /// The background a floating panel sits on — a menu, a dropdown, a dialog. Opaque by default, because the
     /// thing it covers must not read through it, and mode-following for the same reason as [`ink`](Self::ink).
     fn surface(&self) -> Color {
-        if crate::is_dark() {
+        if crate::mode::is_dark() {
             Color::rgba(0.09, 0.09, 0.11, 1.0)
         } else {
             Color::rgba(1.0, 1.0, 1.0, 1.0)

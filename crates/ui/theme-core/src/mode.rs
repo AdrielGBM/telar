@@ -43,18 +43,9 @@ pub fn set_mode(id: impl Into<String>) {
     ACTIVE_MODE.with(|s| s.set(Some(id)));
 }
 
-/// Selects `default` only when no mode is active yet. Called at app start and after a hot reload so a
-/// selection restored by the rsx hot-reload bridge is not clobbered by the default.
-pub fn init_mode(default: impl Into<String>) {
-    let already_set = ACTIVE_MODE.with(|s| s.peek().is_some());
-    if !already_set {
-        set_mode(default);
-    }
-}
-
 /// Reactive read of the active mode id — subscribes the caller so a label re-renders on switch. `None` before
 /// any mode is set.
-pub fn use_mode() -> Option<String> {
+fn use_mode() -> Option<String> {
     ACTIVE_MODE.with(|s| s.get())
 }
 
@@ -64,53 +55,30 @@ pub fn active_mode() -> Option<String> {
 }
 
 thread_local! {
-    // The (light, dark) mode-id pair, so is_dark/set_dark/toggle_dark can switch schemes without the app
-    // hardcoding which registered modes are the light/dark ones. ManuallyDrop for the same dlclose-safety
-    // reason as MODES/ACTIVE_MODE above. None until set_light_dark is called.
+    // The (light, dark) mode-id pair, so is_dark can tell which registered mode is the dark one without the
+    // app hardcoding it. ManuallyDrop for the same dlclose-safety reason as MODES/ACTIVE_MODE above. None
+    // until set_light_dark is called.
     static SCHEME_PAIR: ManuallyDrop<RefCell<Option<(String, String)>>> =
         ManuallyDrop::new(RefCell::new(None));
 }
 
-/// Designates which two registered modes form the light/dark pair. A thin, optional convention over the open
-/// mode registry: it does not replace named modes (a third mode like `"pastel"` stays valid) — it only tells
-/// `is_dark`/`set_dark`/`toggle_dark` which ids to flip between. Both ids should also be registered via
-/// [`register_mode`]. Does not itself change the active mode.
-pub fn set_light_dark(light: impl Into<String>, dark: impl Into<String>) {
+/// Designates which two registered modes form the light/dark pair, so [`is_dark`] can tell which one is
+/// currently active. Called by [`follow_system`]; both ids should also be registered via [`register_mode`].
+/// Does not itself change the active mode.
+fn set_light_dark(light: impl Into<String>, dark: impl Into<String>) {
     SCHEME_PAIR.with(|p| *p.borrow_mut() = Some((light.into(), dark.into())));
 }
 
 /// Reactive: `true` when the active mode is the designated dark mode. `false` when it is the light mode, no
-/// pair has been set, or a third (unpaired) mode is active. Read this for a sun/moon toggle's on/off state.
-pub fn is_dark() -> bool {
+/// pair has been set, or a third (unpaired) mode is active. Backs [`ThemeTokens`](crate::ThemeTokens)'s
+/// mode-following `ink`/`surface` defaults.
+pub(crate) fn is_dark() -> bool {
     let active = use_mode();
     SCHEME_PAIR.with(|p| {
         p.borrow()
             .as_ref()
             .is_some_and(|(_, dark)| active.as_deref() == Some(dark.as_str()))
     })
-}
-
-/// Selects the designated dark (`on = true`) or light (`on = false`) mode. No-op if no pair has been set.
-pub fn set_dark(on: bool) {
-    let target = SCHEME_PAIR.with(|p| {
-        p.borrow()
-            .as_ref()
-            .map(|(light, dark)| if on { dark.clone() } else { light.clone() })
-    });
-    if let Some(target) = target {
-        set_mode(target);
-    }
-}
-
-/// Flips between the designated light and dark modes. Reads the current scheme non-reactively so it is safe
-/// to call from an event handler.
-pub fn toggle_dark() {
-    let currently_dark = SCHEME_PAIR.with(|p| {
-        p.borrow()
-            .as_ref()
-            .is_some_and(|(_, dark)| active_mode().as_deref() == Some(dark.as_str()))
-    });
-    set_dark(!currently_dark);
 }
 
 thread_local! {
@@ -131,8 +99,8 @@ pub fn set_system_dark(dark: bool) {
 
 /// Drives the active mode from the OS light/dark preference — light → `light`, dark → `dark` — updating live
 /// as the OS scheme changes. Installs a reactive effect (kept alive internally) and designates the pair so
-/// [`is_dark`]/[`toggle_dark`] stay consistent. Re-calling replaces the effect (hot reload re-runs setup). A
-/// manual [`set_mode`] still wins until the next OS change re-drives it.
+/// [`is_dark`] stays consistent. Re-calling replaces the effect (hot reload re-runs setup). A manual
+/// [`set_mode`] still wins until the next OS change re-drives it.
 pub fn follow_system(light: impl Into<String>, dark: impl Into<String>) {
     let light = light.into();
     let dark = dark.into();
@@ -182,43 +150,6 @@ mod tests {
     }
 
     #[test]
-    fn init_mode_does_not_clobber_existing_selection() {
-        reset();
-        set_mode("midnight");
-        init_mode("modern");
-        assert_eq!(
-            active_mode().as_deref(),
-            Some("midnight"),
-            "init must keep a selection already made (e.g. restored across hot reload)"
-        );
-    }
-
-    #[test]
-    fn init_mode_applies_default_when_empty() {
-        reset();
-        init_mode("modern");
-        assert_eq!(active_mode().as_deref(), Some("modern"));
-    }
-
-    #[test]
-    fn set_and_toggle_dark_switch_between_the_pair() {
-        reset();
-        register_mode("day", || {});
-        register_mode("night", || {});
-        set_light_dark("day", "night");
-
-        set_dark(true);
-        assert_eq!(active_mode().as_deref(), Some("night"));
-        set_dark(false);
-        assert_eq!(active_mode().as_deref(), Some("day"));
-
-        toggle_dark();
-        assert_eq!(active_mode().as_deref(), Some("night"));
-        toggle_dark();
-        assert_eq!(active_mode().as_deref(), Some("day"));
-    }
-
-    #[test]
     fn follow_system_drives_mode_from_os_scheme() {
         reset();
         register_mode("day", || {});
@@ -244,14 +175,6 @@ mod tests {
             !is_dark(),
             "a third mode outside the pair is neither dark nor light"
         );
-    }
-
-    #[test]
-    fn dark_helpers_are_noops_without_a_pair() {
-        reset();
-        set_dark(true);
-        toggle_dark();
-        assert_eq!(active_mode(), None, "no pair set → nothing to switch to");
     }
 
     #[test]

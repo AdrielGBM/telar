@@ -22,14 +22,6 @@ pub fn set_locale(id: impl Into<String>) {
     LOCALE.with(|s| s.set(Some(id.into())));
 }
 
-/// Sets `default` only when no locale is active yet. Called at app start (and after a hot reload) so a
-/// selection restored across a dylib swap is not clobbered by the default.
-pub fn init_locale(default: impl Into<String>) {
-    if LOCALE.with(|s| s.peek().is_none()) {
-        set_locale(default);
-    }
-}
-
 /// Reactive read of the active locale — subscribes the caller so translated text re-renders on switch. `None`
 /// before any locale is set (callers fall back to the catalog's default locale).
 pub fn use_locale() -> Option<String> {
@@ -43,7 +35,7 @@ pub fn current_locale() -> Option<String> {
 
 /// The language subtag of the OS locale, from `$LC_ALL` / `$LC_MESSAGES` / `$LANG` (in POSIX precedence),
 /// lowercased and stripped of any territory/encoding suffix — e.g. `es_ES.UTF-8` → `"es"`. `None` when unset
-/// or the C/POSIX locale. An app can seed the initial language with `init_locale(detect_system_locale()?)`.
+/// or the C/POSIX locale. An app can seed the initial language by passing this to [`set_locale`] at startup.
 pub fn detect_system_locale() -> Option<String> {
     let raw = ["LC_ALL", "LC_MESSAGES", "LANG"]
         .into_iter()
@@ -69,21 +61,6 @@ mod tests {
 
     fn reset() {
         LOCALE.with(|s| s.set(None));
-    }
-
-    #[test]
-    fn init_locale_does_not_clobber_existing_selection() {
-        reset();
-        set_locale("es");
-        init_locale("en");
-        assert_eq!(current_locale().as_deref(), Some("es"));
-    }
-
-    #[test]
-    fn init_locale_applies_default_when_empty() {
-        reset();
-        init_locale("en");
-        assert_eq!(current_locale().as_deref(), Some("en"));
     }
 
     #[test]

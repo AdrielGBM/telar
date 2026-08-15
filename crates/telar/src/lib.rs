@@ -80,7 +80,7 @@ pub use motion_core as motion;
 #[cfg(feature = "runtime")]
 pub use direction::follow_locale_direction;
 pub use i18n_core as i18n;
-pub use i18n_core::{current_locale, detect_system_locale, init_locale, set_locale, use_locale};
+pub use i18n_core::{current_locale, detect_system_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     Cursor, Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand, WindowConfig,
@@ -133,9 +133,9 @@ pub use surface::{
 };
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ControlSize, Theme, ThemeTokens, control_scale, follow_system, init_mode, is_dark,
-    register_mode, set_control_size, set_dark, set_light_dark, set_mode, set_system_dark,
-    set_theme, toggle_dark, use_control_size, use_mode, use_theme, use_theme_tokens,
+    ControlSize, Theme, ThemeTokens, active_mode, control_scale, follow_system, register_mode,
+    set_control_size, set_mode, set_system_dark, set_theme, use_control_size, use_theme,
+    use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;

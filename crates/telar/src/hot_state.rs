@@ -69,7 +69,7 @@ pub fn hot_snapshot_json() -> String {
 /// `_rsx_hot_restore` export, before the new tree mounts.
 pub fn hot_restore_json(blob: &str) {
     if let Ok(mut map) = serde_json::from_str::<HashMap<String, String>>(blob) {
-        // Re-apply immediately, overriding the default `init_mode` set during this dylib's `setup`, so the
+        // Re-apply immediately, overriding the default mode this dylib's `setup` just selected, so the
         // user's last selection survives the swap. Removed from the map so it never lingers in PENDING.
         if let Some(mode) = map.remove(THEME_MODE_KEY) {
             theme_core::set_mode(mode);
@@ -173,7 +173,7 @@ mod tests {
         theme_core::set_mode("midnight");
         let blob = hot_snapshot_json();
 
-        // Incoming dylib: `setup` re-registered modes and `init_mode` applied the default "modern"...
+        // Incoming dylib: `setup` re-registered modes and selected the default "modern"...
         theme_core::register_mode("modern", || {});
         theme_core::set_mode("modern");
         // ...then restore overrides it with the carried-over selection.

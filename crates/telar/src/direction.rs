@@ -18,8 +18,9 @@ thread_local! {
 /// Makes the writing direction follow the active locale, so switching to Arabic or Hebrew mirrors the layout
 /// and switching back restores it — no rebuild, the existing nodes are re-resolved on the next layout pass.
 ///
-/// Call once at app start, next to [`init_locale`](crate::init_locale). Apps that drive direction themselves
-/// (a preview harness forcing RTL, say) can skip it and call [`set_direction`](crate::set_direction) instead.
+/// Call once at app start, next to the app's initial [`set_locale`](crate::set_locale) call. Apps that drive
+/// direction themselves (a preview harness forcing RTL, say) can skip it and call
+/// [`set_direction`](crate::set_direction) instead.
 pub fn follow_locale_direction() {
     let effect = reactive_core::effect(|| {
         let direction = i18n_core::use_locale()

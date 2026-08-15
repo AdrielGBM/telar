@@ -10,7 +10,7 @@ mod locale;
 mod message;
 mod plural;
 
-pub use locale::{current_locale, detect_system_locale, init_locale, set_locale, use_locale};
+pub use locale::{current_locale, detect_system_locale, set_locale, use_locale};
 pub use message::{Catalog, Entry, Message, Part};
 pub use plural::{PluralCategory, plural_category};
 
