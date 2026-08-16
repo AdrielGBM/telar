@@ -15,7 +15,7 @@ reactive_core::surface_local! {
 /// Registers `node` as an interactive (press/drag) target, tracking its laid-out `rect` signal. A surface that
 /// carves its input region from its content — a click-through overlay such as the notification popups — reads
 /// [`interactive_rects`] to receive pointer input only where widgets actually respond. Idempotent per node.
-pub fn register_interactive(node: NodeId, rect: ReadSignal<Rect>) {
+pub(crate) fn register_interactive(node: NodeId, rect: ReadSignal<Rect>) {
     with_interactive(|m| {
         m.insert(node, rect);
     });
@@ -23,7 +23,7 @@ pub fn register_interactive(node: NodeId, rect: ReadSignal<Rect>) {
 
 /// Drops `node` from the interactive set — called when its widget is dropped, so a dismissed card stops
 /// contributing to the input region.
-pub fn unregister_interactive(node: NodeId) {
+pub(crate) fn unregister_interactive(node: NodeId) {
     with_interactive(|m| {
         m.remove(&node);
     });

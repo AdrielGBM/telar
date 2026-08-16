@@ -5,7 +5,7 @@ use ui_tree::{NodeVec, RenderNode};
 
 use crate::context;
 
-pub struct LayoutLeaf {
+pub(crate) struct LayoutLeaf {
     pub node: NodeId,
     pub rect: RwSignal<Rect>,
 }

@@ -126,11 +126,6 @@ pub fn use_context<T: Any + Clone + 'static>() -> Option<T> {
     services_core::try_inject::<T>()
 }
 
-/// [`use_context`] without the clone, for a context too big to copy per child.
-pub fn with_context<T: Any + 'static, R>(f: impl FnOnce(&T) -> R) -> Option<R> {
-    services_core::with_service::<T, R>(f)
-}
-
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;

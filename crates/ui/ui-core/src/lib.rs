@@ -19,7 +19,7 @@ mod layout_leaf;
 mod lazy;
 mod line;
 mod line_gutter;
-pub mod named_overlay;
+mod named_overlay;
 pub mod overlay;
 mod path;
 mod pointer;
@@ -57,33 +57,28 @@ pub use dismiss::{dismiss_depth, dismiss_top, use_dismiss_depth};
 pub use drag::{DragStart, drag_start, drag_travel};
 pub use image::Image;
 pub use input::Input;
-pub use input_region::{interactive_rects, register_interactive, unregister_interactive};
+pub use input_region::interactive_rects;
 pub use kept::kept;
 pub use keyboard::{
     end_frame as end_keyboard_frame, key_held, key_pressed, modifiers, observe as observe_keyboard,
     reset as reset_keyboard,
 };
 pub use layout_item::{ClipAxis, ClippedItem, Holding, LayoutItem, box_item};
-pub use layout_leaf::LayoutLeaf;
 pub use lazy::Lazy;
 pub use line::Line;
 pub use line_gutter::LineGutter;
-pub use named_overlay::{
-    close as close_overlay, is_open as use_overlay_open, open as open_overlay,
-    peek_open as overlay_open, state as overlay_state, toggle as toggle_overlay,
-};
+pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};
 pub use overlay::{Overlay, Placement, anchor_rect};
 pub use path::Path;
 pub use pointer::{
-    PointerButtons, observe_pointer, pointer_buttons, pointer_occluded, reset_pointer,
-    transform_pointer,
+    PointerButtons, observe_pointer, pointer_buttons, reset_pointer, transform_pointer,
 };
 pub use reactive_list::ReactiveList;
 pub use rect::Rectangle;
 pub use rich_text::RichText;
 pub use scroll_area::{LayoutScrollArea, ScrollViewport, ScrollbarStyle};
 pub use scroll_region::visible_rect;
-pub use slots::{Children, Slots, use_context, with_context};
+pub use slots::{Children, Slots, use_context};
 pub use styled_container::{StyledContainer, box_transform, style_follows};
 pub use surface::{
     DEFAULT_SCRIM, KeyboardMode, MIN_FRAME_SIZE, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,

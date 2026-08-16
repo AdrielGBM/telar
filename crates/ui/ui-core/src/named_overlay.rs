@@ -58,23 +58,6 @@ pub fn close(id: &str) {
     state(id).set(false);
 }
 
-pub fn toggle(id: &str) {
-    let s = state(id);
-    let open = s.peek();
-    s.set(!open);
-}
-
-/// Reactive read of whether the overlay named `id` is open — for a trigger that styles itself as active while
-/// its panel is up.
-pub fn is_open(id: &str) -> bool {
-    state(id).get()
-}
-
-/// Non-subscribing read, for use inside an event handler.
-pub fn peek_open(id: &str) -> bool {
-    state(id).peek()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,25 +86,23 @@ mod tests {
     }
 
     #[test]
-    fn open_close_and_toggle_drive_the_same_state() {
+    fn open_and_close_drive_the_same_state() {
         reset();
-        assert!(!peek_open("panel"));
+        assert!(!state("panel").peek());
         open("panel");
-        assert!(peek_open("panel"));
+        assert!(state("panel").peek());
         close("panel");
-        assert!(!peek_open("panel"));
-        toggle("panel");
-        assert!(peek_open("panel"));
-        toggle("panel");
-        assert!(!peek_open("panel"));
+        assert!(!state("panel").peek());
     }
 
+    /// The state is a real signal, so a trigger that styles itself as active while its panel is up
+    /// re-runs on open and close without any wiring of its own.
     #[test]
-    fn is_open_is_reactive() {
+    fn the_state_is_reactive() {
         reset();
         let seen = std::rc::Rc::new(RefCell::new(Vec::new()));
         let s = seen.clone();
-        let _e = reactive_core::effect(move || s.borrow_mut().push(is_open("banner")));
+        let _e = reactive_core::effect(move || s.borrow_mut().push(state("banner").get()));
         open("banner");
         close("banner");
         assert_eq!(*seen.borrow(), vec![false, true, false]);

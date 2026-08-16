@@ -59,10 +59,6 @@ impl Container {
         })
     }
 
-    pub fn rect(&self) -> RwSignal<Rect> {
-        self.rect.clone()
-    }
-
     fn dispatch_children(&mut self, event: &Event) -> EventResult {
         match &self.dyn_host {
             Some(host) => host.dispatch(event),

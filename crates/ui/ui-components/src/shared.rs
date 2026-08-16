@@ -160,7 +160,7 @@ pub(crate) fn resolve_open(
     open: Option<RwSignal<bool>>,
     id: &'static str,
 ) -> Option<RwSignal<bool>> {
-    open.or_else(|| (!id.is_empty()).then(|| ui_core::named_overlay::state(id)))
+    open.or_else(|| (!id.is_empty()).then(|| ui_core::overlay_state(id)))
 }
 
 /// A control (checkbox box / radio ring / toggle pill) plus an optional label, laid out as one gap-10 row that

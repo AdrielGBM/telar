@@ -87,7 +87,7 @@ pub fn reset_pointer() {
 /// is right for the gesture and wrong for hover: two overlapping boxes would both read the same move as
 /// *the pointer is over me*, and a viewport would highlight the face behind the panel the user is pointing
 /// at. The container marks the covered subtrees as it broadcasts, and the widgets that track hover ask here.
-pub fn pointer_occluded() -> bool {
+pub(crate) fn pointer_occluded() -> bool {
     OCCLUDED.with(|c| c.get())
 }
 

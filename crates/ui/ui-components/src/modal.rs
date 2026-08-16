@@ -347,7 +347,7 @@ mod tests {
         // And a dismissal still drives it, so Escape and `Navigator::back()` work with no extra wiring.
         assert!(ui_core::dismiss_top());
         relayout_if_dirty();
-        assert!(!ui_core::overlay_open("confirm-test"));
+        assert!(!ui_core::overlay_state("confirm-test").peek());
         assert!(!find_text(&tree.commands(), "Confirm"));
     }
 
