@@ -427,8 +427,9 @@ pub fn reset_tasks() {
     drop(mailbox);
 }
 
-/// How many spawned tasks and open streams still hold a callback. For diagnostics and tests.
-pub fn pending_task_count() -> usize {
+/// How many spawned tasks and open streams still hold a callback. Test-only: nothing in a normal build asks.
+#[cfg(test)]
+fn pending_task_count() -> usize {
     TASKS.with(|t| t.borrow().pending.len())
 }
 

@@ -21,8 +21,8 @@ pub use runtime::{
 pub use signal::{ReadSignal, RwSignal, signal};
 pub use surface_local::SurfaceSlot;
 pub use task::{
-    Emitter, Task, cancel_tasks_for, drain_tasks, pending_task_count, reset_tasks, set_task_waker,
-    spawn_stream, spawn_task,
+    Emitter, Task, cancel_tasks_for, drain_tasks, reset_tasks, set_task_waker, spawn_stream,
+    spawn_task,
 };
 
 #[cfg(test)]

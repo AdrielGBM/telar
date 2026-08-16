@@ -5206,7 +5206,6 @@ name = "telar-ui-tree"
 version = "0.1.3"
 dependencies = [
  "criterion",
- "rustc-hash 2.1.3",
  "telar-geometry-core",
  "telar-motion-core",
  "telar-platform-core",

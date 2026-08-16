@@ -49,7 +49,7 @@ pub fn note_damage(active: bool) {
 }
 
 #[inline]
-pub fn enabled() -> bool {
+fn enabled() -> bool {
     *ENABLED.get_or_init(
         || matches!(std::env::var("TELAR_PERF").as_deref(), Ok(v) if !v.is_empty() && v != "0"),
     )
@@ -66,7 +66,7 @@ pub fn now_if_enabled() -> Option<Instant> {
 }
 
 #[inline]
-pub fn record(phase: Phase, dur: Duration) {
+fn record(phase: Phase, dur: Duration) {
     let i = phase as usize;
     let ns = dur.as_nanos() as u64;
     SUMS[i].fetch_add(ns, Ordering::Relaxed);

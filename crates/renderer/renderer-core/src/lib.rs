@@ -13,7 +13,7 @@ mod preprocess;
 mod renderer;
 mod shadow;
 mod style;
-pub mod style_pool;
+mod style_pool;
 
 pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 
@@ -28,9 +28,7 @@ pub use geometry_core::{BorderRadius, Color};
 pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
 pub use image::{ExternalTexture, ImageData, ImageFilter, premultiply_rgba};
 pub use path::{PathData, PathVerb};
-pub use preprocess::{
-    ScaleScratch, blur_padding, blur_sigma, expand_fill_layers, would_expand_fill_layers,
-};
+pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers};
 pub use renderer::RenderBackend;
 pub use shadow::ShadowLayout;
 pub use style::{
@@ -38,4 +36,3 @@ pub use style::{
     LineCap, LineJoin, Paint, PathStyle, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextAlign,
     TextStyle, border_inner_shape,
 };
-pub use style_pool::{hash_path_style, hash_rect_style, hash_text_style};
