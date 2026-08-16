@@ -268,18 +268,33 @@ where
                 mf - layer_oy as f32,
             );
 
-            // Optimization 3: skip draw commands whose visual bounds don't overlap the dirty region. Only applies at the top level (not inside layers): a layer is a fresh isolated pixmap rendered from scratch every frame, so all its commands must run regardless of which window-space region is dirty.
-            if let Some(dirty_rects) = skip_rect {
-                if !inside_layer {
-                    if let Some(vr) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if dirty_rects.iter().all(|dr| !vr.overlaps(*dr)) {
-                            continue;
-                        }
-                    }
+            // Ahead of the shared visual rect below, so a rect that draws nothing never pays for computing one.
+            if let DrawCommand::Rect { rect, style } = cmd
+                && (rect.width <= 0.0
+                    || rect.height <= 0.0
+                    || (style.fill.is_none() && style.stroke.is_none()))
+            {
+                continue;
+            }
+
+            // One visual rect for the whole body: the dirty-region skip and every drawing arm ask the same
+            // question of the same command. `None` for the state commands (clip/matrix/layer), which is what
+            // keeps hoisting this safe — a state command has no bounds and must never be skipped.
+            if let Some(vr) = renderer_core::culling::command_visual_rect(
+                cmd,
+                self.draw_state.cumulative_matrix,
+                &self.font_metrics,
+            ) {
+                // Only at the top level: a layer is a fresh isolated pixmap rendered from scratch every frame,
+                // so all its commands must run regardless of which window-space region is dirty.
+                if let Some(dirty_rects) = skip_rect
+                    && !inside_layer
+                    && dirty_rects.iter().all(|dr| !vr.overlaps(*dr))
+                {
+                    continue;
+                }
+                if cull_bounds(vr, self.draw_state.current_clip()) {
+                    continue;
                 }
             }
 
@@ -287,21 +302,6 @@ where
                 DrawCommand::Rect { rect, style } => {
                     let rect = *rect;
                     let style = **style;
-                    if rect.width <= 0.0
-                        || rect.height <= 0.0
-                        || (style.fill.is_none() && style.stroke.is_none())
-                    {
-                        continue;
-                    }
-                    if let Some(vr) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(vr, self.draw_state.current_clip()) {
-                            continue;
-                        }
-                    }
                     let pixmap = if let Some((layer, _, _, _)) = self.layer_stack.last_mut() {
                         layer
                     } else {
@@ -330,15 +330,6 @@ where
                 DrawCommand::Text { text, rect, style } => {
                     let rect = *rect;
                     let style = **style;
-                    if let Some(vr) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(vr, self.draw_state.current_clip()) {
-                            continue;
-                        }
-                    }
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -375,15 +366,6 @@ where
                 DrawCommand::RichText { runs, rect, base } => {
                     let rect = *rect;
                     let base = **base;
-                    if let Some(vr) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(vr, self.draw_state.current_clip()) {
-                            continue;
-                        }
-                    }
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -413,15 +395,6 @@ where
                     });
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    if let Some(vr) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(vr, self.draw_state.current_clip()) {
-                            continue;
-                        }
-                    }
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -437,15 +410,6 @@ where
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    if let Some(vr) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(vr, self.draw_state.current_clip()) {
-                            continue;
-                        }
-                    }
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -472,15 +436,6 @@ where
                 }
                 DrawCommand::Path { data, style } => {
                     let style = **style;
-                    if let Some(vr) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(vr, self.draw_state.current_clip()) {
-                            continue;
-                        }
-                    }
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
