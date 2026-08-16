@@ -57,11 +57,11 @@ enum Step {
 pub struct Segment {
     // Human-readable widget type name, captured at mount for the devtools tree inspector.
     name: &'static str,
-    // This component's own flattened commands, excluding children (spliced in at compose time).
-    own_commands: Rc<RefCell<Vec<DrawCommand>>>,
-    // Parallel to `own_commands`: whether each command belongs to an `Overlay` region (hoisted to the top
-    // layer at compose time). Same length as `own_commands`.
-    own_overlay: Rc<RefCell<Vec<bool>>>,
+    // This component's own flattened commands, excluding children (spliced in at compose time), each with
+    // whether it belongs to an `Overlay` region (hoisted to the top layer at compose time). One list rather
+    // than two of the same length: the flag was compared in a second pass that allocated a `Vec<bool>` per
+    // re-render to answer what the per-command comparison already knows.
+    own_commands: Rc<RefCell<Vec<(DrawCommand, bool)>>>,
     // Child splice points in emission order (see [`ChildSlots`]).
     child_slots: Rc<RefCell<ChildSlots>>,
     // Set by the effect when this segment's output changes; cleared when composed. This lives on the Segment object (not a thread-local) so it works across the hot-reload dylib boundary: a dylib segment's effect sets it and the binary's compose/dirty-check read the same `Cell` — whereas a thread-local generation would be a separate duplicated instance per side.
@@ -126,15 +126,13 @@ impl Segment {
         name: &'static str,
         render: impl Fn() -> Option<RenderNode> + 'static,
     ) -> Rc<Segment> {
-        let own_commands: Rc<RefCell<Vec<DrawCommand>>> = Default::default();
-        let own_overlay: Rc<RefCell<Vec<bool>>> = Default::default();
+        let own_commands: Rc<RefCell<Vec<(DrawCommand, bool)>>> = Default::default();
         let child_slots: Rc<RefCell<ChildSlots>> = Default::default();
         let stack: Rc<RefCell<Vec<Step>>> = Default::default();
         // Starts dirty so the first compose includes this segment.
         let is_dirty = Rc::new(Cell::new(true));
 
         let own_c = Rc::clone(&own_commands);
-        let overlay_c = Rc::clone(&own_overlay);
         let slots_c = Rc::clone(&child_slots);
         let dirty_c = Rc::clone(&is_dirty);
         let _effect = effect(move || {
@@ -143,14 +141,11 @@ impl Segment {
                 return; // widget is mutably borrowed (event dispatch); keep last render
             };
             let mut own = own_c.borrow_mut();
-            let mut overlay = overlay_c.borrow_mut();
             let mut stk = stack.borrow_mut();
             let mut new_slots: ChildSlots = Vec::new();
-            let own_changed =
-                flatten_segment(node, &mut own, &mut overlay, &mut new_slots, &mut stk);
+            let own_changed = flatten_segment(node, &mut own, &mut new_slots, &mut stk);
             drop(stk);
             drop(own);
-            drop(overlay);
             let mut slots = slots_c.borrow_mut();
             // The boundary structure also changes the output, even if own commands are identical.
             let slots_changed = slots.len() != new_slots.len()
@@ -167,7 +162,6 @@ impl Segment {
         Rc::new(Segment {
             name,
             own_commands,
-            own_overlay,
             child_slots,
             is_dirty,
             _effect,
@@ -207,13 +201,16 @@ impl Segment {
         });
 
         let mut bounds = Rect::default();
-        for cmd in self.own_commands.borrow().iter() {
-            let rect = match cmd {
-                DrawCommand::Rect { rect, .. } => *rect,
-                DrawCommand::Text { rect, .. } => *rect,
-                DrawCommand::Image { rect, .. } => *rect,
-                DrawCommand::PushClip { rect, .. } => *rect,
-                _ => continue,
+        for (cmd, _) in self.own_commands.borrow().iter() {
+            // The renderer's own answer to "what does this command paint", rather than a second list of
+            // arms: the local copy knew four commands, so a `RichText` contributed nothing and a
+            // notification card — whose whole body is one — inspected as an empty rect.
+            let Some(rect) = renderer_core::culling::command_visual_rect(
+                cmd,
+                geometry_core::Transform::IDENTITY.to_array(),
+                &renderer_core::culling::FontMetrics::default(),
+            ) else {
+                continue;
             };
             bounds = union_nonempty(bounds, rect);
         }
@@ -227,12 +224,12 @@ impl Segment {
     }
 }
 
-/// Like `flatten_view`, but `RenderNode::Boundary` records a child-splice point instead of emitting
-/// the child's commands. Returns whether the own command list changed in place.
+/// Flattens one segment's `RenderNode` into its own command list, in place: `RenderNode::Boundary` records a
+/// child-splice point instead of emitting the child's commands, which is what keeps a parent's re-render off
+/// its children. Returns whether that list changed.
 fn flatten_segment(
     root: RenderNode,
-    out: &mut Vec<DrawCommand>,
-    overlay: &mut Vec<bool>,
+    out: &mut Vec<(DrawCommand, bool)>,
     slots: &mut ChildSlots,
     stack: &mut Vec<Step>,
 ) -> bool {
@@ -242,23 +239,21 @@ fn flatten_segment(
     let mut changed = false;
     // Nesting depth of `Overlay` regions; > 0 means the commands/children emitted now are hoisted content.
     let mut overlay_depth: usize = 0;
-    // Rebuilt fresh each flatten (parallel to `out`), then compared with the stored flags to detect a
-    // pure overlay-membership change (same commands, different layering).
-    let mut new_overlay: Vec<bool> = Vec::with_capacity(out.len());
 
     macro_rules! emit_command {
         ($command:expr) => {{
-            let command = $command;
+            // The layering is compared with the command: a subtree that moved into an overlay emits the same
+            // commands and still changes the output.
+            let entry = ($command, overlay_depth > 0);
             if pos < out.len() {
-                if out[pos] != command {
-                    out[pos] = command;
+                if out[pos] != entry {
+                    out[pos] = entry;
                     changed = true;
                 }
             } else {
-                out.push(command);
+                out.push(entry);
                 changed = true;
             }
-            new_overlay.push(overlay_depth > 0);
             pos += 1;
         }};
     }
@@ -329,10 +324,6 @@ fn flatten_segment(
         out.truncate(pos);
         changed = true;
     }
-    if *overlay != new_overlay {
-        *overlay = new_overlay;
-        changed = true;
-    }
     changed
 }
 
@@ -351,15 +342,14 @@ pub(crate) fn compose_into(
 ) {
     seg.is_dirty.set(false);
     let own_commands = seg.own_commands.borrow();
-    let own_overlay = seg.own_overlay.borrow();
     let slots = seg.child_slots.borrow();
     let mut si = 0;
-    for (i, cmd) in own_commands.iter().enumerate() {
+    for (i, (cmd, is_overlay)) in own_commands.iter().enumerate() {
         while si < slots.len() && slots[si].0 == i {
             compose_into(&slots[si].1, out, overlay_out, in_overlay || slots[si].2);
             si += 1;
         }
-        if in_overlay || own_overlay.get(i).copied().unwrap_or(false) {
+        if in_overlay || *is_overlay {
             overlay_out.push(cmd.clone());
         } else {
             out.push(cmd.clone());

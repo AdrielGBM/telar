@@ -27,32 +27,94 @@ pub fn style_follows(node: NodeId, style: impl Fn() -> LayoutStyle + 'static) ->
     })
 }
 
-pub struct StyledContainer {
-    node: NodeId,
-    rect: RwSignal<Rect>,
-    style: Box<dyn Fn(Rect) -> RectStyle>,
+/// The paint a box swaps in per state, and the state itself.
+///
+/// One value so "does this box repaint on a pointer transition" is a question with an owner, instead of a
+/// term someone has to remember to add to a disjunction spelled out at the top of `on_event`.
+struct StateStyle {
     // Swapped in while the pointer is over the box (mouse only), mirroring `Button`'s rect/rect_hover.
-    hover_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    hover: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     is_hovered: RwSignal<bool>,
     // Swapped in while a primary pointer is held down inside the box (the pressed / CSS `:active` state),
-    // taking precedence over `hover_style`. Mouse and touch; cleared on release, leave, or drag-off.
-    active_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    // taking precedence over `hover`. Mouse and touch; cleared on release, leave, or drag-off.
+    active: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     is_active: RwSignal<bool>,
     // Swapped in ahead of every other state: a control that cannot be used must not also look pressable.
-    disabled_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
-    // A closure (like `opacity`) so `view()` and the pointer path both re-read it: whether a control is usable is state that moves.
-    is_disabled: Box<dyn Fn() -> bool>,
+    disabled: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     // Laid *over* whichever state won, not instead of it — see `on_focus_style`.
-    focus_style: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    focus: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+}
+
+impl Default for StateStyle {
+    fn default() -> Self {
+        Self {
+            hover: None,
+            is_hovered: signal(false),
+            active: None,
+            is_active: signal(false),
+            disabled: None,
+            focus: None,
+        }
+    }
+}
+
+impl StateStyle {
+    /// Whether a pointer transition changes how the box looks, and so has to be tracked at all.
+    fn repaints_on_pointer(&self) -> bool {
+        self.hover.is_some() || self.active.is_some()
+    }
+}
+
+/// What the box wants told about the pointer, beyond press and drag.
+#[derive(Default)]
+struct PointerHooks {
+    // Fires with `true`/`false` as the mouse enters/leaves the box (mouse only, like the hover style).
+    hover: Option<Box<dyn Fn(bool)>>,
+    // Fires with the pointer position, local to the box, on every move over it. The continuous half of `hover`, which only reports the crossings.
+    moved: Option<Box<dyn Fn(f32, f32)>>,
+    // Fires with the wheel delta while the pointer is over the box.
+    scroll: Option<Box<dyn Fn(f32, f32)>>,
+    // Pointer shape while the box is hovered; restored to the default on leave. Set from `cursor:` in the DSL.
+    cursor: Option<Cursor>,
+}
+
+impl PointerHooks {
+    /// Whether anything here needs the pointer's moves. `cursor` counts: a box whose only claim is a shape
+    /// still has to see the crossings that set and clear it.
+    fn is_set(&self) -> bool {
+        self.hover.is_some()
+            || self.moved.is_some()
+            || self.scroll.is_some()
+            || self.cursor.is_some()
+    }
+}
+
+/// The box's place in the focus order, when it has one.
+#[derive(Default)]
+struct Focusable {
+    // When set, the box is focusable: it joins the tab order, takes focus on tap, and handles Tab while
+    // focused. `on_focus` observes the transitions.
+    id: Option<FocusId>,
+    // Watches focus transitions for `on_focus`; dropping it (with the box) tears the subscription down.
+    _effect: Option<Effect>,
     // Whether Enter and Space fire the press the way a tap does. Set by `control`, because a control that
     // answers a mouse and not a keyboard is the failure this whole path exists to make unspellable.
     activates: bool,
     // Registered when the box is given a `disabled` source; withdrawn on drop.
-    focus_scope: Option<focus::ScopeId>,
-    // A closure (not a plain f32) so `view()` re-reads it every run: a reactive opacity or a `transition:opacity` animation resolves to its current value on each re-render.
-    opacity: Box<dyn Fn() -> f32>,
+    scope: Option<focus::ScopeId>,
+}
+
+pub struct StyledContainer {
+    node: NodeId,
+    rect: RwSignal<Rect>,
+    style: Box<dyn Fn(Rect) -> RectStyle>,
+    state: StateStyle,
+    // A closure (like `opacity`) so `view()` and the pointer path both re-read it: whether a control is usable is state that moves. `None` is the common case and skips the call on the pointer-move path.
+    disabled_source: Option<Box<dyn Fn() -> bool>>,
+    // A closure (not a plain f32) so `view()` re-reads it every run: a reactive opacity or a `transition:opacity` animation resolves to its current value on each re-render. `None` means fully opaque.
+    opacity: Option<Box<dyn Fn() -> f32>>,
     // Resolved per `view()` (like `opacity`) so a `$signal`-driven transform re-reads its current value. Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity (no wrapping node).
-    transform: Box<dyn Fn(Rect) -> Option<[f32; 6]>>,
+    transform: Option<Box<dyn Fn(Rect) -> Option<[f32; 6]>>>,
     children: TrackedChildren,
     // Set when the box holds a reactive fragment: static + dynamic children route through the host so
     // they interleave in this node (see `child_host`). `children` is empty in that case.
@@ -63,22 +125,11 @@ pub struct StyledContainer {
     kept_effects: Vec<Effect>,
     // Optional drag gesture (slider/reorder/resize): reports the pointer position on press and each move.
     drag: DragGesture,
-    // Fires with `true`/`false` as the mouse enters/leaves the box (mouse only, like the hover style).
-    on_hover: Option<Box<dyn Fn(bool)>>,
-    // Fires with the pointer position, local to the box, on every move over it. The continuous half of `on_hover`, which only reports the crossings.
-    on_pointer_move: Option<Box<dyn Fn(f32, f32)>>,
-    // Fires with the wheel delta while the pointer is over the box.
-    on_scroll: Option<Box<dyn Fn(f32, f32)>>,
+    pointer: PointerHooks,
     // Fires on every key press. Key events carry no pointer position, so they are broadcast to every widget
     // — this is a GLOBAL shortcut handler (there is no per-widget focus), not focused text input.
     on_key: Option<Box<dyn Fn(&Key)>>,
-    // When set, the box is focusable: it joins the tab order, takes focus on tap, and handles Tab while
-    // focused. `on_focus` observes the transitions.
-    focus_id: Option<FocusId>,
-    // Watches focus transitions for `on_focus`; dropping it (with the box) tears the subscription down.
-    _focus_effect: Option<Effect>,
-    // Pointer shape while the box is hovered; restored to the default on leave. Set from `cursor:` in the DSL.
-    cursor: Option<Cursor>,
+    focusable: Focusable,
     // Whether the box declines to shadow what it is drawn over (`pointer-events: none`). Set from
     // `click_through` in the DSL; see `LayoutItem::pointer_opaque`.
     click_through: bool,
@@ -91,35 +142,36 @@ impl StyledContainer {
         children: Vec<Box<dyn LayoutItem>>,
     ) -> Result<Self, LayoutError> {
         let (node, rect, children) = register_container(layout_style, children)?;
-        Ok(Self {
+        Ok(Self::assemble(node, rect, Box::new(style), children, None))
+    }
+
+    /// Everything a fresh box holds before any builder touches it; the two constructors differ only in
+    /// where their children live.
+    fn assemble(
+        node: NodeId,
+        rect: RwSignal<Rect>,
+        style: Box<dyn Fn(Rect) -> RectStyle>,
+        children: TrackedChildren,
+        dyn_host: Option<DynHost>,
+    ) -> Self {
+        Self {
             node,
             rect,
-            style: Box::new(style),
-            hover_style: None,
-            is_hovered: signal(false),
-            active_style: None,
-            is_active: signal(false),
-            disabled_style: None,
-            is_disabled: Box::new(|| false),
-            focus_style: None,
-            activates: false,
-            focus_scope: None,
-            opacity: Box::new(|| 1.0),
-            transform: Box::new(|_| None),
+            style,
+            state: StateStyle::default(),
+            disabled_source: None,
+            opacity: None,
+            transform: None,
             children,
-            dyn_host: None,
+            dyn_host,
             press: PressGesture::default(),
             kept_effects: Vec::new(),
             drag: DragGesture::default(),
-            on_hover: None,
-            on_pointer_move: None,
-            on_scroll: None,
+            pointer: PointerHooks::default(),
             on_key: None,
-            focus_id: None,
-            _focus_effect: None,
-            cursor: None,
+            focusable: Focusable::default(),
             click_through: false,
-        })
+        }
     }
 
     /// A styled box whose children are a mix of static widgets and reactive fragments (`ChildSlot`s),
@@ -133,35 +185,34 @@ impl StyledContainer {
         let node = new_container(layout_style, &[])?;
         let rect = track_layout(node).expect("new_container always registers a signal");
         let dyn_host = DynHost::build(node, slots)?;
-        Ok(Self {
+        Ok(Self::assemble(
             node,
             rect,
-            style: Box::new(style),
-            hover_style: None,
-            is_hovered: signal(false),
-            active_style: None,
-            is_active: signal(false),
-            disabled_style: None,
-            is_disabled: Box::new(|| false),
-            focus_style: None,
-            activates: false,
-            focus_scope: None,
-            opacity: Box::new(|| 1.0),
-            transform: Box::new(|_| None),
-            children: Vec::new(),
-            dyn_host: Some(dyn_host),
-            press: PressGesture::default(),
-            kept_effects: Vec::new(),
-            drag: DragGesture::default(),
-            on_hover: None,
-            on_pointer_move: None,
-            on_scroll: None,
-            on_key: None,
-            focus_id: None,
-            _focus_effect: None,
-            cursor: None,
-            click_through: false,
-        })
+            Box::new(style),
+            Vec::new(),
+            Some(dyn_host),
+        ))
+    }
+
+    /// Whether the box is currently refusing input. `None` — the common case — answers without a dyn call on
+    /// the pointer-move broadcast path, which every box in the tree pays.
+    fn is_disabled(&self) -> bool {
+        self.disabled_source.as_ref().is_some_and(|f| f())
+    }
+
+    /// Whether the box wants nothing from an event and can route it straight to its children, exactly as a
+    /// plain container would.
+    ///
+    /// One question per group rather than one term per field: this predicate was a ten-term disjunction
+    /// amended in ten commits, two of them fixing the omission the shape invites — a box whose only claim
+    /// was a cursor, and one whose only claim was `on_key`, each silently lost its events.
+    fn is_inert(&self) -> bool {
+        !self.press.is_set()
+            && !self.drag.is_set()
+            && !self.state.repaints_on_pointer()
+            && !self.pointer.is_set()
+            && self.on_key.is_none()
+            && self.focusable.id.is_none()
     }
 
     fn dispatch_children(&mut self, event: &Event) -> EventResult {
@@ -172,7 +223,7 @@ impl StyledContainer {
     }
 
     pub fn with_opacity(mut self, opacity: impl Fn() -> f32 + 'static) -> Self {
-        self.opacity = Box::new(opacity);
+        self.opacity = Some(Box::new(opacity));
         self
     }
 
@@ -182,14 +233,14 @@ impl StyledContainer {
         mut self,
         transform: impl Fn(Rect) -> Option<[f32; 6]> + 'static,
     ) -> Self {
-        self.transform = Box::new(transform);
+        self.transform = Some(Box::new(transform));
         self
     }
 
     /// Paint the box with `f` while the mouse hovers it (a declarative style swap, like `Button`).
     /// Hover is mouse-only; touch never sets it, so a tap leaves no stuck hover state.
     pub fn on_hover_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
-        self.hover_style = Some(Box::new(f));
+        self.state.hover = Some(Box::new(f));
         self
     }
 
@@ -197,7 +248,7 @@ impl StyledContainer {
     /// state, which takes precedence over `on_hover_style`. Unlike hover it tracks touch as well as mouse,
     /// and it clears on release, on leaving the box, or once the press drags off, so it never sticks.
     pub fn on_active_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
-        self.active_style = Some(Box::new(f));
+        self.state.active = Some(Box::new(f));
         self
     }
 
@@ -212,12 +263,12 @@ impl StyledContainer {
     /// pointer and still showing a hand cursor, which says "press me" about something that will do nothing.
     pub fn disabled(mut self, f: impl Fn() -> bool + 'static) -> Self {
         let f = std::rc::Rc::new(f);
-        self.is_disabled = {
+        self.disabled_source = Some({
             let f = f.clone();
             Box::new(move || f())
-        };
+        });
         // Tab is the question the pointer already answers here, so it goes through the same mechanism a hidden overlay uses — which gives a disabled *wrapper* the `fieldset` reading for the keyboard too, rather than shielding the mouse and leaving Tab a way in.
-        self.focus_scope = Some(focus::register_scope_because(
+        self.focusable.scope = Some(focus::register_scope_because(
             self.node,
             move || !f(),
             false,
@@ -228,7 +279,7 @@ impl StyledContainer {
 
     /// The paint for the disabled state, which wins over the pressed and hover ones.
     pub fn on_disabled_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
-        self.disabled_style = Some(Box::new(f));
+        self.state.disabled = Some(Box::new(f));
         self
     }
 
@@ -259,11 +310,11 @@ impl StyledContainer {
     /// Deliberately not implied by [`on_press`](Self::on_press): a scrim, a click-away backdrop and a drag
     /// surface all take presses and none of them is a place the keyboard should stop.
     pub fn control(mut self, role: focus::Role) -> Self {
-        let id = *self.focus_id.get_or_insert_with(focus::next_id);
+        let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_with_role(id, focus::FocusKind::Widget, self.node, role);
-        self.activates = true;
-        if self.focus_style.is_none() {
-            self.focus_style = Some(Box::new(|_r| default_focus_ring()));
+        self.focusable.activates = true;
+        if self.state.focus.is_none() {
+            self.state.focus = Some(Box::new(|_r| default_focus_ring()));
         }
         self.mark_interactive();
         self
@@ -275,7 +326,7 @@ impl StyledContainer {
     /// reader announces "checkbox" and stops — and a default of "unticked" would be worse, since it would be
     /// confidently wrong for half of them.
     pub fn toggled(self, state: impl Fn() -> bool + 'static) -> Self {
-        if let Some(id) = self.focus_id {
+        if let Some(id) = self.focusable.id {
             focus::set_toggled(id, state);
         }
         self
@@ -283,17 +334,17 @@ impl StyledContainer {
 
     pub fn on_focus_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         // Declaring a ring is declaring the box focusable, or it would join no tab order and the ring would be a style nothing could satisfy.
-        let id = *self.focus_id.get_or_insert_with(focus::next_id);
+        let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_at(id, focus::FocusKind::Widget, self.node);
-        self.focus_style = Some(Box::new(f));
+        self.state.focus = Some(Box::new(f));
         self
     }
 
     /// Whether the box is currently pressed (a primary pointer is held down inside it). Set only when an
     /// `active_style` is present; drives its paint swap and clears on release/leave/drag-off.
     fn set_active(&self, active: bool) {
-        if self.active_style.is_some() && self.is_active.get() != active {
-            self.is_active.set(active);
+        if self.state.active.is_some() && self.state.is_active.get() != active {
+            self.state.is_active.set(active);
         }
     }
 
@@ -303,15 +354,16 @@ impl StyledContainer {
     fn end_containment(&mut self) {
         self.press.cancel();
         self.set_active(false);
-        let tracks_hover =
-            self.hover_style.is_some() || self.on_hover.is_some() || self.cursor.is_some();
-        if tracks_hover && self.is_hovered.get() {
-            self.is_hovered.set(false);
+        let tracks_hover = self.state.hover.is_some()
+            || self.pointer.hover.is_some()
+            || self.pointer.cursor.is_some();
+        if tracks_hover && self.state.is_hovered.get() {
+            self.state.is_hovered.set(false);
             // The shape was this box's claim about what a press would do here, and nothing else restores it while the pointer is still inside the window.
-            if self.cursor.is_some() {
+            if self.pointer.cursor.is_some() {
                 platform_core::push_window_command(WindowCommand::SetCursor(Cursor::Default));
             }
-            if let Some(cb) = &self.on_hover {
+            if let Some(cb) = &self.pointer.hover {
                 cb(false);
             }
         }
@@ -322,7 +374,7 @@ impl StyledContainer {
     /// The shape is the app's statement of what the next press will do — orbit, resize a panel, place a
     /// point — so it belongs to the widget that would handle that press, not to a mode the app tracks.
     pub fn cursor(mut self, cursor: Cursor) -> Self {
-        self.cursor = Some(cursor);
+        self.pointer.cursor = Some(cursor);
         self
     }
 
@@ -498,7 +550,7 @@ impl StyledContainer {
     /// [`on_hover`](Self::on_hover) for a handler the caller may not have supplied.
     pub fn maybe_on_hover(mut self, f: Option<impl Fn(bool) + 'static>) -> Self {
         let Some(f) = f else { return self };
-        self.on_hover = Some(Box::new(f));
+        self.pointer.hover = Some(Box::new(f));
         self.mark_interactive();
         self
     }
@@ -517,7 +569,7 @@ impl StyledContainer {
     /// [`on_pointer_move`](Self::on_pointer_move) for a handler the caller may not have supplied.
     pub fn maybe_on_pointer_move(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
         let Some(f) = f else { return self };
-        self.on_pointer_move = Some(Box::new(f));
+        self.pointer.moved = Some(Box::new(f));
         self.mark_interactive();
         self
     }
@@ -536,7 +588,7 @@ impl StyledContainer {
     /// [`on_scroll`](Self::on_scroll) for a handler the caller may not have supplied.
     pub fn maybe_on_scroll(mut self, f: Option<impl Fn(f32, f32) + 'static>) -> Self {
         let Some(f) = f else { return self };
-        self.on_scroll = Some(Box::new(f));
+        self.pointer.scroll = Some(Box::new(f));
         self.mark_interactive();
         self
     }
@@ -569,11 +621,11 @@ impl StyledContainer {
     /// [`on_focus`](Self::on_focus) for a handler the caller may not have supplied.
     pub fn maybe_on_focus(mut self, f: Option<impl Fn(bool) + 'static>) -> Self {
         let Some(f) = f else { return self };
-        let id = *self.focus_id.get_or_insert_with(focus::next_id);
+        let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_at(id, focus::FocusKind::Widget, self.node);
         // An effect fires the callback only on an actual transition (its first run seeds `last`, no fire).
         let last = std::rc::Rc::new(std::cell::Cell::new(focus::is_focused(id)));
-        self._focus_effect = Some(effect(move || {
+        self.focusable._effect = Some(effect(move || {
             let now = focus::is_focused(id);
             if now != last.get() {
                 last.set(now);
@@ -598,22 +650,22 @@ impl Component for StyledContainer {
     fn view(&self) -> RenderNode {
         let r = self.rect.get();
         // Disabled wins over pressed wins over hover wins over base. Each state is only read when its style exists, so a plain box's view() stays inert and subscribes to none of them.
-        let style = if let Some(disabled) = &self.disabled_style
-            && (self.is_disabled)()
+        let style = if let Some(disabled) = &self.state.disabled
+            && self.is_disabled()
         {
             disabled
-        } else if let Some(active) = &self.active_style
-            && self.is_active.get()
+        } else if let Some(active) = &self.state.active
+            && self.state.is_active.get()
         {
             active
-        } else if let Some(hover) = &self.hover_style
-            && self.is_hovered.get()
+        } else if let Some(hover) = &self.state.hover
+            && self.state.is_hovered.get()
         {
             hover
         } else {
             &self.style
         };
-        let painted = match (&self.focus_style, self.focus_id) {
+        let painted = match (&self.state.focus, self.focusable.id) {
             (Some(ring), Some(id)) if focus::is_focus_visible(id) => {
                 let base = style(r);
                 let ring = ring(r);
@@ -653,13 +705,13 @@ impl Component for StyledContainer {
                     .chain(self.children.iter().map(|c| c.segment.boundary())),
             ),
         };
-        let opacity = (self.opacity)();
+        let opacity = self.opacity.as_ref().map_or(1.0, |o| o());
         let composed = if opacity < 1.0 {
             RenderNode::layer(opacity, 0.0, [content])
         } else {
             content
         };
-        match (self.transform)(r) {
+        match self.transform.as_ref().and_then(|t| t(r)) {
             Some(matrix) => RenderNode::transform_with(matrix, [composed]),
             None => composed,
         }
@@ -668,7 +720,7 @@ impl Component for StyledContainer {
     fn on_event(&mut self, event: &Event) -> EventResult {
         // `disabled` on a region means the region, as a `fieldset` does — hence ahead of the pure-routing bail below, which a wrapper with no handlers of its own would otherwise take.
         // The state it was showing goes with it, or a box disabled mid-hover keeps the highlight and the hand cursor it can no longer honour.
-        if (self.is_disabled)() {
+        if self.is_disabled() {
             return match event {
                 Event::PointerMoved { .. }
                 | Event::PointerPressed { .. }
@@ -681,19 +733,7 @@ impl Component for StyledContainer {
                 _ => self.dispatch_children(event),
             };
         }
-        // No tap/drag handler, hover style, or event callbacks: behave exactly as a plain container (pure routing).
-        if !self.press.is_set()
-            && !self.drag.is_set()
-            && self.hover_style.is_none()
-            && self.active_style.is_none()
-            && self.on_hover.is_none()
-            && self.on_pointer_move.is_none()
-            && self.on_scroll.is_none()
-            && self.on_key.is_none()
-            && self.focus_id.is_none()
-            // A box whose only claim is a pointer shape still has to see the moves that set and clear it; `tracks_hover` below counts `cursor` for exactly that, and bailing here skipped past it.
-            && self.cursor.is_none()
-        {
+        if self.is_inert() {
             return self.dispatch_children(event);
         }
         let rect = self.rect.get();
@@ -719,24 +759,25 @@ impl Component for StyledContainer {
                 if !inside {
                     self.set_active(false);
                 }
-                if inside && let Some(cb) = &self.on_pointer_move {
+                if inside && let Some(cb) = &self.pointer.moved {
                     cb(*x as f32 - rect.x, *y as f32 - rect.y);
                 }
-                let tracks_hover =
-                    self.hover_style.is_some() || self.on_hover.is_some() || self.cursor.is_some();
+                let tracks_hover = self.state.hover.is_some()
+                    || self.pointer.hover.is_some()
+                    || self.pointer.cursor.is_some();
                 if tracks_hover
                     && matches!(source, PointerSource::Mouse)
-                    && inside != self.is_hovered.get()
+                    && inside != self.state.is_hovered.get()
                 {
-                    self.is_hovered.set(inside);
-                    if let Some(cursor) = self.cursor {
+                    self.state.is_hovered.set(inside);
+                    if let Some(cursor) = self.pointer.cursor {
                         platform_core::push_window_command(WindowCommand::SetCursor(if inside {
                             cursor
                         } else {
                             Cursor::Default
                         }));
                     }
-                    if let Some(cb) = &self.on_hover {
+                    if let Some(cb) = &self.pointer.hover {
                         cb(inside);
                     }
                     return EventResult::Handled;
@@ -761,7 +802,7 @@ impl Component for StyledContainer {
                     self.set_active(true);
                 }
                 // A tap inside a focusable box takes focus (and consumes the press so focus sticks).
-                let focused = match self.focus_id {
+                let focused = match self.focusable.id {
                     Some(id) if primary && rect.contains(*x as f32, *y as f32) => {
                         focus::request_from_pointer(id);
                         true
@@ -825,7 +866,7 @@ impl Component for StyledContainer {
                 if self.dispatch_children(event) == EventResult::Handled {
                     return EventResult::Handled;
                 }
-                let Some(cb) = &self.on_scroll else {
+                let Some(cb) = &self.pointer.scroll else {
                     return EventResult::Ignored;
                 };
                 if !rect.contains(*x as f32, *y as f32) {
@@ -841,7 +882,7 @@ impl Component for StyledContainer {
             // Broadcast (no pointer position): fire the global key handler, then keep routing to children.
             Event::KeyPressed { key, modifiers } => {
                 // While this focusable box holds focus, Tab moves focus to the next/previous field.
-                if let Some(id) = self.focus_id
+                if let Some(id) = self.focusable.id
                     && focus::is_focused(id)
                     && matches!(key, Key::Named(NamedKey::Tab))
                 {
@@ -856,9 +897,9 @@ impl Component for StyledContainer {
                 // focused box with no press handler still reaches whatever else wanted it — and skipped
                 // entirely for a box that handles its own keys, which is not second-guessed: a dropdown
                 // trigger answers Enter by confirming a highlighted row, not by re-opening itself.
-                if self.activates
+                if self.focusable.activates
                     && self.on_key.is_none()
-                    && let Some(id) = self.focus_id
+                    && let Some(id) = self.focusable.id
                     && focus::is_focused(id)
                     && matches!(key, Key::Named(NamedKey::Enter | NamedKey::Space))
                     && self.press.activate()
@@ -886,11 +927,11 @@ impl Component for StyledContainer {
 impl Drop for StyledContainer {
     fn drop(&mut self) {
         // Drop the focus watcher first so releasing focus below doesn't fire `on_focus` during teardown.
-        self._focus_effect.take();
-        if let Some(id) = self.focus_id {
+        self.focusable._effect.take();
+        if let Some(id) = self.focusable.id {
             focus::unregister(id);
         }
-        if let Some(scope) = self.focus_scope {
+        if let Some(scope) = self.focusable.scope {
             focus::unregister_scope(scope);
         }
         crate::input_region::unregister_interactive(self.node);
@@ -1730,7 +1771,7 @@ mod tests {
         )
         .unwrap();
 
-        let id = card.focus_id.expect("a ring makes the box focusable");
+        let id = card.focusable.id.expect("a ring makes the box focusable");
         focus::request(id);
         card.on_event(&Event::PointerMoved {
             x: 100.0,
@@ -1771,7 +1812,7 @@ mod tests {
             AvailableSpace::Definite(100.0),
         )
         .unwrap();
-        let id = card.focus_id.expect("a ring makes the box focusable");
+        let id = card.focusable.id.expect("a ring makes the box focusable");
 
         card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
         assert!(focus::is_focused(id), "the tap did take focus");
@@ -1846,7 +1887,7 @@ mod tests {
     /// very rect the layout pass that runs it is about to write. `styled_by` makes it reachable from any
     /// widget, since `style()` is an arbitrary closure the author wrote.
     ///
-    /// It settles instead of panicking, and the reason is worth pinning: `compute_layout_root` collects the
+    /// It settles instead of panicking, and the reason is worth pinning: `compute_layout` collects the
     /// `(signal, rect)` updates *while* holding the layout-runtime borrow and applies them only after
     /// releasing it, so the flush that re-runs this closure never re-enters a live borrow. The remaining
     /// failure mode of this shape is a re-layout cycle, which has its own named assert.
@@ -2656,7 +2697,7 @@ mod tests {
         )
         .unwrap()
         .maybe_on_focus(None::<fn(bool)>);
-        assert!(card.focus_id.is_none(), "no handler, no focus id");
+        assert!(card.focusable.id.is_none(), "no handler, no focus id");
 
         focus::focus_next();
         assert!(focus::exposed().is_empty(), "and it is not a tab stop");

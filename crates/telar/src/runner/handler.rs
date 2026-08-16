@@ -894,7 +894,9 @@ where
         let commands_ref = self.tree.as_ref().map(|t| t.frame());
         let base_slice: &[renderer_core::DrawCommand] = commands_ref.as_deref().unwrap_or(&[]);
         if let Some(tree) = &self.tree {
-            self.dev.on_tree(&crate::tree::TreeView(tree.as_ref()));
+            let mut nodes = Vec::new();
+            tree.walk(&mut nodes);
+            self.dev.on_tree(&nodes);
         }
         let logical_w = w as f32 / self.scale_factor;
         let logical_h = h as f32 / self.scale_factor;

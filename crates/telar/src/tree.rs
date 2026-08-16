@@ -187,30 +187,6 @@ impl HotTree {
     }
 }
 
-/// Adapts a [`UiTree`] to the devtools inspector's view of a tree.
-pub struct TreeView<'a>(pub &'a dyn UiTree);
-
-impl crate::dev_plugin::DevTreeView for TreeView<'_> {
-    fn node_count(&self) -> usize {
-        let mut nodes = Vec::new();
-        self.0.walk(&mut nodes);
-        nodes.len()
-    }
-
-    fn for_each_node(&self, f: &mut dyn FnMut(&crate::dev_plugin::DevNodeInfo)) {
-        let mut nodes = Vec::new();
-        self.0.walk(&mut nodes);
-        for node in &nodes {
-            f(&crate::dev_plugin::DevNodeInfo {
-                id: node.id,
-                name: node.name,
-                rect: node.rect,
-                depth: node.depth,
-            });
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -6,21 +6,9 @@
 use std::borrow::Cow;
 use std::time::Duration;
 
-use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::DrawCommand;
-
-pub struct DevNodeInfo {
-    pub id: u64,
-    pub name: &'static str,
-    pub rect: Rect,
-    pub depth: usize,
-}
-
-pub trait DevTreeView {
-    fn node_count(&self) -> usize;
-    fn for_each_node(&self, f: &mut dyn FnMut(&DevNodeInfo));
-}
+use ui_tree::SegmentNodeInfo;
 
 pub enum DevAction {
     None,
@@ -48,7 +36,10 @@ pub trait DevPlugin: Default + 'static {
         let _ = error;
     }
 
-    fn on_tree(&mut self, _tree: &dyn DevTreeView) {}
+    /// The mounted component tree as the inspector sees it, once per frame. Takes the walked slice rather
+    /// than a trait that walks on demand: the two questions the trait offered were asked one after the
+    /// other, and each walked the whole tree.
+    fn on_tree(&mut self, _nodes: &[SegmentNodeInfo]) {}
 }
 
 impl DevPlugin for () {

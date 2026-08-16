@@ -303,6 +303,11 @@ impl LayoutEngine {
     /// non-row node (missing / errored), is `false`. A transparent fragment reads its host's axis to know
     /// which margin edge a per-item gap sits on.
     pub fn is_row(&self, node: NodeId) -> bool {
+        // Same guard every other read takes, and for the same reason: taffy panics on a freed key rather
+        // than reporting it, so a node removed since the caller last saw it has to be answered here.
+        if self.alive(node).is_err() {
+            return false;
+        }
         self.tree
             .style(node)
             .map(|s| {
@@ -426,6 +431,7 @@ impl LayoutEngine {
     where
         F: FnMut(NodeId, geometry_core::Rect) -> bool,
     {
+        self.alive(root)?;
         struct StackEntry {
             node: NodeId,
             offset_x: f32,

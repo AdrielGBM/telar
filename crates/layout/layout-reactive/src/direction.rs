@@ -2,7 +2,7 @@
 //!
 //! Mirrors `theme-core`'s active-mode store and `i18n-core`'s active-locale store: a thread-local `RwSignal`,
 //! a setter, and a reactive getter. Unlike those two, the value is not read by the widgets themselves —
-//! [`compute_layout_root`](crate::compute_layout_root) reconciles each surface's layout engine with it before
+//! [`compute_layout`](crate::compute_layout) reconciles each surface's layout engine with it before
 //! laying out, so a flip re-resolves the existing nodes rather than rebuilding any part of the tree. That is
 //! also what makes it reach every surface on the thread, not just whichever one was active at the call.
 

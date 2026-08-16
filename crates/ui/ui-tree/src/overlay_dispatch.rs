@@ -110,57 +110,50 @@ fn pointer_pos(event: &Event) -> Option<(f32, f32)> {
 /// is outside every overlay and no gesture is captured). Non-pointer events always return `Ignored` so
 /// keyboard and `CursorLeft` keep broadcasting through the tree.
 pub fn dispatch_overlays(event: &Event) -> EventResult {
+    let press = matches!(event, Event::PointerPressed { .. });
+    let release = matches!(event, Event::PointerReleased { .. });
+    // Only these three reach an overlay, and the snapshot below is not free: taking it for a key press
+    // cloned the whole registry to answer `Ignored`.
+    if !press && !release && !matches!(event, Event::PointerMoved { .. }) {
+        return EventResult::Ignored;
+    }
     // Snapshot the registry (cheap `Rc` clones) and drop the borrow before dispatching: a handler may
     // write signals whose deferred flush registers/unregisters an overlay, which would re-enter the borrow.
     let (entries, captured) = with_overlays_ref(|r| (r.entries.clone(), r.captured));
     if entries.is_empty() {
         return EventResult::Ignored;
     }
-    match event {
-        Event::PointerPressed { .. } => {
-            let (x, y) = pointer_pos(event).unwrap();
-            for (id, sink) in entries.iter().rev() {
-                if sink.content_rect().contains(x, y) {
-                    let handled = sink.dispatch(event) == EventResult::Handled;
-                    // A modal consumes the press regardless; a click-through overlay only when a child took
-                    // it — otherwise the loop continues to the overlays below and ultimately the tree.
-                    if sink.blocking() || handled {
-                        // Capture the gesture so following moves/releases route here wherever the pointer goes.
-                        with_overlays(|r| r.captured = Some(*id));
-                        return EventResult::Handled;
-                    }
-                }
-            }
-            EventResult::Ignored
-        }
-        Event::PointerMoved { .. } | Event::PointerReleased { .. } => {
-            let is_release = matches!(event, Event::PointerReleased { .. });
-            if let Some(cap_id) = captured {
-                if let Some((_, sink)) = entries.iter().find(|(id, _)| *id == cap_id) {
-                    sink.dispatch(event);
-                    if is_release {
-                        with_overlays(|r| r.captured = None);
-                    }
-                    return EventResult::Handled;
-                }
-                // The capturing overlay is gone (dismissed mid-gesture); drop the stale capture.
+    let (x, y) = pointer_pos(event).unwrap();
+
+    // A gesture that began on an overlay stays there wherever the pointer goes, until it is released.
+    if !press && let Some(cap_id) = captured {
+        if let Some((_, sink)) = entries.iter().find(|(id, _)| *id == cap_id) {
+            sink.dispatch(event);
+            if release {
                 with_overlays(|r| r.captured = None);
             }
-            let (x, y) = pointer_pos(event).unwrap();
-            for (_, sink) in entries.iter().rev() {
-                if sink.content_rect().contains(x, y) {
-                    let handled = sink.dispatch(event) == EventResult::Handled;
-                    // Same rule as a press: a modal swallows it over its whole barrier; a click-through one
-                    // only when a child handled it, else the move/release falls through to the layer behind.
-                    if sink.blocking() || handled {
-                        return EventResult::Handled;
-                    }
-                }
-            }
-            EventResult::Ignored
+            return EventResult::Handled;
         }
-        _ => EventResult::Ignored,
+        // The capturing overlay is gone (dismissed mid-gesture); drop the stale capture.
+        with_overlays(|r| r.captured = None);
     }
+
+    // Topmost first. A modal consumes the event over its whole barrier; a click-through overlay only when a
+    // child took it, otherwise the walk continues to the overlays below and ultimately to the tree.
+    for (id, sink) in entries.iter().rev() {
+        if !sink.content_rect().contains(x, y) {
+            continue;
+        }
+        let handled = sink.dispatch(event) == EventResult::Handled;
+        if sink.blocking() || handled {
+            if press {
+                // Capture the gesture so following moves/releases route here wherever the pointer goes.
+                with_overlays(|r| r.captured = Some(*id));
+            }
+            return EventResult::Handled;
+        }
+    }
+    EventResult::Ignored
 }
 
 #[cfg(test)]

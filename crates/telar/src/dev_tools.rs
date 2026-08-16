@@ -2,12 +2,13 @@ use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use crate::dev_plugin::{DevAction, DevPlugin, DevTreeView};
+use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::{
     BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, Stroke, TextStyle,
 };
+use ui_tree::SegmentNodeInfo;
 
 fn rect_command(rect: Rect, style: RectStyle) -> DrawCommand {
     DrawCommand::Rect {
@@ -51,13 +52,6 @@ const GRAY_DIM: Color = Color::rgba(0.3, 0.3, 0.3, 1.0);
 const FPS_WINDOW: Duration = Duration::from_secs(1);
 const KEEPALIVE_INTERVAL: Duration = Duration::from_millis(1000);
 
-struct CachedNode {
-    id: u64,
-    name: &'static str,
-    rect: Rect,
-    depth: usize,
-}
-
 pub struct DevTools {
     frame_times: VecDeque<Instant>,
     last_fps: u32,
@@ -67,7 +61,7 @@ pub struct DevTools {
     build_error: Option<String>,
     inspector_open: bool,
     selected_node: Option<u64>,
-    nodes: Vec<CachedNode>,
+    nodes: Vec<SegmentNodeInfo>,
     inspector_rect: Rect,
     frame_time_millis: f32,
     node_count: usize,
@@ -429,16 +423,9 @@ impl DevPlugin for DevTools {
         self.build_error = error;
     }
 
-    fn on_tree(&mut self, tree: &dyn DevTreeView) {
-        self.node_count = tree.node_count();
+    fn on_tree(&mut self, nodes: &[SegmentNodeInfo]) {
+        self.node_count = nodes.len();
         self.nodes.clear();
-        tree.for_each_node(&mut |info| {
-            self.nodes.push(CachedNode {
-                id: info.id,
-                name: info.name,
-                rect: info.rect,
-                depth: info.depth,
-            });
-        });
+        self.nodes.extend_from_slice(nodes);
     }
 }

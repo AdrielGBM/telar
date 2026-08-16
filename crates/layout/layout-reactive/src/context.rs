@@ -37,19 +37,11 @@ pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, 
     with_runtime(|rt| rt.new_container(style, children))
 }
 
-pub fn compute_layout(
-    root: NodeId,
-    width: AvailableSpace,
-    height: AvailableSpace,
-) -> Result<(), LayoutError> {
-    compute_layout_root(root, width, height)
-}
-
 /// Lays out `root` against the given space and reflects the result into each node's rect signal.
 /// Collects the (signal, rect) updates while holding the runtime borrow, then applies them in a batch
 /// *after* releasing it — a rect `.set()` can flush effects, and one of those may itself touch the
 /// layout runtime (a reactive list), which would re-enter the borrow.
-pub fn compute_layout_root(
+pub fn compute_layout(
     root: NodeId,
     width: AvailableSpace,
     height: AvailableSpace,
@@ -82,7 +74,7 @@ pub fn relayout_if_dirty() {
             .collect()
     });
     for (root, width, height) in roots {
-        let _ = compute_layout_root(root, width, height);
+        let _ = compute_layout(root, width, height);
     }
 }
 
@@ -122,7 +114,7 @@ pub fn is_hidden(node: NodeId) -> bool {
 }
 
 pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {
-    with_runtime(|rt| rt.mark_dirty(node))
+    with_runtime(|rt| rt.engine.mark_dirty(node))
 }
 
 /// Replaces `node`'s layout style and dirties it, so the next pass lays it out again.
@@ -133,13 +125,13 @@ pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {
 pub fn set_layout_style(node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
     with_runtime(|rt| {
         rt.engine.set_style(node, style)?;
-        rt.mark_dirty(node)
+        rt.engine.mark_dirty(node)
     })
 }
 
 /// Shows or hides a node in layout flow. A hidden node takes no space (and lays out none of its subtree); mark an ancestor dirty and recompute for the change to take effect. Used for responsive layouts (e.g. collapsing a sidebar on narrow windows).
 pub fn set_display(node: NodeId, visible: bool) {
-    with_runtime(|rt| rt.set_display(node, visible))
+    with_runtime(|rt| rt.engine.set_display(node, visible))
 }
 
 /// Lays `node`'s children along the horizontal axis, after the node was built as a column. A reconciling
@@ -537,14 +529,6 @@ impl LayoutRuntime {
 
     pub(crate) fn track_layout(&self, node: NodeId) -> Option<RwSignal<Rect>> {
         self.registry.get(&node).cloned()
-    }
-
-    pub(crate) fn mark_dirty(&mut self, node: NodeId) -> Result<(), LayoutError> {
-        self.engine.mark_dirty(node)
-    }
-
-    pub(crate) fn set_display(&mut self, node: NodeId, visible: bool) {
-        self.engine.set_display(node, visible);
     }
 
     fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {

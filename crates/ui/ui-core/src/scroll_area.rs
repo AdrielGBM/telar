@@ -481,7 +481,7 @@ impl LayoutScrollArea {
         let layout_effect = effect(move || {
             let vp = viewport.get();
             if vp.width > 0.0 {
-                let _ = crate::context::compute_layout_root(
+                let _ = crate::context::compute_layout(
                     content_node,
                     AvailableSpace::Definite(vp.width),
                     AvailableSpace::MaxContent,
