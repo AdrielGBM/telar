@@ -1,5 +1,5 @@
 use taffy::{
-    Dimension, Display, FlexDirection, FlexWrap, GridAutoFlow, GridPlacement, LengthPercentage,
+    Dimension, Display, FlexDirection, FlexWrap, GridPlacement, LengthPercentage,
     LengthPercentageAuto, Style,
 };
 
@@ -437,40 +437,6 @@ impl LayoutStyle {
             .into_iter()
             .map(|t| t.into_template_component())
             .collect();
-        self
-    }
-
-    pub fn grid_template_rows(mut self, tracks: Vec<TemplateTrack>) -> Self {
-        self.inner.grid_template_rows = tracks
-            .into_iter()
-            .map(|t| t.into_template_component())
-            .collect();
-        self
-    }
-
-    pub fn grid_auto_flow_row(mut self) -> Self {
-        self.inner.grid_auto_flow = GridAutoFlow::Row;
-        self
-    }
-
-    pub fn grid_auto_flow_column(mut self) -> Self {
-        self.inner.grid_auto_flow = GridAutoFlow::Column;
-        self
-    }
-
-    pub fn grid_column(mut self, start: i16, end: i16) -> Self {
-        self.inner.grid_column = taffy::geometry::Line {
-            start: taffy::style_helpers::line(start),
-            end: taffy::style_helpers::line(end),
-        };
-        self
-    }
-
-    pub fn grid_row(mut self, start: i16, end: i16) -> Self {
-        self.inner.grid_row = taffy::geometry::Line {
-            start: taffy::style_helpers::line(start),
-            end: taffy::style_helpers::line(end),
-        };
         self
     }
 

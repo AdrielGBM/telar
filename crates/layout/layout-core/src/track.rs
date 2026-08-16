@@ -21,14 +21,6 @@ impl TemplateTrack {
         TemplateTrack::Single(style_helpers::auto())
     }
 
-    pub fn min_content() -> Self {
-        TemplateTrack::Single(style_helpers::min_content())
-    }
-
-    pub fn max_content() -> Self {
-        TemplateTrack::Single(style_helpers::max_content())
-    }
-
     pub fn minmax(min: TemplateTrack, max: TemplateTrack) -> Self {
         let min_fn = match min {
             TemplateTrack::Single(tsf) => tsf.min,
