@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use telar_transpiler::SourceMap;
-use telar_workspace::find_ancestor_dir;
+use telar_transpiler::find_ancestor_dir;
 
 /// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`. Anchored on `Cargo.toml` (not `telar.toml`) so this works in crates without an rsx config too.
 pub fn crate_root(rsx_path: &Path) -> Option<PathBuf> {
@@ -42,14 +42,20 @@ pub fn generated_target(
     // Match the macro: baked `src:"..."` paths resolve against the project asset root, not the `.rsx` dir.
     let assets_root = telar_transpiler::assets_root(&root);
     // Match the macro's cross-file registry so component calls (optional props, slot arg) resolve the same
-    // in the editor as in the build. The file being edited uses its live buffer, not its on-disk content.
-    let registry = build_component_registry(&src_dir, rsx_path, source);
+    // in the editor as in the build. The file being edited uses its live buffer, not its on-disk content, and
+    // a short-name collision is ignored rather than fatal: the build reports it, and IntelliSense is more
+    // useful degraded than dark.
+    let components = telar_transpiler::build_component_registry(
+        &src_dir,
+        &telar_transpiler::component_paths(&root),
+        &[(rsx_path, source)],
+    );
     let result = telar_transpiler::transpile_source(
         source,
         &stem,
         theme_type,
         Some(assets_root.as_path()),
-        Some(&registry),
+        Some(&components.registry),
     )
     .ok()?;
     let out_path = root.join(".telar").join("build").join(&rel);
@@ -68,37 +74,6 @@ pub fn sync_build_file(rsx_path: &Path, source: &str, theme_type: Option<&str>) 
     };
     write_if_changed(&path, &code);
     write_if_changed(&path.with_extension("rs.map"), &map.to_json());
-}
-
-/// Scans every `.rsx` under `src_dir` for its component signature, mirroring the macro's pre-pass so the
-/// editor and the build agree on cross-file call shapes. The file at `current_path` is scanned from its
-/// live `current_source` buffer (not disk), so unsaved edits to a component's props/slots take effect.
-fn build_component_registry(
-    src_dir: &Path,
-    current_path: &Path,
-    current_source: &str,
-) -> telar_transpiler::ComponentRegistry {
-    let mut registry = telar_transpiler::ComponentRegistry::new();
-    // Seed the built-in component catalogue first so a local `.rsx` of the same name still overrides it.
-    for (name, sig) in telar_transpiler::external_component_sigs() {
-        registry.insert(name.to_string(), sig);
-    }
-    for rsx_file in telar_transpiler::find_rsx_files(src_dir) {
-        let source = if rsx_file == current_path {
-            current_source.to_string()
-        } else {
-            std::fs::read_to_string(&rsx_file).unwrap_or_default()
-        };
-        let sig = telar_transpiler::scan_component_sig(&source);
-        let stem = telar_transpiler::relative_stem(&rsx_file, src_dir);
-        registry.insert(telar_transpiler::naming::to_snake_case(&stem), sig.clone());
-        if let Some(base) = rsx_file.file_stem().and_then(|s| s.to_str()) {
-            registry
-                .entry(telar_transpiler::naming::to_snake_case(base))
-                .or_insert(sig);
-        }
-    }
-    registry
 }
 
 /// The `<crate>/.telar/build/` path segment that marks a generated file (platform separators).

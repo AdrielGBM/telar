@@ -1,11 +1,13 @@
 //! RSX transpiler: converts a parsed [`RsxDocument`] AST into compilable Rust source code that depends on `telar::*`.
 
 mod codegen;
+mod components;
 mod discovery;
 mod edges;
 mod error;
 mod i18n;
 pub mod naming;
+mod paths;
 mod registry;
 mod signal_scan;
 mod source_map;
@@ -17,6 +19,7 @@ pub use codegen::{
     ComponentRegistry, ComponentSig, TranspiledSource, external_component_sigs, scan_component_sig,
     transpile_source,
 };
+pub use components::{ProjectComponents, build_component_registry};
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, component_paths,
     discover_rust_modules, find_rsx_files, find_rsx_files_in_tree, prune_stale_generated,
@@ -27,6 +30,7 @@ pub use i18n::{
     CatalogModel, I18N_CATALOG_PATH, I18N_MODULE, MessageModel, PartModel, catalog_files,
     parse_catalog, parse_message, to_source as bake_catalog_to_source,
 };
+pub use paths::{find_ancestor_dir, find_telar_root, find_workspace_root};
 pub use registry::{
     TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, color_keywords, is_builtin_tag,
     is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, tag_attr_keys,

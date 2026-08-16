@@ -51,7 +51,7 @@ fn apk_path(args: &[String]) -> PathBuf {
 
 fn load_dotenv(cmd: &mut Command) {
     let cwd = std::env::current_dir().unwrap_or_default();
-    let root = telar_workspace::find_workspace_root(&cwd).unwrap_or(cwd);
+    let root = telar_transpiler::find_workspace_root(&cwd).unwrap_or(cwd);
     let path = root.join(".env");
     let Ok(content) = std::fs::read_to_string(&path) else {
         return;

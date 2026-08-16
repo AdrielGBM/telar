@@ -1,10 +1,26 @@
+//! The seam the in-app devtools overlay plugs into, and the tree model it reads.
+//!
+//! A runtime with no overlay compiled in runs `()` through the same trait, so the frame loop has one shape
+//! whether or not `dev` is on.
+
 use std::borrow::Cow;
 use std::time::Duration;
 
+use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::DrawCommand;
 
-use crate::dev_tree_view::DevTreeView;
+pub struct DevNodeInfo {
+    pub id: u64,
+    pub name: &'static str,
+    pub rect: Rect,
+    pub depth: usize,
+}
+
+pub trait DevTreeView {
+    fn node_count(&self) -> usize;
+    fn for_each_node(&self, f: &mut dyn FnMut(&DevNodeInfo));
+}
 
 pub enum DevAction {
     None,

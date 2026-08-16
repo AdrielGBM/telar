@@ -17,6 +17,10 @@ pub mod window_signals;
 
 #[cfg(feature = "runtime")]
 pub mod app;
+#[cfg(feature = "runtime")]
+pub mod dev_plugin;
+#[cfg(feature = "dev")]
+pub mod dev_tools;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 pub mod hot;
 #[cfg(feature = "dev")]
@@ -57,7 +61,7 @@ pub use window_signals::WindowSignals;
 #[cfg(feature = "runtime")]
 pub use app::App;
 #[cfg(feature = "runtime")]
-pub use devtools_core::{DevAction, DevPlugin};
+pub use dev_plugin::{DevAction, DevPlugin};
 #[cfg(feature = "runtime")]
 pub use geometry_core::{ObjectFit, Point, Rect, Transform};
 #[cfg(feature = "runtime")]

@@ -1,4 +1,4 @@
-use devtools_core::{DevAction, DevPlugin};
+use crate::dev_plugin::{DevAction, DevPlugin};
 use platform_core::{Event, EventHandler, Window, WindowCommand};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::{RenderBackend, RendererError};

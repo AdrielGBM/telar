@@ -54,7 +54,7 @@ impl ProjectInfo {
     }
 
     pub fn discover(file_path: &Path) -> Option<Self> {
-        let root = telar_workspace::find_telar_root(file_path)?;
+        let root = telar_transpiler::find_telar_root(file_path)?;
         let toml_path = root.join("telar.toml");
         let theme_type = read_theme_type(&toml_path);
         let theme_fields = if let Some(ref type_name) = theme_type {
@@ -69,7 +69,7 @@ impl ProjectInfo {
             .map(|c| c.keys().cloned().collect())
             .unwrap_or_default();
         let component_root =
-            telar_workspace::find_workspace_root(&root).unwrap_or_else(|| root.clone());
+            telar_transpiler::find_workspace_root(&root).unwrap_or_else(|| root.clone());
         Some(Self {
             root,
             component_root,

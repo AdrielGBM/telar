@@ -156,7 +156,7 @@ Everything is published under the `telar-` prefix. Most users only need the `tel
 | [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,headless}` | Window/event abstraction and its backends |
 | [`telar-parser`](crates/tools/telar-parser) · [`telar-transpiler`](crates/tools/telar-transpiler) · [`telar-macros`](crates/tools/telar-macros) | The `.rsx` pipeline |
 | [`telar-i18n-core`](crates/i18n/i18n-core) · [`telar-navigate-core`](crates/navigate/navigate-core) · [`telar-services-core`](crates/services/services-core) | i18n runtime, navigation, platform paths and DI |
-| [`telar-devtools`](crates/tools/telar-devtools) · [`telar-devtools-core`](crates/tools/devtools-core) · [`telar-diagnostics`](crates/tools/telar-diagnostics) · [`telar-workspace`](crates/tools/telar-workspace) | Devtools overlay and shared tooling |
+| [`telar-diagnostics`](crates/tools/telar-diagnostics) | Shared tooling (the devtools overlay lives in `telar` behind `dev`) |
 
 `telar-analyzer` lives in this repo but is distributed as a binary through GitHub Releases and the VS Code extension rather than crates.io.
 

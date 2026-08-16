@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use devtools_core::DevPlugin;
+use crate::dev_plugin::DevPlugin;
 use platform_core::{EventHandler, SurfaceId};
 use platform_desktop::{DesktopPathsProvider, WinitPlatform, WinitWindow, request_dynamic_surface};
 use services_core::AppPathsProvider;
@@ -100,7 +100,7 @@ pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
         if std::env::var("TELAR_DEVTOOLS").as_deref() == Ok("0") {
             run_desktop_with_plugin::<A, ()>(config, app, app_name);
         } else {
-            run_desktop_with_plugin::<A, telar_devtools::DevTools>(config, app, app_name);
+            run_desktop_with_plugin::<A, crate::dev_tools::DevTools>(config, app, app_name);
         }
     }
     #[cfg(not(feature = "dev"))]

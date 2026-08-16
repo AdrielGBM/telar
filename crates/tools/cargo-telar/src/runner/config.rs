@@ -139,7 +139,7 @@ pub(crate) fn find_package_dir(args: &[String]) -> PathBuf {
 
     if let Some(name) = package_name {
         let cwd = std::env::current_dir().unwrap_or_default();
-        if let Some(root) = telar_workspace::find_workspace_root(&cwd)
+        if let Some(root) = telar_transpiler::find_workspace_root(&cwd)
             && let Some(dir) = find_package_dir_in_workspace(&root, name)
         {
             return dir;
@@ -198,7 +198,7 @@ impl ResolvedPackage {
 // Resolves the target package's workspace root and parsed manifest in a single pass so the packaging paths stop re-deriving them (and re-reading Cargo.toml) at each call site.
 pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
     let dir = find_package_dir(args);
-    let workspace_root = telar_workspace::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
+    let workspace_root = telar_transpiler::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
     let manifest = read_manifest_in(&dir);
     let produces_cdylib = manifest
         .as_ref()

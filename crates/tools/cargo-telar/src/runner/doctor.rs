@@ -101,7 +101,7 @@ pub(crate) fn run_doctor_cmd() -> ! {
 
     doc.section("Project");
     let cwd = std::env::current_dir().unwrap_or_default();
-    match telar_workspace::find_workspace_root(&cwd) {
+    match telar_transpiler::find_workspace_root(&cwd) {
         Some(root) => doc.info("workspace root", &root.display().to_string()),
         None => doc.info("workspace root", "none (standalone package)"),
     }

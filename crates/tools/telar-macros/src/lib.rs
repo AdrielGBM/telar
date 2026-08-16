@@ -351,62 +351,18 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     // Pre-pass: collect every component's signature (its Props shape + whether it takes a slot) so each file's
     // transpile can emit calls to other components correctly — optional props and the slot arg both need the
-    // callee's shape, which lives in another file. Keyed by both the path-flattened stem and the bare basename.
-    let mut registry = telar_transpiler::ComponentRegistry::new();
-    // Seed the built-in component catalogue first so a local `.rsx` of the same name still overrides it.
-    for (name, sig) in telar_transpiler::external_component_sigs() {
-        registry.insert(name.to_string(), sig);
-    }
-    // Then the crates this one borrows components from (`[telar] components` in telar.toml). Signatures only — each of those files is compiled by the crate that owns it — and before the local pass, so a component defined here still wins the name.
-    let borrowed_dirs = telar_transpiler::component_paths(&manifest_dir);
-    let mut borrowed_files: Vec<std::path::PathBuf> = Vec::new();
-    // Which of *this crate's own* files claimed each bare basename, so a second claimant is named rather than
-    // dropped. Borrowed components are not tracked here: a local component outranks one from another crate for
-    // the short name, the same way it outranks the built-in catalogue.
-    let mut short_names: std::collections::HashMap<String, std::path::PathBuf> =
-        std::collections::HashMap::new();
-    for dir in &borrowed_dirs {
-        for rsx_file in telar_transpiler::find_rsx_files(dir) {
-            let Ok(source) = std::fs::read_to_string(&rsx_file) else {
-                continue;
-            };
-            let sig = telar_transpiler::scan_component_sig(&source);
-            let stem = telar_transpiler::relative_stem(&rsx_file, dir);
-            registry.insert(telar_transpiler::naming::to_snake_case(&stem), sig.clone());
-            if let Some(base) = rsx_file.file_stem().and_then(|s| s.to_str()) {
-                registry
-                    .entry(telar_transpiler::naming::to_snake_case(base))
-                    .or_insert(sig);
-            }
-            borrowed_files.push(rsx_file);
-        }
-    }
-    for rsx_file in &rsx_files {
-        let Ok(source) = std::fs::read_to_string(rsx_file) else {
-            continue;
-        };
-        let sig = telar_transpiler::scan_component_sig(&source);
-        let stem = telar_transpiler::relative_stem(rsx_file, &src_dir);
-        registry.insert(telar_transpiler::naming::to_snake_case(&stem), sig.clone());
-        if let Some(base) = rsx_file.file_stem().and_then(|s| s.to_str()) {
-            let short = telar_transpiler::naming::to_snake_case(base);
-            // Two files with the same basename in different directories both want the short name, and only the
-            // first in walk order got it — silently, so a call meant for one resolved to the other's signature
-            // and failed somewhere else entirely. Whoever claimed it keeps it; the collision is now named.
-            match short_names.entry(short) {
-                std::collections::hash_map::Entry::Vacant(slot) => {
-                    slot.insert(rsx_file.clone());
-                    registry.insert(telar_transpiler::naming::to_snake_case(base), sig);
-                }
-                std::collections::hash_map::Entry::Occupied(taken) => {
-                    let (first, second) = (taken.get().display(), rsx_file.display());
-                    let msg = format!(
-                        "two components share the short name `{base}`: {first} and {second}. Call either by its full path-flattened name, or rename one."
-                    );
-                    return Err(quote! { compile_error!(#msg) });
-                }
-            }
-        }
+    // callee's shape, which lives in another file.
+    let telar_transpiler::ProjectComponents {
+        registry,
+        borrowed: borrowed_files,
+        collision,
+    } = telar_transpiler::build_component_registry(
+        &src_dir,
+        &telar_transpiler::component_paths(&manifest_dir),
+        &[],
+    );
+    if let Some(msg) = collision {
+        return Err(quote! { compile_error!(#msg) });
     }
 
     let mut include_stmts = TokenStream2::new();

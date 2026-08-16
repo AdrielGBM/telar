@@ -1,4 +1,4 @@
-use devtools_core::DevPlugin;
+use crate::dev_plugin::DevPlugin;
 use platform_core::{Platform, PlatformError};
 use services_core::AppPathsProvider;
 

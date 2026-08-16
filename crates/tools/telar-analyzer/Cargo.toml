@@ -14,7 +14,6 @@ repository.workspace = true
 
 [dependencies]
 telar-parser = { workspace = true }
-telar-workspace = { workspace = true }
 telar-transpiler = { workspace = true }
 serde = { workspace = true }
 toml = { workspace = true }

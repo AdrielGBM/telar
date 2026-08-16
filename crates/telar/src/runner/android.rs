@@ -1,5 +1,5 @@
 #[cfg(target_os = "android")]
-use devtools_core::DevPlugin;
+use crate::dev_plugin::DevPlugin;
 #[cfg(target_os = "android")]
 use platform_core::Platform;
 #[cfg(target_os = "android")]
@@ -48,7 +48,7 @@ pub fn run_android_app_with_name<A: App>(
 ) {
     bridge_debug_props_to_env();
     #[cfg(feature = "dev")]
-    run_android_with_plugin::<A, telar_devtools::DevTools>(config, app, app_name, android_app);
+    run_android_with_plugin::<A, crate::dev_tools::DevTools>(config, app, app_name, android_app);
     #[cfg(not(feature = "dev"))]
     run_android_with_plugin::<A, ()>(config, app, app_name, android_app);
 }

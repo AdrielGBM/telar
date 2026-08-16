@@ -1,14 +1,13 @@
-//! Shared project-root resolution for the rsx toolchain.
+//! Project-root resolution for the rsx toolchain.
 //!
-//! `cargo-telar` (the dev/build CLI) and `telar-analyzer` (the LSP) both need to
-//! anchor file discovery — generated `.telar/` output, theme scanning — to the
-//! same directory. Keeping the upward-walk and the marker definitions in one
-//! place stops the two tools from diverging.
+//! `cargo-telar` (the dev/build CLI) and `telar-analyzer` (the LSP) both anchor file discovery — generated
+//! `.telar/` output, theme scanning — to the same directory. The upward walk and the marker definitions live
+//! here so the two tools cannot diverge on where a project starts.
 
 use std::path::{Path, PathBuf};
 
-/// Walks up from `start` (or its parent directory if `start` is a file),
-/// returning the first ancestor directory for which `matches` returns true.
+/// Walks up from `start` (or its parent directory if `start` is a file), returning the first ancestor
+/// directory for which `matches` returns true.
 pub fn find_ancestor_dir(start: &Path, matches: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     let mut dir = if start.is_file() {
         start.parent()?
@@ -23,7 +22,7 @@ pub fn find_ancestor_dir(start: &Path, matches: impl Fn(&Path) -> bool) -> Optio
     }
 }
 
-/// Nearest ancestor directory containing an `telar.toml`.
+/// Nearest ancestor directory containing a `telar.toml`.
 pub fn find_telar_root(start: &Path) -> Option<PathBuf> {
     find_ancestor_dir(start, |dir| dir.join("telar.toml").exists())
 }

@@ -645,7 +645,6 @@ dependencies = [
  "serde_json",
  "telar-parser",
  "telar-transpiler",
- "telar-workspace",
  "toml",
 ]
 
@@ -4821,8 +4820,6 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "serde_json",
- "telar-devtools",
- "telar-devtools-core",
  "telar-geometry-core",
  "telar-i18n-core",
  "telar-layout-core",
@@ -4867,29 +4864,9 @@ dependencies = [
  "telar-diagnostics",
  "telar-parser",
  "telar-transpiler",
- "telar-workspace",
  "tokio",
  "toml",
  "url",
-]
-
-[[package]]
-name = "telar-devtools"
-version = "0.1.3"
-dependencies = [
- "telar-devtools-core",
- "telar-geometry-core",
- "telar-platform-core",
- "telar-renderer-core",
-]
-
-[[package]]
-name = "telar-devtools-core"
-version = "0.1.3"
-dependencies = [
- "telar-geometry-core",
- "telar-platform-core",
- "telar-renderer-core",
 ]
 
 [[package]]
@@ -5217,13 +5194,6 @@ dependencies = [
  "telar-platform-core",
  "telar-reactive-core",
  "telar-renderer-core",
-]
-
-[[package]]
-name = "telar-workspace"
-version = "0.1.3"
-dependencies = [
- "toml",
 ]
 
 [[package]]

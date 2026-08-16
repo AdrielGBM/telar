@@ -627,7 +627,7 @@ impl Backend {
         let uri = &params.text_document.uri;
         let path = crate::uri::to_path(uri)?;
         // Resolve links against the project asset root (matching the baker), falling back to the file's dir when there is no telar.toml.
-        let assets_dir = telar_workspace::find_telar_root(&path)
+        let assets_dir = telar_transpiler::find_telar_root(&path)
             .map(|root| telar_transpiler::assets_root(&root))
             .or_else(|| path.parent().map(|p| p.to_path_buf()))?;
         let store = self.store.read().await;
@@ -782,8 +782,8 @@ impl Backend {
         {
             let path = crate::uri::to_path(uri)?;
             // Workspace first: a component is referenced from wherever it is used, which in a multi-crate project is not the crate that defines it. The nearest `telar.toml` is the narrower answer and is only right when there is no workspace above it.
-            let root = telar_workspace::find_workspace_root(&path)
-                .or_else(|| telar_workspace::find_telar_root(&path))?;
+            let root = telar_transpiler::find_workspace_root(&path)
+                .or_else(|| telar_transpiler::find_telar_root(&path))?;
             let locations = self
                 .with_index(root, move |idx| idx.component_references(&name))
                 .await?;
@@ -939,8 +939,8 @@ impl Backend {
             let uri = store.any_uri()?;
             let path = crate::uri::to_path(uri)?;
             // The Cargo workspace root, so a `workspace/symbol` query answers for the whole workspace rather than for whichever crate happened to have a file open; the nearest `telar.toml` is the fallback for a project that is not in one.
-            telar_workspace::find_workspace_root(&path)
-                .or_else(|| telar_workspace::find_telar_root(&path))?
+            telar_transpiler::find_workspace_root(&path)
+                .or_else(|| telar_transpiler::find_telar_root(&path))?
         };
         self.with_index(root, move |idx| idx.symbols(&query)).await
     }

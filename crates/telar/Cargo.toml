@@ -25,7 +25,6 @@ runtime = [
     "dep:ui-core",
     "dep:ui-tree",
     "dep:geometry-core",
-    "dep:devtools-core",
     "dep:toml",
     "dep:tracing",
     "dep:platform-android",
@@ -37,7 +36,6 @@ desktop = ["runtime", "dep:platform-desktop"]
 dev = [
     "runtime",
     "desktop",
-    "dep:telar-devtools",
     "dep:libloading",
     "dep:serde_json",
 ]
@@ -84,8 +82,6 @@ ui-tree = { workspace = true, optional = true }
 ui-components = { workspace = true, optional = true }
 navigate-core = { workspace = true, optional = true }
 geometry-core = { workspace = true, optional = true }
-devtools-core = { workspace = true, optional = true }
-telar-devtools = { workspace = true, optional = true }
 telar-macros = { workspace = true }
 libloading = { version = "0.9.0", optional = true }
 serde_json = { version = "1", optional = true }
