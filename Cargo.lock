@@ -643,7 +643,6 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
- "telar",
  "telar-parser",
  "telar-transpiler",
  "telar-workspace",

@@ -1,7 +1,6 @@
 use std::process::Command;
 
 use clap::Parser;
-use telar::RendererBackend;
 
 mod android;
 mod check;
@@ -16,8 +15,8 @@ mod watch;
 use android::build_android_package;
 use check::run_check_cmd;
 use cli::{
-    BackendArg, BuildArgs, BuildFormat, Cli, CommonArgs, DevArgs, DevtoolsArg, HotArgs,
-    PreviewArgs, Target, TelarCommand, TestArgs,
+    BuildArgs, BuildFormat, Cli, CommonArgs, DevArgs, DevtoolsArg, HotArgs, PreviewArgs, Target,
+    TelarCommand, TestArgs,
 };
 use config::load_config;
 use doctor::run_doctor_cmd;
@@ -77,7 +76,7 @@ fn run_dev_cmd(args: DevArgs) {
     }
     let mut config = load_config(&cargo_args);
     if let Some(backend) = backend {
-        config.backend = Some(backend_from_arg(backend));
+        config.backend = Some(backend);
     }
     // CLI `--devtools off` overrides any config-file setting.
     if let Some(devtools) = devtools {
@@ -136,7 +135,7 @@ fn run_preview_cmd(args: PreviewArgs) {
     }
     let mut config = load_config(&cargo_args);
     if let Some(backend) = backend {
-        config.backend = Some(backend_from_arg(backend));
+        config.backend = Some(backend);
     }
     run_hot_loop(
         HotMode::Preview,
@@ -229,7 +228,7 @@ fn run_build_cmd(args: BuildArgs) -> ! {
     }
     let mut config = load_config(&cargo_args);
     if let Some(backend) = backend {
-        config.backend = Some(backend_from_arg(backend));
+        config.backend = Some(backend);
     }
 
     if android {
@@ -263,12 +262,4 @@ fn build_cargo_args(
         args.push(features.clone());
     }
     args
-}
-
-fn backend_from_arg(backend: BackendArg) -> RendererBackend {
-    match backend {
-        BackendArg::Auto => RendererBackend::Auto,
-        BackendArg::Hardware => RendererBackend::Hardware,
-        BackendArg::Software => RendererBackend::Software,
-    }
 }

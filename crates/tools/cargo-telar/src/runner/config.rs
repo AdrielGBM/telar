@@ -1,7 +1,19 @@
 use std::path::{Path, PathBuf};
 
+use clap::ValueEnum;
 use serde::Deserialize;
-use telar::RendererBackend;
+
+/// Which renderer the built app selects at startup. Declared here rather than imported from `telar` because
+/// the value never crosses the boundary: [`backend_as_str`] lowers it to the `TELAR_RENDERER_BACKEND` env
+/// var, which the runtime re-parses from `option_env!` — so importing it cost the CLI the whole facade.
+#[derive(Deserialize, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum RendererBackend {
+    #[default]
+    Auto,
+    Hardware,
+    Software,
+}
 
 #[derive(Deserialize, Default, Clone)]
 pub(crate) struct WindowConfig {

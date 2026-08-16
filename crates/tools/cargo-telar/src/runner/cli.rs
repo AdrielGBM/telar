@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 
+use crate::runner::config::RendererBackend;
+
 #[derive(Parser)]
 #[command(
     name = "cargo-telar",
@@ -54,7 +56,7 @@ pub(crate) struct CommonArgs {
     pub(crate) target: Target,
     /// Renderer backend
     #[arg(long, value_enum)]
-    pub(crate) backend: Option<BackendArg>,
+    pub(crate) backend: Option<RendererBackend>,
     /// Extra args passed directly to cargo (after --)
     #[arg(last = true)]
     pub(crate) cargo_args: Vec<String>,
@@ -128,13 +130,6 @@ pub(crate) struct BuildArgs {
 pub(crate) enum Target {
     Desktop,
     Android,
-}
-
-#[derive(Clone, ValueEnum)]
-pub(crate) enum BackendArg {
-    Auto,
-    Hardware,
-    Software,
 }
 
 #[derive(Clone, ValueEnum)]
