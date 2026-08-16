@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use geometry_core::{ObjectFit, Point};
 use rustc_hash::{FxHashMap, FxHasher};
 
-use renderer_core::{Color, DrawCommand, GradientKind, ImageData, Paint, PathStyle, PathVerb};
+use renderer_core::{Color, DrawCommand, ImageData, PathVerb, hash_path_style};
 
 #[cfg(feature = "dynamic-svg")]
 use usvg::tiny_skia_path::Transform as SkiaTransform;
@@ -258,7 +258,7 @@ fn hash_command<H: Hasher>(cmd: &DrawCommand, h: &mut H) {
             for v in data.verbs() {
                 hash_verb(v, h);
             }
-            hash_style(style, h);
+            hash_path_style(style).hash(h);
         }
         DrawCommand::PushLayer {
             opacity,
@@ -299,67 +299,7 @@ fn hash_verb<H: Hasher>(v: &PathVerb, h: &mut H) {
     }
 }
 
-fn hash_style<H: Hasher>(s: &PathStyle, h: &mut H) {
-    hash_opt_paint(&s.fill, h);
-    match &s.stroke {
-        None => 0u8.hash(h),
-        Some(st) => {
-            1u8.hash(h);
-            hash_paint(&st.paint, h);
-            st.width.to_bits().hash(h);
-            (st.cap as u8).hash(h);
-            (st.join as u8).hash(h);
-        }
-    }
-    (s.fill_rule as u8).hash(h);
-}
-
-fn hash_opt_paint<H: Hasher>(p: &Option<Paint>, h: &mut H) {
-    match p {
-        None => 0u8.hash(h),
-        Some(p) => {
-            1u8.hash(h);
-            hash_paint(p, h);
-        }
-    }
-}
-
-fn hash_paint<H: Hasher>(p: &Paint, h: &mut H) {
-    match p {
-        Paint::Solid(c) => {
-            0u8.hash(h);
-            hash_color(c, h);
-        }
-        Paint::Gradient(g) => {
-            1u8.hash(h);
-            match g.kind {
-                GradientKind::Linear { start, end } => {
-                    0u8.hash(h);
-                    hash_point(&start, h);
-                    hash_point(&end, h);
-                }
-                GradientKind::Radial { center, radius } => {
-                    1u8.hash(h);
-                    hash_point(&center, h);
-                    radius.to_bits().hash(h);
-                }
-            }
-            for st in g.stops.active() {
-                st.position.to_bits().hash(h);
-                hash_color(&st.color, h);
-            }
-        }
-    }
-}
-
 fn hash_point<H: Hasher>(p: &Point, h: &mut H) {
     p.x.to_bits().hash(h);
     p.y.to_bits().hash(h);
-}
-
-fn hash_color<H: Hasher>(c: &Color, h: &mut H) {
-    c.r.to_bits().hash(h);
-    c.g.to_bits().hash(h);
-    c.b.to_bits().hash(h);
-    c.a.to_bits().hash(h);
 }

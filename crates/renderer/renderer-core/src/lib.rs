@@ -36,3 +36,4 @@ pub use style::{
     LineCap, LineJoin, Paint, PathStyle, RectStyle, Scale, Shadow, ShapeStyle, Stroke, TextAlign,
     TextStyle, border_inner_shape,
 };
+pub use style_pool::hash_path_style;
