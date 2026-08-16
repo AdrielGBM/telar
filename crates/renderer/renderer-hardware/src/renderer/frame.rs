@@ -480,6 +480,31 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         }
 
         for (cmd_idx, cmd) in commands.iter().enumerate() {
+            // Ahead of the bounds below, and that order is the point: a rect that draws nothing would otherwise
+            // union into the layer accumulator and grow the layer texture to cover it.
+            if let DrawCommand::Rect { rect, style } = cmd
+                && (rect.width <= 0.0
+                    || rect.height <= 0.0
+                    || (style.fill.is_none() && style.stroke.is_none()))
+            {
+                continue;
+            }
+
+            // One set of bounds for the whole body: every drawing arm asked the same question of the same
+            // command. `None` for the state commands (clip/matrix/layer), which must never be culled.
+            if let Some(bounds) = renderer_core::culling::command_visual_rect(
+                cmd,
+                self.draw_state.cumulative_matrix,
+                &self.font_metrics,
+            ) {
+                if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
+                    continue;
+                }
+                if let Some(accum) = layer_accum_stack.last_mut() {
+                    accum.extend(bounds);
+                }
+            }
+
             match cmd {
                 DrawCommand::Rect { rect, style } => {
                     let rect = *rect;
@@ -489,18 +514,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         || (style.fill.is_none() && style.stroke.is_none())
                     {
                         continue;
-                    }
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
-                            continue;
-                        }
-                        if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.extend(bounds);
-                        }
                     }
                     self.flush_text();
                     self.flush_line();
@@ -518,18 +531,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 DrawCommand::Text { text, rect, style } => {
                     let rect = *rect;
                     let style = **style;
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
-                            continue;
-                        }
-                        if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.extend(bounds);
-                        }
-                    }
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
@@ -628,18 +629,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 DrawCommand::RichText { runs, rect, base } => {
                     let rect = *rect;
                     let base = **base;
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
-                            continue;
-                        }
-                        if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.extend(bounds);
-                        }
-                    }
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
@@ -664,18 +653,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     });
                 }
                 DrawCommand::Image { data, rect, filter } => {
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
-                            continue;
-                        }
-                        if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.extend(bounds);
-                        }
-                    }
                     self.flush_rect();
                     self.flush_text();
                     self.flush_line();
@@ -706,18 +683,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         .push(crate::primitives::image::prepare_image(translated));
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
-                            continue;
-                        }
-                        if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.extend(bounds);
-                        }
-                    }
                     self.flush_rect();
                     self.flush_text();
                     self.flush_image();
@@ -739,18 +704,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 }
                 DrawCommand::Path { data, style } => {
                     let style = **style;
-                    if let Some(bounds) = renderer_core::culling::command_visual_rect(
-                        cmd,
-                        self.draw_state.cumulative_matrix,
-                        &self.font_metrics,
-                    ) {
-                        if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
-                            continue;
-                        }
-                        if let Some(accum) = layer_accum_stack.last_mut() {
-                            accum.extend(bounds);
-                        }
-                    }
                     self.flush_all();
 
                     if let Some(shadow) = style.shadow {
