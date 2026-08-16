@@ -5036,7 +5036,12 @@ dependencies = [
  "rustc-hash 2.1.3",
  "slab",
  "smallvec",
+ "telar-reactive-local",
 ]
+
+[[package]]
+name = "telar-reactive-local"
+version = "0.1.3"
 
 [[package]]
 name = "telar-renderer-assets"

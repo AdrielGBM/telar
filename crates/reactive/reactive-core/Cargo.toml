@@ -14,3 +14,4 @@ repository.workspace = true
 rustc-hash = { workspace = true }
 slab = "0.4.12"
 smallvec = { workspace = true }
+reactive-local = { workspace = true }
