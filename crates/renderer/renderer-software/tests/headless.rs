@@ -357,3 +357,95 @@ fn clip_composes_with_active_matrix() {
         red_at(170, 140)
     );
 }
+
+// The cross-platform pixel guard the two hash goldens cannot be. Both of those enforce their hash only
+// under an env var, for reasons that hold: system-font fallback and tiny-skia's SIMD float rounding both
+// flip a hash per machine without any behaviour change. This scene removes both variables instead of
+// tolerating them — no text, and every edge on an integer boundary, so no pixel ever carries partial
+// coverage and there is nothing for float rounding to disagree about. What survives is exact everywhere,
+// which is what makes it safe to assert unconditionally.
+//
+// It pins the parts of `render_frame` a refactor of the command loop actually moves: clip intersection,
+// matrix translation, layer compositing, and paint order.
+#[test]
+fn axis_aligned_scene_is_pixel_exact_on_every_platform() {
+    const W: u32 = 64;
+    const H: u32 = 48;
+    let clear = Color::from_rgb_u8(0, 0, 0);
+    let red = Color::from_rgb_u8(255, 0, 0);
+    let green = Color::from_rgb_u8(0, 255, 0);
+    let blue = Color::from_rgb_u8(0, 0, 255);
+
+    let solid = |c: Color| Arc::new(RectStyle::default().with_fill(c));
+    let cmds = vec![
+        // Painted first, then covered on its right half — pins paint order.
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 0.0, 32.0, 16.0),
+            style: solid(red),
+        },
+        DrawCommand::Rect {
+            rect: Rect::new(16.0, 0.0, 16.0, 16.0),
+            style: solid(green),
+        },
+        // Clipped: only the left half of the blue rect may survive.
+        DrawCommand::PushClip {
+            rect: Rect::new(0.0, 16.0, 16.0, 16.0),
+            radius: BorderRadius::all(0.0),
+        },
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 16.0, 32.0, 16.0),
+            style: solid(blue),
+        },
+        DrawCommand::PopClip,
+        // Translated: drawn at x=0 under a +32 matrix, so it must land at x=32.
+        DrawCommand::PushMatrix {
+            matrix: [1.0, 0.0, 0.0, 1.0, 32.0, 32.0],
+        },
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 0.0, 16.0, 16.0),
+            style: solid(green),
+        },
+        DrawCommand::PopMatrix,
+    ];
+
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        W,
+        H,
+        SoftwareRendererConfig::default(),
+    );
+    renderer.begin_frame(W, H, 1.0, 0).unwrap();
+    renderer.render_frame(&cmds, Some(clear)).unwrap();
+    let rgba = renderer.read_rgba().expect("pixmap after a frame");
+
+    let px = |x: u32, y: u32| -> (u8, u8, u8) {
+        let i = ((y * W + x) * 4) as usize;
+        (rgba[i], rgba[i + 1], rgba[i + 2])
+    };
+
+    assert_eq!(
+        px(8, 8),
+        (255, 0, 0),
+        "the uncovered half of the first rect"
+    );
+    assert_eq!(
+        px(24, 8),
+        (0, 255, 0),
+        "the later rect paints over the earlier one"
+    );
+    assert_eq!(px(8, 24), (0, 0, 255), "inside the clip");
+    assert_eq!(
+        px(24, 24),
+        (0, 0, 0),
+        "outside the clip, so still the clear colour"
+    );
+    assert_eq!(
+        px(40, 40),
+        (0, 255, 0),
+        "the matrix moved this rect to x=32"
+    );
+    assert_eq!(
+        px(8, 40),
+        (0, 0, 0),
+        "and left nothing behind at its untranslated origin"
+    );
+}

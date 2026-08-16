@@ -654,7 +654,7 @@ fn render_frame_pixel_golden() {
     // so this exact hash only reproduces on the machine EXPECTED was baked on. Enforce it strictly only when
     // opted in (that machine); everywhere else — cross-platform CI — the assertions above (renders without
     // error, tightly-packed readback of the right size) are the portable smoke test, and a hash mismatch is
-    // reported but not fatal. The deterministic cross-platform pixel guard is the software renderer's golden.
+    // reported but not fatal. The deterministic cross-platform guard is `axis_aligned_scene_is_pixel_exact_on_every_platform` in renderer-software: no text and integer-aligned edges, so nothing is left for a driver or an architecture to round differently.
     if std::env::var_os("TELAR_HARDWARE_GOLDEN").is_some() {
         assert_eq!(
             hash, EXPECTED,
