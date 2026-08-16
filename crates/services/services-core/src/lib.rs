@@ -6,7 +6,7 @@ mod registry;
 mod scope;
 
 pub use dialogs::{FileDialog, FileDialogs, FileFilter, file_dialogs, set_file_dialogs};
-pub use paths::AppPathsProvider;
+pub use paths::{AppPathsProvider, NoPaths};
 #[cfg(feature = "di")]
 pub use registry::ServiceError;
 #[cfg(feature = "di")]

@@ -17,21 +17,7 @@ use std::time::Duration;
 
 use platform_core::{Event, EventHandler, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
-use telar::{App, AppPathsProvider, build_surface_handler};
-
-struct NullPaths;
-
-impl AppPathsProvider for NullPaths {
-    fn config_dir(&self) -> Option<PathBuf> {
-        None
-    }
-    fn data_dir(&self) -> Option<PathBuf> {
-        None
-    }
-    fn cache_dir(&self) -> Option<PathBuf> {
-        None
-    }
-}
+use telar::{App, AppPathsProvider, NoPaths, build_surface_handler};
 
 fn dylib_path() -> PathBuf {
     let name = if cfg!(target_os = "windows") {
@@ -85,7 +71,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     let window = HeadlessWindow::new(w, h);
     let mut handler: Box<dyn EventHandler<HeadlessWindow>> = build_surface_handler(
         app,
-        Box::new(NullPaths) as Box<dyn AppPathsProvider>,
+        Box::new(NoPaths) as Box<dyn AppPathsProvider>,
         "telar-sandbox-hot-tree-test",
     );
     handler.new_events();

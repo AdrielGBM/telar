@@ -10,14 +10,13 @@ use ui_core::EventResult;
 use crate::app::App;
 use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
-use crate::window_signals::WindowSignals;
 
 use super::COMMAND_BUF_POOL_CAP;
 use super::font_config::{
     SystemFonts, build_font_config, build_hardware_font_config, build_software_renderer_config,
     hardware_cache_path,
 };
-use super::hot_host::{FrameMsg, spawn_render_thread};
+use super::frame_thread::{FrameMsg, spawn_render_thread};
 use super::{FRAME_BUDGET, HW_KEEPALIVE_GRACE, HW_KEEPALIVE_INTERVAL};
 
 pub(super) struct AppHandler<W, D: DevPlugin>
@@ -72,7 +71,6 @@ where
     pub(super) redraw_waker: Option<crate::app_context::RedrawWaker>,
     // Reused across frames so the SW/HiDPI command scaling allocates neither a fresh Vec nor redundant per-command style Arcs.
     pub(super) scale_scratch: renderer_core::ScaleScratch,
-    pub(super) window_signals: Option<WindowSignals>,
     pub(super) app_name: String,
     pub(super) last_frame: std::time::Instant,
     // When the frame pass last ran, as opposed to `last_frame`, which only advances on a frame carrying new content; `on_redraw` paces itself against this so the pass costs the same however often the platform calls it.
@@ -164,7 +162,6 @@ where
         exit_requested: false,
         redraw_waker: None,
         scale_scratch: renderer_core::ScaleScratch::new(),
-        window_signals: None,
         app_name,
         last_frame: std::time::Instant::now(),
         // Backdated so the first `on_redraw` after resume composes immediately instead of waiting out a frame it has nothing to pace against yet.
@@ -203,14 +200,9 @@ where
     W: Window + Clone + Send + Sync + 'static,
     D: DevPlugin,
 {
-    /// Enters this handler's surface world for the duration of a lifecycle call, so its build/event/frame
-    /// resolve layout/overlay/focus (and the reactive current-surface) against the right surface. Returns
-    /// `None` for a single-window app — its ambient world is its one surface — making this a zero-cost no-op.
-    /// The returned guard owns the restore state and does not borrow `self`, so callers can mutate `self`
-    /// while it is held (`let _surface = self.enter_surface();`).
-    // Drains and applies the window-management commands a handler enqueued — from a title-bar control during
-    // event dispatch, or from `on_frame` (e.g. raising this window on a routed handoff). Returns whether any
-    // applied. Routed through the App bridge so the dylib-backed `HotApp` drains the dylib's own queue.
+    /// Drains and applies the window-management commands a handler enqueued — from a title-bar control during
+    /// event dispatch, or from `on_frame` (e.g. raising this window on a routed handoff). Returns whether any
+    /// applied. Routed through the App bridge so the dylib-backed `HotApp` drains the dylib's own queue.
     fn apply_window_commands(&mut self, window: &W) -> bool {
         let mut applied = false;
         for cmd in self.app.drain_window_commands() {
@@ -227,6 +219,39 @@ where
             }
         }
         applied
+    }
+
+    /// Enters this handler's surface world for the duration of a lifecycle call, so its build/event/frame
+    /// resolve layout/overlay/focus (and the reactive current-surface) against the right surface. Returns
+    /// `None` for a single-window app — its ambient world is its one surface — making this a zero-cost no-op.
+    /// The returned guard owns the restore state and does not borrow `self`, so callers can mutate `self`
+    /// while it is held (`let _surface = self.enter_surface();`).
+    /// Drops the previous tree, builds the app's UI again, and starts it at the surface's real size and past
+    /// every generation already drawn.
+    ///
+    /// The generation step is the load-bearing part, and the reason this is one function: the counter lives on
+    /// the tree, so a fresh tree starts over and a surface whose content never changes hands the renderer a
+    /// number it has already presented — which it answers by re-presenting the texture it retained. See
+    /// [`generation_base`](Self::generation_base). Callers must have `scale_factor` and `renderer_transparent`
+    /// current before calling.
+    fn mount_tree(&mut self, window: &W) {
+        // Dropped before the new one is built: an effect from the outgoing tree that re-runs while its
+        // replacement is being assembled would write into widgets nothing is drawing any more.
+        self.tree = None;
+        self.tree = Some(self.app.mount());
+        self.generation_base = self.last_generation + 1;
+        if self.is_transparent() != self.renderer_transparent {
+            self.pending_restart = true;
+        }
+        // A tree starts at its 0×0 defaults and learns the surface's real size from this event, exactly as it
+        // would from a monitor's own resize.
+        let resize = Event::WindowResized {
+            width: (window.width() as f32 / self.scale_factor) as u32,
+            height: (window.height() as f32 / self.scale_factor) as u32,
+        };
+        if let Some(ref mut tree) = self.tree {
+            tree.on_event(&resize);
+        }
     }
 
     fn enter_surface(&self) -> Option<LifecycleGuard> {
@@ -264,8 +289,6 @@ where
     // up the render thread for the hardware path. Returns false if renderer creation failed. Split out of
     // on_resume so the offscreen/headless path (which needs no surface) can bypass it entirely.
     fn init_windowed_renderer(&mut self, window: &W, system_fonts: &SystemFonts) -> bool {
-        let android = cfg!(target_os = "android");
-        let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
         match self.backend {
             RendererBackend::Software => {
                 if let Err(e) = self.start_software_render_thread(window, system_fonts) {
@@ -274,45 +297,56 @@ where
                 }
             }
             RendererBackend::Hardware | RendererBackend::Auto => {
-                let font_config = build_hardware_font_config(
-                    self.font_paths.clone(),
-                    self.font_data.clone(),
-                    system_fonts,
-                );
-                // Reuse the renderer saved on suspend (keeps device/pipelines/caches warm); only the surface is rebound. Otherwise build a fresh one.
-                let hw_result = if let Some(mut existing) = self.hw_renderer.take() {
-                    existing
-                        .rebind_surface(std::sync::Arc::new(window.clone()))
-                        .map(|()| existing)
-                } else {
-                    HardwareRenderer::new(
-                        window.clone(),
-                        cache_path.as_deref(),
-                        android,
-                        font_config,
-                        HardwareRendererConfig {
-                            transparent: self.is_transparent(),
-                            ..HardwareRendererConfig::default()
-                        },
-                    )
-                };
-                match hw_result {
-                    Ok(hw) => self.start_hardware_render_thread(hw),
-                    Err(e) if matches!(self.backend, RendererBackend::Auto) => {
-                        tracing::warn!("HW renderer unavailable ({e}), falling back to SW");
-                        if let Err(e2) = self.start_software_render_thread(window, system_fonts) {
-                            tracing::error!("SW fallback also failed: {e2}");
-                            return false;
+                // Reuse the renderer saved on suspend (keeps device/pipelines/caches warm); only the surface
+                // is rebound, which is fast and cannot be done off this thread. This branch belongs to resume
+                // alone: `hw_renderer` is only ever populated by `on_suspend`.
+                match self.hw_renderer.take() {
+                    Some(mut existing) => {
+                        match existing.rebind_surface(std::sync::Arc::new(window.clone())) {
+                            Ok(()) => self.start_hardware_render_thread(existing),
+                            Err(e) => {
+                                tracing::warn!("rebinding the suspended renderer failed ({e})");
+                                self.spawn_hardware_build(window);
+                            }
                         }
                     }
-                    Err(e) => {
-                        tracing::error!("HW renderer failed: {e}");
-                        return false;
-                    }
+                    None => self.spawn_hardware_build(window),
                 }
             }
         }
         true
+    }
+
+    /// Starts building a hardware renderer for `window` off the UI thread, leaving the handle for
+    /// [`EventHandler::on_redraw`] to pick up.
+    ///
+    /// One strategy for all three paths that build one — first resume, a dev backend toggle and a restart —
+    /// rather than two synchronous copies beside the toggle's background build. Until it lands there is no
+    /// renderer and frames are dropped, which is the interval the toggle already lived with; the poll site
+    /// applies the `Auto` → software fallback for every path at once.
+    fn spawn_hardware_build(&mut self, window: &W) {
+        let window = window.clone();
+        let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
+        let font_paths = self.font_paths.clone();
+        let font_data = self.font_data.clone();
+        let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
+        let android = cfg!(target_os = "android");
+        // Computed before the closure: `self` is not `Send`, so its transparency must be captured by value,
+        // not read across the spawn.
+        let transparent = self.is_transparent();
+        self.pending_renderer = Some(std::thread::spawn(move || {
+            let font_config = build_hardware_font_config(font_paths, font_data, &system_fonts);
+            HardwareRenderer::new(
+                window,
+                cache_path.as_deref(),
+                android,
+                font_config,
+                HardwareRendererConfig {
+                    transparent,
+                    ..HardwareRendererConfig::default()
+                },
+            )
+        }));
     }
 
     /// Puts a freshly built hardware renderer on its own thread and wires the frame channels to it.
@@ -450,10 +484,6 @@ where
         self.renderer_transparent = self.is_transparent();
         let sf = window.scale_factor() as f32;
         self.scale_factor = sf;
-        self.window_signals = Some(WindowSignals::new(
-            window.width() as f32 / sf,
-            window.height() as f32 / sf,
-        ));
         // Prefer the process-global loop wake (installed by the platform): it wakes the loop — redrawing every
         // surface — without holding any window, so an app can cache this waker or hand it to a worker thread
         // and, if its content is later moved to another window, the original still closes and wakeups still
@@ -471,7 +501,6 @@ where
         if let Some(waker) = self.redraw_waker.clone() {
             self.app.install_task_waker(waker);
         }
-        self.tree = Some(self.app.mount());
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
             let (relay_tx, relay_rx) = std::sync::mpsc::channel::<crate::hot::HotEvent>();
@@ -489,14 +518,7 @@ where
                 .ok();
             self.hot_reload_rx = Some(relay_rx);
         }
-        // Synthesize an initial WindowResized so apps that initialize layout from that event start with the correct logical dimensions instead of their hardcoded defaults.
-        let initial_resize = platform_core::Event::WindowResized {
-            width: (window.width() as f32 / sf) as u32,
-            height: (window.height() as f32 / sf) as u32,
-        };
-        if let Some(ref mut tree) = self.tree {
-            tree.on_event(&initial_resize);
-        }
+        self.mount_tree(window);
 
         let w = window.clone();
         self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
@@ -513,25 +535,7 @@ where
     /// takes.
     fn remount(&mut self, window: &W) {
         let _surface = self.enter_surface();
-        // Dropped before the new one is built: an effect from the outgoing tree that re-runs while its
-        // replacement is being assembled would write into widgets nothing is drawing any more.
-        self.tree = None;
-        self.tree = Some(self.app.mount());
-        // Past every generation this surface has already been drawn at, so the renderer cannot mistake the new
-        // tree's fresh counter for content it is already showing. See `generation_base`.
-        self.generation_base = self.last_generation + 1;
-        if self.is_transparent() != self.renderer_transparent {
-            self.pending_restart = true;
-        }
-        // The same synthetic resize a fresh mount gets: a tree starts at its 0×0 defaults and learns the
-        // surface's real size from this event, exactly as it would from a monitor's own resize.
-        let resize = Event::WindowResized {
-            width: (window.width() as f32 / self.scale_factor) as u32,
-            height: (window.height() as f32 / self.scale_factor) as u32,
-        };
-        if let Some(ref mut tree) = self.tree {
-            tree.on_event(&resize);
-        }
+        self.mount_tree(window);
         window.request_redraw();
     }
 
@@ -542,11 +546,6 @@ where
         ui_core::observe_pointer(&event);
         if let Event::ScaleFactorChanged { scale_factor } = &event {
             self.scale_factor = *scale_factor as f32;
-        }
-        if let Event::WindowResized { width, height } = &event {
-            if let Some(ref signals) = self.window_signals {
-                signals.update(*width as f32, *height as f32);
-            }
         }
         if let Event::ColorSchemeChanged { dark } = &event {
             // Drives the follow_system effect (which writes the theme signal); batch the app's runtime so the
@@ -575,35 +574,7 @@ where
                         RendererBackend::Software => {
                             self.pending_restart = true;
                         }
-                        _ => {
-                            let window_clone = window.clone();
-                            let cache_path =
-                                hardware_cache_path(&self.app_name, self.paths.as_ref());
-                            let font_paths = self.font_paths.clone();
-                            let font_data = self.font_data.clone();
-                            let android = cfg!(target_os = "android");
-                            let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-                            // Computed before the closure: `self` is not `Send`, so its transparency must be captured by value, not read across the spawn.
-                            let transparent = self.is_transparent();
-                            let handle = std::thread::spawn(move || {
-                                let font_config = build_hardware_font_config(
-                                    font_paths,
-                                    font_data,
-                                    &system_fonts,
-                                );
-                                HardwareRenderer::new(
-                                    window_clone,
-                                    cache_path.as_deref(),
-                                    android,
-                                    font_config,
-                                    HardwareRendererConfig {
-                                        transparent,
-                                        ..HardwareRendererConfig::default()
-                                    },
-                                )
-                            });
-                            self.pending_renderer = Some(handle);
-                        }
+                        _ => self.spawn_hardware_build(window),
                     }
                 }
                 DevAction::None => {}
@@ -665,24 +636,12 @@ where
                                 // Drop the old tree first so effect closures (which contain code from the old dylib) are destroyed while the old lib is still mapped. Only then replace self.app, which dlcloses the old dylib.
                                 self.tree = None;
                                 self.app = Box::new(new_app);
-                                self.tree = Some(self.app.mount());
-                                // The same step past every drawn generation that `remount` takes, and for the
-                                // same reason: without it a reload of a screen whose content never changes
-                                // hands the renderer a number it has already presented, so it re-presents the
-                                // pre-reload texture. See `generation_base`.
-                                self.generation_base = self.last_generation + 1;
-                                if self.is_transparent() != self.renderer_transparent {
-                                    self.pending_restart = true;
-                                }
+                                self.mount_tree(window);
                                 // A successful reload clears any banner from the previous failed build.
                                 self.dev.set_build_error(None);
-                                // Synthesize WindowResized so the new tree's layout starts with the correct logical dimensions instead of its 0×0 defaults.
-                                let resize = platform_core::Event::WindowResized {
-                                    width: (window.width() as f32 / self.scale_factor) as u32,
-                                    height: (window.height() as f32 / self.scale_factor) as u32,
-                                };
+                                // The incoming dylib's segments subscribe to signals created in the old one's
+                                // runtime, so nothing wakes them without this.
                                 if let Some(ref mut tree) = self.tree {
-                                    tree.on_event(&resize);
                                     tree.bump_force_ticks();
                                 }
                                 tracing::info!("hot reloaded: {}", new_path.display());
@@ -724,12 +683,7 @@ where
         let mut redraw_requested = false;
         {
             let mut ctx = crate::app_context::AppCtx {
-                app_name: &self.app_name,
-                prefs: &mut self.prefs,
-                paths: self.paths.as_ref(),
-                pending_restart: &mut self.pending_restart,
                 redraw_requested: &mut redraw_requested,
-                window_signals: self.window_signals.as_ref(),
                 redraw_waker: self.redraw_waker.as_ref(),
                 raw_window_handle: raw_window_handle::HasWindowHandle::window_handle(window)
                     .ok()
@@ -772,6 +726,18 @@ where
                         }
                         self.start_hardware_render_thread(new_renderer);
                     }
+                    // Every path that builds a renderer arrives here, so the fallback lives here too: an
+                    // `Auto` app whose adapter is missing (or lost, on a restart that already dropped the
+                    // working one) gets software rather than a window that presents nothing.
+                    Err(e) if matches!(self.backend, RendererBackend::Auto) => {
+                        tracing::warn!("HW renderer unavailable ({e}), falling back to SW");
+                        let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
+                        drop(self.renderer.take());
+                        self.stop_render_thread();
+                        if let Err(e2) = self.start_software_render_thread(window, &system_fonts) {
+                            tracing::error!("SW fallback also failed: {e2}");
+                        }
+                    }
                     Err(e) => tracing::error!("Background HW renderer creation failed: {e}"),
                 }
                 window.request_redraw();
@@ -787,9 +753,6 @@ where
                 .prefs
                 .backend
                 .unwrap_or_else(config::compile_time_backend);
-            let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
-            let android = cfg!(target_os = "android");
-            let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
             // Drop old renderer and render thread before creating new one to avoid peak memory overlap.
             drop(self.renderer.take());
             self.stop_render_thread();
@@ -799,42 +762,15 @@ where
             }
             match self.backend {
                 RendererBackend::Software => {
+                    let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
                     if let Err(e) = self.start_software_render_thread(window, &system_fonts) {
                         tracing::error!("Failed to switch to SW renderer: {e}");
                     }
                 }
+                // Nothing presents until the build lands, which a restart already accepted by dropping the
+                // renderer above; the poll site takes the `Auto` fallback if it fails.
                 RendererBackend::Hardware | RendererBackend::Auto => {
-                    let font_config = build_hardware_font_config(
-                        self.font_paths.clone(),
-                        self.font_data.clone(),
-                        &system_fonts,
-                    );
-                    match HardwareRenderer::new(
-                        window.clone(),
-                        cache_path.as_deref(),
-                        android,
-                        font_config,
-                        HardwareRendererConfig {
-                            transparent: self.is_transparent(),
-                            ..HardwareRendererConfig::default()
-                        },
-                    ) {
-                        Ok(hw) => self.start_hardware_render_thread(hw),
-                        // The working renderer is already gone by here, so without the same Auto fallback the
-                        // init path takes, a machine that loses its adapter presents nothing for the rest of
-                        // the process.
-                        Err(e) if matches!(self.backend, RendererBackend::Auto) => {
-                            tracing::warn!(
-                                "HW renderer unavailable on restart ({e}), falling back to SW"
-                            );
-                            if let Err(e2) =
-                                self.start_software_render_thread(window, &system_fonts)
-                            {
-                                tracing::error!("SW fallback also failed: {e2}");
-                            }
-                        }
-                        Err(e) => tracing::error!("Failed to switch to HW renderer: {e}"),
-                    }
+                    self.spawn_hardware_build(window)
                 }
             }
         }
@@ -1015,20 +951,6 @@ mod tests {
     use super::*;
     use platform_headless::HeadlessWindow;
 
-    struct NullPaths;
-
-    impl AppPathsProvider for NullPaths {
-        fn config_dir(&self) -> Option<std::path::PathBuf> {
-            None
-        }
-        fn data_dir(&self) -> Option<std::path::PathBuf> {
-            None
-        }
-        fn cache_dir(&self) -> Option<std::path::PathBuf> {
-            None
-        }
-    }
-
     /// An app whose content never changes — a shell's frame ring, a wallpaper, a static diagram. Its tree's
     /// own generation is fixed for the life of the tree, which is what makes the collision below reachable.
     struct Unchanging;
@@ -1049,7 +971,7 @@ mod tests {
     fn handler() -> AppHandler<HeadlessWindow, ()> {
         build_app_handler::<HeadlessWindow, ()>(
             Box::new(Unchanging),
-            Box::new(NullPaths),
+            Box::new(services_core::NoPaths),
             Vec::new(),
             Vec::new(),
             RendererBackend::Software,

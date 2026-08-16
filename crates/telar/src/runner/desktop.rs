@@ -12,54 +12,6 @@ use crate::app::App;
 use crate::app_config::AppConfig;
 use crate::surface::{SurfaceControl, SurfaceToken};
 
-#[cfg(telar_hot_reload)]
-pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_TITLE") {
-        config.title = v;
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_WIDTH") {
-        if let Ok(n) = v.parse() {
-            config.width = n;
-        }
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_HEIGHT") {
-        if let Ok(n) = v.parse() {
-            config.height = n;
-        }
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_DECORATIONS") {
-        config.has_decorations = v == "1";
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_RESIZABLE") {
-        config.is_resizable = v == "1";
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_TRANSPARENT") {
-        config.is_transparent = v == "1";
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_FULLSCREEN") {
-        config.fullscreen = match v.as_str() {
-            "borderless" => platform_core::FullscreenMode::Borderless,
-            "exclusive" => platform_core::FullscreenMode::Exclusive,
-            _ => platform_core::FullscreenMode::Disabled,
-        };
-    }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_POSITION") {
-        config.position = parse_dev_window_position(&v);
-    }
-}
-
-// Parses the TELAR_DEV_WINDOW_POSITION value: "centered" (or empty/invalid) → Centered; "<x>,<y>" → absolute coordinates.
-#[cfg(telar_hot_reload)]
-fn parse_dev_window_position(value: &str) -> platform_core::WindowPosition {
-    let value = value.trim();
-    if let Some((x, y)) = value.split_once(',')
-        && let (Ok(x), Ok(y)) = (x.trim().parse::<i32>(), y.trim().parse::<i32>())
-    {
-        return platform_core::WindowPosition::At(x, y);
-    }
-    platform_core::WindowPosition::Centered
-}
-
 fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
     let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
     platform_desktop::DesktopFileDialogs::install();
@@ -71,22 +23,7 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
             std::process::exit(1);
         }
     };
-    let AppConfig {
-        window,
-        font_paths,
-        font_data,
-    } = config;
-    #[cfg(telar_hot_reload)]
-    let window = {
-        let mut window = window;
-        apply_dev_window_overrides(&mut window);
-        window
-    };
-    let config = AppConfig {
-        window,
-        font_paths,
-        font_data,
-    };
+    let config = super::dev_window::with_dev_overrides(config);
     if let Err(e) = super::run_with_platform::<_, A, D>(platform, config, paths, app, app_name) {
         tracing::error!("Event loop exited with error: {e}");
         std::process::exit(1);

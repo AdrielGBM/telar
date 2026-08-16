@@ -18,6 +18,26 @@ pub trait AppPathsProvider: Send + Sync {
     }
 }
 
+/// A provider that reports no directories at all, so nothing it is handed to touches a real XDG path.
+///
+/// Public rather than test-only: a preview window, a headless rasterise and every integration test want the
+/// same answer, and each had written its own copy of these three `None`s.
+pub struct NoPaths;
+
+impl AppPathsProvider for NoPaths {
+    fn config_dir(&self) -> Option<PathBuf> {
+        None
+    }
+
+    fn data_dir(&self) -> Option<PathBuf> {
+        None
+    }
+
+    fn cache_dir(&self) -> Option<PathBuf> {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,25 +95,9 @@ mod tests {
         assert_eq!(provider.cache_dir(), Some(PathBuf::from("/mock/cache")));
     }
 
-    struct NonePathsProvider;
-
-    impl AppPathsProvider for NonePathsProvider {
-        fn config_dir(&self) -> Option<PathBuf> {
-            None
-        }
-
-        fn data_dir(&self) -> Option<PathBuf> {
-            None
-        }
-
-        fn cache_dir(&self) -> Option<PathBuf> {
-            None
-        }
-    }
-
     #[test]
     fn test_none_provider_handles_missing_paths() {
-        let provider = NonePathsProvider;
+        let provider = NoPaths;
 
         assert_eq!(provider.config_dir(), None);
         assert_eq!(provider.data_dir(), None);

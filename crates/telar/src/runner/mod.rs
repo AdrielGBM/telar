@@ -1,15 +1,30 @@
+#[cfg(target_os = "android")]
 mod android;
 #[cfg(all(feature = "desktop", not(target_os = "android")))]
 mod desktop;
+#[cfg(any(
+    all(feature = "desktop", not(target_os = "android")),
+    target_os = "android"
+))]
+mod dev_window;
 mod font_config;
+mod frame_thread;
 pub(crate) use font_config::offscreen_hardware_font_config;
 pub use font_config::set_default_font_family;
-#[cfg(not(target_os = "android"))]
 mod generic;
 mod handler;
+#[cfg(all(feature = "dev", not(target_os = "android")))]
 mod hot_host;
-#[cfg(not(target_os = "android"))]
 mod multi;
+
+/// The window an app opens with: `App::window_config` outright replaces whatever the caller passed,
+/// including the `[telar.dev.window]` overrides. See [`dev_window::with_dev_overrides`] for why that order.
+fn resolved_window<A: crate::app::App + ?Sized>(
+    from_config: platform_core::WindowConfig,
+    app: &A,
+) -> platform_core::WindowConfig {
+    app.window_config().unwrap_or(from_config)
+}
 
 const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
 
@@ -30,9 +45,7 @@ const COMMAND_BUF_POOL_CAP: usize = 3;
 pub use android::run_android_app_with_name;
 #[cfg(all(feature = "desktop", not(target_os = "android")))]
 pub use desktop::{open_window, run_app_windowed, run_app_with_name};
-#[cfg(not(target_os = "android"))]
 pub use generic::run_with_platform;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 pub use hot_host::run_hot_reload_host;
-#[cfg(not(target_os = "android"))]
 pub use multi::{build_surface_handler, run_multi_with_platform};

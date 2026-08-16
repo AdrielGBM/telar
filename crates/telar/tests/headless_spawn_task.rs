@@ -10,8 +10,9 @@ mod common;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
-use common::{NullPaths, assert_center_rgb};
+use common::assert_center_rgb;
 use platform_headless::{FrameSink, HeadlessPlatform};
+use telar::NoPaths;
 use telar::{
     App, AppConfig, AppCtx, AppPathsProvider, AvailableSpace, Color, Component, Event, EventResult,
     LayoutItem, LayoutStyle, NodeId, ReadSignal, RectStyle, Rectangle, RenderNode, RwSignal,
@@ -125,7 +126,7 @@ fn a_background_task_result_reaches_the_screen() {
     run_with_platform::<_, _, ()>(
         platform,
         AppConfig::default(),
-        Box::new(NullPaths) as Box<dyn AppPathsProvider>,
+        Box::new(NoPaths) as Box<dyn AppPathsProvider>,
         TaskApp {
             color: RefCell::new(None),
             spawned: false,

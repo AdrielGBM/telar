@@ -51,23 +51,6 @@ impl PreviewSurface {
     }
 }
 
-#[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]
-pub fn make_hot_preview_app(entries: Vec<PreviewEntry>) -> Box<dyn crate::App> {
-    Box::new(crate::preview::PreviewApp { entries })
-}
-
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub fn try_run_preview(entries: Vec<PreviewEntry>, config: AppConfig) -> bool {
-    #[cfg(feature = "preview")]
-    {
-        crate::run_preview_window(entries, config);
-        return true;
-    }
-    #[allow(unreachable_code)]
-    let _ = (entries, config);
-    false
-}
-
 /// The `cargo telar` dev-loop entry, for an app that wires its own runner instead of expanding [`crate::app!`] —
 /// a multi-surface host, or one on an out-of-tree backend, which reaches [`crate::run_with_platform`] or
 /// [`crate::run_multi_with_platform`] directly. `app!` generates a call to this; anything using `rsx_modules!`
@@ -115,7 +98,16 @@ where
         try_run_test(entries(), config);
     }
     if std::env::var("TELAR_PREVIEW").is_ok() {
-        return try_run_preview(entries(), config);
+        // Only a build with the feature can show a window; without it the caller starts its app as usual.
+        #[cfg(feature = "preview")]
+        {
+            crate::run_app_with_name(
+                config,
+                crate::preview::PreviewApp { entries: entries() },
+                "telar-preview",
+            );
+            return true;
+        }
     }
     false
 }

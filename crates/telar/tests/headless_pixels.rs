@@ -7,8 +7,9 @@ mod common;
 
 use std::sync::{Arc, Mutex};
 
-use common::{FillApp, NullPaths, assert_center_rgb};
+use common::{FillApp, assert_center_rgb};
 use platform_headless::{FrameSink, HeadlessPlatform};
+use telar::NoPaths;
 use telar::{AppConfig, AppPathsProvider, Color, run_with_platform};
 
 #[test]
@@ -24,7 +25,7 @@ fn headless_renders_fill_color_to_pixels() {
     run_with_platform::<_, _, ()>(
         platform,
         AppConfig::default(),
-        Box::new(NullPaths) as Box<dyn AppPathsProvider>,
+        Box::new(NoPaths) as Box<dyn AppPathsProvider>,
         FillApp {
             color: Color::from_rgb_u8(50, 120, 200),
         },

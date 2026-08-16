@@ -16,7 +16,7 @@ thread_local! {
 /// (`[R, G, B, A]` per pixel, row-major, `width * height * 4` bytes), or `None` if the size is empty or the
 /// frame failed to render.
 ///
-/// The fourth answer alongside [`crate::try_run_test`], [`crate::run_preview_window`] and
+/// The fourth answer alongside [`crate::try_run_test`], the preview window and
 /// [`crate::run_preview_png`], and the lowest-level one: no [`crate::App`], no layout pass, no platform event
 /// loop — just draw commands in, pixels out. For the caller that has already composed a few
 /// [`DrawCommand`]s and needs a raw buffer to hand to something else: a compositor drag icon, a tray or

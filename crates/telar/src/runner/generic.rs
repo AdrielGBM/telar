@@ -33,13 +33,11 @@ where
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let AppConfig {
-        mut window,
+        window,
         font_paths,
         font_data,
     } = config;
-    if let Some(custom) = app.window_config() {
-        window = custom;
-    }
+    let window = super::resolved_window(window, &app);
     let handler = build_app_handler::<P::Window, D>(
         Box::new(app),
         paths,

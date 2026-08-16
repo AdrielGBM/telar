@@ -1,27 +1,15 @@
-#[cfg(target_os = "android")]
-use crate::dev_plugin::DevPlugin;
-#[cfg(target_os = "android")]
-use platform_core::Platform;
-#[cfg(target_os = "android")]
-use services_core::AppPathsProvider;
+//! The Android entry point: everything about booting an app that differs from every other platform.
 
-#[cfg(target_os = "android")]
 use crate::app::App;
-#[cfg(target_os = "android")]
 use crate::app_config::AppConfig;
-#[cfg(target_os = "android")]
-use crate::config;
-#[cfg(target_os = "android")]
-use crate::prefs::UserPrefs;
-
-#[cfg(target_os = "android")]
-use super::handler::build_app_handler;
+use crate::dev_plugin::DevPlugin;
+use services_core::AppPathsProvider;
 
 // App processes do not inherit the adb shell environment, so debug flags that are env vars on
 // desktop (TELAR_PERF, TELAR_HW_DAMAGE, …) are unreachable on Android. Bridge them from `debug.telar.<k>`
 // system properties (settable without root via `adb shell setprop debug.telar.perf 1`) into the
 // env vars the engine reads. Must run before any OnceLock reads them or the render thread spawns.
-#[cfg(all(feature = "runtime", target_os = "android"))]
+#[cfg(feature = "runtime")]
 fn bridge_debug_props_to_env() {
     for (prop, var) in [
         ("debug.telar.perf", "TELAR_PERF"),
@@ -39,7 +27,7 @@ fn bridge_debug_props_to_env() {
     }
 }
 
-#[cfg(all(feature = "runtime", target_os = "android"))]
+#[cfg(feature = "runtime")]
 pub fn run_android_app_with_name<A: App>(
     config: AppConfig,
     app: A,
@@ -53,19 +41,21 @@ pub fn run_android_app_with_name<A: App>(
     run_android_with_plugin::<A, ()>(config, app, app_name, android_app);
 }
 
-#[cfg(all(feature = "runtime", target_os = "android"))]
+/// Builds the Android platform and paths provider, then hands over to the one shared boot sequence.
+///
+/// The sequence itself — load prefs, resolve the backend, resolve the window, build the handler, run — used
+/// to be written out again here, `run_with_platform` being gated off this target for no reason: it is generic
+/// over `Platform`, `AndroidPlatform` implements it, and it imports nothing desktop-only.
+#[cfg(feature = "runtime")]
 fn run_android_with_plugin<A: App, D: DevPlugin>(
     config: AppConfig,
     app: A,
     app_name: &str,
     android_app: platform_android::AndroidApp,
 ) {
-    use platform_android::{AndroidPathsProvider, AndroidPlatform, AndroidWindow};
+    use platform_android::{AndroidPathsProvider, AndroidPlatform};
 
     let paths: Box<dyn AppPathsProvider> = Box::new(AndroidPathsProvider::new(android_app.clone()));
-    let prefs = UserPrefs::load(app_name, paths.as_ref());
-    let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
-
     let platform = match AndroidPlatform::try_new(android_app) {
         Ok(p) => p,
         Err(e) => {
@@ -73,28 +63,8 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
             return;
         }
     };
-    let AppConfig {
-        mut window,
-        font_paths,
-        font_data,
-    } = config;
-    #[cfg(telar_hot_reload)]
-    super::desktop::apply_dev_window_overrides(&mut window);
-    if let Some(custom) = app.window_config() {
-        window = custom;
-    }
-    if let Err(e) = platform.run(
-        window,
-        build_app_handler::<AndroidWindow, D>(
-            Box::new(app),
-            paths,
-            font_paths,
-            font_data,
-            backend,
-            prefs,
-            app_name.to_owned(),
-        ),
-    ) {
+    let config = super::dev_window::with_dev_overrides(config);
+    if let Err(e) = super::run_with_platform::<_, A, D>(platform, config, paths, app, app_name) {
         tracing::error!("Android event loop exited with error: {e}");
     }
 }

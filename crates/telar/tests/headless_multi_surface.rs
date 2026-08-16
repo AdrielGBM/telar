@@ -9,8 +9,9 @@ mod common;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use common::{FillApp, MaybePanicApp, NullPaths, assert_center_rgb};
+use common::{FillApp, MaybePanicApp, assert_center_rgb};
 use platform_headless::{HeadlessPlatform, SurfaceFrameSink};
+use telar::NoPaths;
 use telar::{AppConfig, AppPathsProvider, Color, SurfaceId, WindowConfig, run_multi_with_platform};
 
 #[test]
@@ -47,7 +48,7 @@ fn headless_multi_surface_renders_isolated_trees() {
     run_multi_with_platform(
         platform,
         surfaces,
-        |_id| Box::new(NullPaths) as Box<dyn AppPathsProvider>,
+        |_id| Box::new(NoPaths) as Box<dyn AppPathsProvider>,
         move |id| {
             let rgb = colors_for_factory[&id];
             FillApp {
@@ -95,7 +96,7 @@ fn headless_multi_surface_quarantines_a_panicking_surface() {
     run_multi_with_platform(
         platform,
         vec![make(good), make(bad)],
-        |_id| Box::new(NullPaths) as Box<dyn AppPathsProvider>,
+        |_id| Box::new(NoPaths) as Box<dyn AppPathsProvider>,
         move |id| MaybePanicApp {
             color: Color::from_rgb_u8(40, 200, 40),
             panic_on_build: id == bad,

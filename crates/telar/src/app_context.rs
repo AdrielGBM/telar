@@ -1,11 +1,6 @@
 use std::sync::Arc;
 
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
-use services_core::AppPathsProvider;
-
-use crate::config::RendererBackend;
-use crate::prefs::UserPrefs;
-use crate::window_signals::WindowSignals;
 
 /// A `Send`/`Sync`, cloneable handle that wakes the UI event loop (requests a redraw). Hand it to a background
 /// thread (a file dialog, a `notify` watcher, a network fetch) so that when the thread has produced a result —
@@ -27,12 +22,7 @@ impl RedrawWaker {
 }
 
 pub struct AppCtx<'a> {
-    pub(crate) app_name: &'a str,
-    pub(crate) prefs: &'a mut UserPrefs,
-    pub(crate) paths: &'a dyn AppPathsProvider,
-    pub(crate) pending_restart: &'a mut bool,
     pub(crate) redraw_requested: &'a mut bool,
-    pub(crate) window_signals: Option<&'a WindowSignals>,
     pub(crate) redraw_waker: Option<&'a RedrawWaker>,
     // This window's raw OS handles, for app code doing native platform integration (Wayland/X11 drag-and-drop,
     // IME, a custom GPU surface). `None` on backends that can't report them. Standard, backend-agnostic types.
@@ -43,10 +33,6 @@ pub struct AppCtx<'a> {
 impl<'a> AppCtx<'a> {
     pub fn request_redraw(&mut self) {
         *self.redraw_requested = true;
-    }
-
-    pub fn window(&self) -> Option<&WindowSignals> {
-        self.window_signals
     }
 
     /// A `Send`/`Sync` handle to wake the UI loop from a background thread (see [`RedrawWaker`]). Grab it once
@@ -66,29 +52,5 @@ impl<'a> AppCtx<'a> {
     /// [`raw_window_handle`](Self::raw_window_handle) for native platform integration. `None` where unavailable.
     pub fn raw_display_handle(&self) -> Option<RawDisplayHandle> {
         self.raw_display_handle
-    }
-
-    pub fn restart_required(&self) -> bool {
-        *self.pending_restart
-    }
-
-    pub fn renderer_backend(&self) -> Option<RendererBackend> {
-        self.prefs.backend
-    }
-
-    pub fn set_renderer_backend(&mut self, backend: RendererBackend) {
-        self.prefs.backend = Some(backend);
-        *self.pending_restart = true;
-        if let Err(e) = self.prefs.save(self.app_name, self.paths) {
-            tracing::warn!("Could not save preferences: {e}");
-        }
-    }
-
-    pub fn reset_renderer_backend(&mut self) {
-        self.prefs.backend = None;
-        *self.pending_restart = true;
-        if let Err(e) = self.prefs.save(self.app_name, self.paths) {
-            tracing::warn!("Could not save preferences: {e}");
-        }
     }
 }

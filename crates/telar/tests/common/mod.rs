@@ -6,26 +6,10 @@
 #![allow(dead_code)]
 
 use telar::{
-    App, AppPathsProvider, AvailableSpace, Color, Component, Event, EventResult, LayoutItem,
-    LayoutStyle, NodeId, RectStyle, Rectangle, RenderNode, SizeDimension, compute_layout,
-    mark_dirty, new_container, reset_layout_runtime,
+    App, AvailableSpace, Color, Component, Event, EventResult, LayoutItem, LayoutStyle, NodeId,
+    RectStyle, Rectangle, RenderNode, SizeDimension, compute_layout, mark_dirty, new_container,
+    reset_layout_runtime,
 };
-
-/// A paths provider that reports nothing, so tests touch no real XDG directories (UserPrefs::load finds no
-/// file and uses defaults).
-pub struct NullPaths;
-
-impl AppPathsProvider for NullPaths {
-    fn config_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
-    fn data_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
-    fn cache_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
-}
 
 struct FillRoot {
     root: NodeId,

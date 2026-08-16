@@ -10,21 +10,7 @@ use std::time::Duration;
 
 use platform_core::{Event, EventHandler, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
-use telar::{AppPathsProvider, build_surface_handler};
-
-struct NullPaths;
-
-impl AppPathsProvider for NullPaths {
-    fn config_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
-    fn data_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
-    fn cache_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
-}
+use telar::{AppPathsProvider, NoPaths, build_surface_handler};
 
 /// One loop iteration that delivers an event, returning the pace the handler asks to be woken at.
 fn feed(
@@ -74,7 +60,7 @@ fn a_nav_click_keeps_the_loop_scheduling_frames_until_the_fade_settles() {
     let window = HeadlessWindow::new(w, h);
     let mut handler: Box<dyn EventHandler<HeadlessWindow>> = build_surface_handler(
         sandbox::core::app::SandboxRoot,
-        Box::new(NullPaths) as Box<dyn AppPathsProvider>,
+        Box::new(NoPaths) as Box<dyn AppPathsProvider>,
         "telar-sandbox-pacing-test",
     );
 

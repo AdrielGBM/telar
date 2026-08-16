@@ -3,30 +3,27 @@ mod macros;
 pub mod config;
 
 #[cfg(feature = "runtime")]
+pub mod app;
+#[cfg(feature = "runtime")]
 pub mod app_config;
 #[cfg(feature = "runtime")]
 pub mod app_context;
 #[cfg(feature = "runtime")]
-mod direction;
-#[cfg(feature = "runtime")]
-pub mod files;
-#[cfg(feature = "runtime")]
-pub mod prefs;
-#[cfg(feature = "runtime")]
-pub mod window_signals;
-
-#[cfg(feature = "runtime")]
-pub mod app;
-#[cfg(feature = "runtime")]
 pub mod dev_plugin;
 #[cfg(feature = "dev")]
 pub mod dev_tools;
+#[cfg(feature = "runtime")]
+mod direction;
+#[cfg(feature = "runtime")]
+pub mod files;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 pub mod hot;
 #[cfg(feature = "dev")]
 pub mod hot_state;
 #[cfg(feature = "plugin")]
 pub mod plugin;
+#[cfg(feature = "runtime")]
+pub mod prefs;
 #[cfg(feature = "platform-headless")]
 mod raster;
 #[cfg(feature = "runtime")]
@@ -49,17 +46,11 @@ mod preview_runner;
 pub use preview_runner::{PreviewEntry, PreviewSurface};
 
 #[cfg(feature = "runtime")]
+pub use app::App;
+#[cfg(feature = "runtime")]
 pub use app_config::AppConfig;
 #[cfg(feature = "runtime")]
 pub use app_context::{AppCtx, RedrawWaker};
-#[cfg(feature = "runtime")]
-pub use prefs::UserPrefs;
-pub use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
-#[cfg(feature = "runtime")]
-pub use window_signals::WindowSignals;
-
-#[cfg(feature = "runtime")]
-pub use app::App;
 #[cfg(feature = "runtime")]
 pub use dev_plugin::{DevAction, DevPlugin};
 #[cfg(feature = "runtime")]
@@ -71,6 +62,9 @@ pub use layout_core::{
 };
 #[cfg(feature = "plugin")]
 pub use plugin::EmbeddedApp;
+#[cfg(feature = "runtime")]
+pub use prefs::UserPrefs;
+pub use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 #[cfg(feature = "runtime")]
 pub use tree::{Frame, HotTree, LocalTree, UiTree};
 // Named in the tree shims the `app!` macro exports, so it has to be reachable through the facade.
@@ -126,7 +120,7 @@ pub use renderer_core::{
 /// memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
 #[cfg(feature = "runtime")]
 pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer_caches};
-pub use services_core::AppPathsProvider;
+pub use services_core::{AppPathsProvider, NoPaths};
 // Available in every GUI build, not opt-in: `ui_core::Surface` composes the per-surface service scope, so
 // `runtime` pulls in ui-core which turns on services-core/di. A non-GUI build (the `cargo-telar` tool depends on
 // `rsx` with default-features off) has no ui-core, hence no `di`, hence nothing to re-export.
@@ -152,13 +146,13 @@ pub use ui_core::{
     Canvas, ChildSlot, Children, ClipAxis, ClippedItem, Component, ComponentList, Container,
     DEFAULT_SCRIM, DragStart, EventResult, Holding, Image, Input, KeyboardMode, LayoutItem,
     LayoutScrollArea, Lazy, Line, LineGutter, MIN_FRAME_SIZE, NodeId, NodeVec, Overlay, Path,
-    PointerButtons, ReactiveList, Rectangle, RenderNode, RichText, ScrollViewport, ScrollbarStyle,
-    Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle, SurfacePlacement,
-    SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, SurfaceTransition, Text, TextArea,
-    VirtualList, anchor_rect, box_item, box_transform, close_overlay, compute_layout,
-    current_direction, dismiss_depth, dismiss_top, drag_start, drag_travel, focus, fragment,
-    fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects, kept, key_held,
-    key_pressed, logical_border_radius, logical_border_widths, mark_dirty, modifiers,
+    PointerButtons, ReactiveList, Rectangle, RenderNode, RichText, ScrollPage, ScrollViewport,
+    ScrollbarStyle, Slots, StyledContainer, SurfaceAlign, SurfaceAnchor, SurfaceFrameStyle,
+    SurfacePlacement, SurfaceRole, SurfaceRoot, SurfaceScaffold, SurfaceSize, SurfaceTransition,
+    Text, TextArea, VirtualList, anchor_rect, box_item, box_transform, close_overlay,
+    compute_layout, current_direction, dismiss_depth, dismiss_top, drag_start, drag_travel, focus,
+    fragment, fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects, kept,
+    key_held, key_pressed, logical_border_radius, logical_border_widths, mark_dirty, modifiers,
     new_container, new_leaf, observe_keyboard, observe_pointer, open_overlay, overlay_state,
     pointer_buttons, relayout_if_dirty, remove_node, reset_layout_runtime, set_children,
     set_direction, set_display, set_min_height, set_overlay_host, surface_frame, track_layout,
@@ -190,10 +184,13 @@ pub fn dispatch_overlays(event: &Event) -> bool {
     not(target_os = "android")
 ))]
 mod preview;
+#[cfg(all(
+    any(feature = "preview", feature = "preview-headless"),
+    not(target_os = "android")
+))]
+pub use preview::PreviewApp;
 #[cfg(all(feature = "preview-headless", not(target_os = "android")))]
 pub use preview::run_preview_png;
-#[cfg(all(feature = "preview", not(target_os = "android")))]
-pub use preview::run_preview_window;
 #[cfg(feature = "platform-headless")]
 pub use raster::rasterize;
 
@@ -230,7 +227,5 @@ pub use runner::{open_window, run_app_windowed, run_app_with_name};
 
 pub use telar_macros::{app, rsx_modules, t};
 
-#[cfg(all(feature = "dev", feature = "preview", not(target_os = "android")))]
-pub use preview_runner::make_hot_preview_app;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
-pub use preview_runner::{dev_entry, try_run_preview, try_run_test};
+pub use preview_runner::{dev_entry, try_run_test};

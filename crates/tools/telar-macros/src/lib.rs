@@ -108,7 +108,9 @@ pub fn app(input: TokenStream) -> TokenStream {
     let hot_export = if is_hot_reload {
         let body: TokenStream2 = if is_preview {
             quote! {
-                return ::telar::make_hot_preview_app(telar_all_preview_entries());
+                return ::std::boxed::Box::new(::telar::PreviewApp {
+                    entries: telar_all_preview_entries(),
+                });
             }
         } else {
             quote! {

@@ -1,72 +1,12 @@
+#[cfg(feature = "preview-headless")]
+use crate::AppConfig;
 use crate::{
-    App, AppConfig, AvailableSpace, Color, Component, Container, Event, EventResult, LayoutError,
-    LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, PreviewEntry, RenderNode, SizeDimension,
-    Text, TextStyle, compute_layout, mark_dirty, new_container, reset_layout_runtime,
+    App, Color, Component, Container, LayoutError, LayoutItem, LayoutStyle, PreviewEntry,
+    ScrollPage, Text, TextStyle, reset_layout_runtime,
 };
 
 pub struct PreviewApp {
     pub entries: Vec<PreviewEntry>,
-}
-
-/// Full-window scrolling page: a window-sized root holding a LayoutScrollArea whose viewport is recomputed on resize so content scrolls against the current window dimensions.
-struct ScrollPage {
-    root: NodeId,
-    content_node: NodeId,
-    scroll_area: LayoutScrollArea,
-}
-
-impl ScrollPage {
-    fn new(content: Box<dyn LayoutItem>) -> Result<Self, LayoutError> {
-        let content_node = content.layout_node();
-        let scroll_area = LayoutScrollArea::new(
-            LayoutStyle::new().flex_grow(1.0).align_self_stretch(),
-            content,
-        )?;
-        // Root fills the window via percent sizing so compute_layout against Definite(w, h) yields a full-window viewport for the scroll-area leaf.
-        let root = new_container(
-            LayoutStyle::new()
-                .flex_column()
-                .width(SizeDimension::Percent(1.0))
-                .height(SizeDimension::Percent(1.0)),
-            &[scroll_area.layout_node()],
-        )?;
-        Ok(Self {
-            root,
-            content_node,
-            scroll_area,
-        })
-    }
-
-    fn recompute_layout(&mut self, width: f32, height: f32) {
-        mark_dirty(self.root).ok();
-        compute_layout(
-            self.root,
-            AvailableSpace::Definite(width),
-            AvailableSpace::Definite(height),
-        )
-        .ok();
-        compute_layout(
-            self.content_node,
-            AvailableSpace::Definite(width),
-            AvailableSpace::MaxContent,
-        )
-        .ok();
-        self.scroll_area.clamp_scroll();
-    }
-}
-
-impl Component for ScrollPage {
-    fn view(&self) -> RenderNode {
-        self.scroll_area.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        if let Event::WindowResized { width, height } = event {
-            self.recompute_layout(*width as f32, *height as f32);
-            return EventResult::Handled;
-        }
-        self.scroll_area.on_event(event)
-    }
 }
 
 /// A tree preview is dropped into the page as it is; a surface preview is first given the two things a
@@ -170,15 +110,10 @@ impl App for PreviewApp {
     }
 }
 
-#[cfg(feature = "preview")]
-pub fn run_preview_window(entries: Vec<PreviewEntry>, config: AppConfig) {
-    crate::run_app_with_name(config, PreviewApp { entries }, "telar-preview");
-}
-
 /// Renders every `[preview]` entry to its own PNG under `out_dir` on the headless backend, then exits.
 ///
 /// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] proves a component builds
-/// and lays out but never draws a pixel, and [`run_preview_window`] draws but needs a desktop window a shell has
+/// and lays out but never draws a pixel, and the preview window draws but needs a desktop window a shell has
 /// no way to open. Each entry gets its own file rather than one page of all of them, so a name identifies a
 /// preview and a golden-image run can compare them one at a time.
 #[cfg(feature = "preview-headless")]
@@ -216,7 +151,7 @@ pub fn run_preview_png(
             crate::run_with_platform::<_, _, ()>(
                 platform,
                 config.clone(),
-                Box::new(NullPaths) as Box<dyn crate::AppPathsProvider>,
+                Box::new(crate::NoPaths) as Box<dyn crate::AppPathsProvider>,
                 app,
                 "telar-preview",
             )
@@ -274,20 +209,4 @@ fn sanitize(name: &str) -> String {
             }
         })
         .collect()
-}
-
-#[cfg(feature = "preview-headless")]
-struct NullPaths;
-
-#[cfg(feature = "preview-headless")]
-impl crate::AppPathsProvider for NullPaths {
-    fn config_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
-    fn data_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
-    fn cache_dir(&self) -> Option<std::path::PathBuf> {
-        None
-    }
 }
