@@ -224,16 +224,31 @@ impl PluginInstance {
     /// Dispatch an event to the content (already in local coordinates). Self-batches in the plugin's runtime.
     pub fn on_event(&mut self, event: &Event) -> bool {
         let _g = self.surface.enter();
+        // A cdylib carries its own copy of every `thread_local` in ui-core, so the host observing on its side of the boundary left the plugin's widgets reading a permanently empty registry — `modifiers()` answered "none" and a dropdown's type-ahead swallowed Ctrl+C. `crate::tree::HotTree::on_event` carries the same two lines for the same reason.
+        ui_core::observe_keyboard(event);
+        ui_core::observe_pointer(event);
         self.tree.on_event(event) == EventResult::Handled
     }
 
     /// Route a positioned event to the plugin's overlay layer (modals/dropdowns) with priority; `true` means an
     /// overlay consumed it and the host should not fall through to the content.
+    ///
+    /// The host calls this before [`on_event`](Self::on_event) and stops when it returns `true`, so the
+    /// registries are fed here too — otherwise an event an overlay consumes never reaches them at all.
     pub fn dispatch_overlays(&self, event: &Event) -> bool {
         let _g = self.surface.enter();
+        ui_core::observe_keyboard(event);
+        ui_core::observe_pointer(event);
         // Batch so an overlay handler's signal writes flush after dispatch, not mid-walk (matches the runner's
         // event-batch bracket around overlay dispatch).
         reactive_core::batch(|| ui_core::dispatch_overlays(event) == EventResult::Handled)
+    }
+
+    /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes
+    /// on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.
+    pub fn end_frame(&self) {
+        let _g = self.surface.enter();
+        ui_core::end_keyboard_frame();
     }
 
     /// Advance the plugin's motion engine and flush its runtime so animations progress and re-render.
@@ -351,6 +366,7 @@ plugin_shim!(__plugin_paint() -> DrawList => paint);
 plugin_shim!(__plugin_generation() -> u64 => generation);
 plugin_shim!(__plugin_on_event(event: &Event) -> bool => on_event);
 plugin_shim!(__plugin_dispatch_overlays(event: &Event) -> bool => dispatch_overlays);
+plugin_shim!(__plugin_end_frame() => end_frame);
 plugin_shim!(__plugin_motion_tick(now: Instant) => motion_tick);
 plugin_shim!(__plugin_motion_active() -> bool => motion_active);
 plugin_shim!(__plugin_drain_window_commands() -> WindowCommands => drain_window_commands);
@@ -369,132 +385,89 @@ pub unsafe fn __plugin_on_frame(inst: *mut PluginInstance, ctx: &mut AppCtx) {
     unsafe { (*inst).on_frame(ctx) }
 }
 
-/// Exports the `_rsx_plugin_*` FFI symbols for a plugin cdylib. `$factory` is any
+/// The version of the guest/host contract below. Bump it whenever [`PluginVTable`] changes shape — adding a
+/// field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch
+/// instead of being called through a table whose fields have moved under it.
+pub const TELAR_PLUGIN_ABI: u32 = 1;
+
+/// Everything the host calls on a plugin, as one exported symbol.
+///
+/// `#[repr(C)]` is what makes the version check sound rather than cosmetic: `abi` is guaranteed to sit at
+/// offset 0, so the host can read it out of a guest built against a different (possibly shorter) table before
+/// it reads anything else.
+///
+/// The signatures use the `extern "Rust"` ABI over Rust types, so a plugin must be built with the same
+/// toolchain as its host — a first-party plugin model, exactly as hot reload requires.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PluginVTable {
+    pub abi: u32,
+    pub create: unsafe extern "Rust" fn(&[String]) -> *mut PluginInstance,
+    pub destroy: unsafe extern "Rust" fn(*mut PluginInstance),
+    pub relayout: unsafe extern "Rust" fn(*mut PluginInstance, f32, f32),
+    pub relayout_dirty: unsafe extern "Rust" fn(*mut PluginInstance),
+    pub paint: unsafe extern "Rust" fn(*mut PluginInstance) -> DrawList,
+    pub generation: unsafe extern "Rust" fn(*mut PluginInstance) -> u64,
+    pub on_event: unsafe extern "Rust" fn(*mut PluginInstance, &Event) -> bool,
+    pub dispatch_overlays: unsafe extern "Rust" fn(*mut PluginInstance, &Event) -> bool,
+    pub end_frame: unsafe extern "Rust" fn(*mut PluginInstance),
+    pub motion_tick: unsafe extern "Rust" fn(*mut PluginInstance, Instant),
+    pub motion_active: unsafe extern "Rust" fn(*mut PluginInstance) -> bool,
+    pub drain_window_commands: unsafe extern "Rust" fn(*mut PluginInstance) -> WindowCommands,
+    pub set_system_dark: unsafe extern "Rust" fn(*mut PluginInstance, bool),
+    pub activate: unsafe extern "Rust" fn(*mut PluginInstance),
+    pub clear_color: unsafe extern "Rust" fn(*mut PluginInstance) -> Option<Color>,
+    pub title: unsafe extern "Rust" fn(*mut PluginInstance) -> String,
+    pub icon: unsafe extern "Rust" fn(*mut PluginInstance) -> Option<Vec<u8>>,
+    pub id: unsafe extern "Rust" fn(*mut PluginInstance) -> String,
+    pub on_frame: unsafe extern "Rust" fn(*mut PluginInstance, &mut AppCtx),
+}
+
+/// Exports a plugin cdylib's one FFI symbol, the `_rsx_plugin_vtable`. `$factory` is any
 /// `Fn(&[String]) -> Box<dyn telar::EmbeddedApp>` — invoked once per instance with the launch args.
 ///
 /// ```ignore
 /// telar::plugin!(|args: &[String]| -> Box<dyn telar::EmbeddedApp> { Box::new(MyApp::new(args)) });
 /// ```
 ///
-/// The symbols are plain (release) exports — no `TELAR_HOT_RELOAD_BUILD`, no `dev` feature. They use the
-/// `extern "Rust"` ABI, so a plugin must be built with the same toolchain as its host (a first-party plugin
-/// model), exactly as hot-reload requires.
+/// One symbol rather than one per method, so adding a guest method is a field here and a wrapper on the host
+/// instead of four edits across two macros — and so a stale `.so` fails the [`TELAR_PLUGIN_ABI`] check with a
+/// version mismatch rather than a missing-symbol error that names whichever method happened to be added last.
+///
+/// The symbol is a plain (release) export — no `TELAR_HOT_RELOAD_BUILD`, no `dev` feature.
 #[macro_export]
 macro_rules! plugin {
     ($factory:expr) => {
         #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_create(
-            args: &[::std::string::String],
-        ) -> *mut $crate::plugin::PluginInstance {
-            $crate::plugin::__plugin_create(($factory)(args))
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_destroy(inst: *mut $crate::plugin::PluginInstance) {
-            unsafe { $crate::plugin::__plugin_destroy(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_relayout(
-            inst: *mut $crate::plugin::PluginInstance,
-            width: f32,
-            height: f32,
-        ) {
-            unsafe { $crate::plugin::__plugin_relayout(inst, width, height) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_relayout_dirty(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) {
-            unsafe { $crate::plugin::__plugin_relayout_dirty(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_paint(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) -> $crate::plugin::DrawList {
-            unsafe { $crate::plugin::__plugin_paint(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_generation(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) -> u64 {
-            unsafe { $crate::plugin::__plugin_generation(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_on_event(
-            inst: *mut $crate::plugin::PluginInstance,
-            event: &$crate::plugin::PluginEvent,
-        ) -> bool {
-            unsafe { $crate::plugin::__plugin_on_event(inst, event) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_dispatch_overlays(
-            inst: *mut $crate::plugin::PluginInstance,
-            event: &$crate::plugin::PluginEvent,
-        ) -> bool {
-            unsafe { $crate::plugin::__plugin_dispatch_overlays(inst, event) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_motion_tick(
-            inst: *mut $crate::plugin::PluginInstance,
-            now: ::std::time::Instant,
-        ) {
-            unsafe { $crate::plugin::__plugin_motion_tick(inst, now) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_motion_active(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) -> bool {
-            unsafe { $crate::plugin::__plugin_motion_active(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_drain_window_commands(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) -> $crate::plugin::WindowCommands {
-            unsafe { $crate::plugin::__plugin_drain_window_commands(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_set_system_dark(
-            inst: *mut $crate::plugin::PluginInstance,
-            dark: bool,
-        ) {
-            unsafe { $crate::plugin::__plugin_set_system_dark(inst, dark) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_activate(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) {
-            unsafe { $crate::plugin::__plugin_activate(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_clear_color(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) -> ::std::option::Option<$crate::plugin::PluginColor> {
-            unsafe { $crate::plugin::__plugin_clear_color(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_title(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) -> ::std::string::String {
-            unsafe { $crate::plugin::__plugin_title(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_icon(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) -> ::std::option::Option<::std::vec::Vec<u8>> {
-            unsafe { $crate::plugin::__plugin_icon(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_id(
-            inst: *mut $crate::plugin::PluginInstance,
-        ) -> ::std::string::String {
-            unsafe { $crate::plugin::__plugin_id(inst) }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "Rust" fn _rsx_plugin_on_frame(
-            inst: *mut $crate::plugin::PluginInstance,
-            ctx: &mut $crate::AppCtx,
-        ) {
-            unsafe { $crate::plugin::__plugin_on_frame(inst, ctx) }
-        }
+        pub static _rsx_plugin_vtable: $crate::plugin::PluginVTable = {
+            unsafe extern "Rust" fn create(
+                args: &[::std::string::String],
+            ) -> *mut $crate::plugin::PluginInstance {
+                $crate::plugin::__plugin_create(($factory)(args))
+            }
+            $crate::plugin::PluginVTable {
+                abi: $crate::plugin::TELAR_PLUGIN_ABI,
+                create,
+                destroy: $crate::plugin::__plugin_destroy,
+                relayout: $crate::plugin::__plugin_relayout,
+                relayout_dirty: $crate::plugin::__plugin_relayout_dirty,
+                paint: $crate::plugin::__plugin_paint,
+                generation: $crate::plugin::__plugin_generation,
+                on_event: $crate::plugin::__plugin_on_event,
+                dispatch_overlays: $crate::plugin::__plugin_dispatch_overlays,
+                end_frame: $crate::plugin::__plugin_end_frame,
+                motion_tick: $crate::plugin::__plugin_motion_tick,
+                motion_active: $crate::plugin::__plugin_motion_active,
+                drain_window_commands: $crate::plugin::__plugin_drain_window_commands,
+                set_system_dark: $crate::plugin::__plugin_set_system_dark,
+                activate: $crate::plugin::__plugin_activate,
+                clear_color: $crate::plugin::__plugin_clear_color,
+                title: $crate::plugin::__plugin_title,
+                icon: $crate::plugin::__plugin_icon,
+                id: $crate::plugin::__plugin_id,
+                on_frame: $crate::plugin::__plugin_on_frame,
+            }
+        };
     };
 }
 
@@ -508,147 +481,267 @@ mod host {
     use super::*;
     use std::path::Path;
 
-    /// One resolved plugin export: the raw `extern "Rust"` function pointers, valid for as long as the owning
-    /// `Library` stays mapped. Storing the pointers (rather than borrowed `Symbol`s) keeps [`LoadedPlugin`]
-    /// non-self-referential and makes per-frame calls a plain indirect call.
-    struct Symbols {
-        destroy: unsafe extern "Rust" fn(*mut PluginInstance),
-        relayout: unsafe extern "Rust" fn(*mut PluginInstance, f32, f32),
-        relayout_dirty: unsafe extern "Rust" fn(*mut PluginInstance),
-        paint: unsafe extern "Rust" fn(*mut PluginInstance) -> DrawList,
-        generation: unsafe extern "Rust" fn(*mut PluginInstance) -> u64,
-        on_event: unsafe extern "Rust" fn(*mut PluginInstance, &Event) -> bool,
-        dispatch_overlays: unsafe extern "Rust" fn(*mut PluginInstance, &Event) -> bool,
-        motion_tick: unsafe extern "Rust" fn(*mut PluginInstance, Instant),
-        motion_active: unsafe extern "Rust" fn(*mut PluginInstance) -> bool,
-        drain_window_commands: unsafe extern "Rust" fn(*mut PluginInstance) -> WindowCommands,
-        set_system_dark: unsafe extern "Rust" fn(*mut PluginInstance, bool),
-        activate: unsafe extern "Rust" fn(*mut PluginInstance),
-        clear_color: unsafe extern "Rust" fn(*mut PluginInstance) -> Option<Color>,
-        title: unsafe extern "Rust" fn(*mut PluginInstance) -> String,
-        icon: unsafe extern "Rust" fn(*mut PluginInstance) -> Option<Vec<u8>>,
-        id: unsafe extern "Rust" fn(*mut PluginInstance) -> String,
-        on_frame: unsafe extern "Rust" fn(*mut PluginInstance, &mut AppCtx),
-    }
-
     /// A loaded plugin the host drives. Holds the live instance (dylib-allocated) and the `Library` that must
     /// outlive it. `!Send`/`!Sync`: the instance is a foreign reactive runtime, driven only on the UI thread.
     pub struct LoadedPlugin {
         inst: *mut PluginInstance,
-        symbols: Symbols,
+        vtable: PluginVTable,
         // Declared last so it drops last: the instance is destroyed (dylib code) before the library unmaps.
         _lib: libloading::Library,
     }
 
-    /// Load a plugin cdylib and create one instance from it (calling its `_rsx_plugin_create` with `args`).
+    /// Load a plugin cdylib and create one instance from it (calling its vtable's `create` with `args`).
     ///
-    /// The `.so` is loaded `RTLD_LOCAL` so its copies of the runtime symbols never interpose on the host's, and
-    /// kept mapped for the plugin's lifetime — the instance holds live pointers into the dylib's code and data.
+    /// The library is kept mapped for the plugin's lifetime — the instance holds live pointers into the dylib's
+    /// code and data.
     pub fn load_plugin(
         path: &Path,
         args: &[String],
     ) -> Result<LoadedPlugin, Box<dyn std::error::Error>> {
-        #[cfg(unix)]
-        let lib = unsafe {
-            libloading::os::unix::Library::open(
-                Some(path.as_os_str()),
-                libc::RTLD_NOW | libc::RTLD_LOCAL,
-            )
-            .map(libloading::Library::from)?
-        };
-        #[cfg(not(unix))]
-        let lib = unsafe { libloading::Library::new(path)? };
+        let lib = crate::dylib::open(path)?;
 
-        // Resolve every symbol once (deref the `Symbol` to copy out the raw fn pointer, valid while `lib` lives).
-        let symbols = unsafe {
-            Symbols {
-                destroy: *lib.get(b"_rsx_plugin_destroy\0")?,
-                relayout: *lib.get(b"_rsx_plugin_relayout\0")?,
-                relayout_dirty: *lib.get(b"_rsx_plugin_relayout_dirty\0")?,
-                paint: *lib.get(b"_rsx_plugin_paint\0")?,
-                generation: *lib.get(b"_rsx_plugin_generation\0")?,
-                on_event: *lib.get(b"_rsx_plugin_on_event\0")?,
-                dispatch_overlays: *lib.get(b"_rsx_plugin_dispatch_overlays\0")?,
-                motion_tick: *lib.get(b"_rsx_plugin_motion_tick\0")?,
-                motion_active: *lib.get(b"_rsx_plugin_motion_active\0")?,
-                drain_window_commands: *lib.get(b"_rsx_plugin_drain_window_commands\0")?,
-                set_system_dark: *lib.get(b"_rsx_plugin_set_system_dark\0")?,
-                activate: *lib.get(b"_rsx_plugin_activate\0")?,
-                clear_color: *lib.get(b"_rsx_plugin_clear_color\0")?,
-                title: *lib.get(b"_rsx_plugin_title\0")?,
-                icon: *lib.get(b"_rsx_plugin_icon\0")?,
-                id: *lib.get(b"_rsx_plugin_id\0")?,
-                on_frame: *lib.get(b"_rsx_plugin_on_frame\0")?,
-            }
-        };
-        let create: libloading::Symbol<unsafe extern "Rust" fn(&[String]) -> *mut PluginInstance> =
-            unsafe { lib.get(b"_rsx_plugin_create\0")? };
-        let inst = unsafe { create(args) };
+        let symbol: libloading::Symbol<*const PluginVTable> =
+            unsafe { lib.get(b"_rsx_plugin_vtable\0")? };
+        let ptr: *const PluginVTable = *symbol;
+        // Read the version word alone first: a guest built against a shorter table has fewer bytes than `PluginVTable`, so copying the whole struct out before the check would read past the end of it. `#[repr(C)]` is what puts `abi` at offset 0 for every version of the table.
+        let abi = unsafe { *ptr.cast::<u32>() };
+        if abi != TELAR_PLUGIN_ABI {
+            return Err(format!(
+                "plugin built for ABI {abi}, host is ABI {TELAR_PLUGIN_ABI} — rebuild {}",
+                path.display()
+            )
+            .into());
+        }
+        let vtable = unsafe { *ptr };
+
+        let inst = unsafe { (vtable.create)(args) };
         if inst.is_null() {
-            return Err("plugin _rsx_plugin_create returned null".into());
+            return Err("plugin create returned null".into());
         }
         Ok(LoadedPlugin {
             inst,
-            symbols,
+            vtable,
             _lib: lib,
         })
     }
 
     impl LoadedPlugin {
         pub fn relayout(&self, width: f32, height: f32) {
-            unsafe { (self.symbols.relayout)(self.inst, width, height) }
+            unsafe { (self.vtable.relayout)(self.inst, width, height) }
         }
         pub fn relayout_dirty(&self) {
-            unsafe { (self.symbols.relayout_dirty)(self.inst) }
+            unsafe { (self.vtable.relayout_dirty)(self.inst) }
         }
         pub fn paint(&self) -> DrawList {
-            unsafe { (self.symbols.paint)(self.inst) }
+            unsafe { (self.vtable.paint)(self.inst) }
         }
         pub fn generation(&self) -> u64 {
-            unsafe { (self.symbols.generation)(self.inst) }
+            unsafe { (self.vtable.generation)(self.inst) }
         }
         pub fn on_event(&self, event: &Event) -> bool {
-            unsafe { (self.symbols.on_event)(self.inst, event) }
+            unsafe { (self.vtable.on_event)(self.inst, event) }
         }
         pub fn dispatch_overlays(&self, event: &Event) -> bool {
-            unsafe { (self.symbols.dispatch_overlays)(self.inst, event) }
+            unsafe { (self.vtable.dispatch_overlays)(self.inst, event) }
+        }
+        /// Call once per frame the host drove this plugin through, after its events. Closes the plugin's
+        /// one-frame keyboard state, which `key_pressed` inside it answers from.
+        pub fn end_frame(&self) {
+            unsafe { (self.vtable.end_frame)(self.inst) }
         }
         pub fn motion_tick(&self, now: Instant) {
-            unsafe { (self.symbols.motion_tick)(self.inst, now) }
+            unsafe { (self.vtable.motion_tick)(self.inst, now) }
         }
         pub fn motion_active(&self) -> bool {
-            unsafe { (self.symbols.motion_active)(self.inst) }
+            unsafe { (self.vtable.motion_active)(self.inst) }
         }
         pub fn drain_window_commands(&self) -> WindowCommands {
-            unsafe { (self.symbols.drain_window_commands)(self.inst) }
+            unsafe { (self.vtable.drain_window_commands)(self.inst) }
         }
         pub fn set_system_dark(&self, dark: bool) {
-            unsafe { (self.symbols.set_system_dark)(self.inst, dark) }
+            unsafe { (self.vtable.set_system_dark)(self.inst, dark) }
         }
         pub fn activate(&self) {
-            unsafe { (self.symbols.activate)(self.inst) }
+            unsafe { (self.vtable.activate)(self.inst) }
         }
         pub fn clear_color(&self) -> Option<Color> {
-            unsafe { (self.symbols.clear_color)(self.inst) }
+            unsafe { (self.vtable.clear_color)(self.inst) }
         }
         pub fn title(&self) -> String {
-            unsafe { (self.symbols.title)(self.inst) }
+            unsafe { (self.vtable.title)(self.inst) }
         }
         pub fn icon(&self) -> Option<Vec<u8>> {
-            unsafe { (self.symbols.icon)(self.inst) }
+            unsafe { (self.vtable.icon)(self.inst) }
         }
         pub fn id(&self) -> String {
-            unsafe { (self.symbols.id)(self.inst) }
+            unsafe { (self.vtable.id)(self.inst) }
         }
         pub fn on_frame(&self, ctx: &mut AppCtx) {
-            unsafe { (self.symbols.on_frame)(self.inst, ctx) }
+            unsafe { (self.vtable.on_frame)(self.inst, ctx) }
         }
     }
 
     impl Drop for LoadedPlugin {
         fn drop(&mut self) {
             // Destroy the instance (runs dylib code touching its thread-locals) before `_lib` unmaps.
-            unsafe { (self.symbols.destroy)(self.inst) }
+            unsafe { (self.vtable.destroy)(self.inst) }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use layout_core::LayoutStyle;
+    use platform_core::{Key, ModifiersState};
+    use renderer_core::RectStyle;
+
+    struct Stub {
+        node: Option<NodeId>,
+        seen: usize,
+    }
+
+    impl Stub {
+        fn new() -> Self {
+            Self {
+                node: None,
+                seen: 0,
+            }
+        }
+    }
+
+    impl EmbeddedApp for Stub {
+        fn build(&mut self) {
+            let (node, _) =
+                ui_core::new_leaf(LayoutStyle::new().width(40.0).height(20.0)).expect("leaf");
+            self.node = Some(node);
+        }
+        fn layout_root(&self) -> NodeId {
+            self.node.expect("build ran first")
+        }
+        fn view(&self) -> RenderNode {
+            RenderNode::rect(Rect::new(0.0, 0.0, 40.0, 20.0), RectStyle::default())
+        }
+        fn on_event(&mut self, _event: &Event) -> EventResult {
+            self.seen += 1;
+            EventResult::Ignored
+        }
+        fn title(&self) -> String {
+            "stub".into()
+        }
+        fn id(&self) -> String {
+            "stub".into()
+        }
+    }
+
+    fn shift() -> ModifiersState {
+        ModifiersState {
+            is_shift: true,
+            ..ModifiersState::default()
+        }
+    }
+
+    // No crate in this repository links a plugin cdylib, so this invocation is the only place the `plugin!` expansion is ever compiled — without it, adding a vtable field type-checks here and breaks every guest at load time instead.
+    crate::plugin!(|_args: &[String]| -> Box<dyn EmbeddedApp> { Box::new(Stub::new()) });
+
+    #[test]
+    fn the_export_macro_builds_a_vtable_at_the_current_abi() {
+        assert_eq!(_rsx_plugin_vtable.abi, TELAR_PLUGIN_ABI);
+        let inst = unsafe { (_rsx_plugin_vtable.create)(&[]) };
+        assert!(!inst.is_null());
+        assert_eq!(unsafe { (_rsx_plugin_vtable.id)(inst) }, "stub");
+        unsafe { (_rsx_plugin_vtable.destroy)(inst) };
+    }
+
+    // B5. These tests deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `PluginInstance::on_event` — the state every hogar plugin shipped in.
+    #[test]
+    fn a_plugin_records_the_modifiers_it_is_handed() {
+        let mut inst = PluginInstance::new(Box::new(Stub::new()));
+        let _g = inst.surface.enter();
+        assert_eq!(ui_core::modifiers(), ModifiersState::default());
+        drop(_g);
+
+        inst.on_event(&Event::ModifiersChanged { modifiers: shift() });
+
+        let _g = inst.surface.enter();
+        assert!(
+            ui_core::modifiers().is_shift,
+            "a shift-drag inside a plugin is indistinguishable from a plain one without this"
+        );
+    }
+
+    #[test]
+    fn an_overlay_event_reaches_the_registry_too() {
+        let inst = PluginInstance::new(Box::new(Stub::new()));
+        // The host stops at `dispatch_overlays` when it returns true, so an event an overlay consumes would never reach the registry if only `on_event` observed.
+        inst.dispatch_overlays(&Event::ModifiersChanged { modifiers: shift() });
+
+        let _g = inst.surface.enter();
+        assert!(ui_core::modifiers().is_shift);
+    }
+
+    #[test]
+    fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
+        let mut inst = PluginInstance::new(Box::new(Stub::new()));
+        inst.on_event(&Event::KeyPressed {
+            key: Key::Char('c'),
+            modifiers: ModifiersState::default(),
+        });
+
+        {
+            let _g = inst.surface.enter();
+            assert!(ui_core::key_pressed(&Key::Char('c')));
+        }
+        inst.end_frame();
+        let _g = inst.surface.enter();
+        assert!(
+            !ui_core::key_pressed(&Key::Char('c')),
+            "without end_frame the press answers forever, not for its frame"
+        );
+        assert!(
+            ui_core::key_held(&Key::Char('c')),
+            "held is not what end_frame clears"
+        );
+    }
+
+    #[test]
+    fn a_plugin_paints_and_its_generation_is_stable_between_frames() {
+        let mut inst = PluginInstance::new(Box::new(Stub::new()));
+        inst.relayout(40.0, 20.0);
+        assert!(!inst.paint().is_empty());
+        assert_eq!(inst.generation(), inst.generation());
+    }
+
+    #[test]
+    fn the_driver_forwards_metadata_from_the_embedded_app() {
+        let inst = PluginInstance::new(Box::new(Stub::new()));
+        assert_eq!(inst.title(), "stub");
+        assert_eq!(inst.id(), "stub");
+        assert_eq!(inst.clear_color(), None);
+    }
+
+    // `composite` splices a plugin's frame into the host's: translated to its sub-rect so the plugin paints in its own origin space, and clipped so it cannot draw over the host's chrome.
+    #[test]
+    fn composite_translates_into_the_sub_rect_and_clips_to_it() {
+        let rect = Rect::new(10.0, 20.0, 100.0, 50.0);
+        let node = composite(
+            rect,
+            0,
+            vec![DrawCommand::Rect {
+                rect: Rect::new(0.0, 0.0, 5.0, 5.0),
+                style: std::sync::Arc::new(RectStyle::default()),
+            }],
+        );
+        match node {
+            RenderNode::Clip {
+                rect: clip,
+                children,
+                ..
+            } => {
+                assert_eq!(clip, rect, "clipped to the host's sub-rect");
+                assert!(!children.is_empty());
+            }
+            _ => panic!("expected the plugin's frame to be wrapped in a clip"),
         }
     }
 }

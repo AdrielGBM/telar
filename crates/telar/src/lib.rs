@@ -14,6 +14,11 @@ pub mod dev_plugin;
 pub mod dev_tools;
 #[cfg(feature = "runtime")]
 mod direction;
+#[cfg(any(
+    all(feature = "dev", not(target_os = "android")),
+    feature = "plugin-host"
+))]
+mod dylib;
 #[cfg(feature = "runtime")]
 pub mod files;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
