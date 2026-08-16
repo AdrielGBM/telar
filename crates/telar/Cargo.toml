@@ -58,10 +58,9 @@ di = ["services-core/di"]
 svg = ["ui-core?/svg"]
 dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
 dynamic-image = ["renderer-assets?/dynamic-image"]
-async-assets = ["ui-core?/async-assets"]
+async-assets = ["runtime", "ui-core/async-assets"]
 # Exposes `rasterize`. Implies `runtime` for the renderer it drives, and deliberately not `desktop` — the whole point is drawing without a window.
 platform-headless = ["runtime", "dep:platform-headless"]
-image = ["dep:image"]
 
 [dependencies]
 serde = { workspace = true }
