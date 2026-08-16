@@ -1,6 +1,7 @@
-use crate::analysis::util::{attribute_key_before_colon, word_at_cursor};
+use crate::analysis::util::attribute_key_before_colon;
 use crate::position::{Section, find_section_at, parser_line_to_lsp_range};
 use crate::project::ProjectInfo;
+use crate::text::word_at_cursor;
 use lsp_types::{GotoDefinitionResponse, Location, Uri};
 use telar_parser::RsxDocument;
 use telar_transpiler::{color_attr_keys, is_builtin_tag};
@@ -17,7 +18,7 @@ pub fn goto_definition(
         return None;
     }
     let line_text = source.lines().nth(line as usize)?;
-    let (word_start, word) = word_at_cursor(line_text, character as usize);
+    let (word_start, word) = word_at_cursor(line_text, character);
     if word.is_empty() {
         return None;
     }

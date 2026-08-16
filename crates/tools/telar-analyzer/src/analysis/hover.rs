@@ -1,7 +1,8 @@
 use crate::analysis::color::{hex_string, parse_hex, rgba};
-use crate::analysis::util::{attribute_key_before_colon, word_at_cursor};
+use crate::analysis::util::attribute_key_before_colon;
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
+use crate::text::word_at_cursor;
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 use telar_parser::{RsxDocument, StyleValue};
 use telar_transpiler::{color_attr_keys, keyword_color_rgba};
@@ -17,7 +18,7 @@ pub fn hover_info(
         return None;
     }
     let line_text = source.lines().nth(line as usize)?;
-    let (word_start, word) = word_at_cursor(line_text, character as usize);
+    let (word_start, word) = word_at_cursor(line_text, character);
     if word.is_empty() {
         return None;
     }

@@ -57,6 +57,19 @@ pub fn ident_at(line: &str, character: u32) -> Option<(usize, &str)> {
     (start != end).then(|| (start, &line[start..end]))
 }
 
+/// The `.rsx` word under the cursor and its byte start, breaking on whitespace, `:` and `"` — so a `@class`
+/// keeps its sigil and an attribute value stops at its quote. Wider than [`ident_at`], which is for Rust.
+pub fn word_at_cursor(line: &str, character: u32) -> (usize, &str) {
+    let cursor = utf16_to_byte(line, character).min(line.len());
+    let breaks = |c: char| c.is_whitespace() || c == ':' || c == '"';
+    let start = line[..cursor].rfind(breaks).map(|i| i + 1).unwrap_or(0);
+    let end = line[cursor..]
+        .find(breaks)
+        .map(|i| cursor + i)
+        .unwrap_or(line.len());
+    (start, &line[start..end])
+}
+
 /// The leading element token of a line (first whitespace-delimited word) and its byte start (the indent width). `None` for a blank line.
 pub fn leading_token(line: &str) -> Option<(usize, &str)> {
     let lead = line.len() - line.trim_start().len();
@@ -95,6 +108,21 @@ pub fn byte_offset(source: &str, line: u32, utf16_col: u32) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The column arriving from the editor counts UTF-16 units; slicing the line by it directly panicked the
+    // moment anything before the cursor was multi-byte.
+    #[test]
+    fn word_at_cursor_takes_a_utf16_column_not_a_byte_offset() {
+        let line = r#"    text "héllo world""#;
+        // The first `l`: its UTF-16 column lands inside the two bytes of `é`, so slicing the line by that
+        // column is a non-char-boundary panic, not merely a wrong answer.
+        let byte = line.find("llo").unwrap();
+        let utf16 = byte_to_utf16(line, byte);
+        assert!(!line.is_char_boundary(utf16 as usize));
+        assert_eq!(word_at_cursor(line, utf16).1, "héllo");
+        // Past the end clamps rather than panicking.
+        assert_eq!(word_at_cursor(line, 9_999).1, "");
+    }
 
     #[test]
     fn ident_at_finds_the_word_under_the_cursor() {
