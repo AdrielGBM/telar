@@ -13,4 +13,5 @@ repository.workspace = true
 [dependencies]
 geometry-core = { workspace = true }
 raw-window-handle = { workspace = true }
+reactive-local = { workspace = true }
 thiserror = { workspace = true }
