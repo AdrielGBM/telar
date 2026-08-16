@@ -1,5 +1,6 @@
-#[cfg(target_os = "linux")]
 mod accessibility;
+// D-Bus, and only reached on Linux: winit answers the color-scheme question itself on Windows and macOS.
+#[cfg(target_os = "linux")]
 mod color_scheme;
 mod dialogs;
 mod paths;

@@ -18,7 +18,9 @@ enum UserEvent {
     // rather than answered where it arrives: AccessKit calls its handlers on a platform thread, and the UI
     // that has to answer is `!Send` — it lives on this one.
     Accessibility(accesskit_winit::Event),
-    // The OS color-scheme flipped; carries the new dark (`true`) / light preference (Linux portal watch).
+    // The OS color-scheme flipped; carries the new dark (`true`) / light preference. Linux only: it is the
+    // portal watch that sends it, where winit reports nothing. Elsewhere winit delivers `ThemeChanged` itself.
+    #[cfg(target_os = "linux")]
     ColorScheme(bool),
     // A background thread asked to wake the UI (via the app redraw waker); redraw every live surface so each
     // one's `on_frame` runs and drains its channels — wherever the waking app's content currently lives.
@@ -102,6 +104,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::Accessibility(event) => self.on_accessibility(event.window_event),
+            #[cfg(target_os = "linux")]
             UserEvent::ColorScheme(dark) => {
                 if let Some(window) = &self.window {
                     self.handler
@@ -479,6 +482,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
             // a per-surface hook this backend does not have. Named rather than caught by a wildcard, so adding
             // it is a compile error here and not a silent no-op.
             UserEvent::Accessibility(_) => {}
+            #[cfg(target_os = "linux")]
             UserEvent::ColorScheme(dark) => {
                 // Bracket each surface's write on its own (this callback is not inside a shared batch bracket).
                 for surface in self.surfaces.values_mut() {
