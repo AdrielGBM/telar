@@ -119,13 +119,9 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
     }
 
     /// Sets the animation played on the incoming page when navigation changes the current route.
-    pub fn with_transition(mut self, transition: NavTransition) -> Self {
-        self.set_transition(transition);
-        self
-    }
-
-    /// [`with_transition`](Self::with_transition) for a host that is already owned elsewhere — a
-    /// [`TabHost`](crate::TabHost) mints one of these per tab and cannot take it by value.
+    ///
+    /// Takes `&mut self` rather than `self`: a [`TabHost`](crate::TabHost) mints one of these per tab and
+    /// cannot take it by value, so a by-value builder would have been the second spelling of one setter.
     pub fn set_transition(&mut self, transition: NavTransition) {
         self.transition = transition;
     }
@@ -454,9 +450,8 @@ mod tests {
                 }) as Box<dyn NavPage>)
             }
         };
-        let host = NavHost::new(nav.clone(), factory)
-            .unwrap()
-            .with_transition(transition);
+        let mut host = NavHost::new(nav.clone(), factory).unwrap();
+        host.set_transition(transition);
         (host, nav, Harness { built, nodes, log })
     }
 
