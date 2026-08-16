@@ -3,6 +3,8 @@
 //! No-op without the env var (so it never gates CI). Run:
 //!   TELAR_VISUAL_OUT=/tmp/input.png cargo test -p renderer-software --test input_visual -- --nocapture
 
+mod common;
+
 use layout_core::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle};
 use platform_core::{Event, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
@@ -16,11 +18,9 @@ use ui_core::{
 use ui_tree::ComponentList;
 
 #[test]
+#[ignore = "PNG-dump utility, not a regression test: run it explicitly with TELAR_VISUAL_OUT set"]
 fn input_visual_png() {
-    let Ok(out) = std::env::var("TELAR_VISUAL_OUT") else {
-        eprintln!("set TELAR_VISUAL_OUT to write a PNG; skipping");
-        return;
-    };
+    let out = std::env::var("TELAR_VISUAL_OUT").expect("set TELAR_VISUAL_OUT to the path to write");
 
     let (w, h) = (520u32, 160u32);
     let ink = Color::from_rgb_u8(230, 232, 240);
@@ -98,17 +98,13 @@ fn input_visual_png() {
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();
     let rgba = r.read_rgba().expect("pixmap exists after a frame");
-    let img = image::RgbaImage::from_raw(w, h, rgba.to_vec()).expect("rgba length matches w*h*4");
-    img.save(&out).expect("write PNG");
-    eprintln!("wrote {out}");
+    common::save_png(&out, w, h, &rgba);
 }
 
 #[test]
+#[ignore = "PNG-dump utility, not a regression test: run it explicitly with TELAR_SLIDER_OUT set"]
 fn slider_visual_png() {
-    let Ok(out) = std::env::var("TELAR_SLIDER_OUT") else {
-        eprintln!("set TELAR_SLIDER_OUT to write a PNG; skipping");
-        return;
-    };
+    let out = std::env::var("TELAR_SLIDER_OUT").expect("set TELAR_SLIDER_OUT to the path to write");
 
     let (w, h) = (360u32, 120u32);
     reset_layout_runtime();
@@ -163,17 +159,14 @@ fn slider_visual_png() {
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();
     let rgba = r.read_rgba().expect("pixmap exists after a frame");
-    let img = image::RgbaImage::from_raw(w, h, rgba.to_vec()).expect("rgba length matches w*h*4");
-    img.save(&out).expect("write PNG");
-    eprintln!("wrote {out}");
+    common::save_png(&out, w, h, &rgba);
 }
 
 #[test]
+#[ignore = "PNG-dump utility, not a regression test: run it explicitly with TELAR_OVERLAY_OUT set"]
 fn overlay_visual_png() {
-    let Ok(out) = std::env::var("TELAR_OVERLAY_OUT") else {
-        eprintln!("set TELAR_OVERLAY_OUT to write a PNG; skipping");
-        return;
-    };
+    let out =
+        std::env::var("TELAR_OVERLAY_OUT").expect("set TELAR_OVERLAY_OUT to the path to write");
 
     let (w, h) = (420u32, 260u32);
     let ink = Color::from_rgb_u8(230, 232, 240);
@@ -253,9 +246,7 @@ fn overlay_visual_png() {
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();
     let rgba = r.read_rgba().expect("pixmap exists after a frame");
-    let img = image::RgbaImage::from_raw(w, h, rgba.to_vec()).expect("rgba length matches w*h*4");
-    img.save(&out).expect("write PNG");
-    eprintln!("wrote {out}");
+    common::save_png(&out, w, h, &rgba);
 }
 
 // Renders the page (wrapper) plus the portaled overlay; the overlay's content is laid out via the host,

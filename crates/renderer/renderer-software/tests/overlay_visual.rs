@@ -3,6 +3,8 @@
 //! hoists it), and (2) a tap at the center reaches the scrim and is blocked from the background behind it
 //! (priority pointer routing). Runs in CI without an env var; pass `TELAR_VISUAL_OUT` to also dump a PNG.
 
+mod common;
+
 use layout_core::{AvailableSpace, LayoutStyle};
 use platform_core::{Event, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
@@ -79,13 +81,7 @@ fn overlay_draws_on_top_and_captures_the_tap() {
         .render_frame(&tree.commands(), Some(Color::BLACK))
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap exists after a frame");
-    if let Ok(out) = std::env::var("TELAR_VISUAL_OUT") {
-        image::RgbaImage::from_raw(w, h, rgba.to_vec())
-            .expect("rgba length matches w*h*4")
-            .save(&out)
-            .expect("write PNG");
-        eprintln!("wrote {out}");
-    }
+    common::save_png_if_requested("TELAR_VISUAL_OUT", w, h, &rgba);
 
     // The center pixel must be the blue scrim, not the red background: the overlay hoisted above it.
     let center = (((h / 2) * w + w / 2) * 4) as usize;

@@ -2,6 +2,8 @@
 //! states and renders them to a PNG for eyeballing. Runs in CI (asserts it renders with content); pass
 //! TELAR_WIDGETS_OUT=/path.png to also dump the image.
 
+mod common;
+
 use layout_core::{AvailableSpace, LayoutStyle};
 use platform_headless::HeadlessWindow;
 use reactive_core::signal;
@@ -116,13 +118,7 @@ fn form_widgets_render() {
         rgba.chunks_exact(4).any(|px| px[0] != 244),
         "expected widgets to draw content over the clear color"
     );
-    if let Ok(out) = std::env::var("TELAR_WIDGETS_OUT") {
-        image::RgbaImage::from_raw(w, h, rgba.to_vec())
-            .expect("rgba len")
-            .save(&out)
-            .expect("write PNG");
-        eprintln!("wrote {out}");
-    }
+    common::save_png_if_requested("TELAR_WIDGETS_OUT", w, h, &rgba);
 }
 
 #[test]
@@ -184,13 +180,7 @@ fn modal_renders_over_a_page() {
         rgba.chunks_exact(4).any(|px| px[0] != 238),
         "expected the modal to draw over the page"
     );
-    if let Ok(out) = std::env::var("TELAR_MODAL_OUT") {
-        image::RgbaImage::from_raw(w, h, rgba.to_vec())
-            .expect("rgba len")
-            .save(&out)
-            .expect("write PNG");
-        eprintln!("wrote {out}");
-    }
+    common::save_png_if_requested("TELAR_MODAL_OUT", w, h, &rgba);
 }
 
 #[test]
@@ -279,11 +269,5 @@ fn select_open_renders() {
         .render_frame(&tree.commands(), Some(Color::from_rgb_u8(244, 245, 248)))
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap");
-    if let Ok(out) = std::env::var("TELAR_SELECT_OUT") {
-        image::RgbaImage::from_raw(w, h, rgba.to_vec())
-            .expect("rgba")
-            .save(&out)
-            .expect("png");
-        eprintln!("wrote {out}");
-    }
+    common::save_png_if_requested("TELAR_SELECT_OUT", w, h, &rgba);
 }

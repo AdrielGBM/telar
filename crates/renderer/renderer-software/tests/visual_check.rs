@@ -2,6 +2,8 @@
 //! render change can be eyeballed (open the PNG) instead of only hashed. Run with:
 //!   TELAR_VISUAL_OUT=/path/out.png cargo test -p renderer-software --test visual_check -- --nocapture
 
+mod common;
+
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -10,11 +12,9 @@ use renderer_core::{Color, DrawCommand, RenderBackend, TextStyle};
 use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 #[test]
+#[ignore = "PNG-dump utility, not a regression test: run it explicitly with TELAR_VISUAL_OUT set"]
 fn visual_check_png() {
-    let Ok(out) = std::env::var("TELAR_VISUAL_OUT") else {
-        eprintln!("set TELAR_VISUAL_OUT to write a PNG; skipping");
-        return;
-    };
+    let out = std::env::var("TELAR_VISUAL_OUT").expect("set TELAR_VISUAL_OUT to the path to write");
 
     let (w, h) = (520u32, 420u32);
     let mut r = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
@@ -76,7 +76,5 @@ fn visual_check_png() {
         .unwrap();
     let rgba = r.read_rgba().expect("pixmap exists after a frame");
 
-    let img = image::RgbaImage::from_raw(w, h, rgba.to_vec()).expect("rgba length matches w*h*4");
-    img.save(&out).expect("write PNG");
-    eprintln!("wrote {out}");
+    common::save_png(&out, w, h, &rgba);
 }
