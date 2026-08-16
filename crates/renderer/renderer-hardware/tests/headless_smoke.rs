@@ -12,7 +12,7 @@ use renderer_core::{
     ShapeStyle, Stroke, TextStyle,
 };
 use renderer_text::TextShaperConfig;
-use telar_renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
+use telar_renderer_hardware::HardwareRenderer;
 
 #[test]
 fn headless_renders_non_empty_frame() {
@@ -25,7 +25,6 @@ fn headless_renders_non_empty_frame() {
         None,
         false,
         TextShaperConfig::default(),
-        HardwareRendererConfig::default(),
     )) {
         Ok(r) => r,
         Err(e) => {
@@ -121,7 +120,6 @@ fn headless(w: u32, h: u32) -> Option<HardwareRenderer<HeadlessWindow>> {
         None,
         false,
         TextShaperConfig::default(),
-        HardwareRendererConfig::default(),
     )) {
         Ok(r) => Some(r),
         Err(e) => {
@@ -273,7 +271,6 @@ fn damage_prime_matches_full_repaint() {
             None,
             false,
             TextShaperConfig::default(),
-            HardwareRendererConfig::default(),
         ))
     };
 
@@ -363,7 +360,6 @@ fn damage_confines_translucent_layer_composite() {
             None,
             false,
             TextShaperConfig::default(),
-            HardwareRendererConfig::default(),
         ))
     };
 
@@ -448,7 +444,6 @@ fn damage_confines_opacity_layer() {
             None,
             false,
             TextShaperConfig::default(),
-            HardwareRendererConfig::default(),
         ))
     };
     let mut r1 = match make() {
@@ -625,7 +620,6 @@ fn render_frame_pixel_golden() {
         None,
         false,
         TextShaperConfig::default(),
-        HardwareRendererConfig::default(),
     )) {
         Ok(r) => r,
         Err(e) => {
@@ -683,7 +677,6 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
         None,
         false,
         TextShaperConfig::default(),
-        HardwareRendererConfig::default(),
     )) {
         Ok(r) => r,
         Err(e) => {

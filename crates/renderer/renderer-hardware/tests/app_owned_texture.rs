@@ -14,7 +14,7 @@ use platform_headless::HeadlessWindow;
 use renderer_core::{Color, DrawCommand, ImageFilter, RenderBackend};
 use renderer_text::TextShaperConfig;
 use telar_renderer_hardware::{
-    HardwareRenderer, HardwareRendererConfig,
+    HardwareRenderer,
     gpu::{self, wgpu},
 };
 
@@ -27,7 +27,6 @@ fn telar_composes_a_texture_the_application_filled() {
         None,
         false,
         TextShaperConfig::default(),
-        HardwareRendererConfig::default(),
     )) {
         Ok(r) => r,
         Err(e) => {

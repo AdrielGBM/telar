@@ -520,7 +520,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             alpha_mode,
             cache_path,
             font_config,
-            config,
         )
         .await
     }
@@ -539,7 +538,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         alpha_mode: wgpu::CompositeAlphaMode,
         cache_path: Option<&std::path::Path>,
         font_config: renderer_text::TextShaperConfig,
-        config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
         // Read off the device, not the adapter: an adopted device (see `crate::gpu`) may have been created without a feature its adapter advertises, and taking the immediates path against one that lacks it is a validation error rather than a slow path.
         const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<BlurParams>() as u32;
@@ -586,15 +584,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         // Builds this thread's shared caches if this is its first renderer, and yields handles on the one glyph
         // atlas every renderer on the thread samples. Taken before the scope below because the text pipeline is
         // built on a spawned thread, which a thread-local borrow cannot cross.
-        let (atlas_bgl, atlas_bind_group) = crate::caches::atlas_handles(
-            &device,
-            font_config.font.clone(),
-            &crate::caches::HardwarePolicies {
-                path_tess: config.path_tess,
-                shadow: config.shadow,
-                image_texture: config.image_texture,
-            },
-        );
+        let (atlas_bgl, atlas_bind_group) =
+            crate::caches::atlas_handles(&device, font_config.font.clone());
 
         // Create all Send-safe pipelines in parallel; on Vulkan/Metal this reduces startup from ~8 serial compilations to ~1 critical path, ImagePipeline (Rc<> cache) must be created on this thread, and `pc` must be defined here (not inside the scope closure) so its lifetime covers the spawned threads.
         let pc = pipeline_cache.as_ref();
@@ -700,8 +691,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         }
 
         // Pre-allocate the per-layer viewport buffer/bind-group pool so the common case (few layers per frame) never hits create_buffer_init/create_bind_group during rendering.
-        let mut viewport_buffer_pool = Vec::with_capacity(config.viewport_pool_size);
-        for _ in 0..config.viewport_pool_size {
+        let mut viewport_buffer_pool = Vec::with_capacity(crate::limits::VIEWPORT_POOL_SIZE);
+        for _ in 0..crate::limits::VIEWPORT_POOL_SIZE {
             viewport_buffer_pool.push(create_viewport_pool_slot(
                 &device,
                 &viewport_bind_group_layout,
@@ -727,7 +718,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             viewport_buffer_pool,
             viewport_buffer_pool_index: 0,
             texture_pool: Vec::new(),
-            max_texture_pool_per_size: config.max_texture_pool_per_size,
+            max_texture_pool_per_size: crate::limits::MAX_TEXTURE_POOL_PER_SIZE,
             rect_pipeline,
             text_pipeline,
             line_pipeline,
@@ -1088,7 +1079,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
-        config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
         // Rgba8Unorm is a mandatory renderable format and the windowed path's first choice (see `pool::preferred_format`), so `read_rgba` yields straight R,G,B,A bytes.
         let mut renderer = Self::new_offscreen(
@@ -1096,7 +1086,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             cache_path,
             vulkan_only,
             font_config,
-            config,
         )
         .await?;
         // Allocate an initial offscreen target so read_rgba works even before the first begin_frame; begin_frame's reconfigure recreates it at the real frame size.
@@ -1120,7 +1109,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
-        config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
         let _gpu = renderer_core::gpu_sync::lifecycle_guard();
         pollster::block_on(Self::new_for_texture(
@@ -1128,7 +1116,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             cache_path,
             vulkan_only,
             font_config,
-            config,
         ))
     }
 
@@ -1153,16 +1140,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
-        config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
-        let mut renderer = Self::new_offscreen(
-            target.format(),
-            cache_path,
-            vulkan_only,
-            font_config,
-            config,
-        )
-        .await?;
+        let mut renderer =
+            Self::new_offscreen(target.format(), cache_path, vulkan_only, font_config).await?;
         renderer.compose_into(target);
         Ok(renderer)
     }
@@ -1183,7 +1163,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
-        config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
         let backends = if vulkan_only {
             wgpu::Backends::VULKAN
@@ -1226,7 +1205,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             alpha_mode,
             cache_path,
             font_config,
-            config,
         )
         .await
     }

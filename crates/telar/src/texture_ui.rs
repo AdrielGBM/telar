@@ -31,8 +31,8 @@ use geometry_core::{Rect, Transform};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, SizeDimension};
 use platform_core::Event;
 use renderer_core::{Color, RenderBackend, RendererError};
+use renderer_hardware::HardwareRenderer;
 use renderer_hardware::gpu::wgpu;
-use renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
 use ui_core::{
     Component, ComponentList, EventResult, LayoutItem, NodeId, RenderNode, Surface, compute_layout,
     mark_dirty, new_container,
@@ -157,7 +157,6 @@ impl TextureUi {
             None,
             false,
             crate::runner::offscreen_hardware_font_config(font_paths, font_data),
-            HardwareRendererConfig::default(),
         )?;
 
         let surface = Surface::new();

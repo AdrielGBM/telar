@@ -18,7 +18,7 @@ use renderer_core::{
     TextStyle,
 };
 use renderer_text::TextShaperConfig;
-use telar_renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
+use telar_renderer_hardware::HardwareRenderer;
 
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;
@@ -107,7 +107,6 @@ fn bench_render_frame(c: &mut Criterion) {
         None,
         false,
         TextShaperConfig::default(),
-        HardwareRendererConfig::default(),
     )) {
         Ok(r) => r,
         Err(e) => {

@@ -48,13 +48,13 @@ impl SharedCaches {
     fn new(config: &SoftwareRendererConfig) -> Self {
         Self {
             text_shaper: TextShaper::with_config(TextShaperConfig {
-                raster: config.text_raster,
-                shaping: config.text_shaping,
+                raster: renderer_cache::limits::TEXT_RASTER,
+                shaping: renderer_cache::limits::TEXT_SHAPING,
                 font: config.font.clone(),
             }),
-            shadow_cache: Cache::new(config.shadow, pixmap_bytes),
-            text_shadow_cache: Cache::new(config.text_shadow, pixmap_bytes),
-            path_shadow_cache: Cache::new(config.path_shadow, pixmap_bytes),
+            shadow_cache: Cache::new(renderer_cache::limits::SHADOW, pixmap_bytes),
+            text_shadow_cache: Cache::new(renderer_cache::limits::TEXT_SHADOW, pixmap_bytes),
+            path_shadow_cache: Cache::new(renderer_cache::limits::PATH_SHADOW, pixmap_bytes),
             pending_shadows: HashMap::new(),
             pending_text_shadows: HashMap::new(),
             pending_path_shadows: HashMap::new(),

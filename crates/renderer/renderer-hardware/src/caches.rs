@@ -365,16 +365,16 @@ pub(crate) struct SharedCaches {
 }
 
 impl SharedCaches {
-    fn new(device: &Device, font: renderer_core::FontConfig, config: &HardwarePolicies) -> Self {
+    fn new(device: &Device, font: renderer_core::FontConfig) -> Self {
         Self {
             text_shaper: TextShaper::with_config(renderer_text::TextShaperConfig {
                 font,
                 ..Default::default()
             }),
-            path_tess: PathTessCache::new(config.path_tess),
-            shadow_resolved: Cache::new(config.shadow, resolved_shadow_bytes),
+            path_tess: PathTessCache::new(renderer_cache::limits::GPU_PATH_TESS),
+            shadow_resolved: Cache::new(renderer_cache::limits::GPU_SHADOW, resolved_shadow_bytes),
             atlas: SharedAtlas::new(device),
-            images: SharedImages::new(device, config.image_texture),
+            images: SharedImages::new(device, renderer_cache::limits::gpu_texture(0, 0)),
         }
     }
 
@@ -385,14 +385,6 @@ impl SharedCaches {
         stats.push(self.images.textures.stat("gpu.texture"));
         stats
     }
-}
-
-/// The bounds the shared caches are built with, taken from whichever renderer builds them first.
-#[derive(Clone, Copy)]
-pub(crate) struct HardwarePolicies {
-    pub(crate) path_tess: Policy,
-    pub(crate) shadow: Policy,
-    pub(crate) image_texture: Policy,
 }
 
 static CACHES: std::sync::OnceLock<std::sync::Mutex<SharedCaches>> = std::sync::OnceLock::new();
@@ -406,7 +398,6 @@ static CACHES: std::sync::OnceLock<std::sync::Mutex<SharedCaches>> = std::sync::
 pub(crate) fn atlas_handles(
     device: &Device,
     font: renderer_core::FontConfig,
-    config: &HardwarePolicies,
 ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
     with_caches(|caches| {
         (
@@ -415,7 +406,7 @@ pub(crate) fn atlas_handles(
         )
     })
     .unwrap_or_else(|| {
-        let caches = SharedCaches::new(device, font, config);
+        let caches = SharedCaches::new(device, font);
         let handles = (
             caches.atlas.bind_group_layout.clone(),
             caches.atlas.bind_group.clone(),
