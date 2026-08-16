@@ -7,7 +7,6 @@ use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use platform_core::{Key, NamedKey};
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
-use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{
     Children, Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item,
@@ -47,7 +46,7 @@ pub(crate) enum TriggerLabel {
 /// static label. `selected` drives the bound-selection behaviour: `Some` writes the picked index back and
 /// highlights the selected row; `None` (menu) skips both, leaving one-shot actions.
 ///
-/// `fill` gives the trigger the width its row offers instead of the fixed [`PANEL_WIDTH`], and the panel then
+/// `stretch` gives the trigger the width its row offers instead of the fixed [`PANEL_WIDTH`], and the panel then
 /// opens at whatever width the trigger was laid out to. That is what a form row wants — a control 180px wide
 /// beside fields that span the row reads as a mistake — and it is the caller's choice because a dropdown
 /// standing on its own has no row to take a width from.
@@ -63,7 +62,7 @@ pub(crate) struct Dropdown {
     pub color: Box<dyn Fn() -> Color>,
     pub on_pick: Option<Box<dyn Fn(u32)>>,
     pub selected: Option<RwSignal<u32>>,
-    pub fill: bool,
+    pub stretch: bool,
     pub bordered: bool,
     pub caret: bool,
     pub style: Option<Box<dyn Fn(RectStyle) -> RectStyle>>,
@@ -76,7 +75,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         color,
         on_pick,
         selected,
-        fill,
+        stretch,
         bordered,
         caret: with_caret,
         style: surface,
@@ -165,7 +164,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         .padding_horizontal(12.0)
         .gap(6.0)
         .justify_content(layout_core::JustifyContent::SPACE_BETWEEN);
-    let trigger_box = if fill {
+    let trigger_box = if stretch {
         trigger_box.flex_grow(1.0)
     } else {
         trigger_box.width(PANEL_WIDTH)
@@ -294,7 +293,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             // narrower list would read as a different control — but only ever *widens* it. Taking the
             // trigger's width outright is what turned a compact `File` button into a 40px sheet with one
             // character per line; the trigger is a floor, never a ceiling.
-            let width = if fill {
+            let width = if stretch {
                 anchor.width.max(PANEL_WIDTH)
             } else {
                 PANEL_WIDTH
@@ -359,10 +358,9 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
 
     // The widget owns both the trigger and the (portaling) overlay holder; the holder's placeholder takes no
     // space in the column, so only the trigger participates in flow layout.
-    // `fill` has to reach the root as well as the trigger: the trigger grows inside *this* box, and this box
-    // is what the caller's row lays out — left content-sized it shrinks to the label and the trigger with it.
+    // `stretch` has to reach the root as well as the trigger: the trigger grows inside *this* box, and this box is what the caller's row lays out — left content-sized it shrinks to the label and the trigger with it.
     let root_box = LayoutStyle::new().flex_column();
-    let root_box = if fill {
+    let root_box = if stretch {
         root_box.flex_grow(1.0)
     } else {
         root_box
@@ -380,11 +378,7 @@ fn trigger_rect_style(color: &dyn Fn() -> Color, bordered: bool) -> RectStyle {
     if !bordered {
         return RectStyle::default().with_radius(radius);
     }
-    let accent = shared::resolve(color, || {
-        use_theme_tokens()
-            .map(|t| t.primary())
-            .unwrap_or(shared::DEFAULT_ACCENT)
-    });
+    let accent = shared::resolve(color, shared::accent);
     RectStyle::default()
         .with_fill(shared::surface())
         .with_stroke(Stroke::new(accent, 1.0))
@@ -426,11 +420,7 @@ fn panel_rect_style() -> RectStyle {
 pub(crate) fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> RectStyle {
     let radius = BorderRadius::all(shared::radius_sm());
     if is_selected {
-        let accent = shared::resolve(color, || {
-            use_theme_tokens()
-                .map(|t| t.primary())
-                .unwrap_or(shared::DEFAULT_ACCENT)
-        });
+        let accent = shared::resolve(color, shared::accent);
         RectStyle::default()
             .with_fill(accent.with_alpha(0.14))
             .with_radius(radius)
@@ -440,11 +430,7 @@ pub(crate) fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> 
 }
 
 pub(crate) fn option_row_hover_style(color: &dyn Fn() -> Color) -> RectStyle {
-    let accent = shared::resolve(color, || {
-        use_theme_tokens()
-            .map(|t| t.primary())
-            .unwrap_or(shared::DEFAULT_ACCENT)
-    });
+    let accent = shared::resolve(color, shared::accent);
     RectStyle::default()
         .with_fill(accent.with_alpha(0.10))
         .with_radius(BorderRadius::all(4.0))

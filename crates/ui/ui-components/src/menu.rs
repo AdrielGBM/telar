@@ -21,8 +21,8 @@ pub struct MenuProps {
     /// Accent colour (trigger border, hover highlight). `Color::TRANSPARENT` (the default) means "unset" and
     /// falls back to the theme accent. A closure so a theme token re-reads on every render.
     pub color: Box<dyn Fn() -> Color>,
-    /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::fill`].
-    pub fill: bool,
+    /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::stretch`].
+    pub stretch: bool,
     /// Draw the trigger as a field, with the border a `select` carries. Off by default, because a menu is a
     /// *button* that happens to open a list, and a button wears no frame until it is pressed.
     ///
@@ -43,7 +43,7 @@ impl Default for MenuProps {
             label: Box::new(String::new),
             on_select: None,
             color: Box::new(|| Color::TRANSPARENT),
-            fill: false,
+            stretch: false,
             bordered: false,
             caret: true,
             style: None,
@@ -60,7 +60,7 @@ pub fn menu(props: MenuProps, children: Children) -> Result<Box<dyn LayoutItem>,
         color: props.color,
         on_pick: props.on_select,
         selected: None,
-        fill: props.fill,
+        stretch: props.stretch,
         bordered: props.bordered,
         caret: props.caret,
         style: props.style,
@@ -224,39 +224,18 @@ mod tests {
     use ui_core::reset_layout_runtime;
 
     use layout_core::{AvailableSpace, LayoutStyle};
-    use platform_core::{Event, PointerButton, PointerSource};
+    use platform_core::Event;
     use ui_core::{
         ComponentList, EventResult, compute_layout, dispatch_overlays, relayout_if_dirty,
     };
 
     use super::*;
-
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn release(x: f64, y: f64) -> Event {
-        Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
+    use crate::harness::{press, release, route};
 
     // Mirror the runner: consult the overlay registry first, then walk the tree only if no overlay
     // consumed the event (the anchored panel routes through the registry, the trigger through the tree).
-    fn route(tree: &mut ComponentList, event: &Event) {
-        if dispatch_overlays(event) == EventResult::Ignored {
-            tree.on_event(event);
-        }
-    }
 
-    /// A compact trigger does not squeeze the panel. `fill` means "be at least as wide as the control I sit
+    /// A compact trigger does not squeeze the panel. `stretch` means "be at least as wide as the control I sit
     /// under", and taking that width outright turned a `File` button into a 40px sheet with one character per
     /// line — every item wrapped down its own column.
     #[test]
@@ -265,7 +244,7 @@ mod tests {
         let item = menu(
             MenuProps {
                 label: Box::new(|| "File".to_string()),
-                fill: true,
+                stretch: true,
                 ..Default::default()
             },
             rows(&["New", "Open…", "Save", "Import STEP…"]),

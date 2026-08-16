@@ -8,7 +8,7 @@ use reactive_core::RwSignal;
 use renderer_core::{Color, RectStyle, TextStyle};
 use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
-use ui_core::{LayoutItem, StyledContainer, Text, box_item};
+use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item, style_follows};
 
 /// A reactive colour prop re-erased to a shareable handle: a `Box<dyn Fn>` isn't `Clone`, but widgets must hand the same colour closure to several style closures, so they re-erase to this `Rc`.
 pub(crate) type ReactiveColor = Rc<dyn Fn() -> Color>;
@@ -53,6 +53,9 @@ pub(crate) const DEFAULT_TRACK: Color = Color::rgba(0.5, 0.5, 0.6, 0.3);
 pub(crate) const SURFACE_ALT: Color = Color::rgba(0.5, 0.5, 0.55, 0.1);
 /// Hairline border fallback when no theme is active.
 pub(crate) const BORDER: Color = Color::rgba(0.5, 0.5, 0.55, 0.35);
+/// Secondary-text fallback for captions and placeholders when no theme is active. Distinct from `tabs`'s own
+/// `INK_MUTED`, which is an opaque grey for an inactive tab label rather than this translucent one.
+pub(crate) const INK_MUTED: Color = Color::rgba(0.5, 0.5, 0.6, 0.6);
 
 /// Theme-resolved text ink (`ink`), falling back to [`INK`] when no theme is active. Call it
 /// INSIDE a style closure so widget text recolours when the theme switches (e.g. dark mode).
@@ -103,6 +106,22 @@ pub(crate) fn surface_alt() -> Color {
 /// Theme-resolved hairline border (`border`), falling back to [`BORDER`].
 pub(crate) fn border() -> Color {
     use_theme_tokens().map(|t| t.border()).unwrap_or(BORDER)
+}
+/// Theme-resolved accent (`primary`), falling back to [`DEFAULT_ACCENT`].
+pub(crate) fn accent() -> Color {
+    use_theme_tokens()
+        .map(|t| t.primary())
+        .unwrap_or(DEFAULT_ACCENT)
+}
+/// Readable ink for a label sitting on [`accent`], falling back to white.
+pub(crate) fn on_accent() -> Color {
+    use_theme_tokens()
+        .map(|t| t.on_primary())
+        .unwrap_or(Color::rgba(1.0, 1.0, 1.0, 1.0))
+}
+/// Theme-resolved secondary text (`muted`), falling back to [`INK_MUTED`].
+pub(crate) fn muted() -> Color {
+    use_theme_tokens().map(|t| t.muted()).unwrap_or(INK_MUTED)
 }
 
 /// Base corner radius from the theme. A component that wants a different shape multiplies this rather than
@@ -165,6 +184,90 @@ pub(crate) fn resolve_open(
 
 /// A control (checkbox box / radio ring / toggle pill) plus an optional label, laid out as one gap-10 row that
 /// is itself the tap target: a tap runs `on_press`. Shared by checkbox, radio and toggle.
+/// Writes an `impl Default` for a `Props` struct from a field list, naming each field's *kind* instead of
+/// repeating its value.
+///
+/// The catalogue's 22 `Default` impls were 226 lines in which the same four expressions appeared 41 times
+/// between them — `Box::new(String::new)` nineteen times, `Box::new(|| Color::TRANSPARENT)` twenty-one. They
+/// cannot be `#[derive(Default)]`: a `Box<dyn Fn() -> String>` has no `Default`, and the field types stay
+/// exactly as they are because `scan_props_struct` detects them by their literal type text, so a newtype would
+/// move the `.rsx` authoring surface.
+///
+/// Kinds: `text` (an empty reactive string), `color` (unset — `TRANSPARENT`, the catalogue's "fall back to the
+/// theme" sentinel), `flag` (a reactive `false`), `action` (a no-op callback), and `= <expr>` for a field whose
+/// default carries information. A struct where most fields are the last kind is better written by hand.
+macro_rules! props_default {
+    ($ty:ident { $($field:ident : $kind:tt),* $(,)? }) => {
+        impl Default for $ty {
+            fn default() -> Self {
+                Self { $($field: props_default!(@value $kind)),* }
+            }
+        }
+    };
+    (@value text) => { Box::new(String::new) };
+    (@value color) => { Box::new(|| renderer_core::Color::TRANSPARENT) };
+    (@value flag) => { Box::new(|| false) };
+    (@value action) => { Box::new(|| {}) };
+    (@value none) => { None };
+    (@value zero) => { Default::default() };
+    (@value ($e:expr)) => { $e };
+}
+pub(crate) use props_default;
+
+/// The shared title text style, re-read every frame so it tracks the active theme. Three consumers: `heading`,
+/// `section` and `modal`'s title.
+///
+/// Its fallback is deliberately not [`accent`] — swapping this for the accent repaints every modal title.
+pub(crate) fn heading_style() -> TextStyle {
+    let color = use_theme_tokens()
+        .map(|t| t.primary())
+        .unwrap_or(Color::rgba(0.1, 0.1, 0.12, 1.0));
+    TextStyle::new(20.0, color).with_weight(600)
+}
+
+/// The caption size for a control that carries one above it. 0.85 of the body size, which is what `badge`,
+/// `tooltip` and `list`'s group heading already use — `slider` had drifted to 0.93 on its own.
+pub(crate) fn caption_size() -> f32 {
+    font_size() * 0.85
+}
+
+fn caption_box() -> LayoutStyle {
+    LayoutStyle::new().height(caption_size() * 1.4)
+}
+
+fn caption_column(width: f32) -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .gap(spacing() * 0.75)
+        .width(width)
+}
+
+/// Stacks an optional small caption above `control`, or hands `control` back untouched when the label is
+/// empty. The counterpart of [`labelled_control`], which puts the label *beside* the control instead.
+pub(crate) fn captioned(
+    control: Box<dyn LayoutItem>,
+    label: impl Fn() -> String + 'static,
+    width: f32,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    if label().is_empty() {
+        return Ok(box_item(control));
+    }
+    let caption = Text::new(
+        move || label(),
+        caption_box(),
+        || TextStyle::new(caption_size(), muted()),
+    )?;
+    // The caption is a leaf, so its own node's style is followed from here — the column outlives it and is where an effect belonging to this subtree wants to be owned.
+    let caption_node = caption.layout_node();
+    let col = Container::new(
+        caption_column(width),
+        vec![box_item(caption), box_item(control)],
+    )?
+    .styled_by(move || caption_column(width))
+    .keeping(style_follows(caption_node, caption_box));
+    Ok(box_item(col))
+}
+
 pub(crate) fn labelled_control(
     control: Box<dyn LayoutItem>,
     label: impl Fn() -> String + 'static,
@@ -178,7 +281,7 @@ pub(crate) fn labelled_control(
         let text = Text::auto(
             move || label(),
             LayoutStyle::new(),
-            || TextStyle::new(14.0, ink()),
+            || TextStyle::new(font_size(), ink()),
         )?;
         children.push(box_item(text));
     }
@@ -187,7 +290,7 @@ pub(crate) fn labelled_control(
     let row = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
-            .gap(10.0)
+            .gap(spacing() * 1.25)
             .align_items(AlignItems::CENTER),
         |_r| RectStyle::default(),
         children,

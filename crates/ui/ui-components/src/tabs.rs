@@ -3,11 +3,11 @@ use std::rc::Rc;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
-use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
+use crate::shared::props_default;
 
 fn pad_x() -> f32 {
     shared::spacing() * 2.0
@@ -17,9 +17,6 @@ fn pad_y() -> f32 {
 }
 fn gap() -> f32 {
     shared::spacing() * 0.5
-}
-fn font_size() -> f32 {
-    shared::font_size()
 }
 fn radius() -> f32 {
     shared::radius() * 1.5
@@ -52,15 +49,11 @@ pub struct TabsProps {
     pub color: Box<dyn Fn() -> Color>,
 }
 
-impl Default for TabsProps {
-    fn default() -> Self {
-        Self {
-            items: Vec::new(),
-            selected: None,
-            color: Box::new(|| Color::TRANSPARENT),
-        }
-    }
-}
+props_default!(TabsProps {
+    items: zero,
+    selected: none,
+    color: color,
+});
 
 pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TabsProps {
@@ -80,7 +73,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let label_widget = Text::auto(
             move || label.to_string(),
             LayoutStyle::new(),
-            move || TextStyle::new(font_size(), tab_ink(label_selected.get() == idx)),
+            move || TextStyle::new(shared::font_size(), tab_ink(label_selected.get() == idx)),
         )?;
 
         let base_selected = selected.clone();
@@ -108,11 +101,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 /// blends in until hovered, when it lifts to a faint accent wash.
 fn tab_rect(active: bool, color: &dyn Fn() -> Color, hovered: bool) -> RectStyle {
     let radius = BorderRadius::all(radius());
-    let accent = shared::resolve(color, || {
-        use_theme_tokens()
-            .map(|t| t.primary())
-            .unwrap_or(shared::DEFAULT_ACCENT)
-    });
+    let accent = shared::resolve(color, || shared::accent());
     if active {
         let fill = if hovered { accent.darken(0.15) } else { accent };
         return RectStyle::default().with_fill(fill).with_radius(radius);
@@ -128,9 +117,7 @@ fn tab_rect(active: bool, color: &dyn Fn() -> Color, hovered: bool) -> RectStyle
 /// The label ink: white on the active (filled) tab for contrast, muted on the rest.
 fn tab_ink(active: bool) -> Color {
     if active {
-        use_theme_tokens()
-            .map(|t| t.on_primary())
-            .unwrap_or(Color::WHITE)
+        shared::on_accent()
     } else {
         INK_MUTED
     }
@@ -140,46 +127,16 @@ fn tab_ink(active: bool) -> Color {
 mod tests {
     use ui_core::reset_layout_runtime;
 
-    use layout_core::AvailableSpace;
-    use platform_core::{Event, PointerButton, PointerSource};
-    use ui_core::{Component, NodeId, compute_layout, new_container, track_layout};
+    use ui_core::{Component, NodeId};
 
     use super::*;
-
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn release(x: f64, y: f64) -> Event {
-        Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
+    use crate::harness::{press, release};
 
     // Lays `node` out as the sole child of a 400×100 root (an auto-size ROOT fills its available space, so
     // laying `node` itself out as the root would force it to 400px wide instead of its natural content
     // width) and returns its laid-out rect.
     fn lay_out(node: NodeId) -> geometry_core::Rect {
-        let rect = track_layout(node).unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_row().width(400.0).height(100.0),
-            &[node],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(400.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        rect.get()
+        crate::harness::lay_out_row(node, 400.0, 100.0)
     }
 
     // Construction: a tab bar builds headless, lays out (a row of measured tab pills), and renders.

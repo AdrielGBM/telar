@@ -3,11 +3,11 @@ use std::rc::Rc;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::signal;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
-use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
+use crate::shared::props_default;
 
 /// Padding a button reserves around its label, derived from the theme's spacing unit rather than fixed so one
 /// theme number moves it. `Text::auto` measures the label at its full line box (taller than a bare
@@ -45,17 +45,13 @@ pub struct ButtonProps {
     pub on_press: Box<dyn Fn()>,
 }
 
-impl Default for ButtonProps {
-    fn default() -> Self {
-        Self {
-            label: Box::new(String::new),
-            fill: Box::new(|| Color::TRANSPARENT),
-            outline: Box::new(|| Color::TRANSPARENT),
-            ghost: false,
-            on_press: Box::new(|| {}),
-        }
-    }
-}
+props_default!(ButtonProps {
+    label: text,
+    fill: color,
+    outline: color,
+    ghost: (false),
+    on_press: action,
+});
 
 pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ButtonProps {
@@ -141,9 +137,7 @@ fn variant_rect(
     if fill_c != Color::TRANSPARENT {
         return RectStyle::default().with_fill(fill_c).with_radius(radius);
     }
-    let primary = use_theme_tokens()
-        .map(|t| t.primary())
-        .unwrap_or(shared::DEFAULT_ACCENT);
+    let primary = shared::accent();
     let base = if hovered {
         primary.darken(0.15)
     } else {
@@ -176,9 +170,7 @@ fn label_color(
     if fill_c != Color::TRANSPARENT {
         return shared::ink_on(fill_c);
     }
-    use_theme_tokens()
-        .map(|t| t.on_primary())
-        .unwrap_or(Color::WHITE)
+    shared::on_accent()
 }
 
 #[cfg(test)]

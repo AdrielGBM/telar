@@ -22,6 +22,7 @@ use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item, use_context};
 
 use crate::shared;
+use crate::shared::props_default;
 
 /// What a row needs to know about the list it is in, and what the list needs to learn from its rows.
 ///
@@ -284,17 +285,13 @@ pub struct ItemProps {
     pub on_press: Option<Box<dyn Fn()>>,
 }
 
-impl Default for ItemProps {
-    fn default() -> Self {
-        Self {
-            label: Box::new(String::new),
-            disabled: Box::new(|| false),
-            checked: None,
-            hint: None,
-            on_press: None,
-        }
-    }
-}
+props_default!(ItemProps {
+    label: text,
+    disabled: flag,
+    checked: none,
+    hint: none,
+    on_press: none,
+});
 
 pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ItemProps {

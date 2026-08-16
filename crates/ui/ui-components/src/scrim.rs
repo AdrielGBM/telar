@@ -17,8 +17,6 @@ use ui_core::{
 /// an `opacity` layer over the whole overlay) so the dialog itself stays fully opaque — layering the scrim's
 /// alpha over the dialog would bleed the page through it.
 pub(crate) const SCRIM: Color = Color::rgba(0.0, 0.0, 0.0, 0.5);
-/// Hairline border around the dialog card / drawer panel edge.
-pub(crate) const DEFAULT_BORDER: Color = Color::rgba(0.12, 0.12, 0.16, 0.15);
 
 /// The dismiss handler the helper hands to each widget's scrim (and, for `modal`, its Close): shared so both
 /// affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.

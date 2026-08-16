@@ -1,9 +1,9 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
-use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
+use crate::shared::props_default;
 
 fn pad_x() -> f32 {
     shared::spacing()
@@ -37,14 +37,10 @@ pub struct BadgeProps {
     pub color: Box<dyn Fn() -> Color>,
 }
 
-impl Default for BadgeProps {
-    fn default() -> Self {
-        Self {
-            label: Box::new(String::new),
-            color: Box::new(|| Color::TRANSPARENT),
-        }
-    }
-}
+props_default!(BadgeProps {
+    label: text,
+    color: color,
+});
 
 pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let BadgeProps { label, color } = props;
@@ -69,17 +65,13 @@ pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 /// The default pill fill when `color` is unset: the theme's primary accent, matching `button`'s own default.
 fn fill_default() -> Color {
-    use_theme_tokens()
-        .map(|t| t.primary())
-        .unwrap_or(shared::DEFAULT_ACCENT)
+    shared::accent()
 }
 
 /// The label's on-accent colour, re-read every frame so it tracks the active theme (mirrors `button`'s
 /// no-variant label default: the theme's `on_primary()`, or white with no theme installed).
 fn on_accent_style() -> TextStyle {
-    let color = use_theme_tokens()
-        .map(|t| t.on_primary())
-        .unwrap_or(Color::WHITE);
+    let color = shared::on_accent();
     TextStyle::new(font_size(), color)
 }
 

@@ -9,6 +9,7 @@ use ui_core::{
 };
 
 use crate::shared;
+use crate::shared::props_default;
 
 /// Fallback bubble surface when `color` is unset — an opaque dark chip.
 const DEFAULT_BUBBLE: Color = Color::rgba(0.12, 0.12, 0.16, 0.96);
@@ -67,22 +68,18 @@ pub struct TooltipProps {
     /// The wrapper the tooltip puts around the trigger is a real node in the parent's flow, so without this
     /// a tooltipped child cannot be a `flex-1` cell: wrapping it collapses the row it was sharing. Set on a
     /// tab, a toolbar segment, or anything else whose whole point is to divide the space evenly.
-    pub fill: bool,
+    pub stretch: bool,
 }
 
-impl Default for TooltipProps {
-    fn default() -> Self {
-        Self {
-            text: Box::new(String::new),
-            shortcut: Box::new(String::new),
-            description: Box::new(String::new),
-            side: "",
-            color: Box::new(|| Color::TRANSPARENT),
-            style: None,
-            fill: false,
-        }
-    }
-}
+props_default!(TooltipProps {
+    text: text,
+    shortcut: text,
+    description: text,
+    side: (""),
+    color: color,
+    style: none,
+    stretch: (false),
+});
 
 fn placement_of(side: &str) -> Placement {
     match side {
@@ -101,7 +98,7 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
         side,
         color,
         style,
-        fill,
+        stretch,
     } = props;
     let placement = placement_of(side);
     let trigger_content = slots.take_default();
@@ -109,7 +106,7 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
     let hovered = signal(false);
 
     let mut trigger_style = LayoutStyle::new().flex_row();
-    if fill {
+    if stretch {
         trigger_style = trigger_style.flex_grow(1.0).align_self_stretch();
     }
     let hover_sink = hovered.clone();
@@ -156,10 +153,9 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
     )?;
 
     // The trigger sits in flow; the bubble node is a 0-size portal placeholder, so it never shifts the trigger.
-    // `fill` has to reach this root as well as the trigger — the root is what the parent actually lays out,
-    // so growing only the inner node would leave the pair hugging its content anyway.
+    // `stretch` has to reach this root as well as the trigger — the root is what the parent actually lays out, so growing only the inner node would leave the pair hugging its content anyway.
     let mut root_style = LayoutStyle::new().flex_column();
-    if fill {
+    if stretch {
         root_style = root_style.flex_grow(1.0).align_self_stretch();
     }
     Ok(box_item(Container::new(
@@ -303,8 +299,9 @@ fn dim(alpha: f32) -> Color {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::harness::moved;
     use layout_core::AvailableSpace;
-    use platform_core::{Event, PointerSource};
+
     use renderer_core::DrawCommand;
     use ui_core::reset_layout_runtime;
     use ui_core::{ComponentList, compute_layout, new_container, relayout_if_dirty};
@@ -312,14 +309,6 @@ mod tests {
     fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
         cmds.iter()
             .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
-    }
-
-    fn moved(x: f64, y: f64) -> Event {
-        Event::PointerMoved {
-            x,
-            y,
-            source: PointerSource::Mouse,
-        }
     }
 
     // A trigger slot child with a definite size so the trigger has a rect to hover and anchor against.

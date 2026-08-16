@@ -1,11 +1,9 @@
 use crate::shared;
+use crate::shared::props_default;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
-use theme_core::use_theme_tokens;
-use ui_core::{Container, Input, LayoutItem, StyledContainer, Text, box_item, style_follows};
-
-/// Fallback text colour ("ink") when `color` is unset, matching the button catalogue's ghost-variant text.
+use ui_core::{Input, LayoutItem, StyledContainer, box_item, style_follows};
 
 fn box_radius() -> f32 {
     shared::radius() * 2.0
@@ -20,12 +18,6 @@ const DEFAULT_WIDTH: f32 = 300.0;
 fn font_size() -> f32 {
     shared::font_size() * 1.07
 }
-fn label_size() -> f32 {
-    shared::font_size() * 0.85
-}
-fn label_gap() -> f32 {
-    shared::spacing() * 0.75
-}
 
 fn line_box() -> LayoutStyle {
     LayoutStyle::new().height(font_size() * 1.4)
@@ -36,15 +28,6 @@ fn field_box(width: f32) -> LayoutStyle {
         .width(width)
         .padding_horizontal(pad_x())
         .padding_vertical(pad_y())
-}
-fn caption_box() -> LayoutStyle {
-    LayoutStyle::new().height(label_size() * 1.4)
-}
-fn column_box(width: f32) -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
-        .gap(label_gap())
-        .width(width)
 }
 
 /// A labelled, bordered text input: the `Input` primitive (kernel, unstyled) wrapped in a padded/rounded
@@ -70,18 +53,14 @@ pub struct TextFieldProps {
     pub on_submit: Option<Box<dyn Fn()>>,
 }
 
-impl Default for TextFieldProps {
-    fn default() -> Self {
-        Self {
-            value: None,
-            placeholder: Box::new(String::new),
-            label: Box::new(String::new),
-            width: 0.0,
-            color: Box::new(|| Color::TRANSPARENT),
-            on_submit: None,
-        }
-    }
-}
+props_default!(TextFieldProps {
+    value: none,
+    placeholder: text,
+    label: text,
+    width: zero,
+    color: color,
+    on_submit: none,
+});
 
 /// Builds a `text_field`: a bordered/padded box around `ui_core::Input`, swapping in a muted placeholder
 /// muted hint via the `Input`'s own `placeholder` while the value is empty — the field stays a live,
@@ -134,27 +113,7 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     .styled_by(move || field_box(width))
     .keeping(style_follows(line_node, line_box));
 
-    if label().is_empty() {
-        return Ok(box_item(box_));
-    }
-    let caption = Text::new(
-        move || label(),
-        caption_box(),
-        || TextStyle::new(label_size(), muted_color()),
-    )?;
-    let caption_node = caption.layout_node();
-    let col = Container::new(column_box(width), vec![box_item(caption), box_item(box_)])?
-        .styled_by(move || column_box(width))
-        .keeping(style_follows(caption_node, caption_box));
-    Ok(box_item(col))
-}
-
-/// The shared muted tone for the label caption and the placeholder text, re-read every frame so it tracks
-/// the active theme (falls back to `ThemeTokens::muted`'s own default when no theme is installed).
-fn muted_color() -> Color {
-    use_theme_tokens()
-        .map(|t| t.muted())
-        .unwrap_or(Color::rgba(0.5, 0.5, 0.6, 0.6))
+    shared::captioned(box_item(box_), label, width)
 }
 
 #[cfg(test)]
@@ -163,20 +122,12 @@ mod tests {
     use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
-    use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource};
+    use platform_core::{Event, Key, ModifiersState, NamedKey};
     use renderer_core::DrawCommand;
 
     use super::*;
+    use crate::harness::press;
     use ui_core::{ComponentList, compute_layout, new_container, track_layout};
-
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
 
     // Lays a `text_field` out inside a fixed-size root and returns it plus its absolute box rect (the
     // outermost node's rect, valid only when `label` is empty — a labelled field's outer node is the

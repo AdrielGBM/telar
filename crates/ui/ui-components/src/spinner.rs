@@ -7,6 +7,7 @@ use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
+use crate::shared::props_default;
 
 /// Track stroke thickness and orbiting head diameter, as fractions of `size`.
 const TRACK_STROKE_FRACTION: f32 = 0.12;
@@ -34,14 +35,10 @@ pub struct SpinnerProps {
     pub size: f32,
 }
 
-impl Default for SpinnerProps {
-    fn default() -> Self {
-        Self {
-            color: Box::new(|| Color::TRANSPARENT),
-            size: 0.0,
-        }
-    }
-}
+props_default!(SpinnerProps {
+    color: color,
+    size: zero,
+});
 
 pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SpinnerProps { color, size } = props;
@@ -59,11 +56,7 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let head = StyledContainer::new(
         LayoutStyle::new().width(head_size).height(head_size),
         move |_r| {
-            let fill = shared::resolve(color.as_ref(), || {
-                use_theme_tokens()
-                    .map(|t| t.primary())
-                    .unwrap_or(shared::DEFAULT_ACCENT)
-            });
+            let fill = shared::resolve(color.as_ref(), || shared::accent());
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(head_size / 2.0))
@@ -104,26 +97,13 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 mod tests {
     use ui_core::reset_layout_runtime;
 
-    use layout_core::AvailableSpace;
-    use ui_core::{NodeId, compute_layout, new_container, track_layout};
+    use ui_core::NodeId;
 
     use super::*;
 
     // Lays `node` out inside a 100×100 root, mirroring `slider`'s test harness.
     fn lay_out(node: NodeId) {
-        let rect = track_layout(node).unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(100.0).height(100.0),
-            &[node],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(100.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        let _ = rect.get();
+        crate::harness::lay_out(node, 100.0, 100.0);
     }
 
     #[test]

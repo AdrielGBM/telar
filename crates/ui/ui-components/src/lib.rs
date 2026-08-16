@@ -7,6 +7,8 @@ mod checkbox;
 mod chip;
 mod drawer;
 mod dropdown;
+#[cfg(test)]
+mod harness;
 mod heading;
 mod list;
 mod menu;

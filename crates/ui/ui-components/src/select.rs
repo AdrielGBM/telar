@@ -1,3 +1,4 @@
+use crate::shared::props_default;
 use layout_core::LayoutError;
 use reactive_core::{RwSignal, signal};
 use renderer_core::Color;
@@ -32,19 +33,15 @@ pub struct SelectProps {
     pub on_select: Option<Box<dyn Fn(u32)>>,
     /// Take the width the row offers instead of the fixed trigger width — what a form field wants, where a
     /// 180px control beside full-width ones reads as a mistake. The panel opens at that width too.
-    pub fill: bool,
+    pub stretch: bool,
 }
 
-impl Default for SelectProps {
-    fn default() -> Self {
-        Self {
-            selected: None,
-            color: Box::new(|| Color::TRANSPARENT),
-            on_select: None,
-            fill: false,
-        }
-    }
-}
+props_default!(SelectProps {
+    selected: none,
+    color: color,
+    on_select: none,
+    stretch: (false),
+});
 
 pub fn select(props: SelectProps, rows: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // `None` selection is uncontrolled: own an internal signal so the trigger still tracks a choice.
@@ -60,7 +57,7 @@ pub fn select(props: SelectProps, rows: Children) -> Result<Box<dyn LayoutItem>,
         color: props.color,
         on_pick: props.on_select,
         selected: Some(selected),
-        fill: props.fill,
+        stretch: props.stretch,
         // A select *is* a field: it wears the border and the caret, and neither is up for discussion the way
         // a menu's are — a bare select is indistinguishable from a label.
         bordered: true,
@@ -71,7 +68,7 @@ pub fn select(props: SelectProps, rows: Children) -> Result<Box<dyn LayoutItem>,
 #[cfg(test)]
 mod tests {
     use layout_core::AvailableSpace;
-    use platform_core::{Event, PointerButton, PointerSource};
+
     use reactive_core::signal;
     use ui_core::reset_layout_runtime;
     use ui_core::{
@@ -79,6 +76,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::harness::{press, release, route};
 
     /// Three choices as `item` rows, which is how a select is written now.
     fn sizes() -> Children {
@@ -100,30 +98,8 @@ mod tests {
         })
     }
 
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn release(x: f64, y: f64) -> Event {
-        Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-
     // Mirror the runner: consult the overlay registry first, then walk the tree only if no overlay
     // consumed the event (the anchored panel routes through the registry, the trigger through the tree).
-    fn route(tree: &mut ComponentList, event: &Event) {
-        if dispatch_overlays(event) == EventResult::Ignored {
-            tree.on_event(event);
-        }
-    }
 
     // Construction: a select builds headless, lays out (the trigger takes its fixed size), and renders.
     #[test]

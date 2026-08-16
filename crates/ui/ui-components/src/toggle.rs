@@ -6,6 +6,7 @@ use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
+use crate::shared::props_default;
 
 /// The off-track fill with no theme to ask — a light neutral, which reads on a light page and is a bright slab
 /// on a dark one.
@@ -37,16 +38,12 @@ pub struct ToggleProps {
     pub on_toggle: Option<Box<dyn Fn(bool)>>,
 }
 
-impl Default for ToggleProps {
-    fn default() -> Self {
-        Self {
-            checked: None,
-            label: Box::new(String::new),
-            color: Box::new(|| Color::TRANSPARENT),
-            on_toggle: None,
-        }
-    }
-}
+props_default!(ToggleProps {
+    checked: none,
+    label: text,
+    color: color,
+    on_toggle: none,
+});
 
 pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ToggleProps {
@@ -85,11 +82,7 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .align_items(AlignItems::CENTER),
         move |_r| {
             let fill = if track_on.get() {
-                shared::resolve(color.as_ref(), || {
-                    use_theme_tokens()
-                        .map(|t| t.primary())
-                        .unwrap_or(shared::DEFAULT_ACCENT)
-                })
+                shared::resolve(color.as_ref(), || shared::accent())
             } else {
                 off_track()
             };
@@ -124,46 +117,14 @@ mod tests {
     use std::rc::Rc;
     use ui_core::reset_layout_runtime;
 
-    use layout_core::{AvailableSpace, LayoutStyle};
-    use platform_core::{Event, PointerButton, PointerSource};
     use reactive_core::signal;
-    use ui_core::{Component, LayoutItem, NodeId, compute_layout, new_container, track_layout};
+    use ui_core::{Component, LayoutItem, NodeId};
 
     use super::*;
+    use crate::harness::{centre, press, release};
 
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn release(x: f64, y: f64) -> Event {
-        Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-
-    // Lays `node` out inside a 200×100 root and returns its centre point, for tapping.
     fn lay_out(node: NodeId) -> (f64, f64) {
-        let rect = track_layout(node).unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(200.0).height(100.0),
-            &[node],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        let r = rect.get();
-        ((r.x + r.width / 2.0) as f64, (r.y + r.height / 2.0) as f64)
+        centre(crate::harness::lay_out(node, 200.0, 100.0))
     }
 
     #[test]

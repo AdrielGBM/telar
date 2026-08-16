@@ -3,11 +3,11 @@ use std::rc::Rc;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
-use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
+use crate::shared::props_default;
 
 /// − / + button side length (px) — square, small enough to sit beside the value without dominating it.
 fn button_size() -> f32 {
@@ -16,15 +16,6 @@ fn button_size() -> f32 {
 /// Gap between the − button, the value, and the + button.
 fn gap() -> f32 {
     shared::spacing()
-}
-fn glyph_size() -> f32 {
-    shared::font_size()
-}
-fn radius() -> f32 {
-    shared::radius()
-}
-fn value_size() -> f32 {
-    shared::font_size()
 }
 
 fn row_box() -> LayoutStyle {
@@ -63,18 +54,14 @@ pub struct StepperProps {
     pub on_change: Option<Box<dyn Fn(f32)>>,
 }
 
-impl Default for StepperProps {
-    fn default() -> Self {
-        Self {
-            value: None,
-            min: 0.0,
-            max: 0.0,
-            step: 0.0,
-            color: Box::new(|| Color::TRANSPARENT),
-            on_change: None,
-        }
-    }
-}
+props_default!(StepperProps {
+    value: none,
+    min: zero,
+    max: zero,
+    step: zero,
+    color: color,
+    on_change: none,
+});
 
 pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let StepperProps {
@@ -131,7 +118,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             }
         },
         LayoutStyle::new(),
-        || TextStyle::new(value_size(), shared::ink()),
+        || TextStyle::new(shared::font_size(), shared::ink()),
     )?;
 
     let row = Container::new(
@@ -144,11 +131,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 
 /// The − / + button's accent: the caller's `color` when set, else the theme's `primary`.
 fn button_fill(color: &shared::ReactiveColor) -> Color {
-    shared::resolve(color.as_ref(), || {
-        use_theme_tokens()
-            .map(|t| t.primary())
-            .unwrap_or(shared::DEFAULT_ACCENT)
-    })
+    shared::resolve(color.as_ref(), shared::accent)
 }
 
 /// A small square pressable box with a centred glyph — the − / + buttons, built on the same
@@ -164,14 +147,19 @@ fn stepper_button(
     let glyph_widget = Text::auto(
         move || glyph.to_string(),
         LayoutStyle::new(),
-        move || TextStyle::new(glyph_size(), shared::ink_on(button_fill(&glyph_fill))),
+        move || {
+            TextStyle::new(
+                shared::font_size(),
+                shared::ink_on(button_fill(&glyph_fill)),
+            )
+        },
     )?;
     let container = StyledContainer::new(
         button_box(),
         move |_r| {
             RectStyle::default()
                 .with_fill(button_fill(&color))
-                .with_radius(BorderRadius::all(radius()))
+                .with_radius(BorderRadius::all(shared::radius()))
         },
         vec![box_item(glyph_widget)],
     )?
@@ -188,27 +176,11 @@ mod tests {
     use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
-    use platform_core::{Event, PointerButton, PointerSource};
+
     use ui_core::{Component, compute_layout, track_layout};
 
     use super::*;
-
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn release(x: f64, y: f64) -> Event {
-        Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
+    use crate::harness::{press, release};
 
     // Taps (press then release inside) − and + at their expected edge positions: the row has no padding, so
     // the − button occupies its left button_size() px and the + button its right button_size() px.

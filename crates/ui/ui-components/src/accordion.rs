@@ -4,7 +4,6 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, RectStyle, TextStyle};
-use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{
     ClippedItem, Component, Container, EventResult, LayoutItem, RenderNode, Slots, StyledContainer,
@@ -12,15 +11,13 @@ use ui_core::{
 };
 
 use crate::shared;
+use crate::shared::props_default;
 
 fn pad_x() -> f32 {
     shared::spacing() * 1.75
 }
 fn pad_y() -> f32 {
     shared::spacing() * 1.25
-}
-fn title_size() -> f32 {
-    shared::font_size()
 }
 fn caret_size() -> f32 {
     shared::font_size() * 0.85
@@ -56,15 +53,11 @@ pub struct AccordionProps {
     pub color: Box<dyn Fn() -> Color>,
 }
 
-impl Default for AccordionProps {
-    fn default() -> Self {
-        Self {
-            title: Box::new(String::new),
-            open: None,
-            color: Box::new(|| Color::TRANSPARENT),
-        }
-    }
-}
+props_default!(AccordionProps {
+    title: text,
+    open: none,
+    color: color,
+});
 
 pub fn accordion(
     props: AccordionProps,
@@ -90,11 +83,7 @@ pub fn accordion(
         },
         LayoutStyle::new(),
         move || {
-            let accent = shared::resolve(caret_color.as_ref(), || {
-                use_theme_tokens()
-                    .map(|t| t.primary())
-                    .unwrap_or(shared::DEFAULT_ACCENT)
-            });
+            let accent = shared::resolve(caret_color.as_ref(), || shared::accent());
             TextStyle::new(caret_size(), accent)
         },
     )?;
@@ -102,7 +91,7 @@ pub fn accordion(
     let title_widget = Text::auto(
         move || title(),
         LayoutStyle::new(),
-        || TextStyle::new(title_size(), shared::ink()),
+        || TextStyle::new(shared::font_size(), shared::ink()),
     )?;
 
     let toggle_open = open.clone();
@@ -169,27 +158,11 @@ mod tests {
     use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
-    use platform_core::{Event, PointerButton, PointerSource};
+
     use ui_core::{compute_layout, new_container, track_layout};
 
     use super::*;
-
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn release(x: f64, y: f64) -> Event {
-        Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
+    use crate::harness::{press, release};
 
     fn slot_with_body(label: &'static str) -> Slots {
         let body = Text::new(

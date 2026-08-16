@@ -35,7 +35,7 @@ pub struct DrawerProps {
     pub width: f32,
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
     pub on_close: Option<Box<dyn Fn()>>,
-    /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `shared::DEFAULT_SURFACE`. A closure
+    /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure
     /// (re-read every frame) so a theme token or `$signal` colour re-colours live.
     pub color: Box<dyn Fn() -> Color>,
 }
@@ -97,8 +97,8 @@ fn build_open_drawer(
         sheet(),
         move |_r| {
             RectStyle::default()
-                .with_fill(shared::resolve(color.as_ref(), || shared::DEFAULT_SURFACE))
-                .with_stroke(Stroke::new(scrim::DEFAULT_BORDER, 1.0))
+                .with_fill(shared::resolve(color.as_ref(), shared::surface))
+                .with_stroke(Stroke::new(shared::border(), 1.0))
         },
         body,
     )?

@@ -1,14 +1,15 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item};
 
 use crate::heading::heading_style;
 use crate::scrim;
 use crate::shared;
+use crate::shared::props_default;
 
 /// Muted tone for the Close affordance.
-const CLOSE_INK: Color = Color::rgba(0.35, 0.35, 0.42, 1.0);
 fn dialog_radius() -> f32 {
     shared::radius() * 3.0
 }
@@ -63,22 +64,18 @@ pub struct ModalProps {
     pub title: Box<dyn Fn() -> String>,
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.
     pub on_close: Option<Box<dyn Fn()>>,
-    /// Dialog surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `shared::DEFAULT_SURFACE`. A closure
+    /// Dialog surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure
     /// (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
     pub color: Box<dyn Fn() -> Color>,
 }
 
-impl Default for ModalProps {
-    fn default() -> Self {
-        Self {
-            open: None,
-            id: "",
-            title: Box::new(String::new),
-            on_close: None,
-            color: Box::new(|| Color::TRANSPARENT),
-        }
-    }
-}
+props_default!(ModalProps {
+    open: none,
+    id: (""),
+    title: text,
+    on_close: none,
+    color: color,
+});
 
 pub fn modal(props: ModalProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ModalProps {
@@ -111,13 +108,14 @@ fn build_open_modal(
     let close_label = Text::auto(
         || "Close".to_string(),
         LayoutStyle::new(),
-        || TextStyle::new(close_size(), CLOSE_INK),
+        || TextStyle::new(close_size(), shared::ink()),
     )?;
     let close = StyledContainer::new(
         LayoutStyle::new().flex_row(),
         |_r| RectStyle::default(),
         vec![box_item(close_label)],
     )?
+    .control(Role::Button)
     .on_press({
         let dismiss = dismiss.clone();
         move || (*dismiss)()
@@ -133,8 +131,8 @@ fn build_open_modal(
         card(),
         move |_r| {
             RectStyle::default()
-                .with_fill(shared::resolve(color.as_ref(), || shared::DEFAULT_SURFACE))
-                .with_stroke(Stroke::new(scrim::DEFAULT_BORDER, 1.0))
+                .with_fill(shared::resolve(color.as_ref(), shared::surface))
+                .with_stroke(Stroke::new(shared::border(), 1.0))
                 .with_radius(BorderRadius::all(dialog_radius()))
         },
         dialog_children,

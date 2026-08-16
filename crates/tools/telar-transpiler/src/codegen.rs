@@ -194,7 +194,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "select",
             compound(
-                &["selected", "color", "on_select", "fill"],
+                &["selected", "color", "on_select", "stretch"],
                 &["color"],
                 &["selected", "on_select"],
             ),
@@ -208,7 +208,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                     "label",
                     "on_select",
                     "color",
-                    "fill",
+                    "stretch",
                     "bordered",
                     "caret",
                     "style",
@@ -264,7 +264,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                     "description",
                     "side",
                     "color",
-                    "fill",
+                    "stretch",
                     "style",
                 ],
                 true,

@@ -3,12 +3,10 @@ use std::rc::Rc;
 use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
 use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
-use ui_core::{
-    Container, LayoutItem, StyledContainer, Text, box_item, box_transform, style_follows,
-};
+use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
 
@@ -20,28 +18,12 @@ fn track_height() -> f32 {
 fn thumb_size() -> f32 {
     shared::icon_size()
 }
-/// Caption size/gap above the track, mirroring `text_field`'s label row.
-fn label_size() -> f32 {
-    shared::font_size() * 0.93
-}
-fn label_gap() -> f32 {
-    shared::spacing() * 0.75
-}
 
 fn thumb_box() -> LayoutStyle {
     LayoutStyle::new().width(thumb_size()).height(thumb_size())
 }
 fn track_box(width: f32) -> LayoutStyle {
     LayoutStyle::new().width(width).height(track_height())
-}
-fn caption_box() -> LayoutStyle {
-    LayoutStyle::new().height(label_size() * 1.4)
-}
-fn column_box(width: f32) -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
-        .gap(label_gap())
-        .width(width)
 }
 
 /// A drag-driven `min..=max` control: a rounded track, an accent fill up to `value`, and a thumb positioned by
@@ -121,11 +103,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |_r| {
-            let fill = shared::resolve(fill_color.as_ref(), || {
-                use_theme_tokens()
-                    .map(|t| t.primary())
-                    .unwrap_or(shared::DEFAULT_ACCENT)
-            });
+            let fill = shared::resolve(fill_color.as_ref(), || shared::accent());
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(track_height() / 2.0))
@@ -147,11 +125,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let thumb = StyledContainer::new(
         thumb_box(),
         move |_r| {
-            let fill = shared::resolve(thumb_color.as_ref(), || {
-                use_theme_tokens()
-                    .map(|t| t.primary())
-                    .unwrap_or(shared::DEFAULT_ACCENT)
-            });
+            let fill = shared::resolve(thumb_color.as_ref(), || shared::accent());
             RectStyle::default()
                 .with_fill(fill)
                 .with_stroke(Stroke::new(Color::WHITE, 2.0))
@@ -220,28 +194,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         }
     });
 
-    if label().is_empty() {
-        return Ok(box_item(track));
-    }
-    let caption = Text::new(
-        move || label(),
-        caption_box(),
-        || TextStyle::new(label_size(), label_color()),
-    )?;
-    // The caption is a leaf, so its own node's style is followed from here — the column outlives it and is
-    // where an effect belonging to this subtree wants to be owned.
-    let caption_node = caption.layout_node();
-    let col = Container::new(column_box(width), vec![box_item(caption), box_item(track)])?
-        .styled_by(move || column_box(width))
-        .keeping(style_follows(caption_node, caption_box));
-    Ok(box_item(col))
-}
-
-/// The muted label ink, re-read every frame so it tracks the active theme (mirrors `text_field`'s caption colour).
-fn label_color() -> Color {
-    use_theme_tokens()
-        .map(|t| t.muted())
-        .unwrap_or(Color::rgba(0.5, 0.5, 0.6, 0.6))
+    shared::captioned(box_item(track), label, width)
 }
 
 #[cfg(test)]
@@ -251,52 +204,16 @@ mod tests {
     use ui_core::reset_layout_runtime;
 
     use geometry_core::Rect;
-    use layout_core::{AvailableSpace, LayoutStyle};
-    use platform_core::{Event, PointerButton, PointerSource};
+
     use reactive_core::signal;
-    use ui_core::{Component, LayoutItem, NodeId, compute_layout, new_container, track_layout};
+    use ui_core::{Component, LayoutItem, NodeId};
 
     use super::*;
-
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn moved(x: f64, y: f64) -> Event {
-        Event::PointerMoved {
-            x,
-            y,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn release(x: f64, y: f64) -> Event {
-        Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
+    use crate::harness::{moved, press, release};
 
     // Lays `node` out inside a 300×100 root and returns its laid-out rect, for computing drag points on the track.
     fn lay_out(node: NodeId) -> Rect {
-        let rect = track_layout(node).unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(300.0).height(100.0),
-            &[node],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(300.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        rect.get()
+        crate::harness::lay_out(node, 300.0, 100.0)
     }
 
     // The core contract: dragging to the track's midpoint maps to value ≈ 0.5, and to the far edge maps to 1.0.

@@ -6,6 +6,7 @@ use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
+use crate::shared::props_default;
 
 fn pad_x() -> f32 {
     shared::spacing() * 1.25
@@ -61,15 +62,11 @@ pub struct ChipProps {
     pub on_close: Option<Box<dyn Fn()>>,
 }
 
-impl Default for ChipProps {
-    fn default() -> Self {
-        Self {
-            label: Box::new(String::new),
-            color: Box::new(|| Color::TRANSPARENT),
-            on_close: None,
-        }
-    }
-}
+props_default!(ChipProps {
+    label: text,
+    color: color,
+    on_close: none,
+});
 
 pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ChipProps {

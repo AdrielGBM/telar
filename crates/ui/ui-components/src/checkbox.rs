@@ -1,15 +1,13 @@
+use std::rc::Rc;
+
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
-use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
-
-/// The unchecked box's fill and its 1.5px border.
-const SURFACE: Color = Color::WHITE;
-const BORDER: Color = Color::rgba(0.75, 0.77, 0.80, 1.0);
+use crate::shared::props_default;
 
 /// A labelled checkbox: an 18px box that fills with the accent and shows a check while its bound `checked`
 /// signal is on; tapping the row toggles it (and fires `on_toggle`). High-level sugar over the primitives
@@ -26,16 +24,12 @@ pub struct CheckboxProps {
     pub on_toggle: Option<Box<dyn Fn(bool)>>,
 }
 
-impl Default for CheckboxProps {
-    fn default() -> Self {
-        Self {
-            checked: None,
-            label: Box::new(String::new),
-            color: Box::new(|| Color::TRANSPARENT),
-            on_toggle: None,
-        }
-    }
-}
+props_default!(CheckboxProps {
+    checked: none,
+    label: text,
+    color: color,
+    on_toggle: none,
+});
 
 pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let CheckboxProps {
@@ -47,13 +41,17 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
     // Uncontrolled: own the state so the box still toggles when the caller binds no signal.
     let checked = checked.unwrap_or_else(|| signal(false));
 
-    // The check: a small inner square that only paints (white) while checked, so toggling never reflows.
+    // Shared between the box's fill and the mark, which reads it to pick an ink that contrasts with it.
+    let color: shared::ReactiveColor = Rc::from(color);
+
+    // The check: a small inner square that only paints while checked, so toggling never reflows. Its ink is read off the box's own fill — a hard white vanished on the near-white `primary` of a neutral palette.
     let mark_checked = checked.clone();
+    let mark_color = color.clone();
     let mark = StyledContainer::new(
         LayoutStyle::new().width(10.0).height(10.0),
         move |_r| {
             let fill = if mark_checked.get() {
-                Color::WHITE
+                shared::ink_on(shared::resolve(mark_color.as_ref(), shared::accent))
             } else {
                 Color::TRANSPARENT
             };
@@ -76,16 +74,12 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
         move |_r| {
             let radius = BorderRadius::all(5.0);
             if box_checked.get() {
-                let fill = shared::resolve(color.as_ref(), || {
-                    use_theme_tokens()
-                        .map(|t| t.primary())
-                        .unwrap_or(shared::DEFAULT_ACCENT)
-                });
+                let fill = shared::resolve(color.as_ref(), || shared::accent());
                 RectStyle::default().with_fill(fill).with_radius(radius)
             } else {
                 RectStyle::default()
-                    .with_fill(SURFACE)
-                    .with_stroke(Stroke::new(BORDER, 1.5))
+                    .with_fill(shared::surface())
+                    .with_stroke(Stroke::new(shared::border(), 1.5))
                     .with_radius(radius)
             }
         },
@@ -116,46 +110,14 @@ mod tests {
     use std::rc::Rc;
     use ui_core::reset_layout_runtime;
 
-    use layout_core::{AvailableSpace, LayoutStyle};
-    use platform_core::{Event, PointerButton, PointerSource};
     use reactive_core::signal;
-    use ui_core::{Component, LayoutItem, NodeId, compute_layout, new_container, track_layout};
+    use ui_core::{Component, LayoutItem, NodeId};
 
     use super::*;
+    use crate::harness::{centre, press, release};
 
-    fn press(x: f64, y: f64) -> Event {
-        Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-    fn release(x: f64, y: f64) -> Event {
-        Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        }
-    }
-
-    // Lays `node` out inside a 200×100 root and returns its centre point, for tapping.
     fn lay_out(node: NodeId) -> (f64, f64) {
-        let rect = track_layout(node).unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(200.0).height(100.0),
-            &[node],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(200.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        let r = rect.get();
-        ((r.x + r.width / 2.0) as f64, (r.y + r.height / 2.0) as f64)
+        centre(crate::harness::lay_out(node, 200.0, 100.0))
     }
 
     #[test]

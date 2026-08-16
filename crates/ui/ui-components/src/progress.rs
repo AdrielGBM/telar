@@ -6,6 +6,7 @@ use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
+use crate::shared::props_default;
 
 /// A determinate 0.0..=1.0 progress bar: a rounded track with an accent fill scaled by `value`. Sibling of
 /// `slider` minus the drag/thumb — the fill reuses the same "absolute_fill child, scaled from the left edge"
@@ -26,17 +27,13 @@ pub struct ProgressProps {
     pub height: f32,
 }
 
-impl Default for ProgressProps {
-    fn default() -> Self {
-        Self {
-            value: None,
-            color: Box::new(|| Color::TRANSPARENT),
-            track_color: Box::new(|| Color::TRANSPARENT),
-            width: 0.0,
-            height: 0.0,
-        }
-    }
-}
+props_default!(ProgressProps {
+    value: none,
+    color: color,
+    track_color: color,
+    width: zero,
+    height: zero,
+});
 
 pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ProgressProps {
@@ -61,11 +58,7 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |_r| {
-            let fill = shared::resolve(color.as_ref(), || {
-                use_theme_tokens()
-                    .map(|t| t.primary())
-                    .unwrap_or(shared::DEFAULT_ACCENT)
-            });
+            let fill = shared::resolve(color.as_ref(), || shared::accent());
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(height / 2.0))
@@ -98,27 +91,14 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
 mod tests {
     use ui_core::reset_layout_runtime;
 
-    use layout_core::AvailableSpace;
     use reactive_core::signal;
-    use ui_core::{NodeId, compute_layout, new_container, track_layout};
+    use ui_core::NodeId;
 
     use super::*;
 
     // Lays `node` out inside a 300×100 root, mirroring `slider`'s test harness.
     fn lay_out(node: NodeId) {
-        let rect = track_layout(node).unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(300.0).height(100.0),
-            &[node],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(300.0),
-            AvailableSpace::Definite(100.0),
-        )
-        .unwrap();
-        let _ = rect.get();
+        crate::harness::lay_out(node, 300.0, 100.0);
     }
 
     // An unset `value` prop must fall back to a working internal signal (uncontrolled mode), not panic.
