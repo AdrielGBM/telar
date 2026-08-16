@@ -325,6 +325,10 @@ where
     /// renderer and frames are dropped, which is the interval the toggle already lived with; the poll site
     /// applies the `Auto` → software fallback for every path at once.
     fn spawn_hardware_build(&mut self, window: &W) {
+        // A second handle for the wake below: until the build lands there is no renderer, so no frame this
+        // thread could ask for would draw anything, and on the first-resume path there is no previous frame
+        // being paced either — the thread that ends the interval is the only one that can end the wait.
+        let wake = window.clone();
         let window = window.clone();
         let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
         let font_paths = self.font_paths.clone();
@@ -336,7 +340,7 @@ where
         let transparent = self.is_transparent();
         self.pending_renderer = Some(std::thread::spawn(move || {
             let font_config = build_hardware_font_config(font_paths, font_data, &system_fonts);
-            HardwareRenderer::new(
+            let built = HardwareRenderer::new(
                 window,
                 cache_path.as_deref(),
                 android,
@@ -345,7 +349,9 @@ where
                     transparent,
                     ..HardwareRendererConfig::default()
                 },
-            )
+            );
+            wake.request_redraw();
+            built
         }));
     }
 
@@ -743,6 +749,10 @@ where
                 window.request_redraw();
             } else {
                 self.pending_renderer = Some(handle);
+                // The wake the builder sends can land a hair before the thread has actually exited, and a
+                // window with no renderer has nothing else pacing it — so ask again rather than wait for a
+                // frame no one is going to request.
+                window.request_redraw();
             }
         }
 
