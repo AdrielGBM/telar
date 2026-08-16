@@ -714,7 +714,7 @@ mod tests {
     #[test]
     fn widget_ref_passthrough() {
         let src = "[logic]\nlet canvas = build_canvas()?;\n[view]\nwidget \"canvas\"\n";
-        let out = crate::transpile_source_with_theme(src, "my_section", None, None).unwrap();
+        let out = crate::transpile_source(src, "my_section", None, None, None).unwrap();
         assert!(out.rust_code.contains("Ok(Box::new(canvas))"));
     }
 
@@ -722,7 +722,7 @@ mod tests {
     fn build_splices_an_expression_evaluated_at_each_construction_point() {
         // The point of `build`: inside a reactive region it re-runs, so nothing is moved twice.
         let src = "[logic]\nlet items = memo(move || vec![1, 2]);\n[view]\nrow\n    for id in $items key *id\n        build \"icon_view(id)?\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("Ok(box_item(icon_view(id)?))"),
@@ -737,7 +737,7 @@ mod tests {
     #[test]
     fn build_works_alongside_widget_in_a_static_view() {
         let src = "[logic]\nlet icon = make_icon()?;\n[view]\nrow\n    widget \"icon\"\n    build \"other()?\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
             out.rust_code.contains("children![icon, other()?]"),
             "a spliced binding and a built expression are siblings:\n{}",
@@ -754,7 +754,7 @@ mod tests {
             // Nested one level down: a plain container inside a reactive branch is rebuilt with it.
             "[logic]\nlet icon = make_icon()?;\nlet shown = memo(move || true);\n[view]\nrow\n    if $shown\n        col\n            widget \"icon\"\n",
         ] {
-            let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+            let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
             let code = &out.rust_code;
             assert!(
                 code.contains("compile_error!")
@@ -772,7 +772,7 @@ mod tests {
     fn a_non_reactive_branch_still_takes_a_widget() {
         // A construction-time `if` picks its branch once, so the guard is about rebuilding, not about branching.
         let src = "[logic]\nlet icon = make_icon()?;\nlet vertical = true;\n[view]\nrow\n    if vertical\n        widget \"icon\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
             !out.rust_code.contains("compile_error!"),
             "a one-shot `if` is not a reactive region:\n{}",
@@ -786,7 +786,7 @@ mod tests {
             ("[logic]\n[view]\nbuild \"\"\n", "empty"),
             ("[logic]\n[view]\nbuild \"icon_view(name\"\n", "unbalanced"),
         ] {
-            let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+            let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
             assert!(
                 out.rust_code.contains("compile_error!"),
                 "a {why} build expression should not reach rustc as broken syntax:\n{}",
@@ -794,9 +794,10 @@ mod tests {
             );
         }
         // A bracket inside a string literal is not an unbalanced bracket.
-        let ok = crate::transpile_source_with_theme(
+        let ok = crate::transpile_source(
             "[logic]\n[view]\nbuild \"label(\\\")\\\")?\"\n",
             "demo",
+            None,
             None,
             None,
         )
@@ -808,7 +809,7 @@ mod tests {
     fn widget_ref_invalid_identifier_errors() {
         // A non-identifier `widget` reference emits a `compile_error!` instead of splicing broken code.
         let src = "[logic]\n[view]\nwidget \"not an ident\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
             out.rust_code.contains("compile_error!"),
             "invalid widget ref should emit compile_error!:\n{}",
@@ -821,7 +822,7 @@ mod tests {
         // `field: Type = expr` sugar: the emitted struct drops the default (invalid Rust otherwise) and a
         // synthesized `Default` impl carries it; the `#[derive(Default)]` is stripped to avoid a collision.
         let src = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub gap: f32,\n    pub pad: f32 = 16.0,\n}\n[view]\ntext \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "card", None, None).unwrap();
+        let out = crate::transpile_source(src, "card", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("pub pad: f32,"),
@@ -866,7 +867,7 @@ mod tests {
     #[test]
     fn unknown_tag_becomes_component_call() {
         let src = "[logic]\n[view]\nmy_card\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
             out.rust_code.contains("my_card()?"),
             "no-attr tag should call fn directly"
@@ -876,7 +877,7 @@ mod tests {
     #[test]
     fn class_paint_promotes_container_and_is_consumed() {
         let src = "[style]\n@card\n    fill: #ffffff\n    radius: 12\n    padding: 8\n[view]\ncol @card\n    text \"hi\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         // A `col` carrying paint from its class becomes a StyledContainer, not a plain Container.
         assert!(
@@ -895,7 +896,7 @@ mod tests {
         // `box @a @b`: the first class is the base (its `style_*()` fn), the second's layout props are chained
         // on top (so it overrides), and a later class's paint still reaches the RectStyle.
         let src = "[style]\n@a\n    align: center\n@b\n    align: start\n    fill: #ff0000\n[view]\nbox @a @b\n    text \"hi\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         // First class as base fn, second class's align chained directly after it (later wins at runtime).
         assert!(
@@ -914,7 +915,7 @@ mod tests {
         // A `style_*()` class fn is `LayoutStyle::new()` = display:block, where align/justify are no-ops.
         // A classed `box` must still get `.flex_column()` (like a plain box) so its children actually centre.
         let src = "[style]\n@center\n    align: center\n    justify: center\n[view]\nbox @center width:100 height:60\n    text \"hi\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
             out.rust_code.contains("style_center().flex_column()"),
             "a classed box must be a flex container so align/justify apply:\n{}",
@@ -926,7 +927,7 @@ mod tests {
     fn container_on_press_emits_click_handler() {
         // A painted `box` (StyledContainer) and a plain `col` (Container) both wire `.on_press`.
         let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press(|| $n.update(|v| *v += 1))\n    col on_press(|| $n.set(0))\n        text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.matches(".on_press(").count() >= 2,
@@ -948,7 +949,7 @@ mod tests {
     #[test]
     fn a_forwarded_on_press_on_a_plain_row_upgrades_to_styled_container() {
         let src = "[logic]\npub struct Props {\n    pub on_press: Box<dyn Fn()>,\n}\n\n[view]\nrow on_press(props.on_press)\n    text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -961,7 +962,7 @@ mod tests {
     #[test]
     fn lazy_declares_a_flex_column() {
         let src = "[logic]\nlet open = signal(false);\n[view]\nlazy when:$open\n    text \"a\"\n    text \"b\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         let lazy_call = code
@@ -979,7 +980,7 @@ mod tests {
     #[test]
     fn compound_assign_sugar_rewrites_to_update() {
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    button on_press(|| $count += 1)\n    button on_press(|| $count -= 2)\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("count.update(|__v| *__v += 1)"),
@@ -995,7 +996,7 @@ mod tests {
     fn toggle_and_update_closures_pass_through() {
         // `.toggle()` (a real RwSignal<bool> method) and an explicit `.update(...)` are left untouched.
         let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press(|| $flag.toggle())\n    button on_press(|| $count.update(|n| *n += 1))\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("flag.toggle()"),
@@ -1011,7 +1012,7 @@ mod tests {
     fn quoted_escape_decodes_then_reemits() {
         // `\"` in .rsx content decodes to a real quote, then re-emits as an escaped quote in the Rust literal.
         let src = "[logic]\n[view]\ntext \"say \\\"hi\\\"\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains(r#"say \"hi\""#),
@@ -1024,7 +1025,7 @@ mod tests {
         // `transition(...)` and `on_press(...)` are paren-delimited, so a box can be animated AND clickable
         // on one line in any order, and a closure with nested parens is captured whole.
         let src = "[logic]\nlet count = signal(0i32);\n[view]\nbox fill:primary transition(fill 200ms ease-out) on_press(|| $count.update(|n| *n += 1))\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains(".on_press("),
@@ -1044,7 +1045,7 @@ mod tests {
     #[test]
     fn overlay_builds_overlay_widget() {
         let src = "[view]\ncol\n    text \"behind\"\n    overlay align:center justify:center\n        text \"on top\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1061,7 +1062,7 @@ mod tests {
     #[test]
     fn box_hover_emits_on_hover_style() {
         let src = "[view]\nbox fill:#101010 hover_style(fill:#f0f0f0 stroke:#ff0000) radius:10\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
             out.rust_code.contains(".on_hover_style("),
             "hover(...) should wire on_hover_style:\n{}",
@@ -1073,7 +1074,7 @@ mod tests {
     #[test]
     fn on_drag_wires_and_upgrades_container() {
         let src = "[logic]\nlet x = signal(0.0f32);\n[view]\ncol on_drag(|px, _py| $x.set(px))\n    text \"t\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("StyledContainer::new("),
@@ -1089,7 +1090,7 @@ mod tests {
     #[test]
     fn plain_col_with_hover_upgrades_to_styled_container() {
         let src = "[view]\ncol hover_style(fill:#f0f0f0)\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("StyledContainer::new("),
@@ -1106,7 +1107,7 @@ mod tests {
     #[test]
     fn box_active_style_emits_on_active_style() {
         let src = "[view]\nbox fill:#101010 active_style(fill:#303030) radius:10\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
             out.rust_code.contains(".on_active_style("),
             "active_style(...) should wire on_active_style:\n{}",
@@ -1118,7 +1119,7 @@ mod tests {
     #[test]
     fn plain_col_with_active_style_upgrades_to_styled_container() {
         let src = "[view]\ncol active_style(fill:#303030)\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("StyledContainer::new(") && code.contains(".on_active_style("),
@@ -1130,7 +1131,7 @@ mod tests {
     #[test]
     fn component_default_slot_takes_slots_arg() {
         let src = "[view]\nbox fill:#101010 pad:16\n    children\n";
-        let out = crate::transpile_source_with_theme(src, "card", None, None).unwrap();
+        let out = crate::transpile_source(src, "card", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("mut __slots: Slots"),
@@ -1146,7 +1147,7 @@ mod tests {
     #[test]
     fn component_named_and_default_slots() {
         let src = "[view]\nbox pad:16\n    children name:\"header\"\n    children\n";
-        let out = crate::transpile_source_with_theme(src, "panel", None, None).unwrap();
+        let out = crate::transpile_source(src, "panel", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("__children.extend(__slots.take(\"header\"));"),
@@ -1162,7 +1163,7 @@ mod tests {
     #[test]
     fn component_call_with_children_builds_slots() {
         let src = "[view]\ncard\n    text \"hi\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("let mut __slots = Slots::new();"),
@@ -1178,7 +1179,7 @@ mod tests {
     #[test]
     fn component_call_routes_named_slot() {
         let src = "[view]\npanel\n    text \"T\" slot:\"header\"\n    text \"B\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("__slots.push(Some(\"header\"), box_item("),
@@ -1194,7 +1195,7 @@ mod tests {
     #[test]
     fn component_bool_flag_prop() {
         let src = "[view]\ncard elevated\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("CardProps { elevated: true }"),
@@ -1206,7 +1207,7 @@ mod tests {
     #[test]
     fn component_signal_prop_clones_handle() {
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard count:$count\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("count: count.clone()"),
@@ -1218,7 +1219,7 @@ mod tests {
     #[test]
     fn component_closure_prop_is_boxed() {
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard on_tap(|| $count += 1)\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("Box::new("),
@@ -1235,7 +1236,7 @@ mod tests {
     #[test]
     fn component_free_closure_prop_carries_source_span() {
         let src = "[view]\ncard on_tap(|| toggle())\n    text \"x\"\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(!out.rust_code.contains("@RSX@"), "markers must be stripped");
         let span = out
             .expr_spans
@@ -1272,7 +1273,7 @@ mod tests {
         let mut reg = crate::ComponentRegistry::new();
         reg.insert("card".to_string(), sig(true, &["gap"], true));
         let out =
-            crate::transpile_source_full("[view]\ncard\n", "demo", None, None, Some(&reg)).unwrap();
+            crate::transpile_source("[view]\ncard\n", "demo", None, None, Some(&reg)).unwrap();
         assert!(
             out.rust_code
                 .contains("card(CardProps { ..Default::default() }, Slots::new())?"),
@@ -1289,7 +1290,7 @@ mod tests {
             "doc_header".to_string(),
             sig(true, &["kicker", "title", "desc"], false),
         );
-        let out = crate::transpile_source_full(
+        let out = crate::transpile_source(
             "[view]\ndoc_header title:\"X\"\n",
             "demo",
             None,
@@ -1314,7 +1315,7 @@ mod tests {
             "prop_row".to_string(),
             sig(true, &["name", "values", "about"], false),
         );
-        let out = crate::transpile_source_full(
+        let out = crate::transpile_source(
             "[view]\nprop_row name:\"a\" values:\"b\" about:\"c\"\n",
             "demo",
             None,
@@ -1333,7 +1334,7 @@ mod tests {
     #[test]
     fn text_rich_weight_italic_align() {
         let src = "[view]\ntext \"Hi\" weight:bold italic align:center\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains(".with_weight(700)"),
@@ -1350,7 +1351,7 @@ mod tests {
     #[test]
     fn text_rich_numeric_weight_and_align_end() {
         let src = "[view]\ntext \"Hi\" weight:600 align:right\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1371,7 +1372,7 @@ mod tests {
     #[test]
     fn text_lines_and_ellipsis() {
         let src = "[view]\ntext \"Long copy here\" lines:2 ellipsis max_width:200\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(code.contains(".with_max_lines(2)"), "max_lines:\n{code}");
@@ -1383,7 +1384,7 @@ mod tests {
     #[test]
     fn input_binds_value_style_and_submit() {
         let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name size:16 color:primary width:200 on_submit(|| $name.set(String::new()))\n";
-        let code = crate::transpile_source_with_theme(src, "demo", Some("SandboxTheme"), None)
+        let code = crate::transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1406,7 +1407,7 @@ mod tests {
     #[test]
     fn reactive_for_emits_reactive_list() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1432,7 +1433,7 @@ mod tests {
     #[test]
     fn reactive_for_without_key_uses_positional_reconciliation() {
         let src = "[view]\ncol\n    for n in $items\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1451,7 +1452,7 @@ mod tests {
     #[test]
     fn reactive_for_in_row_is_transparent_between_static_siblings() {
         let src = "[logic]\nlet ws = signal(vec![1i32, 2]);\n[view]\nrow\n    text \"L\"\n    for w in $ws key *w\n        text \"x\"\n    text \"R\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1474,7 +1475,7 @@ mod tests {
     #[test]
     fn reactive_for_with_gap_in_row_is_transparent_gap_fragment() {
         let src = "[logic]\nlet ws = signal(vec![1i32, 2]);\n[view]\nrow\n    for w in $ws key *w gap:6\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1495,7 +1496,7 @@ mod tests {
     #[test]
     fn reactive_for_with_gap_keyless_uses_positional_gap_fragment() {
         let src = "[view]\nrow\n    for w in $ws gap:4\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1508,7 +1509,7 @@ mod tests {
     #[test]
     fn static_for_stays_construction_loop() {
         let src = "[view]\ncol\n    for n in 0..3\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1527,7 +1528,7 @@ mod tests {
     #[test]
     fn reactive_if_emits_reactive_list() {
         let src = "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"yes\"\n    else\n        text \"no\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1549,7 +1550,7 @@ mod tests {
     #[test]
     fn static_if_stays_construction() {
         let src = "[view]\ncol\n    if some_flag\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1570,7 +1571,7 @@ mod tests {
     fn root_static_if_returns_branch_directly_without_wrapper() {
         let src =
             "[view]\nif vertical\n    col\n        text \"a\"\nelse\n    row\n        text \"b\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1591,7 +1592,7 @@ mod tests {
     #[test]
     fn reactive_for_single_child_item_is_not_wrapped() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2]);\n[view]\nrow align:stretch\n    for n in $items key *n\n        box fill:primary\n            text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1608,7 +1609,7 @@ mod tests {
     #[test]
     fn transform_attrs_emit_with_transform() {
         let src = "[view]\ncol\n    box fill:primary rotate:30 scale:1.2\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1633,7 +1634,7 @@ mod tests {
     #[test]
     fn transform_promotes_plain_container() {
         let src = "[view]\ncol\n    col rotate:5\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1650,7 +1651,7 @@ mod tests {
     #[test]
     fn no_transform_no_call() {
         let src = "[view]\ncol\n    box fill:primary\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1664,7 +1665,7 @@ mod tests {
     fn event_callbacks_emit_on_hover_and_on_key() {
         // Paren form for both, since `key:value` consumes to end of line (only the last attr can use `:`).
         let src = "[logic]\nlet hot = signal(false);\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_hover(|h| $hot.set(h)) on_key(|_k| $n += 1)\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(code.contains(".on_hover("), "emits on_hover:\n{code}");
@@ -1675,7 +1676,7 @@ mod tests {
     #[test]
     fn on_pointer_move_emits_the_container_method() {
         let src = "[logic]\nlet at = signal((0.0f32, 0.0f32));\n[view]\ncol\n    box on_pointer_move(|x, y| $at.set((x, y)))\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1694,7 +1695,7 @@ mod tests {
     fn drag_threshold_emits_the_slop_distance() {
         let src =
             "[view]\ncol\n    box drag_threshold:4 on_drag(|_x, _y| ())\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1707,7 +1708,7 @@ mod tests {
     #[test]
     fn drag_button_emits_the_extra_buttons() {
         let src = "[view]\ncol\n    box drag_button:secondary,auxiliary on_drag(|_x, _y| ())\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1722,7 +1723,7 @@ mod tests {
     #[test]
     fn on_hover_promotes_plain_container() {
         let src = "[view]\ncol\n    col on_hover(|_h| ())\n        text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1736,7 +1737,7 @@ mod tests {
     #[test]
     fn heading_resolves_as_widget_component() {
         let src = "[view]\ncol\n    heading text:\"Title\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1752,7 +1753,7 @@ mod tests {
     #[test]
     fn btn_signal_color_is_cloned_into_style_closure() {
         let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbutton label:\"x\" fill:$c\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1769,8 +1770,7 @@ mod tests {
     // (no slot arg, no default), preserving the per-file fallback.
     #[test]
     fn no_registry_keeps_flat_call() {
-        let out =
-            crate::transpile_source_with_theme("[view]\nmy_card\n", "demo", None, None).unwrap();
+        let out = crate::transpile_source("[view]\nmy_card\n", "demo", None, None, None).unwrap();
         assert!(
             out.rust_code.contains("my_card()?"),
             "without a registry a no-attr call stays flat:\n{}",
@@ -1784,7 +1784,7 @@ mod tests {
     #[test]
     fn box_fill_computed_expression_is_reactive() {
         let src = "[logic]\nlet snap = signal(0i32);\nlet ids = signal(vec![1i32]);\n[view]\nrow\n    for id in $ids key id\n        box fill(chip_fill($snap, id)) radius:6\n            text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1802,7 +1802,7 @@ mod tests {
     fn text_color_computed_expression_is_reactive() {
         let src =
             "[logic]\nlet snap = signal(0i32);\n[view]\ntext \"hi\" color(text_color($snap))\n";
-        let code = crate::transpile_source_with_theme(src, "demo", None, None)
+        let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1820,7 +1820,7 @@ mod tests {
     #[test]
     fn bare_color_token_still_resolves_via_theme() {
         let src = "[view]\nbox fill:primary\n    text \"x\"\n";
-        let code = crate::transpile_source_with_theme(src, "demo", Some("MyTheme"), None)
+        let code = crate::transpile_source(src, "demo", Some("MyTheme"), None, None)
             .unwrap()
             .rust_code;
         assert!(
@@ -1839,7 +1839,7 @@ mod tests {
             let src = format!("[view]\n{tag}\n");
             // A real emit arm may still reject a bare instance (missing required attr, etc.); that is not
             // a fall-through, since `emit_component_call` returns unconditionally and never errors.
-            let Ok(out) = crate::transpile_source_with_theme(&src, "demo", None, None) else {
+            let Ok(out) = crate::transpile_source(&src, "demo", None, None, None) else {
                 continue;
             };
             assert!(

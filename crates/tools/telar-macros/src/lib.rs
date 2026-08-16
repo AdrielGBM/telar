@@ -426,7 +426,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
         let stem = telar_transpiler::relative_stem(rsx_file, &src_dir);
 
-        let result = match telar_transpiler::transpile_source_full(
+        let result = match telar_transpiler::transpile_source(
             &source,
             &stem,
             theme_type_str,

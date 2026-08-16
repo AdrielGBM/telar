@@ -44,7 +44,7 @@ pub fn generated_target(
     // Match the macro's cross-file registry so component calls (optional props, slot arg) resolve the same
     // in the editor as in the build. The file being edited uses its live buffer, not its on-disk content.
     let registry = build_component_registry(&src_dir, rsx_path, source);
-    let result = telar_transpiler::transpile_source_full(
+    let result = telar_transpiler::transpile_source(
         source,
         &stem,
         theme_type,

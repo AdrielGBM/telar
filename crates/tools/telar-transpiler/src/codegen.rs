@@ -671,19 +671,12 @@ pub struct TranspiledSource {
 }
 
 /// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect. `base_dir` is the directory of the `.rsx` (its parent), against which static `svg`/`img` asset paths are resolved and baked at build time.
-pub fn transpile_source_with_theme(
-    source: &str,
-    component_name: &str,
-    theme_type: Option<&str>,
-    base_dir: Option<&Path>,
-) -> Result<TranspiledSource, TranspileError> {
-    transpile_source_full(source, component_name, theme_type, base_dir, None)
-}
-
-/// Like [`transpile_source_with_theme`], but also given the workspace [`ComponentRegistry`] so calls to
-/// other components emit optional props and the slot argument correctly (a childless call to a slotted
-/// component still passes `Slots::new()`; a call that omits defaultable props adds `..Default::default()`).
-pub fn transpile_source_full(
+///
+/// `registry` is the workspace [`ComponentRegistry`], which lets calls to other components emit optional
+/// props and the slot argument correctly (a childless call to a slotted component still passes
+/// `Slots::new()`; a call that omits defaultable props adds `..Default::default()`). `None` transpiles the
+/// file on its own, which is what a unit test and a single-file check want.
+pub fn transpile_source(
     source: &str,
     component_name: &str,
     theme_type: Option<&str>,
@@ -727,7 +720,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         ));
     }
 
-    let (props_struct, props_default_impl, _, props_span) =
+    let (props_struct, props_default_impl, props_span) =
         extract_props_struct(&doc.logic.source, &fn_name);
     let (context_struct, context_span) = extract_context_struct(&doc.logic.source, &fn_name);
     let has_props = props_struct.is_some();
@@ -1237,18 +1230,11 @@ fn slot_context_expr(nodes: &[ViewNode]) -> Option<String> {
 }
 
 /// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone,
-/// renames it to `{PascalFnName}Props`, and returns `(struct_code, default_impl, logic_without_struct, span)`.
+/// renames it to `{PascalFnName}Props`, and returns `(struct_code, default_impl, span)`.
 /// `default_impl` is `Some` only when the struct uses inline `field: Type = expr` defaults (a synthesized
 /// `Default` impl); it is emitted after the struct with no source mapping. `span` is the struct's
 /// `[start, end]` (inclusive) line span within `logic`, so the caller can map the struct back to source.
-/// `(struct_code, default_impl, logic_without_struct, struct_line_span)` — the output of extracting a
-/// `Props` struct from a logic zone.
-type ExtractedProps = (
-    Option<String>,
-    Option<String>,
-    String,
-    Option<(usize, usize)>,
-);
+type ExtractedProps = (Option<String>, Option<String>, Option<(usize, usize)>);
 
 /// The inclusive line span of `struct <name> { … }` in `lines`, taking in any `#[…]` attribute and comment
 /// lines directly above it: a doc comment left behind would land on whatever statement follows, describing the
@@ -1328,19 +1314,13 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
     let lines: Vec<&str> = logic.lines().collect();
 
     let Some((start, end)) = struct_line_span(&lines, "Props") else {
-        return (None, None, logic.to_string(), None);
+        return (None, None, None);
     };
 
     let struct_code = lines[start..=end].join("\n");
     let props_type = to_pascal_case(fn_name) + "Props";
     // Only rename the struct declaration, not the `derive(Props)` attribute.
     let renamed = struct_code.replace("struct Props", &format!("struct {props_type}"));
-
-    let remaining = {
-        let mut remaining_lines = lines[..start].to_vec();
-        remaining_lines.extend_from_slice(&lines[end + 1..]);
-        remaining_lines.join("\n")
-    };
     let span = Some((start, end));
 
     // Inline `name: Type = expr` defaults: strip them from the emitted struct (Rust fields can't carry
@@ -1348,7 +1328,7 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
     // emitted verbatim (renamed) — byte-identical to the pre-sugar behaviour.
     let (open_rel, close_rel) = match (renamed.find('{'), renamed.rfind('}')) {
         (Some(o), Some(c)) if o < c => (o, c),
-        _ => return (Some(renamed), None, remaining, span),
+        _ => return (Some(renamed), None, span),
     };
     let body = &renamed[open_rel + 1..close_rel];
     let parsed: Vec<ParsedField> = split_top_level_commas(body)
@@ -1356,7 +1336,7 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
         .filter_map(|c| parse_field(c))
         .collect();
     if !parsed.iter().any(|f| f.default.is_some()) {
-        return (Some(renamed), None, remaining, span);
+        return (Some(renamed), None, span);
     }
 
     // Rebuild the struct with defaults stripped, dropping `Default` from any `#[derive(...)]` (it would
@@ -1390,7 +1370,7 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
         "impl Default for {props_type} {{\n    fn default() -> Self {{\n        Self {{\n{impl_body}        }}\n    }}\n}}"
     );
 
-    (Some(struct_out), Some(impl_code), remaining, span)
+    (Some(struct_out), Some(impl_code), span)
 }
 
 /// Removes `Default` from a `#[derive(...)]` attribute line (returning `None` if the derive becomes
