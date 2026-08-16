@@ -189,11 +189,44 @@ impl_leaf_widget!(Text);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::{compute_layout, new_container, relayout_if_dirty, reset_layout_runtime};
+    use crate::context::{
+        compute_layout, new_container, relayout_if_dirty, reset_layout_runtime, track_layout,
+    };
     use crate::layout_item::LayoutItem;
     use layout_core::AvailableSpace;
     use reactive_core::signal;
     use renderer_core::Color;
+
+    // Auto-height text must reserve more vertical space when it is narrower (more wrapped lines), so
+    // following content is pushed down instead of overlapped.
+    #[test]
+    fn auto_text_height_grows_when_narrower() {
+        let long = "This is a deliberately long paragraph of text that wraps onto several \
+                    lines when the available width is small, and fewer lines when it is wide.";
+        let height_at = |w: f32| -> f32 {
+            reset_layout_runtime();
+            let t = Text::auto(
+                move || long.to_string(),
+                LayoutStyle::new(),
+                || TextStyle::new(16.0, Color::BLACK),
+            )
+            .unwrap();
+            let node = t.layout_node();
+            compute_layout(
+                node,
+                AvailableSpace::Definite(w),
+                AvailableSpace::MaxContent,
+            )
+            .unwrap();
+            track_layout(node).unwrap().get().height
+        };
+        let narrow = height_at(200.0);
+        let wide = height_at(800.0);
+        assert!(
+            narrow > wide + 20.0,
+            "narrow text should be taller: narrow={narrow} wide={wide}"
+        );
+    }
 
     /// Two labels of the same style sit on the same baseline, whatever letters they happen to contain.
     ///

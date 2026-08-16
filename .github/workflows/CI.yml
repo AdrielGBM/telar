@@ -13,7 +13,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace --all-features --exclude telar-platform-android
+      # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off
+      # in the `test` job, which leaves `apps/sandbox/tests/hot_tree.rs` — the only guard for the
+      # split-runtime regression — never even type-checked.
+      - run: cargo check --workspace --all-features --all-targets --exclude telar-platform-android
 
   msrv:
     runs-on: ubuntu-latest
@@ -50,10 +53,23 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # A software Vulkan adapter, so the 15 GPU tests run somewhere instead of skipping on every runner —
+      # `crates/telar/tests/texture_ui.rs` is the only in-tree proof of the seam pixel-art builds on.
+      # `TELAR_REQUIRE_GPU` below turns a missing adapter into a failure on this leg, so the suite cannot go
+      # back to skipping silently.
+      - name: Install lavapipe
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
       - run: cargo test --workspace --exclude telar-platform-android
+        env:
+          TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
       # `plugin-host` and `platform-headless` are enabled by no workspace member, so the plugin bridge and
       # the offscreen rasteriser are never compiled by the line above — while both ship in out-of-tree apps.
       - run: cargo test -p telar --features plugin-host,platform-headless
+        env:
+          TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
 
   # Exercises `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
   package:

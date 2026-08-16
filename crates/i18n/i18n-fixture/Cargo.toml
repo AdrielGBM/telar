@@ -1,0 +1,13 @@
+[package]
+name = "telar-i18n-fixture"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+readme.workspace = true
+license.workspace = true
+repository.workspace = true
+# A test fixture, not a library anyone installs: it exists so the baked catalog has a crate to be baked into.
+publish = false
+
+[dependencies]
+telar.workspace = true

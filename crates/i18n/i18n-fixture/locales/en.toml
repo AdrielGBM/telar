@@ -1,0 +1,8 @@
+greeting = "Hello, {name}!"
+
+[nav]
+overview = "Overview"
+
+[items]
+one = "{count} item"
+other = "{count} items"

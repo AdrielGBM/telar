@@ -7,6 +7,8 @@
 //! Its own test binary because the shared device is a process-wide `OnceLock`, and this one wants to be the
 //! renderer that populates it.
 
+mod common;
+
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -30,7 +32,7 @@ fn telar_composes_a_texture_the_application_filled() {
     )) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("skipping: no GPU adapter available: {e:?}");
+            common::skip_without_gpu("app-owned texture test", e);
             return;
         }
     };

@@ -3,6 +3,8 @@
 //! The mirror of `renderer-hardware/tests/app_owned_texture.rs`, which proves the other direction. Its own
 //! test binary because the shared device is a process-wide `OnceLock` and this one wants to open it.
 
+mod common;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -121,7 +123,7 @@ fn read_back(gpu: &telar::gpu::SharedGpu, texture: &wgpu::Texture) -> Vec<u8> {
 #[test]
 fn telar_draws_into_the_application_picture_and_takes_the_pointer_with_it() {
     let Ok(gpu) = telar::gpu::open() else {
-        eprintln!("skipping: no GPU adapter available");
+        common::skip_without_gpu("the app-owned texture seam");
         return;
     };
 
@@ -198,7 +200,7 @@ fn telar_draws_into_the_application_picture_and_takes_the_pointer_with_it() {
 #[test]
 fn two_texture_uis_lay_out_against_their_own_targets() {
     let Ok(gpu) = telar::gpu::open() else {
-        eprintln!("skipping: no GPU adapter available");
+        common::skip_without_gpu("the app-owned texture seam");
         return;
     };
 
@@ -278,7 +280,7 @@ impl LayoutItem for Label {
 #[test]
 fn pixel_raster_reaches_the_application_texture_without_a_blended_edge() {
     let Ok(gpu) = telar::gpu::open() else {
-        eprintln!("skipping: no GPU adapter available");
+        common::skip_without_gpu("the app-owned texture seam");
         return;
     };
 

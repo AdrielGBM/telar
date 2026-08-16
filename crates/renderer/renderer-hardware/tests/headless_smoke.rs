@@ -1,7 +1,9 @@
 //! Smoke test for the headless (offscreen) rendering path: build a windowless renderer, render a
 //! simple frame, and confirm `read_rgba` returns a tightly-packed, non-zero RGBA buffer with the
-//! drawn rect distinguishable from the cleared background. Skips gracefully when no GPU adapter is
-//! available (e.g. CI without a GPU) instead of failing.
+//! drawn rect distinguishable from the cleared background. Skips when no GPU adapter is available,
+//! unless `TELAR_REQUIRE_GPU` says one was expected — see [`common::skip_without_gpu`].
+
+mod common;
 
 use std::sync::Arc;
 
@@ -28,7 +30,7 @@ fn headless_renders_non_empty_frame() {
     )) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("skipping headless smoke test: no GPU adapter available: {e:?}");
+            common::skip_without_gpu("headless smoke test", e);
             return;
         }
     };
@@ -123,7 +125,7 @@ fn headless(w: u32, h: u32) -> Option<HardwareRenderer<HeadlessWindow>> {
     )) {
         Ok(r) => Some(r),
         Err(e) => {
-            eprintln!("skipping: no GPU adapter available: {e:?}");
+            common::skip_without_gpu("layer-target test", e);
             None
         }
     }
@@ -277,7 +279,7 @@ fn damage_prime_matches_full_repaint() {
     let mut r1 = match make() {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("skipping F1 pixel test: no GPU adapter available: {e:?}");
+            common::skip_without_gpu("F1 pixel test", e);
             return;
         }
     };
@@ -366,7 +368,7 @@ fn damage_confines_translucent_layer_composite() {
     let mut r1 = match make() {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("skipping translucent-layer damage test: no GPU adapter: {e:?}");
+            common::skip_without_gpu("translucent-layer damage test", e);
             return;
         }
     };
@@ -449,7 +451,7 @@ fn damage_confines_opacity_layer() {
     let mut r1 = match make() {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("skipping opacity-layer damage test: no GPU adapter: {e:?}");
+            common::skip_without_gpu("opacity-layer damage test", e);
             return;
         }
     };
@@ -623,7 +625,7 @@ fn render_frame_pixel_golden() {
     )) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("skipping golden pixel test: no GPU adapter available: {e:?}");
+            common::skip_without_gpu("golden pixel test", e);
             return;
         }
     };
@@ -680,7 +682,7 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
     )) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("skipping layer-scissor test: no GPU adapter available: {e:?}");
+            common::skip_without_gpu("layer-scissor test", e);
             return;
         }
     };

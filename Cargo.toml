@@ -34,6 +34,7 @@ members = [
     "crates/i18n/i18n-core",
     "crates/navigate/navigate-core",
     "crates/reactive/reactive-local",
+    "crates/i18n/i18n-fixture",
 ]
 
 default-members = [

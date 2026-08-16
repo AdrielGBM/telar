@@ -46,6 +46,72 @@ fn larger_line_height_increases_measured_height() {
     );
 }
 
+// `max_lines` must cut the shaped paragraph to that many visual lines, and `ellipsis` must mark the cut with
+// `…` rather than dropping the tail in silence. Every clamped label in the tree rests on this and nothing
+// asserted it: the only test that named ellipsis was a PNG utility that never runs. Guarded on text that
+// really wrapped past the clamp, so a font-less machine skips instead of passing vacuously.
+#[test]
+fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
+    let mut sh = TextShaper::new();
+    let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 90.0,
+        height: 10_000.0,
+    };
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let shaped = |sh: &mut TextShaper, style: &TextStyle| {
+        make_buffer(&mut sh.font_system, text, rect, style)
+    };
+
+    if shaped(&mut sh, &base).layout_runs().count() <= 2 {
+        return;
+    }
+
+    let clamped = shaped(&mut sh, &base.with_max_lines(2));
+    assert_eq!(
+        clamped.layout_runs().count(),
+        2,
+        "max_lines(2) must leave two visual lines"
+    );
+
+    let elided = shaped(&mut sh, &base.with_max_lines(2).with_ellipsis(true));
+    assert_eq!(
+        elided.layout_runs().count(),
+        2,
+        "the ellipsis must fit inside the clamp, not push a third line"
+    );
+    let elided_text: String = elided.lines.iter().map(|line| line.text()).collect();
+    assert!(
+        elided_text.ends_with('\u{2026}'),
+        "a clamped label with ellipsis must end in `…`: {elided_text:?}"
+    );
+}
+
+// The clamp has to reach `measure` too: a label reserves the box `measure_text` reports, so a height measured
+// as if the dropped lines were still there leaves a hole under every truncated label.
+#[test]
+fn max_lines_clamps_the_measured_height() {
+    let mut sh = TextShaper::new();
+    let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let (_, wrapped) = sh.measure_text(text, 90.0, &base);
+    let (_, single) = sh.measure_text("alpha", 90.0, &base);
+    if single <= 0.0 || wrapped <= single * 2.0 {
+        return;
+    }
+    let (_, clamped) = sh.measure_text(text, 90.0, &base.with_max_lines(2));
+    assert!(
+        clamped < wrapped,
+        "max_lines must shrink the measured height: wrapped={wrapped} clamped={clamped}"
+    );
+    assert!(
+        clamped <= single * 2.5,
+        "two clamped lines should measure about two lines tall: single={single} clamped={clamped}"
+    );
+}
+
 // Default spacing keeps the exact packed style bits (so existing keys and the byte-golden are untouched), while any non-default line_height or letter_spacing yields distinct bits so cached measures/rasters aren't reused across spacing. Pure bit math: font-independent.
 #[test]
 fn text_style_bits_default_unchanged_and_spacing_perturbs() {

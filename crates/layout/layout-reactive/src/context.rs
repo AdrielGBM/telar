@@ -631,6 +631,95 @@ mod tests {
         );
     }
 
+    // A wrapping flex row must reserve height for ALL its lines so a following sibling sits below it instead
+    // of overlapping. Reproduces the "next section positions as if the wrapped card didn't exist" report.
+    #[test]
+    fn wrapped_flex_row_reserves_height_for_all_lines() {
+        reset_layout_runtime();
+        let mut cards = Vec::new();
+        for _ in 0..4 {
+            let (n, _) = new_leaf(
+                LayoutStyle::new()
+                    .min_width(260.0)
+                    .height(100.0)
+                    .flex_grow(1.0),
+            )
+            .unwrap();
+            cards.push(n);
+        }
+        let row =
+            new_container(LayoutStyle::new().flex_row().flex_wrap().gap(24.0), &cards).unwrap();
+        let (marker, _) = new_leaf(LayoutStyle::new().height(50.0)).unwrap();
+        let col =
+            new_container(LayoutStyle::new().flex_column().gap(20.0), &[row, marker]).unwrap();
+        // 900px wide → 3 cards on line 1, the 4th wraps to line 2.
+        compute_layout(
+            col,
+            AvailableSpace::Definite(900.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        let row_rect = track_layout(row).unwrap().get();
+        let marker_rect = track_layout(marker).unwrap().get();
+        assert!(
+            row_rect.height >= 220.0,
+            "wrapped row height {} should cover 2 lines (~224)",
+            row_rect.height
+        );
+        assert!(
+            marker_rect.y >= row_rect.y + row_rect.height - 0.5,
+            "marker overlaps wrapped row: row.y={} row.h={} marker.y={}",
+            row_rect.y,
+            row_rect.height,
+            marker_rect.y
+        );
+    }
+
+    // Same as above but the cards are content-sized containers (a column whose height comes from its
+    // children) with grow:1 — the real feature-card shape.
+    #[test]
+    fn wrapped_content_sized_cards_reserve_height() {
+        reset_layout_runtime();
+        let mut cards = Vec::new();
+        for _ in 0..4 {
+            let (inner, _) = new_leaf(LayoutStyle::new().height(100.0)).unwrap();
+            let card = new_container(
+                LayoutStyle::new()
+                    .flex_column()
+                    .min_width(260.0)
+                    .flex_grow(1.0),
+                &[inner],
+            )
+            .unwrap();
+            cards.push(card);
+        }
+        let row =
+            new_container(LayoutStyle::new().flex_row().flex_wrap().gap(24.0), &cards).unwrap();
+        let (marker, _) = new_leaf(LayoutStyle::new().height(50.0)).unwrap();
+        let col =
+            new_container(LayoutStyle::new().flex_column().gap(20.0), &[row, marker]).unwrap();
+        compute_layout(
+            col,
+            AvailableSpace::Definite(900.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        let row_rect = track_layout(row).unwrap().get();
+        let marker_rect = track_layout(marker).unwrap().get();
+        assert!(
+            row_rect.height >= 220.0,
+            "wrapped content-sized row height {} should cover 2 lines (~224)",
+            row_rect.height
+        );
+        assert!(
+            marker_rect.y >= row_rect.y + row_rect.height - 0.5,
+            "marker overlaps row: row.y={} row.h={} marker.y={}",
+            row_rect.y,
+            row_rect.height,
+            marker_rect.y
+        );
+    }
+
     // Re-running compute_layout against the SAME available space (root re-dirtied by an unrelated change) must keep the max-width box correctly sized: the idempotent undo must still lift and re-pin a previously pinned box so its wrapped height holds.
     #[test]
     fn maxwidth_box_stable_across_recompute() {
