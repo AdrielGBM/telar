@@ -17,6 +17,8 @@ const BUBBLE_INK: Color = Color::rgba(0.98, 0.98, 1.0, 1.0);
 /// How wide a bubble may get before its text wraps. A hint is read at a glance, and a sentence stretched
 /// across the window is not: 240px is about a dozen words, which is as much as a hint should ever say.
 const BUBBLE_MAX_WIDTH: f32 = 240.0;
+/// Leading for the description line, the only one that wraps (`leading-snug`).
+const DESCRIPTION_LEADING: f32 = 1.375;
 /// A bubble is the smallest surface in the app and a corner is read against the size it turns, so it takes
 /// the middle step of the theme's radius scale, and moves when a theme moves its base radius. It was one and
 /// a half times the *base* radius, half as round again as the button that
@@ -257,8 +259,10 @@ impl Content {
                 .gap(bubble_pad_x() * 1.5),
             vec![box_item(name), box_item(key)],
         )?;
+        // The only line in a bubble that wraps, so the only one whose leading is set: at the shaper's default 1.2 a two-line hint reads as squashed *text* rather than as short leading.
         let body = optional_line(description, || {
             TextStyle::new(bubble_text_size() * 0.92, dim(0.72))
+                .with_line_height(DESCRIPTION_LEADING)
         })?;
         Ok(vec![box_item(title), box_item(body)])
     }
@@ -448,20 +452,20 @@ mod tests {
         tree.on_event(&moved(40.0, 15.0));
         relayout_if_dirty();
 
-        let leading = tree
-            .commands()
-            .iter()
-            .find_map(|c| match c {
-                DrawCommand::Text { text, rect, style } if text.starts_with("Name regions") => {
-                    Some(rect.height / style.font_size)
-                }
-                _ => None,
-            })
-            .expect("the description is drawn");
-        assert!(
-            leading >= 1.3,
-            "a wrapping line needs more than the default leading, got {leading}"
-        );
+        // Asserted on the style, not on the drawn height: whether this sentence needs a second line depends on the system font, so measuring it tests the CI runner's font and not the leading.
+        let leading_of = |needle: &str| {
+            tree.commands()
+                .iter()
+                .find_map(|c| match c {
+                    DrawCommand::Text { text, style, .. } if text.starts_with(needle) => {
+                        Some(style.line_height)
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("`{needle}` is drawn"))
+        };
+        assert_eq!(leading_of("Name regions"), Some(DESCRIPTION_LEADING));
+        assert_eq!(leading_of("Setup"), None, "the name never wraps");
     }
 
     /// A bubble is as wide as what it says, up to its cap. It was taking the cap whatever it had to say,
