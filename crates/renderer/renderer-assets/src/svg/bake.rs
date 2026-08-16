@@ -8,6 +8,7 @@ use renderer_core::{
     PathData, PathStyle, PathVerb, Stroke,
 };
 
+use super::raster::raster_px;
 use super::vector::convert_group;
 use super::{BakedSvg, SvgError, Unsupported};
 
@@ -35,24 +36,12 @@ pub(crate) fn bake(content: &str) -> Result<((f32, f32), BakedSvg), SvgError> {
     }
 }
 
-// Rasterize at 2x intrinsic, matching the runtime fallback's density so baked and dynamic rasters stay comparably crisp.
 fn rasterize(
     tree: &usvg::Tree,
     intrinsic: (f32, f32),
 ) -> Result<(ImageData, (f32, f32)), SvgError> {
     let (vb_w, vb_h) = intrinsic;
-    const DENSITY: f32 = 2.0;
-    const MAX_SIDE: f32 = 4096.0;
-    let mut px_w = (vb_w * DENSITY).ceil();
-    let mut px_h = (vb_h * DENSITY).ceil();
-    let max_side = px_w.max(px_h);
-    if max_side > MAX_SIDE {
-        let k = MAX_SIDE / max_side;
-        px_w = (px_w * k).floor();
-        px_h = (px_h * k).floor();
-    }
-    let pw = (px_w as u32).max(1);
-    let ph = (px_h as u32).max(1);
+    let (pw, ph) = raster_px(vb_w, vb_h);
 
     let mut pixmap = resvg::tiny_skia::Pixmap::new(pw, ph)
         .ok_or_else(|| SvgError("failed to allocate raster pixmap".into()))?;
