@@ -51,6 +51,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --exclude telar-platform-android
+      # `plugin-host` and `platform-headless` are enabled by no workspace member, so the plugin bridge and
+      # the offscreen rasteriser are never compiled by the line above — while both ship in out-of-tree apps.
+      - run: cargo test -p telar --features plugin-host,platform-headless
 
   # Exercises `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
   package:
