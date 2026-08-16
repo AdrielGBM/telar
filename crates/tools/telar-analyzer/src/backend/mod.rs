@@ -308,21 +308,11 @@ impl Backend {
         }
         // Outside a native `.rsx` zone: delegate Rust completion to the embedded rust-analyzer over the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
         let rsx_path = file_path?;
-        let items = match find_section_at(&source, pos.line) {
-            Section::Logic => {
-                self.logic_query(rsx_path, source, theme, pos, |a, path, text, line, col| {
-                    Some(a.completions_at(&path, text, line, col))
-                })
-                .await?
-            }
-            Section::View => {
-                self.view_query(rsx_path, source, theme, pos, |a, path, text, offset| {
-                    Some(a.completions_at_offset(&path, text, offset))
-                })
-                .await?
-            }
-            _ => return None,
-        };
+        let items = self
+            .rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
+                Some(a.completions_at_offset(&path, text, offset))
+            })
+            .await?;
         Some(CompletionResponse::Array(self.defer_completion_docs(items)))
     }
 
@@ -420,21 +410,10 @@ impl Backend {
         };
 
         let rsx_path = file_path?;
-        match find_section_at(&source, pos.line) {
-            Section::Logic => {
-                self.logic_query(rsx_path, source, theme, pos, |a, path, text, line, col| {
-                    a.signature_help_at(&path, text, line, col)
-                })
-                .await
-            }
-            Section::View => {
-                self.view_query(rsx_path, source, theme, pos, |a, path, text, offset| {
-                    a.signature_help_at_offset(&path, text, offset)
-                })
-                .await
-            }
-            _ => None,
-        }
+        self.rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
+            a.signature_help_at_offset(&path, text, offset)
+        })
+        .await
     }
 
     pub async fn goto_definition(
@@ -467,29 +446,11 @@ impl Backend {
         }
         // Outside a native `.rsx` zone: resolve Rust definitions via the embedded rust-analyzer, then reverse-map any generated-`.rs` targets back onto their `.rsx` (see `map_definition_targets`).
         let rsx_path = file_path?;
-        let targets = match find_section_at(&source, pos.line) {
-            Section::Logic => {
-                self.logic_query(
-                    rsx_path.clone(),
-                    source,
-                    theme,
-                    pos,
-                    |a, path, text, line, col| a.definition_at(&path, text, line, col),
-                )
-                .await?
-            }
-            Section::View => {
-                self.view_query(
-                    rsx_path.clone(),
-                    source,
-                    theme,
-                    pos,
-                    |a, path, text, offset| a.definition_at_offset(&path, text, offset),
-                )
-                .await?
-            }
-            _ => return None,
-        };
+        let targets = self
+            .rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
+                a.definition_at_offset(&path, text, offset)
+            })
+            .await?;
         let locations = map_definition_targets(targets);
         if locations.is_empty() {
             return None;
@@ -522,21 +483,10 @@ impl Backend {
         }
         // Native `.rsx` hover (tags / colors) didn't match: delegate to the embedded rust-analyzer over the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
         let rsx_path = file_path?;
-        match find_section_at(&source, pos.line) {
-            Section::Logic => {
-                self.logic_query(rsx_path, source, theme, pos, |a, path, text, line, col| {
-                    a.hover_at(&path, text, line, col)
-                })
-                .await
-            }
-            Section::View => {
-                self.view_query(rsx_path, source, theme, pos, |a, path, text, offset| {
-                    a.hover_at_offset(&path, text, offset)
-                })
-                .await
-            }
-            _ => None,
-        }
+        self.rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
+            a.hover_at_offset(&path, text, offset)
+        })
+        .await
     }
 
     pub async fn formatting(&self, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {

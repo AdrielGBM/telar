@@ -4,29 +4,6 @@ use lsp_types::{
 use ra_ap_ide::{CompletionItemKind as RaKind, LineIndex, Severity, SymbolKind, TextSize};
 use ra_ap_ide_db::line_index::WideEncoding;
 
-/// Byte offset of `(line, utf16_col)` within `text`, always landing on a UTF-8 char boundary. The column is UTF-16 (LSP convention); converting it byte-wise would point mid-character on multi-byte text and make rust-analyzer's completion panic ("start of range should be a character boundary") when it inserts its synthetic marker.
-pub(super) fn byte_offset(text: &str, line: u32, utf16_col: u32) -> Option<TextSize> {
-    let mut line_start = 0usize;
-    for (i, current) in text.split_inclusive('\n').enumerate() {
-        if i as u32 == line {
-            let content = current.strip_suffix('\n').unwrap_or(current);
-            let mut remaining = utf16_col;
-            let mut byte = 0usize;
-            for ch in content.chars() {
-                let width = ch.len_utf16() as u32;
-                if remaining < width {
-                    break;
-                }
-                remaining -= width;
-                byte += ch.len_utf8();
-            }
-            return Some(TextSize::from((line_start + byte) as u32));
-        }
-        line_start += current.len();
-    }
-    None
-}
-
 /// `None` drops a suppressed (`#[allow]`-ed) diagnostic; everything else maps to its LSP severity.
 pub(super) fn map_severity(severity: Severity) -> Option<DiagnosticSeverity> {
     Some(match severity {

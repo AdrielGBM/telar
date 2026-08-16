@@ -10,25 +10,11 @@ use ra_ap_vfs::FileId;
 use super::config::{
     completion_config, find_all_refs_config, goto_definition_config, hover_config,
 };
-use super::mapping::{byte_offset, lsp_position, map_completion_kind, map_documentation};
+use super::mapping::{lsp_position, map_completion_kind, map_documentation};
 use super::{DefinitionTarget, EmbeddedAnalyzer, RefTarget};
 
 impl EmbeddedAnalyzer {
-    /// `[logic]` completion: overlays the freshly transpiled Rust for `gen_path`, then queries rust-analyzer at the mapped cursor. `line`/`col` are in the generated file (`.rsx` line resolved through the source map, column already `+LOGIC_INDENT`).
-    pub fn completions_at(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        line: u32,
-        col: u32,
-    ) -> Vec<CompletionItem> {
-        let Some(offset) = byte_offset(&generated, line, col) else {
-            return Vec::new();
-        };
-        self.completions_at_offset(gen_path, generated, offset)
-    }
-
-    /// Completion at an exact byte `offset` in the generated file. The `[view]` path computes the offset itself (via the expression-span map), so it bypasses the line/column mapping that the `[logic]` path uses. `offset` must land on a UTF-8 char boundary or rust-analyzer panics.
+    /// Completion at an exact byte `offset` in the generated file: overlays the freshly transpiled Rust for `gen_path`, then queries rust-analyzer there. The backend resolves the `.rsx` cursor to that offset. `offset` must land on a UTF-8 char boundary or rust-analyzer panics.
     pub fn completions_at_offset(
         &mut self,
         gen_path: &Path,
@@ -60,19 +46,7 @@ impl EmbeddedAnalyzer {
             .collect()
     }
 
-    /// `[logic]` signature help, mapped to LSP. Same overlay→query path as completion.
-    pub fn signature_help_at(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        line: u32,
-        col: u32,
-    ) -> Option<SignatureHelp> {
-        let offset = byte_offset(&generated, line, col)?;
-        self.signature_help_at_offset(gen_path, generated, offset)
-    }
-
-    /// Signature help at an exact byte `offset` in the generated file (used by the `[view]` path). `offset` must land on a UTF-8 char boundary.
+    /// Signature help at an exact byte `offset` in the generated file, mapped to LSP. Same overlay→query path as completion.
     pub fn signature_help_at_offset(
         &mut self,
         gen_path: &Path,
@@ -104,19 +78,7 @@ impl EmbeddedAnalyzer {
         })
     }
 
-    /// `[logic]` hover, mapped to LSP. Same overlay→query path as completion.
-    pub fn hover_at(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        line: u32,
-        col: u32,
-    ) -> Option<Hover> {
-        let offset = byte_offset(&generated, line, col)?;
-        self.hover_at_offset(gen_path, generated, offset)
-    }
-
-    /// Hover at an exact byte `offset` in the generated file (used by the `[view]` path). `offset` must land on a UTF-8 char boundary. The range is omitted so the client highlights the hovered `.rsx` word itself — mapping the generated-file range back is unnecessary for a tooltip.
+    /// Hover at an exact byte `offset` in the generated file, mapped to LSP. The range is omitted so the client highlights the hovered `.rsx` word itself — mapping the generated-file range back is unnecessary for a tooltip.
     pub fn hover_at_offset(
         &mut self,
         gen_path: &Path,
@@ -144,19 +106,7 @@ impl EmbeddedAnalyzer {
         })
     }
 
-    /// `[logic]` go-to-definition. Same overlay→query path as completion.
-    pub fn definition_at(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        line: u32,
-        col: u32,
-    ) -> Option<Vec<DefinitionTarget>> {
-        let offset = byte_offset(&generated, line, col)?;
-        self.definition_at_offset(gen_path, generated, offset)
-    }
-
-    /// Definition at an exact byte `offset` in the generated file (used by the `[view]` path). `offset` must land on a UTF-8 char boundary. Each navigation target is resolved to its file path (via the `Vfs`) and name range (in that file's coordinates); the backend reverse-maps the generated `.telar/build/*.rs` ones back to the `.rsx`. `None` means rust-analyzer found nothing.
+    /// Go-to-definition at an exact byte `offset` in the generated file. Each navigation target is resolved to its file path (via the `Vfs`) and name range (in that file's coordinates); the backend reverse-maps the generated `.telar/build/*.rs` ones back to the `.rsx`. `None` means rust-analyzer found nothing.
     pub fn definition_at_offset(
         &mut self,
         gen_path: &Path,
@@ -192,19 +142,7 @@ impl EmbeddedAnalyzer {
         Some(targets)
     }
 
-    /// `[logic]` find-all-references. Same overlay→query path as completion; the cursor is mapped through the line map by the caller (`line`/`col` are generated-file coordinates).
-    pub fn references_at(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        line: u32,
-        col: u32,
-    ) -> Option<Vec<RefTarget>> {
-        let offset = byte_offset(&generated, line, col)?;
-        self.references_at_offset(gen_path, generated, offset)
-    }
-
-    /// Find-all-references at an exact byte `offset` in the generated file (used by the `[view]` path and by component rename, which queries the generated `fn`/`Props` definition directly). Returns the declaration plus every use across the workspace; `None` when rust-analyzer resolves no symbol.
+    /// Find-all-references at an exact byte `offset` in the generated file (component rename queries the generated `fn`/`Props` definition directly). Returns the declaration plus every use across the workspace; `None` when rust-analyzer resolves no symbol.
     pub fn references_at_offset(
         &mut self,
         gen_path: &Path,

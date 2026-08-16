@@ -19,9 +19,6 @@ mod mapping;
 mod queries;
 mod vfs;
 
-/// `[logic]` lines are emitted verbatim under a fixed function-body indent, so an `.rsx` column maps to the generated column by adding this. (Generalized away by the byte-span source map, T-S1.)
-const LOGIC_INDENT: u32 = 4;
-
 /// A go-to-definition target resolved against the embedded analyzer: the target file's path and the name range within it, in LSP (line, UTF-16 col) coordinates. The backend decides whether the path is a generated `.telar/build/*.rs` (reverse-mapped to the `.rsx`) or a real file (used verbatim).
 pub struct DefinitionTarget {
     pub path: PathBuf,
@@ -90,9 +87,4 @@ impl EmbeddedAnalyzer {
             file_id,
         );
     }
-}
-
-/// Column is `rsx_col + LOGIC_INDENT`; exposed so the backend mirrors the same offset.
-pub const fn logic_indent() -> u32 {
-    LOGIC_INDENT
 }
