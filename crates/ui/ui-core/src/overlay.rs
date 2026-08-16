@@ -219,10 +219,8 @@ impl OverlaySink for OverlaySinkImpl {
 ///
 /// Variants (all portal the same way, they differ in how they route clicks and where the content sits):
 /// - [`Overlay::new`] — modal: blocks every click inside its content rect (a full-viewport scrim).
-/// - [`Overlay::new_click_through`] — non-modal: clicks on the transparent fill fall through to the tree;
-///   only clicks a child handles are consumed. For a toast/tooltip layer that must not eat background clicks.
-/// - [`Overlay::anchored`] — positions the content next to a trigger widget (dropdowns/menus/tooltips): the
-///   content is translated to the trigger's rect and only that panel blocks, so clicks elsewhere fall through.
+/// - [`Overlay::anchored_click_through`] — positions the content next to a trigger widget (dropdowns, menus,
+///   tooltips) and takes no pointer, so clicks anywhere fall through to the tree behind.
 pub struct Overlay {
     // Node handed to the DOM parent: a 0×0 placeholder (when portaled) or the content itself (fallback).
     layout_node: NodeId,
@@ -261,35 +259,10 @@ impl Overlay {
         Self::build(layout_style, children, true, None, Rc::new(visible))
     }
 
-    /// A non-modal portal: clicks on the transparent fill fall through to the content behind; only clicks a
-    /// child actually handles are consumed. Use for a toast/tooltip layer that must not block the page.
-    pub fn new_click_through(
-        layout_style: LayoutStyle,
-        children: Vec<Box<dyn LayoutItem>>,
-    ) -> Result<Self, LayoutError> {
-        Self::build(layout_style, children, false, None, Rc::new(|| true))
-    }
-
     /// A portal whose content is positioned next to `trigger` (a dropdown/menu/tooltip popping up by its
-    /// button). The content sizes to its intrinsic panel and is translated to the trigger's rect per
-    /// `placement`; only that panel blocks (the barrier tracks the trigger), so clicks elsewhere fall through.
-    pub fn anchored(
-        layout_style: LayoutStyle,
-        children: Vec<Box<dyn LayoutItem>>,
-        trigger: RwSignal<Rect>,
-        placement: Placement,
-    ) -> Result<Self, LayoutError> {
-        Self::build(
-            layout_style,
-            children,
-            true,
-            Some(Anchor { trigger, placement }),
-            Rc::new(|| true),
-        )
-    }
-
-    /// [`anchored`](Self::anchored) for a panel that must not take the pointer: a tooltip bubble, a hint,
-    /// anything that appears because the pointer is *near* it and would be dismissed by touching it.
+    /// button) and takes no pointer: a tooltip bubble, a hint, anything that appears because the pointer is
+    /// *near* it and would be dismissed by touching it. The content sizes to its intrinsic panel and is
+    /// translated to the trigger's rect per `placement`.
     pub fn anchored_click_through(
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
@@ -480,7 +453,7 @@ mod tests {
 
         reset_layout_runtime();
         let behind = focus::next_id();
-        focus::register(behind);
+        focus::register_as(behind, focus::FocusKind::Widget);
 
         let below = focus::next_id();
         let inside = StyledContainer::new(
@@ -564,7 +537,7 @@ mod tests {
 
         reset_layout_runtime();
         let base = focus::next_id();
-        focus::register(base);
+        focus::register_as(base, focus::FocusKind::Widget);
 
         // Ids allocated between the two markers belong to whatever the overlay built.
         let below = focus::next_id();
@@ -836,8 +809,14 @@ mod tests {
                 let s = panel_clicked.clone();
                 move || s.set(true)
             });
-        let overlay =
-            Overlay::new_click_through(LayoutStyle::new(), vec![Box::new(panel)]).unwrap();
+        let overlay = Overlay::build(
+            LayoutStyle::new(),
+            vec![Box::new(panel)],
+            false,
+            None,
+            Rc::new(|| true),
+        )
+        .unwrap();
         let root = Container::new(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             vec![Box::new(bg), Box::new(overlay)],
@@ -903,11 +882,15 @@ mod tests {
         // 2. Open an anchored overlay below a trigger, with a fixed 120×60 panel.
         let trigger = signal(Rect::new(50.0, 20.0, 80.0, 30.0));
         let panel = Container::new(LayoutStyle::new().width(120.0).height(60.0), vec![]).unwrap();
-        let overlay = Overlay::anchored(
+        let overlay = Overlay::build(
             LayoutStyle::new(),
             vec![Box::new(panel)],
-            trigger.clone(),
-            Placement::Below,
+            true,
+            Some(Anchor {
+                trigger: trigger.clone(),
+                placement: Placement::Below,
+            }),
+            Rc::new(|| true),
         )
         .unwrap();
         relayout_if_dirty();

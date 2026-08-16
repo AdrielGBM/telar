@@ -1244,7 +1244,7 @@ mod tests {
         .unwrap()
         .on_key(move |_k| sink.set(sink.get() + 1));
         let button = focus::next_id();
-        focus::register(button);
+        focus::register_as(button, focus::FocusKind::Widget);
         focus::request(button);
         card.on_event(&Event::KeyPressed {
             key: Key::Char('3'),

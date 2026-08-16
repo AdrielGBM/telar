@@ -4,7 +4,7 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, ScrollDelta};
-use reactive_core::{Effect, Memo, ReadSignal, RwSignal, effect, memo, signal};
+use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
@@ -391,27 +391,6 @@ impl ScrollViewport {
             self.set_y.set(0.0);
         }
     }
-
-    /// A reactive flag for whether `item` currently intersects the visible window, grown by `margin` px
-    /// on every side (a prefetch band, so work can start just before the item scrolls into view). `item`
-    /// must be a node inside this scroll's content, so its tracked rect shares the content-local space
-    /// the offset indexes into.
-    pub fn visible(&self, item: NodeId, margin: f32) -> Memo<bool> {
-        let item_rect = track_layout(item).expect("item node not registered in ctx");
-        let offset_x = self.offset_x.clone();
-        let offset_y = self.offset_y.clone();
-        let rect = self.rect.clone();
-        memo(move || {
-            let vp = rect.get();
-            let window = Rect::new(
-                offset_x.get() - margin,
-                offset_y.get() - margin,
-                vp.width + 2.0 * margin,
-                vp.height + 2.0 * margin,
-            );
-            item_rect.get().overlaps(window)
-        })
-    }
 }
 
 // Taffy-layout viewport; always valid as a LayoutItem — no panic possible.
@@ -552,20 +531,6 @@ impl LayoutScrollArea {
             _layout_effect: layout_effect,
             _clamp_effect: clamp_effect,
         })
-    }
-
-    /// The live scroll offset `(x, y)` signals, for a caller that constructed the scroll via
-    /// [`new`](Self::new) and wants to read the offset after the fact.
-    pub fn scroll_offset(&self) -> (ReadSignal<f32>, ReadSignal<f32>) {
-        (
-            self.core.scroll_x.read_only(),
-            self.core.scroll_y.read_only(),
-        )
-    }
-
-    pub fn scrollbar_style(mut self, style: ScrollbarStyle) -> Self {
-        self.core.scrollbar_style = style;
-        self
     }
 
     pub fn clamp_scroll(&mut self) {

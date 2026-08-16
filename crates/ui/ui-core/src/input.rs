@@ -107,23 +107,6 @@ impl Input {
         self
     }
 
-    /// Gives keyboard focus to this field (as a tap would). For programmatic focus after construction — e.g. a
-    /// container focusing the field when its tab becomes active. Mirrors `TextArea::request_focus`.
-    pub fn request_focus(&self) {
-        focus::request(self.id);
-    }
-
-    /// Whether this field currently holds keyboard focus.
-    pub fn focused(&self) -> bool {
-        focus::is_focused(self.id)
-    }
-
-    /// A `Copy` [`focus::FocusHandle`] to this field, so a caller that has moved it into a container can still
-    /// focus it later without keeping a reference to the field itself.
-    pub fn focus_handle(&self) -> focus::FocusHandle {
-        focus::handle(self.id)
-    }
-
     /// The current caret byte offset, clamped to the text and snapped to a char boundary.
     fn caret_at(&self, text: &str) -> usize {
         let mut c = self.caret.get().min(text.len());
@@ -406,7 +389,10 @@ mod tests {
         )
         .unwrap()
         .autofocus();
-        assert!(input.focused(), "the field holds focus from construction");
+        assert!(
+            focus::is_focused(input.id),
+            "the field holds focus from construction"
+        );
         input.on_event(&key(Key::Char('x')));
         assert_eq!(value.get(), "x", "and the very first keystroke is text");
 
@@ -420,7 +406,7 @@ mod tests {
             || TextStyle::new(14.0, Color::BLACK),
         )
         .unwrap();
-        assert!(!plain.focused());
+        assert!(!focus::is_focused(plain.id));
         plain.on_event(&key(Key::Char('x')));
         assert_eq!(untouched.get(), "");
     }

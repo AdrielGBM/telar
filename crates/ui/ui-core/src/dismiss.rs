@@ -152,7 +152,7 @@ mod tests {
 
         // A focused editor gets first refusal: it blurs itself, and the dialog around it stays up.
         let id = crate::focus::next_id();
-        crate::focus::register(id);
+        crate::focus::register_as(id, crate::focus::FocusKind::Widget);
         crate::focus::request(id);
         assert_eq!(crate::dispatch_overlays(&esc), crate::EventResult::Ignored);
         assert!(!closed.get(), "the focused field consumes the first Escape");

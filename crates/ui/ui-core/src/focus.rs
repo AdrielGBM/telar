@@ -239,14 +239,10 @@ pub fn clear() {
     }
 }
 
-/// Adds `id` to the tab order (at the end), if not already present. A focusable widget calls this on
-/// creation; registration order is the traversal order.
-pub fn register(id: FocusId) {
-    register_as(id, FocusKind::Widget);
-}
-
-/// [`register`] for a widget that says what it does with the keyboard. A text field registers as
-/// [`FocusKind::TextEntry`], which is what makes [`text_entry_focused`] answerable.
+/// Adds `id` to the tab order (at the end), if not already present, as a widget that says what it does with
+/// the keyboard — a text field registers as [`FocusKind::TextEntry`], which is what makes
+/// [`text_entry_focused`] answerable. A focusable widget calls this on creation; registration order is the
+/// traversal order.
 pub fn register_as(id: FocusId, kind: FocusKind) {
     register_node(id, kind, None, default_role(kind), true);
 }
@@ -621,7 +617,7 @@ mod tests {
 
         reset_layout_runtime();
         let base = next_id();
-        register(base);
+        register_as(base, FocusKind::Widget);
 
         let below = next_id();
         let off = StyledContainer::new(
@@ -662,7 +658,7 @@ mod tests {
 
         reset_layout_runtime();
         let base = next_id();
-        register(base);
+        register_as(base, FocusKind::Widget);
 
         let below = next_id();
         let hidden = StyledContainer::new(
@@ -703,9 +699,9 @@ mod tests {
         // Register three contiguous ids at the end of the order and step within that block (robust to any
         // ids other tests registered earlier on this thread).
         let (a, b, c) = (next_id(), next_id(), next_id());
-        register(a);
-        register(b);
-        register(c);
+        register_as(a, FocusKind::Widget);
+        register_as(b, FocusKind::Widget);
+        register_as(c, FocusKind::Widget);
 
         request(a);
         focus_next();
