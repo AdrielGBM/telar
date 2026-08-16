@@ -362,6 +362,7 @@ where
         self.render_ret_rx = Some(ret_rx);
         self.render_join = Some(RenderJoin::Hardware(join));
         self.renderer_is_hardware = true;
+        self.dev.set_renderer_info("hardware (wgpu)");
     }
 
     /// Builds the software rasteriser and puts it on its own thread, exactly as hardware gets. The surface is
@@ -384,6 +385,7 @@ where
         self.render_ret_rx = Some(ret_rx);
         self.render_join = Some(RenderJoin::Software(join));
         self.renderer_is_hardware = false;
+        self.dev.set_renderer_info("software");
         Ok(())
     }
 

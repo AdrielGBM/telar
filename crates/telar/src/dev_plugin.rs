@@ -36,6 +36,11 @@ pub trait DevPlugin: Default + 'static {
         let _ = error;
     }
 
+    /// Names the backend that is now drawing, so the overlay can say which one `ctrl+shift+b` just switched to.
+    fn set_renderer_info(&mut self, info: &str) {
+        let _ = info;
+    }
+
     /// The mounted component tree as the inspector sees it, once per frame. Takes the walked slice rather
     /// than a trait that walks on demand: the two questions the trait offered were asked one after the
     /// other, and each walked the whole tree.
