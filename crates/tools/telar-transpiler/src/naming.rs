@@ -87,13 +87,45 @@ pub(crate) fn is_ident(s: &str) -> bool {
     chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
 
-/// If `bytes[i]` opens a string/char literal or a `//` line comment, returns the index just past it, so an
+/// If `bytes[i]` opens a string, raw string, char literal or comment, returns the index just past it, so an
 /// identifier scan skips its contents — a name embedded in `"text"` or `// note` is not a real reference to
 /// it. A `'a` lifetime tick (no closing quote) is left alone; escaped char literals (`'\n'`) are handled.
-/// Shared by [`contains_ident`] and [`crate::naming::replace_whole_word`] so both agree on what is code.
+/// Shared by [`contains_ident`] and [`replace_whole_word`] so both agree on what is code.
+///
+/// A `//` ends at its newline, not at the end of the input: these scanners run over whole `[logic]` blocks,
+/// where swallowing the rest of the snippet would hide every signal declared after the first comment.
 pub(crate) fn literal_or_comment_end(bytes: &[u8], i: usize) -> Option<usize> {
     match bytes[i] {
-        b'/' if bytes.get(i + 1) == Some(&b'/') => Some(bytes.len()),
+        b'/' if bytes.get(i + 1) == Some(&b'/') => Some(
+            bytes[i..]
+                .iter()
+                .position(|&b| b == b'\n')
+                .map_or(bytes.len(), |n| i + n),
+        ),
+        b'/' if bytes.get(i + 1) == Some(&b'*') => {
+            let mut j = i + 2;
+            while j + 1 < bytes.len() && !(bytes[j] == b'*' && bytes[j + 1] == b'/') {
+                j += 1;
+            }
+            Some((j + 2).min(bytes.len()))
+        }
+        // `r"…"` / `r#"…"#`: no escapes inside, so the terminator is the quote plus as many `#` as opened it.
+        b'r' if matches!(bytes.get(i + 1), Some(&b'"') | Some(&b'#')) => {
+            let hashes = bytes[i + 1..].iter().take_while(|&&b| b == b'#').count();
+            if bytes.get(i + 1 + hashes) != Some(&b'"') {
+                return None;
+            }
+            let mut j = i + 2 + hashes;
+            while j < bytes.len() {
+                if bytes[j] == b'"'
+                    && bytes[j + 1..].iter().take_while(|&&b| b == b'#').count() >= hashes
+                {
+                    return Some((j + 1 + hashes).min(bytes.len()));
+                }
+                j += 1;
+            }
+            Some(bytes.len())
+        }
         b'"' => {
             let mut j = i + 1;
             while j < bytes.len() && bytes[j] != b'"' {
@@ -140,6 +172,23 @@ pub(crate) fn contains_ident(code: &str, ident: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A `//` used to skip to the end of the whole snippet, so on a multi-line `[logic]` block every signal declared after the first comment read as absent.
+    #[test]
+    fn a_line_comment_hides_only_its_own_line() {
+        assert!(contains_ident("// count\nlet x = count;", "count"));
+        assert!(!contains_ident("// count is gone", "count"));
+        assert!(contains_ident(
+            "let a = 1; /* count */ let b = count;",
+            "count"
+        ));
+        assert!(!contains_ident("/* count */", "count"));
+        assert!(!contains_ident(r#"let s = r"count";"#, "count"));
+        assert!(contains_ident(
+            r##"let s = r#"x"#; let y = count;"##,
+            "count"
+        ));
+    }
 
     #[test]
     fn snake_basic_already_snake() {
