@@ -272,21 +272,6 @@ pub(super) fn convert_rgba_to_xrgb(src: &[u8], dst: &mut [u32]) {
     }
 }
 
-// Clamps a float rect to integer pixel bounds inside `width`×`height`. Returns None when the rect has no on-screen area.
-fn clamp_rect_px(r: Rect, width: usize, height: usize) -> Option<(usize, usize, usize, usize)> {
-    let x0 = r.x.floor().max(0.0) as usize;
-    let y0 = r.y.floor().max(0.0) as usize;
-    let x1 = ((r.x + r.width).ceil().max(0.0) as usize).min(width);
-    let y1 = ((r.y + r.height).ceil().max(0.0) as usize).min(height);
-    let x0 = x0.min(width);
-    let y0 = y0.min(height);
-    if x1 > x0 && y1 > y0 {
-        Some((x0, y0, x1, y1))
-    } else {
-        None
-    }
-}
-
 // Swizzles only `rect` from the RGBA pixmap into the XRGB output buffer, reusing the SIMD converter. A full-width rect is swizzled as one contiguous block (the common case for a horizontal scroll band); narrower rects go row by row.
 #[cfg(target_endian = "little")]
 pub(super) fn convert_rgba_to_xrgb_region(
@@ -296,9 +281,10 @@ pub(super) fn convert_rgba_to_xrgb_region(
     height: usize,
     rect: Rect,
 ) {
-    let Some((x0, y0, x1, y1)) = clamp_rect_px(rect, width, height) else {
+    let Some((x0, y0, x1, y1)) = clamp_to_pixels(rect, width as u32, height as u32) else {
         return;
     };
+    let (x0, y0, x1, y1) = (x0 as usize, y0 as usize, x1 as usize, y1 as usize);
     if x0 == 0 && x1 == width {
         // Rows are contiguous in memory — one SIMD pass over the whole span.
         let a = y0 * width;

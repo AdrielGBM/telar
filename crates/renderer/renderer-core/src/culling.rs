@@ -36,8 +36,9 @@ pub fn expand_for_shadow(
     offset_x: f32,
     offset_y: f32,
 ) -> Rect {
-    // Must match the software renderer's blur padding (ceil(blur_radius * 1.5) + 1); using only blur_radius leaves stale shadow pixels outside the dirty rect when shadows move.
-    let expand = (blur_radius * 1.5).ceil() + 1.0 + spread;
+    // Through the renderers' own padding: a smaller expansion here leaves stale shadow pixels outside the dirty rect when a shadow moves.
+    let expand =
+        crate::preprocess::blur_padding(crate::preprocess::blur_sigma(blur_radius)) as f32 + spread;
     let expanded = Rect::new(
         rect.x - expand,
         rect.y - expand,
