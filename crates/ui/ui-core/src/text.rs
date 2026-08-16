@@ -156,7 +156,11 @@ impl Component for Text {
         // button and blurred under one, because the sideways placement centres on the trigger and contributed
         // its own half pixel, cancelling this one. Vertical position is the axis to snap; horizontal subpixel
         // placement is what keeps letter spacing even, and the shaper bins it on purpose.
-        let y = ((r.height - text_height) / 2.0 + nudge).round();
+        // Within the leaf, always. The nudge is a *centring* refinement, and a box no taller than one line
+        // has nothing to centre in: applying it there walks the glyphs out through the top of the box the
+        // layout reserved for them, so a `pad:6` label inked at row 5.
+        let slack = (r.height - text_height).max(0.0);
+        let y = ((slack / 2.0 + nudge).clamp(0.0, slack)).round();
         // Render the full line box so nothing clips.
         let line_height = text_height;
         self.leaf.at_layout_position(RenderNode::text(
@@ -283,6 +287,50 @@ mod tests {
             .unwrap();
             let y = text_y(&text.view()).expect("a text leaf draws text");
             assert_eq!(y, y.round(), "a {height}px box put the text at {y}");
+        }
+    }
+
+    /// The optical nudge never walks the glyphs out of the box the layout reserved for them.
+    ///
+    /// The nudge centres the glyph band, and a box no taller than one line has nothing to centre in — so
+    /// applying it there put the text at a negative `y`. A `pad:6` status line then inked at row 5, one row
+    /// above its own padding, which is how an out-of-tree app found this.
+    #[test]
+    fn text_stays_inside_a_box_that_is_exactly_one_line_tall() {
+        fn text_rect(node: &RenderNode) -> Option<Rect> {
+            match node {
+                RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => Some(*rect),
+                RenderNode::Transform { children, .. } | RenderNode::Group { children } => {
+                    children.iter().find_map(text_rect)
+                }
+                _ => None,
+            }
+        }
+        reset_layout_runtime();
+        for size in [11.0_f32, 13.0, 15.0, 24.0] {
+            let text = Text::auto(
+                || "Ag".to_string(),
+                LayoutStyle::new().width(200.0),
+                move || TextStyle::new(size, Color::BLACK),
+            )
+            .unwrap();
+            let root = new_container(
+                LayoutStyle::new().flex_column().width(200.0),
+                &[text.layout_node()],
+            )
+            .unwrap();
+            compute_layout(
+                root,
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::MaxContent,
+            )
+            .unwrap();
+            let rect = text_rect(&text.view()).expect("a text leaf draws text");
+            assert!(
+                rect.y >= 0.0,
+                "at {size}px the text starts {}px above its own box",
+                -rect.y
+            );
         }
     }
 
