@@ -456,37 +456,6 @@ col @card
     }
 
     #[test]
-    fn parses_canvas_with_params() {
-        let src = "[logic]\n[view]\ncanvas @chart\n    |w, h|\n    rect\n";
-        let doc = parse(src).unwrap();
-        let ViewNode::Element(canvas) = &doc.view.nodes[0] else {
-            panic!();
-        };
-        assert_eq!(canvas.tag, "canvas");
-        assert_eq!(canvas.classes, vec!["chart".to_string()]);
-        assert_eq!(canvas.leading_params.as_deref(), Some("w, h"));
-        // The `|w, h|` line is consumed, leaving the rect as the only child.
-        assert_eq!(canvas.children.len(), 1);
-        let ViewNode::Element(rect) = &canvas.children[0] else {
-            panic!();
-        };
-        assert_eq!(rect.tag, "rect");
-    }
-
-    #[test]
-    fn leading_params_are_tag_agnostic() {
-        // The `|…|` leading-child rule is generic: any element (not just `canvas`) captures it.
-        let src = "[logic]\n[view]\nsurface @plot\n    |w, h|\n    rect\n";
-        let doc = parse(src).unwrap();
-        let ViewNode::Element(surface) = &doc.view.nodes[0] else {
-            panic!();
-        };
-        assert_eq!(surface.tag, "surface");
-        assert_eq!(surface.leading_params.as_deref(), Some("w, h"));
-        assert_eq!(surface.children.len(), 1);
-    }
-
-    #[test]
     fn parses_named_closure_param_attribute() {
         let src = "[logic]\n[view]\nbtn \"x\" on_press(|ev| handle(ev))\n";
         let doc = parse(src).unwrap();

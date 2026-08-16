@@ -38,13 +38,47 @@ impl ViewGen<'_> {
     }
 
     /// Builds the `(styling closure, .with_opacity(..) suffix)` for a styled container from paint attributes. The closure's param is `r` only when a gradient needs the rendered bounds. `transitions` maps an animated property to its `motion::` curve; any `fill`/`stroke`/`opacity` it names is wrapped in the animation retarget+get block and its `Animated` handle appended to `hoists`. Any `$ident` among the paint attrs (see `color_attr_keys`) is cloned into the closure (`wrap_signal_clones`) so the outer signal binding stays usable elsewhere.
+    /// Extracts `shadow-*` attrs and produces a `Some(Shadow::new(...))` expression, or `None` when no shadow attrs are present.
+    fn shadow_expr(&self, attrs: &[Attr]) -> Option<String> {
+        if !attrs.iter().any(|a| a.key.starts_with("shadow")) {
+            return None;
+        }
+        let sx = attrs
+            .iter()
+            .find(|a| a.key == "shadow_x")
+            .and_then(|a| a.value.parse::<f32>().ok())
+            .unwrap_or(0.0);
+        let sy = attrs
+            .iter()
+            .find(|a| a.key == "shadow_y")
+            .and_then(|a| a.value.parse::<f32>().ok())
+            .unwrap_or(4.0);
+        let blur = attrs
+            .iter()
+            .find(|a| a.key == "shadow_blur")
+            .and_then(|a| a.value.parse::<f32>().ok())
+            .unwrap_or(8.0);
+        let color = attrs
+            .iter()
+            .find(|a| a.key == "shadow_color")
+            .map(|a| self.color_expr(&a.value))
+            .unwrap_or_else(|| "Color::rgba(0.0, 0.0, 0.0, 0.25)".to_string());
+        Some(format!(
+            "Some(Shadow::new({}, {}, {}, {}))",
+            format_f32(sx),
+            format_f32(sy),
+            format_f32(blur),
+            color
+        ))
+    }
+
     pub(super) fn rect_style_pieces(
         &mut self,
         pattrs: &[Attr],
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
     ) -> (String, String) {
-        let shadow = self.canvas_shadow(pattrs);
+        let shadow = self.shadow_expr(pattrs);
         let gradient = self.box_gradient_paint(pattrs);
         let mut solid_fill = pattrs
             .iter()

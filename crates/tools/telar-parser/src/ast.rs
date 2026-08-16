@@ -132,10 +132,6 @@ pub struct Element {
     pub classes: Vec<String>,
     pub attributes: Vec<Attr>,
     pub content: Option<String>,
-    /// Leading `|params|` line declared on the first deeper-indented child (before the real children).
-    /// Vocabulary-neutral at the parser level; the transpiler interprets it (e.g. `canvas` drawing-area
-    /// dimensions `|w, h|`).
-    pub leading_params: Option<String>,
     pub children: Vec<ViewNode>,
     pub line: usize,
     /// Byte offset in the source where the (de-quoted) `content` begins, or the line start when the

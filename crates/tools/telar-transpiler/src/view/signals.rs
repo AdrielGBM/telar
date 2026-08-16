@@ -295,9 +295,6 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
                 if let Some(content) = &el.content {
                     out.push(content.clone());
                 }
-                if let Some(params) = &el.leading_params {
-                    out.push(params.clone());
-                }
                 for attr in &el.attributes {
                     out.push(attr.value.clone());
                 }
@@ -456,22 +453,4 @@ pub(super) fn build_rect_style(
             None => "RectStyle::default()".to_string(),
         }
     }
-}
-
-/// Binds canvas closure params (`w, h`) to fields of the `Rect` argument.
-pub(super) fn canvas_param_bindings(params: &str, pad: &str) -> String {
-    let mut out = String::new();
-    let names: Vec<&str> = params
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .collect();
-    // Convention: first param is width, second is height.
-    if let Some(w) = names.first() {
-        let _ = writeln!(out, "{pad}    let {w} = __rect.width;");
-    }
-    if let Some(h) = names.get(1) {
-        let _ = writeln!(out, "{pad}    let {h} = __rect.height;");
-    }
-    out
 }

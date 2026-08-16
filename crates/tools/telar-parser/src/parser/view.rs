@@ -239,20 +239,6 @@ impl Parser {
 
         let mut element = parse_element_header(&content, number, content_start)?;
 
-        // Any element whose first deeper-indented child is a `|…|` line declares leading closure
-        // params before its real children; the transpiler owns the interpretation (e.g. `canvas`
-        // drawing-area dimensions `|w, h|`).
-        self.skip_blank_view_lines();
-        if let Some(next) = self.lines.get(self.pos)
-            && next.section == Section::View
-            && next.indent > indent
-            && next.content.starts_with('|')
-            && let Some(params) = parse_leading_params(&next.content)
-        {
-            element.leading_params = Some(params);
-            self.pos += 1;
-        }
-
         element.children = self.parse_children(indent)?;
 
         Ok(ViewNode::Element(element))
@@ -374,13 +360,6 @@ fn split_match_header(rest: &str) -> Option<(String, Option<String>, Option<Stri
     (!scrutinee.is_empty()).then_some((scrutinee, binding, key_expr))
 }
 
-/// Extracts the inner text from a leading `|params|` line (e.g. `w, h` from `|w, h|`).
-fn parse_leading_params(content: &str) -> Option<String> {
-    let after = content.strip_prefix('|')?;
-    let end = after.find('|')?;
-    Some(after[..end].trim().to_string())
-}
-
 /// Parses an element header line into tag, classes, attrs, and quoted content.
 ///
 /// Tokens are consumed left to right. A bare `@name` is a class; a quoted string
@@ -396,7 +375,6 @@ fn parse_element_header(
         classes: Vec::new(),
         attributes: Vec::new(),
         content: None,
-        leading_params: None,
         children: Vec::new(),
         line,
         content_start,

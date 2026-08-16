@@ -2291,12 +2291,12 @@ col @card
         );
     }
 
-    /// The one escape hatch a 1069-line application needed: a canvas paints wherever its commands say, so
+    /// The one escape hatch a 1069-line application needed: a node paints wherever its commands say, so
     /// without a clip an axis line runs straight over the header. `ClippedItem` existed the whole time; the
     /// markup had no way to ask for it, so the `.rsx` dropped into Rust and spliced the widget back in.
     #[test]
     fn a_clip_attribute_cuts_a_node_to_its_own_rect() {
-        let src = "[view]\ncol\n    canvas width:100 height:100 clip\n";
+        let src = "[view]\ncol\n    box width:100 height:100 clip\n";
         let code = transpile_source_with_theme(src, "demo", None, None)
             .unwrap()
             .rust_code;

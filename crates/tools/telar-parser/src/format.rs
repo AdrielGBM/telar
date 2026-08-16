@@ -248,12 +248,6 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
             out.push_str(&pad);
             out.push_str(&format_element_header(element));
             out.push('\n');
-            // Leading `|params|` line (e.g. `canvas` drawing-area dimensions) re-emitted before children.
-            if let Some(params) = &element.leading_params {
-                out.push_str(&INDENT.repeat(depth + 1));
-                out.push_str(&format!("|{params}|"));
-                out.push('\n');
-            }
             for child in &element.children {
                 emit_node(child, depth + 1, out);
             }

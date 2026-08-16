@@ -1,6 +1,5 @@
 //! Generates the body of the component function from the `[view]` section.
 
-mod canvas;
 mod component;
 mod container;
 mod control_flow;
@@ -401,7 +400,6 @@ impl<'a> ViewGen<'a> {
             "input" => "input",
             "svg" => "svg",
             "path" => "path",
-            "canvas" => "canvas",
             _ => "node",
         };
         let count = self.counters.entry(prefix.to_string()).or_insert(0);
@@ -650,7 +648,6 @@ impl<'a> ViewGen<'a> {
             "svg" => self.emit_svg(el),
             "path" => self.emit_path(el),
             "scroll" => self.emit_scroll(el),
-            "canvas" => self.emit_canvas(el),
             "widget" => self.emit_widget_ref(el),
             "build" => self.emit_build_expr(el),
             "children" => self.emit_slot(el),
@@ -860,39 +857,6 @@ mod tests {
             "inline default should mark props as default-constructible"
         );
         assert!(sig.prop_fields.contains(&"pad".to_string()));
-    }
-
-    #[test]
-    fn canvas_with_rect_and_text_children() {
-        let src = "[logic]\n[view]\ncanvas width:100 height:50\n    rect fill:#3c77fa radius:8\n    text \"hi\" x:0 y:4 w:full h:42 size:12 color:white\n";
-        let out = crate::transpile_source_with_theme(src, "demo", None, None).unwrap();
-        let code = &out.rust_code;
-        assert!(code.contains("Canvas::new("), "missing Canvas::new");
-        assert!(
-            code.contains("let __w = __rect.width;"),
-            "missing __w binding"
-        );
-        assert!(
-            code.contains("let __h = __rect.height;"),
-            "missing __h binding"
-        );
-        assert!(
-            code.contains("RenderNode::rect("),
-            "missing RenderNode::rect"
-        );
-        assert!(
-            code.contains("RenderNode::group(["),
-            "missing RenderNode::group"
-        );
-        assert!(
-            code.contains("RenderNode::text("),
-            "missing RenderNode::text"
-        );
-        assert!(code.contains("__w"), "w:full should resolve to __w");
-        assert!(
-            code.contains("Color::WHITE"),
-            "color:white should resolve to Color::WHITE"
-        );
     }
 
     #[test]
