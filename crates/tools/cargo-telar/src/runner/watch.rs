@@ -476,7 +476,7 @@ impl HotMode {
     fn features(&self) -> &'static [&'static str] {
         match self {
             HotMode::Dev => &["telar/dev"],
-            HotMode::Preview => &["rsx/preview", "telar/dev"],
+            HotMode::Preview => &["telar/preview", "telar/dev"],
         }
     }
 

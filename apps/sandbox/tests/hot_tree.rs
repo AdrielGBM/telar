@@ -6,7 +6,7 @@
 //! builds one, so it is `#[ignore]`d by default. To run it:
 //!
 //! ```text
-//! TELAR_HOT_RELOAD_BUILD=1 RUSTFLAGS=--cfg=telar_hot_reload cargo build -p sandbox --features rsx/dev --lib
+//! TELAR_HOT_RELOAD_BUILD=1 RUSTFLAGS=--cfg=telar_hot_reload cargo build -p sandbox --features sandbox/dev --lib
 //! cargo test -p sandbox --features dev --test hot_tree -- --ignored
 //! ```
 
