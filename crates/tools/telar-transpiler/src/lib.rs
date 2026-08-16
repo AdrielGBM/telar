@@ -2401,6 +2401,37 @@ col @card
         );
     }
 
+    /// But only where the clone is load-bearing. A binding named once, outside any reactive branch, is built
+    /// once and handed over once — cloning it demanded `Clone` of everything a `.rsx` forwards, which a
+    /// `Box<dyn Fn()>` callback prop (the shape every catalogue component declares) can never satisfy.
+    #[test]
+    fn a_logic_binding_named_once_outside_a_reactive_branch_is_moved() {
+        let src = "[logic]\nlet save: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncolumn\n    save_row on_press:save\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            !code.contains("save.clone()"),
+            "a single non-reactive call site takes the binding by value:\n{code}"
+        );
+        assert!(code.contains("on_press: save"), "{code}");
+    }
+
+    /// Inside one it must still be cloned: the builder closure runs again on every re-render and cannot
+    /// consume its capture. `captured_idents` does not cover a plain binding — it collects `$signal`s and
+    /// loop variables — so nothing else keeps it alive.
+    #[test]
+    fn a_logic_binding_inside_a_reactive_branch_is_still_cloned() {
+        let src = "[logic]\nlet open = signal(true);\nlet save: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncolumn\n    if $open\n        save_row on_press:save\n";
+        let code = transpile_source_with_theme(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("save.clone()"),
+            "a re-runnable branch cannot move its capture:\n{code}"
+        );
+    }
+
     /// And only bindings: a name the logic zone never bound is a path, a constant or an ambient token, and
     /// cloning it would be inventing a value rather than copying one.
     #[test]

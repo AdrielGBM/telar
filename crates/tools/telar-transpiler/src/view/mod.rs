@@ -202,6 +202,9 @@ pub struct ViewGen<'a> {
     /// Stack of child accumulators (see [`ChildSink`]); the top is the one an emitted `if`/`for` body
     /// pushes into. Pushed before a container's children are emitted, popped after.
     child_sinks: Vec<ChildSink>,
+    /// `[logic]` bindings a lone-identifier prop names more than once in this view, so the first call site
+    /// cannot move what the second still needs. Computed once from the whole view in [`Self::generate_root`].
+    multi_referenced: Vec<String>,
     /// How many reactive branch/item closures enclose the node being emitted. Non-zero means the code being
     /// generated may run more than once for the same content, which is what makes a one-shot `widget`
     /// reference unsound there — see [`ViewGen::in_reactive_region`].
@@ -238,6 +241,7 @@ impl<'a> ViewGen<'a> {
             registry: None,
             child_sinks: Vec::new(),
             host_rows: Vec::new(),
+            multi_referenced: Vec::new(),
             reactive_depth: 0,
             scroll_viewport: None,
         }
@@ -245,6 +249,12 @@ impl<'a> ViewGen<'a> {
 
     /// Whether the node being emitted sits inside a reactive branch or item closure, i.e. inside code that may
     /// build the same content again after the region has disposed it.
+    /// Whether a lone `[logic]` binding named here must be cloned rather than moved: either the code around it
+    /// can run again, or another call site still needs it.
+    pub(super) fn must_clone_local(&self, name: &str) -> bool {
+        self.in_reactive_region() || self.multi_referenced.iter().any(|n| n == name)
+    }
+
     pub(super) fn in_reactive_region(&self) -> bool {
         self.reactive_depth > 0
     }
@@ -420,6 +430,18 @@ impl<'a> ViewGen<'a> {
 
     /// Generates the full view body and returns the final `Ok(Box::new(...))` expression.
     pub fn generate_root(&mut self, nodes: &[ViewNode]) -> String {
+        self.multi_referenced = self
+            .locals
+            .iter()
+            .filter(|name| {
+                signals::subtree_snippets(nodes)
+                    .iter()
+                    .filter(|s| s.trim() == name.as_str())
+                    .count()
+                    > 1
+            })
+            .cloned()
+            .collect();
         // A single static `if`/`if-else` root returns its branch directly, so the branch element becomes the
         // component root with no injected column that would trap a `row align:stretch` at content height. A
         // reactive (`$`) condition keeps the fragment-swap path below.

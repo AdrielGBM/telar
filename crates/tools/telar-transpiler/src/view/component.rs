@@ -471,13 +471,20 @@ impl ViewGen<'_> {
             return self.color_expr(v);
         }
         let lead = attr.value.len() - attr.value.trim_start().len();
-        // A lone `[logic]` binding gets the same handle-clone a lone `$signal` does, one arm above: a prop takes its value by ownership, and inside a reactive branch the closure is called again and cannot consume its capture.
-        // Same bet as the `$` arm, which has always cloned without knowing the type: a binding that is not `Clone` is a loud error here, and was already unusable in the reactive case where the move is what fails.
+        // A lone `[logic]` binding, cloned only where the clone is load-bearing: inside a reactive branch the
+        // builder closure runs again and cannot consume its capture, so the binding has to survive the first
+        // run. Outside one it is built once and moving is both correct and what the author wrote — cloning
+        // there demanded `Clone` of every forwarded binding, which a `Box<dyn Fn()>` prop can never satisfy.
+        //
+        // `captured_idents` does not cover this: it collects `$signal`s and loop variables, so a plain
+        // `[logic]` binding reaches a reactive closure with nothing else keeping it alive.
         if self.is_local(v) {
-            return format!(
-                "{}{v}.clone()",
-                expr_marker(attr.value_start + lead, v.len())
-            );
+            let marker = expr_marker(attr.value_start + lead, v.len());
+            return if self.must_clone_local(v) {
+                format!("{marker}{v}.clone()")
+            } else {
+                format!("{marker}{v}")
+            };
         }
         // Verbatim pass-through: tag the value with its source span so the analyzer can complete in it. The
         // delimiting parens are dropped here rather than at the call, so the span still covers the expression
