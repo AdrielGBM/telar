@@ -317,24 +317,11 @@ pub fn format_f32(n: f32) -> String {
     }
 }
 
-/// Builds a `Color::rgba(...)` const expression from a `#rrggbb` / `#rrggbbaa` string.
+/// Builds a `Color::rgba(...)` const expression from a hex string, at any length
+/// [`telar_parser::parse_hex`] accepts. Anything else falls back to opaque black, which the parser has
+/// already rejected before a value reaches here.
 pub fn hex_to_color_expr(hex: &str) -> String {
-    let h = hex.trim_start_matches('#');
-    let parse = |s: &str| u8::from_str_radix(s, 16).unwrap_or(0);
-    let (r, g, b, a) = match h.len() {
-        6 => (parse(&h[0..2]), parse(&h[2..4]), parse(&h[4..6]), 255),
-        8 => (
-            parse(&h[0..2]),
-            parse(&h[2..4]),
-            parse(&h[4..6]),
-            parse(&h[6..8]),
-        ),
-        3 => {
-            let dup = |c: &str| parse(&format!("{c}{c}"));
-            (dup(&h[0..1]), dup(&h[1..2]), dup(&h[2..3]), 255)
-        }
-        _ => (0, 0, 0, 255),
-    };
+    let [r, g, b, a] = telar_parser::parse_hex(hex).unwrap_or([0, 0, 0, 255]);
     format!("Color::rgba({r}.0 / 255.0, {g}.0 / 255.0, {b}.0 / 255.0, {a}.0 / 255.0)")
 }
 

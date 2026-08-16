@@ -68,6 +68,11 @@ impl Color {
         (lightness, c, h, self.a)
     }
 
+    /// Parses `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`, with or without the `#`.
+    ///
+    /// Those four lengths are the `.rsx` hex table (`telar_parser::parse_hex`), stated there and repeated
+    /// here because geometry cannot depend on a tools crate. The two must accept the same set: a colour that
+    /// parses at runtime and not in the DSL is a colour the author cannot write.
     pub fn from_hex(hex: &str) -> Option<Self> {
         let hex = hex.strip_prefix('#').unwrap_or(hex);
         // Byte-slice indexing below assumes single-byte chars.

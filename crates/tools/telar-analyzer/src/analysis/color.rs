@@ -118,27 +118,12 @@ fn keyword_color(value: &str) -> Option<Color> {
     Some(rgba(r, g, b, a))
 }
 
-/// Parses `#rgb` / `#rrggbb` / `#rrggbbaa` (matching the transpiler's `hex_to_color_expr`).
+/// The swatch for a `#`-prefixed value, at any length [`telar_parser::parse_hex`] accepts. The `#` is
+/// required here: a bare `ff0000` in a `.rsx` is a word, not a colour.
 pub(crate) fn parse_hex(hex: &str) -> Option<Color> {
-    let h = hex.strip_prefix('#')?;
-    if !h.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return None;
-    }
-    let byte = |s: &str| u8::from_str_radix(s, 16).ok();
-    let (r, g, b, a) = match h.len() {
-        3 => {
-            let dup = |c: &str| byte(&format!("{c}{c}"));
-            (dup(&h[0..1])?, dup(&h[1..2])?, dup(&h[2..3])?, 255)
-        }
-        6 => (byte(&h[0..2])?, byte(&h[2..4])?, byte(&h[4..6])?, 255),
-        8 => (
-            byte(&h[0..2])?,
-            byte(&h[2..4])?,
-            byte(&h[4..6])?,
-            byte(&h[6..8])?,
-        ),
-        _ => return None,
-    };
+    let [r, g, b, a] = hex
+        .starts_with('#')
+        .then(|| telar_parser::parse_hex(hex))??;
     Some(rgba(r, g, b, a))
 }
 

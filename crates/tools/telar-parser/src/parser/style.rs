@@ -129,21 +129,15 @@ impl Parser {
     }
 }
 
-/// A hex color body (the part after `#`) is valid only at the lengths the transpiler expands:
-/// `#rgb`, `#rrggbb`, `#rrggbbaa`, all hex digits.
-fn is_valid_hex(hex: &str) -> bool {
-    matches!(hex.len(), 3 | 6 | 8) && hex.bytes().all(|b| b.is_ascii_hexdigit())
-}
-
 /// `#` is reserved for hex colors in `.rsx`, so any `#`-prefixed value must be a well-formed hex.
 /// Catches typos (`#zzz`, `#12`) at parse time instead of silently rendering them as black.
 /// `pub(super)` because `view::parse_element_header` validates attribute values with it too.
 pub(super) fn check_hex_value(value: &str, line: usize) -> Result<(), ParseError> {
-    if let Some(hex) = value.strip_prefix('#')
-        && !is_valid_hex(hex)
-    {
+    if value.starts_with('#') && crate::parse_hex(value).is_none() {
         return Err(ParseError {
-            message: format!("invalid hex color `{value}`: expected #rgb, #rrggbb or #rrggbbaa"),
+            message: format!(
+                "invalid hex color `{value}`: expected #rgb, #rgba, #rrggbb or #rrggbbaa"
+            ),
             line,
         });
     }

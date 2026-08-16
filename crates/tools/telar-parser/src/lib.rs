@@ -14,11 +14,13 @@
 pub mod format;
 
 mod ast;
+mod color;
 mod error;
 mod lexer;
 mod parser;
 
 pub use ast::*;
+pub use color::parse_hex;
 pub use error::ParseError;
 pub use lexer::{Section, find_section_at, header_section, is_preview_header};
 
@@ -546,7 +548,7 @@ col @card
 
     #[test]
     fn invalid_hex_constant_errors_but_valid_hex_parses() {
-        for bad in ["#zzz", "#12", "#abcd", "#1234567"] {
+        for bad in ["#zzz", "#12", "#12345", "#1234567"] {
             let src = format!("[style]\nc: {bad}\n[view]\ncol\n");
             let err = parse(&src).unwrap_err();
             assert!(
@@ -554,7 +556,9 @@ col @card
                 "expected reject of {bad}"
             );
         }
-        for good in ["#abc", "#3d78fa", "#3d78fa80"] {
+        // `#abcd` is the four-digit form `Color::from_hex` has always accepted at runtime; rejecting it here
+        // made a legal colour a parse error.
+        for good in ["#abc", "#abcd", "#3d78fa", "#3d78fa80"] {
             let src = format!("[style]\nc: {good}\n[view]\ncol\n");
             assert!(parse(&src).is_ok(), "expected accept of {good}");
         }
