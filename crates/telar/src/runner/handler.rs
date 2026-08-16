@@ -666,6 +666,14 @@ where
                                 self.tree = None;
                                 self.app = Box::new(new_app);
                                 self.tree = Some(self.app.mount());
+                                // The same step past every drawn generation that `remount` takes, and for the
+                                // same reason: without it a reload of a screen whose content never changes
+                                // hands the renderer a number it has already presented, so it re-presents the
+                                // pre-reload texture. See `generation_base`.
+                                self.generation_base = self.last_generation + 1;
+                                if self.is_transparent() != self.renderer_transparent {
+                                    self.pending_restart = true;
+                                }
                                 // A successful reload clears any banner from the previous failed build.
                                 self.dev.set_build_error(None);
                                 // Synthesize WindowResized so the new tree's layout starts with the correct logical dimensions instead of its 0×0 defaults.
@@ -812,6 +820,19 @@ where
                         },
                     ) {
                         Ok(hw) => self.start_hardware_render_thread(hw),
+                        // The working renderer is already gone by here, so without the same Auto fallback the
+                        // init path takes, a machine that loses its adapter presents nothing for the rest of
+                        // the process.
+                        Err(e) if matches!(self.backend, RendererBackend::Auto) => {
+                            tracing::warn!(
+                                "HW renderer unavailable on restart ({e}), falling back to SW"
+                            );
+                            if let Err(e2) =
+                                self.start_software_render_thread(window, &system_fonts)
+                            {
+                                tracing::error!("SW fallback also failed: {e2}");
+                            }
+                        }
                         Err(e) => tracing::error!("Failed to switch to HW renderer: {e}"),
                     }
                 }
