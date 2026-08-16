@@ -34,6 +34,20 @@ pub(super) enum DrawStep {
     SetShaderClip {
         viewport_bind_group: wgpu::BindGroup,
     },
+    // Where the pass has to break. Carried as one payload so `build_segments` can move it into a `Segment`
+    // instead of repacking it field by field into a second set of variants that has to be kept identical.
+    Boundary(Boundary),
+    ShadowPlaceholder {
+        op_index: usize,
+    },
+    CompositeShadow {
+        bind_group: wgpu::BindGroup,
+    },
+}
+
+// A point where one render pass ends and another begins: everything the executor needs to open the new pass
+// or to composite the finished one.
+pub(super) enum Boundary {
     BeginLayer {
         msaa_texture: wgpu::Texture,
         msaa_view: wgpu::TextureView,
@@ -58,12 +72,6 @@ pub(super) enum DrawStep {
         bind_group: wgpu::BindGroup,
         // Outer scissor to apply during the composite blit, so the layer respects parent clip rects (e.g. scroll area). None = full render target.
         scissor: Option<Rect>,
-    },
-    ShadowPlaceholder {
-        op_index: usize,
-    },
-    CompositeShadow {
-        bind_group: wgpu::BindGroup,
     },
 }
 

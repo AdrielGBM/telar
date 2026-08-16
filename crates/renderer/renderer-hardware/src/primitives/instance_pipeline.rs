@@ -76,3 +76,28 @@ impl<I: bytemuck::Pod> InstancePipeline<I> {
         })
     }
 }
+
+/// Uploads `pending` into the pipeline's instance buffer when its contents changed since the last frame,
+/// remembering the hash in `prev_hash`; an empty batch resets the hash so the next non-empty one uploads.
+///
+/// Four pipelines asked exactly this in four byte-identical blocks, differing only in which buffer and which
+/// remembered hash they named.
+pub(crate) fn upload_instances<I: bytemuck::Pod>(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    pipeline: &mut InstancePipeline<I>,
+    pending: &[I],
+    prev_hash: &mut u64,
+) {
+    if pending.is_empty() {
+        *prev_hash = 0;
+        return;
+    }
+    let hash = renderer_core::hash_pod_slice(pending);
+    if hash == *prev_hash {
+        return;
+    }
+    pipeline.ensure_capacity(device, pending.len());
+    queue.write_buffer(&pipeline.instances_buffer, 0, bytemuck::cast_slice(pending));
+    *prev_hash = hash;
+}

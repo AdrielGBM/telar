@@ -126,3 +126,37 @@ pub(super) struct PooledTexture {
     pub(super) bucket_width: u32,
     pub(super) bucket_height: u32,
 }
+
+/// The MSAA and resolve pair for a layer at `bucket_w`×`bucket_h`: reused from `pool` when it holds a
+/// matching bucket, freshly created when it does not.
+///
+/// Takes the pool by reference rather than reading it off the renderer, so the layer pool and the shadow
+/// capture pool — which asked the same question in the same twenty-two lines — can both call it.
+pub(super) fn take_layer_textures(
+    pool: &mut Vec<PooledTexture>,
+    pipeline: &crate::primitives::layer::LayerPipeline,
+    device: &wgpu::Device,
+    bucket_w: u32,
+    bucket_h: u32,
+) -> (
+    wgpu::Texture,
+    wgpu::TextureView,
+    wgpu::Texture,
+    wgpu::TextureView,
+) {
+    match pool
+        .iter()
+        .position(|p| p.bucket_width == bucket_w && p.bucket_height == bucket_h)
+    {
+        Some(pos) => {
+            let p = pool.remove(pos);
+            (
+                p.msaa_texture,
+                p.msaa_view,
+                p.resolve_texture,
+                p.resolve_view,
+            )
+        }
+        None => pipeline.create_layer_textures(device, bucket_w, bucket_h),
+    }
+}

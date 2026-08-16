@@ -209,22 +209,8 @@ impl BlurPipeline {
             })
         };
 
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some(label),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: dst_view,
-                resolve_target: None,
-                depth_slice: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
+        let mut pass =
+            crate::pass::color_pass(encoder, label, dst_view, None, crate::pass::clear_store());
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &bg, &[]);
         if use_immediates {

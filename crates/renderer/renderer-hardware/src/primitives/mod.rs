@@ -11,6 +11,6 @@ mod pipeline;
 mod viewport;
 
 pub(crate) use fill::{EncodedFill, encode_fill_style};
-pub(crate) use instance_pipeline::InstancePipeline;
+pub(crate) use instance_pipeline::{InstancePipeline, upload_instances};
 pub(crate) use pipeline::create_render_pipeline;
 pub(crate) use viewport::{Viewport, create_viewport_bind_group_layout, create_viewport_buffer};

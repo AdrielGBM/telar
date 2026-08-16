@@ -1,36 +1,59 @@
 use super::*;
 
-use super::pool::{bucket_size, return_pooled_texture, take_pooled_texture};
+use super::pool::{bucket_size, return_pooled_texture, take_layer_textures, take_pooled_texture};
 use super::shadow::{ShadowCacheKind, ShadowKind};
-use super::steps::LayerAccum;
+use super::steps::{Boundary, LayerAccum};
 
-// A layer-boundary-split render segment: a run of draw steps, or a layer begin/composite/prerendered marker. Lifted to module scope so it can appear in the phase-method signatures that build and execute segments.
+// A layer-boundary-split render segment: a run of draw steps, or the boundary that ended it. Lifted to module scope so it can appear in the phase-method signatures that build and execute segments.
 pub(super) enum Segment {
-    Draw {
-        start: usize,
-        end: usize,
+    Draw { start: usize, end: usize },
+    Boundary(Boundary),
+}
+
+// A layer currently being rendered into: its two textures and views, the viewport bind group its draws bind,
+// and the bucket size the textures were allocated at. Was a seven-element tuple read by index, with the
+// meaning of each position written out again at every use.
+struct LayerTarget {
+    msaa_texture: wgpu::Texture,
+    msaa_view: wgpu::TextureView,
+    resolve_texture: wgpu::Texture,
+    resolve_view: wgpu::TextureView,
+    viewport_bind_group: wgpu::BindGroup,
+    width: u32,
+    height: u32,
+}
+
+// What asking the surface for this frame's texture left us with.
+enum Acquired {
+    Texture(wgpu::SurfaceTexture),
+    // Nothing to render into, and nothing wrong: the surface was lost, timed out or is occluded. Any
+    // reconfigure has already happened and the pending state is cleared; the caller drops the frame.
+    SkipFrame,
+}
+
+// One entry of the clip stack, shaped as what its `PopClip` has to undo. The three forms used to be three
+// parallel stacks plus three renderer fields, and nothing but arithmetic on their lengths said which entry a
+// `PopClip` was closing.
+enum ClipEntry {
+    // A plain scissor rect: the draw-state clip stack is the only thing to unwind.
+    Scissor,
+    // A rounded clip masked in-shader by the viewport SDF, carrying the scissor it displaced.
+    Shader {
+        outer_scissor: Option<Rect>,
     },
-    BeginLayer {
-        msaa_texture: wgpu::Texture,
-        msaa_view: wgpu::TextureView,
-        resolve_texture: wgpu::Texture,
-        resolve_view: wgpu::TextureView,
-        viewport_bind_group: wgpu::BindGroup,
-        width: u32,
-        height: u32,
-        offset_x: f32,
-        offset_y: f32,
-        backdrop_blur: f32,
+    // A rounded clip nested inside another one: drawn into a mini-layer, composited by this bind group.
+    Layer {
+        composite: wgpu::BindGroup,
+        outer_scissor: Option<Rect>,
     },
-    EndLayerComposite {
-        bind_group: wgpu::BindGroup,
-        cache_hash: Option<u64>,
-        scissor: Option<Rect>,
-    },
-    PrerenderedLayer {
-        bind_group: wgpu::BindGroup,
-        scissor: Option<Rect>,
-    },
+}
+
+// The three views a frame renders through. One value because they are created together and read together;
+// as three `Option` fields, every later phase re-stated the invariant with its own `.expect`.
+pub(super) struct FrameTargets {
+    surface_view: wgpu::TextureView,
+    msaa_view: wgpu::TextureView,
+    retained_view: wgpu::TextureView,
 }
 
 // Owned per-frame state threaded through the render_frame phase methods. Holds only owned values (never borrows of `self`) so it survives across the `&mut self` phase calls; `retained_view` in particular is a cheap Arc-backed clone of `self.retained_view` for exactly that reason.
@@ -43,9 +66,8 @@ pub(super) struct FrameCtx {
     dirty_scissor: Option<Rect>,
     load_op: wgpu::LoadOp<wgpu::Color>,
     output: Option<wgpu::SurfaceTexture>,
-    surface_view: Option<wgpu::TextureView>,
-    msaa_view: Option<wgpu::TextureView>,
-    retained_view: Option<wgpu::TextureView>,
+    // The three views the frame renders through, created together once the surface is acquired.
+    targets: Option<FrameTargets>,
     frame_scratch_textures: Vec<(
         u32,
         u32,
@@ -53,6 +75,22 @@ pub(super) struct FrameCtx {
         wgpu::Texture,
         wgpu::TextureView,
     )>,
+}
+
+// The frame's opening load: a clear to the application background, or a Load when it asked for none.
+fn frame_load_op(clear_color: Option<Color>) -> wgpu::LoadOp<wgpu::Color> {
+    match clear_color {
+        Some(c) => {
+            let c = c.to_array();
+            wgpu::LoadOp::Clear(wgpu::Color {
+                r: c[0] as f64,
+                g: c[1] as f64,
+                b: c[2] as f64,
+                a: c[3] as f64,
+            })
+        }
+        None => wgpu::LoadOp::Load,
+    }
 }
 
 // F1: confine a top-level layer composite to the dirty rect. A layer's mini-layer can be larger than
@@ -117,9 +155,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             }
         }
         self.layer_cache_pixel_budget = 4 * self.width as u64 * self.height as u64;
-        self.shader_clip_active = false;
-        self.shader_clip_depth = 0;
-        self.shader_clip_outer_scissor = None;
         self.clear_pending();
         self.publish_cache_stats();
         // Reclaim the previous frame's composite uniform buffers; the previous frame was already submitted/presented so they are no longer referenced by in-flight GPU work.
@@ -149,13 +184,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let frame_has_backdrop_blur = commands.iter().any(
             |c| matches!(c, DrawCommand::PushLayer { backdrop_blur, .. } if *backdrop_blur > 0.0),
         );
-        // Top-level layer composites are confined to the dirty rect (see confine_to_dirty), so F1
-        // damage priming is correct for opacity PushLayers, fill-layer-expanded translucent rounded
-        // rects, and nested rounded PushClips — their composites no longer touch preserved pixels
-        // outside the dirty region. Only a backdrop-blur layer still blocks damage: it samples the
-        // parent frame, which outside the dirty rect is the primed *previous* frame, so the blur near
-        // the dirty boundary would pull in stale content.
-        let frame_blocks_damage = frame_has_backdrop_blur;
         // F1 on the single-sample (mobile) path damage-tracks by Loading the persistent msaa_texture,
         // which requires rendering through the offscreen rather than straight into the rotating
         // swapchain — so direct-to-surface is disabled whenever damage tracking is on. (TELAR_HW_DAMAGE=0
@@ -174,12 +202,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.draw_state.reset();
 
         let interpret_start = renderer_core::perf::now_if_enabled();
-        let (scroll_blit, prime, prime_delta, dirty_scissor, damage) = self.analyze_frame(
-            commands,
-            clear_color,
-            frame_has_backdrop_blur,
-            frame_blocks_damage,
-        );
+        let (scroll_blit, prime, prime_delta, dirty_scissor, damage) =
+            self.analyze_frame(commands, clear_color, frame_has_backdrop_blur);
 
         renderer_core::perf::note_damage(damage);
         // F1: when damage tracking, repaint the app background (clear_color) inside the dirty scissor
@@ -197,15 +221,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             prime,
             prime_delta,
             dirty_scissor,
-            load_op: wgpu::LoadOp::Load,
+            load_op: frame_load_op(clear_color),
             output: None,
-            surface_view: None,
-            msaa_view: None,
-            retained_view: None,
+            targets: None,
             frame_scratch_textures: Vec::new(),
         };
 
-        if self.acquire_surface_and_upload(clear_color, &mut ctx)? {
+        if self.acquire_surface_and_upload(&mut ctx)? {
             return Ok(());
         }
 
@@ -247,42 +269,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             && self.width > 0
             && self.height > 0
         {
-            let acquired = {
-                let _swapchain = super::swapchain_lock();
-                self.surface.as_ref().unwrap().get_current_texture()
-            };
-            let output = match acquired {
-                wgpu::CurrentSurfaceTexture::Success(t) => t,
-                wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
-                    tracing::debug!("hw idle-blit: suboptimal surface");
-                    t
-                }
-                wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
-                    tracing::warn!("hw idle-blit: surface Lost/Outdated, reconfiguring");
-                    if let Some(config) = &self.config.clone() {
-                        let _swapchain = super::swapchain_rebuild_lock();
-                        self.surface
-                            .as_ref()
-                            .unwrap()
-                            .configure(&self.device, config);
-                    }
-                    self.clear_pending();
-                    return Ok(true);
-                }
-                wgpu::CurrentSurfaceTexture::Timeout => {
-                    tracing::warn!("hw idle-blit: Timeout, skipping frame");
-                    self.clear_pending();
-                    return Ok(true);
-                }
-                wgpu::CurrentSurfaceTexture::Occluded => {
-                    tracing::warn!("hw idle-blit: Occluded, skipping frame");
-                    self.clear_pending();
-                    return Ok(true);
-                }
-                other => {
-                    self.clear_pending();
-                    return Err(RendererError::Present(format!("surface error: {other:?}")));
-                }
+            let output = match self.acquire_surface_texture("hw idle-blit")? {
+                Acquired::Texture(t) => t,
+                Acquired::SkipFrame => return Ok(true),
             };
             let surface_view = output
                 .texture
@@ -313,22 +302,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             label: Some("telar-idle-blit"),
                         });
                 {
-                    let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("telar-idle-blit-pass"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &surface_view,
-                            resolve_target: None,
-                            depth_slice: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        occlusion_query_set: None,
-                        timestamp_writes: None,
-                        multiview_mask: None,
-                    });
+                    let mut blit = crate::pass::color_pass(
+                        &mut encoder,
+                        "telar-idle-blit-pass",
+                        &surface_view,
+                        None,
+                        crate::pass::clear_store(),
+                    );
                     blit.set_pipeline(&self.retained_blit_pipeline.pipeline);
                     blit.set_bind_group(0, &self.viewport_bind_group, &[]);
                     blit.set_bind_group(1, &retained_bg, &[]);
@@ -352,7 +332,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         commands: &[DrawCommand],
         clear_color: Option<Color>,
         frame_has_backdrop_blur: bool,
-        frame_blocks_damage: bool,
     ) -> (
         Option<renderer_core::ScrollBlit>,
         bool,
@@ -389,9 +368,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         // Requires an OPAQUE clear: the injected background rect draws through the premultiplied-alpha
         // rect pipeline, so a translucent clear_color would blend over (not replace) the primed frame
         // inside the dirty rect and accumulate error each frame, diverging from a full LoadOp::Clear.
+        // Top-level layer composites are confined to the dirty rect (see confine_to_dirty), so priming is
+        // correct for opacity PushLayers, fill-layer-expanded translucent rounded rects and nested rounded
+        // PushClips. Only a backdrop-blur layer still blocks damage: it samples the parent frame, which
+        // outside the dirty rect is the primed *previous* frame, so the blur near the dirty boundary would
+        // pull in stale content.
         let allow_damage_with_clear = hw_damage_with_clear_enabled()
             && clear_color.is_some_and(|c| c.a >= 1.0)
-            && !frame_blocks_damage
+            && !frame_has_backdrop_blur
             && ((self.msaa_samples > 1 && self.retained_view.is_some()) || self.msaa_samples == 1);
         // A transparent frame Loads instead of Clearing, which assumes the target still holds the previous
         // frame. That holds on the single-sample path, where the offscreen persists across frames (see the
@@ -434,6 +418,54 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         dirty_area <= surface_area * 0.6
     }
 
+    /// This frame's swapchain texture, or [`Acquired::SkipFrame`] when the surface has none to give.
+    ///
+    /// Lost/Outdated reconfigures and drops the frame; Timeout and Occluded just drop it. `what` names the
+    /// caller in the logs, which is the only thing that ever differed between the two copies of this.
+    fn acquire_surface_texture(&mut self, what: &str) -> Result<Acquired, RendererError> {
+        let acquired = {
+            let _swapchain = super::swapchain_lock();
+            self.surface.as_ref().unwrap().get_current_texture()
+        };
+        match acquired {
+            wgpu::CurrentSurfaceTexture::Success(t) => Ok(Acquired::Texture(t)),
+            wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
+                tracing::debug!("{what}: suboptimal surface, rendering anyway");
+                Ok(Acquired::Texture(t))
+            }
+            wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                tracing::warn!(
+                    "{what}: surface Lost/Outdated, reconfiguring {}x{}",
+                    self.width,
+                    self.height
+                );
+                if let Some(config) = &self.config.clone() {
+                    let _swapchain = super::swapchain_rebuild_lock();
+                    self.surface
+                        .as_ref()
+                        .unwrap()
+                        .configure(&self.device, config);
+                }
+                self.clear_pending();
+                Ok(Acquired::SkipFrame)
+            }
+            wgpu::CurrentSurfaceTexture::Timeout => {
+                tracing::warn!("{what}: surface Timeout, skipping frame");
+                self.clear_pending();
+                Ok(Acquired::SkipFrame)
+            }
+            wgpu::CurrentSurfaceTexture::Occluded => {
+                tracing::warn!("{what}: surface Occluded, skipping frame");
+                self.clear_pending();
+                Ok(Acquired::SkipFrame)
+            }
+            other => {
+                self.clear_pending();
+                Err(RendererError::Present(format!("surface error: {other:?}")))
+            }
+        }
+    }
+
     fn interpret_commands(
         &mut self,
         commands: &[DrawCommand],
@@ -444,10 +476,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let mut current_scissor: Option<Rect> = None;
         let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new(); // saves/restores current_scissor across PushLayer/PopLayer; layers disable frustum culling inside their bounds
         let mut layer_accum_stack: Vec<LayerAccum> = Vec::new();
-        // Composite bind_groups for rounded PushClip mini-layers, consumed at the matching PopClip.
-        let mut round_clip_composite: Vec<wgpu::BindGroup> = Vec::new();
-        // Parallel to draw_state clip stack: true = rounded mini-layer, false = scissor rect.
-        let mut clip_is_round: Vec<bool> = Vec::new();
+        // Parallel to the draw_state clip stack, and what each `PopClip` reads to know what it closes.
+        let mut clip_stack: Vec<ClipEntry> = Vec::new();
         let expanded_commands = expand_fill_layers(commands);
         let commands: &[DrawCommand] = expanded_commands.as_deref().unwrap_or(commands);
 
@@ -509,12 +539,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 DrawCommand::Rect { rect, style } => {
                     let rect = *rect;
                     let style = **style;
-                    if rect.width <= 0.0
-                        || rect.height <= 0.0
-                        || (style.fill.is_none() && style.stroke.is_none())
-                    {
-                        continue;
-                    }
                     self.flush_text();
                     self.flush_line();
                     self.flush_image();
@@ -840,20 +864,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         self.draw_state.cumulative_matrix,
                         *rect,
                     );
+                    let shader_clip_active = clip_stack
+                        .iter()
+                        .any(|entry| matches!(entry, ClipEntry::Shader { .. }));
                     if radius.is_zero() {
                         let effective = self.draw_state.push_clip(*rect);
                         current_scissor = Some(effective);
-                        clip_is_round.push(false);
+                        clip_stack.push(ClipEntry::Scissor);
                         self.pending_steps.push(DrawStep::SetScissor {
                             rect: Some(effective),
                         });
-                    } else if !self.shader_clip_active {
+                    } else if !shader_clip_active {
                         // Non-nested rounded clip: mask corners in-shader via the viewport SDF, no mini-layer. A scissor to the clip rect still bounds the cheap pixels. TODO(sprint3-t8): a PushLayer nested inside this shader clip renders into its own pass without the SDF mask, so the layer's corners are not rounded; such cases still need the mini-layer fallback.
                         let effective = self.draw_state.push_clip(*rect);
-                        clip_is_round.push(false);
-                        self.shader_clip_active = true;
-                        self.shader_clip_depth = clip_is_round.len();
-                        self.shader_clip_outer_scissor = current_scissor;
+                        clip_stack.push(ClipEntry::Shader {
+                            outer_scissor: current_scissor,
+                        });
                         current_scissor = Some(effective);
                         let clip_vp_bg =
                             self.take_shader_clip_viewport_bind_group(*rect, radius.top_left);
@@ -865,10 +891,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         });
                     } else {
                         // Nested rounded clip: fall back to a mini-layer, draw into it, composite with SDF mask at PopClip.
-                        scissor_layer_stack.push(current_scissor);
+                        let outer_scissor = current_scissor;
                         current_scissor = None;
                         self.draw_state.push_clip(*rect);
-                        clip_is_round.push(true);
                         let ox = rect.x.floor().max(0.0);
                         let oy = rect.y.floor().max(0.0);
                         let texture_width_logical = (rect.width.ceil() as u32).max(1);
@@ -882,27 +907,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         let bucket_w = bucket_size(texture_width);
                         let bucket_h = bucket_size(texture_height);
                         let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
-                            if let Some(pos) =
-                                self.layer_texture_pool
-                                    .iter()
-                                    .position(|p: &PooledTexture| {
-                                        p.bucket_width == bucket_w && p.bucket_height == bucket_h
-                                    })
-                            {
-                                let p = self.layer_texture_pool.remove(pos);
-                                (
-                                    p.msaa_texture,
-                                    p.msaa_view,
-                                    p.resolve_texture,
-                                    p.resolve_view,
-                                )
-                            } else {
-                                self.layer_pipeline.create_layer_textures(
-                                    &self.device,
-                                    bucket_w,
-                                    bucket_h,
-                                )
-                            };
+                            take_layer_textures(
+                                &mut self.layer_texture_pool,
+                                &self.layer_pipeline,
+                                &self.device,
+                                bucket_w,
+                                bucket_h,
+                            );
                         // Use physical bucket dimensions: to_ndc scales logical coords by scale_factor, so size must be physical to map [0, logical_w] correctly to NDC [-1, 1].
                         let layer_vp = Viewport::new(
                             [bucket_w as f32, bucket_h as f32],
@@ -929,45 +940,50 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             radius.top_left,
                             uv_scale,
                         );
-                        self.pending_steps.push(DrawStep::BeginLayer {
-                            msaa_texture,
-                            msaa_view,
-                            resolve_texture,
-                            resolve_view,
-                            viewport_bind_group: layer_vp_bg,
-                            width: bucket_w,
-                            height: bucket_h,
-                            offset_x: ox,
-                            offset_y: oy,
-                            backdrop_blur: 0.0,
-                        });
+                        self.pending_steps
+                            .push(DrawStep::Boundary(Boundary::BeginLayer {
+                                msaa_texture,
+                                msaa_view,
+                                resolve_texture,
+                                resolve_view,
+                                viewport_bind_group: layer_vp_bg,
+                                width: bucket_w,
+                                height: bucket_h,
+                                offset_x: ox,
+                                offset_y: oy,
+                                backdrop_blur: 0.0,
+                            }));
                         // Pool return for clip layer textures is handled by the EndLayerComposite execution path.
-                        round_clip_composite.push(composite_bg);
+                        clip_stack.push(ClipEntry::Layer {
+                            composite: composite_bg,
+                            outer_scissor,
+                        });
                     }
                 }
                 DrawCommand::PopClip => {
                     self.flush_all();
-                    let popped_depth = clip_is_round.len();
-                    if clip_is_round.pop() == Some(true) {
-                        let composite_bg = round_clip_composite
-                            .pop()
-                            .expect("round_clip_composite underflow");
+                    let popped = clip_stack.pop();
+                    if let Some(ClipEntry::Layer {
+                        composite,
+                        outer_scissor,
+                    }) = popped
+                    {
                         self.draw_state.pop_clip();
-                        current_scissor = scissor_layer_stack.pop().flatten();
-                        self.pending_steps.push(DrawStep::EndLayerComposite {
-                            bind_group: composite_bg,
-                            // Round-clip layers draw the clip mask into the texture, so their content is not safely cacheable by command hash.
-                            cache_hash: None,
-                            scissor: current_scissor,
-                        });
+                        current_scissor = outer_scissor;
+                        self.pending_steps
+                            .push(DrawStep::Boundary(Boundary::EndLayerComposite {
+                                bind_group: composite,
+                                // Round-clip layers draw the clip mask into the texture, so their content is not safely cacheable by command hash.
+                                cache_hash: None,
+                                scissor: current_scissor,
+                            }));
                         self.pending_steps.push(DrawStep::SetScissor {
                             rect: current_scissor,
                         });
-                    } else if self.shader_clip_active && popped_depth == self.shader_clip_depth {
-                        // Matching PopClip for the active in-shader rounded clip: restore the unclipped viewport and the outer scissor.
+                    } else if let Some(ClipEntry::Shader { outer_scissor }) = popped {
+                        // Matching PopClip for the in-shader rounded clip: restore the unclipped viewport and the outer scissor.
                         self.draw_state.pop_clip();
-                        self.shader_clip_active = false;
-                        current_scissor = self.shader_clip_outer_scissor;
+                        current_scissor = outer_scissor;
                         let base_vp_bg = self.take_shader_clip_viewport_bind_group(
                             Rect::new(0.0, 0.0, 0.0, 0.0),
                             0.0,
@@ -1131,10 +1147,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                 .truncate(accum.line_instance_start as usize);
                             self.pending_image_instances
                                 .truncate(accum.image_instance_start as usize);
-                            self.pending_steps.push(DrawStep::PrerenderedLayer {
-                                bind_group,
-                                scissor: current_scissor,
-                            });
+                            self.pending_steps.push(DrawStep::Boundary(
+                                Boundary::PrerenderedLayer {
+                                    bind_group,
+                                    scissor: current_scissor,
+                                },
+                            ));
                             // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
                             if let Some(s) = current_scissor {
                                 self.pending_steps
@@ -1142,28 +1160,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             }
                         } else {
                             let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
-                                if let Some(pos) =
-                                    self.layer_texture_pool
-                                        .iter()
-                                        .position(|p: &PooledTexture| {
-                                            p.bucket_width == bucket_w
-                                                && p.bucket_height == bucket_h
-                                        })
-                                {
-                                    let p = self.layer_texture_pool.remove(pos);
-                                    (
-                                        p.msaa_texture,
-                                        p.msaa_view,
-                                        p.resolve_texture,
-                                        p.resolve_view,
-                                    )
-                                } else {
-                                    self.layer_pipeline.create_layer_textures(
-                                        &self.device,
-                                        bucket_w,
-                                        bucket_h,
-                                    )
-                                };
+                                take_layer_textures(
+                                    &mut self.layer_texture_pool,
+                                    &self.layer_pipeline,
+                                    &self.device,
+                                    bucket_w,
+                                    bucket_h,
+                                );
                             // Physical bucket dimensions: to_ndc multiplies logical coords by scale_factor, so using physical size correctly maps logical content into the physical texture.
                             let layer_vp = Viewport::new(
                                 [bucket_w as f32, bucket_h as f32],
@@ -1192,7 +1195,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             );
                             self.pending_steps.insert(
                                 accum.begin_step_index,
-                                DrawStep::BeginLayer {
+                                DrawStep::Boundary(Boundary::BeginLayer {
                                     msaa_texture,
                                     msaa_view,
                                     resolve_texture,
@@ -1203,18 +1206,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                     offset_x,
                                     offset_y,
                                     backdrop_blur: accum.backdrop_blur,
-                                },
+                                }),
                             );
-                            self.pending_steps.push(DrawStep::EndLayerComposite {
-                                bind_group: composite_bg,
-                                // Only cache when no dirty-scissor is active; otherwise the layer's draws may be clipped to the dirty region, leaving a partially-rendered texture.
-                                cache_hash: if dirty_scissor.is_none() {
-                                    layer_hash
-                                } else {
-                                    None
+                            self.pending_steps.push(DrawStep::Boundary(
+                                Boundary::EndLayerComposite {
+                                    bind_group: composite_bg,
+                                    // Only cache when no dirty-scissor is active; otherwise the layer's draws may be clipped to the dirty region, leaving a partially-rendered texture.
+                                    cache_hash: if dirty_scissor.is_none() {
+                                        layer_hash
+                                    } else {
+                                        None
+                                    },
+                                    scissor: current_scissor,
                                 },
-                                scissor: current_scissor,
-                            });
+                            ));
                             // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
                             if let Some(s) = current_scissor {
                                 self.pending_steps
@@ -1229,23 +1234,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.flush_all();
     }
 
-    fn acquire_surface_and_upload(
-        &mut self,
-        clear_color: Option<Color>,
-        ctx: &mut FrameCtx,
-    ) -> Result<bool, RendererError> {
-        ctx.load_op = if let Some(c) = clear_color {
-            let c_arr = c.to_array();
-            wgpu::LoadOp::Clear(wgpu::Color {
-                r: c_arr[0] as f64,
-                g: c_arr[1] as f64,
-                b: c_arr[2] as f64,
-                a: c_arr[3] as f64,
-            })
-        } else {
-            wgpu::LoadOp::Load
-        };
-
+    fn acquire_surface_and_upload(&mut self, ctx: &mut FrameCtx) -> Result<bool, RendererError> {
         if self.config.is_none() || self.width == 0 || self.height == 0 {
             tracing::warn!(
                 "hw render_frame: skipping, config={} w={} h={}",
@@ -1259,46 +1248,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         // Windowed: acquire the swapchain texture to present into. Headless (surface None): `output` stays None and every draw targets `offscreen_output` instead.
         let output: Option<wgpu::SurfaceTexture> = if self.surface.is_some() {
-            let acquired = {
-                let _swapchain = super::swapchain_lock();
-                self.surface.as_ref().unwrap().get_current_texture()
-            };
-            match acquired {
-                wgpu::CurrentSurfaceTexture::Success(t) => Some(t),
-                wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
-                    tracing::debug!("hw render_frame: suboptimal surface, rendering anyway");
-                    Some(t)
-                }
-                wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
-                    tracing::warn!(
-                        "hw render_frame: surface Lost/Outdated, reconfiguring {}x{}",
-                        self.width,
-                        self.height
-                    );
-                    if let Some(config) = &self.config.clone() {
-                        let _swapchain = super::swapchain_rebuild_lock();
-                        self.surface
-                            .as_ref()
-                            .unwrap()
-                            .configure(&self.device, config);
-                    }
-                    self.clear_pending();
-                    return Ok(true);
-                }
-                wgpu::CurrentSurfaceTexture::Timeout => {
-                    tracing::warn!("hw render_frame: surface Timeout, skipping frame");
-                    self.clear_pending();
-                    return Ok(true);
-                }
-                wgpu::CurrentSurfaceTexture::Occluded => {
-                    tracing::warn!("hw render_frame: surface Occluded, skipping frame");
-                    self.clear_pending();
-                    return Ok(true);
-                }
-                other => {
-                    self.clear_pending();
-                    return Err(RendererError::Present(format!("surface error: {other:?}")));
-                }
+            match self.acquire_surface_texture("hw render_frame")? {
+                Acquired::Texture(t) => Some(t),
+                Acquired::SkipFrame => return Ok(true),
             }
         } else {
             None
@@ -1322,73 +1274,34 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 .sync(&self.queue, &mut caches.text_shaper.atlas)
         });
 
-        if !self.pending_instances.is_empty() {
-            let h = hash_pod_slice(&self.pending_instances);
-            if h != self.prev_rect_hash {
-                self.rect_pipeline
-                    .instances
-                    .ensure_capacity(&self.device, self.pending_instances.len());
-                self.queue.write_buffer(
-                    &self.rect_pipeline.instances.instances_buffer,
-                    0,
-                    bytemuck::cast_slice(&self.pending_instances),
-                );
-                self.prev_rect_hash = h;
-            }
-        } else {
-            self.prev_rect_hash = 0;
-        }
-
-        if !self.pending_text_instances.is_empty() {
-            let h = hash_pod_slice(&self.pending_text_instances);
-            if h != self.prev_text_hash {
-                self.text_pipeline
-                    .instances
-                    .ensure_capacity(&self.device, self.pending_text_instances.len());
-                self.queue.write_buffer(
-                    &self.text_pipeline.instances.instances_buffer,
-                    0,
-                    bytemuck::cast_slice(&self.pending_text_instances),
-                );
-                self.prev_text_hash = h;
-            }
-        } else {
-            self.prev_text_hash = 0;
-        }
-
-        if !self.pending_line_instances.is_empty() {
-            let h = hash_pod_slice(&self.pending_line_instances);
-            if h != self.prev_line_hash {
-                self.line_pipeline
-                    .instances
-                    .ensure_capacity(&self.device, self.pending_line_instances.len());
-                self.queue.write_buffer(
-                    &self.line_pipeline.instances.instances_buffer,
-                    0,
-                    bytemuck::cast_slice(&self.pending_line_instances),
-                );
-                self.prev_line_hash = h;
-            }
-        } else {
-            self.prev_line_hash = 0;
-        }
-
-        if !self.pending_image_instances.is_empty() {
-            let h = hash_pod_slice(&self.pending_image_instances);
-            if h != self.prev_image_hash {
-                self.image_pipeline
-                    .instances
-                    .ensure_capacity(&self.device, self.pending_image_instances.len());
-                self.queue.write_buffer(
-                    &self.image_pipeline.instances.instances_buffer,
-                    0,
-                    bytemuck::cast_slice(&self.pending_image_instances),
-                );
-                self.prev_image_hash = h;
-            }
-        } else {
-            self.prev_image_hash = 0;
-        }
+        upload_instances(
+            &self.device,
+            &self.queue,
+            &mut self.rect_pipeline.instances,
+            &self.pending_instances,
+            &mut self.prev_rect_hash,
+        );
+        upload_instances(
+            &self.device,
+            &self.queue,
+            &mut self.text_pipeline.instances,
+            &self.pending_text_instances,
+            &mut self.prev_text_hash,
+        );
+        upload_instances(
+            &self.device,
+            &self.queue,
+            &mut self.line_pipeline.instances,
+            &self.pending_line_instances,
+            &mut self.prev_line_hash,
+        );
+        upload_instances(
+            &self.device,
+            &self.queue,
+            &mut self.image_pipeline.instances,
+            &self.pending_image_instances,
+            &mut self.prev_image_hash,
+        );
 
         if !self.pending_path_vertices.is_empty() {
             self.path_pipeline.ensure_capacity(
@@ -1433,325 +1346,300 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .iter()
             .any(|op| matches!(op.kind, ShadowKind::Path { .. }));
 
-        let shadow_results: Vec<Option<wgpu::BindGroup>> = if has_text_shadows || has_path_shadows {
-            // Reuse the retained shadow instance buffer + bind group when the instance data is unchanged; otherwise (re)create and cache them. This avoids a create_buffer_init + create_bind_group round-trip every frame for static shadows.
-            let shadow_instances_bg_opt = if has_text_shadows {
-                let instances_hash = hash_pod_slice(&self.pending_shadow_instances);
-                let cache_valid = self
-                    .shadow_instances_cache
-                    .as_ref()
-                    .is_some_and(|(h, _, _)| *h == instances_hash);
-                if !cache_valid {
-                    let buf = self
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("telar-shadow-instances"),
-                            contents: bytemuck::cast_slice(&self.pending_shadow_instances),
-                            usage: wgpu::BufferUsages::STORAGE,
-                        });
-                    let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some("telar-shadow-instances-bg"),
-                        layout: &self.text_pipeline.instances.instances_bind_group_layout,
-                        entries: &[wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: buf.as_entire_binding(),
-                        }],
-                    });
-                    self.shadow_instances_cache = Some((instances_hash, buf, bg));
-                }
-                // create_bind_group returns an owned Arc-backed handle, so clone to hand a copy to the draw loop while keeping the cached one.
-                self.shadow_instances_cache
-                    .as_ref()
-                    .map(|(_, _, bg)| bg.clone())
-            } else {
-                None
-            };
+        if !has_text_shadows && !has_path_shadows {
+            return;
+        }
 
-            let shadow_path_vb_opt = if has_path_shadows {
-                Some(
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("telar-shadow-path-vb"),
-                            contents: bytemuck::cast_slice(&self.pending_shadow_path_vertices),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        }),
-                )
-            } else {
-                None
-            };
-            let shadow_path_ib_opt = if has_path_shadows {
-                Some(
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("telar-shadow-path-ib"),
-                            contents: bytemuck::cast_slice(&self.pending_shadow_path_indices),
-                            usage: wgpu::BufferUsages::INDEX,
-                        }),
-                )
-            } else {
-                None
-            };
-            let shadow_path_fd_bg_opt = if has_path_shadows {
-                let fd_buf = self
+        // Reuse the retained shadow instance buffer + bind group when the instance data is unchanged; otherwise (re)create and cache them. This avoids a create_buffer_init + create_bind_group round-trip every frame for static shadows.
+        let shadow_instances_bg_opt = if has_text_shadows {
+            let instances_hash = hash_pod_slice(&self.pending_shadow_instances);
+            let cache_valid = self
+                .shadow_instances_cache
+                .as_ref()
+                .is_some_and(|(h, _, _)| *h == instances_hash);
+            if !cache_valid {
+                let buf = self
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("telar-shadow-path-fd"),
-                        contents: bytemuck::cast_slice(&self.pending_shadow_path_fill_data),
+                        label: Some("telar-shadow-instances"),
+                        contents: bytemuck::cast_slice(&self.pending_shadow_instances),
                         usage: wgpu::BufferUsages::STORAGE,
                     });
                 let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("telar-shadow-path-fd-bg"),
-                    layout: &self.path_pipeline.fill_data.bind_group_layout,
+                    label: Some("telar-shadow-instances-bg"),
+                    layout: &self.text_pipeline.instances.instances_bind_group_layout,
                     entries: &[wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: fd_buf.as_entire_binding(),
+                        resource: buf.as_entire_binding(),
                     }],
                 });
-                Some(bg)
-            } else {
-                None
+                self.shadow_instances_cache = Some((instances_hash, buf, bg));
+            }
+            // create_bind_group returns an owned Arc-backed handle, so clone to hand a copy to the draw loop while keeping the cached one.
+            self.shadow_instances_cache
+                .as_ref()
+                .map(|(_, _, bg)| bg.clone())
+        } else {
+            None
+        };
+
+        let shadow_path_vb_opt = if has_path_shadows {
+            Some(
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("telar-shadow-path-vb"),
+                        contents: bytemuck::cast_slice(&self.pending_shadow_path_vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    }),
+            )
+        } else {
+            None
+        };
+        let shadow_path_ib_opt = if has_path_shadows {
+            Some(
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("telar-shadow-path-ib"),
+                        contents: bytemuck::cast_slice(&self.pending_shadow_path_indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    }),
+            )
+        } else {
+            None
+        };
+        let shadow_path_fd_bg_opt = if has_path_shadows {
+            let fd_buf = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("telar-shadow-path-fd"),
+                    contents: bytemuck::cast_slice(&self.pending_shadow_path_fill_data),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+            let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("telar-shadow-path-fd-bg"),
+                layout: &self.path_pipeline.fill_data.bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: fd_buf.as_entire_binding(),
+                }],
+            });
+            Some(bg)
+        } else {
+            None
+        };
+
+        let mut results: Vec<Option<wgpu::BindGroup>> =
+            Vec::with_capacity(self.pending_shadows.len());
+
+        // Hoist the shared geometry bind groups/buffers out of the loop so both shadow kinds can read them. They are only created when the corresponding shadow kind is present.
+        let shadow_instances_bg = shadow_instances_bg_opt;
+        let shadow_path_vb = shadow_path_vb_opt;
+        let shadow_path_ib = shadow_path_ib_opt;
+        let shadow_path_fd_bg = shadow_path_fd_bg_opt;
+
+        for op in &self.pending_shadows {
+            let key = match &op.kind {
+                ShadowKind::Text {
+                    instance_start,
+                    instance_end,
+                } => {
+                    let instance_count = instance_end - instance_start;
+                    let instances_hash = hash_pod_slice(
+                        &self.pending_shadow_instances
+                            [*instance_start as usize..*instance_end as usize],
+                    );
+                    ShadowCacheKey {
+                        kind: ShadowCacheKind::Text {
+                            instance_start: *instance_start,
+                            instance_count,
+                            instances_hash,
+                        },
+                        sigma_bits: op.sigma.to_bits(),
+                        texture_width: op.texture_width,
+                        texture_height: op.texture_height,
+                    }
+                }
+                ShadowKind::Path {
+                    index_start,
+                    index_end,
+                } => {
+                    let index_count = index_end - index_start;
+                    let geometry_hash = {
+                        let verts = &self.pending_shadow_path_vertices;
+                        let idxs = &self.pending_shadow_path_indices
+                            [*index_start as usize..*index_end as usize];
+                        let h = hash_pod_slice(verts);
+                        let mut hasher = FxHasher::default();
+                        h.hash(&mut hasher);
+                        hash_pod_slice(idxs).hash(&mut hasher);
+                        hasher.finish()
+                    };
+                    ShadowCacheKey {
+                        kind: ShadowCacheKind::Path {
+                            index_start: *index_start,
+                            index_count,
+                            geometry_hash,
+                        },
+                        sigma_bits: op.sigma.to_bits(),
+                        texture_width: op.texture_width,
+                        texture_height: op.texture_height,
+                    }
+                }
             };
 
-            let mut results: Vec<Option<wgpu::BindGroup>> =
-                Vec::with_capacity(self.pending_shadows.len());
+            // Cloned out of the cache — a `TextureView` is an `Arc` handle, so this names the same GPU object —
+            // because the bind group is built from `self.composite_pipeline`, and the cache's borrow cannot be
+            // held across that.
+            let cached_view = crate::caches::with_shared(|caches| {
+                caches
+                    .shadow_resolved
+                    .get(&key)
+                    .map(|(_, view)| view.clone())
+            })
+            .flatten();
+            if let Some(cached_view) = cached_view {
+                let cbw = bucket_size(op.texture_width);
+                let cbh = bucket_size(op.texture_height);
+                let bg = self.composite_pipeline.create_bind_group(
+                    &self.device,
+                    &self.queue,
+                    &cached_view,
+                    op.dest,
+                    1.0,
+                    0.0,
+                    [
+                        op.texture_width as f32 / cbw as f32,
+                        op.texture_height as f32 / cbh as f32,
+                    ],
+                );
+                results.push(Some(bg));
+                continue;
+            }
 
-            // Hoist the shared geometry bind groups/buffers out of the loop so both shadow kinds can read them. They are only created when the corresponding shadow kind is present.
-            let shadow_instances_bg = shadow_instances_bg_opt;
-            let shadow_path_vb = shadow_path_vb_opt;
-            let shadow_path_ib = shadow_path_ib_opt;
-            let shadow_path_fd_bg = shadow_path_fd_bg_opt;
+            let cap_bucket_w = bucket_size(op.texture_width);
+            let cap_bucket_h = bucket_size(op.texture_height);
+            let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
+                take_layer_textures(
+                    &mut self.shadow_capture_pool,
+                    &self.layer_pipeline,
+                    &self.device,
+                    cap_bucket_w,
+                    cap_bucket_h,
+                );
 
-            for op in &self.pending_shadows {
-                let key = match &op.kind {
+            // Use bucket dimensions: shadow-texture vertices are 0-based local coords, so the viewport size must match the physical texture, not the logical one.
+            let vp_data = Viewport::new(
+                [cap_bucket_w as f32, cap_bucket_h as f32],
+                [0.0, 0.0],
+                self.scale_factor,
+            );
+            let vp_buf = crate::primitives::create_viewport_buffer(
+                &self.device,
+                "telar-shadow-vp",
+                &vp_data,
+            );
+            let shadow_vp_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("telar-shadow-vp-bg"),
+                layout: &self.viewport_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: vp_buf.as_entire_binding(),
+                }],
+            });
+
+            {
+                let cap_draw_view = if self.msaa_samples > 1 {
+                    &cap_msaa_view
+                } else {
+                    &cap_resolve_view
+                };
+                let cap_resolve_opt = if self.msaa_samples > 1 {
+                    Some(&cap_resolve_view)
+                } else {
+                    None
+                };
+                let mut pass = crate::pass::color_pass(
+                    encoder,
+                    "telar-shadow-capture",
+                    cap_draw_view,
+                    cap_resolve_opt,
+                    wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: if self.msaa_samples > 1 && cap_resolve_opt.is_some() {
+                            wgpu::StoreOp::Discard
+                        } else {
+                            wgpu::StoreOp::Store
+                        },
+                    },
+                );
+                match &op.kind {
                     ShadowKind::Text {
                         instance_start,
                         instance_end,
                     } => {
-                        let instance_count = instance_end - instance_start;
-                        let instances_hash = hash_pod_slice(
-                            &self.pending_shadow_instances
-                                [*instance_start as usize..*instance_end as usize],
-                        );
-                        ShadowCacheKey {
-                            kind: ShadowCacheKind::Text {
-                                instance_start: *instance_start,
-                                instance_count,
-                                instances_hash,
-                            },
-                            sigma_bits: op.sigma.to_bits(),
-                            texture_width: op.texture_width,
-                            texture_height: op.texture_height,
-                        }
+                        let shadow_instances_bg = shadow_instances_bg.as_ref().unwrap();
+                        pass.set_pipeline(&self.text_pipeline.pipeline);
+                        pass.set_bind_group(0, &shadow_vp_bg, &[]);
+                        pass.set_bind_group(1, shadow_instances_bg, &[]);
+                        pass.set_bind_group(2, &self.text_pipeline.atlas_bind_group, &[]);
+                        pass.draw(0..6, *instance_start..*instance_end);
                     }
                     ShadowKind::Path {
                         index_start,
                         index_end,
                     } => {
-                        let index_count = index_end - index_start;
-                        let geometry_hash = {
-                            let verts = &self.pending_shadow_path_vertices;
-                            let idxs = &self.pending_shadow_path_indices
-                                [*index_start as usize..*index_end as usize];
-                            let h = hash_pod_slice(verts);
-                            let mut hasher = FxHasher::default();
-                            h.hash(&mut hasher);
-                            hash_pod_slice(idxs).hash(&mut hasher);
-                            hasher.finish()
-                        };
-                        ShadowCacheKey {
-                            kind: ShadowCacheKind::Path {
-                                index_start: *index_start,
-                                index_count,
-                                geometry_hash,
-                            },
-                            sigma_bits: op.sigma.to_bits(),
-                            texture_width: op.texture_width,
-                            texture_height: op.texture_height,
-                        }
-                    }
-                };
-
-                // Cloned out of the cache — a `TextureView` is an `Arc` handle, so this names the same GPU object —
-                // because the bind group is built from `self.composite_pipeline`, and the cache's borrow cannot be
-                // held across that.
-                let cached_view = crate::caches::with_shared(|caches| {
-                    caches
-                        .shadow_resolved
-                        .get(&key)
-                        .map(|(_, view)| view.clone())
-                })
-                .flatten();
-                if let Some(cached_view) = cached_view {
-                    let cbw = bucket_size(op.texture_width);
-                    let cbh = bucket_size(op.texture_height);
-                    let bg = self.composite_pipeline.create_bind_group(
-                        &self.device,
-                        &self.queue,
-                        &cached_view,
-                        op.dest,
-                        1.0,
-                        0.0,
-                        [
-                            op.texture_width as f32 / cbw as f32,
-                            op.texture_height as f32 / cbh as f32,
-                        ],
-                    );
-                    results.push(Some(bg));
-                    continue;
-                }
-
-                let cap_bucket_w = bucket_size(op.texture_width);
-                let cap_bucket_h = bucket_size(op.texture_height);
-                let (cap_msaa_texture, cap_msaa_view, cap_resolve_texture, cap_resolve_view) =
-                    if let Some(pos) =
-                        self.shadow_capture_pool
-                            .iter()
-                            .position(|p: &PooledTexture| {
-                                p.bucket_width == cap_bucket_w && p.bucket_height == cap_bucket_h
-                            })
-                    {
-                        let p = self.shadow_capture_pool.remove(pos);
-                        (
-                            p.msaa_texture,
-                            p.msaa_view,
-                            p.resolve_texture,
-                            p.resolve_view,
-                        )
-                    } else {
-                        self.layer_pipeline.create_layer_textures(
-                            &self.device,
-                            cap_bucket_w,
-                            cap_bucket_h,
-                        )
-                    };
-
-                // Use bucket dimensions: shadow-texture vertices are 0-based local coords, so the viewport size must match the physical texture, not the logical one.
-                let vp_data = Viewport::new(
-                    [cap_bucket_w as f32, cap_bucket_h as f32],
-                    [0.0, 0.0],
-                    self.scale_factor,
-                );
-                let vp_buf = crate::primitives::create_viewport_buffer(
-                    &self.device,
-                    "telar-shadow-vp",
-                    &vp_data,
-                );
-                let shadow_vp_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("telar-shadow-vp-bg"),
-                    layout: &self.viewport_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: vp_buf.as_entire_binding(),
-                    }],
-                });
-
-                {
-                    let cap_draw_view = if self.msaa_samples > 1 {
-                        &cap_msaa_view
-                    } else {
-                        &cap_resolve_view
-                    };
-                    let cap_resolve_opt = if self.msaa_samples > 1 {
-                        Some(&cap_resolve_view)
-                    } else {
-                        None
-                    };
-                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("telar-shadow-capture"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: cap_draw_view,
-                            resolve_target: cap_resolve_opt,
-                            depth_slice: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                store: if self.msaa_samples > 1 && cap_resolve_opt.is_some() {
-                                    wgpu::StoreOp::Discard
-                                } else {
-                                    wgpu::StoreOp::Store
-                                },
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        occlusion_query_set: None,
-                        timestamp_writes: None,
-                        multiview_mask: None,
-                    });
-                    match &op.kind {
-                        ShadowKind::Text {
-                            instance_start,
-                            instance_end,
-                        } => {
-                            let shadow_instances_bg = shadow_instances_bg.as_ref().unwrap();
-                            pass.set_pipeline(&self.text_pipeline.pipeline);
-                            pass.set_bind_group(0, &shadow_vp_bg, &[]);
-                            pass.set_bind_group(1, shadow_instances_bg, &[]);
-                            pass.set_bind_group(2, &self.text_pipeline.atlas_bind_group, &[]);
-                            pass.draw(0..6, *instance_start..*instance_end);
-                        }
-                        ShadowKind::Path {
-                            index_start,
-                            index_end,
-                        } => {
-                            let shadow_path_vb = shadow_path_vb.as_ref().unwrap();
-                            let shadow_path_ib = shadow_path_ib.as_ref().unwrap();
-                            let shadow_path_fd_bg = shadow_path_fd_bg.as_ref().unwrap();
-                            pass.set_pipeline(&self.path_pipeline.pipeline);
-                            pass.set_bind_group(0, &shadow_vp_bg, &[]);
-                            pass.set_bind_group(1, shadow_path_fd_bg, &[]);
-                            pass.set_vertex_buffer(0, shadow_path_vb.slice(..));
-                            pass.set_index_buffer(
-                                shadow_path_ib.slice(..),
-                                wgpu::IndexFormat::Uint32,
-                            );
-                            pass.draw_indexed(*index_start..*index_end, 0, 0..1);
-                        }
+                        let shadow_path_vb = shadow_path_vb.as_ref().unwrap();
+                        let shadow_path_ib = shadow_path_ib.as_ref().unwrap();
+                        let shadow_path_fd_bg = shadow_path_fd_bg.as_ref().unwrap();
+                        pass.set_pipeline(&self.path_pipeline.pipeline);
+                        pass.set_bind_group(0, &shadow_vp_bg, &[]);
+                        pass.set_bind_group(1, shadow_path_fd_bg, &[]);
+                        pass.set_vertex_buffer(0, shadow_path_vb.slice(..));
+                        pass.set_index_buffer(shadow_path_ib.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(*index_start..*index_end, 0, 0..1);
                     }
                 }
-
-                let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
-                    &self.device,
-                    &mut *encoder,
-                    &cap_resolve_view,
-                    cap_bucket_w,
-                    cap_bucket_h,
-                    op.sigma,
-                );
-                let shadow_uv_scale = [
-                    op.texture_width as f32 / cap_bucket_w as f32,
-                    op.texture_height as f32 / cap_bucket_h as f32,
-                ];
-                let bg = self.composite_pipeline.create_bind_group(
-                    &self.device,
-                    &self.queue,
-                    &blurred_view,
-                    op.dest,
-                    1.0,
-                    0.0,
-                    shadow_uv_scale,
-                );
-                results.push(Some(bg));
-                crate::caches::with_shared(|caches| {
-                    caches
-                        .shadow_resolved
-                        .insert(key, (blurred_texture, blurred_view))
-                });
-                self.shadow_capture_pool.push(PooledTexture {
-                    msaa_texture: cap_msaa_texture,
-                    msaa_view: cap_msaa_view,
-                    resolve_texture: cap_resolve_texture,
-                    resolve_view: cap_resolve_view,
-                    bucket_width: cap_bucket_w,
-                    bucket_height: cap_bucket_h,
-                });
             }
 
-            // Shadow passes are recorded into the shared `encoder` and submitted with the main pass; no separate submit here.
-            results
-        } else {
-            Vec::new()
-        };
+            let (blurred_texture, blurred_view) = self.blur_pipeline.apply(
+                &self.device,
+                &mut *encoder,
+                &cap_resolve_view,
+                cap_bucket_w,
+                cap_bucket_h,
+                op.sigma,
+            );
+            let shadow_uv_scale = [
+                op.texture_width as f32 / cap_bucket_w as f32,
+                op.texture_height as f32 / cap_bucket_h as f32,
+            ];
+            let bg = self.composite_pipeline.create_bind_group(
+                &self.device,
+                &self.queue,
+                &blurred_view,
+                op.dest,
+                1.0,
+                0.0,
+                shadow_uv_scale,
+            );
+            results.push(Some(bg));
+            crate::caches::with_shared(|caches| {
+                caches
+                    .shadow_resolved
+                    .insert(key, (blurred_texture, blurred_view))
+            });
+            self.shadow_capture_pool.push(PooledTexture {
+                msaa_texture: cap_msaa_texture,
+                msaa_view: cap_msaa_view,
+                resolve_texture: cap_resolve_texture,
+                resolve_view: cap_resolve_view,
+                bucket_width: cap_bucket_w,
+                bucket_height: cap_bucket_h,
+            });
+        }
 
-        let mut shadow_results = shadow_results;
+        // Shadow passes are recorded into the shared `encoder` and submitted with the main pass; no separate submit here.
+        let mut shadow_results = results;
         for step in &mut self.pending_steps {
             if let DrawStep::ShadowPlaceholder { op_index } = step {
                 if let Some(entry) = shadow_results.get_mut(*op_index) {
@@ -1816,7 +1704,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 })?
                 .create_view(&wgpu::TextureViewDescriptor::default()),
         };
-        ctx.surface_view = Some(surface_view);
 
         // Under direct-to-surface the main target IS the presentation texture (swapchain windowed, offscreen headless), so every existing `msaa_view` reference (top-level draw passes and layer composites) renders straight to it; the trailing copy/resolve is then skipped.
         let msaa_view = if ctx.direct_to_surface {
@@ -1842,24 +1729,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 })?
                 .create_view(&wgpu::TextureViewDescriptor::default())
         };
-        ctx.msaa_view = Some(msaa_view);
-
-        ctx.retained_view = Some(self.retained_view.clone().ok_or_else(|| {
-            RendererError::Backend("retained_view not initialized; call begin_frame first".into())
-        })?);
+        ctx.targets = Some(FrameTargets {
+            surface_view,
+            msaa_view,
+            retained_view: self.retained_view.clone().ok_or_else(|| {
+                RendererError::Backend(
+                    "retained_view not initialized; call begin_frame first".into(),
+                )
+            })?,
+        });
 
         let mut steps = std::mem::take(&mut self.pending_steps);
         let mut segments: Vec<Segment> = Vec::new();
         // Walk steps emitting Segment::Draw with index ranges; extract layer-boundary steps in place via std::mem::replace to avoid moving ownership-bearing variants.
         let mut current_start: usize = 0;
         for i in 0..steps.len() {
-            let is_boundary = matches!(
-                steps[i],
-                DrawStep::BeginLayer { .. }
-                    | DrawStep::EndLayerComposite { .. }
-                    | DrawStep::PrerenderedLayer { .. }
-            );
-            if !is_boundary {
+            if !matches!(steps[i], DrawStep::Boundary(_)) {
                 continue;
             }
             if i > current_start {
@@ -1868,54 +1753,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     end: i,
                 });
             }
-            let taken = std::mem::replace(&mut steps[i], DrawStep::SetScissor { rect: None });
-            match taken {
-                DrawStep::BeginLayer {
-                    msaa_texture,
-                    msaa_view: lmv,
-                    resolve_texture,
-                    resolve_view: lrv,
-                    viewport_bind_group,
-                    width,
-                    height,
-                    offset_x,
-                    offset_y,
-                    backdrop_blur,
-                } => {
-                    segments.push(Segment::BeginLayer {
-                        msaa_texture,
-                        msaa_view: lmv,
-                        resolve_texture,
-                        resolve_view: lrv,
-                        viewport_bind_group,
-                        width,
-                        height,
-                        offset_x,
-                        offset_y,
-                        backdrop_blur,
-                    });
-                }
-                DrawStep::EndLayerComposite {
-                    bind_group,
-                    cache_hash,
-                    scissor,
-                } => {
-                    segments.push(Segment::EndLayerComposite {
-                        bind_group,
-                        cache_hash,
-                        scissor,
-                    });
-                }
-                DrawStep::PrerenderedLayer {
-                    bind_group,
-                    scissor,
-                } => {
-                    segments.push(Segment::PrerenderedLayer {
-                        bind_group,
-                        scissor,
-                    });
-                }
-                _ => unreachable!(),
+            if let DrawStep::Boundary(boundary) =
+                std::mem::replace(&mut steps[i], DrawStep::SetScissor { rect: None })
+            {
+                segments.push(Segment::Boundary(boundary));
             }
             current_start = i + 1;
         }
@@ -1936,14 +1777,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         segments: Vec<Segment>,
     ) -> Result<(), RendererError> {
         // Views are owned clones (cheap Arc bumps) so no borrow of `ctx` is held across the `ctx.frame_scratch_textures` writes below.
-        let msaa_view = ctx
-            .msaa_view
-            .clone()
-            .expect("msaa_view set in build_segments");
-        let retained_view = ctx
-            .retained_view
-            .clone()
-            .expect("retained_view set in build_segments");
+        let targets = ctx.targets.as_ref().expect("targets set in build_segments");
+        // Owned clones (cheap Arc bumps) so no borrow of `ctx` is held across the `ctx.frame_scratch_textures` writes below.
+        let msaa_view = targets.msaa_view.clone();
+        let retained_view = targets.retained_view.clone();
         let load_op = ctx.load_op;
         let dirty_scissor = ctx.dirty_scissor;
         let prime = ctx.prime;
@@ -1970,22 +1807,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let fold_init_clear =
             self.msaa_samples == 1 && matches!(segments.first(), Some(Segment::Draw { .. }));
         if !fold_init_clear {
-            let mut init = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("telar-main-init"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &msaa_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: load_op,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
+            let mut init = crate::pass::color_pass(
+                encoder,
+                "telar-main-init",
+                &msaa_view,
+                None,
+                wgpu::Operations {
+                    load: load_op,
+                    store: wgpu::StoreOp::Store,
+                },
+            );
             if let Some(ref bg) = prime_bind_group {
                 init.set_pipeline(&self.composite_pipeline.pipeline);
                 init.set_bind_group(0, &self.viewport_bind_group, &[]);
@@ -1994,20 +1825,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }
         }
 
-        let mut layer_stack: Vec<(
-            wgpu::Texture,
-            wgpu::TextureView, // msaa view (render target)
-            wgpu::Texture,
-            wgpu::TextureView, // resolve view
-            wgpu::BindGroup,   // per-layer viewport bind group
-            u32,               // layer texture width
-            u32,               // layer texture height
-        )> = Vec::new();
+        let mut layer_stack: Vec<LayerTarget> = Vec::new();
         // Marks draw segments preceding EndLayerComposite to inline MSAA resolve into the drawing pass, skipping the dedicated resolve pass.
         let mut inline_resolve_targets: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
-            if let (Segment::Draw { .. }, Some(Segment::EndLayerComposite { .. })) =
-                (&segments[i], segments.get(i + 1))
+            if let (
+                Segment::Draw { .. },
+                Some(Segment::Boundary(Boundary::EndLayerComposite { .. })),
+            ) = (&segments[i], segments.get(i + 1))
             {
                 inline_resolve_targets[i] = true;
             }
@@ -2015,8 +1840,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         let mut endlayer_resolve_done: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
-            if matches!(segments[i], Segment::EndLayerComposite { .. })
-                && i > 0
+            if matches!(
+                segments[i],
+                Segment::Boundary(Boundary::EndLayerComposite { .. })
+            ) && i > 0
                 && inline_resolve_targets[i - 1]
             {
                 endlayer_resolve_done[i] = true;
@@ -2028,15 +1855,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 Segment::Draw { start, end } => {
                     let draw_steps = &steps[start..end];
                     let inline_resolve = inline_resolve_targets[seg_idx];
-                    let attach_view: &wgpu::TextureView =
-                        if let Some((_, lmv, _, lrv, _, _, _)) = layer_stack.last() {
-                            if self.msaa_samples > 1 { lmv } else { lrv }
+                    let attach_view: &wgpu::TextureView = if let Some(layer) = layer_stack.last() {
+                        if self.msaa_samples > 1 {
+                            &layer.msaa_view
                         } else {
-                            &msaa_view
-                        };
+                            &layer.resolve_view
+                        }
+                    } else {
+                        &msaa_view
+                    };
                     let resolve_view_opt: Option<&wgpu::TextureView> =
                         if inline_resolve && self.msaa_samples > 1 {
-                            layer_stack.last().map(|(_, _, _, rv, _, _, _)| rv)
+                            layer_stack.last().map(|layer| &layer.resolve_view)
                         } else {
                             None
                         };
@@ -2045,7 +1875,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     // clip nested in a layer name pixels outside the attachment, which wgpu rejects as fatal.
                     let (target_w, target_h) = layer_stack
                         .last()
-                        .map(|l| (l.5, l.6))
+                        .map(|layer| (layer.width, layer.height))
                         .unwrap_or((self.width, self.height));
 
                     // When the init pass was folded away (first segment is this top-level Draw), apply the frame's clear here instead of Loading an uninitialised target.
@@ -2054,29 +1884,23 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     } else {
                         wgpu::LoadOp::Load
                     };
-                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("telar-render-pass"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: attach_view,
-                            resolve_target: resolve_view_opt,
-                            depth_slice: None,
-                            ops: wgpu::Operations {
-                                load: pass_load,
-                                store: if resolve_view_opt.is_some() {
-                                    wgpu::StoreOp::Discard // MSAA samples not needed after inline resolve
-                                } else {
-                                    wgpu::StoreOp::Store
-                                },
+                    let mut render_pass = crate::pass::color_pass(
+                        encoder,
+                        "telar-render-pass",
+                        attach_view,
+                        resolve_view_opt,
+                        wgpu::Operations {
+                            load: pass_load,
+                            store: if resolve_view_opt.is_some() {
+                                wgpu::StoreOp::Discard // MSAA samples not needed after inline resolve
+                            } else {
+                                wgpu::StoreOp::Store
                             },
-                        })],
-                        depth_stencil_attachment: None,
-                        occlusion_query_set: None,
-                        timestamp_writes: None,
-                        multiview_mask: None,
-                    });
+                        },
+                    );
 
-                    let active_vp_bg = if let Some((_, _, _, _, vp_bg, _, _)) = layer_stack.last() {
-                        vp_bg
+                    let active_vp_bg = if let Some(layer) = layer_stack.last() {
+                        &layer.viewport_bind_group
                     } else {
                         &self.viewport_bind_group
                     };
@@ -2183,16 +2007,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                 render_pass.draw(0..6, 0..1);
                             }
                             DrawStep::ShadowPlaceholder { .. } => {}
-                            DrawStep::BeginLayer { .. }
-                            | DrawStep::EndLayerComposite { .. }
-                            | DrawStep::PrerenderedLayer { .. } => {
+                            DrawStep::Boundary(_) => {
                                 unreachable!("layer boundaries are split into segments")
                             }
                         }
                     }
                 }
 
-                Segment::BeginLayer {
+                Segment::Boundary(Boundary::BeginLayer {
                     msaa_texture,
                     msaa_view: layer_msaa_view,
                     resolve_texture,
@@ -2203,34 +2025,28 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     offset_x,
                     offset_y,
                     backdrop_blur,
-                } => {
+                }) => {
                     {
                         let clear_target = if self.msaa_samples > 1 {
                             &layer_msaa_view
                         } else {
                             &resolve_view
                         };
-                        let _clear = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("telar-layer-clear"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: clear_target,
-                                resolve_target: None,
-                                depth_slice: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                                        r: 0.0,
-                                        g: 0.0,
-                                        b: 0.0,
-                                        a: 0.0,
-                                    }),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            occlusion_query_set: None,
-                            timestamp_writes: None,
-                            multiview_mask: None,
-                        });
+                        let _clear = crate::pass::color_pass(
+                            encoder,
+                            "telar-layer-clear",
+                            clear_target,
+                            None,
+                            wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 0.0,
+                                    g: 0.0,
+                                    b: 0.0,
+                                    a: 0.0,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        );
                     }
 
                     if backdrop_blur > 0.0 {
@@ -2256,23 +2072,17 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         let temp_resolve_view = &temp_resolve_entry.4;
 
                         if self.msaa_samples > 1 {
-                            let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("telar-backdrop-parent-resolve"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: parent_msaa_view,
-                                    resolve_target: Some(temp_resolve_view),
-                                    depth_slice: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        // Store: the parent MSAA is still needed after this resolve so EndLayerComposite can load it to composite the layer on top. Discard here caused a black screen on immediate-mode GPUs (desktop).
-                                        store: wgpu::StoreOp::Store,
-                                    },
-                                })],
-                                depth_stencil_attachment: None,
-                                occlusion_query_set: None,
-                                timestamp_writes: None,
-                                multiview_mask: None,
-                            });
+                            let _resolve = crate::pass::color_pass(
+                                encoder,
+                                "telar-backdrop-parent-resolve",
+                                parent_msaa_view,
+                                Some(temp_resolve_view),
+                                wgpu::Operations {
+                                    load: wgpu::LoadOp::Load,
+                                    // Store: the parent MSAA is still needed after this resolve so EndLayerComposite can load it to composite the layer on top. Discard here caused a black screen on immediate-mode GPUs (desktop).
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            );
                         } else {
                             encoder.copy_texture_to_texture(
                                 wgpu::TexelCopyTextureInfo {
@@ -2362,23 +2172,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             } else {
                                 &resolve_view
                             };
-                            let mut backdrop_pass =
-                                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                    label: Some("telar-backdrop-composite"),
-                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                        view: backdrop_target,
-                                        resolve_target: None,
-                                        depth_slice: None,
-                                        ops: wgpu::Operations {
-                                            load: wgpu::LoadOp::Load,
-                                            store: wgpu::StoreOp::Store,
-                                        },
-                                    })],
-                                    depth_stencil_attachment: None,
-                                    occlusion_query_set: None,
-                                    timestamp_writes: None,
-                                    multiview_mask: None,
-                                });
+                            let mut backdrop_pass = crate::pass::color_pass(
+                                encoder,
+                                "telar-backdrop-composite",
+                                backdrop_target,
+                                None,
+                                crate::pass::load_store(),
+                            );
                             backdrop_pass.set_pipeline(&self.composite_pipeline.pipeline);
                             backdrop_pass.set_bind_group(0, &viewport_bind_group, &[]);
                             backdrop_pass.set_bind_group(1, &backdrop_bg, &[]);
@@ -2389,86 +2189,72 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         ctx.frame_scratch_textures.push(cropped_entry);
                     }
 
-                    layer_stack.push((
+                    layer_stack.push(LayerTarget {
                         msaa_texture,
-                        layer_msaa_view,
+                        msaa_view: layer_msaa_view,
                         resolve_texture,
                         resolve_view,
                         viewport_bind_group,
                         width,
                         height,
-                    ));
+                    });
                 }
 
-                Segment::EndLayerComposite {
+                Segment::Boundary(Boundary::EndLayerComposite {
                     bind_group,
                     cache_hash,
                     scissor,
-                } => {
-                    let (l_msaa_tex, l_msaa_view, l_resolve_tex, l_resolve_view, _, lw, lh) =
-                        layer_stack
-                            .pop()
-                            .expect("layer_stack underflow on EndLayerComposite");
+                }) => {
+                    let layer = layer_stack
+                        .pop()
+                        .expect("layer_stack underflow on EndLayerComposite");
 
                     // When msaa_samples==1, draws already targeted resolve_view directly so no resolve pass is needed.
                     if !endlayer_resolve_done[seg_idx] && self.msaa_samples > 1 {
-                        let _resolve = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("telar-layer-resolve"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &l_msaa_view,
-                                resolve_target: Some(&l_resolve_view),
-                                depth_slice: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Load,
-                                    store: wgpu::StoreOp::Discard, // MSAA samples not needed after resolve
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            occlusion_query_set: None,
-                            timestamp_writes: None,
-                            multiview_mask: None,
-                        });
+                        let _resolve = crate::pass::color_pass(
+                            encoder,
+                            "telar-layer-resolve",
+                            &layer.msaa_view,
+                            Some(&layer.resolve_view),
+                            wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Discard, // MSAA samples not needed after resolve
+                            },
+                        );
                     }
 
-                    // When msaa_samples==1 (Android) draws target the resolve view (tuple index 3), not the MSAA view (index 1); using the wrong view causes composited content to land on a texture the outer layer never reads, making nested layers disappear.
-                    let parent_view: &wgpu::TextureView =
-                        if let Some((_, lmv, _, lrv, _, _, _)) = layer_stack.last() {
-                            if self.msaa_samples > 1 { lmv } else { lrv }
+                    // When msaa_samples==1 (Android) draws target the resolve view, not the MSAA view; the wrong one lands composited content on a texture the outer layer never reads, making nested layers disappear.
+                    let parent_view: &wgpu::TextureView = if let Some(layer) = layer_stack.last() {
+                        if self.msaa_samples > 1 {
+                            &layer.msaa_view
                         } else {
-                            &msaa_view
-                        };
+                            &layer.resolve_view
+                        }
+                    } else {
+                        &msaa_view
+                    };
 
                     // composite_pipeline must be used here (not layer_pipeline): its BGL expects viewport at set 0 and composite params at set 1, incompatible with layer_pipeline's single-set layout.
-                    let parent_vp_bg: &wgpu::BindGroup =
-                        if let Some((_, _, _, _, vp_bg, _, _)) = layer_stack.last() {
-                            vp_bg
-                        } else {
-                            &self.viewport_bind_group
-                        };
+                    let parent_vp_bg: &wgpu::BindGroup = if let Some(layer) = layer_stack.last() {
+                        &layer.viewport_bind_group
+                    } else {
+                        &self.viewport_bind_group
+                    };
                     // The layer being composited is already popped, so this is the PARENT — the attachment the
                     // blit writes into, and therefore what its scissor must be clamped against.
                     let (parent_w, parent_h) = layer_stack
                         .last()
-                        .map(|l| (l.5, l.6))
+                        .map(|layer| (layer.width, layer.height))
                         .unwrap_or((self.width, self.height));
 
                     {
-                        let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("telar-layer-blit"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: parent_view,
-                                resolve_target: None,
-                                depth_slice: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Load,
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            occlusion_query_set: None,
-                            timestamp_writes: None,
-                            multiview_mask: None,
-                        });
+                        let mut blit = crate::pass::color_pass(
+                            encoder,
+                            "telar-layer-blit",
+                            parent_view,
+                            None,
+                            crate::pass::load_store(),
+                        );
                         blit.set_pipeline(&self.composite_pipeline.pipeline);
                         blit.set_bind_group(0, parent_vp_bg, &[]);
                         blit.set_bind_group(1, &bind_group, &[]);
@@ -2490,9 +2276,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
                     if let Some(hash) = cache_hash {
                         // Retain the resolved texture so the next frame can composite it directly. The MSAA half is not cacheable (it is consumed by the resolve), so it drops instead of returning to the pool.
-                        let pixel_count = lw as u64 * lh as u64;
-                        self.layer_resolved_cache
-                            .insert(hash, (l_resolve_tex, l_resolve_view, pixel_count));
+                        let pixel_count = layer.width as u64 * layer.height as u64;
+                        self.layer_resolved_cache.insert(
+                            hash,
+                            (layer.resolve_texture, layer.resolve_view, pixel_count),
+                        );
                         self.layer_resolved_cache_order.push_back(hash);
                         let mut total_pixels: u64 = self
                             .layer_resolved_cache
@@ -2518,55 +2306,48 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         }
                     } else {
                         self.layer_texture_pool.push(PooledTexture {
-                            msaa_texture: l_msaa_tex,
-                            msaa_view: l_msaa_view,
-                            resolve_texture: l_resolve_tex,
-                            resolve_view: l_resolve_view,
-                            bucket_width: lw,
-                            bucket_height: lh,
+                            msaa_texture: layer.msaa_texture,
+                            msaa_view: layer.msaa_view,
+                            resolve_texture: layer.resolve_texture,
+                            resolve_view: layer.resolve_view,
+                            bucket_width: layer.width,
+                            bucket_height: layer.height,
                         });
                     }
                 }
 
-                Segment::PrerenderedLayer {
+                Segment::Boundary(Boundary::PrerenderedLayer {
                     bind_group,
                     scissor,
-                } => {
+                }) => {
                     // Composite the cached layer texture onto the current target (parent layer or surface) without rendering the layer content.
-                    let parent_view: &wgpu::TextureView =
-                        if let Some((_, lmv, _, lrv, _, _, _)) = layer_stack.last() {
-                            if self.msaa_samples > 1 { lmv } else { lrv }
+                    let parent_view: &wgpu::TextureView = if let Some(layer) = layer_stack.last() {
+                        if self.msaa_samples > 1 {
+                            &layer.msaa_view
                         } else {
-                            &msaa_view
-                        };
-                    let parent_vp_bg: &wgpu::BindGroup =
-                        if let Some((_, _, _, _, vp_bg, _, _)) = layer_stack.last() {
-                            vp_bg
-                        } else {
-                            &self.viewport_bind_group
-                        };
+                            &layer.resolve_view
+                        }
+                    } else {
+                        &msaa_view
+                    };
+                    let parent_vp_bg: &wgpu::BindGroup = if let Some(layer) = layer_stack.last() {
+                        &layer.viewport_bind_group
+                    } else {
+                        &self.viewport_bind_group
+                    };
                     // The layer being composited is already popped, so this is the PARENT — the attachment the
                     // blit writes into, and therefore what its scissor must be clamped against.
                     let (parent_w, parent_h) = layer_stack
                         .last()
-                        .map(|l| (l.5, l.6))
+                        .map(|layer| (layer.width, layer.height))
                         .unwrap_or((self.width, self.height));
-                    let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("telar-prerendered-layer-blit"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: parent_view,
-                            resolve_target: None,
-                            depth_slice: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        occlusion_query_set: None,
-                        timestamp_writes: None,
-                        multiview_mask: None,
-                    });
+                    let mut blit = crate::pass::color_pass(
+                        encoder,
+                        "telar-prerendered-layer-blit",
+                        parent_view,
+                        None,
+                        crate::pass::load_store(),
+                    );
                     blit.set_pipeline(&self.composite_pipeline.pipeline);
                     blit.set_bind_group(0, parent_vp_bg, &[]);
                     blit.set_bind_group(1, &bind_group, &[]);
@@ -2599,26 +2380,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         target: &wgpu::TextureView,
         source: &wgpu::BindGroup,
     ) {
-        let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("telar-retained-blit"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target,
-                resolve_target: None,
-                depth_slice: None,
-                ops: wgpu::Operations {
-                    load: if self.app_owned_target {
-                        wgpu::LoadOp::Load
-                    } else {
-                        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
-                    },
-                    store: wgpu::StoreOp::Store,
+        let mut blit = crate::pass::color_pass(
+            encoder,
+            "telar-retained-blit",
+            target,
+            None,
+            wgpu::Operations {
+                load: if self.app_owned_target {
+                    wgpu::LoadOp::Load
+                } else {
+                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
                 },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-            multiview_mask: None,
-        });
+                store: wgpu::StoreOp::Store,
+            },
+        );
         blit.set_pipeline(&self.retained_blit_pipeline.pipeline);
         blit.set_bind_group(0, &self.viewport_bind_group, &[]);
         blit.set_bind_group(1, source, &[]);
@@ -2633,38 +2408,32 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     ) -> Result<(), RendererError> {
         let FrameCtx {
             direct_to_surface,
-            msaa_view,
-            surface_view,
-            retained_view,
+            targets,
             output,
             mut frame_scratch_textures,
             ..
         } = ctx;
-        let msaa_view = msaa_view.expect("msaa_view set in build_segments");
-        let surface_view = surface_view.expect("surface_view set in build_segments");
-        let retained_view = retained_view.expect("retained_view set in build_segments");
+        let FrameTargets {
+            surface_view,
+            msaa_view,
+            retained_view,
+        } = targets.expect("targets set in build_segments");
 
         if direct_to_surface {
             // Already rendered straight into the swapchain texture; no copy/resolve to the surface needed.
         } else if self.msaa_samples > 1 {
             // Resolve MSAA into retained_view so the idle-blit path has valid content next frame.
             {
-                let _final = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("telar-final-resolve"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &msaa_view,
-                        resolve_target: Some(&retained_view),
-                        depth_slice: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Discard,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                    multiview_mask: None,
-                });
+                let _final = crate::pass::color_pass(
+                    &mut encoder,
+                    "telar-final-resolve",
+                    &msaa_view,
+                    Some(&retained_view),
+                    wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Discard,
+                    },
+                );
             }
             let retained_bg = self.retained_blit_pipeline.create_bind_group(
                 &self.device,

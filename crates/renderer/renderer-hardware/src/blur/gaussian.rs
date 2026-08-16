@@ -117,22 +117,13 @@ impl BlurPipeline {
                 _pad: [0.0; 3],
             };
             let bg = make_bg_with_params(src_view, &params);
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("telar-blur-h-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &intermediate_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut pass = crate::pass::color_pass(
+                encoder,
+                "telar-blur-h-pass",
+                &intermediate_view,
+                None,
+                crate::pass::clear_store(),
+            );
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bg, &[]);
             if use_immediates {
@@ -149,22 +140,13 @@ impl BlurPipeline {
                 _pad: [0.0; 3],
             };
             let bg = make_bg_with_params(&intermediate_view, &params);
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("telar-blur-v-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &output_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut pass = crate::pass::color_pass(
+                encoder,
+                "telar-blur-v-pass",
+                &output_view,
+                None,
+                crate::pass::clear_store(),
+            );
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bg, &[]);
             if use_immediates {

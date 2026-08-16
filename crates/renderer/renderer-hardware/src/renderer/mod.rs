@@ -23,7 +23,7 @@ use crate::primitives::line::{LineInstance, LinePipeline};
 use crate::primitives::path::{PathFillData, PathPipeline, PathVertex};
 use crate::primitives::rect::{RectInstance, RectPipeline};
 use crate::primitives::text::{TextInstance, TextPipeline};
-use crate::primitives::{Viewport, create_viewport_bind_group_layout};
+use crate::primitives::{Viewport, create_viewport_bind_group_layout, upload_instances};
 
 mod frame;
 mod pool;
@@ -62,12 +62,6 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     viewport_buffer: wgpu::Buffer,
     viewport_bind_group: wgpu::BindGroup,
     viewport_dirty: bool,
-    // True while a non-nested rounded clip is applied via the in-shader SDF path; a rounded PushClip encountered while this is set falls back to a mini-layer.
-    shader_clip_active: bool,
-    // clip_is_round stack depth (post-push) at which the active shader clip was pushed, used to match its PopClip even when plain scissors are nested inside it.
-    shader_clip_depth: usize,
-    // Scissor in effect before the active shader clip, restored at the matching PopClip.
-    shader_clip_outer_scissor: Option<Rect>,
     // Round-robin pool of (buffer, bind group) pairs reused for per-layer viewport uniforms; avoids a create_buffer_init + create_bind_group driver round-trip per layer each frame. Reset to index 0 at begin_frame.
     viewport_buffer_pool: Vec<(wgpu::Buffer, wgpu::BindGroup)>,
     viewport_buffer_pool_index: usize,
@@ -712,9 +706,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             viewport_buffer,
             viewport_bind_group,
             viewport_dirty: true,
-            shader_clip_active: false,
-            shader_clip_depth: 0,
-            shader_clip_outer_scissor: None,
             viewport_buffer_pool,
             viewport_buffer_pool_index: 0,
             texture_pool: Vec::new(),
