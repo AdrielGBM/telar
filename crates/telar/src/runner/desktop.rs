@@ -3,15 +3,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use devtools_core::DevPlugin;
-use platform_core::{EventHandler, PlatformError, SurfaceId, WindowConfig};
+use platform_core::{EventHandler, SurfaceId};
 use platform_desktop::{DesktopPathsProvider, WinitPlatform, WinitWindow, request_dynamic_surface};
-use renderer_core::Color;
 use services_core::AppPathsProvider;
-use ui_core::{Component, Surface, SurfacePlacement, SurfaceRoot, SurfaceScaffold, SurfaceSize};
+use ui_core::Surface;
 
 use crate::app::App;
 use crate::app_config::AppConfig;
-use crate::surface::{SurfaceContent, SurfaceControl, SurfaceHost, SurfaceToken, set_surface_host};
+use crate::surface::{SurfaceControl, SurfaceToken};
 
 #[cfg(telar_hot_reload)]
 pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
@@ -108,120 +107,6 @@ pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     run_desktop_with_plugin::<A, ()>(config, app, app_name);
 }
 
-/// Open several native windows at once on the winit backend — the desktop counterpart to
-/// [`crate::run_app_with_name`], and the multi-window entry a bar-per-monitor shell (or any multi-window app)
-/// uses on a normal desktop. Each surface `(id, config)` gets a fresh app from `app_factory(id)` running on
-/// **its own thread**, so it has a fully isolated reactive/theme/overlay/focus world. Returns once every window
-/// has closed.
-pub fn run_multi_app_with_name<A, AF>(
-    surfaces: Vec<(SurfaceId, AppConfig)>,
-    app_factory: AF,
-    app_name: &str,
-) -> Result<(), PlatformError>
-where
-    A: App,
-    AF: Fn(SurfaceId) -> A + Send + Sync + 'static,
-{
-    let platform = WinitPlatform::try_new()?;
-    super::run_multi_with_platform(
-        platform,
-        surfaces,
-        |_id| Box::new(DesktopPathsProvider) as Box<dyn AppPathsProvider>,
-        app_factory,
-        app_name,
-    )
-}
-
-// ---- Dynamic secondary surfaces (`open_surface`) on the winit backend --------------------------------
-
-// Derives a winit `WindowConfig` from a backend-agnostic `SurfacePlacement`. winit has no compositor
-// anchoring, so a placement becomes a borderless, transparent top-level window at its content size; a
-// `needs_scaffold` placement (drawer/modal) relies on `SurfaceScaffold` to position the panel in-window.
-fn window_config_for(placement: &SurfacePlacement) -> WindowConfig {
-    let (width, height) = match placement.size {
-        SurfaceSize::Fixed(w, h) => (w, h),
-        SurfaceSize::Auto => (900, 660),
-    };
-    WindowConfig {
-        title: "Surface".to_string(),
-        width,
-        height,
-        has_decorations: false,
-        is_transparent: true,
-        ..Default::default()
-    }
-}
-
-// Wraps an `open_surface` content closure as an `App` (mirrors hyprshell's `HostedSurfaceApp`). No
-// `reset_layout_runtime`: the handler's own `Surface` supplies a fresh, isolated layout world.
-struct HostedSurfaceApp {
-    placement: SurfacePlacement,
-    content: SurfaceContent,
-}
-
-impl App for HostedSurfaceApp {
-    fn root(&self) -> Box<dyn Component> {
-        let content = (self.content)();
-        if self.placement.needs_scaffold() {
-            Box::new(
-                SurfaceScaffold::new(&self.placement, content, None)
-                    .expect("surface scaffold build failed")
-                    .animate_in(),
-            )
-        } else {
-            Box::new(
-                SurfaceRoot::new(content)
-                    .expect("surface root build failed")
-                    .animate_in(),
-            )
-        }
-    }
-
-    fn clear_color(&self) -> Option<Color> {
-        None
-    }
-
-    fn window_config(&self) -> Option<WindowConfig> {
-        Some(window_config_for(&self.placement))
-    }
-}
-
-// The winit `SurfaceHost`: `open_surface` builds a content-hosting handler (with its own `Surface`) and
-// enqueues it as a new top-level window on the running runner — same thread, same reactive runtime as the
-// parent, so the child shares the parent's signal graph.
-struct WinitSurfaceHost;
-
-impl SurfaceHost for WinitSurfaceHost {
-    fn open(&self, placement: SurfacePlacement, content: SurfaceContent) -> SurfaceToken {
-        let window_config = window_config_for(&placement);
-        let app = HostedSurfaceApp { placement, content };
-        let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
-        let prefs = crate::prefs::UserPrefs::load("telar-surface", paths.as_ref());
-        // Same backend convention as every other window: the resolved preference, else the compile-time
-        // default (`Auto` = hardware with a software fallback). The tiling-WM resize race that once forced
-        // software here is handled by deferring on_resume to the surface's first real `Resized` (see the
-        // multi-surface runner), so secondary surfaces are first-class and render like the primary one.
-        let backend = prefs
-            .backend
-            .unwrap_or_else(crate::config::compile_time_backend);
-        // Fonts default to the system set; the layout-time text shaper is shared across surfaces (T-3.1), so
-        // it already carries the parent's fonts.
-        let mut handler = super::handler::build_app_handler::<WinitWindow, ()>(
-            Box::new(app),
-            paths,
-            Vec::new(),
-            Vec::new(),
-            backend,
-            prefs,
-            "telar-surface".to_string(),
-        );
-        handler.surface = Some(Surface::new());
-        let boxed: Box<dyn EventHandler<WinitWindow>> = Box::new(handler);
-        let close = request_dynamic_surface(window_config, boxed);
-        SurfaceToken::new(Box::new(WinitSurfaceControl { close }))
-    }
-}
-
 struct WinitSurfaceControl {
     close: Arc<AtomicBool>,
 }
@@ -267,10 +152,9 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
 }
 
 /// Runs one app in a native window (like [`run_app_with_name`]) but under the single-thread multi-surface
-/// runner with a real [`SurfaceHost`] installed — so the app can call `telar::open_surface` to spawn further
-/// top-level windows that share its one reactive runtime (e.g. a detached tab). The app may be `!Send`.
+/// runner — so the app can call [`open_window`] to move a live sub-app into a further top-level window that
+/// shares its one reactive runtime (e.g. a detached tab). The app may be `!Send`.
 pub fn run_app_windowed<A: App>(config: AppConfig, app: A, app_name: &str) {
-    set_surface_host(Box::new(WinitSurfaceHost));
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,
         Err(e) => {

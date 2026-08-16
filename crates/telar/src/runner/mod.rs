@@ -29,7 +29,7 @@ const COMMAND_BUF_POOL_CAP: usize = 3;
 #[cfg(target_os = "android")]
 pub use android::run_android_app_with_name;
 #[cfg(all(feature = "desktop", not(target_os = "android")))]
-pub use desktop::{open_window, run_app_windowed, run_app_with_name, run_multi_app_with_name};
+pub use desktop::{open_window, run_app_windowed, run_app_with_name};
 #[cfg(not(target_os = "android"))]
 pub use generic::run_with_platform;
 #[cfg(all(feature = "dev", not(target_os = "android")))]

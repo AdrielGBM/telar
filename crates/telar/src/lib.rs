@@ -222,7 +222,7 @@ pub use runner::run_with_platform;
 #[cfg(feature = "runtime")]
 pub use runner::set_default_font_family;
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
-pub use runner::{open_window, run_app_windowed, run_app_with_name, run_multi_app_with_name};
+pub use runner::{open_window, run_app_windowed, run_app_with_name};
 
 pub use telar_macros::{app, rsx_modules, t};
 
