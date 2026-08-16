@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use crate::text::utf16_len;
+
 use lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, Diagnostic, Position, Range, TextEdit, Uri,
     WorkspaceEdit,
@@ -54,7 +56,6 @@ fn is_header(line: &str) -> bool {
 /// A single-edit `WorkspaceEdit` that drops `snippet` into `[style]`: at the end of an existing section, or by creating one before `[view]` (or at end of file) when there is none.
 fn insert_into_style(source: &str, uri: &Uri, snippet: &str) -> Option<WorkspaceEdit> {
     let lines: Vec<&str> = source.lines().collect();
-    let utf16_len = |l: &str| l.encode_utf16().count() as u32;
 
     let (pos, text) = if let Some(style_idx) = lines.iter().position(|l| l.trim() == "[style]") {
         let next = lines

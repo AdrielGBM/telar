@@ -23,8 +23,8 @@ pub fn range_edits(
         .filter(|hunk| hunk_overlaps(hunk, &range))
         .map(|hunk| lsp_types::TextEdit {
             range: lsp_types::Range {
-                start: position_at(source, starts[hunk.src_start]),
-                end: position_at(source, starts[hunk.src_end]),
+                start: crate::text::offset_to_position(source, starts[hunk.src_start]),
+                end: crate::text::offset_to_position(source, starts[hunk.src_end]),
             },
             // Each replaced source line carried its trailing newline (the range ends at the start of the following line), so each replacement line keeps one too.
             new_text: fmt_lines[hunk.fmt_start..hunk.fmt_end]
@@ -132,20 +132,6 @@ fn line_start_offsets(source: &str) -> Vec<usize> {
 }
 
 /// A byte offset within `source` → LSP `(line, UTF-16 col)`.
-fn position_at(source: &str, byte: usize) -> lsp_types::Position {
-    let byte = byte.min(source.len());
-    let mut line = 0u32;
-    let mut line_start = 0usize;
-    for (i, _) in source[..byte].match_indices('\n') {
-        line += 1;
-        line_start = i + 1;
-    }
-    lsp_types::Position {
-        line,
-        character: source[line_start..byte].encode_utf16().count() as u32,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

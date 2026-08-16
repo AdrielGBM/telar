@@ -153,10 +153,6 @@ fn locate(map: &SourceMap, gen_range: Range, gen_code: &str, rsx_source: &str) -
 }
 
 /// The `n`-th line of `text` (0-based), without its trailing newline.
-pub(crate) fn nth_line(text: &str, n: usize) -> Option<&str> {
-    telar_transpiler::nth_line(text, n)
-}
-
 /// Width (UTF-16 code units) of the leading space/tab run of `line`. Used by the inlay-hint path, which
 /// carries a bare position rather than a range and so cannot go through [`SourceMap::locate`].
 pub(crate) fn leading_ws_utf16(line: &str) -> u32 {

@@ -21,7 +21,8 @@ use crate::rpc::OutgoingSender;
 use crate::store::Store;
 use crate::text::{ident_at, name_range};
 
-use mapping::{full_document_range, leading_ws_utf16, map_definition_targets, nth_line};
+use mapping::{full_document_range, leading_ws_utf16, map_definition_targets};
+use telar_transpiler::nth_line;
 
 mod lifecycle;
 mod mapping;
