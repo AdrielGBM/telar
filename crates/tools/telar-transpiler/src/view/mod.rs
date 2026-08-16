@@ -38,18 +38,7 @@ fn expr_marker(rsx_start: usize, len: usize) -> String {
 /// Wraps `emit`'s code in `SRC_PUSH`/`SRC_POP` markers carrying the 0-based `.rsx` `line`.
 fn wrap_source_markers(emit: ChildEmit, line: usize) -> ChildEmit {
     let src0 = line.saturating_sub(1);
-    let wrap = |code: String| format!("{SRC_PUSH}{src0}\n{code}\n{SRC_POP}");
-    match emit {
-        ChildEmit::Simple { name, code } => ChildEmit::Simple {
-            name,
-            code: wrap(code),
-        },
-        ChildEmit::Dynamic { code } => ChildEmit::Dynamic { code: wrap(code) },
-        ChildEmit::Fragment { name, code } => ChildEmit::Fragment {
-            name,
-            code: wrap(code),
-        },
-    }
+    emit.map_code(|code| format!("{SRC_PUSH}{src0}\n{code}\n{SRC_POP}"))
 }
 
 /// The resolved view body: real lines (each with its origin `.rsx` line) plus the byte spans of the verbatim Rust expressions it contains.
@@ -147,6 +136,23 @@ pub(crate) enum ChildEmit {
     /// reconciles into the host container's node). Forces the parent to collect `ChildSlot`s and build via
     /// `from_slots`, so the region's items are real siblings of the static children.
     Fragment { name: String, code: String },
+}
+
+impl ChildEmit {
+    /// Rewrites the generated code, keeping whatever kind of child this is.
+    fn map_code(self, f: impl FnOnce(String) -> String) -> Self {
+        match self {
+            ChildEmit::Simple { name, code } => ChildEmit::Simple {
+                name,
+                code: f(code),
+            },
+            ChildEmit::Dynamic { code } => ChildEmit::Dynamic { code: f(code) },
+            ChildEmit::Fragment { name, code } => ChildEmit::Fragment {
+                name,
+                code: f(code),
+            },
+        }
+    }
 }
 
 /// Collapses a set of already-bound widget `names` into a single content expression: an empty column
@@ -558,19 +564,7 @@ impl<'a> ViewGen<'a> {
                         "`clip:{other}` is not an axis: write `clip` for both, `clip:x` for the left and right edges, or `clip:y` for the top and bottom"
                     ))
                 );
-                return match emit {
-                    ChildEmit::Simple { name, code: c } => ChildEmit::Simple {
-                        name,
-                        code: format!("{c}\n{code}"),
-                    },
-                    ChildEmit::Fragment { name, code: c } => ChildEmit::Fragment {
-                        name,
-                        code: format!("{c}\n{code}"),
-                    },
-                    ChildEmit::Dynamic { code: c } => ChildEmit::Dynamic {
-                        code: format!("{c}\n{code}"),
-                    },
-                };
+                return emit.map_code(|c| format!("{c}\n{code}"));
             }
         };
         match emit {
@@ -621,19 +615,7 @@ impl<'a> ViewGen<'a> {
         if unknown.is_empty() {
             return emit;
         }
-        match emit {
-            ChildEmit::Simple { name, code } => ChildEmit::Simple {
-                name,
-                code: format!("{unknown}{code}"),
-            },
-            ChildEmit::Fragment { name, code } => ChildEmit::Fragment {
-                name,
-                code: format!("{unknown}{code}"),
-            },
-            ChildEmit::Dynamic { code } => ChildEmit::Dynamic {
-                code: format!("{unknown}{code}"),
-            },
-        }
+        emit.map_code(|code| format!("{unknown}{code}"))
     }
 
     fn emit_element_inner(&mut self, el: &Element) -> ChildEmit {

@@ -264,12 +264,7 @@ impl ViewGen<'_> {
     /// raw value is scanned for `$idents` to clone in, and `color_expr` applies the same `[style]`/theme
     /// precedence as built-in elements. The Props field is expected to be `Box<dyn Fn() -> Color>`.
     fn component_color_attr_expr(&self, attr: &Attr) -> String {
-        if let Some(closure) = already_a_closure(attr) {
-            return closure;
-        }
-        let color = self.color_expr(&attr.value);
-        let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {color}"));
-        format!("Box::new({wrapped})")
+        self.boxed_prop_closure(attr, |s, attr| s.color_expr(&attr.value))
     }
 
     /// A reactive string prop (e.g. a button's `label`): a `move ||` closure re-read every frame, so a
@@ -278,18 +273,15 @@ impl ViewGen<'_> {
     /// A `t"key"` value becomes a catalog lookup, a plain `"literal"` a static string, and a `$signal`/expr a
     /// reactive read.
     fn component_text_attr_expr(&self, attr: &Attr) -> String {
-        if let Some(closure) = already_a_closure(attr) {
-            return closure;
-        }
-        let body = if attr.i18n {
-            self.i18n_lookup(&attr.value)
-        } else if attr.is_quoted {
-            format!("{}.to_string()", rust_str(&attr.value))
-        } else {
-            substitute_reads(attr.value.trim())
-        };
-        let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {body}"));
-        format!("Box::new({wrapped})")
+        self.boxed_prop_closure(attr, |s, attr| {
+            if attr.i18n {
+                s.i18n_lookup(&attr.value)
+            } else if attr.is_quoted {
+                format!("{}.to_string()", rust_str(&attr.value))
+            } else {
+                substitute_reads(attr.value.trim())
+            }
+        })
     }
 
     /// The same for a `Box<dyn Fn() -> bool>` prop — `disabled:$cant_undo`, `checked:$is_on`.
@@ -299,17 +291,27 @@ impl ViewGen<'_> {
     /// expression works, not just a bare signal — `!$on`, `$depth == 0` — since the value is spliced with its
     /// `$` reads substituted, exactly as a `box`'s own `disabled:` is.
     fn component_bool_attr_expr(&self, attr: &Attr) -> String {
+        self.boxed_prop_closure(attr, |_, attr| {
+            let value = attr.value.trim();
+            // A bare flag (`disabled` with no value) is the attribute asserting itself, as `wrap` and `absolute` do.
+            if value.is_empty() {
+                "true".to_string()
+            } else {
+                substitute_reads(value)
+            }
+        })
+    }
+
+    /// The shape every reactive component prop shares: an explicit closure passes through, anything else becomes
+    /// a `move ||` re-read with its `$signal`s cloned in, boxed for a `Box<dyn Fn() -> T>` field.
+    fn boxed_prop_closure(&self, attr: &Attr, body: impl FnOnce(&Self, &Attr) -> String) -> String {
         if let Some(closure) = already_a_closure(attr) {
             return closure;
         }
-        let value = attr.value.trim();
-        // A bare flag (`disabled` with no value) is the attribute asserting itself, as `wrap` and `absolute` do.
-        let body = if value.is_empty() {
-            "true".to_string()
-        } else {
-            substitute_reads(value)
-        };
-        let wrapped = wrap_signal_clones(&[attr.value.as_str()], format!("move || {body}"));
+        let wrapped = wrap_signal_clones(
+            &[attr.value.as_str()],
+            format!("move || {}", body(self, attr)),
+        );
         format!("Box::new({wrapped})")
     }
 

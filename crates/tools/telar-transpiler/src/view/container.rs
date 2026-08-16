@@ -90,11 +90,12 @@ impl ViewGen<'_> {
             .is_some_and(|a| !is_closure_value(&a.value));
 
         let pattrs = self.paint_attrs(el);
-        let hover_call = self.hover_style_call(el, &pattrs);
-        let active_call = self.active_style_call(el, &pattrs);
-        let disabled_call = self.disabled_style_call(el, &pattrs);
+        let hover_call = self.state_style_call(el, "hover_style", "on_hover_style", &pattrs);
+        let active_call = self.state_style_call(el, "active_style", "on_active_style", &pattrs);
+        let disabled_call =
+            self.state_style_call(el, "disabled_style", "on_disabled_style", &pattrs);
         let disabled = self.disabled_call(el);
-        let focus_ring = self.focus_style_call(el, &pattrs);
+        let focus_ring = self.state_style_call(el, "focus_style", "on_focus_style", &[]);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_pointer_move = self.closure_attr_call(el, "on_pointer_move", "on_pointer_move");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");
@@ -205,63 +206,23 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Builds the trailing `.on_hover_style(...)` from a `hover_style(...)` attribute, or an empty string when
-    /// there is none. The parenthesized value is a mini list of paint props (`hover(fill:x stroke:y)`);
-    /// they override the element's base paint for the hovered state, so `view()` swaps to them while the
-    /// mouse is over the box. Reuses `rect_style_pieces`, so `$signal` colors are cloned into the closure
-    /// just like the base style. Transitions are intentionally not applied to the hover variant.
-    fn hover_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == "hover_style") else {
-            return String::new();
-        };
-        // Overrides first so `rect_style_pieces`' first-match `find` picks the hover value over the base.
-        let mut merged = parse_inline_paint_attrs(&attr.value);
-        merged.extend(base_pattrs.iter().cloned());
-        let mut hoists: Vec<String> = Vec::new();
-        let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
-        format!(".on_hover_style({closure})")
-    }
-
-    /// Builds the trailing `.on_active_style(...)` from an `active_style(...)` attribute — the pressed /
-    /// CSS `:active` paint swap, symmetric with [`hover_style_call`](Self::hover_style_call): a
-    /// whitespace-separated list of paint props (`active_style(fill:x stroke:y)`) that override the base
-    /// paint while a primary pointer is held down inside the box, taking precedence over the hover style.
-    fn active_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == "active_style") else {
+    /// Builds one trailing `.on_X_style(...)` from an `X_style(...)` attribute — the paint swap for a state,
+    /// written as a mini list of paint props (`hover_style(fill:x stroke:y)`). Reuses `rect_style_pieces`, so a
+    /// `$signal` colour is cloned into the closure just like the base style. Transitions are deliberately not
+    /// applied to a state variant.
+    ///
+    /// `base` is prepended to the overrides so `rect_style_pieces`. first-match `find` picks the state value over
+    /// the base one. The focus ring passes an empty `base`: what the ring does not name comes from whichever
+    /// state won underneath it at paint time, not from the base style at build time.
+    fn state_style_call(&mut self, el: &Element, key: &str, method: &str, base: &[Attr]) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
         let mut merged = parse_inline_paint_attrs(&attr.value);
-        merged.extend(base_pattrs.iter().cloned());
+        merged.extend(base.iter().cloned());
         let mut hoists: Vec<String> = Vec::new();
         let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
-        format!(".on_active_style({closure})")
-    }
-
-    /// Builds the trailing `.on_disabled_style(...)` from a `disabled_style(...)` attribute — the same shape
-    /// as [`active_style_call`](Self::active_style_call), for the state that wins over it.
-    fn disabled_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == "disabled_style") else {
-            return String::new();
-        };
-        let mut merged = parse_inline_paint_attrs(&attr.value);
-        merged.extend(base_pattrs.iter().cloned());
-        let mut hoists: Vec<String> = Vec::new();
-        let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
-        format!(".on_disabled_style({closure})")
-    }
-
-    /// Builds the trailing `.on_focus_style(...)` from a `focus_style(...)` attribute — the ring, which the
-    /// box lays over whichever state won instead of swapping to.
-    fn focus_style_call(&mut self, el: &Element, base_pattrs: &[Attr]) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == "focus_style") else {
-            return String::new();
-        };
-        // Not merged with the base, unlike the hover and active variants: what the ring does not name comes from the state underneath it at paint time, not from the base style at build time.
-        let pieces = parse_inline_paint_attrs(&attr.value);
-        let _ = base_pattrs;
-        let mut hoists: Vec<String> = Vec::new();
-        let (closure, _opacity) = self.rect_style_pieces(&pieces, &HashMap::new(), &mut hoists);
-        format!(".on_focus_style({closure})")
+        format!(".{method}({closure})")
     }
 
     /// Builds the trailing `.disabled(...)` from a `disabled:` attribute.
