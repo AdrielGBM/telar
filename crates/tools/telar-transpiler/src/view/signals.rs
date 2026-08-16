@@ -187,59 +187,53 @@ pub(super) fn substitute_handles(s: &str) -> String {
     substitute_dollar(s, false)
 }
 
-/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`). Only an ASCII `$` followed by an identifier start counts as a marker; everything else is copied through unchanged.
+/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`); everything else is copied through unchanged.
 fn substitute_dollar(s: &str, read: bool) -> String {
-    let bytes = s.as_bytes();
     let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'$'
-            && bytes
-                .get(i + 1)
-                .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
-        {
-            let start = i + 1;
-            let mut j = start;
-            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
-                j += 1;
-            }
-            out.push_str(&s[start..j]);
-            if read {
-                out.push_str(".get()");
-            }
-            i = j;
-        } else {
-            let ch = s[i..].chars().next().unwrap();
-            out.push(ch);
-            i += ch.len_utf8();
+    let mut copied = 0;
+    for (marker, end) in dollar_spans(s) {
+        out.push_str(&s[copied..marker]);
+        out.push_str(&s[marker + 1..end]);
+        if read {
+            out.push_str(".get()");
         }
+        copied = end;
     }
+    out.push_str(&s[copied..]);
     out
 }
 
 /// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured by a closure.
 pub(super) fn signal_idents(s: &str) -> Vec<String> {
+    dollar_spans(s)
+        .map(|(marker, end)| s[marker + 1..end].to_string())
+        .collect()
+}
+
+/// Every `$ident` marker in `s` as a `(dollar, end)` byte span. Only an ASCII `$` followed by an identifier
+/// start counts as a marker; a byte-wise walk cannot split a multi-byte char, since no continuation byte is
+/// ASCII.
+fn dollar_spans(s: &str) -> impl Iterator<Item = (usize, usize)> {
     let bytes = s.as_bytes();
-    let mut idents = Vec::new();
     let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'$'
-            && bytes
-                .get(i + 1)
-                .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
-        {
-            let start = i + 1;
-            let mut j = start;
-            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
-                j += 1;
+    std::iter::from_fn(move || {
+        while i < bytes.len() {
+            if bytes[i] == b'$'
+                && bytes
+                    .get(i + 1)
+                    .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
+            {
+                let marker = i;
+                i += 1;
+                while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                    i += 1;
+                }
+                return Some((marker, i));
             }
-            idents.push(s[start..j].to_string());
-            i = j;
-        } else {
             i += 1;
         }
-    }
-    idents
+        None
+    })
 }
 
 /// The distinct identifiers a `move` closure must clone so its captures stay independent of the outer
