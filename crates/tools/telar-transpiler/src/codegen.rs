@@ -213,7 +213,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                     "style",
                 ],
                 &["color"],
-                &["on_select"],
+                &["on_select", "style"],
             )
             .with_text(&["label"]),
         ),
@@ -268,7 +268,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
                 ],
                 true,
                 &["color"],
-                &[],
+                &["style"],
             )
             .with_text(&["text", "shortcut", "description"]),
         ),
