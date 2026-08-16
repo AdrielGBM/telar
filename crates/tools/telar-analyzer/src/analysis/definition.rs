@@ -1,10 +1,9 @@
-use crate::analysis::util::attribute_key_before_colon;
-use crate::position::{Section, find_section_at, parser_line_to_lsp_range};
+use crate::analysis::util::{ViewToken, view_token_at};
+use crate::position::parser_line_to_lsp_range;
 use crate::project::ProjectInfo;
-use crate::text::word_at_cursor;
 use lsp_types::{GotoDefinitionResponse, Location, Uri};
 use telar_parser::RsxDocument;
-use telar_transpiler::{color_attr_keys, is_builtin_tag};
+use telar_transpiler::is_builtin_tag;
 
 pub fn goto_definition(
     doc: &RsxDocument,
@@ -14,37 +13,13 @@ pub fn goto_definition(
     character: u32,
     project: Option<&ProjectInfo>,
 ) -> Option<GotoDefinitionResponse> {
-    if find_section_at(source, line) != Section::View {
-        return None;
+    match view_token_at(source, line, character)? {
+        ViewToken::Class(class) => find_class(doc, class, uri),
+        ViewToken::ColorValue(value) => find_color(doc, value, uri, project),
+        // A builtin tag is defined in the framework, not in a file this can open.
+        ViewToken::Tag(tag) if !is_builtin_tag(tag) => find_component(tag, project, uri),
+        ViewToken::Tag(_) => None,
     }
-    let line_text = source.lines().nth(line as usize)?;
-    let (word_start, word) = word_at_cursor(line_text, character);
-    if word.is_empty() {
-        return None;
-    }
-
-    // A `@`-prefixed token is a style-class reference. `word_at_cursor` keeps the sigil in the word (it breaks on whitespace/`:`/`"`, not `@`), so match on the prefix rather than the char before.
-    if let Some(class) = word.strip_prefix('@') {
-        return find_class(doc, class, uri);
-    }
-
-    let char_before = line_text[..word_start].chars().last();
-
-    if char_before == Some(':') {
-        if let Some(key) = attribute_key_before_colon(line_text, word_start)
-            && color_attr_keys().contains(&key)
-        {
-            return find_color(doc, word, uri, project);
-        }
-        return None;
-    }
-
-    let prefix_before_word = line_text[..word_start].trim();
-    if prefix_before_word.is_empty() && !is_builtin_tag(word) {
-        return find_component(word, project, uri);
-    }
-
-    None
 }
 
 fn find_class(doc: &RsxDocument, name: &str, uri: &Uri) -> Option<GotoDefinitionResponse> {

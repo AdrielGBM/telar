@@ -1,11 +1,9 @@
 use crate::analysis::color::{hex_string, parse_hex, rgba};
-use crate::analysis::util::attribute_key_before_colon;
-use crate::position::{Section, find_section_at};
+use crate::analysis::util::{ViewToken, view_token_at};
 use crate::project::ProjectInfo;
-use crate::text::word_at_cursor;
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 use telar_parser::{RsxDocument, StyleValue};
-use telar_transpiler::{color_attr_keys, keyword_color_rgba};
+use telar_transpiler::keyword_color_rgba;
 
 pub fn hover_info(
     doc: &RsxDocument,
@@ -14,32 +12,12 @@ pub fn hover_info(
     character: u32,
     project: Option<&ProjectInfo>,
 ) -> Option<Hover> {
-    if find_section_at(source, line) != Section::View {
-        return None;
+    match view_token_at(source, line, character)? {
+        ViewToken::ColorValue(value) => hover_color(doc, value, project),
+        ViewToken::Tag(tag) => hover_tag(tag),
+        // A style class already shows its own definition through goto-definition; there is no tooltip for it.
+        ViewToken::Class(_) => None,
     }
-    let line_text = source.lines().nth(line as usize)?;
-    let (word_start, word) = word_at_cursor(line_text, character);
-    if word.is_empty() {
-        return None;
-    }
-
-    let char_before = line_text[..word_start].chars().last();
-
-    if char_before == Some(':') {
-        if let Some(key) = attribute_key_before_colon(line_text, word_start)
-            && color_attr_keys().contains(&key)
-        {
-            return hover_color(doc, word, project);
-        }
-        return None;
-    }
-
-    let prefix_before_word = line_text[..word_start].trim();
-    if prefix_before_word.is_empty() {
-        return hover_tag(word);
-    }
-
-    None
 }
 
 fn hover_color(doc: &RsxDocument, value: &str, project: Option<&ProjectInfo>) -> Option<Hover> {
