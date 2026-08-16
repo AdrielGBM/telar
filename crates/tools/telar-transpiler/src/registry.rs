@@ -176,6 +176,8 @@ const CONTAINER_PAINT: &[&str] = &[
     "radial_radius",
     "opacity",
     "on_press",
+    // The non-primary half of `on_press`. Separate because a right- or middle-click otherwise falls through to whatever is behind the box, and folding it into `on_press` would make every pressable box swallow both.
+    "on_alt_press",
     "on_long_press",
     "on_hover",
     // The continuous half of `on_hover`: where the pointer is, not just whether it is in.

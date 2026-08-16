@@ -2287,6 +2287,30 @@ col @card
         assert!(code.contains(".disabled(|| true)"), "{code}");
     }
 
+    /// `on_alt_press` was reachable from hand-written Rust but had no attribute key, so a `.rsx` author could not arm a right- or middle-click at all. The library was ahead of the grammar; the grammar caught up.
+    #[test]
+    fn an_rsx_box_can_arm_a_non_primary_press() {
+        let src = "[view]\nbox width:20 on_alt_press(|b| println!(\"{b:?}\"))\n";
+        let code = transpile_source(src, "demo", None, None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(".on_alt_press("), "{code}");
+        assert!(
+            code.contains("StyledContainer::"),
+            "the handler lives on StyledContainer, so it must force the upgrade:\n{code}"
+        );
+    }
+
+    /// A forwarded (non-literal) value wires the `maybe_` form, so a wrapper component can pass an `Option` through without a no-op stand-in swallowing every right-click.
+    #[test]
+    fn a_forwarded_alt_press_wires_the_maybe_form() {
+        let src = "[logic]\nlet alt: Option<Box<dyn Fn(PointerButton)>> = None;\n\n[view]\nbox width:20 on_alt_press:alt\n";
+        let code = transpile_source(src, "demo", None, None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(".maybe_on_alt_press("), "{code}");
+    }
+
     /// A `String` prop could not take a literal, because a value ends at the first space — so
     /// `name:"Box select".to_string()` parses as the prop plus an attribute called `.to_string`. The way out
     /// was to bind every label to a `[logic]` local, six lines of preamble for three buttons. The transpiler

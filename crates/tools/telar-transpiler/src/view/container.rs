@@ -104,6 +104,7 @@ impl ViewGen<'_> {
         let on_scroll = self.closure_attr_call(el, "on_scroll", "on_scroll");
         let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
         let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
+        let on_alt_press = self.closure_attr_call(el, "on_alt_press", "on_alt_press");
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
@@ -111,7 +112,7 @@ impl ViewGen<'_> {
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded here because its closure form wires on a plain Container too — `on_press_forwarded` above covers the other case. `box` (`always_style`) skips the check.
         let styling = format!(
-            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{drag_threshold}{click_through}"
+            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}"
         );
         let pieces =
             if always_style || has_paint(&pattrs) || !styling.is_empty() || on_press_forwarded {
@@ -159,7 +160,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{cursor}{drag_button}{drag_threshold}{click_through}{styled_by}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}{styled_by}{terminator}"
                 );
             }
             None => {

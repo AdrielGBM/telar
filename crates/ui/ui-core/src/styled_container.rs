@@ -449,7 +449,13 @@ impl StyledContainer {
     ///
     /// Opt-in per box rather than folded into `on_press`, because a non-primary press otherwise falls through
     /// to whatever is behind it — silently swallowing right-clicks on every pressable box would break that.
-    pub fn on_alt_press(mut self, f: impl Fn(PointerButton) + 'static) -> Self {
+    pub fn on_alt_press(self, f: impl Fn(PointerButton) + 'static) -> Self {
+        self.maybe_on_alt_press(Some(f))
+    }
+
+    /// [`on_alt_press`](Self::on_alt_press) for a handler the caller may not have supplied.
+    pub fn maybe_on_alt_press(mut self, f: Option<impl Fn(PointerButton) + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.press.set_alt_press(f);
         self.mark_interactive();
         self
@@ -1640,6 +1646,18 @@ mod tests {
         );
         card.on_event(&release_with(50.0, 50.0, PointerButton::Primary));
         assert!(!alt.get(), "the primary button is not an alt press");
+    }
+
+    // What a wrapper forwarding an optional `on_alt_press` needs: `None` must leave the box transparent to a right-click, not turn it into one that reports the press handled and swallows the context menu behind it.
+    #[test]
+    fn maybe_on_alt_press_of_none_lets_a_secondary_press_fall_through() {
+        let mut card = laid_out_box().maybe_on_alt_press(None::<fn(PointerButton)>);
+        settle(&mut card);
+
+        assert_eq!(
+            card.on_event(&press_with(50.0, 50.0, PointerButton::Secondary)),
+            EventResult::Ignored
+        );
     }
 
     #[test]
