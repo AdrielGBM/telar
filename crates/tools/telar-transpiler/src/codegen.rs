@@ -6,7 +6,8 @@ use telar_parser::{RsxDocument, ViewNode};
 
 use crate::error::TranspileError;
 use crate::naming::{
-    contains_ident, preview_entries_const_name, replace_whole_word, to_pascal_case, to_snake_case,
+    contains_ident, literal_or_comment_end, preview_entries_const_name, replace_whole_word,
+    to_pascal_case, to_snake_case,
 };
 use crate::signal_scan::{scan_effects, scan_locals, scan_signals};
 use crate::source_map::ExprSpan;
@@ -374,53 +375,42 @@ struct ScannedProps {
 }
 
 /// Scans the logic zone for `struct Props`. See [`ScannedProps`] for what each part is used for.
+///
+/// Located through [`struct_line_span`], the same span `extract_props_struct` lifts into the generated file:
+/// what this reads and what that emits cannot disagree about which struct is the props one, nor about which
+/// attribute lines belong to it.
 fn scan_props_struct(logic: &str) -> ScannedProps {
-    let Some(spos) = logic.find("struct Props") else {
+    let lines: Vec<&str> = logic.lines().collect();
+    let Some((start, end)) = struct_line_span(&lines, "Props") else {
         return ScannedProps::default();
     };
-
-    // A `#[derive(...Default...)]` on the attribute lines immediately above the struct opts it into defaults.
-    let lines: Vec<&str> = logic.lines().collect();
-    let sidx = lines
+    let declared = lines[start..=end]
         .iter()
-        .position(|l| l.contains("struct Props"))
-        .unwrap_or(0);
-    let mut derives_default = false;
-    let mut i = sidx;
-    while i > 0 {
-        let t = lines[i - 1].trim();
-        if t.is_empty() || t.starts_with("//") {
-            i -= 1;
-            continue;
-        }
-        if t.starts_with('#') {
-            if t.contains("Default") {
-                derives_default = true;
-            }
-            i -= 1;
-            continue;
-        }
-        break;
-    }
+        .position(|l| declares_struct(l.trim(), "Props"))
+        .map_or(start, |rel| start + rel);
 
-    // Field names live between the struct's first `{` and its matching `}`.
-    let Some(open_rel) = logic[spos..].find('{') else {
+    let derives_default = lines[start..declared]
+        .iter()
+        .any(|l| l.trim_start().starts_with('#') && l.contains("Default"));
+
+    let declaration = lines[declared..=end].join("\n");
+    let Some(open) = declaration.find('{') else {
         return ScannedProps {
             has_props: true,
             props_default: derives_default,
             ..Default::default()
         };
     };
-    let body_start = spos + open_rel + 1;
+    let body_start = open + 1;
     let mut depth = 1i32;
-    let mut end = body_start;
-    for (i, c) in logic[body_start..].char_indices() {
+    let mut body_end = body_start;
+    for (i, c) in declaration[body_start..].char_indices() {
         match c {
             '{' => depth += 1,
             '}' => {
                 depth -= 1;
                 if depth == 0 {
-                    end = body_start + i;
+                    body_end = body_start + i;
                     break;
                 }
             }
@@ -432,7 +422,7 @@ fn scan_props_struct(logic: &str) -> ScannedProps {
         ..Default::default()
     };
     let mut has_inline_default = false;
-    for chunk in split_top_level_commas(&logic[body_start..end]) {
+    for chunk in split_top_level_commas(&declaration[body_start..body_end]) {
         if let Some(field) = parse_field(&chunk) {
             if field.optional {
                 scanned.optional.push(field.name.clone());
@@ -540,7 +530,7 @@ fn split_top_level_commas(body: &str) -> Vec<String> {
     let mut i = 0;
     while i < b.len() {
         let c = b[i];
-        if let Some(next) = skip_literal_or_comment(b, i) {
+        if let Some(next) = literal_or_comment_end(b, i) {
             i = next;
             continue;
         }
@@ -559,38 +549,6 @@ fn split_top_level_commas(body: &str) -> Vec<String> {
     }
     chunks.push(body[start..].to_string());
     chunks
-}
-
-/// The index just past the comment or literal beginning at `at`, or `None` when nothing starts there. A `'` is
-/// only a char literal when it closes within three bytes — otherwise it opens a lifetime (`&'static str`).
-fn skip_literal_or_comment(b: &[u8], at: usize) -> Option<usize> {
-    let past_line_end = |from: usize| {
-        b[from..]
-            .iter()
-            .position(|&c| c == b'\n')
-            .map_or(b.len(), |n| from + n)
-    };
-    match (b[at], b.get(at + 1)) {
-        (b'/', Some(b'/')) => Some(past_line_end(at)),
-        (b'/', Some(b'*')) => {
-            let mut i = at + 2;
-            while i + 1 < b.len() && !(b[i] == b'*' && b[i + 1] == b'/') {
-                i += 1;
-            }
-            Some((i + 2).min(b.len()))
-        }
-        (b'"', _) => {
-            let mut i = at + 1;
-            while i < b.len() && b[i] != b'"' {
-                i += if b[i] == b'\\' { 2 } else { 1 };
-            }
-            Some((i + 1).min(b.len()))
-        }
-        (b'\'', _) => (2..=3)
-            .find(|n| b.get(at + n) == Some(&b'\''))
-            .map(|n| at + n + 1),
-        _ => None,
-    }
 }
 
 /// Indices of the logic-zone lines that make up a top-level `use` statement, in source order.
@@ -1046,25 +1004,19 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
 }
 
 /// Net change in argument-context depth for `line`: `(`/`[` open it, `)`/`]` close it. Block braces `{}` are
-/// statement contexts (a `let` is valid inside them), so they don't count. String/char literals and line
-/// comments are skipped so brackets inside them don't miscount; a `'a` lifetime tick is left alone (it has no
-/// closing quote, unlike a `'x'` char literal). Used by the `[logic]` signal-clone pass to tell a
-/// statement-start line from a continuation line inside an open call/array.
+/// statement contexts (a `let` is valid inside them), so they don't count. Literals and comments are skipped
+/// so brackets inside them don't miscount. Used by the `[logic]` signal-clone pass to tell a statement-start
+/// line from a continuation line inside an open call/array.
 fn arg_depth_delta(line: &str) -> i32 {
     let bytes = line.as_bytes();
     let mut depth = 0i32;
     let mut i = 0;
     while i < bytes.len() {
+        if let Some(end) = literal_or_comment_end(bytes, i) {
+            i = end;
+            continue;
+        }
         match bytes[i] {
-            b'/' if bytes.get(i + 1) == Some(&b'/') => break,
-            b'"' => {
-                i += 1;
-                while i < bytes.len() && bytes[i] != b'"' {
-                    i += if bytes[i] == b'\\' { 2 } else { 1 };
-                }
-            }
-            b'\'' if bytes.get(i + 1) == Some(&b'\\') && bytes.get(i + 3) == Some(&b'\'') => i += 3,
-            b'\'' if bytes.get(i + 2) == Some(&b'\'') => i += 2,
             b'(' | b'[' => depth += 1,
             b')' | b']' => depth -= 1,
             _ => {}
@@ -1094,19 +1046,18 @@ fn find_move_keyword(line: &str) -> Option<usize> {
 /// Byte index just past the closure that begins at `start`: scans its body tracking bracket depth and stops
 /// at the first depth-0 `,` or the first closing bracket that would pop past the closure's own nesting (i.e.
 /// one that closes the *enclosing* call), or end of line. Lets a continuation-line closure argument be
-/// wrapped without swallowing the surrounding call's `)`/`,`.
+/// wrapped without swallowing the surrounding call's `)`/`,`. Literals and comments are skipped, so a `}` or
+/// a `,` written inside one does not end the closure early.
 fn closure_end(line: &str, start: usize) -> usize {
     let bytes = line.as_bytes();
     let mut depth = 0i32;
     let mut i = start;
     while i < bytes.len() {
+        if let Some(end) = literal_or_comment_end(bytes, i) {
+            i = end;
+            continue;
+        }
         match bytes[i] {
-            b'"' => {
-                i += 1;
-                while i < bytes.len() && bytes[i] != b'"' {
-                    i += if bytes[i] == b'\\' { 2 } else { 1 };
-                }
-            }
             b'(' | b'[' | b'{' => depth += 1,
             b')' | b']' | b'}' if depth == 0 => break,
             b')' | b']' | b'}' => depth -= 1,
@@ -1236,19 +1187,21 @@ fn slot_context_expr(nodes: &[ViewNode]) -> Option<String> {
 /// `[start, end]` (inclusive) line span within `logic`, so the caller can map the struct back to source.
 type ExtractedProps = (Option<String>, Option<String>, Option<(usize, usize)>);
 
+/// Whether `line` declares `struct <name>`. The boundary test matters: without it `struct Context` would also
+/// claim a `struct ContextMenu`, and `struct Props` a `struct PropsBag`.
+fn declares_struct(line: &str, name: &str) -> bool {
+    let needle = format!("struct {name}");
+    line.find(&needle).is_some_and(|at| {
+        !line[at + needle.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+    })
+}
+
 /// The inclusive line span of `struct <name> { … }` in `lines`, taking in any `#[…]` attribute and comment
 /// lines directly above it: a doc comment left behind would land on whatever statement follows, describing the
 /// wrong thing in the one place a reader of the generated crate would look. `None` when the struct is absent
 /// or its braces never close.
 fn struct_line_span(lines: &[&str], name: &str) -> Option<(usize, usize)> {
-    let needle = format!("struct {name}");
-    // The boundary matters: without it `struct Context` would also claim a `struct ContextMenu`.
-    let declares = |line: &str| {
-        line.find(&needle).is_some_and(|at| {
-            !line[at + needle.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
-        })
-    };
-    let declared = lines.iter().position(|l| declares(l.trim()))?;
+    let declared = lines.iter().position(|l| declares_struct(l.trim(), name))?;
 
     let mut start = declared;
     while start > 0 && {
