@@ -13,9 +13,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-lsp-types = { version = "0.97", optional = true }
+lsp-types = "0.97"
 telar-parser = { workspace = true }
 telar-transpiler = { workspace = true }
-
-[features]
-lsp = ["dep:lsp-types"]

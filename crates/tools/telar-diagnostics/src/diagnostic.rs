@@ -4,19 +4,6 @@ use telar_parser::ParseError;
 pub enum Severity {
     Error,
     Warning,
-    Info,
-    Hint,
-}
-
-impl Severity {
-    pub fn label(self) -> &'static str {
-        match self {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
-            Severity::Info => "info",
-            Severity::Hint => "hint",
-        }
-    }
 }
 
 /// Source location of a [`Diagnostic`]: the 1-based line (matching the parser). The whole line is spanned.
@@ -36,7 +23,6 @@ pub struct Diagnostic {
     pub severity: Severity,
     pub message: String,
     pub span: Span,
-    pub code: Option<String>,
 }
 
 impl Diagnostic {
@@ -45,7 +31,6 @@ impl Diagnostic {
             severity,
             message: message.into(),
             span,
-            code: None,
         }
     }
 
@@ -55,11 +40,6 @@ impl Diagnostic {
 
     pub fn warning(message: impl Into<String>, span: Span) -> Self {
         Self::new(Severity::Warning, message, span)
-    }
-
-    pub fn with_code(mut self, code: impl Into<String>) -> Self {
-        self.code = Some(code.into());
-        self
     }
 }
 

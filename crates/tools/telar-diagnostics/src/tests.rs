@@ -151,7 +151,6 @@ fn genuinely_unknown_color_still_errors_under_theme() {
     assert!(diags[0].message.contains("bogus"));
 }
 
-#[cfg(feature = "lsp")]
 #[test]
 fn lsp_conversion_maps_severity_and_zero_based_line() {
     use lsp_types::{Diagnostic as LspDiagnostic, DiagnosticSeverity};

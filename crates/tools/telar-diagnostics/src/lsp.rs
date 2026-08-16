@@ -1,4 +1,4 @@
-use lsp_types::{Diagnostic as LspDiagnostic, DiagnosticSeverity, NumberOrString, Position, Range};
+use lsp_types::{Diagnostic as LspDiagnostic, DiagnosticSeverity, Position, Range};
 
 use crate::{Diagnostic, Severity};
 
@@ -7,8 +7,6 @@ impl From<Severity> for DiagnosticSeverity {
         match severity {
             Severity::Error => DiagnosticSeverity::ERROR,
             Severity::Warning => DiagnosticSeverity::WARNING,
-            Severity::Info => DiagnosticSeverity::INFORMATION,
-            Severity::Hint => DiagnosticSeverity::HINT,
         }
     }
 }
@@ -26,7 +24,6 @@ impl From<&Diagnostic> for LspDiagnostic {
                 },
             },
             severity: Some(diag.severity.into()),
-            code: diag.code.clone().map(NumberOrString::String),
             message: diag.message.clone(),
             ..Default::default()
         }
