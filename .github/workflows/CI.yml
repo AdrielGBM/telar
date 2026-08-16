@@ -65,9 +65,10 @@ jobs:
       - run: cargo test --workspace --exclude telar-platform-android
         env:
           TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
-      # `plugin-host` and `platform-headless` are enabled by no workspace member, so the plugin bridge and
-      # the offscreen rasteriser are never compiled by the line above — while both ship in out-of-tree apps.
-      - run: cargo test -p telar --features plugin-host,platform-headless
+      # `plugin-host`, `platform-headless` and `dev` are enabled by no workspace member, so the plugin bridge,
+      # the offscreen rasteriser and the devtools overlay are never compiled by the line above — while the
+      # first two ship in out-of-tree apps and the third is what every `cargo telar dev` session runs.
+      - run: cargo test -p telar --features plugin-host,platform-headless,dev
         env:
           TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
 
