@@ -122,7 +122,7 @@ struct I18nConfig {
 }
 
 fn read_i18n_config(package_root: &Path) -> I18nConfig {
-    let rsx = read_rsx_section(package_root);
+    let rsx = crate::discovery::read_rsx_section(package_root);
     let i18n = rsx
         .as_ref()
         .and_then(|t| t.get("i18n"))
@@ -207,16 +207,6 @@ fn discover_root_dir(root: &Path, sources: &mut Vec<(String, PathBuf)>) {
             sources.push((tag.to_string(), path));
         }
     }
-}
-
-fn read_rsx_section(package_root: &Path) -> Option<toml::Table> {
-    let content = std::fs::read_to_string(package_root.join("telar.toml")).ok()?;
-    content
-        .parse::<toml::Table>()
-        .ok()?
-        .get("telar")?
-        .as_table()
-        .cloned()
 }
 
 /// Parses the catalog for `package_root`. Returns `Ok(None)` when no translation files are found (i18n unused),

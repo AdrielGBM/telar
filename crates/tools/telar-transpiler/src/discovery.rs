@@ -55,7 +55,7 @@ pub fn find_rsx_files_in_tree(root: &Path) -> Vec<PathBuf> {
 }
 
 /// Parses the `[telar]` table from `<package_root>/telar.toml`, or `None` if the file/section is absent.
-fn read_rsx_section(package_root: &Path) -> Option<toml::Table> {
+pub(crate) fn read_rsx_section(package_root: &Path) -> Option<toml::Table> {
     let content = std::fs::read_to_string(package_root.join("telar.toml")).ok()?;
     content
         .parse::<toml::Table>()
