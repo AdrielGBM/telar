@@ -465,6 +465,13 @@ mod tests {
         );
     }
 
+    /// Whether the report points at `suffix`, written with `/` whatever the platform spells it with. A frame
+    /// carries a real mapped path, so on Windows it arrives with backslashes and a literal `src/home.rsx`
+    /// never matches — which is a fact about the separator and not about the mapping under test.
+    fn points_at(text: &str, suffix: &str) -> bool {
+        text.replace('\\', "/").contains(suffix)
+    }
+
     /// Lays out a package the way a hot-reload build leaves one: the `.rsx` the author wrote, the generated
     /// `.rs` nobody wrote, and the map between them. Returns the package root.
     fn fake_package(tag: &str, rsx: &str, generated: &str, map: SourceMap) -> PathBuf {
@@ -528,7 +535,7 @@ mod tests {
         let text = report.render(false);
 
         assert!(text.contains("error: mismatched types"), "{text}");
-        assert!(text.contains("src/home.rsx:2"), "{text}");
+        assert!(points_at(&text, "src/home.rsx:2"), "{text}");
         assert!(
             text.contains("let n = signal(0);"),
             "the frame quotes the line the author wrote:\n{text}"
@@ -558,7 +565,7 @@ mod tests {
         assert!(!report.has_errors(), "a warning does not fail the build");
         let text = report.render(false);
         assert!(text.contains("warning: unused variable"), "{text}");
-        assert!(text.contains("src/home.rsx:2"), "{text}");
+        assert!(points_at(&text, "src/home.rsx:2"), "{text}");
         std::fs::remove_dir_all(&root).ok();
     }
 
@@ -618,7 +625,7 @@ mod tests {
         )
         .render(false);
 
-        assert!(text.contains("src/home.rsx:2"), "{text}");
+        assert!(points_at(&text, "src/home.rsx:2"), "{text}");
         assert!(
             text.contains("    ^^^^^"),
             "the carets sit under `count`, four columns in:\n{text}"
@@ -660,7 +667,7 @@ mod tests {
         )
         .render(false);
 
-        assert!(text.contains("src/home.rsx:3"), "{text}");
+        assert!(points_at(&text, "src/home.rsx:3"), "{text}");
         assert!(
             text.contains(&format!("{}^^^^^^^", " ".repeat(11))),
             "the carets sit under `missing`, past `    text \"{{`:\n{text}"
@@ -686,7 +693,7 @@ mod tests {
         )
         .render(false);
 
-        assert!(text.contains("src/home.rsx:5"), "{text}");
+        assert!(points_at(&text, "src/home.rsx:5"), "{text}");
         assert!(
             !text.contains('^'),
             "nothing is underlined when the columns mean nothing:\n{text}"
