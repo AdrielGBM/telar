@@ -57,7 +57,7 @@ impl ViewGen<'_> {
     /// reconciles on the variant alone, which rebuilds when the shape changes and not when the payload does.
     fn emit_reactive_match(&mut self, block: &MatchBlock) -> ChildEmit {
         let boxed = !self.in_slot_host();
-        let var = self.next_variable_name(if boxed { "node" } else { "frag" });
+        let var = self.next_variable_name("node");
         let pad = self.indent_str();
         let scrutinee = block.scrutinee.trim();
         let source = wrap_signal_clones(
@@ -151,14 +151,14 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// A reactive `if $cond`. Inside a slot host it is a transparent fragment (the shown branch's nodes are
-    /// real siblings inheriting the parent's flex direction); outside one it falls back to a boxed
-    /// `ReactiveList` ([`Self::emit_reactive_if_boxed`]).
+    /// A reactive `if $cond`, keyed on the condition boolean: the old branch's nodes are disposed and the new
+    /// branch built when it flips. Inside a slot host it is a transparent fragment (the shown branch's nodes
+    /// are real siblings inheriting the parent's flex direction); where a fragment cannot attach —
+    /// component-slot children, a bare root, overlay/scroll — it is a single-item `ReactiveList` owning a node
+    /// of its own.
     fn emit_reactive_if(&mut self, block: &IfBlock) -> ChildEmit {
-        if !self.in_slot_host() {
-            return self.emit_reactive_if_boxed(block);
-        }
-        let var = self.next_variable_name("frag");
+        let boxed = !self.in_slot_host();
+        let var = self.next_variable_name("node");
         let pad = self.indent_str();
         let cond = block.condition.trim();
         // Source yields a one-element `vec![<bool>]`; the element is the reconciliation key and branch selector.
@@ -177,44 +177,23 @@ impl ViewGen<'_> {
         let branches =
             self.wrap_branch_closure(&Self::branch_nodes(block), body, &format!("{pad}    "));
 
+        let opener = if boxed {
+            "ReactiveList::new("
+        } else {
+            "fragment("
+        };
+        let closer = self.boxed_list_closer(boxed);
+
         let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = fragment(");
+        let _ = writeln!(code, "{pad}let {var} = {opener}");
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
         let _ = writeln!(code, "{branches},");
-        let _ = write!(code, "{pad});");
-        ChildEmit::Fragment { name: var, code }
-    }
-
-    /// The pre-transparency reactive `if`: a single-item `ReactiveList` keyed on the condition boolean (the
-    /// old branch's nodes are disposed and the new branch built when it flips). Used where a fragment can't
-    /// attach — component-slot children, a bare root, overlay/scroll.
-    fn emit_reactive_if_boxed(&mut self, block: &IfBlock) -> ChildEmit {
-        let var = self.next_variable_name("node");
-        let pad = self.indent_str();
-        let cond = block.condition.trim();
-        let source =
-            wrap_signal_clones(&[cond], format!("move || vec![{}]", substitute_reads(cond)));
-
-        let mut body = String::new();
-        let _ = writeln!(
-            body,
-            "{pad}    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
-        );
-        self.indent += 2;
-        self.in_reactive(|g| g.emit_branch_returns(block, &mut body));
-        self.indent -= 2;
-        let _ = write!(body, "{pad}    }}");
-        let branches =
-            self.wrap_branch_closure(&Self::branch_nodes(block), body, &format!("{pad}    "));
-
-        let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = ReactiveList::new(");
-        let _ = writeln!(code, "{pad}    {source},");
-        let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
-        let _ = writeln!(code, "{branches},");
-        let _ = write!(code, "{pad})?{};", self.boxed_list_axis());
-        ChildEmit::Simple { name: var, code }
+        let _ = write!(code, "{pad}{closer}");
+        match boxed {
+            true => ChildEmit::Simple { name: var, code },
+            false => ChildEmit::Fragment { name: var, code },
+        }
     }
 
     /// Both branches of an `if` as one node list — what the branch closure actually contains, and so what its
@@ -326,12 +305,11 @@ impl ViewGen<'_> {
 
     /// A reactive `for x in $items [key <expr>] [gap:N]`. Inside a slot host it is a transparent fragment: its
     /// items reconcile into the host's node as real siblings, flowing in its flex direction (a `for` in a `row`
-    /// is horizontal), with `gap:` as a per-item margin. Elsewhere it falls back to a boxed `ReactiveList`.
+    /// is horizontal), with `gap:` as a per-item margin. Elsewhere it is a boxed `ReactiveList` owning its own
+    /// container node.
     fn emit_reactive_for(&mut self, block: &ForBlock) -> ChildEmit {
-        if !self.in_slot_host() {
-            return self.emit_reactive_for_boxed(block);
-        }
-        let var = self.next_variable_name("frag");
+        let boxed = !self.in_slot_host();
+        let var = self.next_variable_name("node");
         let pad = self.indent_str();
         let iterable = block.iterable.trim();
         let pattern = block.pattern.trim();
@@ -349,32 +327,18 @@ impl ViewGen<'_> {
             &[iterable],
             format!("move || {}", substitute_reads(iterable)),
         );
-        let ctor = match (key_expr.is_some(), gap_expr.is_some()) {
-            (true, false) => "fragment",
-            (true, true) => "fragment_gap",
-            (false, false) => "fragment_positional",
-            (false, true) => "fragment_positional_gap",
+        let ctor = match (boxed, key_expr.is_some(), gap_expr.is_some()) {
+            (false, true, false) => "fragment",
+            (false, true, true) => "fragment_gap",
+            (false, false, false) => "fragment_positional",
+            (false, false, true) => "fragment_positional_gap",
+            (true, true, false) => "ReactiveList::new",
+            (true, true, true) => "ReactiveList::with_gap",
+            (true, false, false) => "ReactiveList::positional",
+            (true, false, true) => "ReactiveList::positional_with_gap",
         };
-
-        // Computed before this loop's own pattern idents go into scope: those are the closure's parameters, so cloning them above it would name bindings that do not exist there.
-        let prelude_pad = format!("{pad}    ");
-        let mut body = String::new();
-        let _ = writeln!(
-            body,
-            "{pad}    move |{pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
-        );
-        self.indent += 2;
-        let idents = pattern_idents(pattern);
-        let added = idents.len();
-        self.loop_variables.extend(idents);
-        let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
-        self.loop_variables
-            .truncate(self.loop_variables.len() - added);
-        let pad2 = self.indent_str();
-        let _ = writeln!(body, "{pad2}Ok(box_item({cell}))");
-        self.indent -= 2;
-        let _ = write!(body, "{pad}    }}");
-        let item_builder = self.wrap_branch_closure(&block.body, body, &prelude_pad);
+        let item_builder = self.emit_item_closure(block, pattern, &pad);
+        let closer = self.boxed_list_closer(boxed);
 
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {ctor}(");
@@ -386,8 +350,36 @@ impl ViewGen<'_> {
         if let Some(gap_expr) = gap_expr {
             let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
         }
-        let _ = write!(code, "{pad});");
-        ChildEmit::Fragment { name: var, code }
+        let _ = write!(code, "{pad}{closer}");
+        match boxed {
+            true => ChildEmit::Simple { name: var, code },
+            false => ChildEmit::Fragment { name: var, code },
+        }
+    }
+
+    /// The `move |params| -> Result<…>` row closure a reactive `for` hands its list constructor, with the
+    /// clone prelude its body reads.
+    ///
+    /// The prelude is computed before this loop's own pattern idents go into scope: those are the closure's
+    /// parameters, so cloning them above it would name bindings that do not exist there.
+    fn emit_item_closure(&mut self, block: &ForBlock, params: &str, pad: &str) -> String {
+        let mut body = String::new();
+        let _ = writeln!(
+            body,
+            "{pad}    move |{params}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
+        );
+        self.indent += 2;
+        let idents = pattern_idents(block.pattern.trim());
+        let added = idents.len();
+        self.loop_variables.extend(idents);
+        let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
+        self.loop_variables
+            .truncate(self.loop_variables.len() - added);
+        let ipad = self.indent_str();
+        let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
+        self.indent -= 2;
+        let _ = write!(body, "{pad}    }}");
+        self.wrap_branch_closure(&block.body, body, &format!("{pad}    "))
     }
 
     /// A `virtual` loop: only the rows the enclosing scroll shows get built, instead of every row up front.
@@ -423,26 +415,10 @@ impl ViewGen<'_> {
             format!("move || {}", substitute_reads(iterable)),
         );
 
-        let prelude_pad = format!("{pad}    ");
-        let mut body = String::new();
         // `VirtualList` hands a row its index alongside the item, since a virtualised row often wants to know
         // where it sits. The author's pattern binds the item; `__index` is the index.
-        let _ = writeln!(
-            body,
-            "{pad}    move |__index: usize, {pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
-        );
-        self.indent += 2;
-        let idents = pattern_idents(pattern);
-        let added = idents.len();
-        self.loop_variables.extend(idents);
-        let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
-        self.loop_variables
-            .truncate(self.loop_variables.len() - added);
-        let ipad = self.indent_str();
-        let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
-        self.indent -= 2;
-        let _ = write!(body, "{pad}    }}");
-        let item_builder = self.wrap_branch_closure(&block.body, body, &prelude_pad);
+        let item_builder =
+            self.emit_item_closure(block, &format!("__index: usize, {pattern}"), &pad);
 
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = VirtualList::new(");
@@ -459,75 +435,16 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// The pre-transparency reactive `for`: a boxed `ReactiveList` (its own container node) with an optional
-    /// `key`/`gap`. Used where a fragment can't attach (a non-slot-host context).
-    fn emit_reactive_for_boxed(&mut self, block: &ForBlock) -> ChildEmit {
-        let var = self.next_variable_name("node");
-        let pad = self.indent_str();
-        let iterable = block.iterable.trim();
-        let pattern = block.pattern.trim();
-
-        let key_expr = block
-            .key_expr
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty());
-        let gap_expr = block
-            .gap_expr
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty());
-
-        let constructor = match (key_expr.is_some(), gap_expr.is_some()) {
-            (true, false) => "new",
-            (true, true) => "with_gap",
-            (false, false) => "positional",
-            (false, true) => "positional_with_gap",
-        };
-
-        let source = wrap_signal_clones(
-            &[iterable],
-            format!("move || {}", substitute_reads(iterable)),
-        );
-
-        let prelude_pad = format!("{pad}    ");
-        let mut body = String::new();
-        let _ = writeln!(
-            body,
-            "{pad}    move |{pattern}| -> Result<Box<dyn LayoutItem>, LayoutError> {{"
-        );
-        self.indent += 2;
-        let idents = pattern_idents(pattern);
-        let added = idents.len();
-        self.loop_variables.extend(idents);
-        let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
-        self.loop_variables
-            .truncate(self.loop_variables.len() - added);
-        let ipad = self.indent_str();
-        let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
-        self.indent -= 2;
-        let _ = write!(body, "{pad}    }}");
-        let item_builder = self.wrap_branch_closure(&block.body, body, &prelude_pad);
-
-        let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = ReactiveList::{constructor}(");
-        let _ = writeln!(code, "{pad}    {source},");
-        if let Some(key_expr) = key_expr {
-            let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
+    /// The tail that closes a reactive list constructor. A fragment attaches to its host and just ends; a
+    /// boxed `ReactiveList` returns a `Result` and turns into a row when it sits inside one — every
+    /// constructor builds a column, which is right everywhere except here, since a reactive region that owns
+    /// a node of its own inherits nothing from the container it is about to be attached to.
+    fn boxed_list_closer(&self, boxed: bool) -> String {
+        match boxed {
+            true if self.host_is_row() => ")?.as_row();".to_string(),
+            true => ")?;".to_string(),
+            false => ");".to_string(),
         }
-        let _ = writeln!(code, "{item_builder},");
-        if let Some(gap_expr) = gap_expr {
-            let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
-        }
-        let _ = write!(code, "{pad})?{};", self.boxed_list_axis());
-        ChildEmit::Simple { name: var, code }
-    }
-
-    /// The tail that turns a boxed `ReactiveList` into a row when it sits inside one. Every constructor
-    /// builds a column, which is right everywhere except here: a reactive region that owns a node of its
-    /// own inherits nothing from the container it is about to be attached to.
-    fn boxed_list_axis(&self) -> &'static str {
-        if self.host_is_row() { ".as_row()" } else { "" }
     }
 
     /// Emits `body` as one content item. A single plain widget is returned bare so its parent (not an
