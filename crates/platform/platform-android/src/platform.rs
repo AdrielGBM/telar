@@ -1,7 +1,7 @@
 use android_activity::AndroidApp;
 use platform_core::{
-    Event, EventHandler, Platform, PlatformError, PointerButton, PointerSource, ScrollDelta,
-    Window, WindowConfig,
+    Event, EventHandler, Platform, PlatformError, PointerButton, PointerSource, Window,
+    WindowConfig,
 };
 
 // ANativeWindow_setFrameRate is API 30+ and may live in libnativewindow.so on some OEM devices rather than libandroid.so, so resolve it at runtime to avoid a hard dlopen failure on devices where the NDK stub does not match the runtime library.
@@ -145,12 +145,12 @@ mod choreographer {
 }
 
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, MouseScrollDelta, StartCause, Touch, TouchPhase, WindowEvent};
+use winit::event::{StartCause, Touch, TouchPhase, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::platform::android::EventLoopBuilderExtAndroid;
 use winit::window::{WindowAttributes, WindowId};
 
-use platform_winit::WinitWindow as AndroidWindow;
+use platform_winit::{SurfaceIntent, WinitWindow as AndroidWindow, map_window_event};
 
 pub struct AndroidPlatform {
     event_loop: EventLoop<()>,
@@ -325,25 +325,11 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let Some(window) = &self.window else { return };
+        let Some(window) = self.window.clone() else {
+            return;
+        };
         match event {
-            WindowEvent::CloseRequested => {
-                self.handler.on_event(Event::WindowCloseRequested, window);
-                event_loop.exit();
-            }
-            WindowEvent::Resized(size) => {
-                self.handler.on_event(
-                    Event::WindowResized {
-                        width: (size.width as f64 / self.scale_factor).round() as u32,
-                        height: (size.height as f64 / self.scale_factor).round() as u32,
-                    },
-                    window,
-                );
-                window.request_redraw();
-            }
-            WindowEvent::RedrawRequested => {
-                self.handler.on_redraw(window);
-            }
+            // Android is the only backend reporting touch, and `TouchPhase::Moved` emits two events — a scroll synthesised from the `last_touch_pos` delta, then the move — which one `SurfaceIntent` cannot carry.
             WindowEvent::Touch(Touch {
                 phase,
                 location,
@@ -363,7 +349,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                                 button: PointerButton::Primary,
                                 source,
                             },
-                            window,
+                            &window,
                         );
                     }
                     TouchPhase::Moved => {
@@ -380,13 +366,13 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                                         x,
                                         y,
                                     },
-                                    window,
+                                    &window,
                                 );
                             }
                         }
                         self.last_touch_pos = Some((x, y, id));
                         self.handler
-                            .on_event(Event::PointerMoved { x, y, source }, window);
+                            .on_event(Event::PointerMoved { x, y, source }, &window);
                     }
                     TouchPhase::Ended | TouchPhase::Cancelled => {
                         self.last_touch_pos = None;
@@ -397,99 +383,29 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                                 button: PointerButton::Primary,
                                 source,
                             },
-                            window,
+                            &window,
                         );
                     }
                 }
             }
-            WindowEvent::Focused(is_focused) => {
-                self.handler
-                    .on_event(Event::FocusChanged { is_focused }, window);
-            }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                self.scale_factor = scale_factor;
-                self.handler
-                    .on_event(Event::ScaleFactorChanged { scale_factor }, window);
-            }
-            WindowEvent::ModifiersChanged(mods) => {
-                self.modifiers = platform_winit::map_modifiers(&mods);
-                self.handler.on_event(
-                    Event::ModifiersChanged {
-                        modifiers: self.modifiers,
-                    },
-                    window,
-                );
-            }
-            WindowEvent::KeyboardInput { event, .. } => {
-                let Some(key) = platform_winit::map_key(&event.logical_key, event.location) else {
-                    return;
-                };
-                let modifiers = self.modifiers;
-                let ev = match event.state {
-                    ElementState::Pressed => platform_core::Event::KeyPressed { key, modifiers },
-                    ElementState::Released => platform_core::Event::KeyReleased { key, modifiers },
-                };
-                self.handler.on_event(ev, window);
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                let lx = position.x / self.scale_factor;
-                let ly = position.y / self.scale_factor;
-                self.cursor_position = (lx, ly);
-                self.handler.on_event(
-                    Event::PointerMoved {
-                        x: lx,
-                        y: ly,
-                        source: PointerSource::Mouse,
-                    },
-                    window,
-                );
-            }
-            WindowEvent::MouseInput { state, button, .. } => {
-                let Some(btn) = platform_winit::map_mouse_button(button) else {
-                    return;
-                };
-                let (x, y) = self.cursor_position;
-                let ev = match state {
-                    ElementState::Pressed => Event::PointerPressed {
-                        x,
-                        y,
-                        button: btn,
-                        source: PointerSource::Mouse,
-                    },
-                    ElementState::Released => Event::PointerReleased {
-                        x,
-                        y,
-                        button: btn,
-                        source: PointerSource::Mouse,
-                    },
-                };
-                self.handler.on_event(ev, window);
-            }
-            WindowEvent::CursorEntered { .. } => {
-                self.handler.on_event(Event::CursorEntered, window);
-            }
-            WindowEvent::CursorLeft { .. } => {
-                self.handler.on_event(Event::CursorLeft, window);
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                let scroll_delta = match delta {
-                    MouseScrollDelta::LineDelta(x, y) => ScrollDelta::Lines { x, y },
-                    MouseScrollDelta::PixelDelta(pos) => ScrollDelta::Pixels {
-                        x: (pos.x / self.scale_factor) as f32,
-                        y: (pos.y / self.scale_factor) as f32,
-                    },
-                };
-                let (x, y) = self.cursor_position;
-                self.handler.on_event(
-                    Event::Scrolled {
-                        delta: scroll_delta,
-                        x,
-                        y,
-                    },
-                    window,
-                );
-            }
-            _ => {}
+            other => match map_window_event(
+                other,
+                &mut self.cursor_position,
+                &mut self.scale_factor,
+                &mut self.modifiers,
+            ) {
+                SurfaceIntent::Event(e) => self.handler.on_event(e, &window),
+                SurfaceIntent::Resized(e) => {
+                    self.handler.on_event(e, &window);
+                    window.request_redraw();
+                }
+                SurfaceIntent::Redraw => self.handler.on_redraw(&window),
+                SurfaceIntent::Close(e) => {
+                    self.handler.on_event(e, &window);
+                    event_loop.exit();
+                }
+                SurfaceIntent::Ignore => {}
+            },
         }
     }
 }

@@ -2,15 +2,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use platform_core::{
-    Event, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, PlatformError,
-    PointerButton, PointerSource, ScrollDelta, SurfaceId, Window, WindowConfig, WindowPosition,
+    Event, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, PlatformError, SurfaceId,
+    Window, WindowConfig, WindowPosition,
 };
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, MouseScrollDelta, StartCause, Touch, TouchPhase, WindowEvent};
+use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Fullscreen, WindowAttributes, WindowId, WindowLevel};
 
-use platform_winit::WinitWindow;
+use platform_winit::{SurfaceIntent, WinitWindow, map_window_event};
 
 // Winit user-event payloads injected from background threads (via EventLoopProxy) to wake the loop.
 enum UserEvent {
@@ -240,151 +240,6 @@ fn create_window_from_config(
             tracing::error!(error = %e, "failed to create window");
             None
         }
-    }
-}
-
-// What a mapped winit `WindowEvent` means at the platform level, decoupled from *how* it's applied. The
-// single-window runner applies it to a handler directly; the multi-window runner forwards it to that
-// surface's worker thread. Keeping the mapping here (and the application at the call site) lets both share
-// the exact same winit→platform translation.
-enum SurfaceIntent {
-    // Deliver this platform event to the handler.
-    Event(Event),
-    // Deliver this platform event, then request a redraw (winit `Resized`).
-    Resized(Event),
-    // Render now (winit `RedrawRequested`).
-    Redraw,
-    // Deliver `WindowCloseRequested`, then close this surface.
-    Close(Event),
-    // State-only (e.g. `ModifiersChanged`) or an unmapped event — nothing to deliver.
-    Ignore,
-}
-
-// Pure winit `WindowEvent` → [`SurfaceIntent`] translation, updating this surface's cursor/scale/modifiers.
-// No handler and no window side effects, so it can run on the winit thread while the handler lives elsewhere.
-fn map_window_event(
-    event: WindowEvent,
-    cursor_position: &mut (f64, f64),
-    scale_factor: &mut f64,
-    modifiers: &mut platform_core::ModifiersState,
-) -> SurfaceIntent {
-    match event {
-        WindowEvent::CloseRequested => SurfaceIntent::Close(Event::WindowCloseRequested),
-        WindowEvent::Resized(size) => SurfaceIntent::Resized(Event::WindowResized {
-            width: (size.width as f64 / *scale_factor).round() as u32,
-            height: (size.height as f64 / *scale_factor).round() as u32,
-        }),
-        WindowEvent::RedrawRequested => SurfaceIntent::Redraw,
-        WindowEvent::CursorMoved { position, .. } => {
-            let lx = position.x / *scale_factor;
-            let ly = position.y / *scale_factor;
-            *cursor_position = (lx, ly);
-            SurfaceIntent::Event(Event::PointerMoved {
-                x: lx,
-                y: ly,
-                source: PointerSource::Mouse,
-            })
-        }
-        WindowEvent::MouseInput { state, button, .. } => {
-            let Some(btn) = platform_winit::map_mouse_button(button) else {
-                return SurfaceIntent::Ignore;
-            };
-            let (x, y) = *cursor_position;
-            SurfaceIntent::Event(match state {
-                ElementState::Pressed => Event::PointerPressed {
-                    x,
-                    y,
-                    button: btn,
-                    source: PointerSource::Mouse,
-                },
-                ElementState::Released => Event::PointerReleased {
-                    x,
-                    y,
-                    button: btn,
-                    source: PointerSource::Mouse,
-                },
-            })
-        }
-        WindowEvent::Touch(Touch {
-            phase,
-            location,
-            id,
-            ..
-        }) => {
-            let x = location.x / *scale_factor;
-            let y = location.y / *scale_factor;
-            let source = PointerSource::Touch { id };
-            SurfaceIntent::Event(match phase {
-                TouchPhase::Started => Event::PointerPressed {
-                    x,
-                    y,
-                    button: PointerButton::Primary,
-                    source,
-                },
-                TouchPhase::Moved => Event::PointerMoved { x, y, source },
-                TouchPhase::Ended | TouchPhase::Cancelled => Event::PointerReleased {
-                    x,
-                    y,
-                    button: PointerButton::Primary,
-                    source,
-                },
-            })
-        }
-        WindowEvent::Focused(is_focused) => {
-            SurfaceIntent::Event(Event::FocusChanged { is_focused })
-        }
-        WindowEvent::CursorEntered { .. } => SurfaceIntent::Event(Event::CursorEntered),
-        WindowEvent::CursorLeft { .. } => SurfaceIntent::Event(Event::CursorLeft),
-        WindowEvent::ScaleFactorChanged {
-            scale_factor: new_scale,
-            ..
-        } => {
-            *scale_factor = new_scale;
-            SurfaceIntent::Event(Event::ScaleFactorChanged {
-                scale_factor: new_scale,
-            })
-        }
-        WindowEvent::MouseWheel { delta, .. } => {
-            let scroll_delta = match delta {
-                MouseScrollDelta::LineDelta(x, y) => ScrollDelta::Lines { x, y },
-                MouseScrollDelta::PixelDelta(pos) => ScrollDelta::Pixels {
-                    x: (pos.x / *scale_factor) as f32,
-                    y: (pos.y / *scale_factor) as f32,
-                },
-            };
-            let (x, y) = *cursor_position;
-            SurfaceIntent::Event(Event::Scrolled {
-                delta: scroll_delta,
-                x,
-                y,
-            })
-        }
-        WindowEvent::ModifiersChanged(mods) => {
-            *modifiers = platform_winit::map_modifiers(&mods);
-            SurfaceIntent::Event(Event::ModifiersChanged {
-                modifiers: *modifiers,
-            })
-        }
-        WindowEvent::KeyboardInput { event, .. } => {
-            let Some(key) = platform_winit::map_key(&event.logical_key, event.location) else {
-                return SurfaceIntent::Ignore;
-            };
-            let mods = *modifiers;
-            SurfaceIntent::Event(match event.state {
-                ElementState::Pressed => Event::KeyPressed {
-                    key,
-                    modifiers: mods,
-                },
-                ElementState::Released => Event::KeyReleased {
-                    key,
-                    modifiers: mods,
-                },
-            })
-        }
-        WindowEvent::ThemeChanged(theme) => SurfaceIntent::Event(Event::ColorSchemeChanged {
-            dark: theme == winit::window::Theme::Dark,
-        }),
-        _ => SurfaceIntent::Ignore,
     }
 }
 
