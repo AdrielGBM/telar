@@ -1,5 +1,4 @@
 use crate::{Event, PlatformError};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub enum FullscreenMode {
@@ -76,7 +75,14 @@ impl Default for WindowConfig {
     }
 }
 
-pub trait Window: HasWindowHandle + HasDisplayHandle {
+/// A surface a Telar app runs on, from the loop's point of view: how big it is, how to ask it to redraw, and the
+/// window-management verbs a custom title bar needs.
+///
+/// Deliberately says nothing about how it is *drawn*. A GPU or CPU renderer needs `raw-window-handle` handles
+/// out of whatever is behind this, but that is a requirement of those renderers — stated where they are built
+/// (`telar::SurfaceWindow`) — and not of every backend that can host an app. A terminal, or a canvas someone
+/// else owns, has no such handles and should not have to invent an error to return.
+pub trait Window {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
     fn request_redraw(&self);
@@ -259,21 +265,9 @@ pub trait MultiSurfacePlatform {
 mod tests {
     use super::*;
     use geometry_core::Rect;
-    use raw_window_handle::{
-        DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
-    };
 
+    // Nothing here hands out an OS handle, which is the point: a window that has none is still a window.
     struct TestWindow;
-    impl HasWindowHandle for TestWindow {
-        fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-            Err(HandleError::Unavailable)
-        }
-    }
-    impl HasDisplayHandle for TestWindow {
-        fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-            Err(HandleError::Unavailable)
-        }
-    }
     impl Window for TestWindow {
         fn width(&self) -> u32 {
             800
