@@ -119,7 +119,6 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
-    use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
     use platform_core::{Event, Key, ModifiersState, NamedKey};
@@ -133,7 +132,7 @@ mod tests {
     // outermost node's rect, valid only when `label` is empty — a labelled field's outer node is the
     // wrapping column instead, offset above the box by the caption row).
     fn laid_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, geometry_core::Rect) {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let field = text_field(props).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(200.0),

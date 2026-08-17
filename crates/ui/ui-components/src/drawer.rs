@@ -127,7 +127,6 @@ mod tests {
     use layout_core::AvailableSpace;
     use reactive_core::signal;
     use renderer_core::{DrawCommand, TextStyle};
-    use ui_core::reset_layout_runtime;
     use ui_core::{ComponentList, Text, compute_layout, new_container, relayout_if_dirty};
 
     fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
@@ -151,7 +150,7 @@ mod tests {
     // portal is disposed when it closes (its content leaves the command stream).
     #[test]
     fn open_shows_panel_and_close_hides_it() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let slots = slot_with_body("Drawer body");
         let drawer = drawer(
@@ -197,7 +196,7 @@ mod tests {
     // An unbound drawer (no `open` signal) builds a 0-size node and never portals anything.
     #[test]
     fn unbound_drawer_renders_nothing() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let slots = slot_with_body("Drawer body");
         let drawer = drawer(DrawerProps::default(), slots).unwrap();
         let tree = ComponentList::new(drawer);

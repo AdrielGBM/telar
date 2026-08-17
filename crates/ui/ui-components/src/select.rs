@@ -70,7 +70,6 @@ mod tests {
     use layout_core::AvailableSpace;
 
     use reactive_core::signal;
-    use ui_core::reset_layout_runtime;
     use ui_core::{
         ComponentList, EventResult, compute_layout, dispatch_overlays, relayout_if_dirty,
     };
@@ -104,7 +103,7 @@ mod tests {
     // Construction: a select builds headless, lays out (the trigger takes its fixed size), and renders.
     #[test]
     fn builds_and_lays_out() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let picked = signal(1u32);
         let item = select(
             SelectProps {
@@ -138,7 +137,7 @@ mod tests {
         use std::cell::Cell;
         use std::rc::Rc;
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let picked = signal(0u32);
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
@@ -196,7 +195,7 @@ mod tests {
     /// rows to read it from. The declaring walk is what supplies it.
     #[test]
     fn the_trigger_names_the_chosen_row_before_the_panel_has_ever_opened() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let picked = signal(1u32);
         let item = select(
             SelectProps {
@@ -228,7 +227,7 @@ mod tests {
         use std::cell::Cell;
         use std::rc::Rc;
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let picked = signal(0u32);
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();

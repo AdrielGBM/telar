@@ -95,7 +95,6 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 
 #[cfg(test)]
 mod tests {
-    use ui_core::reset_layout_runtime;
 
     use ui_core::NodeId;
 
@@ -108,7 +107,7 @@ mod tests {
 
     #[test]
     fn spinner_builds_with_default_size() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let widget = spinner(SpinnerProps::default());
         assert!(widget.is_ok());
         lay_out(widget.unwrap().layout_node());
@@ -116,7 +115,7 @@ mod tests {
 
     #[test]
     fn spinner_builds_with_custom_size() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let widget = spinner(SpinnerProps {
             size: 48.0,
             ..Default::default()

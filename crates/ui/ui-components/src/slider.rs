@@ -210,7 +210,6 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
-    use ui_core::reset_layout_runtime;
 
     use geometry_core::Rect;
 
@@ -228,7 +227,7 @@ mod tests {
     // The core contract: dragging to the track's midpoint maps to value ≈ 0.5, and to the far edge maps to 1.0.
     #[test]
     fn drag_to_midpoint_sets_value_half() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let mut widget = slider(SliderProps {
             value: Some(value.clone()),
@@ -257,7 +256,7 @@ mod tests {
     // An unset `value` prop must fall back to a working internal signal (uncontrolled mode), not panic.
     #[test]
     fn uncontrolled_slider_builds_with_default_value() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let result = slider(SliderProps::default());
         assert!(result.is_ok());
     }
@@ -267,7 +266,7 @@ mod tests {
     fn on_change_fires_with_mapped_value() {
         let seen: Rc<Cell<f32>> = Rc::new(Cell::new(-1.0));
         let sink = seen.clone();
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let mut widget = slider(SliderProps {
             width: 100.0,
             on_change: Some(Box::new(move |v| sink.set(v))),
@@ -287,7 +286,7 @@ mod tests {
     // A custom min/max range reports the drag in that range, not normalized 0..1.
     #[test]
     fn custom_range_maps_midpoint_to_range_midpoint() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let mut widget = slider(SliderProps {
             value: Some(value.clone()),
@@ -310,7 +309,7 @@ mod tests {
     // A non-zero `step` snaps the reported value to the nearest step, not the raw continuous mapping.
     #[test]
     fn step_snaps_value_to_nearest_step() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let mut widget = slider(SliderProps {
             value: Some(value.clone()),
@@ -335,7 +334,7 @@ mod tests {
     // A `label` wraps the track in a labelled column instead of panicking.
     #[test]
     fn label_builds_without_panicking() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let result = slider(SliderProps {
             label: Box::new(|| "Volume".to_string()),
             ..Default::default()

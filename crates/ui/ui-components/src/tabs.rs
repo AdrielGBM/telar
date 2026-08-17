@@ -127,7 +127,6 @@ fn tab_ink(active: bool) -> Color {
 
 #[cfg(test)]
 mod tests {
-    use ui_core::reset_layout_runtime;
 
     use ui_core::{Component, NodeId};
 
@@ -144,7 +143,7 @@ mod tests {
     // Construction: a tab bar builds headless, lays out (a row of measured tab pills), and renders.
     #[test]
     fn builds_and_lays_out() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let item = tabs(TabsProps {
             items: vec!["One", "Two", "Three"],
             ..Default::default()
@@ -161,7 +160,7 @@ mod tests {
     // hardcoding font metrics to compute the boundary between the two pills.
     #[test]
     fn pressing_the_last_tab_sets_selected_index() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let selected = signal(0u32);
         let mut item = tabs(TabsProps {
             items: vec!["One", "Two"],

@@ -23,6 +23,8 @@ mod slider;
 mod spinner;
 mod stepper;
 mod tabs;
+#[cfg(test)]
+mod test_support;
 mod text_field;
 mod toggle;
 mod tooltip;

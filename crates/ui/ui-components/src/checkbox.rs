@@ -108,7 +108,6 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
 mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
-    use ui_core::reset_layout_runtime;
 
     use reactive_core::signal;
     use ui_core::{Component, LayoutItem, NodeId};
@@ -122,7 +121,7 @@ mod tests {
 
     #[test]
     fn tap_toggles_bound_signal() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let checked = signal(false);
         let mut widget = checkbox(CheckboxProps {
             checked: Some(checked.clone()),
@@ -145,7 +144,7 @@ mod tests {
     fn on_toggle_reports_new_state() {
         let seen: Rc<Cell<Option<bool>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let mut widget = checkbox(CheckboxProps {
             on_toggle: Some(Box::new(move |v| sink.set(Some(v)))),
             ..Default::default()

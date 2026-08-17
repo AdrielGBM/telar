@@ -19,6 +19,29 @@ pub fn set_measure_font_config(font: FontConfig) {
     MEASURE_FONT_CONFIG.with(|c| *c.borrow_mut() = Some(font));
     // Drop any shaper built with the previous fonts so the next measure rebuilds it.
     MEASURE_SHAPER.with(|s| *s.borrow_mut() = None);
+    // Configuring the fonts a raster surface measures in says which measurer you want, so install it here rather than leave every runtime a second call to remember. It yields to a frontend that installed its own.
+    renderer_core::set_default_text_metrics(ShaperMetrics);
+}
+
+/// [`renderer_core::TextMetrics`] over the layout-thread shaper: the answer for any surface whose text is glyphs.
+pub struct ShaperMetrics;
+
+impl renderer_core::TextMetrics for ShaperMetrics {
+    fn measure(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
+        measure_text(text, max_width, style)
+    }
+
+    fn measure_runs(&self, runs: &[TextRun], max_width: f32, base: &TextStyle) -> (f32, f32) {
+        measure_rich_text(runs, max_width, base)
+    }
+
+    fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
+        measure_ink_bounds(text, max_width, style)
+    }
+
+    fn line_height(&self, font_size: f32) -> f32 {
+        font_size * crate::LINE_HEIGHT_FACTOR
+    }
 }
 
 /// Measures the logical (width, height) of `text` wrapped to `max_width` for `style` — weight/italic

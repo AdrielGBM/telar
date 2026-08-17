@@ -2,7 +2,9 @@ pub mod colr;
 mod measure;
 mod shaper;
 
-pub use measure::{measure_ink_bounds, measure_rich_text, measure_text, set_measure_font_config};
+pub use measure::{
+    ShaperMetrics, measure_ink_bounds, measure_rich_text, measure_text, set_measure_font_config,
+};
 pub use shaper::{
     ATLAS_SIZE, ColrGlyph, GlyphAtlas, GlyphInfo, LINE_HEIGHT_FACTOR, TextCacheKey, TextShaper,
     TextShaperConfig, make_text_cache_key, text_style_bits,

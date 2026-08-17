@@ -79,7 +79,6 @@ fn on_accent_style() -> TextStyle {
 mod tests {
     use layout_core::AvailableSpace;
     use renderer_core::DrawCommand;
-    use ui_core::reset_layout_runtime;
     use ui_core::{ComponentList, compute_layout, new_container};
 
     use super::*;
@@ -107,7 +106,7 @@ mod tests {
     // A labelled badge draws its label text.
     #[test]
     fn renders_label() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let badge = badge(BadgeProps {
             label: Box::new(|| "New".to_string()),
             ..Default::default()
@@ -120,7 +119,7 @@ mod tests {
     // An empty label still builds and lays out without panicking.
     #[test]
     fn empty_label_builds_without_panic() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let badge = badge(BadgeProps::default()).unwrap();
         let tree = laid_out(badge);
         let _ = tree.commands();

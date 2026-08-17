@@ -151,6 +151,10 @@ impl TextureUi {
         font_data: Vec<Vec<u8>>,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
+        // The tree built below measures its text, and a texture UI can be the only Telar in the process — there
+        // may be no runner that installed a measurer. Deliberately not `set_measure_font_config`: that is
+        // per-thread state a window's runner owns, and overriding it would re-measure that window's tree.
+        crate::install_default_text_metrics();
         let (width, height) = (target.width(), target.height());
         let renderer = HardwareRenderer::for_texture(
             target,

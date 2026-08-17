@@ -305,7 +305,6 @@ mod tests {
     use layout_core::AvailableSpace;
 
     use renderer_core::DrawCommand;
-    use ui_core::reset_layout_runtime;
     use ui_core::{ComponentList, compute_layout, new_container, relayout_if_dirty};
 
     fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
@@ -325,7 +324,7 @@ mod tests {
     // a real app: a mouse move onto the trigger fires its on_hover, mounting the anchored overlay.
     #[test]
     fn hover_shows_bubble_and_leave_hides_it() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let slots = slot_with_trigger();
         let tooltip = tooltip(
             TooltipProps {
@@ -375,7 +374,7 @@ mod tests {
     /// its own is that folding it into the name loses exactly this arrangement.
     #[test]
     fn a_hint_shows_its_name_its_shortcut_and_its_description() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let tooltip = tooltip(
             TooltipProps {
                 text: Box::new(|| "Move".to_string()),
@@ -418,7 +417,7 @@ mod tests {
     /// The looser leading is set on this line and on no other: the name and the shortcut never wrap.
     #[test]
     fn the_description_line_is_set_with_room_to_wrap_into() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let tooltip = tooltip(
             TooltipProps {
                 text: Box::new(|| "Setup".to_string()),
@@ -465,7 +464,7 @@ mod tests {
     /// a hint, and nothing about it looks like a layout mode being wrong.
     #[test]
     fn a_bubble_is_as_wide_as_what_it_says() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let tooltip = tooltip(
             TooltipProps {
                 text: Box::new(|| "Object".to_string()),
@@ -509,7 +508,7 @@ mod tests {
     /// a taller bubble than it has words for.
     #[test]
     fn an_absent_shortcut_and_description_take_no_room() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let height_of = |props: TooltipProps| {
             let tooltip = tooltip(props, slot_with_trigger()).unwrap();
             let root = new_container(
@@ -538,7 +537,7 @@ mod tests {
             text: Box::new(|| "Move".to_string()),
             ..Default::default()
         });
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let full = height_of(TooltipProps {
             text: Box::new(|| "Move".to_string()),
             description: Box::new(|| "Drag the selection".to_string()),
@@ -554,7 +553,7 @@ mod tests {
     // Construction succeeds headless with an empty trigger and no hover.
     #[test]
     fn builds_without_hover() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let slots = slot_with_trigger();
         let tooltip = tooltip(TooltipProps::default(), slots).unwrap();
         let tree = ComponentList::new(tooltip);

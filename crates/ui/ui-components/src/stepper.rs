@@ -173,7 +173,6 @@ fn stepper_button(
 mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
-    use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
 
@@ -203,7 +202,7 @@ mod tests {
 
     #[test]
     fn plus_increments_by_step_and_clamps_at_max() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let value = signal(4.0f32);
         let mut widget = stepper(StepperProps {
             value: Some(value.clone()),
@@ -232,7 +231,7 @@ mod tests {
 
     #[test]
     fn minus_decrements_by_step_and_clamps_at_min() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let value = signal(1.0f32);
         let mut widget = stepper(StepperProps {
             value: Some(value.clone()),
@@ -263,7 +262,7 @@ mod tests {
     fn on_change_fires_with_new_value() {
         let seen: Rc<Cell<f32>> = Rc::new(Cell::new(-1.0));
         let sink = seen.clone();
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let mut widget = stepper(StepperProps {
             min: 0.0,
             max: 5.0,
@@ -288,7 +287,7 @@ mod tests {
     // An unset `value` prop must fall back to a working internal signal (uncontrolled mode), not panic.
     #[test]
     fn uncontrolled_stepper_builds_with_default_value() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let result = stepper(StepperProps::default());
         assert!(result.is_ok());
     }
@@ -296,7 +295,7 @@ mod tests {
     // An unset (sentinel 0.0) max must not pin the value to min: pressing + repeatedly keeps climbing.
     #[test]
     fn unset_max_does_not_clamp_to_min() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let mut widget = stepper(StepperProps {
             value: Some(value.clone()),

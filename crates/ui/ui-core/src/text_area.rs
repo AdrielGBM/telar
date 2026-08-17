@@ -54,7 +54,7 @@ impl TextArea {
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |_max_width: f32| {
             let s = (measure_style)();
-            let line_h = s.font_size * renderer_text::LINE_HEIGHT_FACTOR;
+            let line_h = crate::text_metrics::line_height(s.font_size);
             let lines = measure_value.with(|t| t.matches('\n').count() + 1);
             (0.0, lines as f32 * line_h)
         });
@@ -110,7 +110,7 @@ impl TextArea {
     }
 
     fn line_height(&self) -> f32 {
-        (self.style)().font_size * renderer_text::LINE_HEIGHT_FACTOR
+        crate::text_metrics::line_height((self.style)().font_size)
     }
 
     /// The current caret byte offset, clamped to the text and snapped to a char boundary.
@@ -265,7 +265,7 @@ impl Component for TextArea {
                 if rect.contains(*x as f32, *y as f32) {
                     focus::request_from_pointer(self.id);
                     let style = (self.style)();
-                    let line_h = style.font_size * renderer_text::LINE_HEIGHT_FACTOR;
+                    let line_h = crate::text_metrics::line_height(style.font_size);
                     // Read the text out (borrow released) before setting the caret: `set` inside a `with`
                     // closure would re-borrow the reactive runtime.
                     let text = self.value.get();
@@ -336,7 +336,7 @@ fn nth_line_bounds(text: &str, n: usize) -> (usize, usize) {
 /// Pixel x of the caret within its line (the advance of the line's prefix up to `caret`).
 fn caret_x(text: &str, caret: usize, style: &TextStyle) -> f32 {
     let (start, _) = line_bounds(text, caret);
-    renderer_text::measure_text(&text[start..caret.min(text.len())], NO_WRAP_WIDTH, style).0
+    crate::text_metrics::measure_text(&text[start..caret.min(text.len())], NO_WRAP_WIDTH, style).0
 }
 
 /// The byte offset within line `n` whose caret x is closest to `x` — used for click-to-position and vertical
@@ -348,7 +348,7 @@ fn offset_at_line_x(text: &str, style: &TextStyle, n: usize, x: f32) -> usize {
     let mut best_dx = f32::MAX;
     let mut idx = 0;
     loop {
-        let w = renderer_text::measure_text(&line[..idx], NO_WRAP_WIDTH, style).0;
+        let w = crate::text_metrics::measure_text(&line[..idx], NO_WRAP_WIDTH, style).0;
         let dx = (w - x).abs();
         if dx < best_dx {
             best_dx = dx;

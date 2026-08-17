@@ -157,7 +157,6 @@ impl Component for Accordion {
 
 #[cfg(test)]
 mod tests {
-    use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
 
@@ -181,7 +180,7 @@ mod tests {
     // Pressing the header toggles the bound `open` signal.
     #[test]
     fn pressing_the_header_toggles_open() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let mut item = accordion(
             AccordionProps {
@@ -220,7 +219,7 @@ mod tests {
     // the very difference this test checks (mirrors `checkbox.rs`'s `lay_out` / `drawer.rs`'s test wrapper).
     #[test]
     fn open_expands_body_and_close_collapses_it() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let item = accordion(
             AccordionProps {
@@ -265,7 +264,7 @@ mod tests {
     // contributes height, well under what the header plus the 20px body row would add up to.
     #[test]
     fn uncontrolled_accordion_builds_and_starts_closed() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let item = accordion(
             AccordionProps {
                 title: Box::new(|| "Details".to_string()),

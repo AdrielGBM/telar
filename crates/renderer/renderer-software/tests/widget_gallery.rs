@@ -24,6 +24,7 @@ use ui_tree::ComponentList;
 #[test]
 fn form_widgets_render() {
     let (w, h) = (360u32, 400u32);
+    common::install_text_metrics();
     reset_layout_runtime();
 
     // Each widget in a clearly-visible state so the PNG shows selected/checked/filled looks.
@@ -124,6 +125,7 @@ fn form_widgets_render() {
 #[test]
 fn modal_renders_over_a_page() {
     let (w, h) = (420u32, 300u32);
+    common::install_text_metrics();
     reset_layout_runtime();
     let open = signal(false);
 
@@ -190,6 +192,7 @@ fn select_open_renders() {
     use ui_core::{Children, EventResult, Slots, dispatch_overlays, track_layout};
 
     let (w, h) = (300u32, 240u32);
+    common::install_text_metrics();
     reset_layout_runtime();
     let picked = signal(1u32);
     let sel = select(

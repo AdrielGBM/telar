@@ -144,7 +144,6 @@ mod tests {
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerButton, PointerSource};
     use renderer_core::DrawCommand;
-    use ui_core::reset_layout_runtime;
     use ui_core::{ComponentList, compute_layout, new_container, track_layout};
 
     use super::*;
@@ -157,7 +156,7 @@ mod tests {
     // A labelled chip draws its label text.
     #[test]
     fn renders_label() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let chip = chip(ChipProps {
             label: Box::new(|| "Draft".to_string()),
             ..Default::default()
@@ -181,7 +180,7 @@ mod tests {
     // Building with `on_close: Some(...)` works and renders the × affordance; tapping it fires the callback.
     #[test]
     fn on_close_renders_and_fires_on_tap() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let flag = Rc::new(Cell::new(false));
         let sink = flag.clone();
         let mut chip = chip(ChipProps {
@@ -231,7 +230,7 @@ mod tests {
     // An empty label still builds and lays out without panicking.
     #[test]
     fn empty_label_builds_without_panic() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let chip = chip(ChipProps::default()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_row().width(200.0).height(60.0),

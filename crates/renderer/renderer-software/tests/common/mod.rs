@@ -1,5 +1,10 @@
 #![allow(dead_code)]
 
+/// Installs the glyph measurer layout sizes text with, which a gallery test has no runner to do for it.
+pub fn install_text_metrics() {
+    renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+}
+
 /// Writes an RGBA8 buffer out as a PNG, for the visual harnesses that exist to be looked at.
 pub fn save_png(path: &str, w: u32, h: u32, rgba: &[u8]) {
     image::RgbaImage::from_raw(w, h, rgba.to_vec())

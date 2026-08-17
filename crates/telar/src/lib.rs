@@ -121,6 +121,20 @@ pub use renderer_core::{
     PathData, PathStyle, PathVerb, RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke,
     TextAlign, TextRun, TextStyle, for_each_with_matrix, hash_draw_commands, transform_clip_rect,
 };
+// Backend-author API, the measuring half: a frontend installs `TextMetrics` for whatever "how wide is this string" means on its surface — cells rather than glyphs, on a terminal.
+#[cfg(feature = "runtime")]
+pub use renderer_core::{TextMetrics, set_default_text_metrics, set_text_metrics};
+
+/// Installs the glyph-shaping text measurer, for code that lays out text with no runner behind it — a layout test,
+/// or a tool that composes a tree only to measure it.
+///
+/// An app never needs this: the runner installs it on resume with the app's own fonts. Nothing happens if a measurer
+/// is already installed.
+#[cfg(feature = "runtime")]
+pub fn install_default_text_metrics() {
+    renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+}
+
 /// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the
 /// memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
 #[cfg(feature = "runtime")]
@@ -158,10 +172,20 @@ pub use ui_core::{
     fragment_positional, interactive_rects, kept, key_held, key_pressed, logical_border_radius,
     logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
     observe_pointer, open_overlay, overlay_state, pointer_buttons, relayout_if_dirty, remove_node,
-    reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
-    set_overlay_host, track_layout, transform_pointer, use_context, use_direction,
-    use_dismiss_depth, visible_window,
+    set_children, set_direction, set_display, set_min_height, set_overlay_host, track_layout,
+    transform_pointer, use_context, use_direction, use_dismiss_depth, visible_window,
 };
+
+/// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
+///
+/// The measurer rides along because sizing text is part of laying it out, and this is the first call every tree
+/// makes: a tree built with no runner behind it — a layout test, a tool measuring a page — would otherwise have to
+/// ask for one separately. A frontend that installed its own keeps it; see [`install_default_text_metrics`].
+#[cfg(feature = "runtime")]
+pub fn reset_layout_runtime() {
+    install_default_text_metrics();
+    ui_core::reset_layout_runtime();
+}
 
 #[cfg(feature = "navigate")]
 pub use navigate_core::{

@@ -185,7 +185,7 @@ mod tests {
     use crate::harness::press;
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerSource};
-    use ui_core::{Component, compute_layout, reset_layout_runtime};
+    use ui_core::{Component, compute_layout};
 
     fn panel() -> Box<dyn LayoutItem> {
         box_item(
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
         use std::cell::RefCell;
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
 
         let asked: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&asked);
@@ -270,7 +270,7 @@ mod tests {
     /// the affordance builds, lays out, and is never visible. Which is exactly what happened.
     #[test]
     fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
 
         const SURFACE: (f32, f32) = (920.0, 680.0);
         let style = SurfaceFrameStyle {
@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn a_frame_without_a_resize_callback_draws_no_grip() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let style = SurfaceFrameStyle {
             background: Color::TRANSPARENT,
             title_bar: Color::TRANSPARENT,

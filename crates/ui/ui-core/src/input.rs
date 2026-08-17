@@ -212,8 +212,8 @@ impl Component for Input {
             // Measured against what is *drawn*: a mask character is not the width of the character it hides,
             // so measuring the real prefix would put the caret somewhere the text is not.
             let prefix = self.shown(&text[..caret]);
-            let (prefix_w, _) = renderer_text::measure_text(&prefix, 1.0e6, &style);
-            let line_h = style.font_size * renderer_text::LINE_HEIGHT_FACTOR;
+            let (prefix_w, _) = crate::text_metrics::measure_text(&prefix, 1.0e6, &style);
+            let line_h = crate::text_metrics::line_height(style.font_size);
             let caret_rect = Rect {
                 x: prefix_w,
                 y: 0.0,

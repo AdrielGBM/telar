@@ -175,7 +175,6 @@ fn label_color(
 mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
-    use ui_core::reset_layout_runtime;
 
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerButton, PointerSource};
@@ -188,7 +187,7 @@ mod tests {
     fn tap_fires_on_press() {
         let flag = Rc::new(Cell::new(false));
         let sink = flag.clone();
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let mut btn = button(ButtonProps {
             label: Box::new(|| "OK".to_string()),
             fill: Box::new(|| Color::rgba(0.2, 0.4, 0.9, 1.0)),
@@ -248,7 +247,7 @@ mod tests {
             }
         }
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         set_theme(Spaced(8.0));
         // Measured with no label, so the width is the padding and nothing else — what a font system made of
         // the text is a different question from whether the box followed the theme.
@@ -295,7 +294,7 @@ mod tests {
             }
         }
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         set_theme(Plain);
         set_control_size(ControlSize::Regular);
         let btn = button(ButtonProps::default()).unwrap();

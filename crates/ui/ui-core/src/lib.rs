@@ -38,6 +38,7 @@ mod surface_context;
 mod svg;
 mod text;
 mod text_area;
+mod text_metrics;
 mod virtual_list;
 
 #[cfg(feature = "async-assets")]

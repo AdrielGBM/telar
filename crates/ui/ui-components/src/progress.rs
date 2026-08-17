@@ -89,7 +89,6 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
 
 #[cfg(test)]
 mod tests {
-    use ui_core::reset_layout_runtime;
 
     use reactive_core::signal;
     use ui_core::NodeId;
@@ -104,7 +103,7 @@ mod tests {
     // An unset `value` prop must fall back to a working internal signal (uncontrolled mode), not panic.
     #[test]
     fn uncontrolled_progress_builds_with_default_value() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let result = progress(ProgressProps::default());
         assert!(result.is_ok());
     }
@@ -112,7 +111,7 @@ mod tests {
     // A caller-bound signal must build, layout, and keep reporting the value it was given.
     #[test]
     fn controlled_progress_builds_and_layouts() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let value = signal(0.3f32);
         let widget = progress(ProgressProps {
             value: Some(value.clone()),
@@ -129,7 +128,7 @@ mod tests {
     // inputs (clamped where the fill's transform reads it, not on the signal itself).
     #[test]
     fn setting_value_after_build_does_not_panic() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let widget = progress(ProgressProps {
             value: Some(value.clone()),

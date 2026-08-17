@@ -15,6 +15,11 @@ use telar_ui_components::*;
 use ui_core::focus::{self, Role};
 use ui_core::{ComponentList, Container, LayoutItem, box_item, compute_layout};
 
+/// Building a control measures its label, so this runs before the first widget exists.
+fn install_metrics() {
+    renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+}
+
 /// Lays `items` out inside a window-sized root, the way a surface would, and hands back a dispatchable tree.
 ///
 /// The root *owns* them: a dropped widget unregisters its focus id, so a helper that laid out the nodes and
@@ -46,6 +51,7 @@ fn key(named: NamedKey) -> Event {
 /// The plain case, and the one that was false for every button in the catalogue: Tab arrives, Enter fires.
 #[test]
 fn a_button_can_be_reached_and_pressed_without_a_mouse() {
+    install_metrics();
     ui_core::reset_layout_runtime();
     focus::clear();
     let fired: Rc<Cell<bool>> = Rc::new(Cell::new(false));
@@ -68,6 +74,7 @@ fn a_button_can_be_reached_and_pressed_without_a_mouse() {
 /// without them being a tab stop just means the keyboard can get stuck on it.
 #[test]
 fn a_slider_moves_under_the_arrow_keys() {
+    install_metrics();
     ui_core::reset_layout_runtime();
     focus::clear();
     let value = signal(0.5f32);
@@ -91,6 +98,7 @@ fn a_slider_moves_under_the_arrow_keys() {
 /// drift.
 #[test]
 fn enter_toggles_a_focused_checkbox() {
+    install_metrics();
     ui_core::reset_layout_runtime();
     focus::clear();
     let checked = signal(false);
@@ -111,6 +119,7 @@ fn enter_toggles_a_focused_checkbox() {
 /// the user to guess; defaulting to unticked is worse, because it is confidently wrong for half of them.
 #[test]
 fn a_checked_box_is_announced_as_checked() {
+    install_metrics();
     ui_core::reset_layout_runtime();
     focus::clear();
     let checked = signal(true);
@@ -135,6 +144,7 @@ fn a_checked_box_is_announced_as_checked() {
 /// that announced itself as a button would be operable and still wrong.
 #[test]
 fn the_catalogue_says_what_each_control_is() {
+    install_metrics();
     ui_core::reset_layout_runtime();
     focus::clear();
     let items: Vec<Box<dyn LayoutItem>> = vec![

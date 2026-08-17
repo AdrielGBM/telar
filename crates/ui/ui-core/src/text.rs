@@ -65,7 +65,7 @@ impl Text {
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |max_width: f32| {
             let s = (measure_style)();
-            renderer_text::measure_text(&(measure_content)(), max_width, &s)
+            crate::text_metrics::measure_text(&(measure_content)(), max_width, &s)
         });
 
         let (node, rect) =
@@ -132,8 +132,9 @@ impl Component for Text {
                 Some((k, top, h, line)) if *k == key => (*top, *h, *line),
                 _ => {
                     let (top, h) =
-                        renderer_text::measure_ink_bounds(REFERENCE, REFERENCE_WIDTH, &style);
-                    let (_, line) = renderer_text::measure_text(REFERENCE, REFERENCE_WIDTH, &style);
+                        crate::text_metrics::measure_ink_bounds(REFERENCE, REFERENCE_WIDTH, &style);
+                    let (_, line) =
+                        crate::text_metrics::measure_text(REFERENCE, REFERENCE_WIDTH, &style);
                     *cache = Some((key, top, h, line));
                     (top, h, line)
                 }
@@ -144,7 +145,7 @@ impl Component for Text {
         // property of the font at this size, so it applies once however many lines there are, while
         // centring against the band alone would push an N-line block down by (N-1)/2 lines — which is what
         // a two-line tooltip did, sinking its second line out of the bubble.
-        let (_, text_height) = renderer_text::measure_text(&text, r.width, &style);
+        let (_, text_height) = crate::text_metrics::measure_text(&text, r.width, &style);
         let nudge = if ink_height > 0.0 {
             reference_line / 2.0 - ink_top - ink_height / 2.0
         } else {
@@ -395,8 +396,8 @@ mod tests {
         )
         .unwrap();
 
-        let (_, one_line) = renderer_text::measure_text("Hxg", 1_000.0, &style());
-        let (_, block) = renderer_text::measure_text(
+        let (_, one_line) = crate::text_metrics::measure_text("Hxg", 1_000.0, &style());
+        let (_, block) = crate::text_metrics::measure_text(
             "Name regions and say what the model is made of",
             150.0,
             &style(),

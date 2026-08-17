@@ -34,7 +34,7 @@ impl RichText {
         let measure_runs = Rc::clone(&runs);
         let measure_base = Rc::clone(&base);
         let measure = Box::new(move |max_width: f32| {
-            renderer_text::measure_rich_text(&(measure_runs)(), max_width, &(measure_base)())
+            crate::text_metrics::measure_rich_text(&(measure_runs)(), max_width, &(measure_base)())
         });
 
         let (node, rect) =

@@ -42,10 +42,10 @@ impl LineGutter {
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |_max_width: f32| {
             let s = (measure_style)();
-            let line_h = s.font_size * renderer_text::LINE_HEIGHT_FACTOR;
+            let line_h = crate::text_metrics::line_height(s.font_size);
             let n = (measure_count)().max(1);
             // Width of the widest (last) number; height from the line count — matching the editor's own metric.
-            let width = renderer_text::measure_text(&n.to_string(), NO_WRAP_WIDTH, &s).0;
+            let width = crate::text_metrics::measure_text(&n.to_string(), NO_WRAP_WIDTH, &s).0;
             (width, n as f32 * line_h)
         });
         let (node, rect) = new_measured_leaf(layout_style, measure)?;
@@ -69,7 +69,7 @@ impl LineGutter {
 impl Component for LineGutter {
     fn view(&self) -> RenderNode {
         let style = (self.style)();
-        let line_h = style.font_size * renderer_text::LINE_HEIGHT_FACTOR;
+        let line_h = crate::text_metrics::line_height(style.font_size);
         let n = (self.line_count)().max(1);
         let mut numbers = String::new();
         for i in 1..=n {
@@ -132,7 +132,7 @@ mod tests {
             &[g.leaf.node],
         )
         .unwrap();
-        let line_h = 14.0 * renderer_text::LINE_HEIGHT_FACTOR;
+        let line_h = crate::text_metrics::line_height(14.0);
         compute_layout(
             root,
             AvailableSpace::Definite(200.0),

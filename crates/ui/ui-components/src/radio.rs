@@ -111,7 +111,6 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
-    use ui_core::reset_layout_runtime;
 
     use reactive_core::signal;
     use ui_core::{Component, LayoutItem, NodeId};
@@ -125,7 +124,7 @@ mod tests {
 
     #[test]
     fn tap_sets_group_selection_to_value() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let selected = signal(0u32);
         let mut widget = radio(RadioProps {
             selected: Some(selected.clone()),
@@ -146,7 +145,7 @@ mod tests {
     fn on_select_reports_value() {
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let mut widget = radio(RadioProps {
             selected: Some(signal(0u32)),
             value: 5,

@@ -1,14 +1,14 @@
 [package]
 name = "telar-ui-core"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Widget kernel for Telar: containers, text, input handling, scrolling and canvas primitives."
 keywords = ["telar", "ui", "gui", "widgets", "reactive"]
 categories = ["gui"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }
@@ -18,12 +18,11 @@ platform-core = { workspace = true }
 reactive-core = { workspace = true }
 renderer-core = { workspace = true }
 renderer-assets = { workspace = true }
-renderer-text = { workspace = true }
 theme-core = { workspace = true }
 ui-tree = { workspace = true }
-motion-core.workspace = true
+motion-core = { workspace = true }
 services-core = { workspace = true, features = ["di"] }
-rustc-hash.workspace = true
+rustc-hash = { workspace = true }
 
 [features]
 # Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.
@@ -32,3 +31,6 @@ svg = []
 dynamic-svg = ["svg", "renderer-assets/dynamic-svg"]
 # The transport-agnostic reactive asset seam (`AssetState`/`AssetSource`); pure reactive glue over existing deps, no transport.
 async-assets = []
+
+[dev-dependencies]
+renderer-text = { workspace = true }

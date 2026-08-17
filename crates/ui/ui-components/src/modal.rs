@@ -158,7 +158,6 @@ mod tests {
     use layout_core::AvailableSpace;
     use reactive_core::signal;
     use renderer_core::DrawCommand;
-    use ui_core::reset_layout_runtime;
     use ui_core::{ComponentList, compute_layout, new_container, relayout_if_dirty};
 
     fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
@@ -182,7 +181,7 @@ mod tests {
     // Overlay portal is disposed when it closes (its content leaves the command stream).
     #[test]
     fn open_shows_dialog_and_close_hides_it() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let slots = slot_with_body("Body");
         let modal = modal(
@@ -252,7 +251,7 @@ mod tests {
     // created inside the `ReactiveList` build closure — an effect nested in a running effect.
     #[test]
     fn open_registers_on_the_dismiss_stack_and_dismissing_closes_it() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let modal = modal(
             ModalProps {
@@ -311,7 +310,7 @@ mod tests {
     // A named modal is opened by name, with nothing holding its state — the point of `id:`. Opening it *before* it is built must still bring it up, since the name resolves to one shared signal either way.
     #[test]
     fn a_named_modal_opens_from_anywhere_even_before_it_is_built() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         ui_core::close_overlay("confirm-test");
         ui_core::open_overlay("confirm-test");
 
@@ -352,7 +351,7 @@ mod tests {
     // Given both, the explicitly bound signal is authoritative — otherwise the two states would race.
     #[test]
     fn an_explicit_open_signal_wins_over_a_name() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         ui_core::open_overlay("ignored-name");
         let open = signal(false);
         let modal = modal(
@@ -376,7 +375,7 @@ mod tests {
     // An unbound modal (no `open` signal) builds a 0-size node and never portals anything.
     #[test]
     fn unbound_modal_renders_nothing() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let slots = slot_with_body("Body");
         let modal = modal(
             ModalProps {

@@ -99,10 +99,10 @@ fn rows(labels: &'static [&'static str]) -> Children {
 #[test]
 fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
     use renderer_core::DrawCommand;
-    use ui_core::{ComponentList, LayoutItem, reset_layout_runtime};
+    use ui_core::{ComponentList, LayoutItem};
 
     let strokes = |bordered: bool, caret: bool| {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let item = menu(
             MenuProps {
                 label: Box::new(|| "File".to_string()),
@@ -164,9 +164,9 @@ fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
 #[test]
 fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
     use renderer_core::{BorderRadius, DrawCommand, ShapeStyle};
-    use ui_core::{ComponentList, LayoutItem, reset_layout_runtime};
+    use ui_core::{ComponentList, LayoutItem};
 
-    reset_layout_runtime();
+    crate::test_support::fresh_layout_runtime();
     let item = menu(
         MenuProps {
             label: Box::new(|| "File".to_string()),
@@ -221,7 +221,6 @@ fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
 mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
-    use ui_core::reset_layout_runtime;
 
     use layout_core::{AvailableSpace, LayoutStyle};
     use platform_core::Event;
@@ -240,7 +239,7 @@ mod tests {
     /// line — every item wrapped down its own column.
     #[test]
     fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let item = menu(
             MenuProps {
                 label: Box::new(|| "File".to_string()),
@@ -291,7 +290,7 @@ mod tests {
     // Construction: a menu builds headless, lays out (the trigger takes its fixed size), and renders.
     #[test]
     fn builds_and_lays_out() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let item = menu(
             MenuProps {
                 label: Box::new(|| "Actions".to_string()),
@@ -332,7 +331,7 @@ mod tests {
     fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
         use platform_core::NamedKey;
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         ui_core::focus::clear();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
@@ -376,7 +375,7 @@ mod tests {
     fn escape_closes_a_menu_whose_trigger_holds_focus() {
         use platform_core::NamedKey;
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         ui_core::focus::clear();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
@@ -412,7 +411,7 @@ mod tests {
     // Picking an item fires on_select with its index and closes the menu.
     #[test]
     fn selecting_an_item_fires_on_select_and_closes() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         let item = menu(
@@ -470,7 +469,7 @@ mod tests {
     fn the_keyboard_steps_over_what_it_cannot_commit() {
         use platform_core::NamedKey;
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         ui_core::focus::clear();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
@@ -533,7 +532,7 @@ mod tests {
     /// A disabled row does not commit when it is clicked either, which is the half a keyboard test cannot see.
     #[test]
     fn a_disabled_row_does_not_commit_on_a_tap() {
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         let structured = Children::new(|| {
@@ -638,7 +637,7 @@ mod tests {
     fn typed_pick(typed: &str) -> Option<u32> {
         use platform_core::NamedKey;
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         ui_core::focus::clear();
         ui_core::reset_keyboard();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
@@ -693,7 +692,7 @@ mod tests {
     fn a_modified_character_is_not_a_search() {
         use platform_core::NamedKey;
 
-        reset_layout_runtime();
+        crate::test_support::fresh_layout_runtime();
         ui_core::focus::clear();
         ui_core::reset_keyboard();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));

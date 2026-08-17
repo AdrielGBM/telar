@@ -7,6 +7,7 @@ pub mod font_config;
 pub mod gpu_sync;
 mod hash;
 mod image;
+mod metrics;
 mod path;
 pub mod perf;
 mod preprocess;
@@ -27,6 +28,10 @@ pub use font_config::FontConfig;
 pub use geometry_core::{BorderRadius, Color};
 pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
 pub use image::{ExternalTexture, ImageData, ImageFilter, premultiply_rgba};
+pub use metrics::{
+    TextMetrics, line_height, measure_ink_bounds, measure_rich_text, measure_text,
+    set_default_text_metrics, set_text_metrics,
+};
 pub use path::{PathData, PathVerb};
 pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers};
 pub use renderer::RenderBackend;
