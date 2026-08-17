@@ -466,6 +466,380 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         }
     }
 
+    /// Closes the layer a `PopLayer` ends, and hands back the scissor now in force.
+    ///
+    /// A layer that drew nothing composites nothing and is rewound entirely; one that drew folds its bounds
+    /// into its parent's; one without a backdrop blur is hashed so an unchanged layer can be re-presented
+    /// rather than re-rendered. `commands` and `cmd_idx` are what that hash is taken over.
+    fn close_layer(
+        &mut self,
+        scissor_layer_stack: &mut Vec<Option<Rect>>,
+        layer_accum_stack: &mut Vec<LayerAccum>,
+        commands: &[DrawCommand],
+        cmd_idx: usize,
+        dirty_scissor: Option<Rect>,
+    ) -> Option<Rect> {
+        self.flush_all();
+        let current_scissor = scissor_layer_stack.pop().flatten();
+        if let Some(accum) = layer_accum_stack.pop() {
+            // Fully-culled opacity layer: all of its content was culled (e.g. it scrolled outside the dirty band, or is off-screen), so it composites nothing — emit no layer passes at all instead of an empty full-screen layer texture + render/resolve/composite passes. Mirrors the software renderer's skip_layer_depth. Authoritative emptiness check is "produced no draw steps" (the flush_all above already flushed this layer's instances into steps); a drawn primitive always emits a step even when its bounds are absent. Backdrop-blur layers are kept (they sample the framebuffer even without their own content).
+            if self.pending_steps.len() == accum.begin_step_index && accum.backdrop_blur == 0.0 {
+                self.pending_instances
+                    .truncate(accum.instance_start as usize);
+                self.pending_text_instances
+                    .truncate(accum.text_instance_start as usize);
+                self.pending_line_instances
+                    .truncate(accum.line_instance_start as usize);
+                self.pending_image_instances
+                    .truncate(accum.image_instance_start as usize);
+                // Was a `continue` in the loop this came out of, which skipped the rest of the arm and moved
+                // to the next command — the same thing this return does, since the caller only assigns.
+                return current_scissor;
+            }
+            let (
+                offset_x,
+                offset_y,
+                texture_width,
+                texture_height,
+                texture_width_logical,
+                texture_height_logical,
+            ) = if let Some(b) = accum.bounds {
+                let ox = b.x.floor().max(0.0);
+                let oy = b.y.floor().max(0.0);
+                let wl = (b.width.ceil() as u32).max(1);
+                let hl = (b.height.ceil() as u32).max(1);
+                let wp = ((wl as f32 * self.scale_factor).ceil() as u32).min(self.width.max(1));
+                let hp = ((hl as f32 * self.scale_factor).ceil() as u32).min(self.height.max(1));
+                (ox, oy, wp, hp, wl, hl)
+            } else {
+                let wl = (self.width as f32 / self.scale_factor).ceil() as u32;
+                let hl = (self.height as f32 / self.scale_factor).ceil() as u32;
+                (0.0, 0.0, self.width.max(1), self.height.max(1), wl, hl)
+            };
+            // Propagate this layer's visual footprint to the parent layer so nested layers are included in the parent's bounds (and thus its texture size).
+            if let Some(parent) = layer_accum_stack.last_mut() {
+                let footprint = Rect::new(
+                    offset_x,
+                    offset_y,
+                    texture_width_logical as f32,
+                    texture_height_logical as f32,
+                );
+                parent.bounds = Some(parent.bounds.map_or(footprint, |b| b.union(footprint)));
+            }
+            // Backdrop-blur layers read framebuffer content, so they are never cacheable.
+            let layer_hash: Option<u64> = if accum.backdrop_blur == 0.0 {
+                use std::hash::{Hash, Hasher};
+                let base =
+                    renderer_core::hash_draw_commands(&commands[accum.command_start..cmd_idx]);
+                let mut h = FxHasher::default();
+                base.hash(&mut h);
+                accum.opacity.to_bits().hash(&mut h);
+                // Use the unclamped floored world bounds (not offset_x/y which are max'd to 0) so that different scroll positions with the same clamped offset don't alias to the same cache entry and produce stale composites.
+                let (hash_bx, hash_by) = accum
+                    .bounds
+                    .map_or((0.0f32, 0.0f32), |b| (b.x.floor(), b.y.floor()));
+                hash_bx.to_bits().hash(&mut h);
+                hash_by.to_bits().hash(&mut h);
+                texture_width.hash(&mut h);
+                texture_height.hash(&mut h);
+                // Text shaping and rasterization depend on the scale factor; mix it in so a scale change without a resize invalidates stale entries.
+                self.scale_factor.to_bits().hash(&mut h);
+                Some(h.finish())
+            } else {
+                None
+            };
+            let cache_hit = layer_hash.is_some_and(|h| self.layer_resolved_cache.contains_key(&h));
+            let bucket_w = bucket_size(texture_width);
+            let bucket_h = bucket_size(texture_height);
+            if cache_hit {
+                let hash = layer_hash.unwrap();
+                let uv_scale = [
+                    texture_width as f32 / bucket_w as f32,
+                    texture_height as f32 / bucket_h as f32,
+                ];
+                let bind_group = {
+                    let (_, cached_view, _) = &self.layer_resolved_cache[&hash];
+                    self.composite_pipeline.create_bind_group(
+                        &self.device,
+                        &self.queue,
+                        cached_view,
+                        [
+                            offset_x,
+                            offset_y,
+                            texture_width_logical as f32,
+                            texture_height_logical as f32,
+                        ],
+                        accum.opacity,
+                        0.0,
+                        uv_scale,
+                    )
+                };
+                // Refresh LRU position so reused layers are not evicted first.
+                if let Some(pos) = self
+                    .layer_resolved_cache_order
+                    .iter()
+                    .position(|k| *k == hash)
+                {
+                    self.layer_resolved_cache_order.remove(pos);
+                }
+                self.layer_resolved_cache_order.push_back(hash);
+                // The layer content emitted DrawSteps and instance data we no longer need; drop them so they neither render nor leave dangling instance ranges.
+                self.pending_steps.truncate(accum.begin_step_index);
+                self.pending_instances
+                    .truncate(accum.instance_start as usize);
+                self.pending_text_instances
+                    .truncate(accum.text_instance_start as usize);
+                self.pending_line_instances
+                    .truncate(accum.line_instance_start as usize);
+                self.pending_image_instances
+                    .truncate(accum.image_instance_start as usize);
+                self.pending_steps
+                    .push(DrawStep::Boundary(Boundary::PrerenderedLayer {
+                        bind_group,
+                        scissor: current_scissor,
+                    }));
+                // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
+                if let Some(s) = current_scissor {
+                    self.pending_steps
+                        .push(DrawStep::SetScissor { rect: Some(s) });
+                }
+            } else {
+                let (msaa_texture, msaa_view, resolve_texture, resolve_view) = take_layer_textures(
+                    &mut self.layer_texture_pool,
+                    &self.layer_pipeline,
+                    &self.device,
+                    bucket_w,
+                    bucket_h,
+                );
+                // Physical bucket dimensions: to_ndc multiplies logical coords by scale_factor, so using physical size correctly maps logical content into the physical texture.
+                let layer_vp = Viewport::new(
+                    [bucket_w as f32, bucket_h as f32],
+                    [offset_x * self.scale_factor, offset_y * self.scale_factor],
+                    self.scale_factor,
+                );
+                let layer_vp_bg = self.take_layer_viewport_bind_group(layer_vp);
+                let uv_scale = [
+                    texture_width as f32 / bucket_w as f32,
+                    texture_height as f32 / bucket_h as f32,
+                ];
+                // Composite bind group uses window-absolute dest rect in logical pixels; parent viewport (set 0) converts it to NDC.
+                let composite_bg = self.composite_pipeline.create_bind_group(
+                    &self.device,
+                    &self.queue,
+                    &resolve_view,
+                    [
+                        offset_x,
+                        offset_y,
+                        texture_width_logical as f32,
+                        texture_height_logical as f32,
+                    ],
+                    accum.opacity,
+                    0.0,
+                    uv_scale,
+                );
+                self.pending_steps.insert(
+                    accum.begin_step_index,
+                    DrawStep::Boundary(Boundary::BeginLayer {
+                        msaa_texture,
+                        msaa_view,
+                        resolve_texture,
+                        resolve_view,
+                        viewport_bind_group: layer_vp_bg,
+                        width: bucket_w,
+                        height: bucket_h,
+                        offset_x,
+                        offset_y,
+                        backdrop_blur: accum.backdrop_blur,
+                    }),
+                );
+                self.pending_steps
+                    .push(DrawStep::Boundary(Boundary::EndLayerComposite {
+                        bind_group: composite_bg,
+                        // Only cache when no dirty-scissor is active; otherwise the layer's draws may be clipped to the dirty region, leaving a partially-rendered texture.
+                        cache_hash: if dirty_scissor.is_none() {
+                            layer_hash
+                        } else {
+                            None
+                        },
+                        scissor: current_scissor,
+                    }));
+                // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
+                if let Some(s) = current_scissor {
+                    self.pending_steps
+                        .push(DrawStep::SetScissor { rect: Some(s) });
+                }
+            }
+        }
+        current_scissor
+    }
+
+    /// Opens a clip and hands back the scissor now in force, pushing the entry [`close_clip`] will read.
+    ///
+    /// Three shapes, decided here and nowhere else: a square clip is a scissor; a rounded one masks its
+    /// corners in-shader; a rounded one *inside* another rounded one cannot — the SDF holds one viewport —
+    /// so it falls back to a mini-layer composited at the pop.
+    fn open_clip(
+        &mut self,
+        clip_stack: &mut Vec<ClipEntry>,
+        current_scissor: Option<Rect>,
+        rect: &Rect,
+        radius: &renderer_core::BorderRadius,
+    ) -> Option<Rect> {
+        self.flush_all();
+        // Clip rects arrive in the emitting widget's local space; map through the active matrix so scissors and rounded mini-layers land in window space (composes with scroll/layout transforms).
+        let rect = &renderer_core::transform_clip_rect(self.draw_state.cumulative_matrix, *rect);
+        let shader_clip_active = clip_stack
+            .iter()
+            .any(|entry| matches!(entry, ClipEntry::Shader { .. }));
+        if radius.is_zero() {
+            let effective = self.draw_state.push_clip(*rect);
+            clip_stack.push(ClipEntry::Scissor);
+            self.pending_steps.push(DrawStep::SetScissor {
+                rect: Some(effective),
+            });
+            return Some(effective);
+        }
+        if !shader_clip_active {
+            // Non-nested rounded clip: mask corners in-shader via the viewport SDF, no mini-layer. A scissor to the clip rect still bounds the cheap pixels. TODO(sprint3-t8): a PushLayer nested inside this shader clip renders into its own pass without the SDF mask, so the layer's corners are not rounded; such cases still need the mini-layer fallback.
+            let effective = self.draw_state.push_clip(*rect);
+            clip_stack.push(ClipEntry::Shader {
+                outer_scissor: current_scissor,
+            });
+            let clip_vp_bg = self.take_shader_clip_viewport_bind_group(*rect, radius.top_left);
+            self.pending_steps.push(DrawStep::SetShaderClip {
+                viewport_bind_group: clip_vp_bg,
+            });
+            self.pending_steps.push(DrawStep::SetScissor {
+                rect: Some(effective),
+            });
+            return Some(effective);
+        }
+        // Nested rounded clip: fall back to a mini-layer, draw into it, composite with SDF mask at PopClip.
+        let outer_scissor = current_scissor;
+        self.draw_state.push_clip(*rect);
+        let ox = rect.x.floor().max(0.0);
+        let oy = rect.y.floor().max(0.0);
+        let texture_width_logical = (rect.width.ceil() as u32).max(1);
+        let texture_height_logical = (rect.height.ceil() as u32).max(1);
+        let texture_width = ((texture_width_logical as f32 * self.scale_factor).ceil() as u32)
+            .min(self.width.max(1));
+        let texture_height = ((texture_height_logical as f32 * self.scale_factor).ceil() as u32)
+            .min(self.height.max(1));
+        let bucket_w = bucket_size(texture_width);
+        let bucket_h = bucket_size(texture_height);
+        let (msaa_texture, msaa_view, resolve_texture, resolve_view) = take_layer_textures(
+            &mut self.layer_texture_pool,
+            &self.layer_pipeline,
+            &self.device,
+            bucket_w,
+            bucket_h,
+        );
+        // Use physical bucket dimensions: to_ndc scales logical coords by scale_factor, so size must be physical to map [0, logical_w] correctly to NDC [-1, 1].
+        let layer_vp = Viewport::new(
+            [bucket_w as f32, bucket_h as f32],
+            [ox * self.scale_factor, oy * self.scale_factor],
+            self.scale_factor,
+        );
+        let layer_vp_bg = self.take_layer_viewport_bind_group(layer_vp);
+        let uv_scale = [
+            texture_width as f32 / bucket_w as f32,
+            texture_height as f32 / bucket_h as f32,
+        ];
+        // composite_bg borrows resolve_view before it moves into BeginLayer
+        let composite_bg = self.composite_pipeline.create_bind_group(
+            &self.device,
+            &self.queue,
+            &resolve_view,
+            [
+                ox,
+                oy,
+                texture_width_logical as f32,
+                texture_height_logical as f32,
+            ],
+            1.0,
+            radius.top_left,
+            uv_scale,
+        );
+        self.pending_steps
+            .push(DrawStep::Boundary(Boundary::BeginLayer {
+                msaa_texture,
+                msaa_view,
+                resolve_texture,
+                resolve_view,
+                viewport_bind_group: layer_vp_bg,
+                width: bucket_w,
+                height: bucket_h,
+                offset_x: ox,
+                offset_y: oy,
+                backdrop_blur: 0.0,
+            }));
+        // Pool return for clip layer textures is handled by the EndLayerComposite execution path.
+        clip_stack.push(ClipEntry::Layer {
+            composite: composite_bg,
+            outer_scissor,
+        });
+        None
+    }
+
+    /// Unwinds one clip and hands back the scissor now in force.
+    ///
+    /// Which of the three shapes a `PushClip` took is not knowable from the `PopClip` — a plain scissor, an
+    /// in-shader rounded mask, or a mini-layer composite — so the entry it pushed carries the answer and this
+    /// is where it is read.
+    fn close_clip(
+        &mut self,
+        clip_stack: &mut Vec<ClipEntry>,
+        current_scissor: Option<Rect>,
+    ) -> Option<Rect> {
+        self.flush_all();
+        match clip_stack.pop() {
+            Some(ClipEntry::Layer {
+                composite,
+                outer_scissor,
+            }) => {
+                self.draw_state.pop_clip();
+                self.pending_steps
+                    .push(DrawStep::Boundary(Boundary::EndLayerComposite {
+                        bind_group: composite,
+                        // Round-clip layers draw the clip mask into the texture, so their content is not safely cacheable by command hash.
+                        cache_hash: None,
+                        scissor: outer_scissor,
+                    }));
+                self.pending_steps.push(DrawStep::SetScissor {
+                    rect: outer_scissor,
+                });
+                outer_scissor
+            }
+            // Matching PopClip for the in-shader rounded clip: restore the unclipped viewport and the outer scissor.
+            Some(ClipEntry::Shader { outer_scissor }) => {
+                self.draw_state.pop_clip();
+                let base_vp_bg =
+                    self.take_shader_clip_viewport_bind_group(Rect::new(0.0, 0.0, 0.0, 0.0), 0.0);
+                self.pending_steps.push(DrawStep::SetShaderClip {
+                    viewport_bind_group: base_vp_bg,
+                });
+                self.pending_steps.push(DrawStep::SetScissor {
+                    rect: outer_scissor,
+                });
+                outer_scissor
+            }
+            Some(ClipEntry::Scissor) => {
+                let effective = self.draw_state.pop_clip();
+                self.pending_steps
+                    .push(DrawStep::SetScissor { rect: effective });
+                effective
+            }
+            // A `PopClip` with nothing to pop: the draw state still unwinds, exactly as before.
+            None => {
+                let effective = self.draw_state.pop_clip();
+                self.pending_steps
+                    .push(DrawStep::SetScissor { rect: effective });
+                let _ = current_scissor;
+                effective
+            }
+        }
+    }
+
     fn interpret_commands(
         &mut self,
         commands: &[DrawCommand],
@@ -858,148 +1232,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     }
                 }
                 DrawCommand::PushClip { rect, radius } => {
-                    self.flush_all();
-                    // Clip rects arrive in the emitting widget's local space; map through the active matrix so scissors and rounded mini-layers land in window space (composes with scroll/layout transforms).
-                    let rect = &renderer_core::transform_clip_rect(
-                        self.draw_state.cumulative_matrix,
-                        *rect,
-                    );
-                    let shader_clip_active = clip_stack
-                        .iter()
-                        .any(|entry| matches!(entry, ClipEntry::Shader { .. }));
-                    if radius.is_zero() {
-                        let effective = self.draw_state.push_clip(*rect);
-                        current_scissor = Some(effective);
-                        clip_stack.push(ClipEntry::Scissor);
-                        self.pending_steps.push(DrawStep::SetScissor {
-                            rect: Some(effective),
-                        });
-                    } else if !shader_clip_active {
-                        // Non-nested rounded clip: mask corners in-shader via the viewport SDF, no mini-layer. A scissor to the clip rect still bounds the cheap pixels. TODO(sprint3-t8): a PushLayer nested inside this shader clip renders into its own pass without the SDF mask, so the layer's corners are not rounded; such cases still need the mini-layer fallback.
-                        let effective = self.draw_state.push_clip(*rect);
-                        clip_stack.push(ClipEntry::Shader {
-                            outer_scissor: current_scissor,
-                        });
-                        current_scissor = Some(effective);
-                        let clip_vp_bg =
-                            self.take_shader_clip_viewport_bind_group(*rect, radius.top_left);
-                        self.pending_steps.push(DrawStep::SetShaderClip {
-                            viewport_bind_group: clip_vp_bg,
-                        });
-                        self.pending_steps.push(DrawStep::SetScissor {
-                            rect: Some(effective),
-                        });
-                    } else {
-                        // Nested rounded clip: fall back to a mini-layer, draw into it, composite with SDF mask at PopClip.
-                        let outer_scissor = current_scissor;
-                        current_scissor = None;
-                        self.draw_state.push_clip(*rect);
-                        let ox = rect.x.floor().max(0.0);
-                        let oy = rect.y.floor().max(0.0);
-                        let texture_width_logical = (rect.width.ceil() as u32).max(1);
-                        let texture_height_logical = (rect.height.ceil() as u32).max(1);
-                        let texture_width = ((texture_width_logical as f32 * self.scale_factor)
-                            .ceil() as u32)
-                            .min(self.width.max(1));
-                        let texture_height = ((texture_height_logical as f32 * self.scale_factor)
-                            .ceil() as u32)
-                            .min(self.height.max(1));
-                        let bucket_w = bucket_size(texture_width);
-                        let bucket_h = bucket_size(texture_height);
-                        let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
-                            take_layer_textures(
-                                &mut self.layer_texture_pool,
-                                &self.layer_pipeline,
-                                &self.device,
-                                bucket_w,
-                                bucket_h,
-                            );
-                        // Use physical bucket dimensions: to_ndc scales logical coords by scale_factor, so size must be physical to map [0, logical_w] correctly to NDC [-1, 1].
-                        let layer_vp = Viewport::new(
-                            [bucket_w as f32, bucket_h as f32],
-                            [ox * self.scale_factor, oy * self.scale_factor],
-                            self.scale_factor,
-                        );
-                        let layer_vp_bg = self.take_layer_viewport_bind_group(layer_vp);
-                        let uv_scale = [
-                            texture_width as f32 / bucket_w as f32,
-                            texture_height as f32 / bucket_h as f32,
-                        ];
-                        // composite_bg borrows resolve_view before it moves into BeginLayer
-                        let composite_bg = self.composite_pipeline.create_bind_group(
-                            &self.device,
-                            &self.queue,
-                            &resolve_view,
-                            [
-                                ox,
-                                oy,
-                                texture_width_logical as f32,
-                                texture_height_logical as f32,
-                            ],
-                            1.0,
-                            radius.top_left,
-                            uv_scale,
-                        );
-                        self.pending_steps
-                            .push(DrawStep::Boundary(Boundary::BeginLayer {
-                                msaa_texture,
-                                msaa_view,
-                                resolve_texture,
-                                resolve_view,
-                                viewport_bind_group: layer_vp_bg,
-                                width: bucket_w,
-                                height: bucket_h,
-                                offset_x: ox,
-                                offset_y: oy,
-                                backdrop_blur: 0.0,
-                            }));
-                        // Pool return for clip layer textures is handled by the EndLayerComposite execution path.
-                        clip_stack.push(ClipEntry::Layer {
-                            composite: composite_bg,
-                            outer_scissor,
-                        });
-                    }
+                    current_scissor =
+                        self.open_clip(&mut clip_stack, current_scissor, rect, radius);
                 }
                 DrawCommand::PopClip => {
-                    self.flush_all();
-                    let popped = clip_stack.pop();
-                    if let Some(ClipEntry::Layer {
-                        composite,
-                        outer_scissor,
-                    }) = popped
-                    {
-                        self.draw_state.pop_clip();
-                        current_scissor = outer_scissor;
-                        self.pending_steps
-                            .push(DrawStep::Boundary(Boundary::EndLayerComposite {
-                                bind_group: composite,
-                                // Round-clip layers draw the clip mask into the texture, so their content is not safely cacheable by command hash.
-                                cache_hash: None,
-                                scissor: current_scissor,
-                            }));
-                        self.pending_steps.push(DrawStep::SetScissor {
-                            rect: current_scissor,
-                        });
-                    } else if let Some(ClipEntry::Shader { outer_scissor }) = popped {
-                        // Matching PopClip for the in-shader rounded clip: restore the unclipped viewport and the outer scissor.
-                        self.draw_state.pop_clip();
-                        current_scissor = outer_scissor;
-                        let base_vp_bg = self.take_shader_clip_viewport_bind_group(
-                            Rect::new(0.0, 0.0, 0.0, 0.0),
-                            0.0,
-                        );
-                        self.pending_steps.push(DrawStep::SetShaderClip {
-                            viewport_bind_group: base_vp_bg,
-                        });
-                        self.pending_steps.push(DrawStep::SetScissor {
-                            rect: current_scissor,
-                        });
-                    } else {
-                        let effective = self.draw_state.pop_clip();
-                        current_scissor = effective;
-                        self.pending_steps
-                            .push(DrawStep::SetScissor { rect: effective });
-                    }
+                    current_scissor = self.close_clip(&mut clip_stack, current_scissor);
                 }
                 DrawCommand::PushMatrix { matrix } => {
                     self.draw_state.push_matrix(*matrix);
@@ -1028,205 +1265,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     });
                 }
                 DrawCommand::PopLayer => {
-                    self.flush_all();
-                    current_scissor = scissor_layer_stack.pop().flatten();
-                    if let Some(accum) = layer_accum_stack.pop() {
-                        // Fully-culled opacity layer: all of its content was culled (e.g. it scrolled outside the dirty band, or is off-screen), so it composites nothing — emit no layer passes at all instead of an empty full-screen layer texture + render/resolve/composite passes. Mirrors the software renderer's skip_layer_depth. Authoritative emptiness check is "produced no draw steps" (the flush_all above already flushed this layer's instances into steps); a drawn primitive always emits a step even when its bounds are absent. Backdrop-blur layers are kept (they sample the framebuffer even without their own content).
-                        if self.pending_steps.len() == accum.begin_step_index
-                            && accum.backdrop_blur == 0.0
-                        {
-                            self.pending_instances
-                                .truncate(accum.instance_start as usize);
-                            self.pending_text_instances
-                                .truncate(accum.text_instance_start as usize);
-                            self.pending_line_instances
-                                .truncate(accum.line_instance_start as usize);
-                            self.pending_image_instances
-                                .truncate(accum.image_instance_start as usize);
-                            continue;
-                        }
-                        let (
-                            offset_x,
-                            offset_y,
-                            texture_width,
-                            texture_height,
-                            texture_width_logical,
-                            texture_height_logical,
-                        ) = if let Some(b) = accum.bounds {
-                            let ox = b.x.floor().max(0.0);
-                            let oy = b.y.floor().max(0.0);
-                            let wl = (b.width.ceil() as u32).max(1);
-                            let hl = (b.height.ceil() as u32).max(1);
-                            let wp = ((wl as f32 * self.scale_factor).ceil() as u32)
-                                .min(self.width.max(1));
-                            let hp = ((hl as f32 * self.scale_factor).ceil() as u32)
-                                .min(self.height.max(1));
-                            (ox, oy, wp, hp, wl, hl)
-                        } else {
-                            let wl = (self.width as f32 / self.scale_factor).ceil() as u32;
-                            let hl = (self.height as f32 / self.scale_factor).ceil() as u32;
-                            (0.0, 0.0, self.width.max(1), self.height.max(1), wl, hl)
-                        };
-                        // Propagate this layer's visual footprint to the parent layer so nested layers are included in the parent's bounds (and thus its texture size).
-                        if let Some(parent) = layer_accum_stack.last_mut() {
-                            let footprint = Rect::new(
-                                offset_x,
-                                offset_y,
-                                texture_width_logical as f32,
-                                texture_height_logical as f32,
-                            );
-                            parent.bounds =
-                                Some(parent.bounds.map_or(footprint, |b| b.union(footprint)));
-                        }
-                        // Backdrop-blur layers read framebuffer content, so they are never cacheable.
-                        let layer_hash: Option<u64> = if accum.backdrop_blur == 0.0 {
-                            use std::hash::{Hash, Hasher};
-                            let base = renderer_core::hash_draw_commands(
-                                &commands[accum.command_start..cmd_idx],
-                            );
-                            let mut h = FxHasher::default();
-                            base.hash(&mut h);
-                            accum.opacity.to_bits().hash(&mut h);
-                            // Use the unclamped floored world bounds (not offset_x/y which are max'd to 0) so that different scroll positions with the same clamped offset don't alias to the same cache entry and produce stale composites.
-                            let (hash_bx, hash_by) = accum
-                                .bounds
-                                .map_or((0.0f32, 0.0f32), |b| (b.x.floor(), b.y.floor()));
-                            hash_bx.to_bits().hash(&mut h);
-                            hash_by.to_bits().hash(&mut h);
-                            texture_width.hash(&mut h);
-                            texture_height.hash(&mut h);
-                            // Text shaping and rasterization depend on the scale factor; mix it in so a scale change without a resize invalidates stale entries.
-                            self.scale_factor.to_bits().hash(&mut h);
-                            Some(h.finish())
-                        } else {
-                            None
-                        };
-                        let cache_hit =
-                            layer_hash.is_some_and(|h| self.layer_resolved_cache.contains_key(&h));
-                        let bucket_w = bucket_size(texture_width);
-                        let bucket_h = bucket_size(texture_height);
-                        if cache_hit {
-                            let hash = layer_hash.unwrap();
-                            let uv_scale = [
-                                texture_width as f32 / bucket_w as f32,
-                                texture_height as f32 / bucket_h as f32,
-                            ];
-                            let bind_group = {
-                                let (_, cached_view, _) = &self.layer_resolved_cache[&hash];
-                                self.composite_pipeline.create_bind_group(
-                                    &self.device,
-                                    &self.queue,
-                                    cached_view,
-                                    [
-                                        offset_x,
-                                        offset_y,
-                                        texture_width_logical as f32,
-                                        texture_height_logical as f32,
-                                    ],
-                                    accum.opacity,
-                                    0.0,
-                                    uv_scale,
-                                )
-                            };
-                            // Refresh LRU position so reused layers are not evicted first.
-                            if let Some(pos) = self
-                                .layer_resolved_cache_order
-                                .iter()
-                                .position(|k| *k == hash)
-                            {
-                                self.layer_resolved_cache_order.remove(pos);
-                            }
-                            self.layer_resolved_cache_order.push_back(hash);
-                            // The layer content emitted DrawSteps and instance data we no longer need; drop them so they neither render nor leave dangling instance ranges.
-                            self.pending_steps.truncate(accum.begin_step_index);
-                            self.pending_instances
-                                .truncate(accum.instance_start as usize);
-                            self.pending_text_instances
-                                .truncate(accum.text_instance_start as usize);
-                            self.pending_line_instances
-                                .truncate(accum.line_instance_start as usize);
-                            self.pending_image_instances
-                                .truncate(accum.image_instance_start as usize);
-                            self.pending_steps.push(DrawStep::Boundary(
-                                Boundary::PrerenderedLayer {
-                                    bind_group,
-                                    scissor: current_scissor,
-                                },
-                            ));
-                            // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
-                            if let Some(s) = current_scissor {
-                                self.pending_steps
-                                    .push(DrawStep::SetScissor { rect: Some(s) });
-                            }
-                        } else {
-                            let (msaa_texture, msaa_view, resolve_texture, resolve_view) =
-                                take_layer_textures(
-                                    &mut self.layer_texture_pool,
-                                    &self.layer_pipeline,
-                                    &self.device,
-                                    bucket_w,
-                                    bucket_h,
-                                );
-                            // Physical bucket dimensions: to_ndc multiplies logical coords by scale_factor, so using physical size correctly maps logical content into the physical texture.
-                            let layer_vp = Viewport::new(
-                                [bucket_w as f32, bucket_h as f32],
-                                [offset_x * self.scale_factor, offset_y * self.scale_factor],
-                                self.scale_factor,
-                            );
-                            let layer_vp_bg = self.take_layer_viewport_bind_group(layer_vp);
-                            let uv_scale = [
-                                texture_width as f32 / bucket_w as f32,
-                                texture_height as f32 / bucket_h as f32,
-                            ];
-                            // Composite bind group uses window-absolute dest rect in logical pixels; parent viewport (set 0) converts it to NDC.
-                            let composite_bg = self.composite_pipeline.create_bind_group(
-                                &self.device,
-                                &self.queue,
-                                &resolve_view,
-                                [
-                                    offset_x,
-                                    offset_y,
-                                    texture_width_logical as f32,
-                                    texture_height_logical as f32,
-                                ],
-                                accum.opacity,
-                                0.0,
-                                uv_scale,
-                            );
-                            self.pending_steps.insert(
-                                accum.begin_step_index,
-                                DrawStep::Boundary(Boundary::BeginLayer {
-                                    msaa_texture,
-                                    msaa_view,
-                                    resolve_texture,
-                                    resolve_view,
-                                    viewport_bind_group: layer_vp_bg,
-                                    width: bucket_w,
-                                    height: bucket_h,
-                                    offset_x,
-                                    offset_y,
-                                    backdrop_blur: accum.backdrop_blur,
-                                }),
-                            );
-                            self.pending_steps.push(DrawStep::Boundary(
-                                Boundary::EndLayerComposite {
-                                    bind_group: composite_bg,
-                                    // Only cache when no dirty-scissor is active; otherwise the layer's draws may be clipped to the dirty region, leaving a partially-rendered texture.
-                                    cache_hash: if dirty_scissor.is_none() {
-                                        layer_hash
-                                    } else {
-                                        None
-                                    },
-                                    scissor: current_scissor,
-                                },
-                            ));
-                            // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
-                            if let Some(s) = current_scissor {
-                                self.pending_steps
-                                    .push(DrawStep::SetScissor { rect: Some(s) });
-                            }
-                        }
-                    }
+                    current_scissor = self.close_layer(
+                        &mut scissor_layer_stack,
+                        &mut layer_accum_stack,
+                        commands,
+                        cmd_idx,
+                        dirty_scissor,
+                    );
                 }
             }
         }
@@ -1769,6 +1814,267 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         Ok((steps, segments))
     }
 
+    /// Runs one segment's draw steps into `render_pass`, the same way for every kind of pass — the main one,
+    /// a layer's, a capture's.
+    fn run_draw_steps<'a>(
+        &'a self,
+        render_pass: &mut wgpu::RenderPass<'a>,
+        draw_steps: &[DrawStep],
+        dirty_scissor: Option<Rect>,
+        target_w: u32,
+        target_h: u32,
+    ) {
+        for step in draw_steps {
+            match step {
+                DrawStep::RectBatch { start, end } => {
+                    render_pass.set_pipeline(&self.rect_pipeline.pipeline);
+                    render_pass.set_bind_group(
+                        1,
+                        &self.rect_pipeline.instances.instances_bind_group,
+                        &[],
+                    );
+                    render_pass.draw(0..6, *start..*end);
+                }
+                DrawStep::TextBatch { start, end } => {
+                    render_pass.set_pipeline(&self.text_pipeline.pipeline);
+                    render_pass.set_bind_group(
+                        1,
+                        &self.text_pipeline.instances.instances_bind_group,
+                        &[],
+                    );
+                    render_pass.set_bind_group(2, &self.text_pipeline.atlas_bind_group, &[]);
+                    render_pass.draw(0..6, *start..*end);
+                }
+                DrawStep::LineBatch { start, end } => {
+                    render_pass.set_pipeline(&self.line_pipeline.pipeline);
+                    render_pass.set_bind_group(
+                        1,
+                        &self.line_pipeline.instances.instances_bind_group,
+                        &[],
+                    );
+                    render_pass.draw(0..6, *start..*end);
+                }
+                DrawStep::ImageBatch {
+                    start,
+                    end,
+                    bind_group,
+                    key: _,
+                } => {
+                    render_pass.set_pipeline(&self.image_pipeline.pipeline);
+                    render_pass.set_bind_group(
+                        1,
+                        &self.image_pipeline.instances.instances_bind_group,
+                        &[],
+                    );
+                    render_pass.set_bind_group(2, bind_group, &[]);
+                    render_pass.draw(0..6, *start..*end);
+                }
+                DrawStep::PathDraw {
+                    index_start,
+                    index_end,
+                } => {
+                    render_pass.set_pipeline(&self.path_pipeline.pipeline);
+                    render_pass.set_bind_group(1, &self.path_pipeline.fill_data.bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, self.path_pipeline.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(
+                        self.path_pipeline.index_buffer.slice(..),
+                        wgpu::IndexFormat::Uint32,
+                    );
+                    render_pass.draw_indexed(*index_start..*index_end, 0, 0..1);
+                }
+                DrawStep::SetScissor { rect } => {
+                    let clipped_rect = match (*rect, dirty_scissor) {
+                        (r, None) => r,
+                        (None, Some(ds)) => Some(ds),
+                        (Some(r), Some(ds)) => r.intersect(ds).or(Some(r)),
+                    };
+                    match clipped_rect {
+                        None => {
+                            render_pass.set_scissor_rect(0, 0, target_w, target_h);
+                        }
+                        Some(r) => {
+                            let (x, y, w, h) =
+                                physical_scissor(r, target_w, target_h, self.scale_factor);
+                            render_pass.set_scissor_rect(x, y, w, h);
+                        }
+                    }
+                }
+                DrawStep::SetShaderClip {
+                    viewport_bind_group,
+                } => {
+                    render_pass.set_bind_group(0, viewport_bind_group, &[]);
+                }
+                DrawStep::CompositeShadow { bind_group } => {
+                    render_pass.set_pipeline(&self.composite_pipeline.pipeline);
+                    render_pass.set_bind_group(1, bind_group, &[]);
+                    render_pass.draw(0..6, 0..1);
+                }
+                DrawStep::ShadowPlaceholder { .. } => {}
+                DrawStep::Boundary(_) => {
+                    unreachable!("layer boundaries are split into segments")
+                }
+            }
+        }
+    }
+
+    /// Fills a layer's texture with the blurred framebuffer behind it, before its own content draws over it.
+    ///
+    /// Always sampled from the root MSAA, never from whatever layer is currently on the stack: a rounded-clip
+    /// mini-layer above this point is transparent at this moment, so blurring it would yield nothing.
+    #[allow(clippy::too_many_arguments)]
+    fn fill_layer_backdrop(
+        &mut self,
+        ctx: &mut FrameCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        msaa_view: &wgpu::TextureView,
+        resolve_view: &wgpu::TextureView,
+        offset_x: f32,
+        offset_y: f32,
+        width: u32,
+        height: u32,
+        backdrop_blur: f32,
+        layer_msaa_view: &wgpu::TextureView,
+        viewport_bind_group: &wgpu::BindGroup,
+    ) {
+        // Always sample from the root (main) MSAA for backdrop blur. Any layers above this point in the stack (e.g. a rounded-clip mini-layer) are transparent at this moment — blurring their content would yield nothing. The root MSAA has the fully-rendered app content that the blur should sample.
+        let (parent_w, parent_h) = (self.width, self.height);
+        let parent_msaa_view: &wgpu::TextureView = msaa_view;
+
+        // Superset usage so any pooled texture of this size/format can serve as either the resolve target or the crop destination interchangeably.
+        let scratch_usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING;
+        let temp_resolve_entry = take_pooled_texture(
+            &self.device,
+            &mut self.texture_pool,
+            parent_w.max(1),
+            parent_h.max(1),
+            self.surface_format,
+            "telar-backdrop-resolve",
+            scratch_usage,
+        );
+        let temp_resolve = &temp_resolve_entry.3;
+        let temp_resolve_view = &temp_resolve_entry.4;
+
+        if self.msaa_samples > 1 {
+            let _resolve = crate::pass::color_pass(
+                encoder,
+                "telar-backdrop-parent-resolve",
+                parent_msaa_view,
+                Some(temp_resolve_view),
+                wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    // Store: the parent MSAA is still needed after this resolve so EndLayerComposite can load it to composite the layer on top. Discard here caused a black screen on immediate-mode GPUs (desktop).
+                    store: wgpu::StoreOp::Store,
+                },
+            );
+        } else {
+            encoder.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: self.msaa_texture.as_ref().unwrap(),
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: temp_resolve,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width: parent_w,
+                    height: parent_h,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+
+        let ox_px = offset_x.floor().max(0.0) as u32;
+        let oy_px = offset_y.floor().max(0.0) as u32;
+        let crop_w = width.min(parent_w.saturating_sub(ox_px));
+        let crop_h = height.min(parent_h.saturating_sub(oy_px));
+
+        let cropped_entry = take_pooled_texture(
+            &self.device,
+            &mut self.texture_pool,
+            crop_w.max(1),
+            crop_h.max(1),
+            self.surface_format,
+            "telar-backdrop-crop",
+            scratch_usage,
+        );
+        let cropped = &cropped_entry.3;
+        let cropped_view = &cropped_entry.4;
+
+        if crop_w > 0 && crop_h > 0 {
+            encoder.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: temp_resolve,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: ox_px,
+                        y: oy_px,
+                        z: 0,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: cropped,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width: crop_w,
+                    height: crop_h,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+
+        let (_blurred_tex, blurred_view) = self.blur_pipeline.apply(
+            &self.device,
+            &mut *encoder,
+            cropped_view,
+            crop_w.max(1),
+            crop_h.max(1),
+            backdrop_blur,
+        );
+
+        let backdrop_bg = self.composite_pipeline.create_bind_group(
+            &self.device,
+            &self.queue,
+            &blurred_view,
+            [offset_x, offset_y, crop_w as f32, crop_h as f32],
+            1.0,
+            0.0,
+            [1.0, 1.0],
+        );
+        {
+            let backdrop_target = if self.msaa_samples > 1 {
+                layer_msaa_view
+            } else {
+                &resolve_view
+            };
+            let mut backdrop_pass = crate::pass::color_pass(
+                encoder,
+                "telar-backdrop-composite",
+                backdrop_target,
+                None,
+                crate::pass::load_store(),
+            );
+            backdrop_pass.set_pipeline(&self.composite_pipeline.pipeline);
+            backdrop_pass.set_bind_group(0, viewport_bind_group, &[]);
+            backdrop_pass.set_bind_group(1, &backdrop_bg, &[]);
+            backdrop_pass.draw(0..6, 0..1);
+        }
+        // Hold these scratch textures until after submit; returning them to the pool now would let a later layer in this same encoder reuse and overwrite them before the GPU reads them.
+        ctx.frame_scratch_textures.push(temp_resolve_entry);
+        ctx.frame_scratch_textures.push(cropped_entry);
+    }
+
     fn execute_segments(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -1906,112 +2212,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     };
                     render_pass.set_bind_group(0, active_vp_bg, &[]);
 
-                    for step in draw_steps {
-                        match step {
-                            DrawStep::RectBatch { start, end } => {
-                                render_pass.set_pipeline(&self.rect_pipeline.pipeline);
-                                render_pass.set_bind_group(
-                                    1,
-                                    &self.rect_pipeline.instances.instances_bind_group,
-                                    &[],
-                                );
-                                render_pass.draw(0..6, *start..*end);
-                            }
-                            DrawStep::TextBatch { start, end } => {
-                                render_pass.set_pipeline(&self.text_pipeline.pipeline);
-                                render_pass.set_bind_group(
-                                    1,
-                                    &self.text_pipeline.instances.instances_bind_group,
-                                    &[],
-                                );
-                                render_pass.set_bind_group(
-                                    2,
-                                    &self.text_pipeline.atlas_bind_group,
-                                    &[],
-                                );
-                                render_pass.draw(0..6, *start..*end);
-                            }
-                            DrawStep::LineBatch { start, end } => {
-                                render_pass.set_pipeline(&self.line_pipeline.pipeline);
-                                render_pass.set_bind_group(
-                                    1,
-                                    &self.line_pipeline.instances.instances_bind_group,
-                                    &[],
-                                );
-                                render_pass.draw(0..6, *start..*end);
-                            }
-                            DrawStep::ImageBatch {
-                                start,
-                                end,
-                                bind_group,
-                                key: _,
-                            } => {
-                                render_pass.set_pipeline(&self.image_pipeline.pipeline);
-                                render_pass.set_bind_group(
-                                    1,
-                                    &self.image_pipeline.instances.instances_bind_group,
-                                    &[],
-                                );
-                                render_pass.set_bind_group(2, bind_group, &[]);
-                                render_pass.draw(0..6, *start..*end);
-                            }
-                            DrawStep::PathDraw {
-                                index_start,
-                                index_end,
-                            } => {
-                                render_pass.set_pipeline(&self.path_pipeline.pipeline);
-                                render_pass.set_bind_group(
-                                    1,
-                                    &self.path_pipeline.fill_data.bind_group,
-                                    &[],
-                                );
-                                render_pass.set_vertex_buffer(
-                                    0,
-                                    self.path_pipeline.vertex_buffer.slice(..),
-                                );
-                                render_pass.set_index_buffer(
-                                    self.path_pipeline.index_buffer.slice(..),
-                                    wgpu::IndexFormat::Uint32,
-                                );
-                                render_pass.draw_indexed(*index_start..*index_end, 0, 0..1);
-                            }
-                            DrawStep::SetScissor { rect } => {
-                                let clipped_rect = match (*rect, dirty_scissor) {
-                                    (r, None) => r,
-                                    (None, Some(ds)) => Some(ds),
-                                    (Some(r), Some(ds)) => r.intersect(ds).or(Some(r)),
-                                };
-                                match clipped_rect {
-                                    None => {
-                                        render_pass.set_scissor_rect(0, 0, target_w, target_h);
-                                    }
-                                    Some(r) => {
-                                        let (x, y, w, h) = physical_scissor(
-                                            r,
-                                            target_w,
-                                            target_h,
-                                            self.scale_factor,
-                                        );
-                                        render_pass.set_scissor_rect(x, y, w, h);
-                                    }
-                                }
-                            }
-                            DrawStep::SetShaderClip {
-                                viewport_bind_group,
-                            } => {
-                                render_pass.set_bind_group(0, viewport_bind_group, &[]);
-                            }
-                            DrawStep::CompositeShadow { bind_group } => {
-                                render_pass.set_pipeline(&self.composite_pipeline.pipeline);
-                                render_pass.set_bind_group(1, bind_group, &[]);
-                                render_pass.draw(0..6, 0..1);
-                            }
-                            DrawStep::ShadowPlaceholder { .. } => {}
-                            DrawStep::Boundary(_) => {
-                                unreachable!("layer boundaries are split into segments")
-                            }
-                        }
-                    }
+                    self.run_draw_steps(
+                        &mut render_pass,
+                        draw_steps,
+                        dirty_scissor,
+                        target_w,
+                        target_h,
+                    );
                 }
 
                 Segment::Boundary(Boundary::BeginLayer {
@@ -2050,143 +2257,19 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     }
 
                     if backdrop_blur > 0.0 {
-                        // Always sample from the root (main) MSAA for backdrop blur. Any layers above this point in the stack (e.g. a rounded-clip mini-layer) are transparent at this moment — blurring their content would yield nothing. The root MSAA has the fully-rendered app content that the blur should sample.
-                        let (parent_w, parent_h) = (self.width, self.height);
-                        let parent_msaa_view: &wgpu::TextureView = &msaa_view;
-
-                        // Superset usage so any pooled texture of this size/format can serve as either the resolve target or the crop destination interchangeably.
-                        let scratch_usage = wgpu::TextureUsages::RENDER_ATTACHMENT
-                            | wgpu::TextureUsages::COPY_SRC
-                            | wgpu::TextureUsages::COPY_DST
-                            | wgpu::TextureUsages::TEXTURE_BINDING;
-                        let temp_resolve_entry = take_pooled_texture(
-                            &self.device,
-                            &mut self.texture_pool,
-                            parent_w.max(1),
-                            parent_h.max(1),
-                            self.surface_format,
-                            "telar-backdrop-resolve",
-                            scratch_usage,
-                        );
-                        let temp_resolve = &temp_resolve_entry.3;
-                        let temp_resolve_view = &temp_resolve_entry.4;
-
-                        if self.msaa_samples > 1 {
-                            let _resolve = crate::pass::color_pass(
-                                encoder,
-                                "telar-backdrop-parent-resolve",
-                                parent_msaa_view,
-                                Some(temp_resolve_view),
-                                wgpu::Operations {
-                                    load: wgpu::LoadOp::Load,
-                                    // Store: the parent MSAA is still needed after this resolve so EndLayerComposite can load it to composite the layer on top. Discard here caused a black screen on immediate-mode GPUs (desktop).
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            );
-                        } else {
-                            encoder.copy_texture_to_texture(
-                                wgpu::TexelCopyTextureInfo {
-                                    texture: self.msaa_texture.as_ref().unwrap(),
-                                    mip_level: 0,
-                                    origin: wgpu::Origin3d::ZERO,
-                                    aspect: wgpu::TextureAspect::All,
-                                },
-                                wgpu::TexelCopyTextureInfo {
-                                    texture: temp_resolve,
-                                    mip_level: 0,
-                                    origin: wgpu::Origin3d::ZERO,
-                                    aspect: wgpu::TextureAspect::All,
-                                },
-                                wgpu::Extent3d {
-                                    width: parent_w,
-                                    height: parent_h,
-                                    depth_or_array_layers: 1,
-                                },
-                            );
-                        }
-
-                        let ox_px = offset_x.floor().max(0.0) as u32;
-                        let oy_px = offset_y.floor().max(0.0) as u32;
-                        let crop_w = width.min(parent_w.saturating_sub(ox_px));
-                        let crop_h = height.min(parent_h.saturating_sub(oy_px));
-
-                        let cropped_entry = take_pooled_texture(
-                            &self.device,
-                            &mut self.texture_pool,
-                            crop_w.max(1),
-                            crop_h.max(1),
-                            self.surface_format,
-                            "telar-backdrop-crop",
-                            scratch_usage,
-                        );
-                        let cropped = &cropped_entry.3;
-                        let cropped_view = &cropped_entry.4;
-
-                        if crop_w > 0 && crop_h > 0 {
-                            encoder.copy_texture_to_texture(
-                                wgpu::TexelCopyTextureInfo {
-                                    texture: temp_resolve,
-                                    mip_level: 0,
-                                    origin: wgpu::Origin3d {
-                                        x: ox_px,
-                                        y: oy_px,
-                                        z: 0,
-                                    },
-                                    aspect: wgpu::TextureAspect::All,
-                                },
-                                wgpu::TexelCopyTextureInfo {
-                                    texture: cropped,
-                                    mip_level: 0,
-                                    origin: wgpu::Origin3d::ZERO,
-                                    aspect: wgpu::TextureAspect::All,
-                                },
-                                wgpu::Extent3d {
-                                    width: crop_w,
-                                    height: crop_h,
-                                    depth_or_array_layers: 1,
-                                },
-                            );
-                        }
-
-                        let (_blurred_tex, blurred_view) = self.blur_pipeline.apply(
-                            &self.device,
-                            &mut *encoder,
-                            cropped_view,
-                            crop_w.max(1),
-                            crop_h.max(1),
+                        self.fill_layer_backdrop(
+                            ctx,
+                            encoder,
+                            &msaa_view,
+                            &resolve_view,
+                            offset_x,
+                            offset_y,
+                            width,
+                            height,
                             backdrop_blur,
+                            &layer_msaa_view,
+                            &viewport_bind_group,
                         );
-
-                        let backdrop_bg = self.composite_pipeline.create_bind_group(
-                            &self.device,
-                            &self.queue,
-                            &blurred_view,
-                            [offset_x, offset_y, crop_w as f32, crop_h as f32],
-                            1.0,
-                            0.0,
-                            [1.0, 1.0],
-                        );
-                        {
-                            let backdrop_target = if self.msaa_samples > 1 {
-                                &layer_msaa_view
-                            } else {
-                                &resolve_view
-                            };
-                            let mut backdrop_pass = crate::pass::color_pass(
-                                encoder,
-                                "telar-backdrop-composite",
-                                backdrop_target,
-                                None,
-                                crate::pass::load_store(),
-                            );
-                            backdrop_pass.set_pipeline(&self.composite_pipeline.pipeline);
-                            backdrop_pass.set_bind_group(0, &viewport_bind_group, &[]);
-                            backdrop_pass.set_bind_group(1, &backdrop_bg, &[]);
-                            backdrop_pass.draw(0..6, 0..1);
-                        }
-                        // Hold these scratch textures until after submit; returning them to the pool now would let a later layer in this same encoder reuse and overwrite them before the GPU reads them.
-                        ctx.frame_scratch_textures.push(temp_resolve_entry);
-                        ctx.frame_scratch_textures.push(cropped_entry);
                     }
 
                     layer_stack.push(LayerTarget {
