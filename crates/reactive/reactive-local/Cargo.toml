@@ -3,6 +3,9 @@ name = "telar-reactive-local"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
+description = "Per-surface thread-local slots for Telar: surface-scoped state and reentry guards."
+keywords = ["telar", "reactive", "thread-local", "surface", "ui"]
+categories = ["gui", "rust-patterns", "concurrency"]
 readme = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
