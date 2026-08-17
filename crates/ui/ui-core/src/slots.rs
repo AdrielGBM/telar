@@ -24,6 +24,13 @@ impl Slots {
         self.items.push((name, item));
     }
 
+    /// Appends `items` as default (unnamed) children. What every generated component call site does with the
+    /// children it collected, so the emitter writes one call instead of a hand-rolled loop 418 times over.
+    pub fn extend_default(&mut self, items: impl IntoIterator<Item = Box<dyn LayoutItem>>) {
+        self.items
+            .extend(items.into_iter().map(|item| (None, item)));
+    }
+
     /// How many children are still undrained, across every slot.
     pub fn len(&self) -> usize {
         self.items.len()

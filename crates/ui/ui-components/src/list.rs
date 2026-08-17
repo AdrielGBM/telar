@@ -15,7 +15,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
+use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, Margin};
 use reactive_core::RwSignal;
 use renderer_core::{RectStyle, ShapeStyle, TextStyle};
 use ui_core::focus::Role;
@@ -373,7 +373,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
     };
 
     let row = StyledContainer::new(row_layout(), row_style, content)?
-        .on_hover_style(hover_style)
+        .hover_style(hover_style)
         .disabled(move || disabled())
         .on_press(commit);
     // Announced without becoming a Tab stop: the list is driven by arrows and type-ahead from the trigger, so
@@ -401,7 +401,7 @@ pub fn separator() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let rule = StyledContainer::new(
         LayoutStyle::new()
             .height(1.0)
-            .margin_vertical(shared::spacing() * 0.25),
+            .margin(Margin::symmetric(shared::spacing() * 0.25, 0.0)),
         |_r| RectStyle::default().with_fill(shared::border()),
         vec![],
     )?;

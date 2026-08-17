@@ -77,6 +77,38 @@ impl LogicalStyle {
     }
 }
 
+/// A box's four margins, named by axis so they follow the writing direction rather than the screen.
+///
+/// The nine builders this replaces mixed two vocabularies — seven physical, two logical — and nothing in the
+/// name of `margin_left` said which of the two it belonged to.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Margin {
+    pub block_start: f32,
+    pub block_end: f32,
+    pub inline_start: f32,
+    pub inline_end: f32,
+}
+
+impl Margin {
+    pub fn all(px: f32) -> Self {
+        Self {
+            block_start: px,
+            block_end: px,
+            inline_start: px,
+            inline_end: px,
+        }
+    }
+
+    pub fn symmetric(block: f32, inline: f32) -> Self {
+        Self {
+            block_start: block,
+            block_end: block,
+            inline_start: inline,
+            inline_end: inline,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct LayoutStyle {
     pub(crate) inner: Style,
@@ -305,60 +337,48 @@ impl LayoutStyle {
         self
     }
 
-    pub fn margin_all(mut self, px: f32) -> Self {
-        let value = LengthPercentageAuto::length(px);
-        self.inner.margin = taffy::geometry::Rect {
-            left: value,
-            right: value,
-            top: value,
-            bottom: value,
-        };
-        self
+    /// All four margins at once, named by axis rather than by side so they follow the writing direction.
+    pub fn margin(self, m: Margin) -> Self {
+        self.margin_block_start(m.block_start)
+            .margin_block_end(m.block_end)
+            .margin_inline_start(m.inline_start)
+            .margin_inline_end(m.inline_end)
     }
 
-    pub fn margin_horizontal(mut self, px: f32) -> Self {
-        self.inner.margin.left = LengthPercentageAuto::length(px);
-        self.inner.margin.right = LengthPercentageAuto::length(px);
-        self
-    }
-
-    pub fn margin_vertical(mut self, px: f32) -> Self {
-        self.inner.margin.top = LengthPercentageAuto::length(px);
-        self.inner.margin.bottom = LengthPercentageAuto::length(px);
-        self
-    }
-
-    pub fn margin_top(mut self, px: f32) -> Self {
+    /// Margin on the edge the block axis starts from — the top, in every writing mode this engine supports.
+    pub fn margin_block_start(mut self, px: f32) -> Self {
         self.inner.margin.top = LengthPercentageAuto::length(px);
         self
     }
 
-    pub fn margin_bottom(mut self, px: f32) -> Self {
+    /// Margin on the edge the block axis ends at — the bottom.
+    pub fn margin_block_end(mut self, px: f32) -> Self {
         self.inner.margin.bottom = LengthPercentageAuto::length(px);
-        self
-    }
-
-    pub fn margin_left(mut self, px: f32) -> Self {
-        self.inner.margin.left = LengthPercentageAuto::length(px);
-        self
-    }
-
-    pub fn margin_right(mut self, px: f32) -> Self {
-        self.inner.margin.right = LengthPercentageAuto::length(px);
         self
     }
 
     /// Margin on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under
     /// [`Direction::Rtl`].
-    pub fn margin_start(mut self, px: f32) -> Self {
+    pub fn margin_inline_start(mut self, px: f32) -> Self {
         self.logical.margin_start = Some(px);
         self
     }
 
     /// Margin on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under
     /// [`Direction::Rtl`].
-    pub fn margin_end(mut self, px: f32) -> Self {
+    pub fn margin_inline_end(mut self, px: f32) -> Self {
         self.logical.margin_end = Some(px);
+        self
+    }
+
+    /// A margin from the viewport's physical left edge, which does **not** follow the writing direction.
+    ///
+    /// The one place that is right: placing an in-flow box at an x already worked out in physical viewport
+    /// coordinates — a dropdown panel under its trigger, a picker under its anchor. Those come from a
+    /// laid-out rect, so mirroring them under RTL would put the panel on the wrong side of the screen. For a
+    /// margin that is part of a box's own spacing, use [`margin_inline_start`](Self::margin_inline_start).
+    pub fn margin_from_left(mut self, px: f32) -> Self {
+        self.inner.margin.left = LengthPercentageAuto::length(px);
         self
     }
 
@@ -593,7 +613,12 @@ mod tests {
     #[test]
     fn only_logical_edges_need_the_style_kept_for_a_flip() {
         assert!(!LayoutStyle::new().flex_row().logical.has_edges());
-        assert!(LayoutStyle::new().margin_start(4.0).logical.has_edges());
+        assert!(
+            LayoutStyle::new()
+                .margin_inline_start(4.0)
+                .logical
+                .has_edges()
+        );
         assert!(LayoutStyle::new().inset_end(4.0).logical.has_edges());
     }
 
@@ -708,16 +733,23 @@ mod tests {
         assert_eq!(style.inner.padding.top, LengthPercentage::length(4.0));
     }
 
+    // The block pair is physical-by-construction: there is no vertical writing mode here, so block start is the top in every direction. The inline pair is the one a flip moves, and it is the one kept in `logical` for `resolve` to place.
     #[test]
-    fn style_margin_horizontal_sets_left_right() {
-        let style = LayoutStyle::new().margin_horizontal(12.0);
-        assert_eq!(style.inner.margin.left, LengthPercentageAuto::length(12.0));
-        assert_eq!(style.inner.margin.right, LengthPercentageAuto::length(12.0));
+    fn margin_writes_the_block_pair_directly_and_defers_the_inline_pair() {
+        let style = LayoutStyle::new().margin(Margin::symmetric(6.0, 12.0));
+        assert_eq!(style.inner.margin.top, LengthPercentageAuto::length(6.0));
+        assert_eq!(style.inner.margin.bottom, LengthPercentageAuto::length(6.0));
+        assert_eq!(style.logical.margin_start, Some(12.0));
+        assert_eq!(style.logical.margin_end, Some(12.0));
     }
 
+    // What `margin_from_left` exists for: an x already in physical viewport coordinates must not mirror.
     #[test]
-    fn style_margin_top_sets_field() {
-        let style = LayoutStyle::new().margin_top(6.0);
-        assert_eq!(style.inner.margin.top, LengthPercentageAuto::length(6.0));
+    fn a_margin_from_the_left_stays_left_under_rtl() {
+        let style = LayoutStyle::new().margin_from_left(20.0);
+        let ltr = style.resolve(Direction::Ltr);
+        let rtl = style.resolve(Direction::Rtl);
+        assert_eq!(ltr.margin.left, LengthPercentageAuto::length(20.0));
+        assert_eq!(rtl.margin.left, LengthPercentageAuto::length(20.0));
     }
 }

@@ -98,9 +98,7 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         vec![box_item(label_widget)],
     )?
     .styled_by(shell)
-    .on_hover_style(move |_r| {
-        variant_rect(hover_fill.as_ref(), hover_outline.as_ref(), ghost, true)
-    })
+    .hover_style(move |_r| variant_rect(hover_fill.as_ref(), hover_outline.as_ref(), ghost, true))
     .on_hover(move |h| hovered.set(h))
     .control(Role::Button)
     .on_press(on_press);

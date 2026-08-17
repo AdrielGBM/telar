@@ -2012,7 +2012,7 @@ col @card
     }
 
     // `for … key … gap:N` inside a container is a transparent gap fragment (spacing via a per-item margin),
-    // not a boxed list — the gap is threaded to `fragment_gap` as a trailing `f32` arg.
+    // not a boxed list — the gap is the fragment's trailing `f32` arg.
     #[test]
     fn reactive_for_key_and_gap_is_transparent_gap_fragment() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n gap:8\n        text \"x\"\n";
@@ -2020,7 +2020,9 @@ col @card
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("fragment_gap(") && !code.contains("ReactiveList"),
+            code.contains("fragment(")
+                && code.contains("(8) as f32,")
+                && !code.contains("ReactiveList"),
             "a keyed `for … gap:N` in a slot host is a transparent gap fragment, not a boxed list:\n{code}"
         );
         assert!(code.contains("|n| *n"), "key closure preserved:\n{code}");
@@ -2056,7 +2058,7 @@ col @card
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("fragment_positional_gap(") && !code.contains("ReactiveList"),
+            code.contains("fragment_positional(") && !code.contains("ReactiveList"),
             "a keyless `for … gap:N` in a slot host is a transparent positional gap fragment:\n{code}"
         );
         assert!(
@@ -2067,16 +2069,16 @@ col @card
 
     // Outside a slot host — here inside an `overlay`, which takes a plain child vec — a reactive `for … gap:N`
     // can't attach as a transparent fragment, so it falls back to the boxed `ReactiveList` that carries the gap
-    // on its own node (`with_gap` keyed, `positional_with_gap` keyless). This keeps the boxed gap path covered.
+    // on its own node (keyed or positional). This keeps the boxed gap path covered.
     #[test]
-    fn reactive_for_gap_outside_slot_host_falls_back_to_boxed_with_gap() {
+    fn reactive_for_gap_outside_slot_host_falls_back_to_a_boxed_list() {
         let keyed = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\noverlay\n    for n in $items key *n gap:8\n        text \"x\"\n";
         let code = transpile_source(keyed, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("ReactiveList::with_gap(") && code.contains("(8) as f32,"),
-            "a keyed `for … gap` in an overlay falls back to the boxed with_gap list:\n{code}"
+            code.contains("ReactiveList::new(") && code.contains("(8) as f32,"),
+            "a keyed `for … gap` in an overlay falls back to the boxed keyed list:\n{code}"
         );
 
         let keyless = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\noverlay\n    for n in $items gap:8\n        text \"x\"\n";
@@ -2084,8 +2086,8 @@ col @card
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("ReactiveList::positional_with_gap(") && code.contains("(8) as f32,"),
-            "a keyless `for … gap` in an overlay falls back to the boxed positional_with_gap list:\n{code}"
+            code.contains("ReactiveList::positional(") && code.contains("(8) as f32,"),
+            "a keyless `for … gap` in an overlay falls back to the boxed positional list:\n{code}"
         );
     }
 
@@ -2380,7 +2382,7 @@ col @card
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
-        assert!(code.contains(".on_focus_style("), "{code}");
+        assert!(code.contains(".focus_style("), "{code}");
     }
 
     /// And the paint for the state, spelled like the two states beside it.
@@ -2390,7 +2392,7 @@ col @card
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
-        assert!(code.contains(".on_disabled_style("), "{code}");
+        assert!(code.contains(".disabled_style("), "{code}");
     }
 
     /// An `Effect` deregisters on drop, so one bound in `[logic]` used to stop the moment the component

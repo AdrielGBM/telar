@@ -159,8 +159,8 @@ pub fn layout_prop_call(key: &str, value: &str, theme: Option<&str>) -> Option<S
         // Logical edges: resolved to left/right against the active writing direction at layout time, so one build serves LTR and RTL.
         "padding_start" | "pad_start" => format!(".padding_start({})", format_number(value, theme)),
         "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value, theme)),
-        "margin_start" => format!(".margin_start({})", format_number(value, theme)),
-        "margin_end" => format!(".margin_end({})", format_number(value, theme)),
+        "margin_start" => format!(".margin_inline_start({})", format_number(value, theme)),
+        "margin_end" => format!(".margin_inline_end({})", format_number(value, theme)),
         "inset_start" => format!(".inset_start({})", format_number(value, theme)),
         "inset_end" => format!(".inset_end({})", format_number(value, theme)),
         "inset_top" => format!(".inset_top({})", format_number(value, theme)),
@@ -351,7 +351,7 @@ mod tests {
             ("pad_start", ".padding_start(12.0)"),
             ("padding_start", ".padding_start(12.0)"),
             ("pad_end", ".padding_end(12.0)"),
-            ("margin_start", ".margin_start(12.0)"),
+            ("margin_start", ".margin_inline_start(12.0)"),
             ("inset_end", ".inset_end(12.0)"),
         ] {
             assert_eq!(
@@ -380,7 +380,10 @@ mod tests {
             ("pad", ".padding_all(use_theme::<Th>().gutter)"),
             ("gap", ".gap(use_theme::<Th>().gutter)"),
             ("width", ".width(use_theme::<Th>().gutter)"),
-            ("margin_start", ".margin_start(use_theme::<Th>().gutter)"),
+            (
+                "margin_start",
+                ".margin_inline_start(use_theme::<Th>().gutter)",
+            ),
         ] {
             assert_eq!(
                 layout_prop_call(key, "theme.gutter", Some("Th")).as_deref(),

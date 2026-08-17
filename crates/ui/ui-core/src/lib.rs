@@ -44,9 +44,7 @@ mod virtual_list;
 pub use async_asset::{AssetSource, AssetState};
 pub use border::{logical_border_radius, logical_border_widths};
 pub use canvas::Canvas;
-pub use child_host::{
-    ChildSlot, fragment, fragment_gap, fragment_positional, fragment_positional_gap,
-};
+pub use child_host::{ChildSlot, fragment, fragment_positional};
 pub use container::Container;
 pub use context::{
     NodeId, absolute_rect, compute_layout, current_direction, mark_dirty, new_container, new_leaf,

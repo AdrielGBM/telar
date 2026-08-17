@@ -190,7 +190,7 @@ fn build_source_link(
         },
         vec![Box::new(label)],
     )?
-    .on_hover_style(|_r| {
+    .hover_style(|_r| {
         RectStyle::default()
             .with_fill(theme().border)
             .with_radius(BorderRadius::all(8.0))
@@ -354,7 +354,7 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
         vec![Box::new(label)],
     )?
     // Only lifts on hover when there is something to go back to, so the dimmed state stays inert.
-    .on_hover_style(move |_r| {
+    .hover_style(move |_r| {
         nav_rect(false).with_fill(if live(&on_hover) {
             theme().border
         } else {
@@ -406,7 +406,7 @@ fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIte
             move |_r| nav_rect(on_base.active() == i),
             vec![Box::new(label)],
         )?
-        .on_hover_style(move |_r| nav_rect_hover(on_hover.active() == i))
+        .hover_style(move |_r| nav_rect_hover(on_hover.active() == i))
         .on_press(move || on_press.select(i));
         buttons.push(Box::new(btn));
     }
@@ -460,7 +460,7 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
         },
         vec![Box::new(glyph)],
     )?
-    .on_hover_style(|_r| {
+    .hover_style(|_r| {
         RectStyle::default()
             .with_fill(theme().border)
             .with_radius(BorderRadius::all(8.0))

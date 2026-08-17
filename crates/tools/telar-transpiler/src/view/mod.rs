@@ -1058,14 +1058,14 @@ mod tests {
         );
     }
 
-    // A `box` with a `hover(...)` override wires `.on_hover_style(...)`.
+    // A `box` with a `hover(...)` override wires `.hover_style(...)`.
     #[test]
-    fn box_hover_emits_on_hover_style() {
+    fn box_hover_emits_hover_style() {
         let src = "[view]\nbox fill:#101010 hover_style(fill:#f0f0f0 stroke:#ff0000) radius:10\n    text \"x\"\n";
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
-            out.rust_code.contains(".on_hover_style("),
-            "hover(...) should wire on_hover_style:\n{}",
+            out.rust_code.contains(".hover_style("),
+            "hover(...) should wire hover_style:\n{}",
             out.rust_code
         );
     }
@@ -1097,20 +1097,20 @@ mod tests {
             "a col with hover should become a StyledContainer:\n{code}"
         );
         assert!(
-            code.contains(".on_hover_style("),
-            "and wire on_hover_style:\n{code}"
+            code.contains(".hover_style("),
+            "and wire hover_style:\n{code}"
         );
     }
 
-    // A `box` with an `active_style(...)` override wires `.on_active_style(...)` — the pressed-state swap,
+    // A `box` with an `active_style(...)` override wires `.active_style(...)` — the pressed-state swap,
     // symmetric with `hover_style`.
     #[test]
-    fn box_active_style_emits_on_active_style() {
+    fn box_active_style_emits_active_style() {
         let src = "[view]\nbox fill:#101010 active_style(fill:#303030) radius:10\n    text \"x\"\n";
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
-            out.rust_code.contains(".on_active_style("),
-            "active_style(...) should wire on_active_style:\n{}",
+            out.rust_code.contains(".active_style("),
+            "active_style(...) should wire active_style:\n{}",
             out.rust_code
         );
     }
@@ -1122,7 +1122,7 @@ mod tests {
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("StyledContainer::new(") && code.contains(".on_active_style("),
+            code.contains("StyledContainer::new(") && code.contains(".active_style("),
             "a col with only active_style should become a StyledContainer and wire it:\n{code}"
         );
     }
@@ -1479,12 +1479,12 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("fragment_gap(") && !code.contains("ReactiveList"),
+            code.contains("fragment(") && !code.contains("ReactiveList"),
             "a reactive for with gap in a slot host is a transparent gap fragment, not a boxed list:\n{code}"
         );
         assert!(
             code.contains("(6) as f32"),
-            "the gap value is passed to fragment_gap:\n{code}"
+            "the gap value is passed to fragment:\n{code}"
         );
         assert!(
             code.contains("Container::from_slots(") && code.contains("flex_row"),
@@ -1500,7 +1500,7 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("fragment_positional_gap(") && code.contains("(4) as f32"),
+            code.contains("fragment_positional(") && code.contains("(4) as f32"),
             "a keyless reactive for with gap is a positional gap fragment:\n{code}"
         );
     }

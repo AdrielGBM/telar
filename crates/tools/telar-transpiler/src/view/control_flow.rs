@@ -118,6 +118,7 @@ impl ViewGen<'_> {
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    {key_fn},");
         let _ = writeln!(code, "{branches},");
+        let _ = writeln!(code, "{pad}    0.0,");
         let _ = write!(code, "{pad}{closer}");
         match boxed {
             true => ChildEmit::Simple { name: var, code },
@@ -189,6 +190,7 @@ impl ViewGen<'_> {
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    |__cond: &bool| *__cond,");
         let _ = writeln!(code, "{branches},");
+        let _ = writeln!(code, "{pad}    0.0,");
         let _ = write!(code, "{pad}{closer}");
         match boxed {
             true => ChildEmit::Simple { name: var, code },
@@ -327,15 +329,11 @@ impl ViewGen<'_> {
             &[iterable],
             format!("move || {}", substitute_reads(iterable)),
         );
-        let ctor = match (boxed, key_expr.is_some(), gap_expr.is_some()) {
-            (false, true, false) => "fragment",
-            (false, true, true) => "fragment_gap",
-            (false, false, false) => "fragment_positional",
-            (false, false, true) => "fragment_positional_gap",
-            (true, true, false) => "ReactiveList::new",
-            (true, true, true) => "ReactiveList::with_gap",
-            (true, false, false) => "ReactiveList::positional",
-            (true, false, true) => "ReactiveList::positional_with_gap",
+        let ctor = match (boxed, key_expr.is_some()) {
+            (false, true) => "fragment",
+            (false, false) => "fragment_positional",
+            (true, true) => "ReactiveList::new",
+            (true, false) => "ReactiveList::positional",
         };
         let item_builder = self.emit_item_closure(block, pattern, &pad);
         let closer = self.boxed_list_closer(boxed);
@@ -347,8 +345,13 @@ impl ViewGen<'_> {
             let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
         }
         let _ = writeln!(code, "{item_builder},");
-        if let Some(gap_expr) = gap_expr {
-            let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
+        match gap_expr {
+            Some(gap_expr) => {
+                let _ = writeln!(code, "{pad}    ({gap_expr}) as f32,");
+            }
+            None => {
+                let _ = writeln!(code, "{pad}    0.0,");
+            }
         }
         let _ = write!(code, "{pad}{closer}");
         match boxed {

@@ -150,6 +150,7 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
                 trigger_rect.clone(),
             )
         },
+        0.0,
     )?;
 
     // The trigger sits in flow; the bubble node is a 0-size portal placeholder, so it never shifts the trigger.
@@ -288,6 +289,7 @@ fn optional_line(
                 style.clone(),
             )?))
         },
+        0.0,
     )?))
 }
 

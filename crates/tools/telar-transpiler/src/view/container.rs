@@ -90,12 +90,11 @@ impl ViewGen<'_> {
             .is_some_and(|a| !is_closure_value(&a.value));
 
         let pattrs = self.paint_attrs(el);
-        let hover_call = self.state_style_call(el, "hover_style", "on_hover_style", &pattrs);
-        let active_call = self.state_style_call(el, "active_style", "on_active_style", &pattrs);
-        let disabled_call =
-            self.state_style_call(el, "disabled_style", "on_disabled_style", &pattrs);
+        let hover_call = self.state_style_call(el, "hover_style", "hover_style", &pattrs);
+        let active_call = self.state_style_call(el, "active_style", "active_style", &pattrs);
+        let disabled_call = self.state_style_call(el, "disabled_style", "disabled_style", &pattrs);
         let disabled = self.disabled_call(el);
-        let focus_ring = self.state_style_call(el, "focus_style", "on_focus_style", &[]);
+        let focus_ring = self.state_style_call(el, "focus_style", "focus_style", &[]);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_pointer_move = self.closure_attr_call(el, "on_pointer_move", "on_pointer_move");
         let on_key = self.closure_attr_call(el, "on_key", "on_key");

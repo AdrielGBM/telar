@@ -61,24 +61,7 @@ impl ReactiveList {
     /// `source` reads the reactive item collection; `key` extracts a stable identity per item; `build`
     /// constructs one widget per item, creating its nodes against the live (thread-local) layout tree
     /// from inside the reconcile effect.
-    pub fn new<Item, Key, S, K, B>(source: S, key: K, build: B) -> Result<Self, LayoutError>
-    where
-        Key: Hash + 'static,
-        Item: 'static,
-        S: Fn() -> Vec<Item> + 'static,
-        K: Fn(&Item) -> Key + 'static,
-        B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
-    {
-        Self::build(
-            LayoutStyle::new().flex_column(),
-            source,
-            build,
-            move |item: &Item, _idx: usize| hash_key(&key(item)),
-        )
-    }
-
-    /// Same as `new`, but with a `gap` (px) laid out between item containers — `for … key … gap:N` in `.rsx`.
-    pub fn with_gap<Item, Key, S, K, B>(
+    pub fn new<Item, Key, S, K, B>(
         source: S,
         key: K,
         build: B,
@@ -127,26 +110,7 @@ impl ReactiveList {
     /// item at index `i` always reuses the node previously at index `i`, so an append/truncate reuses every
     /// surviving node cheaply, but a reorder rebuilds rather than moving nodes (no per-item identity without
     /// a key).
-    pub fn positional<Item, S, B>(source: S, build: B) -> Result<Self, LayoutError>
-    where
-        Item: 'static,
-        S: Fn() -> Vec<Item> + 'static,
-        B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
-    {
-        Self::build(
-            LayoutStyle::new().flex_column(),
-            source,
-            build,
-            |_item: &Item, idx: usize| idx as u64,
-        )
-    }
-
-    /// `positional` with an item gap — `for item in $items gap:N` (no `key`).
-    pub fn positional_with_gap<Item, S, B>(
-        source: S,
-        build: B,
-        gap: f32,
-    ) -> Result<Self, LayoutError>
+    pub fn positional<Item, S, B>(source: S, build: B, gap: f32) -> Result<Self, LayoutError>
     where
         Item: 'static,
         S: Fn() -> Vec<Item> + 'static,
@@ -371,7 +335,7 @@ mod tests {
         reset_layout_runtime();
         let items = signal(vec![1, 2, 3]);
         let src = items.clone();
-        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf()).unwrap();
+        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 0.0).unwrap();
         assert_eq!(list.state.borrow().children.len(), 3);
     }
 
@@ -381,7 +345,7 @@ mod tests {
         reset_layout_runtime();
         let items = signal(vec![1, 2, 3]);
         let src = items.clone();
-        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf()).unwrap();
+        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 0.0).unwrap();
         let v1: Vec<NodeId> = list
             .state
             .borrow()
@@ -411,7 +375,7 @@ mod tests {
         reset_layout_runtime();
         let items = signal(vec![1i32, 2]);
         let src = items.clone();
-        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf()).unwrap();
+        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 0.0).unwrap();
         let list_node = list.layout_node();
         compute_layout(
             list_node,
@@ -448,7 +412,7 @@ mod tests {
         reset_layout_runtime();
         let items = signal(vec![1, 2]);
         let src = items.clone();
-        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf()).unwrap();
+        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 0.0).unwrap();
         let v1: Vec<NodeId> = list
             .state
             .borrow()
@@ -475,8 +439,7 @@ mod tests {
         reset_layout_runtime();
         let items = signal(vec![1i32, 2]);
         let src = items.clone();
-        let list =
-            ReactiveList::with_gap(move || src.get(), |n: &i32| *n, |_| leaf(), 8.0).unwrap();
+        let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 8.0).unwrap();
         let list_node = list.layout_node();
         compute_layout(
             list_node,
@@ -502,7 +465,7 @@ mod tests {
         reset_layout_runtime();
         let items = signal(vec![1, 2]);
         let src = items.clone();
-        let list = ReactiveList::positional(move || src.get(), |_| leaf()).unwrap();
+        let list = ReactiveList::positional(move || src.get(), |_| leaf(), 0.0).unwrap();
         let v1: Vec<NodeId> = list
             .state
             .borrow()

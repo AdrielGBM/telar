@@ -56,27 +56,11 @@ pub struct FragmentSpec {
     gap: f32,
 }
 
-/// A keyed reactive region — `for item in $items key <expr>` (identity-stable reconciliation).
-pub fn fragment<Item, Key, S, K, B>(source: S, key: K, build: B) -> ChildSlot
-where
-    Key: Hash + 'static,
-    Item: 'static,
-    S: Fn() -> Vec<Item> + 'static,
-    K: Fn(&Item) -> Key + 'static,
-    B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
-{
-    make_fragment(
-        source,
-        move |item: &Item, _idx: usize| hash_key(&key(item)),
-        build,
-        0.0,
-    )
-}
-
-/// A keyed reactive region with per-item spacing — `for item in $items key <expr> gap:N`. The gap is laid
-/// out as a main-axis leading margin between consecutive items (see [`reconcile_slot`]), so the region
-/// still flows transparently in the host's direction (horizontal in a `row`) instead of a boxed list.
-pub fn fragment_gap<Item, Key, S, K, B>(source: S, key: K, build: B, gap: f32) -> ChildSlot
+/// A keyed reactive region — `for item in $items key <expr>` (identity-stable reconciliation). `gap` is laid
+/// out as a main-axis leading margin between consecutive items (see [`reconcile_slot`]), so the region still
+/// flows transparently in the host's direction (horizontal in a `row`) instead of becoming a boxed list; pass
+/// `0.0` for none.
+pub fn fragment<Item, Key, S, K, B>(source: S, key: K, build: B, gap: f32) -> ChildSlot
 where
     Key: Hash + 'static,
     Item: 'static,
@@ -92,18 +76,8 @@ where
     )
 }
 
-/// A keyless reactive region — `for item in $items` (reconciles by position).
-pub fn fragment_positional<Item, S, B>(source: S, build: B) -> ChildSlot
-where
-    Item: 'static,
-    S: Fn() -> Vec<Item> + 'static,
-    B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
-{
-    make_fragment(source, |_item: &Item, idx: usize| idx as u64, build, 0.0)
-}
-
-/// A keyless reactive region with per-item spacing — `for item in $items gap:N` (reconciles by position).
-pub fn fragment_positional_gap<Item, S, B>(source: S, build: B, gap: f32) -> ChildSlot
+/// A keyless reactive region — `for item in $items` (reconciles by position). `gap` as in [`fragment`].
+pub fn fragment_positional<Item, S, B>(source: S, build: B, gap: f32) -> ChildSlot
 where
     Item: 'static,
     S: Fn() -> Vec<Item> + 'static,
@@ -368,7 +342,7 @@ mod tests {
             LayoutStyle::new().flex_row(),
             vec![
                 ChildSlot::stat(leaf10()),
-                fragment(move || src.get(), |n: &u32| *n, |_n| Ok(leaf10())),
+                fragment(move || src.get(), |n: &u32| *n, |_n| Ok(leaf10()), 0.0),
                 ChildSlot::stat(leaf10()),
             ],
         )
@@ -399,7 +373,12 @@ mod tests {
         let src = items.clone();
         let container = Container::from_slots(
             LayoutStyle::new().flex_row(),
-            vec![fragment(move || src.get(), |n: &u32| *n, |_n| Ok(leaf10()))],
+            vec![fragment(
+                move || src.get(),
+                |n: &u32| *n,
+                |_n| Ok(leaf10()),
+                0.0,
+            )],
         )
         .unwrap();
         assert_eq!(group_len(&container.view()), 3);
@@ -434,6 +413,7 @@ mod tests {
                         sink.borrow_mut().push(node);
                         Ok(item)
                     },
+                    0.0,
                 ),
                 ChildSlot::stat(static1),
             ],
@@ -485,7 +465,7 @@ mod tests {
             LayoutStyle::new()
                 .flex_row()
                 .align_items(AlignItems::CENTER),
-            vec![fragment_gap(
+            vec![fragment(
                 move || src.get(),
                 |id: &i32| *id as u64,
                 move |id| {
@@ -567,7 +547,7 @@ mod tests {
             LayoutStyle::new()
                 .flex_row()
                 .align_items(AlignItems::STRETCH),
-            vec![fragment_gap(
+            vec![fragment(
                 move || src.get(),
                 |id: &i32| *id as u64,
                 move |_id| {
@@ -631,7 +611,7 @@ mod tests {
         let src = items.clone();
         let container = Container::from_slots(
             LayoutStyle::new().flex_row(),
-            vec![fragment_gap(
+            vec![fragment(
                 move || src.get(),
                 |n: &u32| *n,
                 move |_n| {
@@ -677,7 +657,7 @@ mod tests {
         let src = items.clone();
         let container = Container::from_slots(
             LayoutStyle::new().flex_row(),
-            vec![fragment_gap(
+            vec![fragment(
                 move || src.get(),
                 |n: &u32| *n,
                 move |_n| {

@@ -62,8 +62,8 @@ pub use dev_plugin::{DevAction, DevPlugin};
 pub use geometry_core::{ObjectFit, Point, Rect, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
-    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, SizeDimension,
-    TemplateTrack,
+    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, Margin,
+    SizeDimension, TemplateTrack,
 };
 #[cfg(feature = "plugin")]
 pub use plugin::EmbeddedApp;
@@ -155,12 +155,12 @@ pub use ui_core::{
     Slots, StyledContainer, SurfaceRoot, SurfaceScaffold, SurfaceTransition, Text, TextArea,
     VirtualList, anchor_rect, box_item, box_transform, close_overlay, compute_layout,
     current_direction, dismiss_depth, dismiss_top, drag_start, drag_travel, focus, fragment,
-    fragment_gap, fragment_positional, fragment_positional_gap, interactive_rects, kept, key_held,
-    key_pressed, logical_border_radius, logical_border_widths, mark_dirty, modifiers,
-    new_container, new_leaf, observe_keyboard, observe_pointer, open_overlay, overlay_state,
-    pointer_buttons, relayout_if_dirty, remove_node, reset_layout_runtime, set_children,
-    set_direction, set_display, set_min_height, set_overlay_host, track_layout, transform_pointer,
-    use_context, use_direction, use_dismiss_depth, visible_window,
+    fragment_positional, interactive_rects, kept, key_held, key_pressed, logical_border_radius,
+    logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
+    observe_pointer, open_overlay, overlay_state, pointer_buttons, relayout_if_dirty, remove_node,
+    reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
+    set_overlay_host, track_layout, transform_pointer, use_context, use_direction,
+    use_dismiss_depth, visible_window,
 };
 
 #[cfg(feature = "navigate")]

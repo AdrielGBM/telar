@@ -169,6 +169,7 @@ pub(crate) fn scrim_overlay(
                 _focus: focus_handover,
             }))
         },
+        0.0,
     )?;
     Ok(box_item(list))
 }

@@ -311,8 +311,8 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                     .flex_column()
                     .width(width)
                     .padding_all(panel_pad())
-                    .margin_left(left)
-                    .margin_top(below)
+                    .margin_from_left(left)
+                    .margin_block_start(below)
             };
             let panel = StyledContainer::new(sheet(), |_r| panel_rect_style(), row_items)?
                 .styled_by(sheet)
@@ -333,6 +333,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?;
             Ok(box_item(overlay))
         },
+        0.0,
     )?;
 
     // On the dismiss stack while up, so Escape and the platform Back gesture reach it in the order the user opened things — a menu over a dialog closes the menu first.

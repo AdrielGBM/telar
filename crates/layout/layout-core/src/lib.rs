@@ -7,5 +7,5 @@ mod track;
 pub use direction::Direction;
 pub use engine::{LayoutEngine, MeasureFn, NodeId};
 pub use error::LayoutError;
-pub use style::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle, SizeDimension};
+pub use style::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle, Margin, SizeDimension};
 pub use track::TemplateTrack;

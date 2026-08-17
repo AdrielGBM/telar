@@ -41,7 +41,7 @@ struct StateStyle {
     is_active: RwSignal<bool>,
     // Swapped in ahead of every other state: a control that cannot be used must not also look pressable.
     disabled: Option<Box<dyn Fn(Rect) -> RectStyle>>,
-    // Laid *over* whichever state won, not instead of it — see `on_focus_style`.
+    // Laid *over* whichever state won, not instead of it — see `focus_style`.
     focus: Option<Box<dyn Fn(Rect) -> RectStyle>>,
 }
 
@@ -239,22 +239,22 @@ impl StyledContainer {
 
     /// Paint the box with `f` while the mouse hovers it (a declarative style swap, like `Button`).
     /// Hover is mouse-only; touch never sets it, so a tap leaves no stuck hover state.
-    pub fn on_hover_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+    pub fn hover_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         self.state.hover = Some(Box::new(f));
         self
     }
 
     /// Paint the box with `f` while a primary pointer is held down inside it — the pressed / CSS `:active`
-    /// state, which takes precedence over `on_hover_style`. Unlike hover it tracks touch as well as mouse,
+    /// state, which takes precedence over `hover_style`. Unlike hover it tracks touch as well as mouse,
     /// and it clears on release, on leaving the box, or once the press drags off, so it never sticks.
-    pub fn on_active_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+    pub fn active_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         self.state.active = Some(Box::new(f));
         self
     }
 
     /// Marks the box unusable while `f` reads true: it stops taking the pointer, stops tracking hover and
     /// the pressed state, stops showing its [`cursor`](Self::cursor), and paints its
-    /// [`on_disabled_style`](Self::on_disabled_style) ahead of every other state.
+    /// [`disabled_style`](Self::disabled_style) ahead of every other state.
     ///
     /// Closed here rather than left to each widget because the web never asks anyone to write it: `disabled`
     /// is platform semantics that a selector and the hit-tester read for free, and a catalogue that made every
@@ -278,7 +278,7 @@ impl StyledContainer {
     }
 
     /// The paint for the disabled state, which wins over the pressed and hover ones.
-    pub fn on_disabled_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+    pub fn disabled_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         self.state.disabled = Some(Box::new(f));
         self
     }
@@ -304,7 +304,7 @@ impl StyledContainer {
     /// It joins the tab order at this node, answers Enter and Space the way it answers a tap, draws the
     /// theme's focus ring while the keyboard is what reached it (see
     /// [`focus::is_focus_visible`](crate::focus::is_focus_visible)), and reports `role` outwards. A caller
-    /// that wants a ring of its own still says so with [`on_focus_style`](Self::on_focus_style); this only
+    /// that wants a ring of its own still says so with [`focus_style`](Self::focus_style); this only
     /// supplies one when nothing else has.
     ///
     /// Deliberately not implied by [`on_press`](Self::on_press): a scrim, a click-away backdrop and a drag
@@ -332,7 +332,7 @@ impl StyledContainer {
         self
     }
 
-    pub fn on_focus_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+    pub fn focus_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         // Declaring a ring is declaring the box focusable, or it would join no tab order and the ring would be a style nothing could satisfy.
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_at(id, focus::FocusKind::Widget, self.node);
@@ -544,7 +544,7 @@ impl StyledContainer {
     }
 
     /// Fire `f(true)` when the mouse enters the box and `f(false)` when it leaves (mouse only). Independent
-    /// of `on_hover_style`: a box can observe hover without swapping its paint.
+    /// of `hover_style`: a box can observe hover without swapping its paint.
     ///
     /// Registers the box as a pointer target, like [`on_scroll`](Self::on_scroll) does for the same reason: a
     /// surface that carves its input region from its content (a click-through overlay) never receives a move
@@ -1777,8 +1777,8 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_hover_style(move |_r| RectStyle::default().with_fill(hover_fill))
-        .on_focus_style(move |_r| RectStyle {
+        .hover_style(move |_r| RectStyle::default().with_fill(hover_fill))
+        .focus_style(move |_r| RectStyle {
             stroke: Some(ring),
             ..RectStyle::default()
         });
@@ -1820,7 +1820,7 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_focus_style(move |_r| RectStyle {
+        .focus_style(move |_r| RectStyle {
             stroke: Some(ring),
             ..RectStyle::default()
         });
@@ -1863,7 +1863,7 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
+        .hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
         .on_press(move || sink.set(sink.get() + 1))
         .disabled(move || !flag.get());
         compute_layout(
@@ -2025,7 +2025,7 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
+        .hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
         .disabled(move || !flag.get());
         compute_layout(
             card.layout_node(),
@@ -2064,9 +2064,9 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
-        .on_active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.7, 0.7, 0.7, 1.0)))
-        .on_disabled_style(move |_r| RectStyle::default().with_fill(off))
+        .hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)))
+        .active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.7, 0.7, 0.7, 1.0)))
+        .disabled_style(move |_r| RectStyle::default().with_fill(off))
         .disabled(|| true);
         compute_layout(
             card.layout_node(),
@@ -2128,7 +2128,7 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)));
+        .hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)));
         compute_layout(
             card.layout_node(),
             AvailableSpace::Definite(200.0),
@@ -2167,7 +2167,7 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)));
+        .hover_style(|_r| RectStyle::default().with_fill(Color::rgba(0.9, 0.9, 0.9, 1.0)));
         compute_layout(
             card.layout_node(),
             AvailableSpace::Definite(200.0),
@@ -2198,7 +2198,7 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.5, 0.5, 0.5, 1.0)));
+        .active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.5, 0.5, 0.5, 1.0)));
         compute_layout(
             card.layout_node(),
             AvailableSpace::Definite(200.0),
@@ -2234,8 +2234,8 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_hover_style(move |_r| RectStyle::default().with_fill(hover))
-        .on_active_style(move |_r| RectStyle::default().with_fill(active));
+        .hover_style(move |_r| RectStyle::default().with_fill(hover))
+        .active_style(move |_r| RectStyle::default().with_fill(active));
         compute_layout(
             card.layout_node(),
             AvailableSpace::Definite(200.0),
@@ -2277,7 +2277,7 @@ mod tests {
             vec![],
         )
         .unwrap()
-        .on_active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.5, 0.5, 0.5, 1.0)));
+        .active_style(|_r| RectStyle::default().with_fill(Color::rgba(0.5, 0.5, 0.5, 1.0)));
         compute_layout(
             card.layout_node(),
             AvailableSpace::Definite(200.0),

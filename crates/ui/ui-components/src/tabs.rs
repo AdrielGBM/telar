@@ -87,7 +87,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             vec![box_item(label_widget)],
         )?
         .styled_by(tab_box)
-        .on_hover_style(move |_r| tab_rect(hover_selected.get() == idx, hover_color.as_ref(), true))
+        .hover_style(move |_r| tab_rect(hover_selected.get() == idx, hover_color.as_ref(), true))
         .control(Role::Tab)
         .on_press(move || press_selected.set(idx));
         tab_items.push(box_item(tab));

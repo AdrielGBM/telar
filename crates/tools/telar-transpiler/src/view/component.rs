@@ -384,10 +384,7 @@ impl ViewGen<'_> {
                 }
             })
         });
-        let _ = writeln!(
-            code,
-            "{pad}for __c in __children {{ __slots.push(None, __c); }}"
-        );
+        let _ = writeln!(code, "{pad}__slots.extend_default(__children);");
         "__slots".to_string()
     }
 
