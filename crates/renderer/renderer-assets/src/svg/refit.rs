@@ -11,7 +11,7 @@ use renderer_core::{
 ///
 /// The baked list lives in intrinsic viewBox space with original colors; here it is scaled/translated into widget space and, when `tint` is set, recolored exactly as the dynamic path would. `sx == sy` for `contain`/`cover` (uniform); `object-fit: fill` passes `sx != sy` to stretch to the box.
 pub(super) fn refit_vector(
-    baked: &[DrawCommand],
+    baked: &[super::VectorCommand],
     sx: f32,
     sy: f32,
     dx: f32,
@@ -20,7 +20,7 @@ pub(super) fn refit_vector(
 ) -> Vec<DrawCommand> {
     baked
         .iter()
-        .map(|cmd| refit_command(cmd, sx, sy, dx, dy, tint))
+        .map(|cmd| refit_command(&cmd.to_draw(), sx, sy, dx, dy, tint))
         .collect()
 }
 

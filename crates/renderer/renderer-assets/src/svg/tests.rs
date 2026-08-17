@@ -200,6 +200,24 @@ fn commands_for_is_memoized() {
     );
 }
 
+// The three walks over a baked vector list — the hasher, the re-fitter and the baker's serializer — each answered differently when handed a command outside the set: one panicked, one cloned it through behind a debug assertion, one hashed a marker byte. `VectorCommand` is the set, so there is no fourth case to disagree about and `from_baked_vector` cannot be handed one.
+#[test]
+fn a_baked_vector_list_round_trips_through_every_walk() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#00ff00"/></svg>"##;
+    let baked = SvgData::from_str(svg).unwrap();
+    let source = super::bake_to_source(svg).unwrap();
+    assert!(source.contains("VectorCommand::Path"), "{source}");
+
+    let commands = baked.commands_for(20.0, 20.0, None, None, ObjectFit::Contain);
+    assert!(
+        commands.iter().all(|c| matches!(
+            c,
+            DrawCommand::Path { .. } | DrawCommand::PushLayer { .. } | DrawCommand::PopLayer
+        )),
+        "a vector list re-fits to exactly the commands it is made of"
+    );
+}
+
 #[test]
 fn id_is_stable_across_instances() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10"/></svg>"##;

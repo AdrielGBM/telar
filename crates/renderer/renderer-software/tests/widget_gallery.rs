@@ -269,5 +269,15 @@ fn select_open_renders() {
         .render_frame(&tree.commands(), Some(Color::from_rgb_u8(244, 245, 248)))
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap");
+    // The one thing this test can say that select.rs's unit tests cannot: an open panel is an *overlay*, composed from a different layer than the trigger, and its rows have to survive that trip to the pixels. Without an assertion it only proved the render did not panic.
+    let panel_rows = rgba
+        .chunks_exact(4)
+        .skip((w as usize) * 90 * 1)
+        .filter(|px| px[0] != 244)
+        .count();
+    assert!(
+        panel_rows > 0,
+        "expected the open panel's rows to draw below the trigger"
+    );
     common::save_png_if_requested("TELAR_SELECT_OUT", w, h, &rgba);
 }

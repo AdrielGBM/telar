@@ -4,13 +4,13 @@ use usvg::tiny_skia_path::Transform as SkiaTransform;
 
 use crate::image::byte_string_literal;
 use renderer_core::{
-    Color, DrawCommand, FillRule, Gradient, GradientKind, ImageData, LineCap, LineJoin, Paint,
-    PathData, PathStyle, PathVerb, Stroke,
+    Color, FillRule, Gradient, GradientKind, ImageData, LineCap, LineJoin, Paint, PathData,
+    PathStyle, PathVerb, Stroke,
 };
 
 use super::raster::raster_px;
 use super::vector::convert_group;
-use super::{BakedSvg, SvgError, Unsupported};
+use super::{BakedSvg, SvgError, Unsupported, VectorCommand};
 
 /// Parses `content` and converts it to a `BakedSvg`: a vector display list when every feature has a primitive, otherwise the whole document rasterized. Shared by `bake_to_source` and the equivalence tests.
 pub(crate) fn bake(content: &str) -> Result<((f32, f32), BakedSvg), SvgError> {
@@ -83,24 +83,22 @@ fn serialize(size: (f32, f32), baked: &BakedSvg) -> String {
     }
 }
 
-fn ser_command(cmd: &DrawCommand) -> String {
+fn ser_command(cmd: &VectorCommand) -> String {
     match cmd {
-        DrawCommand::Path { data, style } => format!(
-            "DrawCommand::Path {{ data: std::sync::Arc::new({}), style: std::sync::Arc::new({}) }}",
+        VectorCommand::Path { data, style } => format!(
+            "VectorCommand::Path {{ data: std::sync::Arc::new({}), style: std::sync::Arc::new({}) }}",
             ser_path_data(data),
             ser_path_style(style),
         ),
-        DrawCommand::PushLayer {
+        VectorCommand::PushLayer {
             opacity,
             backdrop_blur,
         } => format!(
-            "DrawCommand::PushLayer {{ opacity: {}, backdrop_blur: {} }}",
+            "VectorCommand::PushLayer {{ opacity: {}, backdrop_blur: {} }}",
             fmt_f32(*opacity),
             fmt_f32(*backdrop_blur),
         ),
-        DrawCommand::PopLayer => "DrawCommand::PopLayer".to_string(),
-        // `convert_group` only ever emits Path / PushLayer / PopLayer into a baked vector list.
-        _ => unreachable!("baked vector list contains only Path/PushLayer/PopLayer"),
+        VectorCommand::PopLayer => "VectorCommand::PopLayer".to_string(),
     }
 }
 

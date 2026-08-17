@@ -3,10 +3,10 @@ use geometry_core::Point;
 use usvg::tiny_skia_path::{Point as SkiaPoint, Transform as SkiaTransform};
 
 use renderer_core::{
-    Color, DrawCommand, FillRule, Gradient, LineCap, LineJoin, Paint, PathData, PathStyle, Stroke,
+    Color, FillRule, Gradient, LineCap, LineJoin, Paint, PathData, PathStyle, Stroke,
 };
 
-use super::Unsupported;
+use super::{Unsupported, VectorCommand};
 use std::sync::Arc;
 
 pub(super) fn convert_group(
@@ -14,7 +14,7 @@ pub(super) fn convert_group(
     fit_ts: SkiaTransform,
     tint: Option<Color>,
     stroke_override: Option<f32>,
-    out: &mut Vec<DrawCommand>,
+    out: &mut Vec<VectorCommand>,
 ) -> Result<(), Unsupported> {
     // Compositing we cannot express as a plain opacity layer forces the whole SVG to the raster fallback.
     if group.clip_path().is_some()
@@ -28,7 +28,7 @@ pub(super) fn convert_group(
     let opacity = group.opacity().get();
     let layered = opacity < 1.0;
     if layered {
-        out.push(DrawCommand::PushLayer {
+        out.push(VectorCommand::PushLayer {
             opacity,
             backdrop_blur: 0.0,
         });
@@ -47,7 +47,7 @@ pub(super) fn convert_group(
     }
 
     if layered {
-        out.push(DrawCommand::PopLayer);
+        out.push(VectorCommand::PopLayer);
     }
     Ok(())
 }
@@ -57,7 +57,7 @@ fn convert_path(
     fit_ts: SkiaTransform,
     tint: Option<Color>,
     stroke_override: Option<f32>,
-    out: &mut Vec<DrawCommand>,
+    out: &mut Vec<VectorCommand>,
 ) -> Result<(), Unsupported> {
     if !path.is_visible() {
         return Ok(());
@@ -112,7 +112,7 @@ fn convert_path(
         });
     }
 
-    out.push(DrawCommand::Path {
+    out.push(VectorCommand::Path {
         data: Arc::new(data),
         style: Arc::new(style),
     });

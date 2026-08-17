@@ -9,4 +9,4 @@ mod svg;
 pub use image::{ImageError, bake_image_to_source, decode};
 #[cfg(feature = "dynamic-svg")]
 pub use svg::bake_to_source;
-pub use svg::{SvgData, SvgError};
+pub use svg::{SvgData, SvgError, VectorCommand};

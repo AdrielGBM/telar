@@ -14,7 +14,9 @@ use std::sync::{Arc, Mutex};
 use geometry_core::{ObjectFit, Point};
 use rustc_hash::{FxHashMap, FxHasher};
 
-use renderer_core::{Color, DrawCommand, ImageData, PathVerb, hash_path_style};
+use renderer_core::{
+    Color, DrawCommand, ImageData, PathData, PathStyle, PathVerb, hash_path_style,
+};
 
 #[cfg(feature = "dynamic-svg")]
 use usvg::tiny_skia_path::Transform as SkiaTransform;
@@ -50,9 +52,50 @@ enum SvgSource {
 }
 
 /// A pre-converted SVG in intrinsic viewBox space, with original colors and no letterbox fit applied.
+/// One command of a baked vector list: exactly the three shapes `vector::convert_group` produces, and no
+/// others.
+///
+/// A `Vec<DrawCommand>` said the same thing in a comment, and three walkers over it each answered a
+/// different way when handed something else — one panicked, one cloned it through with a debug assertion,
+/// one hashed a marker byte — while the public constructor accepted any command at all. Narrowing the type
+/// deletes the question: every walk is exhaustive and there is no unexpected command to disagree about.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VectorCommand {
+    Path {
+        data: Arc<PathData>,
+        style: Arc<PathStyle>,
+    },
+    PushLayer {
+        opacity: f32,
+        backdrop_blur: f32,
+    },
+    PopLayer,
+}
+
+impl VectorCommand {
+    /// The renderer's own command for this one. Total in this direction — every vector command is a draw
+    /// command, which is why the narrowing costs nothing at the point of use.
+    pub(crate) fn to_draw(&self) -> DrawCommand {
+        match self {
+            VectorCommand::Path { data, style } => DrawCommand::Path {
+                data: Arc::clone(data),
+                style: Arc::clone(style),
+            },
+            VectorCommand::PushLayer {
+                opacity,
+                backdrop_blur,
+            } => DrawCommand::PushLayer {
+                opacity: *opacity,
+                backdrop_blur: *backdrop_blur,
+            },
+            VectorCommand::PopLayer => DrawCommand::PopLayer,
+        }
+    }
+}
+
 pub(crate) enum BakedSvg {
     // Paths plus PushLayer/PopLayer, exactly what `vector::convert_group` produces under an identity transform.
-    Vector(Vec<DrawCommand>),
+    Vector(Vec<VectorCommand>),
     // The whole SVG pre-rasterized (the fallback for unsupported features), at its own resolution.
     Raster {
         image: Arc<ImageData>,
@@ -89,7 +132,7 @@ impl SvgData {
     }
 
     /// A pre-baked vector display list (paths plus PushLayer/PopLayer) in intrinsic viewBox space, with original colors and no fit applied. `commands_for` re-fits it into widget space.
-    pub fn from_baked_vector(intrinsic: (f32, f32), commands: Vec<DrawCommand>) -> Self {
+    pub fn from_baked_vector(intrinsic: (f32, f32), commands: Vec<VectorCommand>) -> Self {
         Self::from_baked(intrinsic, BakedSvg::Vector(commands))
     }
 
@@ -182,7 +225,7 @@ impl SvgData {
                 let fit_ts = SkiaTransform::from_row(sx, 0.0, 0.0, sy, offset_x, offset_y);
                 let mut out = Vec::new();
                 match convert_group(tree.root(), fit_ts, tint, stroke, &mut out) {
-                    Ok(()) => out,
+                    Ok(()) => out.iter().map(VectorCommand::to_draw).collect(),
                     Err(Unsupported) => raster::raster_fallback(
                         tree, self.size, fitted_w, fitted_h, offset_x, offset_y, tint,
                     ),
@@ -251,16 +294,16 @@ fn hash_baked(intrinsic: (f32, f32), baked: &BakedSvg) -> u64 {
     h.finish()
 }
 
-fn hash_command<H: Hasher>(cmd: &DrawCommand, h: &mut H) {
+fn hash_command<H: Hasher>(cmd: &VectorCommand, h: &mut H) {
     match cmd {
-        DrawCommand::Path { data, style } => {
+        VectorCommand::Path { data, style } => {
             0u8.hash(h);
             for v in data.verbs() {
                 hash_verb(v, h);
             }
             hash_path_style(style).hash(h);
         }
-        DrawCommand::PushLayer {
+        VectorCommand::PushLayer {
             opacity,
             backdrop_blur,
         } => {
@@ -268,9 +311,7 @@ fn hash_command<H: Hasher>(cmd: &DrawCommand, h: &mut H) {
             opacity.to_bits().hash(h);
             backdrop_blur.to_bits().hash(h);
         }
-        DrawCommand::PopLayer => 2u8.hash(h),
-        // A baked vector list contains only the above; a marker keeps the hash defined for anything unexpected.
-        _ => 255u8.hash(h),
+        VectorCommand::PopLayer => 2u8.hash(h),
     }
 }
 

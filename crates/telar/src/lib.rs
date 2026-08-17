@@ -113,7 +113,7 @@ pub use reactive_core::{
 #[cfg(all(feature = "runtime", feature = "dynamic-image"))]
 pub use renderer_assets::{ImageError, decode};
 #[cfg(all(feature = "runtime", feature = "svg"))]
-pub use renderer_assets::{SvgData, SvgError};
+pub use renderer_assets::{SvgData, SvgError, VectorCommand};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, BorderWidths, Color, DrawCommand, DrawState, FillRule, GlyphRaster, Gradient,

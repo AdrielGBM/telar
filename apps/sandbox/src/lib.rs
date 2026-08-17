@@ -62,27 +62,18 @@ mod smoke {
     /// The horizontal center of the widest sidebar-sized rect — the nav rail's own background.
     fn nav_rail_center_x(tree: &telar::ComponentList) -> f32 {
         let cmds = tree.commands();
-        let mut tx = vec![0.0f32];
         let mut widest: Option<(f32, f32)> = None;
-        for c in cmds.iter() {
-            match c {
-                telar::DrawCommand::PushMatrix { matrix } => {
-                    tx.push(tx.last().unwrap() + matrix[4])
+        telar::for_each_with_matrix(&cmds, |c, m| {
+            if let telar::DrawCommand::Rect { rect, .. } = c
+                && rect.height > 700.0
+                && rect.width < 400.0
+            {
+                let cx = m[4] + rect.x + rect.width / 2.0;
+                if widest.is_none_or(|(w, _)| rect.width > w) {
+                    widest = Some((rect.width, cx));
                 }
-                telar::DrawCommand::PopMatrix => {
-                    tx.pop();
-                }
-                telar::DrawCommand::Rect { rect, .. } => {
-                    if rect.height > 700.0 && rect.width < 400.0 {
-                        let cx = tx.last().unwrap() + rect.x + rect.width / 2.0;
-                        if widest.is_none_or(|(w, _)| rect.width > w) {
-                            widest = Some((rect.width, cx));
-                        }
-                    }
-                }
-                _ => {}
             }
-        }
+        });
         widest
             .expect("the desktop shell draws a full-height sidebar")
             .1
@@ -172,31 +163,20 @@ mod smoke {
                 keep: impl Fn(f32, f32) -> bool,
             ) -> Vec<(f32, f32, telar::Color)> {
                 let cmds = tree.commands();
-                let (mut tx, mut ty) = (vec![0.0f32], vec![0.0f32]);
                 let mut out = Vec::new();
-                for c in cmds.iter() {
-                    match c {
-                        telar::DrawCommand::PushMatrix { matrix } => {
-                            tx.push(tx.last().unwrap() + matrix[4]);
-                            ty.push(ty.last().unwrap() + matrix[5]);
+                telar::for_each_with_matrix(&cmds, |c, m| {
+                    if let telar::DrawCommand::Rect { rect, style } = c {
+                        let cy = m[5] + rect.y + rect.height / 2.0;
+                        // Button-shaped: tall enough to be a control, short enough not to be the panel behind them. Deliberately loose — the exact height is padding plus a line box, and the line box moves with the face the machine resolves.
+                        if (18.0..45.0).contains(&rect.height)
+                            && keep(rect.width, cy)
+                            && let Some(p) = style.fill.as_ref()
+                        {
+                            let cx = m[4] + rect.x + rect.width / 2.0;
+                            out.push((cx, cy, p.solid_color()));
                         }
-                        telar::DrawCommand::PopMatrix => {
-                            tx.pop();
-                            ty.pop();
-                        }
-                        telar::DrawCommand::Rect { rect, style } => {
-                            let cy = ty.last().unwrap() + rect.y + rect.height / 2.0;
-                            // Button-shaped: tall enough to be a control, short enough not to be the panel behind them. Deliberately loose — the exact height is padding plus a line box, and the line box moves with the face the machine resolves.
-                            if (18.0..45.0).contains(&rect.height) && keep(rect.width, cy) {
-                                if let Some(p) = style.fill.as_ref() {
-                                    let cx = tx.last().unwrap() + rect.x + rect.width / 2.0;
-                                    out.push((cx, cy, p.solid_color()));
-                                }
-                            }
-                        }
-                        _ => {}
                     }
-                }
+                });
                 out
             }
 
@@ -319,29 +299,19 @@ mod smoke {
         // y-coordinates of primary-blue, nav-button-width (~208px) rects, composed through the matrix stack.
         fn active_nav_ys(tree: &telar::ComponentList) -> Vec<i32> {
             let cmds = tree.commands();
-            let mut ty = vec![0.0f32];
             let mut ys = Vec::new();
-            for c in cmds.iter() {
-                match c {
-                    telar::DrawCommand::PushMatrix { matrix } => {
-                        ty.push(ty.last().unwrap() + matrix[5])
+            telar::for_each_with_matrix(&cmds, |c, m| {
+                if let telar::DrawCommand::Rect { rect, style } = c {
+                    let blue = style
+                        .fill
+                        .as_ref()
+                        .map(|p| p.solid_color())
+                        .is_some_and(|c| c.b > 0.7 && c.r < 0.45);
+                    if blue && rect.width > 150.0 && rect.width < 240.0 {
+                        ys.push((m[5] + rect.y) as i32);
                     }
-                    telar::DrawCommand::PopMatrix => {
-                        ty.pop();
-                    }
-                    telar::DrawCommand::Rect { rect, style } => {
-                        let blue = style
-                            .fill
-                            .as_ref()
-                            .map(|p| p.solid_color())
-                            .is_some_and(|c| c.b > 0.7 && c.r < 0.45);
-                        if blue && rect.width > 150.0 && rect.width < 240.0 {
-                            ys.push((ty.last().unwrap() + rect.y) as i32);
-                        }
-                    }
-                    _ => {}
                 }
-            }
+            });
             ys
         }
         telar::set_theme(crate::core::theme::SandboxTheme::modern());
@@ -407,44 +377,22 @@ mod smoke {
         });
         // Overview (the initial section) has no primary-blue fills; any blue rect that composes to the
         // content region (effective x ≳ 248) with a non-zero size is leaked Canvas art from a hidden section.
-        fn compose(a: [f32; 6], b: [f32; 6]) -> [f32; 6] {
-            [
-                a[0] * b[0] + a[2] * b[1],
-                a[1] * b[0] + a[3] * b[1],
-                a[0] * b[2] + a[2] * b[3],
-                a[1] * b[2] + a[3] * b[3],
-                a[0] * b[4] + a[2] * b[5] + a[4],
-                a[1] * b[4] + a[3] * b[5] + a[5],
-            ]
-        }
         let cmds = tree.commands();
-        let mut cur = [1.0f32, 0.0, 0.0, 1.0, 0.0, 0.0];
-        let mut stack: Vec<[f32; 6]> = Vec::new();
         let mut leaked = 0;
-        for c in cmds.iter() {
-            match c {
-                telar::DrawCommand::PushMatrix { matrix } => {
-                    stack.push(cur);
-                    cur = compose(cur, *matrix);
+        telar::for_each_with_matrix(&cmds, |c, cur| {
+            if let telar::DrawCommand::Rect { rect, style } = c {
+                let blue = style
+                    .fill
+                    .as_ref()
+                    .map(|p| p.solid_color())
+                    .is_some_and(|c| c.b > 0.7 && c.r < 0.45);
+                let eff_x = cur[0] * rect.x + cur[2] * rect.y + cur[4];
+                let eff_area = (rect.width * cur[0]).abs() * (rect.height * cur[3]).abs();
+                if blue && eff_area > 1.0 && eff_x > 248.0 {
+                    leaked += 1;
                 }
-                telar::DrawCommand::PopMatrix => {
-                    cur = stack.pop().unwrap_or([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
-                }
-                telar::DrawCommand::Rect { rect, style } => {
-                    let blue = style
-                        .fill
-                        .as_ref()
-                        .map(|p| p.solid_color())
-                        .is_some_and(|c| c.b > 0.7 && c.r < 0.45);
-                    let eff_x = cur[0] * rect.x + cur[2] * rect.y + cur[4];
-                    let eff_area = (rect.width * cur[0]).abs() * (rect.height * cur[3]).abs();
-                    if blue && eff_area > 1.0 && eff_x > 248.0 {
-                        leaked += 1;
-                    }
-                }
-                _ => {}
             }
-        }
+        });
         assert_eq!(
             leaked, 0,
             "hidden Canvas art leaked into the content: {leaked} blue rects"

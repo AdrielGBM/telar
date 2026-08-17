@@ -55,40 +55,17 @@ mod layout_tests {
     // Walks the flattened draw commands applying the PushMatrix/PopMatrix stack and returns the rightmost edge of actually-drawn content (Rect/Text/Image). This is what the user sees, unlike the page node rect.
     fn content_right_edge(cmds: &[telar::DrawCommand]) -> f32 {
         use telar::DrawCommand::*;
-        fn mul(a: [f32; 6], b: [f32; 6]) -> [f32; 6] {
-            [
-                a[0] * b[0] + a[2] * b[1],
-                a[1] * b[0] + a[3] * b[1],
-                a[0] * b[2] + a[2] * b[3],
-                a[1] * b[2] + a[3] * b[3],
-                a[0] * b[4] + a[2] * b[5] + a[4],
-                a[1] * b[4] + a[3] * b[5] + a[5],
-            ]
-        }
-        let ident = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
-        let mut stack = vec![ident];
         let mut max_x = 0.0f32;
-        for c in cmds {
-            match c {
-                PushMatrix { matrix } => {
-                    let top = *stack.last().unwrap();
-                    stack.push(mul(top, *matrix));
+        telar::for_each_with_matrix(cmds, |c, m| {
+            if let Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } = c {
+                let right = rect.x + rect.width;
+                // apply affine to the rect's right edge (y irrelevant for max-x here)
+                let x = m[0] * right + m[2] * rect.y + m[4];
+                if x > max_x {
+                    max_x = x;
                 }
-                PopMatrix => {
-                    stack.pop();
-                }
-                Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } => {
-                    let m = stack.last().unwrap();
-                    let right = rect.x + rect.width;
-                    // apply affine to the rect's right edge (y irrelevant for max-x here)
-                    let x = m[0] * right + m[2] * rect.y + m[4];
-                    if x > max_x {
-                        max_x = x;
-                    }
-                }
-                _ => {}
             }
-        }
+        });
         max_x
     }
 
@@ -164,28 +141,15 @@ mod layout_tests {
     }
     fn content_bottom_edge(cmds: &[telar::DrawCommand]) -> f32 {
         use telar::DrawCommand::*;
-        let mut ty = 0.0f32;
-        let mut stack = vec![0.0f32];
         let mut max_y = 0.0f32;
-        for c in cmds {
-            match c {
-                PushMatrix { matrix } => {
-                    ty += matrix[5];
-                    stack.push(ty);
+        telar::for_each_with_matrix(cmds, |c, m| {
+            if let Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } = c {
+                let bottom = m[5] + rect.y + rect.height;
+                if bottom > max_y {
+                    max_y = bottom;
                 }
-                PopMatrix => {
-                    stack.pop();
-                    ty = *stack.last().unwrap();
-                }
-                Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } => {
-                    let bottom = ty + rect.y + rect.height;
-                    if bottom > max_y {
-                        max_y = bottom;
-                    }
-                }
-                _ => {}
             }
-        }
+        });
         max_y
     }
 
@@ -229,25 +193,14 @@ mod layout_tests {
     // Collects (top, bottom) of full-width band background rects in absolute coords.
     fn collect_bands(cmds: &[telar::DrawCommand], min_width: f32) -> Vec<(f32, f32)> {
         use telar::DrawCommand::*;
-        let mut ty = 0.0f32;
-        let mut stack = vec![0.0f32];
         let mut out = Vec::new();
-        for c in cmds {
-            match c {
-                PushMatrix { matrix } => {
-                    ty += matrix[5];
-                    stack.push(ty);
-                }
-                PopMatrix => {
-                    stack.pop();
-                    ty = *stack.last().unwrap();
-                }
-                Rect { rect, .. } if rect.width >= min_width => {
-                    out.push((ty + rect.y, ty + rect.y + rect.height));
-                }
-                _ => {}
+        telar::for_each_with_matrix(cmds, |c, m| {
+            if let Rect { rect, .. } = c
+                && rect.width >= min_width
+            {
+                out.push((m[5] + rect.y, m[5] + rect.y + rect.height));
             }
-        }
+        });
         out
     }
 
@@ -266,25 +219,14 @@ mod layout_tests {
 
             // (command_index, top, bottom, is_full_width_band)
             let mut items: Vec<(usize, f32, f32, bool)> = Vec::new();
-            let mut ty = 0.0f32;
-            let mut stack = vec![0.0f32];
-            for (i, c) in cmds.iter().enumerate() {
-                match c {
-                    PushMatrix { matrix } => {
-                        ty += matrix[5];
-                        stack.push(ty);
-                    }
-                    PopMatrix => {
-                        stack.pop();
-                        ty = *stack.last().unwrap();
-                    }
-                    Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } => {
-                        let band = matches!(c, Rect { .. }) && rect.width >= w as f32 - 4.0;
-                        items.push((i, ty + rect.y, ty + rect.y + rect.height, band));
-                    }
-                    _ => {}
+            let mut i = 0usize;
+            telar::for_each_with_matrix(&cmds, |c, m| {
+                if let Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } = c {
+                    let band = matches!(c, Rect { .. }) && rect.width >= w as f32 - 4.0;
+                    items.push((i, m[5] + rect.y, m[5] + rect.y + rect.height, band));
                 }
-            }
+                i += 1;
+            });
             for &(bi, btop, bbot, is_band) in &items {
                 if !is_band {
                     continue;

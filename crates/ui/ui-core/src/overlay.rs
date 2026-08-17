@@ -129,11 +129,17 @@ fn anchor_translate(
 /// The content rect an anchored overlay actually occupies on screen: its panel translated to the trigger.
 /// This is the hit-test barrier the registry sees, so only the visible panel blocks — clicks elsewhere fall
 /// through even though the underlying content node fills the viewport.
-fn anchored_content_rect(
+/// Where the anchored panel ends up, and the translate that put it there.
+///
+/// Both answers come from one derivation — the panel union, then the flip/shift against the viewport — and
+/// both are wanted for the same pointer event: the registry hit-tests against the rect, and the dispatcher
+/// maps the event back into the children's space by the translate. Derived separately, the two could disagree
+/// about where the panel is while agreeing that the pointer was over it.
+fn anchored_placement(
     children: &TrackedChildren,
     anchor: &Anchor,
     read: impl Fn(&RwSignal<Rect>) -> Rect,
-) -> Rect {
+) -> (Rect, (f32, f32)) {
     let panel = panel_rect(children, &read);
     let (dx, dy) = anchor_translate(
         read(&anchor.trigger),
@@ -141,7 +147,18 @@ fn anchored_content_rect(
         anchor.placement,
         anchor_viewport(),
     );
-    Rect::new(panel.x + dx, panel.y + dy, panel.width, panel.height)
+    (
+        Rect::new(panel.x + dx, panel.y + dy, panel.width, panel.height),
+        (dx, dy),
+    )
+}
+
+fn anchored_content_rect(
+    children: &TrackedChildren,
+    anchor: &Anchor,
+    read: impl Fn(&RwSignal<Rect>) -> Rect,
+) -> Rect {
+    anchored_placement(children, anchor, read).0
 }
 
 /// The overlay's hook into priority pointer routing. Shares the same `Rc<RefCell>` child handles as the
@@ -176,15 +193,10 @@ impl OverlaySink for OverlaySinkImpl {
     fn dispatch(&self, event: &Event) -> EventResult {
         // Anchored content is laid out at its intrinsic (un-anchored) origin but hit at the anchored spot,
         // so map the world event back into the children's local space by the inverse translate first.
-        let offset = self.anchor.as_ref().map(|anchor| {
-            let panel = panel_rect(&self.children.borrow(), |s| s.peek());
-            anchor_translate(
-                anchor.trigger.peek(),
-                panel,
-                anchor.placement,
-                anchor_viewport(),
-            )
-        });
+        let offset = self
+            .anchor
+            .as_ref()
+            .map(|anchor| anchored_placement(&self.children.borrow(), anchor, |s| s.peek()).1);
         match offset {
             Some((dx, dy)) => {
                 // Map world → children-local space: local = world − translate. `offset_pointer(dx,dy)`
