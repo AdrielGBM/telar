@@ -1,6 +1,23 @@
-use telar::{Color, Theme, ThemeTokens, use_theme};
+use telar::{Color, ThemeTokens, use_theme};
 
-#[derive(Clone)]
+// A one-page site with no controls to speak of: the metrics and the status hues stay the catalogue's, said
+// here rather than left to silence. `surface`/`surface_alt`/`border`/`success` now reach the catalogue, which
+// the hand-written impl never forwarded despite the fields existing.
+#[derive(Clone, ThemeTokens)]
+#[theme(default(
+    radius,
+    spacing,
+    font_size,
+    icon_size,
+    scrollbar,
+    ink,
+    warning,
+    error,
+    info,
+    highlight_low,
+    highlight_med,
+    highlight_high
+))]
 pub struct LandingTheme {
     pub background: Color,
     pub surface: Color,
@@ -13,24 +30,6 @@ pub struct LandingTheme {
     pub muted: Color,
     pub on_primary: Color,
     pub on_dark: Color,
-}
-
-impl Theme for LandingTheme {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-impl ThemeTokens for LandingTheme {
-    fn primary(&self) -> Color {
-        self.primary
-    }
-    fn on_primary(&self) -> Color {
-        self.on_primary
-    }
-    fn muted(&self) -> Color {
-        self.muted
-    }
 }
 
 impl LandingTheme {

@@ -5,7 +5,30 @@ use std::path::PathBuf;
 
 mod app_input;
 mod t_macro;
+mod theme_tokens;
 use app_input::{AppInput, preview_const_ident};
+
+/// Implements [`Theme`](telar::Theme) and [`ThemeTokens`](telar::ThemeTokens) for a theme struct, mapping each
+/// token to the field of the same name.
+///
+/// A token whose built-in is a fixed value has to be answered — silence there is what puts a 4px radius next to
+/// bars the user configured to 10, on the same screen, with nothing failing. `radius_sm`/`_md`/`_lg` are exempt:
+/// they derive from `radius`, so a theme that moves the base takes the steps with it.
+///
+/// - `#[token(other)]` on a field: that field also answers `other`.
+/// - `#[theme(token = expr)]` on the struct: an expression, which may read `self`.
+/// - `#[theme(default(a, b))]` on the struct: keep the built-in, on purpose.
+#[proc_macro_derive(ThemeTokens, attributes(token, theme))]
+pub fn derive_theme_tokens(input: TokenStream) -> TokenStream {
+    let parsed = match syn::parse::<syn::DeriveInput>(input) {
+        Ok(parsed) => parsed,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    match theme_tokens::expand(parsed) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
 
 /// Translates a catalog key to a `String`, substituting named arguments: `t!("battery.remaining", time = t)`.
 ///

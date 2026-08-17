@@ -1,4 +1,4 @@
-use telar::{Color, Theme, ThemeTokens, register_mode, set_theme, use_theme};
+use telar::{Color, ThemeTokens, register_mode, set_theme, use_theme};
 
 /// Mode id applied on first launch (and the fallback when a restored/unknown id has no variant).
 pub const DEFAULT_MODE: &str = "modern";
@@ -6,7 +6,11 @@ pub const DEFAULT_MODE: &str = "modern";
 /// Semantic color tokens for the documentation app. Every `.rsx` color reference
 /// (`fill:primary`, `color:muted`, …) resolves to one of these fields via `use_theme`,
 /// so swapping the whole struct at runtime re-colors the entire UI reactively.
-#[derive(Clone)]
+#[derive(Clone, ThemeTokens)]
+#[theme(scrollbar = Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.55))]
+// A documentation app deliberately reads like the catalogue's own defaults, so these stay the built-ins —
+// stated rather than left silent.
+#[theme(default(radius, font_size, icon_size, info, highlight_low, highlight_med, highlight_high))]
 pub struct SandboxTheme {
     pub name: &'static str,
     // Structure
@@ -21,6 +25,7 @@ pub struct SandboxTheme {
     pub primary: Color,
     pub on_primary: Color,
     pub success: Color,
+    #[token(error)]
     pub danger: Color,
     pub warning: Color,
     pub purple: Color,
@@ -29,49 +34,8 @@ pub struct SandboxTheme {
     pub code_bg: Color,
     pub code_fg: Color,
     // Spacing scale. A non-colour token, so it can only be reached from `.rsx` through the dotted form (`pad:theme.gutter`) — a bare ident there means a `[style]` constant.
+    #[token(spacing)]
     pub gutter: f32,
-}
-
-impl Theme for SandboxTheme {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-impl ThemeTokens for SandboxTheme {
-    fn primary(&self) -> Color {
-        self.primary
-    }
-    fn on_primary(&self) -> Color {
-        self.on_primary
-    }
-    fn muted(&self) -> Color {
-        self.muted
-    }
-    fn ink(&self) -> Color {
-        self.ink
-    }
-    fn surface(&self) -> Color {
-        self.surface
-    }
-    fn surface_alt(&self) -> Color {
-        self.surface_alt
-    }
-    fn success(&self) -> Color {
-        self.success
-    }
-    fn warning(&self) -> Color {
-        self.warning
-    }
-    fn error(&self) -> Color {
-        self.danger
-    }
-    fn border(&self) -> Color {
-        self.border
-    }
-    fn scrollbar(&self) -> Color {
-        Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.55)
-    }
 }
 
 /// Shorthand: parse a `#rrggbb` literal into a `Color`. Only called with hard-coded constants below.
