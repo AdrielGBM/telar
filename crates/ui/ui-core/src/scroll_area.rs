@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
-use platform_core::{Event, ScrollDelta};
+use platform_core::Event;
 use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
@@ -113,10 +113,7 @@ fn handle_scroll_event(
         {
             return EventResult::Handled;
         }
-        let (delta_x, delta_y) = match delta {
-            ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
-            ScrollDelta::Pixels { x, y } => (*x, *y),
-        };
+        let (delta_x, delta_y) = delta.pixels();
         let content_rect = content_rect_signal.get();
         let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
         let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
@@ -253,10 +250,7 @@ impl ScrollCore {
             // the slop this gesture is a scroll, not a tap: cancel the pending press on the content once (it
             // sees pinned content-space coords and can't tell on its own).
             Event::Scrolled { delta, .. } if self.press_active && !self.tap_cancelled => {
-                let (dx, dy) = match delta {
-                    ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
-                    ScrollDelta::Pixels { x, y } => (*x, *y),
-                };
+                let (dx, dy) = delta.pixels();
                 self.gesture_scroll += (dx * dx + dy * dy).sqrt();
                 if self.gesture_scroll > SCROLL_TAP_SLOP {
                     self.tap_cancelled = true;

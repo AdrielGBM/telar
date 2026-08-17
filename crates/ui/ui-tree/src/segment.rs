@@ -96,9 +96,7 @@ impl Segment {
     /// the thread-local render generation) only when a signal read by this component's `view()`
     /// changes — so a leaf's signal change costs O(this component), not O(tree).
     pub fn mount<C: Component + 'static>(component: C) -> Rc<Segment> {
-        let name = component.debug_name();
-        let component = Rc::new(RefCell::new(component));
-        Self::mount_fn_named(name, move || component.try_borrow().ok().map(|c| c.view()))
+        Self::mount_dyn(Rc::new(RefCell::new(component)))
     }
 
     /// As `mount`, but takes an already-shared component so a parent can also hold it for event
@@ -113,15 +111,10 @@ impl Segment {
         Self::mount_fn_named(name, move || component.try_borrow().ok().map(|c| c.view()))
     }
 
-    /// Core mount: `render` produces this segment's `RenderNode`, or `None` to keep the previous
-    /// render unchanged (used when the underlying widget is mid event-dispatch and cannot be
-    /// borrowed — borrowing it then would panic, so we leave the last frame's commands in place and
-    /// a later flush re-runs us).
-    pub fn mount_fn(render: impl Fn() -> Option<RenderNode> + 'static) -> Rc<Segment> {
-        Self::mount_fn_named("Component", render)
-    }
-
-    /// As `mount_fn`, but records a human-readable widget `name` for the devtools tree inspector.
+    /// Core mount: `render` produces this segment's `RenderNode`, or `None` to keep the previous render
+    /// unchanged (used when the underlying widget is mid event-dispatch and cannot be borrowed — borrowing it
+    /// then would panic, so we leave the last frame's commands in place and a later flush re-runs us). `name`
+    /// is what the devtools tree inspector shows.
     pub fn mount_fn_named(
         name: &'static str,
         render: impl Fn() -> Option<RenderNode> + 'static,
@@ -661,7 +654,7 @@ mod tests {
                 let w = Rc::clone(&widget);
                 move || w.try_borrow().ok().map(|c| c.view())
             };
-            let root = SegmentRoot::from_segment(Segment::mount_fn(render));
+            let root = SegmentRoot::from_segment(Segment::mount_fn_named("Component", render));
             assert!((first_rect_r(&root) - 0.2).abs() < 1e-6);
 
             widget
@@ -686,7 +679,7 @@ mod tests {
                 let w = Rc::clone(&widget);
                 move || w.try_borrow().ok().map(|c| c.view())
             };
-            let root = SegmentRoot::from_segment(Segment::mount_fn(render));
+            let root = SegmentRoot::from_segment(Segment::mount_fn_named("Component", render));
             assert!((first_rect_r(&root) - 0.2).abs() < 1e-6);
 
             batch(|| {

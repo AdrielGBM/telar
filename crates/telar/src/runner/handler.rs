@@ -41,20 +41,7 @@ where
     // from opaque to transparent between two mounts needs the renderer built again, and asking the app after
     // the rebuild would compare the new answer with itself.
     pub(super) renderer_transparent: bool,
-    /// Added to the tree's own compose generation on its way to a renderer, and stepped past everything already
-    /// drawn whenever the tree is replaced.
-    ///
-    /// A renderer skips its whole pipeline and re-presents the texture it retained when the generation it is
-    /// handed matches the last one it rendered — the invariant being that equal generations mean identical draw
-    /// commands. A remount breaks that on its own: the counter lives on the tree, so a new tree starts over, and
-    /// a surface whose content never changes hands out the very same number it did before. Static surfaces are
-    /// then exactly the ones that keep showing the frame they had before the rebuild, while anything with a
-    /// clock in it repaints because its counter had already climbed past the collision.
-    pub(super) generation_base: u64,
-    /// The highest generation handed to a renderer for this surface, so the next tree can start past it.
-    pub(super) last_generation: u64,
-    /// How many frames have gone out under a live continuous region. See [`frame_generation`](Self::frame_generation).
-    pub(super) continuous_frames: u64,
+    pub(super) generation: FrameGeneration,
     pub(super) backend: RendererBackend,
     pub(super) prefs: UserPrefs,
     pub(super) paths: Box<dyn AppPathsProvider>,
@@ -94,6 +81,44 @@ where
     pub(super) hw_renderer: Option<HardwareRenderer<W>>,
     #[cfg(all(feature = "dev", not(target_os = "android")))]
     pub(super) hot_reload_rx: Option<std::sync::mpsc::Receiver<crate::hot::HotEvent>>,
+}
+
+/// The number a renderer compares against the last one it drew, and the whole of its monotonicity.
+///
+/// A renderer skips its pipeline and re-presents the texture it retained when the generation it is handed
+/// matches the last one it rendered — so equal generations have to mean identical draw commands, and the
+/// number must never go backwards. Three loose `u64` fields written from three places said that only by
+/// convention, and disagreed on overflow: one used `+ 1`, the others saturated.
+///
+/// Two things break the invariant on their own. A remount: the compose counter lives on the tree, so a new
+/// tree starts over and a surface whose content never changes hands out the number it did before — which is
+/// why `restart` steps past everything already drawn. And a continuous region: its commands are identical
+/// every frame while the picture they point at is not, so `next` steps per frame while one is alive.
+#[derive(Default)]
+pub(super) struct FrameGeneration {
+    base: u64,
+    last: u64,
+    continuous_frames: u64,
+}
+
+impl FrameGeneration {
+    /// Starts the next tree past every generation this surface has already handed out.
+    fn restart(&mut self) {
+        self.base = self.last.saturating_add(1);
+    }
+
+    /// This frame's generation, and the only place the three counters move.
+    fn next(&mut self, composed: u64, continuous: bool) -> u64 {
+        if continuous {
+            self.continuous_frames = self.continuous_frames.saturating_add(1);
+        }
+        let generation = self
+            .base
+            .saturating_add(composed)
+            .saturating_add(self.continuous_frames);
+        self.last = self.last.max(generation);
+        generation
+    }
 }
 
 /// A join handle for the render thread, kept typed per backend rather than boxed: joining hardware has to
@@ -150,9 +175,7 @@ where
         renderer: None,
         renderer_is_hardware: false,
         renderer_transparent: false,
-        generation_base: 0,
-        last_generation: 0,
-        continuous_frames: 0,
+        generation: FrameGeneration::default(),
         backend,
         prefs,
         pending_restart: false,
@@ -232,14 +255,14 @@ where
     /// The generation step is the load-bearing part, and the reason this is one function: the counter lives on
     /// the tree, so a fresh tree starts over and a surface whose content never changes hands the renderer a
     /// number it has already presented — which it answers by re-presenting the texture it retained. See
-    /// [`generation_base`](Self::generation_base). Callers must have `scale_factor` and `renderer_transparent`
+    /// [`FrameGeneration`]. Callers must have `scale_factor` and `renderer_transparent`
     /// current before calling.
     fn mount_tree(&mut self, window: &W) {
         // Dropped before the new one is built: an effect from the outgoing tree that re-runs while its
         // replacement is being assembled would write into widgets nothing is drawing any more.
         self.tree = None;
         self.tree = Some(self.app.mount());
-        self.generation_base = self.last_generation + 1;
+        self.generation.restart();
         if self.is_transparent() != self.renderer_transparent {
             self.pending_restart = true;
         }
@@ -262,19 +285,11 @@ where
     }
 
     /// The generation this frame's commands go out under: the tree's own, offset past every tree this surface
-    /// has had before it. See [`generation_base`](Self::generation_base) for why the offset has to exist.
+    /// has had before it. See [`FrameGeneration`] for why the offset has to exist.
     fn frame_generation(&mut self) -> u64 {
         let composed = self.tree.as_ref().map(|t| t.generation()).unwrap_or(0);
-        // A continuous region breaks the invariant this number stands for: its commands are identical every frame while the picture they point at is not, so equal generations would stop meaning an equal frame and the renderer would re-present the texture it retained. Stepping it per frame while one is alive restores what the invariant is actually for — skip work only when the output cannot have changed. Monotonic, so `generation_base` still steps past every tree this surface has had.
-        if self.app.motion_has_continuous() {
-            self.continuous_frames = self.continuous_frames.saturating_add(1);
-        }
-        let generation = self
-            .generation_base
-            .saturating_add(composed)
-            .saturating_add(self.continuous_frames);
-        self.last_generation = self.last_generation.max(generation);
-        generation
+        self.generation
+            .next(composed, self.app.motion_has_continuous())
     }
 
     /// Whether the app asked for a transparent surface (`WindowConfig::is_transparent`). Read at each renderer creation so hardware picks a premultiplied-alpha composite mode and software presents an alpha-preserving buffer.
@@ -552,23 +567,22 @@ where
         // Before dispatch, so a handler running on this very event already sees the state it establishes: a `Shift`-click's press handler has to read the modifiers the click arrived under, and a drag handler has to read the button that started it.
         ui_core::observe_keyboard(&event);
         ui_core::observe_pointer(&event);
-        if let Event::ScaleFactorChanged { scale_factor } = &event {
-            self.scale_factor = *scale_factor as f32;
-        }
-        if let Event::ColorSchemeChanged { dark } = &event {
-            // Drives the follow_system effect (which writes the theme signal); batch the app's runtime so the
-            // re-render flushes cleanly across the hot-reload boundary. No widget consumes this event.
-            self.app.begin_event_batch();
-            self.app.set_system_dark(*dark);
-            self.app.end_event_batch();
-            window.request_redraw();
-            return;
-        }
-        if let Event::KeyPressed { key, modifiers } = &event {
-            match self.dev.on_key(key, *modifiers) {
-                DevAction::Redraw => {
-                    window.request_redraw();
-                }
+        // The four events the runner reads before the app does, matched once. Written as four sequential
+        // `if let`s it re-tested the same value each time, and the two that end the dispatch read as though
+        // they were guards on the ones above them rather than exits.
+        match &event {
+            Event::ScaleFactorChanged { scale_factor } => self.scale_factor = *scale_factor as f32,
+            Event::ColorSchemeChanged { dark } => {
+                // Drives the follow_system effect (which writes the theme signal); batch the app's runtime so the
+                // re-render flushes cleanly across the hot-reload boundary. No widget consumes this event.
+                self.app.begin_event_batch();
+                self.app.set_system_dark(*dark);
+                self.app.end_event_batch();
+                window.request_redraw();
+                return;
+            }
+            Event::KeyPressed { key, modifiers } => match self.dev.on_key(key, *modifiers) {
+                DevAction::Redraw => window.request_redraw(),
                 DevAction::ToggleBackend => {
                     let next = match self.prefs.backend.unwrap_or(RendererBackend::Auto) {
                         RendererBackend::Hardware => RendererBackend::Software,
@@ -579,20 +593,19 @@ where
                         tracing::warn!("Could not save preferences: {e}");
                     }
                     match next {
-                        RendererBackend::Software => {
-                            self.pending_restart = true;
-                        }
+                        RendererBackend::Software => self.pending_restart = true,
                         _ => self.spawn_hardware_build(window),
                     }
                 }
                 DevAction::None => {}
+            },
+            Event::PointerPressed { x, y, .. } => {
+                if self.dev.on_pointer_pressed(*x as f32, *y as f32) {
+                    window.request_redraw();
+                    return;
+                }
             }
-        }
-        if let Event::PointerPressed { x, y, .. } = &event {
-            if self.dev.on_pointer_pressed(*x as f32, *y as f32) {
-                window.request_redraw();
-                return;
-            }
+            _ => {}
         }
         // Batch the app's OWN reactive runtime across dispatch. In hot-reload the app dylib links its own
         // reactive-core copy (separate runtime), which the host's begin/end_batch cannot reach; a handler's
@@ -993,7 +1006,7 @@ mod tests {
     }
 
     /// A rebuilt tree must never hand the renderer a generation it has already drawn — see
-    /// [`AppHandler::generation_base`] for why one otherwise would.
+    /// [`FrameGeneration`] for why one otherwise would.
     ///
     /// What it looked like: a shell's config reload moved the space its bars reserved but left the frame ring
     /// and the wallpaper exactly as they were, until the process was restarted. The bars followed the edit,

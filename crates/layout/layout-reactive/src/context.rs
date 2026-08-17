@@ -559,6 +559,40 @@ mod tests {
 
     use super::*;
 
+    // The premise the whole `constrained` two-pass exists for, and the only test that reaches it: a child whose HEIGHT depends on the width it is given. The fixed-size children below cannot show it — their height is the same at every width — so until this existed the mechanism had no guard at all.
+    //
+    // It passes with the pin pass disabled, on taffy 0.13: the workaround was written against 0.11 and the behaviour appears to be gone, which would make the undo pass, the re-pin pass and the extra `compute_layout` dead weight. Not deleted on that evidence alone — one synthetic measure fn is not `apps/landing`'s wrapping bands, and the failure mode is a layout quietly wrong rather than one that fails to build.
+    #[test]
+    fn a_maxwidth_box_measures_its_content_at_the_capped_width() {
+        reset_layout_runtime();
+        const TOTAL: f32 = 1200.0;
+        const LINE: f32 = 20.0;
+        // Wrapping text: at whatever width it is offered, it needs `TOTAL / width` lines of `LINE` height.
+        let measure: layout_core::MeasureFn = Box::new(|available: f32| {
+            let width = if available > 0.0 { available } else { TOTAL };
+            (width, (TOTAL / width).ceil() * LINE)
+        });
+        let (text, text_rect) = new_measured_leaf(LayoutStyle::new(), measure).unwrap();
+        let box_node =
+            new_container(LayoutStyle::new().flex_column().max_width(400.0), &[text]).unwrap();
+        let root = new_container(LayoutStyle::new().flex_column(), &[box_node]).unwrap();
+        let box_rect = track_layout(box_node).unwrap();
+
+        compute_layout(
+            root,
+            AvailableSpace::Definite(1000.0),
+            AvailableSpace::Definite(1000.0),
+        )
+        .unwrap();
+
+        assert_eq!(text_rect.get().width, 400.0);
+        assert_eq!(
+            box_rect.get().height,
+            3.0 * LINE,
+            "the box has to reserve the height its content takes at the width it was capped to"
+        );
+    }
+
     // A flex-wrap row nested in a max-width box (the full-bleed-band + centered- content pattern) must reserve height for the lines it actually wraps into, even though taffy would otherwise size the box at its uncapped 1-line width.
     #[test]
     fn maxwidth_box_reserves_height_for_wrapped_content() {

@@ -44,7 +44,7 @@ impl ViewGen<'_> {
         for a in &el.attributes {
             if matches!(
                 a.key.as_str(),
-                "value" | "size" | "color" | "on_submit" | "placeholder"
+                "value" | "size" | "color" | "on_submit" | "placeholder" | "secret"
             ) {
                 continue;
             }
@@ -93,6 +93,12 @@ impl ViewGen<'_> {
         }
         if let Some(p) = placeholder {
             tail.push_str(&format!(".placeholder({p})"));
+        }
+        // A bare `secret` is the whole of what a password field needs to say; the bullet is not the caller's
+        // choice to make. Without a spelling for it, every login form in a `.rsx` application had to drop to
+        // hand-written Rust or render the password in clear text.
+        if el.attributes.iter().any(|a| a.key == "secret") {
+            tail.push_str(".secret()");
         }
         let code =
             format!("{pad}let {var} = Input::new({value_expr}, {layout_style}, {style})?{tail};");

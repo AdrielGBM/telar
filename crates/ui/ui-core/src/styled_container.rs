@@ -1,8 +1,7 @@
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
-    Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, ScrollDelta,
-    WindowCommand,
+    Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, WindowCommand,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, RectStyle, ShapeStyle, Stroke};
@@ -888,10 +887,7 @@ impl Component for StyledContainer {
                 if !rect.contains(*x as f32, *y as f32) {
                     return EventResult::Ignored;
                 }
-                let (dx, dy) = match delta {
-                    ScrollDelta::Lines { x, y } => (*x * 20.0, *y * 20.0),
-                    ScrollDelta::Pixels { x, y } => (*x, *y),
-                };
+                let (dx, dy) = delta.pixels();
                 cb(dx, dy);
                 EventResult::Handled
             }
@@ -1006,6 +1002,7 @@ mod tests {
     use theme_core::{Theme, ThemeTokens, set_theme, use_theme};
 
     use super::*;
+    use platform_core::ScrollDelta;
 
     #[test]
     fn box_transform_identity_is_none() {

@@ -298,7 +298,14 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         // `keep:` names the surface-kept position of this viewport, so a remounted tree reopens where it was.
         "scroll" => with(&["keep"]),
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
-        "input" => with(&["value", "size", "color", "placeholder", "on_submit"]),
+        "input" => with(&[
+            "value",
+            "size",
+            "color",
+            "placeholder",
+            "on_submit",
+            "secret",
+        ]),
         "svg" => with(&["src", "tint", "stroke", "fit"]),
         // `lazy` holds its subtree back until `when:` is true.
         "lazy" => with(&["when"]),

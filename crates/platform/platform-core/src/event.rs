@@ -82,6 +82,21 @@ pub enum ScrollDelta {
     Pixels { x: f32, y: f32 },
 }
 
+impl ScrollDelta {
+    /// This delta in pixels, whichever unit the platform reported it in.
+    ///
+    /// The conversion was written out at three call sites, each with the same bare `20.0` and a comment
+    /// promising the copies agreed — which is a promise no comment can keep. A line is what a mouse wheel
+    /// notch is worth, and it is one number for the whole runtime rather than a per-widget choice.
+    pub fn pixels(&self) -> (f32, f32) {
+        const PIXELS_PER_LINE: f32 = 20.0;
+        match self {
+            ScrollDelta::Lines { x, y } => (x * PIXELS_PER_LINE, y * PIXELS_PER_LINE),
+            ScrollDelta::Pixels { x, y } => (*x, *y),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
     WindowResized {

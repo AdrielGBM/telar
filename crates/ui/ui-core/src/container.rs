@@ -85,7 +85,18 @@ impl Container {
 
     /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it;
     /// a child widget that handles the press wins, and a scroll gesture started on it does not fire it.
-    pub fn on_press(mut self, f: impl Fn() + 'static) -> Self {
+    pub fn on_press(self, f: impl Fn() + 'static) -> Self {
+        self.maybe_on_press(Some(f))
+    }
+
+    /// [`on_press`](Self::on_press) for a handler the caller may not have supplied.
+    ///
+    /// The emitter picks this form for any `on_press:` whose value is not a closure literal, which is how a
+    /// wrapper component forwards an `Option` — and a `Container` reached that emitter with no such method,
+    /// so a plain container forwarding one did not compile. `None` leaves the container untouched: a no-op
+    /// handler would still report the tap `Handled`, turning a display-only row into one that swallows it.
+    pub fn maybe_on_press(mut self, f: Option<impl Fn() + 'static>) -> Self {
+        let Some(f) = f else { return self };
         self.press.set(f);
         self.mark_interactive();
         self
