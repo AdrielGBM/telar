@@ -1,5 +1,7 @@
 //! The Android entry point: everything about booting an app that differs from every other platform.
 
+use std::sync::Arc;
+
 use crate::app::App;
 use crate::app_config::AppConfig;
 use crate::dev_plugin::DevPlugin;
@@ -55,7 +57,7 @@ fn run_android_with_plugin<A: App, D: DevPlugin>(
 ) {
     use platform_android::{AndroidPathsProvider, AndroidPlatform};
 
-    let paths: Box<dyn AppPathsProvider> = Box::new(AndroidPathsProvider::new(android_app.clone()));
+    let paths: Arc<dyn AppPathsProvider> = Arc::new(AndroidPathsProvider::new(android_app.clone()));
     let platform = match AndroidPlatform::try_new(android_app) {
         Ok(p) => p,
         Err(e) => {

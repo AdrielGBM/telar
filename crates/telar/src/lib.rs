@@ -142,6 +142,7 @@ pub fn install_default_text_metrics() {
 /// memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
 #[cfg(feature = "software")]
 pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer_caches};
+pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
 // Available in every GUI build, not opt-in: `ui_core::Surface` composes the per-surface service scope, so
 // `runtime` pulls in ui-core which turns on services-core/di. A non-GUI build (the `cargo-telar` tool depends on

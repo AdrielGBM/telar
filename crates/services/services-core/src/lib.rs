@@ -1,3 +1,4 @@
+pub mod app_paths;
 pub mod dialogs;
 pub mod paths;
 #[cfg(feature = "di")]

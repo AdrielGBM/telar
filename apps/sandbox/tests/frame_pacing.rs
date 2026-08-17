@@ -60,7 +60,7 @@ fn a_nav_click_keeps_the_loop_scheduling_frames_until_the_fade_settles() {
     let window = HeadlessWindow::new(w, h);
     let mut handler: Box<dyn EventHandler<HeadlessWindow>> = build_surface_handler(
         sandbox::core::app::SandboxRoot,
-        Box::new(NoPaths) as Box<dyn AppPathsProvider>,
+        std::sync::Arc::new(NoPaths) as std::sync::Arc<dyn AppPathsProvider>,
         "telar-sandbox-pacing-test",
     );
 

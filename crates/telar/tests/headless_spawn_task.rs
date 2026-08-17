@@ -126,7 +126,7 @@ fn a_background_task_result_reaches_the_screen() {
     run_with_platform::<_, _, ()>(
         platform,
         AppConfig::default(),
-        Box::new(NoPaths) as Box<dyn AppPathsProvider>,
+        std::sync::Arc::new(NoPaths) as std::sync::Arc<dyn AppPathsProvider>,
         TaskApp {
             color: RefCell::new(None),
             spawned: false,

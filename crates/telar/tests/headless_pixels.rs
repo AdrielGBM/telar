@@ -25,7 +25,7 @@ fn headless_renders_fill_color_to_pixels() {
     run_with_platform::<_, _, ()>(
         platform,
         AppConfig::default(),
-        Box::new(NoPaths) as Box<dyn AppPathsProvider>,
+        std::sync::Arc::new(NoPaths) as std::sync::Arc<dyn AppPathsProvider>,
         FillApp {
             color: Color::from_rgb_u8(50, 120, 200),
         },

@@ -5,6 +5,17 @@ pub trait AppPathsProvider: Send + Sync {
     fn data_dir(&self) -> Option<PathBuf>;
     fn cache_dir(&self) -> Option<PathBuf>;
 
+    /// Machine-written state the user never edits. Defaults to [`data_dir`](Self::data_dir), which is where it
+    /// lives on every platform that does not separate the two.
+    fn state_dir(&self) -> Option<PathBuf> {
+        self.data_dir()
+    }
+    /// Session-scoped runtime files — a socket, a lock. `None` where the platform has no such place, which is
+    /// the caller's cue to pick its own rather than be handed a directory that outlives the session.
+    fn runtime_dir(&self) -> Option<PathBuf> {
+        None
+    }
+
     /// OS system-font directory to scan for fallback family resolution. `None` on platforms where the
     /// renderer's default font discovery suffices (desktop); the platform adapter overrides it where the OS
     /// keeps fonts in a fixed location (Android → `/system/fonts`).

@@ -2,6 +2,7 @@ use crate::dev_plugin::DevPlugin;
 use platform_core::{Platform, PlatformError};
 use renderer_core::RendererFactory;
 use services_core::AppPathsProvider;
+use std::sync::Arc;
 
 use crate::app::App;
 use crate::app_config::AppConfig;
@@ -25,7 +26,7 @@ use super::host::{SurfaceRenderer, SurfaceWindow};
 pub fn run_with_platform<P, A, D>(
     platform: P,
     config: AppConfig,
-    paths: Box<dyn AppPathsProvider>,
+    paths: Arc<dyn AppPathsProvider>,
     app: A,
     app_name: &str,
 ) -> Result<(), PlatformError>
@@ -58,7 +59,7 @@ pub fn run_with_platform_and_renderer<P, F, A, D>(
     platform: P,
     factory: F,
     config: AppConfig,
-    paths: Box<dyn AppPathsProvider>,
+    paths: Arc<dyn AppPathsProvider>,
     app: A,
     app_name: &str,
 ) -> Result<(), PlatformError>
@@ -82,7 +83,7 @@ where
 fn run_on_platform<P, A, D>(
     platform: P,
     config: AppConfig,
-    paths: Box<dyn AppPathsProvider>,
+    paths: Arc<dyn AppPathsProvider>,
     app: A,
     app_name: &str,
     renderer: SurfaceRenderer<P::Window>,
@@ -93,6 +94,9 @@ where
     A: App,
     D: DevPlugin,
 {
+    // The one place every runner passes through, so app code can ask `telar::paths::cache()` instead of
+    // resolving XDG for itself and landing somewhere else than the runtime it is embedded in.
+    services_core::app_paths::install(app_name, paths.clone());
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let AppConfig {

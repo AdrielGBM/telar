@@ -151,7 +151,7 @@ pub fn run_preview_png(
             crate::run_with_platform::<_, _, ()>(
                 platform,
                 config.clone(),
-                Box::new(crate::NoPaths) as Box<dyn crate::AppPathsProvider>,
+                Arc::new(crate::NoPaths) as Arc<dyn crate::AppPathsProvider>,
                 app,
                 "telar-preview",
             )

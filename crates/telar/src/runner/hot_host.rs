@@ -1,5 +1,7 @@
 //! The `cargo telar dev` host: a binary that loads the app from a dylib and reloads it in place.
 
+use std::sync::Arc;
+
 use platform_core::Platform;
 use platform_desktop::{DesktopPathsProvider, WinitPlatform, WinitWindow};
 
@@ -27,7 +29,7 @@ pub fn run_hot_reload_host(
         }
     };
     let hot_rx = crate::hot::listen_hot_reload(port);
-    let paths: Box<dyn services_core::AppPathsProvider> = Box::new(DesktopPathsProvider);
+    let paths: Arc<dyn services_core::AppPathsProvider> = Arc::new(DesktopPathsProvider);
     platform_desktop::DesktopFileDialogs::install();
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);

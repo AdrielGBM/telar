@@ -71,7 +71,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     let window = HeadlessWindow::new(w, h);
     let mut handler: Box<dyn EventHandler<HeadlessWindow>> = build_surface_handler(
         app,
-        Box::new(NoPaths) as Box<dyn AppPathsProvider>,
+        std::sync::Arc::new(NoPaths) as std::sync::Arc<dyn AppPathsProvider>,
         "telar-sandbox-hot-tree-test",
     );
     handler.new_events();

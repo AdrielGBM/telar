@@ -3,6 +3,7 @@ use platform_core::{Event, EventHandler, Window, WindowCommand};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
+use std::sync::Arc;
 use ui_core::EventResult;
 
 use crate::app::App;
@@ -46,7 +47,7 @@ where
     pub(super) generation: FrameGeneration,
     pub(super) backend: RendererBackend,
     pub(super) prefs: UserPrefs,
-    pub(super) paths: Box<dyn AppPathsProvider>,
+    pub(super) paths: Arc<dyn AppPathsProvider>,
     pub(super) pending_restart: bool,
     pub(super) _flush_notify: Option<FlushNotifyHandle>,
     pub(super) scale_factor: f32,
@@ -123,7 +124,7 @@ impl FrameGeneration {
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_app_handler<W, D>(
     app: Box<dyn App>,
-    paths: Box<dyn AppPathsProvider>,
+    paths: Arc<dyn AppPathsProvider>,
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     backend: crate::config::RendererBackend,
@@ -881,7 +882,7 @@ mod tests {
     fn handler() -> AppHandler<HeadlessWindow, ()> {
         build_app_handler::<HeadlessWindow, ()>(
             Box::new(Unchanging),
-            Box::new(services_core::NoPaths),
+            Arc::new(services_core::NoPaths),
             Vec::new(),
             Vec::new(),
             RendererBackend::Software,

@@ -48,7 +48,7 @@ fn headless_multi_surface_renders_isolated_trees() {
     run_multi_with_platform(
         platform,
         surfaces,
-        |_id| Box::new(NoPaths) as Box<dyn AppPathsProvider>,
+        |_id| std::sync::Arc::new(NoPaths) as std::sync::Arc<dyn AppPathsProvider>,
         move |id| {
             let rgb = colors_for_factory[&id];
             FillApp {
@@ -96,7 +96,7 @@ fn headless_multi_surface_quarantines_a_panicking_surface() {
     run_multi_with_platform(
         platform,
         vec![make(good), make(bad)],
-        |_id| Box::new(NoPaths) as Box<dyn AppPathsProvider>,
+        |_id| std::sync::Arc::new(NoPaths) as std::sync::Arc<dyn AppPathsProvider>,
         move |id| MaybePanicApp {
             color: Color::from_rgb_u8(40, 200, 40),
             panic_on_build: id == bad,

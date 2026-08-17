@@ -115,7 +115,7 @@ fn an_installed_renderer_draws_an_app_on_a_window_with_no_os_handles() {
         CellPlatform { frames: 3 },
         RecordingFactory::new(recording.clone()),
         AppConfig::default(),
-        Box::new(NoPaths),
+        std::sync::Arc::new(NoPaths),
         Panel {
             saw_handles: Arc::clone(&saw_handles),
         },
@@ -163,7 +163,7 @@ fn a_recording_is_readable_after_the_render_thread_is_gone() {
         CellPlatform { frames: 2 },
         RecordingFactory::new(recording.clone()),
         AppConfig::default(),
-        Box::new(NoPaths),
+        std::sync::Arc::new(NoPaths),
         Panel {
             saw_handles: Arc::new(AtomicBool::new(false)),
         },

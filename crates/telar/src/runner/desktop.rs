@@ -13,7 +13,7 @@ use crate::app_config::AppConfig;
 use crate::surface::{SurfaceControl, SurfaceToken};
 
 fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
-    let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
+    let paths: Arc<dyn AppPathsProvider> = Arc::new(DesktopPathsProvider);
     platform_desktop::DesktopFileDialogs::install();
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,
@@ -65,7 +65,7 @@ impl SurfaceControl for WinitSurfaceControl {
 /// the window down. Only meaningful while `run_app_windowed`/the multi-surface runner is running.
 pub fn open_window<A: App>(app: A) -> SurfaceToken {
     let window_config = app.window_config().unwrap_or_default();
-    let paths: Box<dyn AppPathsProvider> = Box::new(DesktopPathsProvider);
+    let paths: Arc<dyn AppPathsProvider> = Arc::new(DesktopPathsProvider);
     platform_desktop::DesktopFileDialogs::install();
     let prefs = crate::prefs::UserPrefs::load("telar-window", paths.as_ref());
     // Same backend convention as the primary window (resolved preference, else the compile-time default —
@@ -107,7 +107,7 @@ pub fn run_app_windowed<A: App>(config: AppConfig, app: A, app_name: &str) {
     let result = super::run_multi_with_platform(
         platform,
         vec![(SurfaceId(0), config)],
-        |_id| Box::new(DesktopPathsProvider) as Box<dyn AppPathsProvider>,
+        |_id| Arc::new(DesktopPathsProvider) as Arc<dyn AppPathsProvider>,
         move |_id| {
             app.borrow_mut()
                 .take()

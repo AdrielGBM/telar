@@ -32,7 +32,7 @@ where
     P: MultiSurfacePlatform,
     P::Window: super::host::SurfaceWindow,
     A: App + 'static,
-    PF: Fn(SurfaceId) -> Box<dyn AppPathsProvider> + 'static,
+    PF: Fn(SurfaceId) -> Arc<dyn AppPathsProvider> + 'static,
     AF: Fn(SurfaceId) -> A + 'static,
 {
     // Split each surface's AppConfig into the WindowConfig the platform needs and the fonts the handler factory
@@ -82,7 +82,7 @@ where
 /// spawning a thread. Builds no renderer and touches no thread-local reactive state; the loop drives it.
 pub fn build_surface_handler<W, A>(
     app: A,
-    paths: Box<dyn AppPathsProvider>,
+    paths: Arc<dyn AppPathsProvider>,
     app_name: &str,
 ) -> Box<dyn EventHandler<W>>
 where
