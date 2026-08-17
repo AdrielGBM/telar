@@ -795,3 +795,99 @@ fn sides_keep_their_own_thicknesses_on_the_gpu() {
     assert!(red_at(20, 39) > 150, "the bottom is its own single row");
     assert!(red_at(20, 36) < 40, "which does not reach four rows up");
 }
+
+/// The clip stack's own invariants, which the golden scene never touches: what a `PopClip` restores and what
+/// a nested clip intersects to.
+fn clip_scene() -> Vec<DrawCommand> {
+    let red = Arc::new(RectStyle::filled(Color::rgb(0.9, 0.1, 0.1), 0.0));
+    let green = Arc::new(RectStyle::filled(Color::rgb(0.1, 0.9, 0.1), 0.0));
+    let blue = Arc::new(RectStyle::filled(Color::rgb(0.1, 0.1, 0.9), 0.0));
+    vec![
+        DrawCommand::PushClip {
+            rect: Rect::new(0.0, 0.0, 100.0, 200.0),
+            radius: Default::default(),
+        },
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 0.0, 200.0, 200.0),
+            style: red.clone(),
+        },
+        // Intersected with the outer clip, this leaves the top-left quarter.
+        DrawCommand::PushClip {
+            rect: Rect::new(0.0, 0.0, 200.0, 50.0),
+            radius: Default::default(),
+        },
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 0.0, 200.0, 200.0),
+            style: green.clone(),
+        },
+        DrawCommand::PopClip,
+        // Reaches y=150, which the nested clip forbade — it can only paint once that clip is gone.
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 150.0, 200.0, 20.0),
+            style: blue.clone(),
+        },
+        DrawCommand::PopClip,
+        // Outside every clip: proves the stack emptied rather than leaking the last scissor.
+        DrawCommand::Rect {
+            rect: Rect::new(150.0, 150.0, 40.0, 40.0),
+            style: red,
+        },
+    ]
+}
+
+#[test]
+fn the_clip_stack_intersects_nests_and_unwinds() {
+    const W: u32 = 200;
+    const H: u32 = 200;
+    let Some(mut renderer) = headless(W, H) else {
+        return;
+    };
+    renderer.begin_frame(W, H, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&clip_scene(), Some(Color::BLACK))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+
+    let at = |x: u32, y: u32| {
+        let i = ((y * W + x) * 4) as usize;
+        (pixels[i], pixels[i + 1], pixels[i + 2])
+    };
+    let dominant = |(r, g, b): (u8, u8, u8)| {
+        if r > 128 && g < 128 && b < 128 {
+            'r'
+        } else if g > 128 && r < 128 && b < 128 {
+            'g'
+        } else if b > 128 && r < 128 && g < 128 {
+            'b'
+        } else {
+            '.'
+        }
+    };
+
+    assert_eq!(dominant(at(25, 25)), 'g', "the nested clip's intersection");
+    assert_eq!(
+        dominant(at(125, 25)),
+        '.',
+        "the outer clip cuts the nested one at x=100"
+    );
+    assert_eq!(
+        dominant(at(25, 100)),
+        'r',
+        "below the nested clip, inside the outer one"
+    );
+    assert_eq!(
+        dominant(at(25, 155)),
+        'b',
+        "PopClip restored the outer clip rather than the nested one"
+    );
+    assert_eq!(
+        dominant(at(125, 155)),
+        '.',
+        "and the outer clip still applies to it"
+    );
+    assert_eq!(
+        dominant(at(170, 170)),
+        'r',
+        "the stack emptied: a draw after the last PopClip is unclipped"
+    );
+}
