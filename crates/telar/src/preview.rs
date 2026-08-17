@@ -12,8 +12,8 @@ pub struct PreviewApp {
 /// A tree preview is dropped into the page as it is; a surface preview is first given the two things a
 /// compositor would give it — a definite size to lay out against, and the root that plays its enter transition.
 ///
-/// The size goes on a box *around* the root rather than on the root itself: `SurfaceRoot` fills its parent by
-/// design (that is how a surface's content stretches to its window), so it needs a parent with a size.
+/// The size goes on a box *around* the root rather than on the root itself: [`WindowRoot::wrapping`] fills its
+/// parent by design (that is how a surface's content stretches to its window), so it needs a parent with a size.
 fn mounted(
     content: Box<dyn LayoutItem>,
     surface: Option<crate::PreviewSurface>,
@@ -21,7 +21,7 @@ fn mounted(
     let Some(surface) = surface else {
         return Ok(content);
     };
-    let root = crate::SurfaceRoot::new(content)?;
+    let root = crate::WindowRoot::wrapping(content)?;
     let root = if surface.animate {
         root.animate_in()
     } else {

@@ -40,6 +40,7 @@ mod text;
 mod text_area;
 mod text_metrics;
 mod virtual_list;
+mod window_root;
 
 #[cfg(feature = "async-assets")]
 pub use async_asset::{AssetSource, AssetState};
@@ -80,7 +81,7 @@ pub use scroll_page::ScrollPage;
 pub use scroll_region::visible_rect;
 pub use slots::{Children, Slots, use_context};
 pub use styled_container::{StyledContainer, box_transform, style_follows};
-pub use surface::{DEFAULT_SCRIM, Edge, SurfaceRoot, SurfaceScaffold, SurfaceTransition};
+pub use surface::{DEFAULT_SCRIM, Edge, SurfaceScaffold, SurfaceTransition};
 pub use surface_context::{Surface, SurfaceGuard};
 #[cfg(feature = "svg")]
 pub use svg::Svg;
@@ -88,6 +89,7 @@ pub use text::Text;
 pub use text_area::TextArea;
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};
 pub use virtual_list::{VirtualList, visible_window};
+pub use window_root::WindowRoot;
 
 /// Routes an event to the overlay layer before the widget tree sees it.
 ///

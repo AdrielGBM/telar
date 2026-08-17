@@ -1,59 +1,23 @@
 //! Shared helpers for the headless integration tests: a no-op paths provider and a minimal real app that
-//! fills its whole window with one solid color (recomputing layout on the WindowResized that AppHandler
-//! synthesizes at mount).
+//! fills its whole window with one solid color.
 
 // Each test binary compiles this module whole but uses only the helpers it needs.
 #![allow(dead_code)]
 
 use telar::{
-    App, AvailableSpace, Color, Component, Event, EventResult, LayoutItem, LayoutStyle, NodeId,
-    RectStyle, Rectangle, RenderNode, SizeDimension, compute_layout, mark_dirty, new_container,
+    App, Color, Component, LayoutStyle, RectStyle, Rectangle, SizeDimension, WindowRoot,
     reset_layout_runtime,
 };
 
-struct FillRoot {
-    root: NodeId,
-    rect: Rectangle,
-}
-
-impl FillRoot {
-    fn new(color: Color) -> Self {
-        let rect = Rectangle::new(
-            LayoutStyle::new()
-                .width(SizeDimension::Percent(1.0))
-                .height(SizeDimension::Percent(1.0)),
-            move || RectStyle::filled(color, 0.0),
-        )
-        .unwrap();
-        let root = new_container(
-            LayoutStyle::new()
-                .width(SizeDimension::Percent(1.0))
-                .height(SizeDimension::Percent(1.0)),
-            &[rect.layout_node()],
-        )
-        .unwrap();
-        Self { root, rect }
-    }
-}
-
-impl Component for FillRoot {
-    fn view(&self) -> RenderNode {
-        self.rect.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        if let Event::WindowResized { width, height } = event {
-            mark_dirty(self.root).ok();
-            compute_layout(
-                self.root,
-                AvailableSpace::Definite(*width as f32),
-                AvailableSpace::Definite(*height as f32),
-            )
-            .ok();
-            return EventResult::Handled;
-        }
-        EventResult::Ignored
-    }
+fn fill_root(color: Color) -> Box<dyn Component> {
+    let rect = Rectangle::new(
+        LayoutStyle::new()
+            .width(SizeDimension::Percent(1.0))
+            .height(SizeDimension::Percent(1.0)),
+        move || RectStyle::filled(color, 0.0),
+    )
+    .unwrap();
+    Box::new(WindowRoot::new(Box::new(rect)))
 }
 
 /// A real rsx app whose window is entirely one solid color.
@@ -64,7 +28,7 @@ pub struct FillApp {
 impl App for FillApp {
     fn root(&self) -> Box<dyn Component> {
         reset_layout_runtime();
-        Box::new(FillRoot::new(self.color))
+        fill_root(self.color)
     }
 
     fn clear_color(&self) -> Option<Color> {
@@ -86,7 +50,7 @@ impl App for MaybePanicApp {
             "MaybePanicApp: intentional build panic"
         );
         reset_layout_runtime();
-        Box::new(FillRoot::new(self.color))
+        fill_root(self.color)
     }
 
     fn clear_color(&self) -> Option<Color> {

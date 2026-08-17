@@ -35,17 +35,17 @@ pub enum Edge {
 /// Enter-animation duration and slide travel.
 const ENTER_MS: u64 = 200;
 const SLIDE_DISTANCE: f32 = 24.0;
-const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+pub(crate) const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
 #[derive(Clone, Copy)]
-enum EnterMotion {
+pub(crate) enum EnterMotion {
     Slide(Edge),
     Fade,
 }
 
 /// The transform matrix and opacity for an enter animation at `progress` (0 = just opened, 1 = settled).
 /// A slide starts `SLIDE_DISTANCE` off its edge and eases to rest; both forms fade in.
-fn enter_transform(motion: EnterMotion, progress: f32) -> ([f32; 6], f32) {
+pub(crate) fn enter_transform(motion: EnterMotion, progress: f32) -> ([f32; 6], f32) {
     let p = progress.clamp(0.0, 1.0);
     let opacity = p;
     match motion {
@@ -64,7 +64,7 @@ fn enter_transform(motion: EnterMotion, progress: f32) -> ([f32; 6], f32) {
     }
 }
 
-fn apply_enter(node: RenderNode, matrix: [f32; 6], opacity: f32) -> RenderNode {
+pub(crate) fn apply_enter(node: RenderNode, matrix: [f32; 6], opacity: f32) -> RenderNode {
     let faded = if opacity < 1.0 {
         RenderNode::layer(opacity, 0.0, [node])
     } else {
@@ -111,7 +111,7 @@ impl SurfaceTransition {
         self.duration
     }
 
-    fn get(&self) -> f32 {
+    pub(crate) fn get(&self) -> f32 {
         self.progress.get()
     }
 }
@@ -283,77 +283,6 @@ impl Component for SurfaceScaffold {
 
     fn debug_name(&self) -> &'static str {
         "SurfaceScaffold"
-    }
-}
-
-pub struct SurfaceRoot {
-    root: NodeId,
-    content: Box<dyn LayoutItem>,
-    transition: Option<SurfaceTransition>,
-}
-
-impl SurfaceRoot {
-    pub fn new(content: Box<dyn LayoutItem>) -> Result<Self, LayoutError> {
-        let root = new_container(
-            LayoutStyle::new()
-                .flex_row()
-                .width(SizeDimension::Percent(1.0))
-                .height(SizeDimension::Percent(1.0)),
-            &[content.layout_node()],
-        )?;
-        Ok(Self {
-            root,
-            content,
-            transition: None,
-        })
-    }
-
-    pub fn animate_in(self) -> Self {
-        self.animate(SurfaceTransition::enter())
-    }
-
-    /// Drives the root from a transition the *caller* owns, so it can also send the surface back out — see
-    /// [`SurfaceTransition::leave`].
-    pub fn animate(mut self, transition: SurfaceTransition) -> Self {
-        self.transition = Some(transition);
-        self
-    }
-}
-
-impl LayoutItem for SurfaceRoot {
-    fn layout_node(&self) -> NodeId {
-        self.root
-    }
-}
-
-impl Component for SurfaceRoot {
-    fn view(&self) -> RenderNode {
-        let content = self.content.view();
-        match &self.transition {
-            Some(transition) => {
-                let (_, opacity) = enter_transform(EnterMotion::Fade, transition.get());
-                apply_enter(content, IDENTITY, opacity)
-            }
-            None => content,
-        }
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        if let Event::WindowResized { width, height } = event {
-            mark_dirty(self.root).ok();
-            compute_layout(
-                self.root,
-                AvailableSpace::Definite(*width as f32),
-                AvailableSpace::Definite(*height as f32),
-            )
-            .ok();
-            return EventResult::Handled;
-        }
-        self.content.on_event(event)
-    }
-
-    fn debug_name(&self) -> &'static str {
-        "SurfaceRoot"
     }
 }
 
