@@ -9,7 +9,7 @@ A modular Rust UI framework with its own template language, reactive signals and
 
 Telar draws every pixel itself — there is no webview and no native widget toolkit underneath. Components are written in `.rsx`, an indentation-based template language that compiles to plain Rust at build time, so what ships is a single binary with no runtime interpreter.
 
-> **Early days.** Telar is at `0.1.3`. The APIs work and are exercised by the apps in this repo, but they will keep moving before `1.0`.
+> **Early days.** Telar is at `0.1.4`. The APIs work and are exercised by the apps in this repo, but they will keep moving before `1.0`.
 
 ## A component
 
