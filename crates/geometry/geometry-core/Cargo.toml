@@ -1,13 +1,13 @@
 [package]
 name = "telar-geometry-core"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Geometry and color primitives for Telar: points, rects, transforms, border radii and Oklch colors."
 keywords = ["telar", "geometry", "color", "graphics", "oklch"]
 categories = ["graphics", "mathematics"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]

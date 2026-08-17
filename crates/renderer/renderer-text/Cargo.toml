@@ -1,14 +1,14 @@
 [package]
 name = "telar-renderer-text"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Text shaping, glyph atlas and COLR glyph rendering for Telar, built on cosmic-text."
 keywords = ["telar", "text", "font", "shaping", "rendering"]
 categories = ["rendering", "text-processing", "graphics"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 cosmic-text = { version = "0.19.0", features = ["shape-run-cache"] }
@@ -19,7 +19,7 @@ renderer-core = { workspace = true }
 rustc-hash = { workspace = true }
 skrifa = "0.45"
 tiny-skia = { workspace = true }
-renderer-cache.workspace = true
+renderer-cache = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.8.2"

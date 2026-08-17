@@ -1,14 +1,14 @@
 [package]
 name = "telar-macros"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Procedural macros that compile .rsx files into Telar components at build time."
 keywords = ["telar", "rsx", "macros", "proc-macro", "ui"]
 categories = ["development-tools::procedural-macro-helpers", "gui"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [lib]
 proc-macro = true

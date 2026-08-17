@@ -1,14 +1,14 @@
 [package]
 name = "telar-renderer-assets"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Decodes SVG and PNG/JPEG assets into Telar's drawing vocabulary, at runtime or baked at build time."
 keywords = ["telar", "svg", "image", "assets", "rendering"]
 categories = ["rendering::data-formats", "multimedia::images", "graphics"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 renderer-core = { workspace = true }

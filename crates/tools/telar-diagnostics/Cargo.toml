@@ -1,16 +1,16 @@
 [package]
 name = "telar-diagnostics"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 # Not on crates.io: telar-analyzer is its only consumer and that one ships as a binary. Publish it the day the analyzer goes up.
 publish = false
 description = "Line-based diagnostic types shared across the Telar .rsx toolchain, with optional LSP conversion."
 keywords = ["telar", "rsx", "diagnostics", "lsp", "tooling"]
 categories = ["development-tools", "development-tools::debugging"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 lsp-types = "0.97"

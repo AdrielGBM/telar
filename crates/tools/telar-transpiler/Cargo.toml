@@ -1,14 +1,14 @@
 [package]
 name = "telar-transpiler"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Transpiles parsed .rsx documents into compilable Rust source for the Telar runtime."
 keywords = ["telar", "rsx", "transpiler", "codegen", "ui"]
 categories = ["development-tools::build-utils", "compilers", "gui"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 # Always-on baker: renderer-assets (usvg/resvg/image) compiles into the proc-macro HOST only, never the app binary. `dynamic-svg`/`dynamic-image` are the host features that let the baker parse SVG / decode images at build time.

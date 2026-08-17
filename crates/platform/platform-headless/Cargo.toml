@@ -1,14 +1,14 @@
 [package]
 name = "telar-platform-headless"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Headless platform backend for Telar: offscreen windows for tests and benchmarks."
 keywords = ["telar", "headless", "platform", "testing", "gui"]
 categories = ["gui", "development-tools::testing"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 platform-core = { workspace = true }

@@ -1,14 +1,14 @@
 [package]
 name = "telar-theme-core"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Theme tokens and reactive light/dark mode for Telar."
 keywords = ["telar", "theme", "dark-mode", "ui", "gui"]
 categories = ["gui"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }

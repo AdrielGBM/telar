@@ -1,14 +1,14 @@
 [package]
 name = "telar-renderer-hardware"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "wgpu-based GPU renderer for Telar with path tessellation, blur and compositing."
 keywords = ["telar", "renderer", "wgpu", "gpu", "graphics"]
 categories = ["rendering::engine", "rendering::graphics-api", "graphics"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 renderer-core = { workspace = true }
@@ -21,8 +21,8 @@ lyon = "1.0.19"
 tracing = { workspace = true }
 geometry-core = { workspace = true }
 rustc-hash = { workspace = true }
-renderer-cache.workspace = true
-lru.workspace = true
+renderer-cache = { workspace = true }
+lru = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.8.2"

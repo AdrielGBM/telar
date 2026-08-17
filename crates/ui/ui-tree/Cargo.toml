@@ -1,14 +1,14 @@
 [package]
 name = "telar-ui-tree"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "Component and render-node tree for Telar, with event dispatch and overlay routing."
 keywords = ["telar", "ui", "gui", "tree", "components"]
 categories = ["gui", "data-structures"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 reactive-core = { workspace = true }

@@ -1,14 +1,14 @@
 [package]
 name = "telar-renderer-software"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "CPU rasterizer for Telar, built on tiny-skia, with software surface presentation."
 keywords = ["telar", "renderer", "software", "rasterizer", "2d"]
 categories = ["rendering::engine", "graphics", "gui"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 renderer-core = { workspace = true }
@@ -21,8 +21,8 @@ rustc-hash = { workspace = true }
 wide = { workspace = true }
 rayon = "1"
 smallvec = { workspace = true }
-tracing.workspace = true
-renderer-cache.workspace = true
+tracing = { workspace = true }
+renderer-cache = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 ndk = { version = "0.9", features = ["nativewindow"] }
