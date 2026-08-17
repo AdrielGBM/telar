@@ -393,6 +393,25 @@ struct SurfaceRunner {
     // its real size (a tiling WM may override the requested size); rendering before that would size the
     // surface and the layout differently. `false` until resumed.
     resumed: bool,
+    // As in the single-window runner: built before the window is shown, and the tree behind it assembled only while something is listening.
+    a11y: Option<accesskit_winit::Adapter>,
+    a11y_nodes: Vec<platform_core::AccessNode>,
+    title: String,
+}
+
+impl SurfaceRunner {
+    /// Hands this surface's tree over, if something is listening. The multi-surface counterpart of
+    /// [`WinitRunner::publish_accessibility`] — a detached tab is a window like any other, and a reader that
+    /// can see the first one and not the second is reporting the shell's plumbing rather than the app.
+    fn publish_accessibility(&mut self) {
+        let Some(adapter) = &mut self.a11y else {
+            return;
+        };
+        let nodes = self.handler.accessibility();
+        let title = self.title.clone();
+        adapter.update_if_active(|| crate::accessibility::tree_update(&nodes, &title));
+        self.a11y_nodes = nodes;
+    }
 }
 
 // Brings a surface up: build under a panic guard (T-4.2), so a build that fails/panics returns `false` and
@@ -425,6 +444,7 @@ struct WinitMultiRunner {
     pending: Vec<(SurfaceId, WindowConfig)>,
     surfaces: HashMap<WindowId, SurfaceRunner>,
     created: bool,
+    a11y_proxy: winit::event_loop::EventLoopProxy<UserEvent>,
     // True only on WaitUntil timer expiry; gates keepalive request_redraw so it fires only on timer ticks.
     timer_has_fired: bool,
 }
@@ -452,6 +472,12 @@ impl WinitMultiRunner {
             return;
         };
         let window_id = window.0.id();
+        // Attached here, while the window is still invisible, because that is what the adapter requires.
+        let a11y = accesskit_winit::Adapter::with_event_loop_proxy(
+            event_loop,
+            &window.0,
+            self.a11y_proxy.clone(),
+        );
         let mut surface = SurfaceRunner {
             handler,
             window,
@@ -461,6 +487,9 @@ impl WinitMultiRunner {
             pace: None,
             close_flag,
             resumed: false,
+            a11y: Some(a11y),
+            a11y_nodes: Vec::new(),
+            title: config.title.clone(),
         };
         if resume_now {
             if !resume_surface(&mut surface) {
@@ -477,11 +506,26 @@ impl WinitMultiRunner {
 impl ApplicationHandler<UserEvent> for WinitMultiRunner {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
-            // The multi-surface runner attaches no adapter yet, so nothing sends these to it. Its windows are
-            // built by a factory after the loop is running, and the adapter has to exist before each is shown —
-            // a per-surface hook this backend does not have. Named rather than caught by a wildcard, so adding
-            // it is a compile error here and not a silent no-op.
-            UserEvent::Accessibility(_) => {}
+            // Routed by window: every surface carries its own adapter, so a request names the one it came from.
+            UserEvent::Accessibility(event) => {
+                use accesskit_winit::WindowEvent as AkEvent;
+                let Some(surface) = self.surfaces.get_mut(&event.window_id) else {
+                    return;
+                };
+                match event.window_event {
+                    AkEvent::InitialTreeRequested => surface.publish_accessibility(),
+                    AkEvent::ActionRequested(request) => {
+                        let Some((id, activate)) =
+                            crate::accessibility::requested_focus_id(&request, &surface.a11y_nodes)
+                        else {
+                            return;
+                        };
+                        surface.handler.on_accessibility_action(id, activate);
+                        surface.publish_accessibility();
+                    }
+                    AkEvent::AccessibilityDeactivated => surface.a11y_nodes.clear(),
+                }
+            }
             #[cfg(target_os = "linux")]
             UserEvent::ColorScheme(dark) => {
                 // Bracket each surface's write on its own (this callback is not inside a shared batch bracket).
@@ -604,6 +648,11 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
         }
         // Clone (a cheap Arc bump) so the window borrow doesn't conflict with the mutable handler/input borrows.
         let window = surface.window.clone();
+        let redrawn = matches!(event, WindowEvent::RedrawRequested);
+        // The adapter tracks the window itself — focus, size, scale — so it sees the event first.
+        if let Some(adapter) = &mut surface.a11y {
+            adapter.process_event(&window.0, &event);
+        }
         surface.handler.new_events();
         // Dispatch under a panic guard (T-4.2): a widget handler / render / effect panic unmounts just this
         // surface. about_to_wait (end_batch) is guarded separately so it always runs, keeping the reactive
@@ -624,6 +673,10 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
         }));
         surface.pace = paced.as_ref().copied().unwrap_or(None);
         let panicked = dispatched.is_err() || paced.is_err();
+        // After the frame rather than before, as in the single-window runner: what is announced is the frame that was drawn.
+        if redrawn && !panicked {
+            surface.publish_accessibility();
+        }
         let close = matches!(dispatched, Ok(WindowEventOutcome::CloseRequested));
         // A panicked handler is in an unknown state; don't poll it, just unmount.
         let exit_requested = !panicked && surface.handler.take_exit_request();
@@ -680,6 +733,7 @@ impl MultiSurfacePlatform for WinitPlatform {
             pending: surfaces,
             surfaces: HashMap::new(),
             created: false,
+            a11y_proxy: self.event_loop.create_proxy(),
             timer_has_fired: false,
         };
         // The app-facing redraw waker wakes the loop through this proxy (which redraws every surface), not by

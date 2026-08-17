@@ -62,6 +62,12 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str) -> TreeUpdate {
         if let Some(on) = node.toggled {
             ak.set_toggled(if on { Toggled::True } else { Toggled::False });
         }
+        // Same reason as the state above: a slider that says only "slider" has not reported the one thing it is for.
+        if let Some(v) = node.value {
+            ak.set_numeric_value(v.now);
+            ak.set_min_numeric_value(v.min);
+            ak.set_max_numeric_value(v.max);
+        }
         children.push(id);
         updates.push((id, ak));
     }
@@ -124,6 +130,7 @@ mod tests {
             focused: false,
             enabled: true,
             toggled: None,
+            value: None,
         }
     }
 

@@ -94,6 +94,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
     let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(|f| -> Rc<dyn Fn(f32)> { Rc::from(f) });
     let key_on_change = on_change.clone();
+    let announced_value = value.clone();
     let commit_value = value.clone();
 
     // The fill: an `absolute_fill` child (so it exactly overlays the track) scaled horizontally from the left
@@ -160,6 +161,14 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // One step per press, or a twentieth of the range when the caller named no step — the granularity a
     // continuous value has to invent for a keyboard, which only ever hands it whole presses.
     .control(Role::Slider)
+    .valued({
+        let value = announced_value.clone();
+        move || platform_core::NumericValue {
+            now: value.get() as f64,
+            min: min as f64,
+            max: max as f64,
+        }
+    })
     .on_key({
         let value = commit_value.clone();
         let on_change = key_on_change.clone();

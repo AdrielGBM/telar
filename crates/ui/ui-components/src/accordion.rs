@@ -94,6 +94,7 @@ pub fn accordion(
         || TextStyle::new(shared::font_size(), shared::ink()),
     )?;
 
+    let announced_open = open.clone();
     let toggle_open = open.clone();
     let header = StyledContainer::new(
         header_box(),
@@ -102,6 +103,7 @@ pub fn accordion(
     )?
     .styled_by(header_box)
     .control(Role::Disclosure)
+    .toggled(move || announced_open.get())
     .on_press(move || toggle_open.update(|o| *o = !*o));
 
     // Body: built once from the slot children. Clipped to its own rect so a collapsed (zero-rect) body

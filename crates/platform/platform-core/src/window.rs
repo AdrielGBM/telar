@@ -300,6 +300,7 @@ mod tests {
                 focused: false,
                 enabled: true,
                 toggled: None,
+                value: None,
             }]
         }
     }

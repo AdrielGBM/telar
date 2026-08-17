@@ -11,7 +11,7 @@
 use std::rc::Rc;
 
 use layout_core::NodeId;
-use platform_core::{Key, ModifiersState, NamedKey};
+use platform_core::{Key, ModifiersState, NamedKey, NumericValue};
 use reactive_core::{RwSignal, signal};
 use rustc_hash::FxHashSet;
 
@@ -112,6 +112,7 @@ struct Entry {
     /// "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to
     /// get the answer that is true then.
     toggled: Option<Rc<dyn Fn() -> bool>>,
+    value: Option<Rc<dyn Fn() -> NumericValue>>,
 }
 
 /// Per-surface keyboard-focus state: the id allocator, the focused-widget signal, and the tab order.
@@ -294,6 +295,7 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                 role,
                 tabbable,
                 toggled: None,
+                value: None,
             }),
         }
         if kind == FocusKind::TextEntry {
@@ -468,6 +470,17 @@ pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
     });
 }
 
+/// Declares that `id` carries a number, and how to read it now. The counterpart of [`set_toggled`] for the
+/// roles whose state is a value rather than a flag.
+pub fn set_value(id: FocusId, read: impl Fn() -> NumericValue + 'static) {
+    let read: Rc<dyn Fn() -> NumericValue> = Rc::new(read);
+    with_focus(|s| {
+        if let Some(entry) = s.order.iter_mut().find(|e| e.id == id) {
+            entry.value = Some(read);
+        }
+    });
+}
+
 /// One focusable as the accessibility layer sees it: where it is, what it is, and whether it is available.
 pub struct Exposed {
     pub id: FocusId,
@@ -477,6 +490,8 @@ pub struct Exposed {
     pub enabled: bool,
     /// Its checked state, for the controls that carry one.
     pub toggled: Option<bool>,
+    /// Its numeric reading, for the controls that carry one.
+    pub value: Option<NumericValue>,
 }
 
 /// The focusables a screen reader should be told about, in tab order.
@@ -488,10 +503,17 @@ pub fn exposed() -> Vec<Exposed> {
     let (order, scopes) = with_focus_ref(|s| {
         // The state closures come out with everything else and are called after the borrow drops: reading one
         // can read a signal, and reading a signal can flush effects back through this very slot.
-        let order: Vec<(FocusId, Option<NodeId>, Role, Option<Rc<dyn Fn() -> bool>>)> = s
+        type Row = (
+            FocusId,
+            Option<NodeId>,
+            Role,
+            Option<Rc<dyn Fn() -> bool>>,
+            Option<Rc<dyn Fn() -> NumericValue>>,
+        );
+        let order: Vec<Row> = s
             .order
             .iter()
-            .map(|e| (e.id, e.node, e.role, e.toggled.clone()))
+            .map(|e| (e.id, e.node, e.role, e.toggled.clone(), e.value.clone()))
             .collect();
         let scopes: Vec<(NodeId, Rc<dyn Fn() -> bool>, bool, ScopeReason)> = s
             .scopes
@@ -508,7 +530,7 @@ pub fn exposed() -> Vec<Exposed> {
 
     order
         .into_iter()
-        .filter_map(|(id, node, role, toggled)| {
+        .filter_map(|(id, node, role, toggled, value)| {
             let node = node?;
             reachable(Some(node), &hiding).then(|| Exposed {
                 id,
@@ -520,6 +542,7 @@ pub fn exposed() -> Vec<Exposed> {
                         && layout_reactive::is_descendant_of(node, *scope)
                 }),
                 toggled: toggled.as_ref().map(|read| read()),
+                value: value.as_ref().map(|read| read()),
             })
         })
         .collect()

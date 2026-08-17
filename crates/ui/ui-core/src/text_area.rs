@@ -61,7 +61,12 @@ impl TextArea {
         let (node, rect) = new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         let caret = value.with(|s| s.len());
         let id = focus::next_id();
-        focus::register_at(id, focus::FocusKind::TextEntry, node);
+        focus::register_with_role(
+            id,
+            focus::FocusKind::TextEntry,
+            node,
+            focus::Role::MultilineTextInput,
+        );
         let remeasure = {
             let value = value.clone();
             effect(move || {

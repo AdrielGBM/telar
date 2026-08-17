@@ -1,7 +1,8 @@
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
-    Cursor, Event, Key, NamedKey, PointerButton, PointerSource, ScrollDelta, WindowCommand,
+    Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, ScrollDelta,
+    WindowCommand,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, RectStyle, ShapeStyle, Stroke};
@@ -328,6 +329,15 @@ impl StyledContainer {
     pub fn toggled(self, state: impl Fn() -> bool + 'static) -> Self {
         if let Some(id) = self.focusable.id {
             focus::set_toggled(id, state);
+        }
+        self
+    }
+
+    /// Declares the number this box carries, so a reader says where a slider stands and not only that it is
+    /// one. The counterpart of [`toggled`](Self::toggled) for a control whose state is a value.
+    pub fn valued(self, read: impl Fn() -> NumericValue + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_value(id, read);
         }
         self
     }

@@ -60,4 +60,18 @@ pub struct AccessNode {
     /// Whether a control that carries a checked state is in it. `None` for the roles that have no such state —
     /// and never a default of `false` for the ones that do, which would announce every checkbox as unticked.
     pub toggled: Option<bool>,
+    /// Where a control that carries a number stands, and between which bounds.
+    ///
+    /// Without it a slider announces "Volume, slider" and stops — the reader can say what the control is and
+    /// not what it says, which is the one thing a value control exists to report. `None` for the roles that
+    /// carry no number.
+    pub value: Option<NumericValue>,
+}
+
+/// A numeric control's reading: where it is now, and the range that makes that number mean something.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NumericValue {
+    pub now: f64,
+    pub min: f64,
+    pub max: f64,
 }

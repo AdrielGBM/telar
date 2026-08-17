@@ -80,6 +80,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let base_color = color.clone();
         let hover_selected = selected.clone();
         let hover_color = color.clone();
+        let announced_selected = selected.clone();
         let press_selected = selected.clone();
         let tab = StyledContainer::new(
             tab_box(),
@@ -89,6 +90,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         .styled_by(tab_box)
         .hover_style(move |_r| tab_rect(hover_selected.get() == idx, hover_color.as_ref(), true))
         .control(Role::Tab)
+        .toggled(move || announced_selected.get() == idx)
         .on_press(move || press_selected.set(idx));
         tab_items.push(box_item(tab));
     }
