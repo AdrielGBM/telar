@@ -81,6 +81,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
         backend,
         prefs,
         "telar-window".to_string(),
+        super::host::SurfaceRenderer::builtin(),
     );
     handler.surface = Some(Surface::new());
     let boxed: Box<dyn EventHandler<WinitWindow>> = Box::new(handler);

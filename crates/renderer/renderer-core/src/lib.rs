@@ -34,7 +34,7 @@ pub use metrics::{
 };
 pub use path::{PathData, PathVerb};
 pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers};
-pub use renderer::RenderBackend;
+pub use renderer::{RenderBackend, RendererBuild, RendererFactory};
 pub use shadow::ShadowLayout;
 pub use style::{
     BorderWidths, FillRule, GlyphRaster, Gradient, GradientKind, GradientStop, GradientStops,

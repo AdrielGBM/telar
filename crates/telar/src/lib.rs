@@ -35,7 +35,7 @@ mod raster;
 pub mod runner;
 #[cfg(feature = "runtime")]
 pub mod surface;
-#[cfg(feature = "runtime")]
+#[cfg(feature = "hardware")]
 mod texture_ui;
 #[cfg(feature = "runtime")]
 pub mod tree;
@@ -90,10 +90,10 @@ pub use platform_core::{
     WindowPosition, push_window_command, take_window_commands,
 };
 // The seam for an application that renders its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on.
-#[cfg(feature = "runtime")]
+#[cfg(feature = "hardware")]
 pub use renderer_hardware::gpu;
 // The same seam facing the other way: Telar composing into a texture the application owns.
-#[cfg(feature = "runtime")]
+#[cfg(feature = "hardware")]
 pub use texture_ui::{TextureUi, TextureUiError};
 // Backend-author API: an out-of-tree `Platform` (e.g. a Wayland layer-shell backend) implements `Platform`
 // and `Window` against these, driving a full rsx app via `run_with_platform` without depending on
@@ -121,9 +121,12 @@ pub use renderer_core::{
     PathData, PathStyle, PathVerb, RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke,
     TextAlign, TextRun, TextStyle, for_each_with_matrix, hash_draw_commands, transform_clip_rect,
 };
-// Backend-author API, the measuring half: a frontend installs `TextMetrics` for whatever "how wide is this string" means on its surface — cells rather than glyphs, on a terminal.
+// Backend-author API, the drawing half: a frontend implements `RendererFactory`, installs it with `run_with_platform_and_renderer`, and installs `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]
-pub use renderer_core::{TextMetrics, set_default_text_metrics, set_text_metrics};
+pub use renderer_core::{
+    FontConfig, RenderBackend, RendererBuild, RendererFactory, TextMetrics,
+    set_default_text_metrics, set_text_metrics,
+};
 
 /// Installs the glyph-shaping text measurer, for code that lays out text with no runner behind it — a layout test,
 /// or a tool that composes a tree only to measure it.
@@ -137,7 +140,7 @@ pub fn install_default_text_metrics() {
 
 /// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the
 /// memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
-#[cfg(feature = "runtime")]
+#[cfg(feature = "software")]
 pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer_caches};
 pub use services_core::{AppPathsProvider, NoPaths};
 // Available in every GUI build, not opt-in: `ui_core::Surface` composes the per-surface service scope, so
@@ -250,6 +253,9 @@ pub use runner::run_multi_with_platform;
 pub use runner::run_with_platform;
 #[cfg(feature = "runtime")]
 pub use runner::set_default_font_family;
+// The renderer seam, and what a window has to be for the built-in renderers to draw on it.
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub use runner::{SurfaceWindow, run_with_platform_and_renderer};
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
 pub use runner::{open_window, run_app_windowed, run_app_with_name};
 

@@ -9,10 +9,12 @@ mod desktop;
 mod dev_window;
 mod font_config;
 mod frame_thread;
+#[cfg(feature = "hardware")]
 pub(crate) use font_config::offscreen_hardware_font_config;
 pub use font_config::set_default_font_family;
 mod generic;
 mod handler;
+mod host;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 mod hot_host;
 mod multi;
@@ -45,7 +47,8 @@ const COMMAND_BUF_POOL_CAP: usize = 3;
 pub use android::run_android_app_with_name;
 #[cfg(all(feature = "desktop", not(target_os = "android")))]
 pub use desktop::{open_window, run_app_windowed, run_app_with_name};
-pub use generic::run_with_platform;
+pub use generic::{run_with_platform, run_with_platform_and_renderer};
+pub use host::SurfaceWindow;
 #[cfg(all(feature = "dev", not(target_os = "android")))]
 pub use hot_host::run_hot_reload_host;
 pub use multi::{build_surface_handler, run_multi_with_platform};

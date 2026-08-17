@@ -1,9 +1,7 @@
 use crate::dev_plugin::{DevAction, DevPlugin};
 use platform_core::{Event, EventHandler, Window, WindowCommand};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
-use renderer_core::{RenderBackend, RendererError};
-use renderer_hardware::{HardwareRenderer, HardwareRendererConfig};
-use renderer_software::SoftwareRenderer;
+use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
 use ui_core::EventResult;
 
@@ -12,11 +10,9 @@ use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
 
 use super::COMMAND_BUF_POOL_CAP;
-use super::font_config::{
-    SystemFonts, build_font_config, build_hardware_font_config, build_software_renderer_config,
-    hardware_cache_path,
-};
-use super::frame_thread::{FrameMsg, spawn_render_thread};
+use super::font_config::{SystemFonts, build_font_config};
+use super::frame_thread::FrameMsg;
+use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
 use super::{FRAME_BUDGET, HW_KEEPALIVE_GRACE, HW_KEEPALIVE_INTERVAL};
 
 pub(super) struct AppHandler<W, D: DevPlugin>
@@ -35,8 +31,14 @@ where
     // The app's mounted UI — obtained from the app rather than built here, because under hot reload the tree has
     // to live in the dylib's runtime for its segments to subscribe to anything (see `crate::tree`).
     pub(super) tree: Option<Box<dyn crate::tree::UiTree>>,
+    // The offscreen renderer, driven inline on this thread. `None` for an on-screen surface, whose renderer lives on the render thread the host owns.
     pub(super) renderer: Option<Box<dyn RenderBackend>>,
-    pub(super) renderer_is_hardware: bool,
+    // Who builds this surface's renderer and keeps it running; behind `dyn` because the frame loop must work for a renderer it cannot name (see `super::host`).
+    pub(super) renderer_host: Box<dyn RendererHost<W>>,
+    // How this window answers for its OS handles, or `None` when it has none: `platform_core::Window` promises none, so the entry point that knows the window type supplies this.
+    pub(super) raw_handles: Option<RawHandles<W>>,
+    // Whether the live renderer wants frames while the screen is idle, which the host reports at every start.
+    pub(super) renderer_keepalive: bool,
     // The transparency the live renderer was built for. Only `remount` reads it: an app whose surface changes
     // from opaque to transparent between two mounts needs the renderer built again, and asking the app after
     // the rebuild would compare the new answer with itself.
@@ -46,8 +48,6 @@ where
     pub(super) prefs: UserPrefs,
     pub(super) paths: Box<dyn AppPathsProvider>,
     pub(super) pending_restart: bool,
-    pub(super) pending_renderer:
-        Option<std::thread::JoinHandle<Result<HardwareRenderer<W>, RendererError>>>,
     pub(super) _flush_notify: Option<FlushNotifyHandle>,
     pub(super) scale_factor: f32,
     // Set when the app pushed WindowCommand::Close (a custom title-bar close button); polled by the platform
@@ -68,17 +68,12 @@ where
     pub(super) font_paths: Vec<std::path::PathBuf>,
     pub(super) font_data: Vec<Vec<u8>>,
     pub(super) _window: std::marker::PhantomData<W>,
-    pub(super) render_tx: Option<std::sync::mpsc::SyncSender<FrameMsg>>,
-    pub(super) render_join: Option<RenderJoin<W>>,
-    // F2: command buffers recycled back from the render thread, plus a small free-list the send path
-    // refills instead of allocating a fresh Vec each frame.
-    pub(super) render_ret_rx: Option<std::sync::mpsc::Receiver<Vec<renderer_core::DrawCommand>>>,
+    // F2: a small free-list the send path refills with the buffers the render thread hands back, instead of allocating a fresh Vec each frame.
     pub(super) command_buf_pool: Vec<Vec<renderer_core::DrawCommand>>,
     /// Just the text of the last frame, kept so the accessibility tree can be built when it is asked for
     /// rather than on every frame. A control is named by the text drawn inside it, and that is the only part
     /// of a frame the naming needs — a handful of commands, held by refcounted `Arc<str>`.
     pub(super) frame_text: Vec<renderer_core::DrawCommand>,
-    pub(super) hw_renderer: Option<HardwareRenderer<W>>,
     #[cfg(all(feature = "dev", not(target_os = "android")))]
     pub(super) hot_reload_rx: Option<std::sync::mpsc::Receiver<crate::hot::HotEvent>>,
 }
@@ -121,34 +116,6 @@ impl FrameGeneration {
     }
 }
 
-/// A join handle for the render thread, kept typed per backend rather than boxed: joining hardware has to
-/// hand back a concrete `HardwareRenderer` for [`AppHandler::hw_renderer`] to rebind on the next resume, and
-/// a `Box<dyn RenderBackend>` could not.
-pub(super) enum RenderJoin<W: Window + Clone + Send + Sync + 'static> {
-    Hardware(std::thread::JoinHandle<HardwareRenderer<W>>),
-    Software(std::thread::JoinHandle<SoftwareRenderer<W, W>>),
-}
-
-impl<W: Window + Clone + Send + Sync + 'static> RenderJoin<W> {
-    /// Waits for the thread to finish, yielding the hardware renderer when there is one to keep warm.
-    /// Software has no device or pipeline cache worth carrying across a suspend, so it is simply dropped.
-    fn join(self) -> Option<HardwareRenderer<W>> {
-        match self {
-            RenderJoin::Hardware(join) => match join.join() {
-                Ok(hw) => Some(hw),
-                Err(_) => {
-                    tracing::warn!("render thread panicked on suspend, renderer lost");
-                    None
-                }
-            },
-            RenderJoin::Software(join) => {
-                let _ = join.join();
-                None
-            }
-        }
-    }
-}
-
 // Assembles an `AppHandler` from its ready inputs — the one place the large field literal lives, shared by the
 // single-surface `run_with_platform` and the per-surface handler factory in `run_multi_with_platform`. Builds
 // no renderer and touches no thread-local state, so it is safe to call on whatever thread will later drive the
@@ -162,24 +129,27 @@ pub(super) fn build_app_handler<W, D>(
     backend: crate::config::RendererBackend,
     prefs: UserPrefs,
     app_name: String,
+    renderer: SurfaceRenderer<W>,
 ) -> AppHandler<W, D>
 where
     W: Window + Clone + Send + Sync + 'static,
     D: DevPlugin,
 {
+    let SurfaceRenderer { host, raw_handles } = renderer;
     AppHandler::<W, D> {
         app,
         surface: None,
         window_commands: platform_core::WindowCommandContext::new(),
         tree: None,
         renderer: None,
-        renderer_is_hardware: false,
+        renderer_host: host,
+        raw_handles,
+        renderer_keepalive: false,
         renderer_transparent: false,
         generation: FrameGeneration::default(),
         backend,
         prefs,
         pending_restart: false,
-        pending_renderer: None,
         _flush_notify: None,
         scale_factor: 1.0,
         exit_requested: false,
@@ -199,12 +169,8 @@ where
         font_paths,
         font_data,
         _window: std::marker::PhantomData,
-        render_tx: None,
-        render_ret_rx: None,
         command_buf_pool: Vec::new(),
         frame_text: Vec::new(),
-        render_join: None,
-        hw_renderer: None,
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         hot_reload_rx: None,
     }
@@ -328,46 +294,63 @@ where
         }
     }
 
+    /// Asks the host to start a renderer. `false` means the surface cannot present at all; a build still in flight
+    /// counts as success, because the frame its own wake asks for is what installs it.
+    ///
+    /// `backend` is passed rather than read from `self` because two callers want something else: the dev toggle
+    /// asks for hardware before its saved preference is re-read, and the `Auto` fallback asks for software without
+    /// giving up on hardware for the next restart.
+    fn start_renderer(&mut self, window: &W, backend: RendererBackend) -> bool {
+        let transparent = self.is_transparent();
+        let request = RendererRequest {
+            backend,
+            transparent,
+            font_paths: &self.font_paths,
+            font_data: &self.font_data,
+            paths: self.paths.as_ref(),
+            app_name: &self.app_name,
+        };
+        match self.renderer_host.start(window, &request) {
+            RendererStart::Started { keepalive, label } => {
+                self.renderer_keepalive = keepalive;
+                self.dev.set_renderer_info(label);
+                true
+            }
+            RendererStart::Building => true,
+            RendererStart::Failed(e) => {
+                tracing::error!("renderer creation failed: {e}");
+                false
+            }
+        }
+    }
+
     /// Installs the renderer a background build finished, or asks for another frame while it is still going.
     ///
     /// The re-ask is not belt-and-braces: a window with no renderer requests no frames, so the wake the
     /// builder sends is the only thing pacing this loop — and it can land a hair before the thread has
     /// actually exited.
     fn poll_pending_renderer(&mut self, window: &W) {
-        let Some(handle) = self.pending_renderer.take() else {
+        let Some(outcome) = self.renderer_host.poll() else {
+            if self.renderer_host.is_building() {
+                window.request_redraw();
+            }
             return;
         };
-        if !handle.is_finished() {
-            self.pending_renderer = Some(handle);
-            window.request_redraw();
-            return;
-        }
-        match handle.join().unwrap_or_else(|_| {
-            Err(RendererError::Backend(
-                "renderer thread panicked".to_string(),
-            ))
-        }) {
-            Ok(new_renderer) => {
-                drop(self.renderer.take());
-                // Retire the old render thread — whichever backend it was driving — before the new one takes the surface.
-                self.stop_render_thread();
-                #[cfg(target_os = "linux")]
-                unsafe {
-                    libc::malloc_trim(0);
-                }
-                self.start_hardware_render_thread(new_renderer);
+        match outcome {
+            RendererStart::Started { keepalive, label } => {
+                self.renderer_keepalive = keepalive;
+                self.dev.set_renderer_info(label);
             }
-            // Every path that builds a renderer arrives here, so the fallback lives here too: an `Auto` app whose adapter is missing (or lost, on a restart that already dropped the working one) gets software rather than a window that presents nothing.
-            Err(e) if matches!(self.backend, RendererBackend::Auto) => {
+            RendererStart::Building => {}
+            // Every path that builds a renderer arrives here, so the fallback lives here too: an `Auto` app whose adapter is missing (or lost, on a restart that already dropped the working one) gets software rather than a window that presents nothing. The configured backend stays `Auto`, so a later restart tries hardware again.
+            RendererStart::Failed(e) if matches!(self.backend, RendererBackend::Auto) => {
                 tracing::warn!("HW renderer unavailable ({e}), falling back to SW");
-                let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-                drop(self.renderer.take());
-                self.stop_render_thread();
-                if let Err(e2) = self.start_software_render_thread(window, &system_fonts) {
-                    tracing::error!("SW fallback also failed: {e2}");
-                }
+                self.renderer_host.retire();
+                self.start_renderer(window, RendererBackend::Software);
             }
-            Err(e) => tracing::error!("Background HW renderer creation failed: {e}"),
+            RendererStart::Failed(e) => {
+                tracing::error!("Background HW renderer creation failed: {e}")
+            }
         }
         window.request_redraw();
     }
@@ -383,23 +366,11 @@ where
             .prefs
             .backend
             .unwrap_or_else(config::compile_time_backend);
-        // Drop old renderer and render thread before creating new one to avoid peak memory overlap.
+        // Drop the old renderer and its thread before creating the new one, to avoid peak memory overlap. Nothing is kept warm: a restart exists to change what a renderer is baked with.
         drop(self.renderer.take());
-        self.stop_render_thread();
-        #[cfg(target_os = "linux")]
-        unsafe {
-            libc::malloc_trim(0);
-        }
-        match self.backend {
-            RendererBackend::Software => {
-                let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-                if let Err(e) = self.start_software_render_thread(window, &system_fonts) {
-                    tracing::error!("Failed to switch to SW renderer: {e}");
-                }
-            }
-            // Nothing presents until the build lands, which a restart already accepted by dropping the renderer above; the poll site takes the `Auto` fallback if it fails.
-            RendererBackend::Hardware | RendererBackend::Auto => self.spawn_hardware_build(window),
-        }
+        self.renderer_host.retire();
+        // Nothing presents until a hardware build lands; the poll site takes the `Auto` fallback if it fails.
+        self.start_renderer(window, self.backend);
     }
 
     /// Whether to submit a frame now, and whether it carries new content. The second of the pass's three
@@ -409,8 +380,8 @@ where
         // A continuous region carries new content the tree cannot report: the application repaints its own texture and the draw commands naming it never change. Counting only `is_dirty` here drops such a frame through to the 1 fps keepalive below, which shows a region refilled at sixty once a second.
         let has_content = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
             || self.app.motion_has_continuous();
-        // Keepalive is a GPU power policy, not a property of running on a render thread: hardware keeps taking frames while idle so an idle blit holds the device in an active state (see `about_to_wait`), whereas re-rasterising an unchanged frame on the CPU buys nothing. Both backends now have a render thread, so this must key off the backend, not off `render_tx`.
-        let needs_keepalive = self.renderer_is_hardware || self.dev.keepalive_interval().is_some();
+        // Keepalive is a power policy of the renderer that is running, not a property of having a render thread: hardware keeps taking frames while idle so an idle blit holds the device in an active state (see `about_to_wait`), whereas re-rasterising an unchanged frame on the CPU buys nothing. Every backend has a render thread, so the host reports this at each start rather than it being inferred here.
+        let needs_keepalive = self.renderer_keepalive || self.dev.keepalive_interval().is_some();
         if !has_content && !needs_keepalive {
             return None;
         }
@@ -439,118 +410,6 @@ where
             .window_config()
             .map(|c| c.is_transparent)
             .unwrap_or(false)
-    }
-
-    // Builds the configured on-screen renderer (software, or hardware with an auto→software fallback) and wires
-    // up the render thread for the hardware path. Returns false if renderer creation failed. Split out of
-    // on_resume so the offscreen/headless path (which needs no surface) can bypass it entirely.
-    fn init_windowed_renderer(&mut self, window: &W, system_fonts: &SystemFonts) -> bool {
-        match self.backend {
-            RendererBackend::Software => {
-                if let Err(e) = self.start_software_render_thread(window, system_fonts) {
-                    tracing::error!("SW renderer failed: {e}");
-                    return false;
-                }
-            }
-            RendererBackend::Hardware | RendererBackend::Auto => {
-                // Reuse the renderer saved on suspend (keeps device/pipelines/caches warm); only the surface
-                // is rebound, which is fast and cannot be done off this thread. This branch belongs to resume
-                // alone: `hw_renderer` is only ever populated by `on_suspend`.
-                match self.hw_renderer.take() {
-                    Some(mut existing) => {
-                        match existing.rebind_surface(std::sync::Arc::new(window.clone())) {
-                            Ok(()) => self.start_hardware_render_thread(existing),
-                            Err(e) => {
-                                tracing::warn!("rebinding the suspended renderer failed ({e})");
-                                self.spawn_hardware_build(window);
-                            }
-                        }
-                    }
-                    None => self.spawn_hardware_build(window),
-                }
-            }
-        }
-        true
-    }
-
-    /// Starts building a hardware renderer for `window` off the UI thread, leaving the handle for
-    /// [`EventHandler::on_redraw`] to pick up.
-    ///
-    /// One strategy for all three paths that build one — first resume, a dev backend toggle and a restart —
-    /// rather than two synchronous copies beside the toggle's background build. Until it lands there is no
-    /// renderer and frames are dropped, which is the interval the toggle already lived with; the poll site
-    /// applies the `Auto` → software fallback for every path at once.
-    fn spawn_hardware_build(&mut self, window: &W) {
-        // A second handle for the wake below: until the build lands there is no renderer, so no frame this
-        // thread could ask for would draw anything, and on the first-resume path there is no previous frame
-        // being paced either — the thread that ends the interval is the only one that can end the wait.
-        let wake = window.clone();
-        let window = window.clone();
-        let cache_path = hardware_cache_path(&self.app_name, self.paths.as_ref());
-        let font_paths = self.font_paths.clone();
-        let font_data = self.font_data.clone();
-        let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-        let android = cfg!(target_os = "android");
-        // Computed before the closure: `self` is not `Send`, so its transparency must be captured by value,
-        // not read across the spawn.
-        let transparent = self.is_transparent();
-        self.pending_renderer = Some(std::thread::spawn(move || {
-            let font_config = build_hardware_font_config(font_paths, font_data, &system_fonts);
-            let built = HardwareRenderer::new(
-                window,
-                cache_path.as_deref(),
-                android,
-                font_config,
-                HardwareRendererConfig {
-                    transparent,
-                    ..HardwareRendererConfig::default()
-                },
-            );
-            wake.request_redraw();
-            built
-        }));
-    }
-
-    /// Puts a freshly built hardware renderer on its own thread and wires the frame channels to it.
-    fn start_hardware_render_thread(&mut self, renderer: HardwareRenderer<W>) {
-        let (tx, ret_rx, join) = spawn_render_thread(renderer);
-        self.render_tx = Some(tx);
-        self.render_ret_rx = Some(ret_rx);
-        self.render_join = Some(RenderJoin::Hardware(join));
-        self.renderer_is_hardware = true;
-        self.dev.set_renderer_info("hardware (wgpu)");
-    }
-
-    /// Builds the software rasteriser and puts it on its own thread, exactly as hardware gets. The surface is
-    /// created *here*, on the UI thread, because macOS/iOS refuse to hand out Core Graphics handles anywhere
-    /// else; only the built renderer moves.
-    fn start_software_render_thread(
-        &mut self,
-        window: &W,
-        system_fonts: &SystemFonts,
-    ) -> Result<(), RendererError> {
-        let budget = build_software_renderer_config(
-            self.font_paths.clone(),
-            self.font_data.clone(),
-            system_fonts,
-            self.is_transparent(),
-        );
-        let renderer = SoftwareRenderer::new(window.clone(), window.clone(), budget)?;
-        let (tx, ret_rx, join) = spawn_render_thread(renderer);
-        self.render_tx = Some(tx);
-        self.render_ret_rx = Some(ret_rx);
-        self.render_join = Some(RenderJoin::Software(join));
-        self.renderer_is_hardware = false;
-        self.dev.set_renderer_info("software");
-        Ok(())
-    }
-
-    /// Tears the render thread down and waits for it, so the next one starts against a surface this one is
-    /// provably no longer touching. Returns the hardware renderer when there was one worth keeping warm.
-    fn stop_render_thread(&mut self) -> Option<HardwareRenderer<W>> {
-        drop(self.render_tx.take());
-        self.render_ret_rx = None;
-        self.render_join.take().and_then(RenderJoin::join)
     }
 
     /// Rasterises a frame inline, for the offscreen renderer that has no thread of its own.
@@ -627,20 +486,19 @@ where
         // CPU pixmap (read back via `last_frame_rgba`), forced regardless of the configured backend so the
         // headless path needs no GPU adapter. On-screen windows build the configured renderer.
         let renderer_ok = if window.is_offscreen() {
-            let budget = build_software_renderer_config(
-                self.font_paths.clone(),
-                self.font_data.clone(),
-                &system_fonts,
-                self.is_transparent(),
-            );
-            self.renderer = Some(Box::new(SoftwareRenderer::<W, W>::new_headless(
-                window.width(),
-                window.height(),
-                budget,
-            )));
-            true
+            let transparent = self.is_transparent();
+            let request = RendererRequest {
+                backend: self.backend,
+                transparent,
+                font_paths: &self.font_paths,
+                font_data: &self.font_data,
+                paths: self.paths.as_ref(),
+                app_name: &self.app_name,
+            };
+            self.renderer = self.renderer_host.build_offscreen(window, &request);
+            self.renderer.is_some()
         } else {
-            self.init_windowed_renderer(window, &system_fonts)
+            self.start_renderer(window, self.backend)
         };
         if !renderer_ok {
             return false;
@@ -735,7 +593,10 @@ where
                     }
                     match next {
                         RendererBackend::Software => self.pending_restart = true,
-                        _ => self.spawn_hardware_build(window),
+                        // Straight to a background build rather than through `pending_restart`, so the running renderer keeps presenting until the new one lands.
+                        _ => {
+                            self.start_renderer(window, RendererBackend::Hardware);
+                        }
                     }
                 }
                 DevAction::None => {}
@@ -812,15 +673,16 @@ where
 
         let mut redraw_requested = false;
         {
+            // `None` when this surface has no OS handles to give: the entry point that built the handler decided.
+            let (raw_window_handle, raw_display_handle) = self
+                .raw_handles
+                .map(|of| of(window))
+                .unwrap_or((None, None));
             let mut ctx = crate::app_context::AppCtx {
                 redraw_requested: &mut redraw_requested,
                 redraw_waker: self.redraw_waker.as_ref(),
-                raw_window_handle: raw_window_handle::HasWindowHandle::window_handle(window)
-                    .ok()
-                    .map(|h| h.as_raw()),
-                raw_display_handle: raw_window_handle::HasDisplayHandle::display_handle(window)
-                    .ok()
-                    .map(|h| h.as_raw()),
+                raw_window_handle,
+                raw_display_handle,
             };
             self.app.on_frame(&mut ctx);
         }
@@ -867,8 +729,8 @@ where
         begin_batch();
         renderer_core::perf::tick();
         // F2: reclaim buffers the render thread finished with, capped so the free-list stays tiny.
-        if let Some(rx) = &self.render_ret_rx {
-            while let Ok(buf) = rx.try_recv() {
+        if let Some(channels) = self.renderer_host.channels() {
+            while let Ok(buf) = channels.ret_rx.try_recv() {
                 if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
                     self.command_buf_pool.push(buf);
                 }
@@ -927,8 +789,8 @@ where
         // On-screen: hand the frame to the render thread and return. Drop it if that thread is still busy,
         // which is what keeps input handling off the rasteriser's critical path. On a dropped or disconnected
         // send, recover the buffer for the free-list instead of freeing it.
-        if let Some(tx) = &self.render_tx {
-            if let Err(e) = tx.try_send(msg) {
+        if let Some(channels) = self.renderer_host.channels() {
+            if let Err(e) = channels.tx.try_send(msg) {
                 let recovered = match e {
                     std::sync::mpsc::TrySendError::Full(m)
                     | std::sync::mpsc::TrySendError::Disconnected(m) => m.commands,
@@ -945,9 +807,8 @@ where
 
     fn on_suspend(&mut self) {
         let _surface = self.enter_surface();
-        // Reclaim the renderer so the next resume can rebind the surface instead of rebuilding
-        // device/pipelines/caches. Only hardware has anything worth carrying over.
-        self.hw_renderer = self.stop_render_thread();
+        // Let the host keep whatever makes the next resume cheap: for hardware, a device to rebind rather than rebuild.
+        self.renderer_host.suspend();
     }
 
     fn new_events(&mut self) {
@@ -970,7 +831,7 @@ where
             if let Some(interval) = dev_keepalive {
                 // Dev plugin drives its own cadence (e.g. FPS counter tick-down).
                 Some(interval)
-            } else if self.renderer_is_hardware && self.last_frame.elapsed() < HW_KEEPALIVE_GRACE {
+            } else if self.renderer_keepalive && self.last_frame.elapsed() < HW_KEEPALIVE_GRACE {
                 // F4: hold the GPU in an active power state at 1fps for a short grace window after the
                 // last content frame (covers interactive bursts), then let it sleep — real input/redraw
                 // events still wake the loop. `last_frame` isn't reset by keepalive blits, so its
@@ -1026,6 +887,7 @@ mod tests {
             RendererBackend::Software,
             UserPrefs::default(),
             "generation-test".to_string(),
+            SurfaceRenderer::builtin(),
         )
     }
 

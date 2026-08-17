@@ -58,6 +58,7 @@ pub fn run_hot_reload_host(
         backend,
         prefs,
         app_name.to_owned(),
+        super::host::SurfaceRenderer::builtin(),
     );
     handler.hot_reload_rx = Some(hot_rx);
     if let Err(e) = platform.run(window, handler) {

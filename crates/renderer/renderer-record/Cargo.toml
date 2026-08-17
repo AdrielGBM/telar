@@ -1,0 +1,14 @@
+[package]
+name = "telar-renderer-record"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "A Telar render backend that draws nothing and records what it was asked to draw, for tests without a GPU or a rasteriser."
+keywords = ["telar", "renderer", "testing", "gui"]
+categories = ["gui", "rendering", "development-tools::testing"]
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+renderer-core = { workspace = true }

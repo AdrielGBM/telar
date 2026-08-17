@@ -1,6 +1,5 @@
 use std::sync::RwLock;
 
-use renderer_software::SoftwareRendererConfig;
 use services_core::AppPathsProvider;
 
 // Process-wide default sans-serif family (a shell's theme font). Every surface builds its own font system
@@ -35,6 +34,7 @@ impl SystemFonts {
     }
 }
 
+#[cfg(feature = "hardware")]
 pub(super) fn hardware_cache_path(
     app_name: &str,
     paths: &dyn AppPathsProvider,
@@ -47,6 +47,7 @@ pub(super) fn hardware_cache_path(
 ///
 /// No paths provider, because there is no window whose platform would supply one — a renderer built for a
 /// texture is not a surface the OS knows about.
+#[cfg(feature = "hardware")]
 pub(crate) fn offscreen_hardware_font_config(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
@@ -61,6 +62,7 @@ pub(crate) fn offscreen_hardware_font_config(
     )
 }
 
+#[cfg(feature = "hardware")]
 pub(super) fn build_hardware_font_config(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
@@ -93,15 +95,16 @@ pub(super) fn build_font_config(
     }
 }
 
+#[cfg(feature = "software")]
 pub(super) fn build_software_renderer_config(
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
     fonts: &SystemFonts,
     transparent: bool,
-) -> SoftwareRendererConfig {
-    SoftwareRendererConfig {
+) -> renderer_software::SoftwareRendererConfig {
+    renderer_software::SoftwareRendererConfig {
         font: build_font_config(font_paths, font_data, fonts),
         transparent,
-        ..SoftwareRendererConfig::default()
+        ..renderer_software::SoftwareRendererConfig::default()
     }
 }

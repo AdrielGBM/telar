@@ -9,6 +9,7 @@ members = [
     "crates/renderer/renderer-core",
     "crates/renderer/renderer-assets",
     "crates/renderer/renderer-cache",
+    "crates/renderer/renderer-record",
     "crates/renderer/renderer-software",
     "crates/renderer/renderer-hardware",
     "crates/renderer/renderer-text",
@@ -44,6 +45,7 @@ default-members = [
     "crates/renderer/renderer-core",
     "crates/renderer/renderer-assets",
     "crates/renderer/renderer-cache",
+    "crates/renderer/renderer-record",
     "crates/renderer/renderer-software",
     "crates/renderer/renderer-hardware",
     "crates/renderer/renderer-text",
@@ -114,6 +116,7 @@ platform-headless = { package = "telar-platform-headless", path = "crates/platfo
 renderer-core = { package = "telar-renderer-core", path = "crates/renderer/renderer-core", version = "0.1.3" }
 renderer-assets = { package = "telar-renderer-assets", path = "crates/renderer/renderer-assets", version = "0.1.3" }
 renderer-cache = { package = "telar-renderer-cache", path = "crates/renderer/renderer-cache", version = "0.1.3" }
+renderer-record = { package = "telar-renderer-record", path = "crates/renderer/renderer-record", version = "0.1.3" }
 reactive-local = { package = "telar-reactive-local", path = "crates/reactive/reactive-local", version = "0.1.3" }
 renderer-software = { package = "telar-renderer-software", path = "crates/renderer/renderer-software", version = "0.1.3" }
 renderer-hardware = { package = "telar-renderer-hardware", path = "crates/renderer/renderer-hardware", version = "0.1.3" }

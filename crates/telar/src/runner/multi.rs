@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use platform_core::{EventHandler, MultiSurfacePlatform, PlatformError, SurfaceId, Window};
+use platform_core::{EventHandler, MultiSurfacePlatform, PlatformError, SurfaceId};
 use services_core::AppPathsProvider;
 
 use crate::app::App;
@@ -30,7 +30,7 @@ pub fn run_multi_with_platform<P, A, PF, AF>(
 ) -> Result<(), PlatformError>
 where
     P: MultiSurfacePlatform,
-    P::Window: Clone + Send + Sync + 'static,
+    P::Window: super::host::SurfaceWindow,
     A: App + 'static,
     PF: Fn(SurfaceId) -> Box<dyn AppPathsProvider> + 'static,
     AF: Fn(SurfaceId) -> A + 'static,
@@ -65,6 +65,7 @@ where
             backend,
             prefs,
             app_name.clone(),
+            super::host::SurfaceRenderer::builtin(),
         );
         // Single-thread multi-surface (M3): every surface shares this UI thread and the one reactive runtime,
         // so each needs its own `Surface` world (layout/overlay/focus/...). The handler activates it around
@@ -85,7 +86,7 @@ pub fn build_surface_handler<W, A>(
     app_name: &str,
 ) -> Box<dyn EventHandler<W>>
 where
-    W: Window + Clone + Send + Sync + 'static,
+    W: super::host::SurfaceWindow,
     A: App + 'static,
 {
     let prefs = UserPrefs::load(app_name, paths.as_ref());
@@ -98,6 +99,7 @@ where
         backend,
         prefs,
         app_name.to_string(),
+        super::host::SurfaceRenderer::builtin(),
     );
     handler.surface = Some(ui_core::Surface::new());
     Box::new(handler)

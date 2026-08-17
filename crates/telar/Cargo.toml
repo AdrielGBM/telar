@@ -1,23 +1,23 @@
 [package]
 name = "telar"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
 description = "A modular Rust UI framework with its own template language, reactive signals and a self-contained renderer."
 keywords = ["ui", "gui", "framework", "reactive", "declarative"]
 categories = ["gui", "rendering", "graphics"]
-readme.workspace = true
-license.workspace = true
-repository.workspace = true
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 
 [features]
-default = ["runtime", "desktop"]
+default = ["runtime", "desktop", "hardware", "software"]
+
 runtime = [
     "dep:platform-core",
+    "dep:platform-android",
     "dep:renderer-core",
     "dep:renderer-assets",
-    "dep:renderer-software",
-    "dep:renderer-hardware",
     "dep:renderer-text",
     "dep:reactive-core",
     "dep:layout-core",
@@ -27,68 +27,66 @@ runtime = [
     "dep:geometry-core",
     "dep:toml",
     "dep:tracing",
-    "dep:platform-android",
-    # Unconditional because `TextureUi` composes without a window while `HardwareRenderer` is still generic over one, so it names the canonical offscreen marker; the `platform-headless` feature below gates `rasterize`, which stays a separate choice.
-    "dep:platform-headless",
     "dep:libc",
 ]
-desktop = ["runtime", "dep:platform-desktop"]
-dev = [
-    "runtime",
-    "desktop",
-    "dep:libloading",
-    "dep:serde_json",
-]
-preview = ["runtime", "desktop"]
-# The same `[preview]` blocks rendered to PNG on the headless backend, for an app with no desktop window to show
-# them in — a shell, a CI job, a golden-image run. Deliberately does not imply `desktop`: pulling winit in to draw
-# a picture is what made `preview` unreachable for those callers in the first place.
-preview-headless = ["runtime", "dep:platform-headless", "dep:image"]
 
-# Dynamic plugins (production, distinct from dev hot-reload). `plugin` builds the dylib-side driver + the
-# `plugin!` export macro; `plugin-host` adds the host-side loader (pulls libloading, like `dev`).
+# Both renderers are opt-in, so a frontend installing its own via `run_with_platform_and_renderer` compiles
+# neither. `RendererBackend::Auto` resolves to whichever is present.
+# `platform-headless` rides along because `TextureUi` names `HeadlessWindow` as its offscreen marker.
+hardware = ["runtime", "dep:renderer-hardware", "dep:platform-headless"]
+software = ["runtime", "dep:renderer-software"]
+
+desktop = ["runtime", "dep:platform-desktop"]
+# Exposes `rasterize`: draw commands in, pixels out, with no window and no GPU.
+platform-headless = ["runtime", "software", "dep:platform-headless"]
+
+dev = ["runtime", "desktop", "dep:libloading", "dep:serde_json"]
+preview = ["runtime", "desktop"]
+# `platform-headless` plus a PNG encoder, which is the only thing `image` is here for.
+preview-headless = ["platform-headless", "dep:image"]
+
+# Production dylibs, distinct from dev hot-reload: `plugin` is the dylib side, `plugin-host` the loader.
 plugin = ["runtime"]
 plugin-host = ["plugin", "dep:libloading"]
 
 components = ["runtime", "dep:ui-components"]
 navigate = ["runtime", "dep:navigate-core"]
+async-assets = ["runtime", "ui-core/async-assets"]
 di = ["services-core/di"]
+
 svg = ["ui-core?/svg"]
 dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
 dynamic-image = ["renderer-assets?/dynamic-image"]
-async-assets = ["runtime", "ui-core/async-assets"]
-# Exposes `rasterize`. Implies `runtime` for the renderer it drives, and deliberately not `desktop` — the whole point is drawing without a window.
-platform-headless = ["runtime", "dep:platform-headless"]
 
 [dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png"], optional = true }
+libloading = { version = "0.9.0", optional = true }
+raw-window-handle = { workspace = true }
 serde = { workspace = true }
+serde_json = { version = "1", optional = true }
 toml = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 
-platform-core = { workspace = true, optional = true }
-renderer-core = { workspace = true, optional = true }
-renderer-assets = { workspace = true, optional = true }
-renderer-software = { workspace = true, optional = true }
-renderer-hardware = { workspace = true, optional = true }
-renderer-text = { workspace = true, optional = true }
-reactive-core = { workspace = true, optional = true }
-# Always-on (D2): the motion engine is small and dependency-free, and the `telar` facade must always expose `motion::*` for transpiler codegen regardless of which optional features are active.
-motion-core = { workspace = true }
-services-core = { workspace = true }
+geometry-core = { workspace = true, optional = true }
+i18n-core = { workspace = true }
 layout-core = { workspace = true, optional = true }
+# Always-on (D2): the motion engine is small and dependency-free, and the facade must expose `motion::*` for transpiler codegen whatever else is off.
+motion-core = { workspace = true }
+navigate-core = { workspace = true, optional = true }
+platform-core = { workspace = true, optional = true }
+platform-headless = { workspace = true, optional = true }
+reactive-core = { workspace = true, optional = true }
+renderer-assets = { workspace = true, optional = true }
+renderer-core = { workspace = true, optional = true }
+renderer-hardware = { workspace = true, optional = true }
+renderer-software = { workspace = true, optional = true }
+renderer-text = { workspace = true, optional = true }
+services-core = { workspace = true }
+telar-macros = { workspace = true }
 theme-core = { workspace = true, optional = true }
+ui-components = { workspace = true, optional = true }
 ui-core = { workspace = true, optional = true }
 ui-tree = { workspace = true, optional = true }
-ui-components = { workspace = true, optional = true }
-navigate-core = { workspace = true, optional = true }
-geometry-core = { workspace = true, optional = true }
-telar-macros = { workspace = true }
-libloading = { version = "0.9.0", optional = true }
-serde_json = { version = "1", optional = true }
-i18n-core.workspace = true
-raw-window-handle.workspace = true
-platform-headless = { workspace = true, optional = true }
-image = { version = "0.25.10", default-features = false, features = ["png"], optional = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 platform-desktop = { workspace = true, optional = true }
@@ -99,11 +97,12 @@ platform-android = { workspace = true, optional = true }
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
 libc = { version = "0.2.186", optional = true }
 
+[dev-dependencies]
+platform-headless = { workspace = true }
+renderer-record = { workspace = true }
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(telar_hot_reload)',
     'cfg(telar_preview)',
 ] }
-
-[dev-dependencies]
-platform-headless = { workspace = true }

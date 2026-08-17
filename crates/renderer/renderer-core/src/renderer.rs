@@ -1,4 +1,4 @@
-use crate::{Color, DrawCommand, RendererError};
+use crate::{Color, DrawCommand, FontConfig, RendererError};
 
 pub trait RenderBackend {
     /// Begin a new frame. Note: `scale_factor` and `generation` may be ignored by backends that receive pre-scaled commands (see `SoftwareRenderer::begin_frame`).
@@ -52,4 +52,66 @@ pub trait RenderBackend {
     fn applies_scale_factor(&self) -> bool {
         false
     }
+}
+
+// Lets an installed renderer travel the frame pipeline, which is generic over `R: RenderBackend + Send` so it can own a concrete backend and hand it back on join.
+impl RenderBackend for Box<dyn RenderBackend + Send> {
+    fn begin_frame(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale_factor: f32,
+        generation: u64,
+    ) -> Result<(), RendererError> {
+        (**self).begin_frame(width, height, scale_factor, generation)
+    }
+
+    fn render_frame(
+        &mut self,
+        commands: &[DrawCommand],
+        clear_color: Option<Color>,
+    ) -> Result<(), RendererError> {
+        (**self).render_frame(commands, clear_color)
+    }
+
+    fn read_rgba(&self) -> Option<Vec<u8>> {
+        (**self).read_rgba()
+    }
+
+    fn bind_to_render_thread(&mut self) {
+        (**self).bind_to_render_thread()
+    }
+
+    fn idle_sweep_after(&self) -> Option<std::time::Duration> {
+        (**self).idle_sweep_after()
+    }
+
+    fn sweep_idle_caches(&mut self) {
+        (**self).sweep_idle_caches()
+    }
+
+    fn applies_scale_factor(&self) -> bool {
+        (**self).applies_scale_factor()
+    }
+}
+
+/// What a renderer is built from, beyond the surface it draws on.
+pub struct RendererBuild<'a> {
+    /// The faces the app's text is shaped with — the same set the layout-time measurer was configured with, since
+    /// measure and draw have to agree on what a string is as wide as.
+    pub fonts: &'a FontConfig,
+    /// Whether the app asked for a transparent surface. A renderer is *built* for one or the other.
+    pub transparent: bool,
+}
+
+/// Builds the renderer for a surface — the seam an out-of-tree frontend installs to draw Telar's frames itself.
+///
+/// Generic over the window type because that is the platform's business: whoever brings a `Platform` brings the
+/// window this draws on. The backend is boxed and `Send` so the frame pipeline can move it to its own thread.
+pub trait RendererFactory<W>: 'static {
+    fn build(
+        &self,
+        window: &W,
+        build: RendererBuild<'_>,
+    ) -> Result<Box<dyn RenderBackend + Send>, RendererError>;
 }
