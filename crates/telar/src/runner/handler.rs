@@ -284,6 +284,147 @@ where
         })
     }
 
+    /// Swaps in a rebuilt dylib, or shows the banner for one that failed to build. `true` means the frame is
+    /// the reload's own and this pass is over.
+    #[cfg(all(feature = "dev", not(target_os = "android")))]
+    fn poll_hot_reload(&mut self, window: &W) -> bool {
+        let Some(rx) = &self.hot_reload_rx else {
+            return false;
+        };
+        let Ok(event) = rx.try_recv() else {
+            return false;
+        };
+        match event {
+            crate::hot::HotEvent::BuildError(msg) => {
+                self.dev.set_build_error(Some(msg));
+                window.request_redraw();
+                false
+            }
+            crate::hot::HotEvent::Reload(new_path) => match crate::hot::load_hot_app(&new_path) {
+                Ok(new_app) => {
+                    // Carry serializable hot state into the incoming dylib while the old tree (and its signals) is still alive; hot_signal consumes it as components remount.
+                    if let Some(blob) = self.app.hot_snapshot() {
+                        new_app.hot_restore(&blob);
+                    }
+                    // Drop the old tree first so effect closures (which contain code from the old dylib) are destroyed while the old lib is still mapped. Only then replace self.app, which dlcloses the old dylib.
+                    self.tree = None;
+                    self.app = Box::new(new_app);
+                    self.mount_tree(window);
+                    // A successful reload clears any banner from the previous failed build.
+                    self.dev.set_build_error(None);
+                    // The incoming dylib's segments subscribe to signals created in the old one's runtime, so nothing wakes them without this.
+                    if let Some(ref mut tree) = self.tree {
+                        tree.bump_force_ticks();
+                    }
+                    tracing::info!("hot reloaded: {}", new_path.display());
+                    window.request_redraw();
+                    true
+                }
+                Err(e) => {
+                    tracing::error!("hot reload failed: {e}");
+                    false
+                }
+            },
+        }
+    }
+
+    /// Installs the renderer a background build finished, or asks for another frame while it is still going.
+    ///
+    /// The re-ask is not belt-and-braces: a window with no renderer requests no frames, so the wake the
+    /// builder sends is the only thing pacing this loop — and it can land a hair before the thread has
+    /// actually exited.
+    fn poll_pending_renderer(&mut self, window: &W) {
+        let Some(handle) = self.pending_renderer.take() else {
+            return;
+        };
+        if !handle.is_finished() {
+            self.pending_renderer = Some(handle);
+            window.request_redraw();
+            return;
+        }
+        match handle.join().unwrap_or_else(|_| {
+            Err(RendererError::Backend(
+                "renderer thread panicked".to_string(),
+            ))
+        }) {
+            Ok(new_renderer) => {
+                drop(self.renderer.take());
+                // Retire the old render thread — whichever backend it was driving — before the new one takes the surface.
+                self.stop_render_thread();
+                #[cfg(target_os = "linux")]
+                unsafe {
+                    libc::malloc_trim(0);
+                }
+                self.start_hardware_render_thread(new_renderer);
+            }
+            // Every path that builds a renderer arrives here, so the fallback lives here too: an `Auto` app whose adapter is missing (or lost, on a restart that already dropped the working one) gets software rather than a window that presents nothing.
+            Err(e) if matches!(self.backend, RendererBackend::Auto) => {
+                tracing::warn!("HW renderer unavailable ({e}), falling back to SW");
+                let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
+                drop(self.renderer.take());
+                self.stop_render_thread();
+                if let Err(e2) = self.start_software_render_thread(window, &system_fonts) {
+                    tracing::error!("SW fallback also failed: {e2}");
+                }
+            }
+            Err(e) => tracing::error!("Background HW renderer creation failed: {e}"),
+        }
+        window.request_redraw();
+    }
+
+    /// Rebuilds the renderer after a backend switch or a transparency change.
+    fn apply_pending_restart(&mut self, window: &W) {
+        if !self.pending_restart {
+            return;
+        }
+        self.pending_restart = false;
+        self.renderer_transparent = self.is_transparent();
+        self.backend = self
+            .prefs
+            .backend
+            .unwrap_or_else(config::compile_time_backend);
+        // Drop old renderer and render thread before creating new one to avoid peak memory overlap.
+        drop(self.renderer.take());
+        self.stop_render_thread();
+        #[cfg(target_os = "linux")]
+        unsafe {
+            libc::malloc_trim(0);
+        }
+        match self.backend {
+            RendererBackend::Software => {
+                let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
+                if let Err(e) = self.start_software_render_thread(window, &system_fonts) {
+                    tracing::error!("Failed to switch to SW renderer: {e}");
+                }
+            }
+            // Nothing presents until the build lands, which a restart already accepted by dropping the renderer above; the poll site takes the `Auto` fallback if it fails.
+            RendererBackend::Hardware | RendererBackend::Auto => self.spawn_hardware_build(window),
+        }
+    }
+
+    /// Whether to submit a frame now, and whether it carries new content. The second of the pass's three
+    /// clocks: the frame budget gates the whole pass, this gates submission, `about_to_wait` reports the next
+    /// wake. `None` means skip this turn.
+    fn frame_is_due(&self, now: std::time::Instant) -> Option<bool> {
+        // A continuous region carries new content the tree cannot report: the application repaints its own texture and the draw commands naming it never change. Counting only `is_dirty` here drops such a frame through to the 1 fps keepalive below, which shows a region refilled at sixty once a second.
+        let has_content = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
+            || self.app.motion_has_continuous();
+        // Keepalive is a GPU power policy, not a property of running on a render thread: hardware keeps taking frames while idle so an idle blit holds the device in an active state (see `about_to_wait`), whereas re-rasterising an unchanged frame on the CPU buys nothing. Both backends now have a render thread, so this must key off the backend, not off `render_tx`.
+        let needs_keepalive = self.renderer_is_hardware || self.dev.keepalive_interval().is_some();
+        if !has_content && !needs_keepalive {
+            return None;
+        }
+        // A keepalive blit carries no new content, so it runs at the keepalive cadence rather than the frame rate. Enforced here instead of left to `about_to_wait`'s reported interval because a submitted frame is itself a wakeup: its commit makes the compositor fd readable, returning the next dispatch immediately to compose another one.
+        let keepalive_interval = self
+            .dev
+            .keepalive_interval()
+            .unwrap_or(HW_KEEPALIVE_INTERVAL);
+        if !has_content && now.duration_since(self.last_submit) < keepalive_interval {
+            return None;
+        }
+        Some(has_content)
+    }
+
     /// The generation this frame's commands go out under: the tree's own, offset past every tree this surface
     /// has had before it. See [`FrameGeneration`] for why the offset has to exist.
     fn frame_generation(&mut self) -> u64 {
@@ -644,40 +785,8 @@ where
     fn on_redraw(&mut self, window: &W) {
         let _surface = self.enter_surface();
         #[cfg(all(feature = "dev", not(target_os = "android")))]
-        if let Some(rx) = &self.hot_reload_rx {
-            if let Ok(event) = rx.try_recv() {
-                match event {
-                    crate::hot::HotEvent::Reload(new_path) => {
-                        match crate::hot::load_hot_app(&new_path) {
-                            Ok(new_app) => {
-                                // Carry serializable hot state into the incoming dylib while the old tree (and its signals) is still alive; hot_signal consumes it as components remount.
-                                if let Some(blob) = self.app.hot_snapshot() {
-                                    new_app.hot_restore(&blob);
-                                }
-                                // Drop the old tree first so effect closures (which contain code from the old dylib) are destroyed while the old lib is still mapped. Only then replace self.app, which dlcloses the old dylib.
-                                self.tree = None;
-                                self.app = Box::new(new_app);
-                                self.mount_tree(window);
-                                // A successful reload clears any banner from the previous failed build.
-                                self.dev.set_build_error(None);
-                                // The incoming dylib's segments subscribe to signals created in the old one's
-                                // runtime, so nothing wakes them without this.
-                                if let Some(ref mut tree) = self.tree {
-                                    tree.bump_force_ticks();
-                                }
-                                tracing::info!("hot reloaded: {}", new_path.display());
-                                window.request_redraw();
-                                return;
-                            }
-                            Err(e) => tracing::error!("hot reload failed: {e}"),
-                        }
-                    }
-                    crate::hot::HotEvent::BuildError(msg) => {
-                        self.dev.set_build_error(Some(msg));
-                        window.request_redraw();
-                    }
-                }
-            }
+        if self.poll_hot_reload(window) {
+            return;
         }
         // Drive the motion engine before tree_dirty is read below: tick()'s .set() calls only enqueue effects while a batch is open (new_events already opened one), so force a flush here to re-run any segment reading an animated value now, not on the next cycle. This is what makes an animation-only frame (no user event, tree otherwise clean) observe interpolated values in this same frame's tree.commands(). The tree is mounted in the app's own runtime (`crate::tree`), so those values reach the segments that read them even under hot reload — a host-mounted tree would instead re-send the commands composed for the animation's first value (a page stuck at opacity 0) until some event forced a re-render.
         // Everything below composes a frame, so pace the whole pass rather than only capping the render at the end. A platform may call `on_redraw` on every loop turn, and the pass then schedules its own next call — the motion tick's `.set()` writes flush, and the flush notifies the platform to redraw — so the loop free-runs instead of sleeping.
@@ -729,97 +838,12 @@ where
             window.request_redraw();
         }
 
-        if let Some(handle) = self.pending_renderer.take() {
-            if handle.is_finished() {
-                match handle.join().unwrap_or_else(|_| {
-                    Err(RendererError::Backend(
-                        "renderer thread panicked".to_string(),
-                    ))
-                }) {
-                    Ok(new_renderer) => {
-                        drop(self.renderer.take());
-                        // Retire the old render thread — whichever backend it was driving — before the new
-                        // one takes the surface.
-                        self.stop_render_thread();
-                        #[cfg(target_os = "linux")]
-                        unsafe {
-                            libc::malloc_trim(0);
-                        }
-                        self.start_hardware_render_thread(new_renderer);
-                    }
-                    // Every path that builds a renderer arrives here, so the fallback lives here too: an
-                    // `Auto` app whose adapter is missing (or lost, on a restart that already dropped the
-                    // working one) gets software rather than a window that presents nothing.
-                    Err(e) if matches!(self.backend, RendererBackend::Auto) => {
-                        tracing::warn!("HW renderer unavailable ({e}), falling back to SW");
-                        let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-                        drop(self.renderer.take());
-                        self.stop_render_thread();
-                        if let Err(e2) = self.start_software_render_thread(window, &system_fonts) {
-                            tracing::error!("SW fallback also failed: {e2}");
-                        }
-                    }
-                    Err(e) => tracing::error!("Background HW renderer creation failed: {e}"),
-                }
-                window.request_redraw();
-            } else {
-                self.pending_renderer = Some(handle);
-                // The wake the builder sends can land a hair before the thread has actually exited, and a
-                // window with no renderer has nothing else pacing it — so ask again rather than wait for a
-                // frame no one is going to request.
-                window.request_redraw();
-            }
-        }
+        self.poll_pending_renderer(window);
+        self.apply_pending_restart(window);
 
-        if self.pending_restart {
-            self.pending_restart = false;
-            self.renderer_transparent = self.is_transparent();
-            self.backend = self
-                .prefs
-                .backend
-                .unwrap_or_else(config::compile_time_backend);
-            // Drop old renderer and render thread before creating new one to avoid peak memory overlap.
-            drop(self.renderer.take());
-            self.stop_render_thread();
-            #[cfg(target_os = "linux")]
-            unsafe {
-                libc::malloc_trim(0);
-            }
-            match self.backend {
-                RendererBackend::Software => {
-                    let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-                    if let Err(e) = self.start_software_render_thread(window, &system_fonts) {
-                        tracing::error!("Failed to switch to SW renderer: {e}");
-                    }
-                }
-                // Nothing presents until the build lands, which a restart already accepted by dropping the
-                // renderer above; the poll site takes the `Auto` fallback if it fails.
-                RendererBackend::Hardware | RendererBackend::Auto => {
-                    self.spawn_hardware_build(window)
-                }
-            }
-        }
-
-        // A continuous region carries new content the tree cannot report: the application repaints its own texture and the draw commands naming it never change. Counting only `is_dirty` here drops such a frame through to the 1 fps keepalive below, which shows a region refilled at sixty once a second.
-        let has_content = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
-            || self.app.motion_has_continuous();
-        // Keepalive is a GPU power policy, not a property of running on a render thread: hardware keeps
-        // taking frames while idle so an idle blit holds the device in an active state (see `about_to_wait`),
-        // whereas re-rasterising an unchanged frame on the CPU buys nothing. Both backends now have a render
-        // thread, so this must key off the backend, not off `render_tx`.
-        let needs_keepalive = self.renderer_is_hardware || self.dev.keepalive_interval().is_some();
-        if !has_content && !needs_keepalive {
+        let Some(has_content) = self.frame_is_due(now) else {
             return;
-        }
-
-        // A keepalive blit carries no new content, so it runs at the keepalive cadence rather than the frame rate. Enforced here instead of left to `about_to_wait`'s reported interval because a submitted frame is itself a wakeup: its commit makes the compositor fd readable, returning the next dispatch immediately to compose another one.
-        let keepalive_interval = self
-            .dev
-            .keepalive_interval()
-            .unwrap_or(HW_KEEPALIVE_INTERVAL);
-        if !has_content && now.duration_since(self.last_submit) < keepalive_interval {
-            return;
-        }
+        };
         self.last_submit = now;
         // Only update last_frame for content frames; keepalive blits must not reset the budget clock (would delay next content render by up to 16ms).
         if has_content {
