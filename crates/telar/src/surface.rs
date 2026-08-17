@@ -1,9 +1,17 @@
-//! Backend-agnostic secondary-surface runtime: routes `open_surface` requests to an installed host; placement/scaffold widgets live in `ui-core`.
+//! Backend-agnostic secondary-surface runtime: routes `open_surface` requests to an installed host.
+//!
+//! The placement type is the backend's own. Telar carried a `SurfacePlacement` vocabulary of its own for a
+//! while, and it bought nothing: the producer and the implementor were two crates of the *same* application,
+//! so both ends paid a translation hop into and out of a framework type whose majority of fields the framework
+//! never read. What is framework-shaped here is the indirection — a thread-local host, keyed by the placement
+//! type — not the description of where a panel sits.
 
+use std::any::{Any, TypeId};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use ui_core::{LayoutItem, SurfacePlacement};
+use std::collections::HashMap;
+use ui_core::LayoutItem;
 
 /// How a hosted surface's content is built — and rebuilt.
 ///
@@ -30,8 +38,9 @@ pub trait SurfaceControl {
     fn rebuild(&self) {}
 }
 
-pub trait SurfaceHost {
-    fn open(&self, placement: SurfacePlacement, content: SurfaceContent) -> SurfaceToken;
+/// A backend registers a host for *its own* placement type `P`, and callers reach it by naming that same type.
+pub trait SurfaceHost<P: 'static>: 'static {
+    fn open(&self, placement: P, content: SurfaceContent) -> SurfaceToken;
 }
 
 pub struct SurfaceToken {
@@ -66,25 +75,36 @@ impl Drop for SurfaceToken {
 }
 
 thread_local! {
-    static SURFACE_HOST: RefCell<Option<Box<dyn SurfaceHost>>> = const { RefCell::new(None) };
+    // Keyed by the placement type because the trait is generic and so not object-safe on its own. The stored value is a `Box<dyn SurfaceHost<P>>` erased once more into `dyn Any`, which is a concrete `'static` type per `P` and so downcasts back exactly.
+    static SURFACE_HOSTS: RefCell<HashMap<TypeId, Box<dyn Any>>> =
+        RefCell::new(HashMap::new());
 }
 
-pub fn set_surface_host(host: Box<dyn SurfaceHost>) {
-    SURFACE_HOST.with(|h| *h.borrow_mut() = Some(host));
+/// Installs `host` as the backend for placements of type `P`. A later call for the same `P` replaces it.
+pub fn set_surface_host<P: 'static>(host: impl SurfaceHost<P>) {
+    let host: Box<dyn SurfaceHost<P>> = Box::new(host);
+    SURFACE_HOSTS.with(|hosts| {
+        hosts
+            .borrow_mut()
+            .insert(TypeId::of::<P>(), Box::new(host) as Box<dyn Any>)
+    });
 }
 
-pub fn has_surface_host() -> bool {
-    SURFACE_HOST.with(|h| h.borrow().is_some())
-}
-
-pub fn open_surface(placement: SurfacePlacement, content: SurfaceContent) -> SurfaceToken {
-    SURFACE_HOST.with(|h| match h.borrow().as_ref() {
-        Some(host) => host.open(placement, content),
-        None => {
-            tracing::warn!(
-                "telar::open_surface: no SurfaceHost installed on this thread; surface ignored"
-            );
-            SurfaceToken::new(Box::new(NoopControl))
+pub fn open_surface<P: 'static>(placement: P, content: SurfaceContent) -> SurfaceToken {
+    SURFACE_HOSTS.with(|hosts| {
+        let hosts = hosts.borrow();
+        match hosts
+            .get(&TypeId::of::<P>())
+            .and_then(|host| host.downcast_ref::<Box<dyn SurfaceHost<P>>>())
+        {
+            Some(host) => host.open(placement, content),
+            None => {
+                tracing::warn!(
+                    "telar::open_surface: no SurfaceHost installed on this thread for {}; surface ignored",
+                    std::any::type_name::<P>()
+                );
+                SurfaceToken::new(Box::new(NoopControl))
+            }
         }
     })
 }

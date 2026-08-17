@@ -26,6 +26,7 @@ mod tabs;
 mod text_field;
 mod toggle;
 mod tooltip;
+mod window_frame;
 
 pub use accordion::{AccordionProps, accordion};
 pub use badge::{BadgeProps, badge};
@@ -48,3 +49,4 @@ pub use tabs::{TabsProps, tabs};
 pub use text_field::{TextFieldProps, text_field};
 pub use toggle::{ToggleProps, toggle};
 pub use tooltip::{TooltipProps, tooltip};
+pub use window_frame::{MIN_FRAME_SIZE, SurfaceFrameStyle, window_frame};

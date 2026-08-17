@@ -1,4 +1,3 @@
-use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -9,245 +8,28 @@ use layout_core::{
 use motion_core::{Animated, Easing, tween};
 use platform_core::{Event, Key, NamedKey, PointerButton};
 use reactive_core::RwSignal;
-use renderer_core::{Color, RectStyle, TextStyle};
+use renderer_core::{Color, RectStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{compute_layout, mark_dirty, new_container, track_layout};
-use crate::layout_item::{LayoutItem, box_item};
-use crate::styled_container::StyledContainer;
-use crate::text::Text;
+use crate::layout_item::LayoutItem;
 
-/// What kind of secondary surface a placement describes. A backend maps the role to its own surface
-/// primitives (a layer-shell backend picks a layer + namespace; a windowed backend a child window or an
-/// in-window portal). Roles carry no behaviour of their own — the explicit [`SurfacePlacement`] fields do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SurfaceRole {
-    /// A panel that slides off a bar/edge, dimming what's behind it.
-    Drawer,
-    /// A transient, positioned popup (a notification, a menu detached from its trigger).
-    Popup,
-    /// A brief, non-interactive status flash (volume/brightness), auto-dismissed.
-    Osd,
-    /// A free-floating window with its own title/close affordances.
-    Float,
-    /// A modal that owns the screen while it is up: a launcher, a command palette, a session menu. Unlike a
-    /// [`Drawer`](Self::Drawer) it isn't anchored to an edge, and unlike a [`Float`](Self::Float) it expects to
-    /// take the keyboard outright — the user is typing into it, not at whatever is behind it.
-    Overlay,
-}
+/// The default scrim wash: ~35 % black over the content behind a drawer/modal. Rendered as a fill (not an
+/// opacity layer) so the panel above it stays fully opaque. Kept as the value a caller reaches for rather
+/// than being folded into the scaffold, because [`SurfaceScaffold`] now takes the colour itself.
+pub const DEFAULT_SCRIM: Color = Color::rgba(0.0, 0.0, 0.0, 0.35);
 
-/// How much of the keyboard a surface needs.
+/// Which side of the viewport a [`SurfaceScaffold`] pins its panel to, and the direction it slides in from.
 ///
-/// The distinction matters because it decides who receives a keystroke *before* any click. A panel with a text
-/// field can wait to be clicked into ([`OnDemand`](Self::OnDemand)); a launcher cannot — it opens on a keybind
-/// and the next keystroke is already its first search character, so it has to hold the keyboard from the moment
-/// it maps ([`Exclusive`](Self::Exclusive)). Asking for more than is needed is not free: a surface holding the
-/// keyboard takes it from the focused window.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum KeyboardMode {
-    /// Display-only; never takes keyboard focus.
-    #[default]
-    None,
-    /// May be given focus on interaction, e.g. a click into a text field.
-    OnDemand,
-    /// Holds the keyboard for as long as it is mapped.
-    Exclusive,
-}
-
-/// The screen edge (or centre) a surface hugs. The cross axis is aligned by [`SurfaceAlign`].
+/// [`Center`](Self::Edge::Center) is not an edge: it means the panel is centred on both axes and arrives by
+/// fading rather than sliding, which is what a launcher or a command palette wants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SurfaceAnchor {
+pub enum Edge {
     Top,
     Bottom,
     Left,
     Right,
     Center,
-}
-
-/// Cross-axis alignment along the anchored edge (e.g. left/centre/right for a top-anchored surface).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SurfaceAlign {
-    Start,
-    Center,
-    End,
-}
-
-/// A surface's size: a fixed logical pixel box, or derived from its content.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SurfaceSize {
-    Fixed(u32, u32),
-    Auto,
-}
-
-/// A backend-agnostic description of a secondary surface: where it sits, how big it is, and how it
-/// behaves (scrim, outside-dismiss, auto-timeout). The intent lives here; a backend derives its own
-/// surface config from it. Reusable by a windowed app (as an in-window portal) and by a shell (as a real
-/// layer-shell surface) alike.
-#[derive(Debug, Clone)]
-pub struct SurfacePlacement {
-    pub role: SurfaceRole,
-    pub anchor: SurfaceAnchor,
-    pub align: SurfaceAlign,
-    pub size: SurfaceSize,
-    /// Gap from the screen edges, as `(top, right, bottom, left)`. A full-screen scrim scaffold applies the
-    /// whole tuple as padding (so the panel floats off every edge, not just the anchored one); a
-    /// directly-anchored surface applies it as the compositor margin.
-    pub margin: (i32, i32, i32, i32),
-    /// Dim (and, with `dismiss_on_outside`, capture) the area behind the panel.
-    pub scrim: bool,
-    /// A press outside the panel dismisses the surface.
-    pub dismiss_on_outside: bool,
-    /// Auto-dismiss after this long; `None` keeps it until closed explicitly.
-    pub timeout: Option<Duration>,
-    /// The surface passes pointer input through to whatever is beneath it (a click-through OSD).
-    pub input_transparent: bool,
-    /// How much of the keyboard the surface needs; a backend maps this to its own focus model (e.g. layer-shell
-    /// keyboard interactivity). Defaults to [`KeyboardMode::None`], so a panel is display-only and never steals
-    /// the keyboard.
-    pub keyboard: KeyboardMode,
-    /// The monitor to place the surface on by name; `None` = the active/default output.
-    pub output: Option<String>,
-}
-
-impl SurfacePlacement {
-    pub fn new(role: SurfaceRole, anchor: SurfaceAnchor) -> Self {
-        Self {
-            role,
-            anchor,
-            align: SurfaceAlign::Center,
-            size: SurfaceSize::Auto,
-            margin: (0, 0, 0, 0),
-            scrim: false,
-            dismiss_on_outside: false,
-            timeout: None,
-            input_transparent: false,
-            keyboard: KeyboardMode::None,
-            output: None,
-        }
-    }
-
-    /// A modal that owns the screen: centred, scrimmed, dismissed by a press outside, and holding the keyboard
-    /// from the moment it maps so the first keystroke after the keybind is already typed into it.
-    pub fn overlay() -> Self {
-        Self {
-            scrim: true,
-            dismiss_on_outside: true,
-            keyboard: KeyboardMode::Exclusive,
-            ..Self::new(SurfaceRole::Overlay, SurfaceAnchor::Center)
-        }
-    }
-
-    pub fn drawer(anchor: SurfaceAnchor) -> Self {
-        Self {
-            scrim: true,
-            dismiss_on_outside: true,
-            ..Self::new(SurfaceRole::Drawer, anchor)
-        }
-    }
-
-    pub fn osd() -> Self {
-        Self {
-            input_transparent: true,
-            ..Self::new(SurfaceRole::Osd, SurfaceAnchor::Top)
-        }
-    }
-
-    pub fn float() -> Self {
-        Self::new(SurfaceRole::Float, SurfaceAnchor::Center)
-    }
-
-    pub fn align(mut self, align: SurfaceAlign) -> Self {
-        self.align = align;
-        self
-    }
-
-    pub fn size(mut self, size: SurfaceSize) -> Self {
-        self.size = size;
-        self
-    }
-
-    pub fn margin(mut self, margin: (i32, i32, i32, i32)) -> Self {
-        self.margin = margin;
-        self
-    }
-
-    pub fn inset(mut self, px: i32) -> Self {
-        let (t, r, b, l) = self.margin;
-        self.margin = match self.anchor {
-            SurfaceAnchor::Top => (px, r, b, l),
-            SurfaceAnchor::Bottom => (t, r, px, l),
-            SurfaceAnchor::Left => (t, r, b, px),
-            SurfaceAnchor::Right => (t, px, b, l),
-            SurfaceAnchor::Center => (t, r, b, l),
-        };
-        self
-    }
-
-    pub fn scrim(mut self, scrim: bool) -> Self {
-        self.scrim = scrim;
-        self
-    }
-
-    pub fn dismiss_on_outside(mut self, dismiss: bool) -> Self {
-        self.dismiss_on_outside = dismiss;
-        self
-    }
-
-    pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
-        self
-    }
-
-    pub fn input_transparent(mut self, transparent: bool) -> Self {
-        self.input_transparent = transparent;
-        self
-    }
-
-    /// Opt the surface into focus-on-interaction, for panels that host editable text (a search box, a note
-    /// title). Sugar for [`keyboard_mode`](Self::keyboard_mode) with
-    /// [`OnDemand`](KeyboardMode::OnDemand)/[`None`](KeyboardMode::None).
-    pub fn keyboard(mut self, wants_keyboard: bool) -> Self {
-        self.keyboard = if wants_keyboard {
-            KeyboardMode::OnDemand
-        } else {
-            KeyboardMode::None
-        };
-        self
-    }
-
-    /// Sets exactly how much of the keyboard the surface takes.
-    pub fn keyboard_mode(mut self, mode: KeyboardMode) -> Self {
-        self.keyboard = mode;
-        self
-    }
-
-    /// Whether the surface takes keyboard focus at all.
-    pub fn wants_keyboard(&self) -> bool {
-        self.keyboard != KeyboardMode::None
-    }
-
-    pub fn output(mut self, output: Option<String>) -> Self {
-        self.output = output;
-        self
-    }
-
-    /// Whether the surface needs a full-viewport scaffold (to draw a scrim or catch outside presses)
-    /// rather than being anchored directly at its content size.
-    pub fn needs_scaffold(&self) -> bool {
-        self.scrim || self.dismiss_on_outside
-    }
-}
-
-/// The default scrim wash: ~35 % black over the content behind a drawer/modal. Rendered as a fill (not an
-/// opacity layer) so the panel above it stays fully opaque.
-pub const DEFAULT_SCRIM: Color = Color::rgba(0.0, 0.0, 0.0, 0.35);
-
-fn cross_align(align: SurfaceAlign) -> AlignItems {
-    match align {
-        SurfaceAlign::Start => AlignItems::START,
-        SurfaceAlign::Center => AlignItems::CENTER,
-        SurfaceAlign::End => AlignItems::END,
-    }
 }
 
 /// Enter-animation duration and slide travel.
@@ -257,7 +39,7 @@ const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
 #[derive(Clone, Copy)]
 enum EnterMotion {
-    Slide(SurfaceAnchor),
+    Slide(Edge),
     Fade,
 }
 
@@ -271,11 +53,11 @@ fn enter_transform(motion: EnterMotion, progress: f32) -> ([f32; 6], f32) {
         EnterMotion::Slide(anchor) => {
             let d = SLIDE_DISTANCE * (1.0 - p);
             let (dx, dy) = match anchor {
-                SurfaceAnchor::Top => (0.0, -d),
-                SurfaceAnchor::Bottom => (0.0, d),
-                SurfaceAnchor::Left => (-d, 0.0),
-                SurfaceAnchor::Right => (d, 0.0),
-                SurfaceAnchor::Center => (0.0, 0.0),
+                Edge::Top => (0.0, -d),
+                Edge::Bottom => (0.0, d),
+                Edge::Left => (-d, 0.0),
+                Edge::Right => (d, 0.0),
+                Edge::Center => (0.0, 0.0),
             };
             (Transform::translate(dx, dy).to_array(), opacity)
         }
@@ -348,21 +130,25 @@ pub struct SurfaceScaffold {
     content: Box<dyn LayoutItem>,
     scrim: Option<Color>,
     dismiss: Option<Rc<dyn Fn()>>,
-    anchor: SurfaceAnchor,
+    edge: Edge,
     transition: Option<SurfaceTransition>,
 }
 
 impl SurfaceScaffold {
+    /// `margin` is `(top, right, bottom, left)` and becomes padding on all four sides, so the panel floats off
+    /// every viewport edge rather than only the one it is pinned to. `scrim` paints behind the panel when set
+    /// (see [`DEFAULT_SCRIM`]); `dismiss` fires on a press outside it, and `None` means outside presses fall
+    /// through.
     pub fn new(
-        placement: &SurfacePlacement,
-        content: Box<dyn LayoutItem>,
+        edge: Edge,
+        align: AlignItems,
+        margin: (i32, i32, i32, i32),
+        scrim: Option<Color>,
         dismiss: Option<Rc<dyn Fn()>>,
+        content: Box<dyn LayoutItem>,
     ) -> Result<Self, LayoutError> {
         let panel_node = content.layout_node();
-        let (mt, mr, mb, ml) = placement.margin;
-        let cross = cross_align(placement.align);
-        // The full margin becomes padding so the panel floats off every screen edge, not just the anchored one;
-        // the per-anchor direction/justify then pins it to its edge within that padded box.
+        let (mt, mr, mb, ml) = margin;
         let base = LayoutStyle::new()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0))
@@ -370,24 +156,24 @@ impl SurfaceScaffold {
             .padding_right(mr as f32)
             .padding_bottom(mb as f32)
             .padding_left(ml as f32);
-        let style = match placement.anchor {
-            SurfaceAnchor::Top => base
+        let style = match edge {
+            Edge::Top => base
                 .flex_column()
                 .justify_content(JustifyContent::START)
-                .align_items(cross),
-            SurfaceAnchor::Bottom => base
+                .align_items(align),
+            Edge::Bottom => base
                 .flex_column()
                 .justify_content(JustifyContent::END)
-                .align_items(cross),
-            SurfaceAnchor::Left => base
+                .align_items(align),
+            Edge::Left => base
                 .flex_row()
                 .justify_content(JustifyContent::START)
-                .align_items(cross),
-            SurfaceAnchor::Right => base
+                .align_items(align),
+            Edge::Right => base
                 .flex_row()
                 .justify_content(JustifyContent::END)
-                .align_items(cross),
-            SurfaceAnchor::Center => base
+                .align_items(align),
+            Edge::Center => base
                 .flex_column()
                 .justify_content(JustifyContent::CENTER)
                 .align_items(AlignItems::CENTER),
@@ -395,19 +181,14 @@ impl SurfaceScaffold {
         let root = new_container(style, &[panel_node])?;
         let panel_rect = track_layout(panel_node);
         let root_rect = track_layout(root);
-        let dismiss = if placement.dismiss_on_outside {
-            dismiss
-        } else {
-            None
-        };
         Ok(Self {
             root,
             panel_rect,
             root_rect,
             content,
-            scrim: placement.scrim.then_some(DEFAULT_SCRIM),
+            scrim,
             dismiss,
-            anchor: placement.anchor,
+            edge,
             transition: None,
         })
     }
@@ -434,7 +215,7 @@ impl Component for SurfaceScaffold {
     fn view(&self) -> RenderNode {
         let content = self.content.view();
         let (matrix, opacity) = match &self.transition {
-            Some(transition) => enter_transform(EnterMotion::Slide(self.anchor), transition.get()),
+            Some(transition) => enter_transform(EnterMotion::Slide(self.edge), transition.get()),
             None => (IDENTITY, 1.0),
         };
         let panel = apply_enter(content, matrix, opacity);
@@ -576,174 +357,10 @@ impl Component for SurfaceRoot {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct SurfaceFrameStyle {
-    pub background: Color,
-    pub title_bar: Color,
-    pub title_text: Color,
-    pub close: Color,
-    pub radius: f32,
-    pub font_size: f32,
-}
-
-/// The smallest a frame will ask to become. A window dragged to nothing is a window the user cannot get hold of
-/// again — its own grip goes with it.
-pub const MIN_FRAME_SIZE: (f32, f32) = (180.0, 120.0);
-
-/// The corner grip's side, in logical pixels. Big enough to hit without aiming, small enough not to read as
-/// content.
-const GRIP_SIZE: f32 = 14.0;
-
-/// The rect a grip measures the frame against. It is a cell rather than a signal because the grip has to exist
-/// before the row that holds it, and that row before the card that holds *both* — so the one rect the grip needs
-/// is the one thing it cannot be handed at construction. Filled in as soon as the card exists.
-type DeferredRect = Rc<RefCell<Option<RwSignal<Rect>>>>;
-
-/// A resize grip for the bottom-right corner of a frame, reporting the size the *surface* should become.
-///
-/// The arithmetic is the whole of it. `on_drag` reports where the pointer is **inside the grip**, so the grip's
-/// own laid-out origin has to be added back to reach surface space — and then the grab offset, the distance from
-/// the pointer to the corner when the drag began, has to come off it, or the corner jumps to the cursor the
-/// instant it is touched. The offset is latched once per drag rather than recomputed, because the card it was
-/// measured against is resizing underneath the gesture.
-fn resize_grip(
-    color: Color,
-    card_rect: DeferredRect,
-    resize: Rc<dyn Fn(f32, f32)>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let grip = StyledContainer::new(
-        LayoutStyle::new().width(GRIP_SIZE).height(GRIP_SIZE),
-        move |_| RectStyle::filled(color, 2.0),
-        vec![],
-    )?;
-    let grip_rect = track_layout(grip.layout_node());
-    let grab: Rc<Cell<Option<(f32, f32)>>> = Rc::new(Cell::new(None));
-    let release = Rc::clone(&grab);
-    Ok(box_item(
-        grip.on_drag(move |local_x, local_y| {
-            let (Some(grip_rect), Some(card_rect)) = (&grip_rect, card_rect.borrow().clone())
-            else {
-                return;
-            };
-            let (grip, card) = (grip_rect.get(), card_rect.get());
-            let (x, y) = (grip.x + local_x, grip.y + local_y);
-            let (offset_x, offset_y) = match grab.get() {
-                Some(offset) => offset,
-                None => {
-                    let offset = (x - (card.x + card.width), y - (card.y + card.height));
-                    grab.set(Some(offset));
-                    offset
-                }
-            };
-            resize(
-                (x - offset_x - card.x).max(MIN_FRAME_SIZE.0),
-                (y - offset_y - card.y).max(MIN_FRAME_SIZE.1),
-            );
-        })
-        .on_drag_end(move |_, _| release.set(None)),
-    ))
-}
-
-/// A titled, closable window frame around `body`.
-///
-/// `resize` opts the frame into a corner grip: it is handed the size the surface should take, in logical
-/// pixels, on every move of that grip. A backend that can renegotiate a surface's size wires it up; one that
-/// cannot passes `None` and the grip is not drawn, rather than drawn and inert.
-pub fn surface_frame(
-    title: impl Into<String>,
-    style: SurfaceFrameStyle,
-    close: std::rc::Rc<dyn Fn()>,
-    body: Box<dyn LayoutItem>,
-    resize: Option<Rc<dyn Fn(f32, f32)>>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let title = title.into();
-    let title_color = style.title_text;
-    let font_size = style.font_size;
-    let title_label = box_item(Text::auto(
-        move || title.clone(),
-        LayoutStyle::new(),
-        move || TextStyle::new(font_size, title_color),
-    )?);
-
-    let close_color = style.close;
-    let close_label = box_item(Text::auto(
-        || "\u{2715}".to_string(),
-        LayoutStyle::new(),
-        move || TextStyle::new(font_size, close_color),
-    )?);
-    let close_button = box_item(
-        StyledContainer::new(
-            LayoutStyle::new()
-                .align_items(AlignItems::CENTER)
-                .justify_content(JustifyContent::CENTER)
-                .padding_horizontal(8.0)
-                .padding_vertical(2.0),
-            |_| RectStyle::default(),
-            vec![close_label],
-        )?
-        .on_press(move || close()),
-    );
-
-    let title_bar_color = style.title_bar;
-    let title_bar = box_item(StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::SPACE_BETWEEN)
-            .width(SizeDimension::Percent(1.0))
-            .padding_horizontal(12.0)
-            .padding_vertical(8.0),
-        move |_| RectStyle::filled(title_bar_color, 0.0),
-        vec![title_label, close_button],
-    )?);
-
-    // A flex item may not shrink below its content unless you say so, and an application body sized to fill the window (the settings page area is a scroll leaf with a definite height) otherwise refuses to give up a single pixel and pushes the grip row off the bottom of the surface — a resize affordance that exists, lays out, and is never on screen.
-    let body_area = box_item(StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .flex_grow(1.0)
-            .min_height(0.0)
-            .width(SizeDimension::Percent(1.0))
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER)
-            .padding_all(12.0),
-        |_| RectStyle::default(),
-        vec![body],
-    )?);
-
-    let card_rect: DeferredRect = Rc::new(RefCell::new(None));
-    let mut children = vec![title_bar, body_area];
-    if let Some(resize) = resize {
-        children.push(box_item(StyledContainer::new(
-            LayoutStyle::new()
-                .flex_row()
-                .width(SizeDimension::Percent(1.0))
-                .flex_shrink(0.0)
-                .justify_content(JustifyContent::END)
-                .padding_horizontal(4.0)
-                .padding_bottom(4.0),
-            |_| RectStyle::default(),
-            vec![resize_grip(style.close, Rc::clone(&card_rect), resize)?],
-        )?));
-    }
-
-    let background = style.background;
-    let radius = style.radius;
-    let card = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .width(SizeDimension::Percent(1.0))
-            .height(SizeDimension::Percent(1.0)),
-        move |_| RectStyle::filled(background, radius),
-        children,
-    )?;
-    *card_rect.borrow_mut() = track_layout(card.layout_node());
-    Ok(box_item(card))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use renderer_core::TextStyle;
     use std::cell::Cell;
 
     use platform_core::PointerSource;
@@ -778,11 +395,13 @@ mod tests {
         reset_layout_runtime();
         let fired = Rc::new(Cell::new(0u32));
         let f = fired.clone();
-        let placement = SurfacePlacement::drawer(SurfaceAnchor::Top).inset(20);
         let mut scaffold = SurfaceScaffold::new(
-            &placement,
-            panel(),
+            Edge::Top,
+            AlignItems::CENTER,
+            (20, 20, 20, 20),
+            Some(DEFAULT_SCRIM),
             Some(Rc::new(move || f.set(f.get() + 1))),
+            panel(),
         )
         .unwrap();
         scaffold.on_event(&Event::WindowResized {
@@ -804,11 +423,13 @@ mod tests {
         reset_layout_runtime();
         let fired = Rc::new(Cell::new(0u32));
         let f = fired.clone();
-        let placement = SurfacePlacement::drawer(SurfaceAnchor::Top).inset(20);
         let mut scaffold = SurfaceScaffold::new(
-            &placement,
-            panel(),
+            Edge::Top,
+            AlignItems::CENTER,
+            (20, 20, 20, 20),
+            Some(DEFAULT_SCRIM),
             Some(Rc::new(move || f.set(f.get() + 1))),
+            panel(),
         )
         .unwrap();
         scaffold.on_event(&Event::WindowResized {
@@ -838,9 +459,12 @@ mod tests {
         .unwrap()
         .autofocus();
         let mut focused = SurfaceScaffold::new(
-            &placement,
-            box_item(field),
+            Edge::Top,
+            AlignItems::CENTER,
+            (20, 20, 20, 20),
+            Some(DEFAULT_SCRIM),
             Some(Rc::new(move || u.set(u.get() + 1))),
+            box_item(field),
         )
         .unwrap();
         focused.on_event(&Event::WindowResized {
@@ -862,13 +486,13 @@ mod tests {
         let fired = Rc::new(Cell::new(0u32));
         let f = fired.clone();
         // Start-aligned top drawer, floated 10px off every edge: the 100-wide panel sits at x in [10, 110].
-        let placement = SurfacePlacement::drawer(SurfaceAnchor::Top)
-            .align(SurfaceAlign::Start)
-            .margin((30, 10, 10, 10));
         let mut scaffold = SurfaceScaffold::new(
-            &placement,
-            panel(),
+            Edge::Top,
+            AlignItems::START,
+            (30, 10, 10, 10),
+            Some(DEFAULT_SCRIM),
             Some(Rc::new(move || f.set(f.get() + 1))),
+            panel(),
         )
         .unwrap();
         scaffold.on_event(&Event::WindowResized {
@@ -897,13 +521,17 @@ mod tests {
         reset_layout_runtime();
         let fired = Rc::new(Cell::new(0u32));
         let f = fired.clone();
-        let placement = SurfacePlacement::new(SurfaceRole::Drawer, SurfaceAnchor::Top).scrim(true);
+        // Scrim but no dismiss handler: the surface dims what is behind it and swallows the press anyway.
         let mut scaffold = SurfaceScaffold::new(
-            &placement,
+            Edge::Top,
+            AlignItems::CENTER,
+            (0, 0, 0, 0),
+            Some(DEFAULT_SCRIM),
+            None,
             panel(),
-            Some(Rc::new(move || f.set(f.get() + 1))),
         )
         .unwrap();
+        let _ = &f;
         scaffold.on_event(&Event::WindowResized {
             width: 200,
             height: 200,
@@ -916,157 +544,6 @@ mod tests {
             "no dismiss must fire when dismiss_on_outside is off"
         );
     }
-
-    /// The grip's whole job is arithmetic, and every part of it is invisible until it is wrong.
-    ///
-    /// `on_drag` reports a position *local to the grip*, so a grip that forgot to add its own origin back would
-    /// resize the window to about 14×14 the moment it was touched. And the grab offset — the distance from the
-    /// pointer to the corner when the drag began — is what stops the corner teleporting to the cursor on the
-    /// first event: press the middle of the grip and the window must not change size at all.
-    #[test]
-    fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
-        use std::cell::RefCell;
-        reset_layout_runtime();
-
-        let asked: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&asked);
-        let style = SurfaceFrameStyle {
-            background: Color::TRANSPARENT,
-            title_bar: Color::TRANSPARENT,
-            title_text: Color::TRANSPARENT,
-            close: Color::TRANSPARENT,
-            radius: 0.0,
-            font_size: 12.0,
-        };
-        let mut frame = surface_frame(
-            "Settings",
-            style,
-            Rc::new(|| {}),
-            panel(),
-            Some(Rc::new(move |w, h| sink.borrow_mut().push((w, h)))),
-        )
-        .unwrap();
-        compute_layout(
-            frame.layout_node(),
-            AvailableSpace::Definite(400.0),
-            AvailableSpace::Definite(300.0),
-        )
-        .unwrap();
-
-        // The grip sits at the card's bottom-right, inset by the row's padding.
-        let grip = Rect {
-            x: 400.0 - 4.0 - GRIP_SIZE,
-            y: 300.0 - 4.0 - GRIP_SIZE,
-            width: GRIP_SIZE,
-            height: GRIP_SIZE,
-        };
-        let (start_x, start_y) = (grip.x + GRIP_SIZE / 2.0, grip.y + GRIP_SIZE / 2.0);
-        frame.on_event(&press(start_x as f64, start_y as f64));
-        frame.on_event(&Event::PointerMoved {
-            x: (start_x + 60.0) as f64,
-            y: (start_y + 40.0) as f64,
-            source: PointerSource::Mouse,
-        });
-
-        let asked = asked.borrow();
-        assert_eq!(
-            asked.first().copied(),
-            Some((400.0, 300.0)),
-            "grabbing the grip without moving must ask for the size the window already is"
-        );
-        assert_eq!(
-            asked.last().copied(),
-            Some((460.0, 340.0)),
-            "the window grows by what the pointer travelled, not to where the pointer is"
-        );
-    }
-
-    /// The grip has to be *on screen*, and a frame around an application is where it stops being.
-    ///
-    /// A settings-sized float hands `surface_frame` a body sized to fill the window — its page area is a scroll
-    /// leaf with a definite height, computed from the surface height less the chrome that existed before there
-    /// was a grip. A body that will not shrink below its content pushes the grip row past the bottom edge, and
-    /// the affordance builds, lays out, and is never visible. Which is exactly what happened.
-    #[test]
-    fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
-        reset_layout_runtime();
-
-        const SURFACE: (f32, f32) = (920.0, 680.0);
-        let style = SurfaceFrameStyle {
-            background: Color::TRANSPARENT,
-            title_bar: Color::TRANSPARENT,
-            title_text: Color::TRANSPARENT,
-            close: Color::TRANSPARENT,
-            radius: 0.0,
-            font_size: 12.0,
-        };
-        // Taller than the surface, the way an application body is once its own chrome is added on top.
-        let hungry = box_item(
-            StyledContainer::new(
-                LayoutStyle::new().width(600.0).height(SURFACE.1),
-                |_r| RectStyle::default(),
-                vec![],
-            )
-            .unwrap(),
-        );
-        let asked: Rc<std::cell::RefCell<Vec<(f32, f32)>>> =
-            Rc::new(std::cell::RefCell::new(Vec::new()));
-        let sink = Rc::clone(&asked);
-        let mut frame = surface_frame(
-            "Settings",
-            style,
-            Rc::new(|| {}),
-            hungry,
-            Some(Rc::new(move |w, h| sink.borrow_mut().push((w, h)))),
-        )
-        .unwrap();
-        compute_layout(
-            frame.layout_node(),
-            AvailableSpace::Definite(SURFACE.0),
-            AvailableSpace::Definite(SURFACE.1),
-        )
-        .unwrap();
-
-        // Pressing the bottom-right corner and dragging is the property the user actually has: a grip laid out past the bottom edge receives nothing, so nothing resizes.
-        let (x, y) = (
-            SURFACE.0 - 4.0 - GRIP_SIZE / 2.0,
-            SURFACE.1 - 4.0 - GRIP_SIZE / 2.0,
-        );
-        frame.on_event(&press(x as f64, y as f64));
-        frame.on_event(&Event::PointerMoved {
-            x: (x + 40.0) as f64,
-            y: (y + 30.0) as f64,
-            source: PointerSource::Mouse,
-        });
-
-        let asked = asked.borrow();
-        assert!(
-            !asked.is_empty(),
-            "nothing at the window's bottom-right corner answered a drag — a body that refuses to shrink \
-             pushes the grip row off the surface, where it lays out perfectly and is never seen"
-        );
-        assert_eq!(
-            asked.last().copied(),
-            Some((SURFACE.0 + 40.0, SURFACE.1 + 30.0)),
-            "and once it is on screen it still resizes by what the pointer travelled"
-        );
-    }
-
-    #[test]
-    fn a_frame_without_a_resize_callback_draws_no_grip() {
-        reset_layout_runtime();
-        let style = SurfaceFrameStyle {
-            background: Color::TRANSPARENT,
-            title_bar: Color::TRANSPARENT,
-            title_text: Color::TRANSPARENT,
-            close: Color::TRANSPARENT,
-            radius: 0.0,
-            font_size: 12.0,
-        };
-        // A grip a backend cannot act on must be absent rather than present and inert — an affordance that does nothing is worse than none.
-        assert!(surface_frame("Clock", style, Rc::new(|| {}), panel(), None).is_ok());
-    }
-
     #[test]
     fn enter_transform_fade_is_opacity_only() {
         assert_eq!(enter_transform(EnterMotion::Fade, 0.0), (IDENTITY, 0.0));
@@ -1076,23 +553,23 @@ mod tests {
 
     #[test]
     fn enter_transform_slide_offsets_from_edge_then_settles() {
-        let (m, o) = enter_transform(EnterMotion::Slide(SurfaceAnchor::Top), 0.0);
+        let (m, o) = enter_transform(EnterMotion::Slide(Edge::Top), 0.0);
         assert_eq!(o, 0.0);
         assert_eq!(m[5], -SLIDE_DISTANCE, "top slides down from above");
         assert_eq!(
-            enter_transform(EnterMotion::Slide(SurfaceAnchor::Top), 1.0),
+            enter_transform(EnterMotion::Slide(Edge::Top), 1.0),
             (IDENTITY, 1.0)
         );
         assert_eq!(
-            enter_transform(EnterMotion::Slide(SurfaceAnchor::Bottom), 0.0).0[5],
+            enter_transform(EnterMotion::Slide(Edge::Bottom), 0.0).0[5],
             SLIDE_DISTANCE
         );
         assert_eq!(
-            enter_transform(EnterMotion::Slide(SurfaceAnchor::Left), 0.0).0[4],
+            enter_transform(EnterMotion::Slide(Edge::Left), 0.0).0[4],
             -SLIDE_DISTANCE
         );
         assert_eq!(
-            enter_transform(EnterMotion::Slide(SurfaceAnchor::Right), 0.0).0[4],
+            enter_transform(EnterMotion::Slide(Edge::Right), 0.0).0[4],
             SLIDE_DISTANCE
         );
     }
