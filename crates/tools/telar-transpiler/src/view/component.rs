@@ -125,6 +125,7 @@ impl ViewGen<'_> {
         let props_default = sig.is_some_and(|s| s.props_default);
         let field_count = sig.map(|s| s.prop_fields.len());
         let color_fields: &[String] = sig.map_or(&[], |s| s.color_fields.as_slice());
+        let reading_fields: &[String] = sig.map_or(&[], |s| s.reading_fields.as_slice());
         let text_fields: &[String] = sig.map_or(&[], |s| s.text_fields.as_slice());
         let bool_fields: &[String] = sig.map_or(&[], |s| s.bool_fields.as_slice());
         let string_fields: &[String] = sig.map_or(&[], |s| s.string_fields.as_slice());
@@ -138,6 +139,8 @@ impl ViewGen<'_> {
                 .map(|attr| {
                     let value = if color_fields.iter().any(|f| f == &attr.key) {
                         self.component_color_attr_expr(attr)
+                    } else if reading_fields.iter().any(|f| f == &attr.key) {
+                        self.component_reading_attr_expr(attr)
                     } else if text_fields.iter().any(|f| f == &attr.key) {
                         self.component_text_attr_expr(attr)
                     } else if bool_fields.iter().any(|f| f == &attr.key) {
@@ -272,6 +275,13 @@ impl ViewGen<'_> {
     /// Mirrors [`Self::component_color_attr_expr`]; the Props field is expected to be `Box<dyn Fn() -> String>`.
     /// A `t"key"` value becomes a catalog lookup, a plain `"literal"` a static string, and a `$signal`/expr a
     /// reactive read.
+    /// A reactive reading prop (a progress bar's `value`): a `move ||` closure re-read every frame, so a
+    /// `$signal` follows state and a value derived from several services follows all of them. The Props field
+    /// is expected to be `Box<dyn Fn() -> T>`.
+    fn component_reading_attr_expr(&self, attr: &Attr) -> String {
+        self.boxed_prop_closure(attr, |_, attr| substitute_reads(attr.value.trim()))
+    }
+
     fn component_text_attr_expr(&self, attr: &Attr) -> String {
         self.boxed_prop_closure(attr, |s, attr| {
             if attr.i18n {

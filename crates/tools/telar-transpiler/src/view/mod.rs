@@ -1258,6 +1258,7 @@ mod tests {
             prop_fields: fields.iter().map(|s| s.to_string()).collect(),
             has_slot,
             color_fields: Vec::new(),
+            reading_fields: Vec::new(),
             text_fields: Vec::new(),
             optional_fields: Vec::new(),
             string_fields: Vec::new(),

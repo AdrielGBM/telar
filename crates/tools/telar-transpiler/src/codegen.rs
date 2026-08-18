@@ -32,6 +32,10 @@ pub struct ComponentSig {
     /// closure (re-read each frame) instead of a resolved `Color`, so a theme token or `$signal` colour
     /// re-colours live. Empty for scanned `.rsx` components; set only for the built-in component catalogue.
     pub color_fields: Vec<String>,
+    /// Prop fields whose value is a reactive *reading* — a number a widget displays and never writes: the
+    /// caller emits them as a `Box<dyn Fn() -> T>` closure, so a value derived from several services can drive
+    /// the widget. A prop that insists on a signal is what makes an application reimplement the widget.
+    pub reading_fields: Vec<String>,
     /// Prop fields whose value is a reactive string: the caller emits them as a `Box<dyn Fn() -> String>`
     /// closure (re-read each frame) instead of a `&'static str`, so a `t"key"` translation or `$signal`
     /// string re-renders live on a locale/state change. Mirrors [`Self::color_fields`]; scanned from a
@@ -67,6 +71,12 @@ impl ComponentSig {
         self
     }
 
+    /// Marks `fields` as reactive reading props (`Box<dyn Fn() -> T>` over a number the widget displays).
+    fn with_readings(mut self, fields: &[&str]) -> Self {
+        self.reading_fields = fields.iter().map(|f| f.to_string()).collect();
+        self
+    }
+
     /// Marks `fields` as reactive predicate props (`Box<dyn Fn() -> bool>`).
     fn with_bools(mut self, fields: &[&str]) -> Self {
         self.bool_fields = fields.iter().map(|f| f.to_string()).collect();
@@ -87,6 +97,7 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         prop_fields: fields.iter().map(|f| f.to_string()).collect(),
         has_slot,
         color_fields: color.iter().map(|f| f.to_string()).collect(),
+        reading_fields: Vec::new(),
         // The catalogue takes its owned-string props through `Box<dyn Fn() -> String>`, so it declares none.
         string_fields: Vec::new(),
         text_fields: Vec::new(),
@@ -277,11 +288,19 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         (
             "progress",
             s(
-                &["value", "color", "track_color", "width", "height"],
+                &[
+                    "value",
+                    "color",
+                    "track_color",
+                    "width",
+                    "stretch",
+                    "height",
+                ],
                 false,
                 &["color", "track_color"],
-                &["value"],
-            ),
+                &[],
+            )
+            .with_readings(&["value"]),
         ),
         ("spinner", s(&["color", "size"], false, &["color"], &[])),
         (
@@ -342,6 +361,7 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
         prop_fields: props.fields,
         has_slot,
         color_fields: props.color,
+        reading_fields: Vec::new(),
         text_fields: props.text,
         optional_fields: props.optional,
         string_fields: props.owned_text,

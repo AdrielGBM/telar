@@ -8,6 +8,7 @@ mod memo;
 pub use reactive_local::reentry;
 mod runtime;
 mod signal;
+mod source;
 #[macro_use]
 
 mod task;
@@ -20,6 +21,7 @@ pub use runtime::{
     end_batch, reset_runtime, set_current_surface, set_flush_notify, set_surface_enter_hook,
 };
 pub use signal::{ReadSignal, RwSignal, signal};
+pub use source::{Source, derive, derive_pair};
 pub use task::{
     Emitter, Task, cancel_tasks_for, drain_tasks, reset_tasks, set_task_waker, spawn_stream,
     spawn_task,

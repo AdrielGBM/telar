@@ -1,6 +1,5 @@
 use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item};
@@ -11,27 +10,35 @@ use crate::shared::props_default;
 /// A determinate 0.0..=1.0 progress bar: a rounded track with an accent fill scaled by `value`. Sibling of
 /// `slider` minus the drag/thumb — the fill reuses the same "absolute_fill child, scaled from the left edge"
 /// technique (see `slider`'s fill) since a progress bar is a slider whose value the app drives instead of the
-/// pointer. `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its
-/// own signal), `Some` is caller-bound.
+/// pointer. `value` is a closure so a reading derived from several services can drive it, and so an unbound
+/// bar reads a flat zero rather than owning a signal nobody can write.
 pub struct ProgressProps {
-    /// Bound progress, normalized to 0.0..=1.0 (out-of-range inputs are clamped on read, not here).
-    /// `None` (the default) is uncontrolled — the widget makes its own `signal(0.0)`.
-    pub value: Option<RwSignal<f32>>,
+    /// Progress, normalized to 0.0..=1.0 (out-of-range inputs are clamped on read, not here).
+    ///
+    /// A closure rather than a signal, like [`color`](Self::color) beside it: a bar *reports* a reading, it
+    /// never writes one, and a caller whose reading is derived from two services has no signal to hand over.
+    /// Insisting on one is what makes a shell reimplement this widget next to the catalogue.
+    pub value: Box<dyn Fn() -> f32>,
     /// Fill accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     pub color: Box<dyn Fn() -> Color>,
     /// Track (rail) colour; `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's muted token.
     pub track_color: Box<dyn Fn() -> Color>,
-    /// Track width in px. `0.0` (the default) means "unset" — the bar uses `220.0`.
+    /// Track width in px. `0.0` (the default) means "unset" — the bar uses `220.0`. Ignored under
+    /// [`stretch`](Self::stretch).
     pub width: f32,
+    /// Fill the parent's width instead of taking a fixed one — what a bar inside a card wants, where a px
+    /// track is either short of the card or past its edge.
+    pub stretch: bool,
     /// Track height in px. `0.0` (the default) means "unset" — the bar uses `8.0`.
     pub height: f32,
 }
 
 props_default!(ProgressProps {
-    value: none,
+    value: reading,
     color: color,
     track_color: color,
     width: zero,
+    stretch: zero,
     height: zero,
 });
 
@@ -41,10 +48,12 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
         color,
         track_color,
         width,
+        stretch,
         height,
     } = props;
-    // Uncontrolled: own the value so the bar still works when the caller binds no signal.
-    let value = value.unwrap_or_else(|| signal(0.0));
+    // Shared by the fill's style closure and its transform, which both need the reading.
+    let value: std::rc::Rc<dyn Fn() -> f32> = std::rc::Rc::from(value);
+    let scale_value = std::rc::Rc::clone(&value);
     let width = if width > 0.0 { width } else { 220.0 };
     let height = if height > 0.0 { height } else { 8.0 };
     // Unlike `slider`, `color` is only needed by this one style closure, so it moves in directly — no `Rc`
@@ -54,7 +63,7 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
     // edge by `value` — cheaper than relaying out a narrower box on every update. See `slider`'s fill for the
     // same technique; `box_transform` only pivots scale on the rect centre, so the raw matrix is needed here
     // too to pin the left edge and grow rightward.
-    let fill_value = value.clone();
+
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |_r| {
@@ -66,12 +75,20 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
         vec![],
     )?
     .with_transform(move |r| {
-        let v = fill_value.get().clamp(0.0, 1.0);
+        let v = scale_value().clamp(0.0, 1.0);
         Some(Transform::scale_around(v, 1.0, r.x, r.y + r.height / 2.0).to_array())
     });
 
     let track = StyledContainer::new(
-        LayoutStyle::new().width(width).height(height),
+        // A stretched bar takes the parent's width: a px track inside a card is either short of it or
+        // past its edge, and the card is what decides how wide a reading should read.
+        LayoutStyle::new()
+            .width(if stretch {
+                layout_core::SizeDimension::Percent(1.0)
+            } else {
+                layout_core::SizeDimension::Px(width)
+            })
+            .height(height),
         move |_r| {
             let fill = shared::resolve(track_color.as_ref(), || {
                 use_theme_tokens()
@@ -114,7 +131,10 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.3f32);
         let widget = progress(ProgressProps {
-            value: Some(value.clone()),
+            value: {
+                let v = value.clone();
+                Box::new(move || v.get())
+            },
             width: 200.0,
             height: 10.0,
             ..Default::default()
@@ -131,7 +151,10 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let widget = progress(ProgressProps {
-            value: Some(value.clone()),
+            value: {
+                let v = value.clone();
+                Box::new(move || v.get())
+            },
             ..Default::default()
         })
         .unwrap();
@@ -139,5 +162,24 @@ mod tests {
         value.set(0.75);
         value.set(1.5);
         assert_eq!(value.get(), 1.5);
+    }
+
+    /// The reason this prop is a closure. A reading derived from two services has no signal behind it, and a
+    /// bar that insisted on one is a bar an application reimplements next to the catalogue.
+    #[test]
+    fn a_derived_reading_can_drive_the_bar() {
+        reactive_core::reset_runtime();
+        let used = signal(3.0f32);
+        let total = signal(4.0f32);
+        let fraction = reactive_core::derive_pair(used.clone(), total.clone(), |u, t| u / t);
+        let read = fraction.clone();
+        let bar = progress(ProgressProps {
+            value: Box::new(move || read.get()),
+            stretch: true,
+            ..Default::default()
+        });
+        assert!(bar.is_ok(), "a derivation drives it");
+        used.set(1.0);
+        assert_eq!(fraction.get(), 0.25, "and keeps following its sources");
     }
 }

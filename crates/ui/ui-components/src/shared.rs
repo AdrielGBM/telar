@@ -210,6 +210,7 @@ macro_rules! props_default {
     (@value action) => { Box::new(|| {}) };
     (@value none) => { None };
     (@value zero) => { Default::default() };
+    (@value reading) => { Box::new(|| 0.0) };
     (@value ($e:expr)) => { $e };
 }
 pub(crate) use props_default;
