@@ -27,12 +27,15 @@ const TAB_INSERT: &str = "    ";
 /// the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining
 /// lines, arrows in all four directions, Home/End, Tab), and draws a caret. Its measured height grows with the
 /// line count, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor.
-/// Paste (`Ctrl+V`) inserts at the caret, newlines and all. Selection and IME are not yet supported (a
-/// single-caret MVP, like `Input`), and copy/cut wait on selection.
+/// Selection (`Shift`+arrows, `Ctrl+A`, shift-click) with copy, cut and paste, newlines and all. IME is not
+/// yet supported.
 pub struct TextArea {
     value: RwSignal<String>,
     // Caret byte offset into `value`. Reactive so a bare caret move re-renders even when the text is unchanged.
     caret: RwSignal<usize>,
+    // The other end of a selection, or `None` when there is none. Byte offset like `caret`, and either side
+    // of it.
+    anchor: RwSignal<Option<usize>>,
     style: Rc<dyn Fn() -> TextStyle>,
     id: FocusId,
     leaf: LayoutLeaf,
@@ -79,6 +82,7 @@ impl TextArea {
         Ok(Self {
             value,
             caret: signal(caret),
+            anchor: signal(None),
             style,
             id,
             leaf: LayoutLeaf { node, rect },
@@ -123,6 +127,29 @@ impl TextArea {
         c
     }
 
+    /// The selected byte range, low end first, or `None` when nothing is selected.
+    fn selection(&self, text: &str) -> Option<(usize, usize)> {
+        let caret = self.caret_at(text);
+        let mut anchor = self.anchor.get()?.min(text.len());
+        while anchor > 0 && !text.is_char_boundary(anchor) {
+            anchor -= 1;
+        }
+        (anchor != caret).then(|| (anchor.min(caret), anchor.max(caret)))
+    }
+
+    fn selected_text(&self, text: &str) -> Option<String> {
+        self.selection(text)
+            .map(|(from, to)| text[from..to].to_string())
+    }
+
+    /// Removes the selection from `text` and reports where the caret lands. Every edit runs through this
+    /// first, so typing over a selection replaces it.
+    fn take_selection(&self, text: &mut String) -> Option<usize> {
+        let (from, to) = self.selection(text)?;
+        text.replace_range(from..to, "");
+        Some(from)
+    }
+
     /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the key
     /// was consumed. On a text change the leaf is marked dirty so the runner re-measures the (possibly new)
     /// line count on the next frame.
@@ -130,17 +157,46 @@ impl TextArea {
         let mut text = self.value.get();
         let mut caret = self.caret_at(&text);
         let mut changed = false;
+        // Where a movement key leaves the anchor: `Shift` keeps (or starts) a selection, anything else drops
+        // it. Resolved after the match so each arm can still read the selection it is replacing.
+        let anchor = if mods.is_shift {
+            Some(self.anchor.get().unwrap_or(caret))
+        } else {
+            None
+        };
         match key {
-            // Paste inserts at the caret, newlines and all — an editor is exactly where a multi-line paste
-            // belongs. Copy and cut need a selection, which this area does not have yet, so `Ctrl+C`/`Ctrl+X`
-            // stay unhandled rather than pretending to have copied nothing.
+            Key::Char('a') | Key::Char('A') if mods.is_ctrl || mods.is_meta => {
+                self.anchor.set(Some(0));
+                self.caret.set(text.len());
+                return EventResult::Handled;
+            }
+            Key::Char('c') | Key::Char('C') if mods.is_ctrl || mods.is_meta => {
+                let Some(selected) = self.selected_text(&text) else {
+                    return EventResult::Ignored;
+                };
+                services_core::set_clipboard_text(&selected);
+                // The selection survives a copy, as it does everywhere else.
+                return EventResult::Handled;
+            }
+            Key::Char('x') | Key::Char('X') if mods.is_ctrl || mods.is_meta => {
+                let Some(selected) = self.selected_text(&text) else {
+                    return EventResult::Ignored;
+                };
+                services_core::set_clipboard_text(&selected);
+                caret = self.take_selection(&mut text).unwrap_or(caret);
+                changed = true;
+            }
+            // Paste replaces the selection, newlines and all — an editor is exactly where a multi-line paste
+            // belongs.
             Key::Char('v') | Key::Char('V') if mods.is_ctrl || mods.is_meta => {
                 let Some(pasted) = services_core::clipboard_text() else {
                     return EventResult::Ignored;
                 };
-                if pasted.is_empty() {
+                let had_selection = self.take_selection(&mut text);
+                if pasted.is_empty() && had_selection.is_none() {
                     return EventResult::Ignored;
                 }
+                caret = had_selection.unwrap_or(caret);
                 text.insert_str(caret, &pasted);
                 caret += pasted.len();
                 changed = true;
@@ -148,16 +204,19 @@ impl TextArea {
             // Any other chord (Ctrl/Meta) is a shortcut, not text — leave it for global handlers (save, …).
             Key::Char(_) if mods.is_ctrl || mods.is_meta => return EventResult::Ignored,
             Key::Char(c) if !c.is_control() => {
+                caret = self.take_selection(&mut text).unwrap_or(caret);
                 text.insert(caret, *c);
                 caret += c.len_utf8();
                 changed = true;
             }
             Key::Named(NamedKey::Space) => {
+                caret = self.take_selection(&mut text).unwrap_or(caret);
                 text.insert(caret, ' ');
                 caret += 1;
                 changed = true;
             }
             Key::Named(NamedKey::Enter) => {
+                caret = self.take_selection(&mut text).unwrap_or(caret);
                 text.insert(caret, '\n');
                 caret += 1;
                 changed = true;
@@ -168,20 +227,28 @@ impl TextArea {
                 changed = true;
             }
             Key::Named(NamedKey::Backspace) => {
-                if caret == 0 {
-                    return EventResult::Ignored;
+                if let Some(at) = self.take_selection(&mut text) {
+                    caret = at;
+                } else {
+                    if caret == 0 {
+                        return EventResult::Ignored;
+                    }
+                    let prev = prev_boundary(&text, caret);
+                    text.replace_range(prev..caret, "");
+                    caret = prev;
                 }
-                let prev = prev_boundary(&text, caret);
-                text.replace_range(prev..caret, "");
-                caret = prev;
                 changed = true;
             }
             Key::Named(NamedKey::Delete) => {
-                if caret >= text.len() {
-                    return EventResult::Ignored;
+                if let Some(at) = self.take_selection(&mut text) {
+                    caret = at;
+                } else {
+                    if caret >= text.len() {
+                        return EventResult::Ignored;
+                    }
+                    let next = next_boundary(&text, caret);
+                    text.replace_range(caret..next, "");
                 }
-                let next = next_boundary(&text, caret);
-                text.replace_range(caret..next, "");
                 changed = true;
             }
             Key::Named(NamedKey::ArrowLeft) => caret = prev_boundary(&text, caret),
@@ -219,6 +286,8 @@ impl TextArea {
             self.value.set(text);
         }
         self.caret.set(caret);
+        // An anchor that caught up with the caret is no selection at all.
+        self.anchor.set(anchor.filter(|a| *a != caret));
         EventResult::Handled
     }
 }
@@ -252,6 +321,42 @@ impl Component for TextArea {
         if focus::is_focused(self.id) {
             let caret = self.caret_at(&text);
             let line = line_index(&text, caret);
+            // One rect per line the selection spans: the first from its start to the line's end, the last from
+            // the line's start to its end, and every line between them whole. A selection that wraps lines is
+            // not one box — drawing it as one would paint over the margin the text does not occupy.
+            let highlight = self.selection(&text).map(|(from, to)| {
+                let (first, last) = (line_index(&text, from), line_index(&text, to));
+                let mut bands = Vec::with_capacity(last - first + 1);
+                for line in first..=last {
+                    let (start, end) = nth_line_bounds(&text, line);
+                    let x0 = if line == first {
+                        caret_x(&text, from, &style)
+                    } else {
+                        caret_x(&text, start, &style)
+                    };
+                    let x1 = if line == last {
+                        caret_x(&text, to, &style)
+                    } else {
+                        // An empty line still shows a sliver, so a selection running through it is continuous
+                        // rather than a gap the eye reads as the selection having ended.
+                        caret_x(&text, end, &style).max(x0 + line_h * 0.35)
+                    };
+                    let fill = match style.paint {
+                        Paint::Solid(c) => c.with_alpha(0.25),
+                        _ => Color::rgba(0.4, 0.6, 0.9, 0.3),
+                    };
+                    bands.push(RenderNode::rect(
+                        Rect {
+                            x: x0,
+                            y: line as f32 * line_h,
+                            width: (x1 - x0).max(1.0),
+                            height: line_h,
+                        },
+                        RectStyle::default().with_fill(Paint::Solid(fill)),
+                    ));
+                }
+                RenderNode::group(bands)
+            });
             let x = caret_x(&text, caret, &style);
             let caret_rect = Rect {
                 x,
@@ -261,8 +366,11 @@ impl Component for TextArea {
             };
             let caret_node =
                 RenderNode::rect(caret_rect, RectStyle::default().with_fill(style.paint));
-            self.leaf
-                .at_layout_position(RenderNode::group([text_node, caret_node]))
+            let layers = match highlight {
+                Some(highlight) => vec![highlight, text_node, caret_node],
+                None => vec![text_node, caret_node],
+            };
+            self.leaf.at_layout_position(RenderNode::group(layers))
         } else {
             self.leaf.at_layout_position(text_node)
         }
@@ -288,8 +396,16 @@ impl Component for TextArea {
                     let local_x = (*x as f32 - rect.x).max(0.0);
                     let last = text.matches('\n').count();
                     let line = ((local_y / line_h).floor() as usize).min(last);
-                    self.caret
-                        .set(offset_at_line_x(&text, &style, line, local_x));
+                    let at = offset_at_line_x(&text, &style, line, local_x);
+                    // Shift-click extends from wherever the selection already starts, which is what every
+                    // editor does and the only pointer gesture available until a drag can be tracked.
+                    if crate::keyboard::modifiers().is_shift {
+                        let from = self.anchor.get().unwrap_or_else(|| self.caret.get());
+                        self.anchor.set(Some(from));
+                    } else {
+                        self.anchor.set(None);
+                    }
+                    self.caret.set(at);
                     EventResult::Handled
                 } else {
                     EventResult::Ignored
@@ -414,6 +530,70 @@ mod tests {
         }
     }
 
+    fn chord(k: Key) -> Event {
+        Event::KeyPressed {
+            key: k,
+            modifiers: ModifiersState {
+                is_ctrl: true,
+                ..ModifiersState::default()
+            },
+        }
+    }
+
+    fn shifted(k: Key) -> Event {
+        Event::KeyPressed {
+            key: k,
+            modifiers: ModifiersState {
+                is_shift: true,
+                ..ModifiersState::default()
+            },
+        }
+    }
+
+    #[test]
+    fn typing_over_a_selection_replaces_it() {
+        let (mut area, value) = focused("one\ntwo");
+        area.on_event(&chord(Key::Char('a')));
+        area.on_event(&key(Key::Char('x')));
+        assert_eq!(value.get(), "x");
+    }
+
+    /// The case the notebook is: a selection that runs across a line break, cut whole.
+    #[test]
+    fn a_selection_across_lines_cuts_whole() {
+        let (mut area, value) = focused("one\ntwo\nthree");
+        area.on_event(&chord(Key::Char('a')));
+        area.on_event(&chord(Key::Char('x')));
+        assert_eq!(value.get(), "");
+    }
+
+    #[test]
+    fn shift_arrows_grow_a_selection_and_backspace_takes_it() {
+        let (mut area, value) = focused("hello");
+        area.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+        area.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+        assert_eq!(area.selection("hello"), Some((3, 5)));
+        area.on_event(&key(Key::Named(NamedKey::Backspace)));
+        assert_eq!(value.get(), "hel");
+    }
+
+    /// Enter with a selection replaces it with the break, rather than pushing the selected text down a line.
+    #[test]
+    fn enter_replaces_a_selection() {
+        let (mut area, value) = focused("abcd");
+        area.on_event(&chord(Key::Char('a')));
+        area.on_event(&key(Key::Named(NamedKey::Enter)));
+        assert_eq!(value.get(), "\n");
+    }
+
+    #[test]
+    fn copy_leaves_the_text_and_the_selection_alone() {
+        let (mut area, value) = focused("one\ntwo");
+        area.on_event(&chord(Key::Char('a')));
+        assert_eq!(area.on_event(&chord(Key::Char('c'))), EventResult::Handled);
+        assert_eq!(value.get(), "one\ntwo");
+        assert_eq!(area.selection("one\ntwo"), Some((0, 7)));
+    }
     fn focused(initial: &str) -> (TextArea, RwSignal<String>) {
         reset_layout_runtime();
         let value = signal(initial.to_string());

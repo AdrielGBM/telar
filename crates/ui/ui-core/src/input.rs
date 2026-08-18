@@ -17,13 +17,16 @@ const CARET_WIDTH: f32 = 1.5;
 /// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no
 /// border or background — wrap it in a `box` for the look) and keyboard-driven. It requests focus on
 /// tap and, while focused, edits the bound signal from key events, drawing a caret at the insertion
-/// point. Paste (`Ctrl+V`) inserts at the caret. Selection and IME composition are not yet supported (a
-/// single-caret MVP), and copy/cut wait on selection — there is nothing yet for them to act on.
+/// point. Selection (`Shift`+arrows/Home/End, `Ctrl+A`) with copy, cut and paste; IME composition is not yet
+/// supported. Drag-to-select waits on click-to-position, which this field does not have either.
 pub struct Input {
     value: RwSignal<String>,
     // Caret byte offset into `value`. Reactive so a bare caret move (arrows/home/end) re-renders even
     // when the text is unchanged; always re-snapped to a char boundary in case the signal changed elsewhere.
     caret: RwSignal<usize>,
+    // The other end of a selection, or `None` when there is none. Byte offset like `caret`, and either side
+    // of it: a selection extended leftwards has its anchor after its caret.
+    anchor: RwSignal<Option<usize>>,
     style: Rc<dyn Fn() -> TextStyle>,
     id: FocusId,
     leaf: LayoutLeaf,
@@ -51,6 +54,7 @@ impl Input {
         Ok(Self {
             value,
             caret: signal(caret),
+            anchor: signal(None),
             style: Rc::new(style_fn),
             id,
             leaf,
@@ -117,54 +121,130 @@ impl Input {
         c
     }
 
+    /// The selected byte range, low end first, or `None` when nothing is selected. An anchor sitting on the
+    /// caret is not a selection — it is where one would start from.
+    fn selection(&self, text: &str) -> Option<(usize, usize)> {
+        let caret = self.caret_at(text);
+        let mut anchor = self.anchor.get()?.min(text.len());
+        while anchor > 0 && !text.is_char_boundary(anchor) {
+            anchor -= 1;
+        }
+        (anchor != caret).then(|| (anchor.min(caret), anchor.max(caret)))
+    }
+
+    /// The selected text, for a copy or a cut.
+    fn selected_text(&self, text: &str) -> Option<String> {
+        self.selection(text)
+            .map(|(from, to)| text[from..to].to_string())
+    }
+
+    /// Removes the selection from `text` and reports where the caret lands, or `None` when there was none.
+    /// Every edit runs through this first: typing over a selection replaces it, which is the behaviour that
+    /// makes a selection worth having.
+    fn take_selection(&self, text: &mut String) -> Option<usize> {
+        let (from, to) = self.selection(text)?;
+        text.replace_range(from..to, "");
+        Some(from)
+    }
+
     /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the
     /// key was consumed.
     fn edit(&mut self, key: &Key, mods: &ModifiersState) -> EventResult {
         let mut text = self.value.get();
         let mut caret = self.caret_at(&text);
+        let chord = mods.is_ctrl || mods.is_meta;
+        // Where a movement key leaves the anchor: `Shift` keeps (or starts) a selection, anything else drops
+        // it. Set after the match so each arm can still read the selection it is replacing.
+        let mut anchor = if mods.is_shift {
+            Some(self.anchor.get().unwrap_or(caret))
+        } else {
+            None
+        };
         match key {
-            // Paste inserts at the caret. Copy and cut need a selection, which this field does not have yet —
-            // so `Ctrl+C`/`Ctrl+X` stay unhandled rather than pretending to have copied nothing.
-            Key::Char('v') | Key::Char('V') if mods.is_ctrl || mods.is_meta => {
+            Key::Char('a') | Key::Char('A') if chord => {
+                anchor = Some(0);
+                caret = text.len();
+            }
+            Key::Char('c') | Key::Char('C') if chord => {
+                let Some(selected) = self.selected_text(&text) else {
+                    return EventResult::Ignored;
+                };
+                services_core::set_clipboard_text(&selected);
+                // The selection survives a copy, as it does everywhere else.
+                return EventResult::Handled;
+            }
+            Key::Char('x') | Key::Char('X') if chord => {
+                let Some(selected) = self.selected_text(&text) else {
+                    return EventResult::Ignored;
+                };
+                services_core::set_clipboard_text(&selected);
+                caret = self.take_selection(&mut text).unwrap_or(caret);
+            }
+            Key::Char('v') | Key::Char('V') if chord => {
                 let Some(pasted) = services_core::clipboard_text() else {
                     return EventResult::Ignored;
                 };
                 // A single-line field takes the first line: a multi-line paste would otherwise put a `\n` in a
                 // value nothing can render, and every field is bound to a signal something else reads.
-                let pasted = pasted.lines().next().unwrap_or_default();
-                if pasted.is_empty() {
+                let pasted = pasted.lines().next().unwrap_or_default().to_string();
+                let had_selection = self.take_selection(&mut text);
+                if pasted.is_empty() && had_selection.is_none() {
                     return EventResult::Ignored;
                 }
-                text.insert_str(caret, pasted);
+                caret = had_selection.unwrap_or(caret);
+                text.insert_str(caret, &pasted);
                 caret += pasted.len();
             }
-            // Any other chord (Ctrl/Meta) is a shortcut, not text — leave it for global handlers.
-            Key::Char(_) if mods.is_ctrl || mods.is_meta => return EventResult::Ignored,
+            // Any other chord is a shortcut, not text — leave it for global handlers.
+            Key::Char(_) if chord => return EventResult::Ignored,
             Key::Char(c) if !c.is_control() => {
+                caret = self.take_selection(&mut text).unwrap_or(caret);
                 text.insert(caret, *c);
                 caret += c.len_utf8();
             }
             Key::Named(NamedKey::Space) => {
+                caret = self.take_selection(&mut text).unwrap_or(caret);
                 text.insert(caret, ' ');
                 caret += 1;
             }
+            // Backspace and Delete take the selection when there is one, and one character when there is not.
             Key::Named(NamedKey::Backspace) => {
-                if caret == 0 {
-                    return EventResult::Ignored;
+                if let Some(at) = self.take_selection(&mut text) {
+                    caret = at;
+                } else {
+                    if caret == 0 {
+                        return EventResult::Ignored;
+                    }
+                    let prev = prev_boundary(&text, caret);
+                    text.replace_range(prev..caret, "");
+                    caret = prev;
                 }
-                let prev = prev_boundary(&text, caret);
-                text.replace_range(prev..caret, "");
-                caret = prev;
             }
             Key::Named(NamedKey::Delete) => {
-                if caret >= text.len() {
-                    return EventResult::Ignored;
+                if let Some(at) = self.take_selection(&mut text) {
+                    caret = at;
+                } else {
+                    if caret >= text.len() {
+                        return EventResult::Ignored;
+                    }
+                    let next = next_boundary(&text, caret);
+                    text.replace_range(caret..next, "");
                 }
-                let next = next_boundary(&text, caret);
-                text.replace_range(caret..next, "");
             }
-            Key::Named(NamedKey::ArrowLeft) => caret = prev_boundary(&text, caret),
-            Key::Named(NamedKey::ArrowRight) => caret = next_boundary(&text, caret),
+            // An unshifted arrow with a selection collapses to its edge rather than moving from the caret:
+            // pressing Left with three characters selected puts the caret before them, not inside them.
+            Key::Named(NamedKey::ArrowLeft) => {
+                caret = match self.selection(&text) {
+                    Some((from, _)) if !mods.is_shift => from,
+                    _ => prev_boundary(&text, caret),
+                }
+            }
+            Key::Named(NamedKey::ArrowRight) => {
+                caret = match self.selection(&text) {
+                    Some((_, to)) if !mods.is_shift => to,
+                    _ => next_boundary(&text, caret),
+                }
+            }
             Key::Named(NamedKey::Home) => caret = 0,
             Key::Named(NamedKey::End) => caret = text.len(),
             Key::Named(NamedKey::Enter) => {
@@ -193,6 +273,9 @@ impl Input {
             self.value.set(text);
         }
         self.caret.set(caret);
+        // An anchor that caught up with the caret is no selection at all, and keeping it would make the next
+        // unshifted arrow collapse to a range of nothing.
+        self.anchor.set(anchor.filter(|a| *a != caret));
         EventResult::Handled
     }
 }
@@ -225,6 +308,28 @@ impl Component for Input {
         // The caret is drawn only while focused; reading `is_focused` subscribes this view to focus moves.
         if focus::is_focused(self.id) {
             let caret = self.caret_at(&text);
+            // The selection paints *behind* the text, in the ink at low alpha rather than a token of its own:
+            // a field is unstyled by design and has no palette to reach for, and the ink is the one colour it
+            // is already guaranteed to contrast with.
+            let highlight = self.selection(&text).map(|(from, to)| {
+                let measure = |upto: usize| {
+                    crate::text_metrics::measure_text(&self.shown(&text[..upto]), 1.0e6, &style).0
+                };
+                let (start, end) = (measure(from), measure(to));
+                let fill = match style.paint {
+                    Paint::Solid(c) => c.with_alpha(0.25),
+                    _ => Color::rgba(0.4, 0.6, 0.9, 0.3),
+                };
+                RenderNode::rect(
+                    Rect {
+                        x: start,
+                        y: 0.0,
+                        width: (end - start).max(1.0),
+                        height: crate::text_metrics::line_height(style.font_size),
+                    },
+                    RectStyle::default().with_fill(Paint::Solid(fill)),
+                )
+            });
             // Measured against what is *drawn*: a mask character is not the width of the character it hides,
             // so measuring the real prefix would put the caret somewhere the text is not.
             let prefix = self.shown(&text[..caret]);
@@ -238,8 +343,11 @@ impl Component for Input {
             };
             let caret_node =
                 RenderNode::rect(caret_rect, RectStyle::default().with_fill(style.paint));
-            self.leaf
-                .at_layout_position(RenderNode::group([text_node, caret_node]))
+            let layers = match highlight {
+                Some(highlight) => vec![highlight, text_node, caret_node],
+                None => vec![text_node, caret_node],
+            };
+            self.leaf.at_layout_position(RenderNode::group(layers))
         } else {
             self.leaf.at_layout_position(text_node)
         }
@@ -256,8 +364,10 @@ impl Component for Input {
             } => {
                 if rect.contains(*x as f32, *y as f32) {
                     focus::request_from_pointer(self.id);
-                    // MVP: land the caret at the end. Click-to-position (measuring per glyph) is a follow-up.
+                    // MVP: land the caret at the end. Click-to-position (measuring per glyph) is a follow-up,
+                    // and drag-to-select waits on it — there is no x-to-offset mapping to drag along yet.
                     self.caret.set(self.value.with(|s| s.len()));
+                    self.anchor.set(None);
                     EventResult::Handled
                 } else {
                     EventResult::Ignored
@@ -324,6 +434,82 @@ mod tests {
         }
     }
 
+    fn chord(k: Key) -> Event {
+        Event::KeyPressed {
+            key: k,
+            modifiers: ModifiersState {
+                is_ctrl: true,
+                ..ModifiersState::default()
+            },
+        }
+    }
+
+    fn shifted(k: Key) -> Event {
+        Event::KeyPressed {
+            key: k,
+            modifiers: ModifiersState {
+                is_shift: true,
+                ..ModifiersState::default()
+            },
+        }
+    }
+
+    #[test]
+    fn shift_arrows_grow_a_selection_and_a_plain_one_drops_it() {
+        let (mut input, _) = focused_input("hello");
+        input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+        input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+        assert_eq!(input.selection("hello"), Some((3, 5)), "two chars selected");
+        input.on_event(&key(Key::Named(NamedKey::ArrowRight)));
+        assert_eq!(input.selection("hello"), None, "a plain arrow drops it");
+    }
+
+    /// The behaviour that makes a selection worth having: what you type lands *instead of* it.
+    #[test]
+    fn typing_over_a_selection_replaces_it() {
+        let (mut input, value) = focused_input("hello");
+        input.on_event(&chord(Key::Char('a')));
+        input.on_event(&key(Key::Char('x')));
+        assert_eq!(value.get(), "x");
+    }
+
+    #[test]
+    fn backspace_takes_the_selection_rather_than_one_character() {
+        let (mut input, value) = focused_input("hello");
+        input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+        input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+        input.on_event(&key(Key::Named(NamedKey::Backspace)));
+        assert_eq!(value.get(), "hel");
+    }
+
+    /// An unshifted arrow with a selection collapses to its edge — pressing Left with three characters
+    /// selected puts the caret before them, not one step in from wherever the caret happened to be.
+    #[test]
+    fn a_plain_arrow_collapses_to_the_selection_edge() {
+        let (mut input, _) = focused_input("hello");
+        input.on_event(&chord(Key::Char('a')));
+        input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
+        assert_eq!(input.caret.get(), 0, "collapsed to the low edge");
+    }
+
+    #[test]
+    fn cut_removes_the_selection_and_copy_leaves_it() {
+        let (mut input, value) = focused_input("hello");
+        input.on_event(&chord(Key::Char('a')));
+        input.on_event(&chord(Key::Char('c')));
+        assert_eq!(value.get(), "hello", "copy leaves the text alone");
+        assert_eq!(input.selection("hello"), Some((0, 5)), "and the selection");
+        input.on_event(&chord(Key::Char('x')));
+        assert_eq!(value.get(), "", "cut takes it");
+    }
+
+    /// Copy and cut with nothing selected report `Ignored`, so a global shortcut table still sees the chord
+    /// instead of it being swallowed by a field that did nothing with it.
+    #[test]
+    fn copy_without_a_selection_is_not_consumed() {
+        let (mut input, _) = focused_input("hello");
+        assert_eq!(input.on_event(&chord(Key::Char('c'))), EventResult::Ignored);
+    }
     // Builds a focused, laid-out input bound to `initial` and returns it plus its value signal.
     fn focused_input(initial: &str) -> (Input, RwSignal<String>) {
         reset_layout_runtime();
