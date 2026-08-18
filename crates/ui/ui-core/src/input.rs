@@ -17,7 +17,8 @@ const CARET_WIDTH: f32 = 1.5;
 /// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no
 /// border or background — wrap it in a `box` for the look) and keyboard-driven. It requests focus on
 /// tap and, while focused, edits the bound signal from key events, drawing a caret at the insertion
-/// point. Selection, clipboard, and IME composition are not yet supported (a single-caret MVP).
+/// point. Paste (`Ctrl+V`) inserts at the caret. Selection and IME composition are not yet supported (a
+/// single-caret MVP), and copy/cut wait on selection — there is nothing yet for them to act on.
 pub struct Input {
     value: RwSignal<String>,
     // Caret byte offset into `value`. Reactive so a bare caret move (arrows/home/end) re-renders even
@@ -122,7 +123,22 @@ impl Input {
         let mut text = self.value.get();
         let mut caret = self.caret_at(&text);
         match key {
-            // A chord (Ctrl/Meta) is a shortcut, not text — leave it for global handlers (copy/paste TBD).
+            // Paste inserts at the caret. Copy and cut need a selection, which this field does not have yet —
+            // so `Ctrl+C`/`Ctrl+X` stay unhandled rather than pretending to have copied nothing.
+            Key::Char('v') | Key::Char('V') if mods.is_ctrl || mods.is_meta => {
+                let Some(pasted) = services_core::clipboard_text() else {
+                    return EventResult::Ignored;
+                };
+                // A single-line field takes the first line: a multi-line paste would otherwise put a `\n` in a
+                // value nothing can render, and every field is bound to a signal something else reads.
+                let pasted = pasted.lines().next().unwrap_or_default();
+                if pasted.is_empty() {
+                    return EventResult::Ignored;
+                }
+                text.insert_str(caret, pasted);
+                caret += pasted.len();
+            }
+            // Any other chord (Ctrl/Meta) is a shortcut, not text — leave it for global handlers.
             Key::Char(_) if mods.is_ctrl || mods.is_meta => return EventResult::Ignored,
             Key::Char(c) if !c.is_control() => {
                 text.insert(caret, *c);

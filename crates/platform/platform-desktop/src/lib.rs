@@ -1,11 +1,13 @@
 mod accessibility;
 // D-Bus, and only reached on Linux: winit answers the color-scheme question itself on Windows and macOS.
 #[cfg(target_os = "linux")]
+mod clipboard;
 mod color_scheme;
 mod dialogs;
 mod paths;
 pub mod platform;
 
+pub use clipboard::DesktopClipboard;
 pub use dialogs::DesktopFileDialogs;
 pub use paths::DesktopPathsProvider;
 pub use platform::{WinitPlatform, request_dynamic_surface};

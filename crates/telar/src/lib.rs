@@ -159,6 +159,7 @@ pub fn install_default_text_metrics() {
 pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer_caches};
 pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
+pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
 // Available in every GUI build, not opt-in: `ui_core::Surface` composes the per-surface service scope, so
 // `runtime` pulls in ui-core which turns on services-core/di. A non-GUI build (the `cargo-telar` tool depends on
 // `rsx` with default-features off) has no ui-core, hence no `di`, hence nothing to re-export.

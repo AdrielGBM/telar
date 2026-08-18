@@ -1,4 +1,5 @@
 pub mod app_paths;
+pub mod clipboard;
 pub mod dialogs;
 pub mod paths;
 #[cfg(feature = "di")]
@@ -6,6 +7,7 @@ mod registry;
 #[cfg(feature = "di")]
 mod scope;
 
+pub use clipboard::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
 pub use dialogs::{FileDialog, FileDialogs, FileFilter, file_dialogs, set_file_dialogs};
 pub use paths::{AppPathsProvider, NoPaths};
 #[cfg(feature = "di")]

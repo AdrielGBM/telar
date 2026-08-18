@@ -27,7 +27,8 @@ const TAB_INSERT: &str = "    ";
 /// the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining
 /// lines, arrows in all four directions, Home/End, Tab), and draws a caret. Its measured height grows with the
 /// line count, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor.
-/// Selection, clipboard, and IME are not yet supported (a single-caret MVP, like `Input`).
+/// Paste (`Ctrl+V`) inserts at the caret, newlines and all. Selection and IME are not yet supported (a
+/// single-caret MVP, like `Input`), and copy/cut wait on selection.
 pub struct TextArea {
     value: RwSignal<String>,
     // Caret byte offset into `value`. Reactive so a bare caret move re-renders even when the text is unchanged.
@@ -130,7 +131,21 @@ impl TextArea {
         let mut caret = self.caret_at(&text);
         let mut changed = false;
         match key {
-            // A chord (Ctrl/Meta) is a shortcut, not text — leave it for global handlers (save, copy/paste TBD).
+            // Paste inserts at the caret, newlines and all — an editor is exactly where a multi-line paste
+            // belongs. Copy and cut need a selection, which this area does not have yet, so `Ctrl+C`/`Ctrl+X`
+            // stay unhandled rather than pretending to have copied nothing.
+            Key::Char('v') | Key::Char('V') if mods.is_ctrl || mods.is_meta => {
+                let Some(pasted) = services_core::clipboard_text() else {
+                    return EventResult::Ignored;
+                };
+                if pasted.is_empty() {
+                    return EventResult::Ignored;
+                }
+                text.insert_str(caret, &pasted);
+                caret += pasted.len();
+                changed = true;
+            }
+            // Any other chord (Ctrl/Meta) is a shortcut, not text — leave it for global handlers (save, …).
             Key::Char(_) if mods.is_ctrl || mods.is_meta => return EventResult::Ignored,
             Key::Char(c) if !c.is_control() => {
                 text.insert(caret, *c);

@@ -15,6 +15,7 @@ use crate::surface::{SurfaceControl, SurfaceToken};
 fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_name: &str) {
     let paths: Arc<dyn AppPathsProvider> = Arc::new(DesktopPathsProvider);
     platform_desktop::DesktopFileDialogs::install();
+    platform_desktop::DesktopClipboard::install();
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,
         Err(e) => {
@@ -67,6 +68,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
     let window_config = app.window_config().unwrap_or_default();
     let paths: Arc<dyn AppPathsProvider> = Arc::new(DesktopPathsProvider);
     platform_desktop::DesktopFileDialogs::install();
+    platform_desktop::DesktopClipboard::install();
     let prefs = crate::prefs::UserPrefs::load("telar-window", paths.as_ref());
     // Same backend convention as the primary window (resolved preference, else the compile-time default —
     // `Auto` = hardware with a software fallback): a secondary window is a first-class window.
