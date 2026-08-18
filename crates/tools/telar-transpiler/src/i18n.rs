@@ -7,105 +7,18 @@
 //! `&'static` data — the same host-only "parse once, emit `&'static`" approach as the svg baker. The parsed
 //! [`CatalogModel`] is also queryable so the `t!` macro and markup emitters can validate keys and arguments at
 //! compile time.
+//!
+//! The model and the TOML grammar are `i18n-core`'s, shared with the runtime loader an app without any `.rsx`
+//! file uses. What is baker-only is here: discovery, and serialization to Rust source.
 
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+use i18n_core::PluralCategory;
+pub use i18n_core::{CatalogModel, MessageModel, PartModel, parse_message};
 
 /// The crate-root module the baked catalog is wired under, and the path every `t!`/markup call site references.
 pub const I18N_MODULE: &str = "__rsx_i18n";
 pub const I18N_CATALOG_PATH: &str = "crate::__rsx_i18n::CATALOG";
-
-/// One piece of a message: literal text or a `{name}` placeholder.
-#[derive(Debug, Clone, PartialEq)]
-pub enum PartModel {
-    Lit(String),
-    Arg(String),
-}
-
-/// A parsed message: `Plain` when it has no placeholders, `Format` otherwise.
-#[derive(Debug, Clone, PartialEq)]
-pub enum MessageModel {
-    Plain(String),
-    Format(Vec<PartModel>),
-    /// Per-CLDR-category messages, keyed by category name and always containing `other`. `BTreeMap` keeps the
-    /// emitted order deterministic, as everywhere else in the baker.
-    Plural(BTreeMap<String, MessageModel>),
-}
-
-impl MessageModel {
-    /// The placeholder names this message expects, in source order (with duplicates removed). A plural
-    /// contributes the union across its branches: which one a call renders is a runtime decision.
-    pub fn arg_names(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        let mut push = |name: &String| {
-            if !names.contains(name) {
-                names.push(name.clone());
-            }
-        };
-        match self {
-            MessageModel::Plain(_) => {}
-            MessageModel::Format(parts) => {
-                for p in parts {
-                    if let PartModel::Arg(name) = p {
-                        push(name);
-                    }
-                }
-            }
-            MessageModel::Plural(branches) => {
-                for name in branches.values().flat_map(MessageModel::arg_names) {
-                    push(&name);
-                }
-            }
-        }
-        names
-    }
-}
-
-/// Whether `table` spells a plural set rather than a namespace: every key is a CLDR category *and* `other`
-/// is among them.
-///
-/// Both halves matter. Requiring `other` is what CLDR requires of any language, and it keeps a namespace
-/// that happens to hold a single `one = "…"` key from being swallowed; requiring every key to be a category
-/// keeps a namespace with a stray `few` sibling from being misread.
-fn is_plural_table(table: &toml::Table) -> bool {
-    !table.is_empty()
-        && table.contains_key("other")
-        && table.keys().all(|k| {
-            matches!(
-                k.as_str(),
-                "zero" | "one" | "two" | "few" | "many" | "other"
-            )
-        })
-}
-
-/// The whole project's parsed catalog: available locales, the fallback locale, and every key's per-locale
-/// messages. `BTreeMap`s keep output deterministic so unchanged catalogs don't retrigger recompilation.
-#[derive(Debug, Clone)]
-pub struct CatalogModel {
-    pub locales: Vec<String>,
-    pub default_locale: String,
-    pub entries: BTreeMap<String, BTreeMap<String, MessageModel>>,
-}
-
-impl CatalogModel {
-    pub fn contains_key(&self, key: &str) -> bool {
-        self.entries.contains_key(key)
-    }
-
-    /// The placeholder names expected for `key`, taken from the default-locale message (falling back to any
-    /// locale that defines the key). Used to validate `t!` arguments.
-    pub fn arg_names(&self, key: &str) -> Option<Vec<String>> {
-        let per_locale = self.entries.get(key)?;
-        let msg = per_locale
-            .get(&self.default_locale)
-            .or_else(|| per_locale.values().next())?;
-        Some(msg.arg_names())
-    }
-
-    pub fn keys(&self) -> impl Iterator<Item = &String> {
-        self.entries.keys()
-    }
-}
 
 /// How the catalog is discovered, from `[telar.i18n]` in `telar.toml` (with back-compat fallbacks to the older
 /// `[telar] locales` / `[telar] default_locale`). Both discovery sources may be active at once; set either name to
@@ -217,139 +130,19 @@ pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, String
         return Ok(None);
     }
 
-    let mut entries: BTreeMap<String, BTreeMap<String, MessageModel>> = BTreeMap::new();
-    let mut locales: Vec<String> = Vec::new();
+    let mut files: Vec<(String, String, String)> = Vec::new();
     for (tag, path) in &sources {
-        if !locales.contains(tag) {
-            locales.push(tag.clone());
-        }
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("reading {}: {e}", path.display()))?;
-        let table: toml::Table = content
-            .parse()
-            .map_err(|e| format!("parsing {}: {e}", path.display()))?;
-        let mut flat = BTreeMap::new();
-        flatten(&table, String::new(), &mut flat, path)?;
-        for (key, message) in flat {
-            let per_locale = entries.entry(key.clone()).or_default();
-            if per_locale.insert(tag.clone(), message).is_some() {
-                return Err(format!(
-                    "{}: duplicate key `{key}` for locale `{tag}` (already defined in another file)",
-                    path.display()
-                ));
-            }
-        }
+        files.push((tag.clone(), content, path.display().to_string()));
     }
-    locales.sort();
+    let borrowed: Vec<(&str, &str, &str)> = files
+        .iter()
+        .map(|(tag, content, label)| (tag.as_str(), content.as_str(), label.as_str()))
+        .collect();
 
-    let default_locale = read_i18n_config(package_root)
-        .default
-        .filter(|d| locales.contains(d))
-        .or_else(|| locales.iter().find(|l| *l == "en").cloned())
-        .unwrap_or_else(|| locales[0].clone());
-
-    Ok(Some(CatalogModel {
-        locales,
-        default_locale,
-        entries,
-    }))
-}
-
-/// Flattens nested TOML tables into dotted keys (`[settings] title = ".."` → `settings.title`). String scalars
-/// become messages; other scalars are coerced to their display; arrays/datetimes are rejected.
-fn flatten(
-    table: &toml::Table,
-    prefix: String,
-    out: &mut BTreeMap<String, MessageModel>,
-    path: &Path,
-) -> Result<(), String> {
-    for (key, value) in table {
-        let full = if prefix.is_empty() {
-            key.clone()
-        } else {
-            format!("{prefix}.{key}")
-        };
-        match value {
-            toml::Value::Table(inner) if is_plural_table(inner) => {
-                let mut branches = BTreeMap::new();
-                for (category, message) in inner {
-                    let toml::Value::String(s) = message else {
-                        return Err(format!(
-                            "{}: plural `{full}.{category}` must be a string, found `{}`",
-                            path.display(),
-                            message.type_str()
-                        ));
-                    };
-                    branches.insert(category.clone(), parse_message(s));
-                }
-                out.insert(full, MessageModel::Plural(branches));
-            }
-            toml::Value::Table(inner) => flatten(inner, full, out, path)?,
-            toml::Value::String(s) => {
-                out.insert(full, parse_message(s));
-            }
-            toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Boolean(_) => {
-                out.insert(full, MessageModel::Plain(value.to_string()));
-            }
-            other => {
-                return Err(format!(
-                    "{}: key `{full}` has unsupported type `{}` (translations must be strings)",
-                    path.display(),
-                    other.type_str()
-                ));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Splits a message string into literal/placeholder parts. `{name}` is a named placeholder (whitespace inside
-/// is trimmed); `{{` / `}}` are escaped literal braces. A string with no placeholders yields [`MessageModel::Plain`].
-pub fn parse_message(content: &str) -> MessageModel {
-    let mut parts: Vec<PartModel> = Vec::new();
-    let mut literal = String::new();
-    let mut chars = content.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            '{' if chars.peek() == Some(&'{') => {
-                chars.next();
-                literal.push('{');
-            }
-            '}' if chars.peek() == Some(&'}') => {
-                chars.next();
-                literal.push('}');
-            }
-            '{' => {
-                if !literal.is_empty() {
-                    parts.push(PartModel::Lit(std::mem::take(&mut literal)));
-                }
-                let mut name = String::new();
-                for ec in chars.by_ref() {
-                    if ec == '}' {
-                        break;
-                    }
-                    name.push(ec);
-                }
-                parts.push(PartModel::Arg(name.trim().to_string()));
-            }
-            _ => literal.push(c),
-        }
-    }
-    if !literal.is_empty() {
-        parts.push(PartModel::Lit(literal));
-    }
-    if parts.iter().all(|p| matches!(p, PartModel::Lit(_))) {
-        let text: String = parts
-            .into_iter()
-            .map(|p| match p {
-                PartModel::Lit(s) => s,
-                PartModel::Arg(_) => unreachable!(),
-            })
-            .collect();
-        MessageModel::Plain(text)
-    } else {
-        MessageModel::Format(parts)
-    }
+    let default = read_i18n_config(package_root).default;
+    CatalogModel::from_sources(&borrowed, default.as_deref()).map(Some)
 }
 
 /// Serializes the catalog to a Rust source module. Types are referenced through the `telar::i18n` facade so the
@@ -422,14 +215,17 @@ fn ser_message(message: &MessageModel) -> String {
     }
 }
 
+/// The Rust variant name for a category written in a catalog. Which *category* a name spells is
+/// [`PluralCategory::parse`]'s decision, shared with the runtime loader; only the spelling of the emitted
+/// variant is the baker's.
 fn ser_category(name: &str) -> &'static str {
-    match name {
-        "zero" => "Zero",
-        "one" => "One",
-        "two" => "Two",
-        "few" => "Few",
-        "many" => "Many",
-        _ => "Other",
+    match PluralCategory::parse(name).unwrap_or(PluralCategory::Other) {
+        PluralCategory::Zero => "Zero",
+        PluralCategory::One => "One",
+        PluralCategory::Two => "Two",
+        PluralCategory::Few => "Few",
+        PluralCategory::Many => "Many",
+        PluralCategory::Other => "Other",
     }
 }
 
@@ -461,30 +257,6 @@ fn ser_str_list(items: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_plain_and_formatted_messages() {
-        assert_eq!(
-            parse_message("Settings"),
-            MessageModel::Plain("Settings".into())
-        );
-        assert_eq!(
-            parse_message("{time} remaining"),
-            MessageModel::Format(vec![
-                PartModel::Arg("time".into()),
-                PartModel::Lit(" remaining".into()),
-            ])
-        );
-        // Whitespace inside the braces is trimmed; escaped braces are literal.
-        assert_eq!(
-            parse_message("{{ {name} }}"),
-            MessageModel::Format(vec![
-                PartModel::Lit("{ ".into()),
-                PartModel::Arg("name".into()),
-                PartModel::Lit(" }".into()),
-            ])
-        );
-    }
 
     #[test]
     fn bakes_catalog_from_disk() {
@@ -626,6 +398,8 @@ mod tests {
 
 #[cfg(test)]
 mod plural_tests {
+    use std::collections::BTreeMap;
+
     use super::*;
 
     fn table(src: &str) -> toml::Table {
@@ -634,44 +408,8 @@ mod plural_tests {
 
     fn flat(src: &str) -> BTreeMap<String, MessageModel> {
         let mut out = BTreeMap::new();
-        flatten(&table(src), String::new(), &mut out, Path::new("t.toml")).unwrap();
+        i18n_core::flatten(&table(src), String::new(), &mut out, "t.toml").unwrap();
         out
-    }
-
-    #[test]
-    fn a_category_table_becomes_one_plural_key() {
-        let out = flat("[items]\none = \"{count} item\"\nother = \"{count} items\"\n");
-        assert_eq!(out.len(), 1, "not two namespaced keys: {out:?}");
-        let MessageModel::Plural(branches) = &out["items"] else {
-            panic!("expected a plural, got {:?}", out["items"]);
-        };
-        assert_eq!(branches.len(), 2);
-        assert!(branches.contains_key("one") && branches.contains_key("other"));
-    }
-
-    #[test]
-    fn a_namespace_table_is_still_flattened() {
-        let out = flat("[nav]\noverview = \"Overview\"\nsettings = \"Settings\"\n");
-        assert_eq!(out.len(), 2);
-        assert!(out.contains_key("nav.overview") && out.contains_key("nav.settings"));
-    }
-
-    #[test]
-    fn a_namespace_is_not_swallowed_just_because_one_key_looks_like_a_category() {
-        // `other` alone is a plausible namespace entry; without the all-keys test this would misparse.
-        let out = flat("[status]\none = \"Single\"\nname = \"Status\"\n");
-        assert_eq!(out.len(), 2, "{out:?}");
-        assert!(out.contains_key("status.one"));
-
-        // And a category table missing `other` is a namespace, since CLDR requires `other` of every language.
-        let out = flat("[thing]\none = \"One\"\nfew = \"Few\"\n");
-        assert!(out.contains_key("thing.one"), "{out:?}");
-    }
-
-    #[test]
-    fn plural_arg_names_union_the_branches() {
-        let out = flat("[items]\none = \"one item\"\nother = \"{count} items\"\n");
-        assert_eq!(out["items"].arg_names(), vec!["count".to_string()]);
     }
 
     #[test]

@@ -12,3 +12,9 @@ repository = { workspace = true }
 
 [dependencies]
 reactive-core = { workspace = true }
+toml = { workspace = true, optional = true }
+
+[features]
+# Parsing a catalog rather than linking a baked one. Opt-in because the baked path — every `.rsx` app — needs
+# no parser at runtime, and this is the only thing in the crate with a dependency beyond reactive-core.
+runtime-catalog = ["dep:toml"]

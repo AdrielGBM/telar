@@ -6,10 +6,16 @@
 //! of pure `&'static` data. At runtime a translated string is nothing more than `translate(&CATALOG, key,
 //! args)`, which reads the active locale reactively and renders the matching [`Message`].
 
+#[cfg(feature = "runtime-catalog")]
+mod catalog;
+mod installed;
 mod locale;
 mod message;
 mod plural;
 
+#[cfg(feature = "runtime-catalog")]
+pub use catalog::{CatalogModel, MessageModel, PartModel, flatten, is_plural_table, parse_message};
+pub use installed::{catalog, set_catalog, t};
 pub use locale::{current_locale, detect_system_locale, set_locale, use_locale};
 pub use message::{Catalog, Entry, Message, Part};
 pub use plural::{PluralCategory, plural_category};

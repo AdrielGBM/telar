@@ -18,6 +18,13 @@ thread_local! {
 /// Sets the active locale (a BCP-47 tag such as `"en"` or `"es"`), re-rendering every translated string that
 /// reads it. The tag should be one of the baked catalog's locales; an unknown tag simply falls back to the
 /// catalog's default locale at lookup time.
+///
+/// **Scope: one reactive runtime, which is one UI thread** — the same as the theme, the control size and the
+/// text direction, all of which are thread-local signals for the same reason (a signal is `!Send`). Telar's
+/// own multi-surface runner drives every surface from one runtime, so there this reaches all of them. An
+/// out-of-tree platform that runs a runtime *per* thread owns fanning process-wide state across its threads,
+/// and owns it for all four signals rather than for this one: a locale-shaped broadcast in here would leave
+/// the same backend still hand-rolling the other three.
 pub fn set_locale(id: impl Into<String>) {
     LOCALE.with(|s| s.set(Some(id.into())));
 }

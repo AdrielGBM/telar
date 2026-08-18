@@ -18,6 +18,9 @@ renderer-assets = { workspace = true, features = [
 ] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.151"
+# The catalog model and its TOML grammar, shared with the runtime loader: the baker adds discovery and
+# codegen on top, and parses nothing the runtime path would parse differently.
+i18n-core = { workspace = true, features = ["runtime-catalog"] }
 telar-parser = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
