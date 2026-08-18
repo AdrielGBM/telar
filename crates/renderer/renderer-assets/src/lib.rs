@@ -4,9 +4,13 @@
 
 mod image;
 mod svg;
+#[cfg(feature = "dynamic-svg")]
+mod svg_cache;
 
 #[cfg(feature = "dynamic-image")]
 pub use image::{ImageError, bake_image_to_source, decode};
 #[cfg(feature = "dynamic-svg")]
 pub use svg::bake_to_source;
 pub use svg::{SvgData, SvgError, VectorCommand};
+#[cfg(feature = "dynamic-svg")]
+pub use svg_cache::{static_key, svg_cached};

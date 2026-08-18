@@ -68,6 +68,28 @@ pub trait ThemeTokens: 'static {
         16.0
     }
 
+    /// The steps either side of [`spacing`](Self::spacing), so a theme owns **how much air everything has**
+    /// instead of each component keeping its own literal.
+    ///
+    /// Note the base sits in the *middle* here, where the radius base is the largest step: "how round is the
+    /// biggest thing" and "what is the default gap" are different questions, and a scale that pretended
+    /// otherwise would make every component either cramped or airy the moment a theme moved one number.
+    ///
+    /// A theme that wants a flat rhythm returns the same number from all four; one that wants a roomier
+    /// language moves the base and the steps follow.
+    fn spacing_sm(&self) -> f32 {
+        self.spacing() * 0.5
+    }
+    fn spacing_md(&self) -> f32 {
+        self.spacing()
+    }
+    fn spacing_lg(&self) -> f32 {
+        self.spacing() * 1.5
+    }
+    fn spacing_xl(&self) -> f32 {
+        self.spacing() * 2.0
+    }
+
     fn muted(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }

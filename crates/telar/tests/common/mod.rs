@@ -90,12 +90,5 @@ pub fn assert_center_rgb(pixels: &[u8], w: u32, h: u32, expected: [u8; 3], label
 /// red there rather than as passing tests that never ran. Everywhere else the absence is a real answer and
 /// the test skips.
 pub fn skip_without_gpu(what: &str) {
-    // An empty value counts as unset: a workflow that picks the variable per matrix leg still defines it as
-    // `""` on the legs that do not want it, and reading that as "required" would fail every skip.
-    let required = std::env::var("TELAR_REQUIRE_GPU").is_ok_and(|v| !v.is_empty());
-    assert!(
-        !required,
-        "{what}: TELAR_REQUIRE_GPU is set, so an adapter was expected"
-    );
-    eprintln!("skipping {what}: no GPU adapter available");
+    telar::testing::require_gpu(what, "no adapter");
 }

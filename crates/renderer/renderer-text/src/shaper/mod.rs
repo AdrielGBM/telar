@@ -400,3 +400,21 @@ impl Default for TextShaper {
         Self::new()
     }
 }
+
+impl TextShaper {
+    /// Whether `family` resolves to an installed face, asked of the database this shaper already loaded.
+    ///
+    /// The same query the sans-serif routing above makes. Exposed because the alternative an application
+    /// reaches for is a second `fontdb::Database::load_system_fonts()`, which is a full font scan to answer a
+    /// question this one can answer for free — and a second database that can disagree with the one the text
+    /// is actually shaped in.
+    pub fn family_available(&mut self, family: &str) -> bool {
+        self.font_system
+            .db_mut()
+            .query(&fontdb::Query {
+                families: &[fontdb::Family::Name(family)],
+                ..fontdb::Query::default()
+            })
+            .is_some()
+    }
+}

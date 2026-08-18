@@ -35,6 +35,8 @@ mod raster;
 pub mod runner;
 #[cfg(feature = "runtime")]
 pub mod surface;
+#[cfg(all(feature = "runtime", feature = "testing"))]
+pub mod testing;
 #[cfg(feature = "hardware")]
 mod texture_ui;
 #[cfg(feature = "runtime")]
@@ -114,6 +116,8 @@ pub use reactive_core::{
 pub use renderer_assets::{ImageError, decode};
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};
+#[cfg(all(feature = "runtime", feature = "dynamic-svg"))]
+pub use renderer_assets::{static_key, svg_cached};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BorderRadius, BorderWidths, Color, DrawCommand, DrawState, FillRule, GlyphRaster, Gradient,
@@ -127,6 +131,17 @@ pub use renderer_core::{
     FontConfig, RenderBackend, RendererBuild, RendererFactory, TextMetrics,
     set_default_text_metrics, set_text_metrics,
 };
+
+/// Whether `family` names a font installed on this system.
+///
+/// [`set_default_font_family`](crate::runner::set_default_font_family) takes any string and falls back silently
+/// when the family is not there, so this is how an application warns instead. Answered by the database the
+/// text shaper already loaded — asking it costs nothing, where a second `fontdb` is a full system font scan
+/// and a second answer that can disagree with the one the text is shaped in.
+#[cfg(feature = "runtime")]
+pub fn font_family_available(family: &str) -> bool {
+    renderer_text::font_family_available(family)
+}
 
 /// Installs the glyph-shaping text measurer, for code that lays out text with no runner behind it — a layout test,
 /// or a tool that composes a tree only to measure it.
@@ -148,7 +163,7 @@ pub use services_core::{AppPathsProvider, NoPaths};
 // `runtime` pulls in ui-core which turns on services-core/di. A non-GUI build (the `cargo-telar` tool depends on
 // `rsx` with default-features off) has no ui-core, hence no `di`, hence nothing to re-export.
 #[cfg(feature = "runtime")]
-pub use services_core::{Scope, provide, try_inject, with_service};
+pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
 #[cfg(feature = "runtime")]
 pub use surface::{
     SurfaceContent, SurfaceControl, SurfaceHost, SurfaceToken, open_surface, set_surface_host,

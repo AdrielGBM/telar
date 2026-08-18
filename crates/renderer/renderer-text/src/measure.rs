@@ -114,3 +114,16 @@ mod tests {
         );
     }
 }
+
+/// Whether `family` names a font installed on this system, answered by the database the layout-time shaper
+/// already loaded — no second scan, and no second database to disagree with the one text is shaped in.
+///
+/// Answers against whatever [`set_measure_font_config`] last configured, so a family bundled with the
+/// application counts as available exactly when the shaper can use it.
+pub fn font_family_available(family: &str) -> bool {
+    MEASURE_SHAPER.with(|s| {
+        let mut slot = s.borrow_mut();
+        slot.get_or_insert_with(build_measure_shaper)
+            .family_available(family)
+    })
+}

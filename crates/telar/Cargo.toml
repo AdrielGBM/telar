@@ -47,6 +47,9 @@ preview-headless = ["platform-headless", "dep:image"]
 
 # Production dylibs, distinct from dev hot-reload: `plugin` is the dylib side, `plugin-host` the loader.
 plugin = ["runtime"]
+# Test helpers an out-of-tree app needs to say what its tree drew, and the GPU gate that keeps a pixel test
+# from passing having asserted nothing. Opt-in: nothing in a shipping binary should reach for these.
+testing = ["runtime"]
 plugin-host = ["plugin", "dep:libloading"]
 
 components = ["runtime", "dep:ui-components"]
@@ -99,6 +102,9 @@ libc = { version = "0.2.186", optional = true }
 
 [dev-dependencies]
 platform-headless = { workspace = true }
+# Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
+# ships in every binary.
+telar = { path = ".", features = ["testing"] }
 renderer-record = { workspace = true }
 
 [lints.rust]

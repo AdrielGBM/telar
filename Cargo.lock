@@ -4820,6 +4820,7 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "serde_json",
+ "telar",
  "telar-geometry-core",
  "telar-i18n-core",
  "telar-layout-core",

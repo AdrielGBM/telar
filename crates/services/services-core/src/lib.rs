@@ -11,7 +11,9 @@ pub use paths::{AppPathsProvider, NoPaths};
 #[cfg(feature = "di")]
 pub use registry::ServiceError;
 #[cfg(feature = "di")]
-pub use scope::{Scope, ServiceContext, ServiceGuard, provide, try_inject, with_service};
+pub use scope::{
+    Scope, ServiceContext, ServiceGuard, context, provide, set_context, try_inject, with_service,
+};
 
 #[cfg(all(test, feature = "di"))]
 mod tests {

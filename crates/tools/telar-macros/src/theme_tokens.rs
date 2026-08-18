@@ -30,7 +30,15 @@ const REQUIRED: &[&str] = &[
 
 /// `radius_sm`/`radius_md`/`radius_lg` derive from `radius`, so silence is the right answer rather than a
 /// contradiction — a theme moves the base and the steps follow.
-const DERIVED: &[&str] = &["radius_sm", "radius_md", "radius_lg"];
+const DERIVED: &[&str] = &[
+    "radius_sm",
+    "radius_md",
+    "radius_lg",
+    "spacing_sm",
+    "spacing_md",
+    "spacing_lg",
+    "spacing_xl",
+];
 
 fn is_token(name: &str) -> bool {
     REQUIRED.contains(&name) || DERIVED.contains(&name)
@@ -115,8 +123,13 @@ fn parse_fields(input: &DeriveInput) -> syn::Result<HashMap<String, TokenStream2
 
 fn return_type(token: &str) -> TokenStream2 {
     match token {
-        "radius" | "radius_sm" | "radius_md" | "radius_lg" | "spacing" | "font_size"
-        | "icon_size" => quote!(f32),
+        t if t.starts_with("radius")
+            || t.starts_with("spacing")
+            || t == "font_size"
+            || t == "icon_size" =>
+        {
+            quote!(f32)
+        }
         _ => quote!(::telar::Color),
     }
 }
@@ -255,6 +268,14 @@ mod tests {
     fn the_radius_scale_is_not_required() {
         let out = expand_str(FULL).expect("valid");
         assert!(!out.contains("fn radius_md"), "left to derive from radius");
+    }
+
+    /// A metric step is an `f32`; answering one with the colour branch would not compile at the call site,
+    /// which is a long way from the attribute that caused it.
+    #[test]
+    fn a_spacing_step_is_typed_as_a_metric() {
+        let out = expand_str(&format!("#[theme(spacing_lg = 20.0)] {FULL}")).expect("valid");
+        assert!(out.contains("fn spacing_lg (& self) -> f32"), "got: {out}");
     }
 
     #[test]
