@@ -3,7 +3,7 @@ name = "telar-renderer-assets"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
-description = "Decodes SVG and PNG/JPEG assets into Telar's drawing vocabulary, at runtime or baked at build time."
+description = "Decodes SVG and raster assets into Telar's drawing vocabulary, at runtime or baked at build time."
 keywords = ["telar", "svg", "image", "assets", "rendering"]
 categories = ["rendering::data-formats", "multimedia::images", "graphics"]
 readme = { workspace = true }
@@ -24,3 +24,28 @@ usvg = { version = "0.48", optional = true }
 dynamic-svg = ["dep:usvg", "dep:resvg"]
 # The `image` crate: runtime decode (`decode`) plus the build-time image baker (`bake_image_to_source`), host-only same as `dynamic-svg`.
 dynamic-image = ["dep:image"]
+
+# Extra decode formats, one knob each, passed straight through to `image`. PNG and JPEG are always on; every
+# other format costs binary size that an app which never meets one should not pay.
+#
+# One per format rather than a set this crate curates, because of *how* the wrong choice fails: `decode` calls
+# `image::load_from_memory`, which dispatches on whatever was compiled in, so a format nobody enabled is not a
+# compile error — it is `unsupported format` at runtime, on the one wallpaper the user picked. A curated list
+# leaves whoever needs the sixteenth format unable to reach it at all, which is the reason an application went
+# and depended on `image` itself instead.
+image-avif = ["dynamic-image", "image/avif"]
+image-bmp = ["dynamic-image", "image/bmp"]
+image-dds = ["dynamic-image", "image/dds"]
+image-exr = ["dynamic-image", "image/exr"]
+image-ff = ["dynamic-image", "image/ff"]
+image-gif = ["dynamic-image", "image/gif"]
+image-hdr = ["dynamic-image", "image/hdr"]
+image-ico = ["dynamic-image", "image/ico"]
+image-pnm = ["dynamic-image", "image/pnm"]
+image-qoi = ["dynamic-image", "image/qoi"]
+image-tga = ["dynamic-image", "image/tga"]
+image-tiff = ["dynamic-image", "image/tiff"]
+image-webp = ["dynamic-image", "image/webp"]
+# Every format `image` ships, for an app that opens whatever the user points it at — a file manager's
+# thumbnails, a wallpaper picker — and would rather pay the size than enumerate.
+image-formats = ["dynamic-image", "image/default-formats"]

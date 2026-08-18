@@ -20,7 +20,11 @@ pub(crate) fn apply_tint_premultiplied(pixels: &mut [u8], tint: Color) {
     }
 }
 
-/// Decodes PNG/JPEG bytes into premultiplied RGBA8 at runtime.
+/// Decodes image bytes into premultiplied RGBA8 at runtime.
+///
+/// Which formats it understands is a build decision: PNG and JPEG always, plus whatever `image-*` feature the
+/// application turned on. A format nobody enabled comes back as an error here rather than failing to compile,
+/// so an app that opens files the user chose should say which formats it means.
 #[cfg(feature = "dynamic-image")]
 pub fn decode(bytes: &[u8]) -> Result<ImageData, ImageError> {
     let (rgba, w, h) = decode_rgba8(bytes)?;
@@ -58,4 +62,32 @@ pub(crate) fn byte_string_literal(bytes: &[u8]) -> String {
     }
     out.push('"');
     out
+}
+
+/// The format knobs, checked where it matters: that turning one on actually reaches `image`.
+///
+/// A feature that forwards nowhere looks identical to one that works — `decode` keeps compiling either way,
+/// and the difference only shows as `unsupported format` on a user's file. GIF stands in for all thirteen: it
+/// is behind `image-gif` exactly as the others are behind theirs, and `image` can encode it, so the test can
+/// make its own input instead of carrying hand-written bytes for a format nobody can read in review.
+#[cfg(all(test, feature = "image-gif"))]
+mod format_features {
+    #[test]
+    fn a_format_behind_a_feature_decodes_once_that_feature_is_on() {
+        let source = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            2,
+            3,
+            image::Rgba([10, 20, 30, 255]),
+        ));
+        let mut bytes = Vec::new();
+        source
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Gif,
+            )
+            .expect("the gif encoder is part of the same feature");
+
+        let decoded = super::decode(&bytes).expect("gif decodes with `image-gif` on");
+        assert_eq!((decoded.width, decoded.height), (2, 3));
+    }
 }
