@@ -306,8 +306,16 @@ impl Component for ReactiveList {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let mut st = self.state.borrow_mut();
-        dispatch_container_event(&mut st.children, event)
+        // The children are snapshotted and the borrow released *before* dispatch, because a handler is
+        // allowed to change the list. A row that deletes itself, a strip that commits a drag-to-reorder — each
+        // writes a signal this list's source reads, and the write flushes the reconcile effect synchronously,
+        // which needs this same `RefCell`. Holding it across dispatch made every one of those a panic.
+        //
+        // Cloning is a handful of `Rc` bumps, and it is what makes the re-entrancy safe rather than merely
+        // quiet: a child removed by the reconcile is still owned by this snapshot, so it finishes the event it
+        // is in the middle of instead of being dropped underneath itself.
+        let mut children = self.state.borrow().children.clone();
+        dispatch_container_event(&mut children, event)
     }
 
     fn debug_name(&self) -> &'static str {
@@ -540,5 +548,66 @@ mod tests {
             vec!["before", "after"],
             "while still seeing what it now says"
         );
+    }
+
+    /// A child handler is allowed to change the list it is in — a row that deletes itself, a strip that
+    /// commits a drag-to-reorder. Both write a signal the source reads, which reconciles synchronously from
+    /// inside this list's own `on_event`; holding the state borrow (or reading a node back through a widget
+    /// that is mid-dispatch) made every one of those a panic rather than a feature.
+    #[test]
+    fn a_child_may_remove_itself_from_inside_its_own_handler() {
+        use crate::context::compute_layout;
+        use crate::styled_container::StyledContainer;
+        use layout_core::AvailableSpace;
+        use platform_core::{Event, PointerButton, PointerSource};
+
+        reset_layout_runtime();
+        let items = signal(vec![1i32, 2, 3]);
+        let src = items.clone();
+        let pressed = items.clone();
+        let mut list = ReactiveList::new(
+            move || src.get(),
+            |n: &i32| *n,
+            move |n: i32| {
+                let items = pressed.clone();
+                Ok(Box::new(
+                    StyledContainer::new(
+                        LayoutStyle::new().width(50.0).height(20.0),
+                        |_| Default::default(),
+                        vec![],
+                    )?
+                    .on_press(move || {
+                        items.set(items.peek().into_iter().filter(|x| *x != n).collect())
+                    }),
+                ) as Box<dyn LayoutItem>)
+            },
+            0.0,
+        )
+        .unwrap();
+        compute_layout(
+            list.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+
+        // The second row: 20px tall each, so y=30 is inside it.
+        let at = |y: f64| (25.0, y);
+        let (x, y) = at(30.0);
+        list.on_event(&Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        list.on_event(&Event::PointerReleased {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+
+        assert_eq!(items.peek(), vec![1, 3]);
+        assert_eq!(list.state.borrow().children.len(), 2);
     }
 }

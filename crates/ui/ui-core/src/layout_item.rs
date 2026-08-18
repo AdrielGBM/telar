@@ -20,12 +20,16 @@ pub(crate) struct Child {
     pub(crate) item: Rc<RefCell<Box<dyn LayoutItem>>>,
     pub(crate) rect: Option<RwSignal<Rect>>,
     pub(crate) segment: Rc<Segment>,
+    /// Copied at construction rather than read back through `item`. A widget's layout node never changes, and
+    /// asking the widget for it would borrow a `RefCell` that is already held mutably whenever a reconcile
+    /// runs from inside one of these children's own event handlers — a row deleting itself, a strip
+    /// committing a reorder.
+    node: layout_core::NodeId,
 }
 
 impl Child {
-    /// The child's layout node, read through the shared widget.
     pub(crate) fn node(&self) -> layout_core::NodeId {
-        self.item.borrow().layout_node()
+        self.node
     }
 }
 
@@ -33,13 +37,15 @@ impl Child {
 /// segment. Used by reactive lists to fold a freshly-built item into the child set (the per-item half of
 /// [`register_container`]).
 pub(crate) fn make_child(widget: Box<dyn LayoutItem>) -> Child {
-    let rect = track_layout(widget.layout_node());
+    let node = widget.layout_node();
+    let rect = track_layout(node);
     let item = Rc::new(RefCell::new(widget));
     let segment = mount_item_segment(Rc::clone(&item));
     Child {
         item,
         rect,
         segment,
+        node,
     }
 }
 
