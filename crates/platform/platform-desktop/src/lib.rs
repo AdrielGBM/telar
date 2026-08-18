@@ -1,7 +1,9 @@
 mod accessibility;
-// D-Bus, and only reached on Linux: winit answers the color-scheme question itself on Windows and macOS.
-#[cfg(target_os = "linux")]
 mod clipboard;
+// D-Bus, and only reached on Linux: winit answers the color-scheme question itself on Windows and macOS.
+// The gate belongs to this module and to nothing else — `zbus` is the one dependency declared for Linux
+// alone, so a `mod` that drifts above this line takes the gate with it and unroofs `zbus` on every other OS.
+#[cfg(target_os = "linux")]
 mod color_scheme;
 mod dialogs;
 mod paths;
