@@ -11,7 +11,7 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, SizeDimension};
 use reactive_core::RwSignal;
-use renderer_core::{Color, RectStyle, TextStyle};
+use renderer_core::{Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::{LayoutItem, StyledContainer, Text, box_item, track_layout};
 
 /// Which window-management controls a frame draws, beside the close button it always has.
@@ -36,6 +36,17 @@ pub struct SurfaceFrameStyle {
     pub font_size: f32,
     /// The controls beside close. Default is none, which is the frame as it was.
     pub controls: WindowControls,
+    /// The inset around `body`. A floating panel wants its content off the edges; an application window
+    /// whose content owns the whole area below the title strip wants `0.0`, and would otherwise get a
+    /// border of background colour it never asked for.
+    pub body_inset: f32,
+    /// Fill behind minimize/maximize under the pointer, and behind close — which is usually the louder of the
+    /// two, since closing is the one control that cannot be undone.
+    ///
+    /// Both default to transparent, i.e. no hover feedback, because a panel whose only control is a ✕ in the
+    /// corner of a translucent surface has nothing to highlight against. A real window title bar sets them.
+    pub control_hover: Color,
+    pub close_hover: Color,
 }
 
 /// The smallest a frame will ask to become. A window dragged to nothing is a window the user cannot get hold of
@@ -98,11 +109,15 @@ fn resize_grip(
 
 /// A titled, closable window frame around `body`.
 ///
+/// `leading` is drawn before the title — an application icon, a back arrow, a status dot. `None` for a frame
+/// that is only a title, which is every panel.
+///
 /// `resize` opts the frame into a corner grip: it is handed the size the surface should take, in logical
 /// pixels, on every move of that grip. A backend that can renegotiate a surface's size wires it up; one that
 /// cannot passes `None` and the grip is not drawn, rather than drawn and inert.
 pub fn window_frame(
     title: impl Into<String>,
+    leading: Option<Box<dyn LayoutItem>>,
     style: SurfaceFrameStyle,
     close: std::rc::Rc<dyn Fn()>,
     body: Box<dyn LayoutItem>,
@@ -123,6 +138,7 @@ pub fn window_frame(
         LayoutStyle::new(),
         move || TextStyle::new(font_size, close_color),
     )?);
+    let close_hover = style.close_hover;
     let close_button = box_item(
         StyledContainer::new(
             LayoutStyle::new()
@@ -133,11 +149,13 @@ pub fn window_frame(
             |_| RectStyle::default(),
             vec![close_label],
         )?
+        .hover_style(move |_| RectStyle::default().with_fill(close_hover))
         .on_press(move || close()),
     );
 
     // Minimize and maximize, when the platform can honour them. Same shape as the close button beside them, so
     // a frame with three controls reads as one strip rather than as a button and two additions.
+    let control_hover = style.control_hover;
     let control_button = |glyph: &'static str,
                           command: platform_core::WindowCommand|
      -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -156,6 +174,7 @@ pub fn window_frame(
                 |_| RectStyle::default(),
                 vec![label],
             )?
+            .hover_style(move |_| RectStyle::default().with_fill(control_hover))
             .on_press(move || platform_core::push_window_command(command.clone())),
         ))
     };
@@ -182,6 +201,20 @@ pub fn window_frame(
         controls,
     )?);
 
+    // The leading item and the title travel together as one group, so SPACE_BETWEEN still pushes the controls
+    // to the far edge rather than spreading three things across the strip.
+    let label_group = box_item(StyledContainer::new(
+        LayoutStyle::new()
+            .flex_row()
+            .align_items(AlignItems::CENTER)
+            .gap(8.0),
+        |_| RectStyle::default(),
+        match leading {
+            Some(leading) => vec![leading, title_label],
+            None => vec![title_label],
+        },
+    )?);
+
     let title_bar_color = style.title_bar;
     let drag_moves = style.controls.drag;
     let title_strip = StyledContainer::new(
@@ -193,7 +226,7 @@ pub fn window_frame(
             .padding_horizontal(12.0)
             .padding_vertical(8.0),
         move |_| RectStyle::filled(title_bar_color, 0.0),
-        vec![title_label, controls],
+        vec![label_group, controls],
     )?;
     // The strip is what a user grabs to move the window, which is why the drag lives here and not on the card:
     // the body is content, and dragging content is a selection everywhere else.
@@ -213,7 +246,7 @@ pub fn window_frame(
             .width(SizeDimension::Percent(1.0))
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .padding_all(12.0),
+            .padding_all(style.body_inset),
         |_| RectStyle::default(),
         vec![body],
     )?);
@@ -288,9 +321,13 @@ mod tests {
             radius: 0.0,
             font_size: 12.0,
             controls: WindowControls::default(),
+            body_inset: 12.0,
+            control_hover: Color::TRANSPARENT,
+            close_hover: Color::TRANSPARENT,
         };
         let mut frame = window_frame(
             "Settings",
+            None,
             style,
             Rc::new(|| {}),
             panel(),
@@ -351,6 +388,9 @@ mod tests {
             radius: 0.0,
             font_size: 12.0,
             controls: WindowControls::default(),
+            body_inset: 12.0,
+            control_hover: Color::TRANSPARENT,
+            close_hover: Color::TRANSPARENT,
         };
         // Taller than the surface, the way an application body is once its own chrome is added on top.
         let hungry = box_item(
@@ -366,6 +406,7 @@ mod tests {
         let sink = Rc::clone(&asked);
         let mut frame = window_frame(
             "Settings",
+            None,
             style,
             Rc::new(|| {}),
             hungry,
@@ -415,9 +456,80 @@ mod tests {
             radius: 0.0,
             font_size: 12.0,
             controls: WindowControls::default(),
+            body_inset: 12.0,
+            control_hover: Color::TRANSPARENT,
+            close_hover: Color::TRANSPARENT,
         };
         // A grip a backend cannot act on must be absent rather than present and inert — an affordance that does nothing is worse than none.
-        assert!(window_frame("Clock", style, Rc::new(|| {}), panel(), None).is_ok());
+        assert!(window_frame("Clock", None, style, Rc::new(|| {}), panel(), None).is_ok());
+    }
+
+    /// A leading item takes room in the strip without pushing the title out of it, and a zero body inset
+    /// gives the body the full width below. Both exist so an application window — an icon beside its title,
+    /// content owning everything under the strip — is this frame rather than a second one.
+    #[test]
+    fn a_leading_item_and_a_zero_inset_reshape_the_frame_without_replacing_it() {
+        // A body that fills, which is what an application window's content is — and what makes the inset the
+        // only thing between it and the card's edge.
+        let filling = || {
+            box_item(
+                StyledContainer::new(
+                    LayoutStyle::new()
+                        .width(SizeDimension::Percent(1.0))
+                        .height(40.0),
+                    |_r| RectStyle::default(),
+                    vec![],
+                )
+                .unwrap(),
+            )
+        };
+        // Everything is built *inside* the closure: `fresh_layout_runtime` empties the tree, so a widget made
+        // before it names a node that no longer exists — and, once ids are handed out again, someone else's.
+        let laid_out = |inset: f32, with_icon: bool| {
+            crate::test_support::fresh_layout_runtime();
+            let body = filling();
+            let body_rect = ui_core::track_layout(body.layout_node()).unwrap();
+            let leading: Option<Box<dyn LayoutItem>> = with_icon.then(|| {
+                box_item(
+                    StyledContainer::new(
+                        LayoutStyle::new().width(16.0).height(16.0),
+                        |_r| RectStyle::default(),
+                        vec![],
+                    )
+                    .unwrap(),
+                )
+            });
+            let leading_rect = leading
+                .as_ref()
+                .and_then(|item| ui_core::track_layout(item.layout_node()));
+            let style = SurfaceFrameStyle {
+                body_inset: inset,
+                ..SurfaceFrameStyle::default()
+            };
+            let frame = window_frame("Files", leading, style, Rc::new(|| {}), body, None).unwrap();
+            compute_layout(
+                frame.layout_node(),
+                AvailableSpace::Definite(300.0),
+                AvailableSpace::Definite(200.0),
+            )
+            .unwrap();
+            (body_rect.get(), leading_rect.map(|r| r.get()))
+        };
+
+        let (flush, icon_rect) = laid_out(0.0, true);
+        assert_eq!(
+            icon_rect.map(|r| r.width),
+            Some(16.0),
+            "the leading item was not laid out"
+        );
+        assert_eq!(flush.x, 0.0, "a zero inset must leave the body flush");
+        assert_eq!(flush.width, 300.0, "and give it the whole width");
+
+        let (inset, _) = laid_out(12.0, false);
+        assert_eq!(
+            inset.x, 12.0,
+            "the default inset must still hold the body off the edge"
+        );
     }
 }
 
@@ -433,6 +545,9 @@ impl Default for SurfaceFrameStyle {
             radius: 0.0,
             font_size: 14.0,
             controls: WindowControls::default(),
+            body_inset: 12.0,
+            control_hover: Color::TRANSPARENT,
+            close_hover: Color::TRANSPARENT,
         }
     }
 }
