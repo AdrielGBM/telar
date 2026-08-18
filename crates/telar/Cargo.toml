@@ -55,11 +55,36 @@ plugin-host = ["plugin", "dep:libloading"]
 components = ["runtime", "dep:ui-components"]
 navigate = ["runtime", "dep:navigate-core"]
 async-assets = ["runtime", "ui-core/async-assets"]
+# The HTTP implementation of that seam. Split from `async-assets` because the seam itself is pure reactive
+# glue: an app supplying its own transport gets it without an HTTP client and a TLS stack.
+http-assets = ["async-assets", "dynamic-svg", "dep:ureq"]
 di = ["services-core/di"]
+# Loading a translation catalog from TOML instead of linking one the transpiler baked. What an app with no
+# `.rsx` file in it needs to reach i18n at all.
+runtime-catalog = ["i18n-core/runtime-catalog"]
+# Filesystem watching delivered on the UI thread. Opt-in: an app that reloads nothing should not link a
+# platform file-notification backend.
+watch = ["runtime", "dep:notify"]
 
 svg = ["ui-core?/svg"]
 dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
 dynamic-image = ["renderer-assets?/dynamic-image"]
+# Decode formats beyond the always-on PNG and JPEG. See `renderer-assets` for why there is one per format:
+# a format nobody enabled fails at runtime, not at compile time.
+image-avif = ["dynamic-image", "renderer-assets?/image-avif"]
+image-bmp = ["dynamic-image", "renderer-assets?/image-bmp"]
+image-dds = ["dynamic-image", "renderer-assets?/image-dds"]
+image-exr = ["dynamic-image", "renderer-assets?/image-exr"]
+image-ff = ["dynamic-image", "renderer-assets?/image-ff"]
+image-gif = ["dynamic-image", "renderer-assets?/image-gif"]
+image-hdr = ["dynamic-image", "renderer-assets?/image-hdr"]
+image-ico = ["dynamic-image", "renderer-assets?/image-ico"]
+image-pnm = ["dynamic-image", "renderer-assets?/image-pnm"]
+image-qoi = ["dynamic-image", "renderer-assets?/image-qoi"]
+image-tga = ["dynamic-image", "renderer-assets?/image-tga"]
+image-tiff = ["dynamic-image", "renderer-assets?/image-tiff"]
+image-webp = ["dynamic-image", "renderer-assets?/image-webp"]
+image-formats = ["dynamic-image", "renderer-assets?/image-formats"]
 
 [dependencies]
 image = { version = "0.25.10", default-features = false, features = ["png"], optional = true }
@@ -90,6 +115,8 @@ theme-core = { workspace = true, optional = true }
 ui-components = { workspace = true, optional = true }
 ui-core = { workspace = true, optional = true }
 ui-tree = { workspace = true, optional = true }
+ureq = { version = "3.4.0", optional = true }
+notify = { version = "8.2.0", optional = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 platform-desktop = { workspace = true, optional = true }
@@ -103,8 +130,9 @@ libc = { version = "0.2.186", optional = true }
 [dev-dependencies]
 platform-headless = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
-# ships in every binary.
-telar = { path = ".", features = ["testing"] }
+# ships in every binary. `http-assets` rides along for the same reason: `tests/http_assets.rs` is real
+# coverage of the transport, not an `--all-features`-only extra.
+telar = { path = ".", features = ["testing", "http-assets", "watch"] }
 renderer-record = { workspace = true }
 
 [lints.rust]

@@ -8,6 +8,8 @@ pub mod app;
 pub mod app_config;
 #[cfg(feature = "runtime")]
 pub mod app_context;
+#[cfg(feature = "http-assets")]
+pub mod async_assets;
 #[cfg(feature = "runtime")]
 pub mod dev_plugin;
 #[cfg(feature = "dev")]
@@ -41,6 +43,8 @@ pub mod testing;
 mod texture_ui;
 #[cfg(feature = "runtime")]
 pub mod tree;
+#[cfg(feature = "watch")]
+pub mod watch;
 #[cfg(feature = "runtime")]
 pub mod window;
 
@@ -85,13 +89,21 @@ pub use motion_core as motion;
 #[cfg(feature = "runtime")]
 pub use direction::follow_locale_direction;
 pub use i18n_core as i18n;
+// `set_catalog` is app lifecycle, like `set_locale`, so it belongs at the root. Its lookup — `i18n::t` — is
+// deliberately not re-exported here: `t` at the facade root is already the `t!` macro, and a second `t` that
+// resolves at runtime rather than at expansion is a name nobody could read at a glance.
+pub use i18n_core::set_catalog;
 pub use i18n_core::{current_locale, detect_system_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     Cursor, Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand, WindowConfig,
     WindowPosition, push_window_command, take_window_commands,
 };
-// The seam for an application that renders its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on.
+#[cfg(feature = "watch")]
+pub use watch::watch_path;
+// The seam for an application that renders its own GPU content: it borrows the device Telar draws with, and
+// re-exports the `wgpu` both sides must agree on. **Depend on `telar::gpu::wgpu`, not on `wgpu` directly**:
+// two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]
 pub use renderer_hardware::gpu;
 // The same seam facing the other way: Telar composing into a texture the application owns.
@@ -164,6 +176,8 @@ pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set
 // Available in every GUI build, not opt-in: `ui_core::Surface` composes the per-surface service scope, so
 // `runtime` pulls in ui-core which turns on services-core/di. A non-GUI build (the `cargo-telar` tool depends on
 // `rsx` with default-features off) has no ui-core, hence no `di`, hence nothing to re-export.
+#[cfg(feature = "http-assets")]
+pub use async_assets::HttpAssetSource;
 #[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
 #[cfg(feature = "runtime")]
@@ -183,19 +197,19 @@ pub use ui_core::Svg;
 pub use ui_core::{AssetSource, AssetState};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Canvas, ChildSlot, Children, ClipAxis, ClippedItem, Component, ComponentList, Container,
+    Axis, Canvas, ChildSlot, Children, ClipAxis, ClippedItem, Component, ComponentList, Container,
     DEFAULT_SCRIM, DragStart, Edge, EventResult, Holding, Image, Input, KeyNav, KeyNavMove,
     LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter, NodeId, NodeVec, Overlay, Path,
     PointerButtons, ReactiveList, Rectangle, RenderNode, RichText, ScrollPage, ScrollViewport,
     ScrollbarStyle, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
-    VirtualList, WindowRoot, anchor_rect, box_item, box_transform, close_overlay, compute_layout,
-    current_direction, dismiss_depth, dismiss_top, drag_start, drag_travel, focus, fragment,
-    fragment_positional, interactive_rects, kept, key_held, key_nav_apply, key_nav_apply_grid,
-    key_pressed, logical_border_radius, logical_border_widths, mark_dirty, modifiers,
-    new_container, new_leaf, observe_keyboard, observe_pointer, open_overlay, overlay_state,
-    pointer_buttons, relayout_if_dirty, remove_node, set_children, set_direction, set_display,
-    set_min_height, set_overlay_host, track_layout, transform_pointer, use_context, use_direction,
-    use_dismiss_depth, visible_window,
+    VirtualList, WindowRoot, anchor_rect, apply_move, box_item, box_transform, close_overlay,
+    compute_layout, current_direction, dismiss_depth, dismiss_top, drag_start, drag_travel, focus,
+    fragment, fragment_positional, insertion_index, interactive_rects, kept, key_held,
+    key_nav_apply, key_nav_apply_grid, key_pressed, logical_border_radius, logical_border_widths,
+    mark_dirty, modifiers, new_container, new_leaf, observe_keyboard, observe_pointer,
+    open_overlay, overlay_state, pointer_buttons, relayout_if_dirty, remove_node, set_children,
+    set_direction, set_display, set_min_height, set_overlay_host, track_layout, transform_pointer,
+    use_context, use_direction, use_dismiss_depth, visible_window,
 };
 
 /// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
@@ -218,10 +232,11 @@ pub use navigate_core::{
 pub use ui_components::{
     AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, DrawerProps, GroupProps,
     HeadingProps, ItemProps, MIN_FRAME_SIZE, MenuProps, ModalProps, ProgressProps, RadioProps,
-    SectionProps, SelectProps, SliderProps, SpinnerProps, StepperProps, SurfaceFrameStyle,
-    TabsProps, TextFieldProps, ToggleProps, TooltipProps, WindowControls, accordion, badge, button,
-    checkbox, chip, drawer, group, heading, item, menu, modal, progress, radio, section, select,
-    separator, slider, spinner, stepper, tabs, text_field, toggle, tooltip, window_frame,
+    ReorderableProps, SectionProps, SelectProps, SliderProps, SpinnerProps, StepperProps,
+    SurfaceFrameStyle, TabsProps, TextFieldProps, ToggleProps, TooltipProps, WindowControls,
+    accordion, badge, button, checkbox, chip, drawer, group, heading, item, menu, modal, progress,
+    radio, reorderable, section, select, separator, slider, spinner, stepper, tabs, text_field,
+    toggle, tooltip, window_frame,
 };
 
 #[cfg(feature = "runtime")]
