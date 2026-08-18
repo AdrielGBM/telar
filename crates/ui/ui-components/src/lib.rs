@@ -51,4 +51,4 @@ pub use tabs::{TabsProps, tabs};
 pub use text_field::{TextFieldProps, text_field};
 pub use toggle::{ToggleProps, toggle};
 pub use tooltip::{TooltipProps, tooltip};
-pub use window_frame::{MIN_FRAME_SIZE, SurfaceFrameStyle, window_frame};
+pub use window_frame::{MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, window_frame};

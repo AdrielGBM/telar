@@ -14,6 +14,7 @@ mod input;
 mod input_region;
 mod kept;
 mod keyboard;
+mod keynav;
 mod layout_item;
 mod layout_leaf;
 mod lazy;
@@ -63,6 +64,7 @@ pub use keyboard::{
     end_frame as end_keyboard_frame, key_held, key_pressed, modifiers, observe as observe_keyboard,
     reset as reset_keyboard,
 };
+pub use keynav::{KeyNav, KeyNavMove, key_nav_apply, key_nav_apply_grid};
 pub use layout_item::{ClipAxis, ClippedItem, Holding, LayoutItem, box_item};
 pub use lazy::Lazy;
 pub use line::Line;

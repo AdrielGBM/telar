@@ -14,6 +14,18 @@ use reactive_core::RwSignal;
 use renderer_core::{Color, RectStyle, TextStyle};
 use ui_core::{LayoutItem, StyledContainer, Text, box_item, track_layout};
 
+/// Which window-management controls a frame draws, beside the close button it always has.
+///
+/// Off by default: a layer-shell panel has no top-level window to minimize, and drawing a control that does
+/// nothing is worse than not drawing it. A windowed backend turns on what its platform can honour.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WindowControls {
+    /// Dragging the title strip asks the platform for an interactive move.
+    pub drag: bool,
+    pub minimize: bool,
+    pub maximize: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct SurfaceFrameStyle {
     pub background: Color,
@@ -22,6 +34,8 @@ pub struct SurfaceFrameStyle {
     pub close: Color,
     pub radius: f32,
     pub font_size: f32,
+    /// The controls beside close. Default is none, which is the frame as it was.
+    pub controls: WindowControls,
 }
 
 /// The smallest a frame will ask to become. A window dragged to nothing is a window the user cannot get hold of
@@ -122,8 +136,55 @@ pub fn window_frame(
         .on_press(move || close()),
     );
 
+    // Minimize and maximize, when the platform can honour them. Same shape as the close button beside them, so
+    // a frame with three controls reads as one strip rather than as a button and two additions.
+    let control_button = |glyph: &'static str,
+                          command: platform_core::WindowCommand|
+     -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let label = box_item(Text::auto(
+            move || glyph.to_string(),
+            LayoutStyle::new(),
+            move || TextStyle::new(font_size, close_color),
+        )?);
+        Ok(box_item(
+            StyledContainer::new(
+                LayoutStyle::new()
+                    .align_items(AlignItems::CENTER)
+                    .justify_content(JustifyContent::CENTER)
+                    .padding_horizontal(8.0)
+                    .padding_vertical(2.0),
+                |_| RectStyle::default(),
+                vec![label],
+            )?
+            .on_press(move || platform_core::push_window_command(command.clone())),
+        ))
+    };
+
+    let mut controls: Vec<Box<dyn LayoutItem>> = Vec::new();
+    if style.controls.minimize {
+        controls.push(control_button(
+            "\u{2013}",
+            platform_core::WindowCommand::Minimize,
+        )?);
+    }
+    if style.controls.maximize {
+        controls.push(control_button(
+            "\u{25a1}",
+            platform_core::WindowCommand::ToggleMaximize,
+        )?);
+    }
+    controls.push(close_button);
+    let controls = box_item(StyledContainer::new(
+        LayoutStyle::new()
+            .flex_row()
+            .align_items(AlignItems::CENTER),
+        |_| RectStyle::default(),
+        controls,
+    )?);
+
     let title_bar_color = style.title_bar;
-    let title_bar = box_item(StyledContainer::new(
+    let drag_moves = style.controls.drag;
+    let title_strip = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
             .align_items(AlignItems::CENTER)
@@ -132,8 +193,16 @@ pub fn window_frame(
             .padding_horizontal(12.0)
             .padding_vertical(8.0),
         move |_| RectStyle::filled(title_bar_color, 0.0),
-        vec![title_label, close_button],
-    )?);
+        vec![title_label, controls],
+    )?;
+    // The strip is what a user grabs to move the window, which is why the drag lives here and not on the card:
+    // the body is content, and dragging content is a selection everywhere else.
+    let title_bar = box_item(if drag_moves {
+        title_strip
+            .on_drag(|_, _| platform_core::push_window_command(platform_core::WindowCommand::Drag))
+    } else {
+        title_strip
+    });
 
     // A flex item may not shrink below its content unless you say so, and an application body sized to fill the window (the settings page area is a scroll leaf with a definite height) otherwise refuses to give up a single pixel and pushes the grip row off the bottom of the surface — a resize affordance that exists, lays out, and is never on screen.
     let body_area = box_item(StyledContainer::new(
@@ -218,6 +287,7 @@ mod tests {
             close: Color::TRANSPARENT,
             radius: 0.0,
             font_size: 12.0,
+            controls: WindowControls::default(),
         };
         let mut frame = window_frame(
             "Settings",
@@ -280,6 +350,7 @@ mod tests {
             close: Color::TRANSPARENT,
             radius: 0.0,
             font_size: 12.0,
+            controls: WindowControls::default(),
         };
         // Taller than the surface, the way an application body is once its own chrome is added on top.
         let hungry = box_item(
@@ -343,8 +414,25 @@ mod tests {
             close: Color::TRANSPARENT,
             radius: 0.0,
             font_size: 12.0,
+            controls: WindowControls::default(),
         };
         // A grip a backend cannot act on must be absent rather than present and inert — an affordance that does nothing is worse than none.
         assert!(window_frame("Clock", style, Rc::new(|| {}), panel(), None).is_ok());
+    }
+}
+
+/// A frame with no colours of its own and no controls — what a caller fills in. Exists so adding a field to
+/// this struct does not break every construction of it.
+impl Default for SurfaceFrameStyle {
+    fn default() -> Self {
+        Self {
+            background: Color::TRANSPARENT,
+            title_bar: Color::TRANSPARENT,
+            title_text: Color::TRANSPARENT,
+            close: Color::TRANSPARENT,
+            radius: 0.0,
+            font_size: 14.0,
+            controls: WindowControls::default(),
+        }
     }
 }

@@ -184,17 +184,18 @@ pub use ui_core::{AssetSource, AssetState};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Canvas, ChildSlot, Children, ClipAxis, ClippedItem, Component, ComponentList, Container,
-    DEFAULT_SCRIM, DragStart, Edge, EventResult, Holding, Image, Input, LayoutItem,
-    LayoutScrollArea, Lazy, Line, LineGutter, NodeId, NodeVec, Overlay, Path, PointerButtons,
-    ReactiveList, Rectangle, RenderNode, RichText, ScrollPage, ScrollViewport, ScrollbarStyle,
-    Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea, VirtualList,
-    WindowRoot, anchor_rect, box_item, box_transform, close_overlay, compute_layout,
+    DEFAULT_SCRIM, DragStart, Edge, EventResult, Holding, Image, Input, KeyNav, KeyNavMove,
+    LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter, NodeId, NodeVec, Overlay, Path,
+    PointerButtons, ReactiveList, Rectangle, RenderNode, RichText, ScrollPage, ScrollViewport,
+    ScrollbarStyle, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
+    VirtualList, WindowRoot, anchor_rect, box_item, box_transform, close_overlay, compute_layout,
     current_direction, dismiss_depth, dismiss_top, drag_start, drag_travel, focus, fragment,
-    fragment_positional, interactive_rects, kept, key_held, key_pressed, logical_border_radius,
-    logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
-    observe_pointer, open_overlay, overlay_state, pointer_buttons, relayout_if_dirty, remove_node,
-    set_children, set_direction, set_display, set_min_height, set_overlay_host, track_layout,
-    transform_pointer, use_context, use_direction, use_dismiss_depth, visible_window,
+    fragment_positional, interactive_rects, kept, key_held, key_nav_apply, key_nav_apply_grid,
+    key_pressed, logical_border_radius, logical_border_widths, mark_dirty, modifiers,
+    new_container, new_leaf, observe_keyboard, observe_pointer, open_overlay, overlay_state,
+    pointer_buttons, relayout_if_dirty, remove_node, set_children, set_direction, set_display,
+    set_min_height, set_overlay_host, track_layout, transform_pointer, use_context, use_direction,
+    use_dismiss_depth, visible_window,
 };
 
 /// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
@@ -218,9 +219,9 @@ pub use ui_components::{
     AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, DrawerProps, GroupProps,
     HeadingProps, ItemProps, MIN_FRAME_SIZE, MenuProps, ModalProps, ProgressProps, RadioProps,
     SectionProps, SelectProps, SliderProps, SpinnerProps, StepperProps, SurfaceFrameStyle,
-    TabsProps, TextFieldProps, ToggleProps, TooltipProps, accordion, badge, button, checkbox, chip,
-    drawer, group, heading, item, menu, modal, progress, radio, section, select, separator, slider,
-    spinner, stepper, tabs, text_field, toggle, tooltip, window_frame,
+    TabsProps, TextFieldProps, ToggleProps, TooltipProps, WindowControls, accordion, badge, button,
+    checkbox, chip, drawer, group, heading, item, menu, modal, progress, radio, section, select,
+    separator, slider, spinner, stepper, tabs, text_field, toggle, tooltip, window_frame,
 };
 
 #[cfg(feature = "runtime")]

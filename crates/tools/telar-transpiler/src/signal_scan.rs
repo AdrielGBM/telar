@@ -129,6 +129,19 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
 /// function returns — running exactly once and never again, with nothing to see in the source. The view
 /// generator hands these to the root widget so they live as long as the tree they belong to. An `effect(…)`
 /// that is never bound at all is already a loud `must_use` warning and needs nothing from this.
+/// Whether `expr` opens with a call to `effect`, however it is spelled — bare, `telar::effect`, or through any
+/// other path. The bare form was the only one recognised, so `let e = telar::effect(…)` — the spelling an
+/// application reaches for when it is not inside a `use telar::*` — was silently not kept alive.
+fn opens_an_effect(expr: &str) -> bool {
+    let expr = expr.trim_start();
+    let Some(head) = expr.split('(').next() else {
+        return false;
+    };
+    head.rsplit("::").next().map(str::trim) == Some("effect")
+}
+
+/// The `[logic]` bindings that hold an `Effect`, so the view can keep them alive past the function that made
+/// them. A handle that drops deregisters its effect, which runs once and then stops.
 pub fn scan_effects(logic_source: &str) -> Vec<String> {
     let mut effects = Vec::new();
     for raw in logic_source.lines() {
@@ -138,7 +151,7 @@ pub fn scan_effects(logic_source: &str) -> Vec<String> {
         let Some((binding, expr)) = rest.split_once('=') else {
             continue;
         };
-        if !expr.trim_start().starts_with("effect(") {
+        if !opens_an_effect(expr) {
             continue;
         }
         let name = binding
@@ -154,6 +167,28 @@ pub fn scan_effects(logic_source: &str) -> Vec<String> {
         }
     }
     effects
+}
+
+/// A `[logic]` line that *calls* `effect(…)` without binding the handle, if there is one.
+///
+/// Such an effect is dropped the instant the statement ends: it runs once, seeds correctly, and never fires
+/// again — which looks like working code until you watch it. The scanner cannot keep what was never bound, so
+/// the honest answer is to refuse rather than to quietly not keep it.
+pub fn unbound_effect(logic_source: &str) -> Option<String> {
+    logic_source
+        .lines()
+        .map(str::trim)
+        .find(|line| {
+            // A binding is handled above; `_ = effect(…)` and a bare call are the two ways to drop one.
+            let body = line
+                .strip_prefix("let _ =")
+                .or_else(|| line.strip_prefix("_ ="))
+                .unwrap_or(line);
+            !line.starts_with("//")
+                && !(line.starts_with("let ") && !line.starts_with("let _ ="))
+                && opens_an_effect(body)
+        })
+        .map(str::to_string)
 }
 
 /// Rewrites a `let NAME = signal(EXPR)` logic line into the keyed hot-reload form
@@ -232,5 +267,41 @@ mod tests {
     fn ignores_plain_let() {
         let s = scan_signals("let x = 5;");
         assert!(s.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod effect_scan_tests {
+    use super::*;
+
+    /// The spelling the scanner used to miss, and the one every application outside a `use telar::*` writes.
+    #[test]
+    fn a_path_qualified_effect_is_recognised() {
+        assert_eq!(scan_effects("let e = telar::effect(|| {});"), vec!["e"]);
+        assert_eq!(scan_effects("let e = crate::effect(|| {});"), vec!["e"]);
+        assert_eq!(scan_effects("let e = effect(|| {});"), vec!["e"]);
+    }
+
+    #[test]
+    fn a_binding_that_is_not_an_effect_is_left_alone() {
+        assert!(scan_effects("let s = signal(0);").is_empty());
+        assert!(scan_effects("let m = memo(|| 1);").is_empty());
+        // A name merely *ending* in `effect` is a different function.
+        assert!(scan_effects("let e = side_effect(|| {});").is_empty());
+    }
+
+    /// The failure this refusal exists for: an effect nobody bound runs once and stops.
+    #[test]
+    fn an_unbound_effect_is_reported() {
+        assert!(unbound_effect("let _ = effect(|| {});").is_some());
+        assert!(unbound_effect("effect(|| {});").is_some());
+        assert!(unbound_effect("telar::effect(|| {});").is_some());
+    }
+
+    #[test]
+    fn a_bound_effect_is_not_reported() {
+        assert!(unbound_effect("let e = effect(|| {});").is_none());
+        assert!(unbound_effect("let e = telar::effect(|| {});").is_none());
+        assert!(unbound_effect("// effect(|| {});").is_none());
     }
 }
