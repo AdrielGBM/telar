@@ -124,8 +124,23 @@ pub fn command_visual_rect(
         DrawCommand::Path { data, style } => {
             let base = data.bounds()?;
             let r = transform_clip_rect(matrix, base);
-            let shadow = style.shadow;
-            Some(match shadow {
+            // A stroke straddles the path, so it reaches half its width past the geometry on every
+            // side — the same half `Line` above already accounts for. Left out, the damage rect is
+            // short by that half and the outer edge of a moving stroke is never repainted, which
+            // leaves a trail behind it.
+            let r = match style.stroke {
+                Some(stroke) => {
+                    let half = stroke.width / 2.0;
+                    Rect::new(
+                        r.x - half,
+                        r.y - half,
+                        r.width + half * 2.0,
+                        r.height + half * 2.0,
+                    )
+                }
+                None => r,
+            };
+            Some(match style.shadow {
                 Some(s) => expand_for_shadow(r, s.blur_radius, s.spread, s.offset_x, s.offset_y),
                 None => r,
             })
@@ -194,5 +209,43 @@ mod tests {
         assert!((r.y - 10.0).abs() < 1e-4);
         assert!((r.width - 20.0).abs() < 1e-4);
         assert!((r.height - 20.0).abs() < 1e-4);
+    }
+
+    /// A stroke straddles its path, so the visual rect has to reach half the width past the geometry
+    /// — as `Line` already does. Without it the damage rect is short by that half, and the outer edge
+    /// of a stroke that moves is never repainted: it leaves a trail behind it.
+    #[test]
+    fn a_stroked_path_reaches_half_its_width_past_its_geometry() {
+        use crate::{Color, PathData, PathStyle, Stroke};
+        use geometry_core::Point;
+        use std::sync::Arc;
+
+        let data = Arc::new(
+            PathData::new()
+                .move_to(Point::new(10.0, 10.0))
+                .line_to(Point::new(40.0, 10.0)),
+        );
+        let bare = DrawCommand::Path {
+            data: Arc::clone(&data),
+            style: Arc::new(PathStyle::default()),
+        };
+        let stroked = DrawCommand::Path {
+            data,
+            style: Arc::new(PathStyle {
+                stroke: Some(Stroke::new(Color::BLACK, 6.0)),
+                ..Default::default()
+            }),
+        };
+
+        let matrix = Transform::IDENTITY.to_array();
+        let metrics = FontMetrics::default();
+        let bare = command_visual_rect(&bare, matrix, &metrics).expect("a path has bounds");
+        let wide =
+            command_visual_rect(&stroked, matrix, &metrics).expect("and so does a stroked one");
+
+        assert_eq!(wide.x, bare.x - 3.0);
+        assert_eq!(wide.y, bare.y - 3.0);
+        assert_eq!(wide.width, bare.width + 6.0);
+        assert_eq!(wide.height, bare.height + 6.0);
     }
 }
