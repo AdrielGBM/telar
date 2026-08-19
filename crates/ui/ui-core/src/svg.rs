@@ -56,16 +56,11 @@ impl Component for Svg {
         let group = RenderNode::Group { children };
         // Cover scales the paths past the box; clip the overflow to the widget's local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll.
         let node = if fit == ObjectFit::Cover {
-            RenderNode::Clip {
-                rect: Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: r.width,
-                    height: r.height,
-                },
-                radius: BorderRadius::zero(),
-                children: NodeVec::collect([group]),
-            }
+            RenderNode::clip(
+                Rect::new(0.0, 0.0, r.width, r.height),
+                BorderRadius::zero(),
+                [group],
+            )
         } else {
             group
         };

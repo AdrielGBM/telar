@@ -152,11 +152,11 @@ impl LayoutItem for ClippedItem {
 
 impl Component for ClippedItem {
     fn view(&self) -> RenderNode {
-        RenderNode::Clip {
-            rect: self.clip(),
-            radius: renderer_core::BorderRadius::zero(),
-            children: ui_tree::NodeVec::collect([self.inner.view()]),
-        }
+        RenderNode::clip(
+            self.clip(),
+            renderer_core::BorderRadius::zero(),
+            [self.inner.view()],
+        )
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {

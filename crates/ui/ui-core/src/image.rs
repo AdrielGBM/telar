@@ -4,7 +4,7 @@ use geometry_core::{ObjectFit, Rect};
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use renderer_core::{BorderRadius, DrawCommand, ImageData, ImageFilter};
-use ui_tree::{Component, EventResult, NodeVec, RenderNode};
+use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
@@ -85,11 +85,7 @@ impl Component for Image {
         });
         // Cover overflows the box; clip it to the local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll. A radius is the other reason to clip, and it applies to a `Contain` fit that overflows nothing too.
         let node = if clip || !self.radius.is_zero() {
-            RenderNode::Clip {
-                rect: r_local,
-                radius: self.radius,
-                children: NodeVec::collect([image]),
-            }
+            RenderNode::clip(r_local, self.radius, [image])
         } else {
             image
         };

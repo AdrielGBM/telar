@@ -131,6 +131,31 @@ impl RenderNode {
         }
     }
 
+    /// A pure translation, which is what almost every `Transform` in a widget is: a leaf drawing its
+    /// content in local coordinates and moving it to wherever the layout put it. Spelling it out as a
+    /// matrix is six numbers where two are meant, and four of them have to be read to see it is not a
+    /// scale or a rotation.
+    pub fn translate(dx: f32, dy: f32, children: impl IntoIterator<Item = RenderNode>) -> Self {
+        Self::Transform {
+            matrix: [1.0, 0.0, 0.0, 1.0, dx, dy],
+            children: NodeVec::collect(children),
+        }
+    }
+
+    /// Cuts its subtree to `rect`, which the renderer maps through the active matrix — so a widget
+    /// clipping itself passes its own local box and the clip composes with whatever moved it there.
+    pub fn clip(
+        rect: Rect,
+        radius: BorderRadius,
+        children: impl IntoIterator<Item = RenderNode>,
+    ) -> Self {
+        Self::Clip {
+            rect,
+            radius,
+            children: NodeVec::collect(children),
+        }
+    }
+
     pub fn layer(
         opacity: f32,
         backdrop_blur: f32,

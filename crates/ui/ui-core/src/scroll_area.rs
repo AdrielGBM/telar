@@ -9,8 +9,6 @@ use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
-use ui_tree::NodeVec;
-
 use crate::context::track_layout;
 use crate::impl_leaf_widget;
 use crate::kept::kept;
@@ -212,21 +210,15 @@ impl ScrollCore {
         let scroll_x = self.scroll_x.get();
         let scroll_y = self.scroll_y.get();
         let content_rect = self.content_rect_signal.get();
-        let scrollable = RenderNode::Clip {
-            rect: viewport,
-            radius: BorderRadius::zero(),
-            children: NodeVec::collect([RenderNode::Transform {
-                matrix: [
-                    1.0,
-                    0.0,
-                    0.0,
-                    1.0,
-                    viewport.x - scroll_x,
-                    viewport.y - scroll_y,
-                ],
-                children: NodeVec::collect([self.content_segment.boundary()]),
-            }]),
-        };
+        let scrollable = RenderNode::clip(
+            viewport,
+            BorderRadius::zero(),
+            [RenderNode::translate(
+                viewport.x - scroll_x,
+                viewport.y - scroll_y,
+                [self.content_segment.boundary()],
+            )],
+        );
         let (vbar, hbar) = draw_scrollbars(
             viewport,
             scroll_x,

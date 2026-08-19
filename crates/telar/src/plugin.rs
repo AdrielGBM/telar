@@ -59,14 +59,15 @@ pub fn composite(rect: Rect, image_salt: u64, mut commands: DrawList) -> RenderN
             }
         }
     }
-    RenderNode::Clip {
+    RenderNode::clip(
         rect,
-        radius: BorderRadius::zero(),
-        children: NodeVec::collect([RenderNode::Transform {
-            matrix: [1.0, 0.0, 0.0, 1.0, rect.x, rect.y],
-            children: NodeVec::collect(commands.into_iter().map(RenderNode::Primitive)),
-        }]),
-    }
+        BorderRadius::zero(),
+        [RenderNode::translate(
+            rect.x,
+            rect.y,
+            commands.into_iter().map(RenderNode::Primitive),
+        )],
+    )
 }
 
 /// An embeddable rsx UI a host can drive as a plugin. The generic union of "build a view tree, render it,
