@@ -92,9 +92,13 @@ pub fn image(view: wgpu::TextureView, id: u64, width: u32, height: u32) -> Image
 
 /// The GPU objects Telar is drawing with, or `None` before its first renderer exists.
 ///
-/// Available from [`App::mount`] onwards: the runner builds the renderer before it mounts the tree, so an
-/// application can take the device here and hand back a widget tree already holding its texture. `None`
-/// therefore means the software backend, which cannot sample a texture it did not upload.
+/// **Not reliably available from [`App::mount`]**, which is the tempting reading and is wrong: the hardware
+/// renderer is built on a thread of its own and the tree is mounted without waiting for it, so a mount that
+/// asks here is racing a build it will almost always lose. `None` means *no device yet*, which is a different
+/// thing from the software backend and looks identical from here.
+///
+/// An application that needs the device to build its tree wants [`open`], which brings it up and hands the
+/// build in flight the very same objects.
 ///
 /// [`App::mount`]: https://docs.rs/telar/latest/telar/trait.App.html#method.mount
 pub fn shared() -> Option<SharedGpu> {
