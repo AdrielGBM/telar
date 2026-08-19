@@ -425,8 +425,21 @@ where
 
     /// The generation this frame's commands go out under: the tree's own, offset past every tree this surface
     /// has had before it. See [`FrameGeneration`] for why the offset has to exist.
+    ///
+    /// **Compose first.** The tree's counter is bumped by `commands()`, so a generation read before this
+    /// frame is composed carries the *previous* frame's number while the commands beside it carry this
+    /// frame's content — and a renderer whose whole contract is "equal generations mean identical commands"
+    /// then re-presents the frame before this one. On a screen with an animation it hides, because the
+    /// continuous counter moves anyway; on a still screen it costs the change until something else redraws.
     fn frame_generation(&mut self) -> u64 {
-        let composed = self.tree.as_ref().map(|t| t.generation()).unwrap_or(0);
+        let composed = self
+            .tree
+            .as_ref()
+            .map(|t| {
+                drop(t.frame());
+                t.generation()
+            })
+            .unwrap_or(0);
         self.generation
             .next(composed, self.app.motion_has_continuous())
     }
@@ -756,7 +769,6 @@ where
         }
 
         let (w, h) = (window.width(), window.height());
-        let generation = self.frame_generation();
         tracing::debug!(
             "on_redraw: window {}x{} scale={} has_content={}",
             w,
@@ -770,6 +782,9 @@ where
         // from the new signal value while commands still reflect the previous view() call.
         end_batch();
         begin_batch();
+        // After that flush, and not before: the number has to describe the commands this frame ships, and the
+        // effects that decide them have only just run.
+        let generation = self.frame_generation();
         renderer_core::perf::tick();
         // F2: reclaim buffers the render thread finished with, capped so the free-list stays tiny.
         if let Some(channels) = self.renderer_host.channels() {
@@ -963,6 +978,66 @@ mod tests {
         let mut handler = handler();
         handler.renderer_keepalive = false;
         assert!(!handler.keepalive_due());
+    }
+
+    /// An app whose one rectangle takes its colour from a signal: the smallest thing that can change without
+    /// anything animating, which is the case the generation got wrong.
+    struct Tinted(reactive_core::RwSignal<f32>);
+
+    impl App for Tinted {
+        fn root(&self) -> Box<dyn ui_tree::Component> {
+            ui_core::reset_layout_runtime();
+            let tint = self.0.clone();
+            Box::new(
+                ui_core::Rectangle::new(
+                    layout_core::LayoutStyle::new().width(10.0).height(10.0),
+                    move || {
+                        renderer_core::RectStyle::filled(
+                            renderer_core::Color::rgba(tint.get(), 0.0, 0.0, 1.0),
+                            0.0,
+                        )
+                    },
+                )
+                .expect("a rectangle builds"),
+            )
+        }
+    }
+
+    /// A tree that changed must not ship its new commands under the old number.
+    ///
+    /// The renderer's whole contract is that equal generations mean identical commands, and it acts on it: the
+    /// hardware backend skips its pipeline and re-presents the frame it retained. Reading the counter before
+    /// composing broke it in the one case nothing else covers — a still screen, where no animation is moving
+    /// the number anyway. On screen it looked like a menu answering a key press a second late, because the
+    /// correct frame was discarded and the next keepalive blit was what finally drew it.
+    #[test]
+    fn new_commands_never_go_out_under_the_previous_generation() {
+        let tint = reactive_core::signal(0.0f32);
+        let mut handler = build_app_handler::<HeadlessWindow, ()>(
+            Box::new(Tinted(tint.clone())),
+            Arc::new(services_core::NoPaths),
+            Vec::new(),
+            Vec::new(),
+            RendererBackend::Software,
+            UserPrefs::default(),
+            "generation-test".to_string(),
+            SurfaceRenderer::builtin(),
+        );
+        handler.tree = Some(handler.app.mount());
+
+        let first = handler.frame_generation();
+        assert_eq!(
+            handler.frame_generation(),
+            first,
+            "a frame nothing changed for must keep the number, or the renderer redraws for nothing"
+        );
+
+        tint.set(0.5);
+        assert_ne!(
+            handler.frame_generation(),
+            first,
+            "the changed frame reused the previous number, so the renderer re-presents the old one"
+        );
     }
 
     /// A rebuilt tree must never hand the renderer a generation it has already drawn — see
