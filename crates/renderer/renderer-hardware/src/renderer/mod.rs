@@ -278,11 +278,12 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
         backends,
         ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
-    // No `compatible_surface`: the shared adapter serves every window. On a normal single-compositor desktop
-    // any window's surface is presentable by the HighPerformance adapter.
+    // No `compatible_surface`: the shared adapter serves every window, and on a normal single-compositor
+    // desktop any window's surface is presentable by whichever this picks. Which one that is belongs to the
+    // application (see `gpu::prefer`), because only it knows whether its frame is a menu or a viewport.
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
+            power_preference: crate::gpu::preference(),
             compatible_surface: None,
             ..Default::default()
         })

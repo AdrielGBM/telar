@@ -17,6 +17,44 @@ pub use wgpu;
 use crate::renderer::SHARED_GPU;
 use renderer_core::{ExternalTexture, ImageData};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
+
+const UNSET: u8 = u8::MAX;
+static POWER: AtomicU8 = AtomicU8::new(UNSET);
+
+/// Which adapter to open the process's device on. Takes effect only before that device exists — the first
+/// renderer, or the first [`open`], settles it for the process, and a later call warns and does nothing.
+///
+/// The default is [`wgpu::PowerPreference::LowPower`], which is the reverse of what a renderer usually asks
+/// for and is deliberate. A user interface is a few thousand draw commands: the integrated adapter runs it
+/// without noticing, and it is already awake because it is the one compositing the desktop. Asking for the
+/// discrete adapter on a hybrid laptop buys nothing measurable and costs two things that are — every frame
+/// crosses devices to reach the display, and a discrete GPU that has been allowed to idle makes the next
+/// frame wait while it clocks back up, which reads as a window answering the first key press late. The
+/// application whose frame is genuinely heavy — a 3D viewport, a shader playground — is the one that should
+/// say so.
+///
+/// `WGPU_POWER_PREF=low|high|none` wins over both, so a machine that disagrees needs no rebuild.
+pub fn prefer(power: wgpu::PowerPreference) {
+    if SHARED_GPU.get().is_some() {
+        tracing::warn!(
+            "the GPU is already open, so this preference arrived too late to be honoured"
+        );
+        return;
+    }
+    POWER.store(power as u8, Ordering::Relaxed);
+}
+
+pub(crate) fn preference() -> wgpu::PowerPreference {
+    if let Some(asked) = wgpu::PowerPreference::from_env() {
+        return asked;
+    }
+    match POWER.load(Ordering::Relaxed) {
+        0 => wgpu::PowerPreference::None,
+        2 => wgpu::PowerPreference::HighPerformance,
+        _ => wgpu::PowerPreference::LowPower,
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct AppTexture {
