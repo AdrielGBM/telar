@@ -30,10 +30,12 @@ fn resolved_window<A: crate::app::App + ?Sized>(
 
 const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
 
-// F4: how long after the last content frame the HW backend keeps issuing 1fps keepalive blits before
-// letting the GPU sleep. Covers interactive bursts (scroll/typing gaps) without waking the GPU once a
-// second forever on a truly static screen (battery). Real input/redraw events still wake the loop.
-const HW_KEEPALIVE_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
+// How long after the last input the HW backend keeps issuing 1fps keepalive blits before letting the GPU
+// sleep, on top of the window still being focused. Long, because what it guards against is somebody walking
+// away from a window they left open, and what it must not do is punish somebody who paused to read: a screen
+// being read produces no frames at all, so timing this from the last *frame* slept while they were still
+// there and made the next key press wait for the GPU to clock back up.
+const IDLE_GRACE: std::time::Duration = std::time::Duration::from_secs(60);
 
 // The cadence of those keepalive blits. Enforced in `on_redraw` as well as reported by `about_to_wait`, because a platform may call `on_redraw` on every loop turn rather than only when a frame is due.
 const HW_KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);

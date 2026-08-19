@@ -14,7 +14,7 @@ use super::COMMAND_BUF_POOL_CAP;
 use super::font_config::{SystemFonts, build_font_config};
 use super::frame_thread::FrameMsg;
 use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
-use super::{FRAME_BUDGET, HW_KEEPALIVE_GRACE, HW_KEEPALIVE_INTERVAL};
+use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL, IDLE_GRACE};
 
 pub(super) struct AppHandler<W, D: DevPlugin>
 where
@@ -40,6 +40,10 @@ where
     pub(super) raw_handles: Option<RawHandles<W>>,
     // Whether the live renderer wants frames while the screen is idle, which the host reports at every start.
     pub(super) renderer_keepalive: bool,
+    /// Whether this window has the keyboard. The keepalive rides on it: somebody who can type is somebody
+    /// whose next frame should not wait for the GPU to wake up.
+    pub(super) focused: bool,
+    pub(super) last_input: std::time::Instant,
     // The transparency the live renderer was built for. Only `remount` reads it: an app whose surface changes
     // from opaque to transparent between two mounts needs the renderer built again, and asking the app after
     // the rebuild would compare the new answer with itself.
@@ -146,6 +150,10 @@ where
         renderer_host: host,
         raw_handles,
         renderer_keepalive: false,
+        // A platform that never reports focus is one whose window is the only thing on screen, so being
+        // believed focused is both the safe answer and the true one.
+        focused: true,
+        last_input: std::time::Instant::now(),
         renderer_transparent: false,
         generation: FrameGeneration::default(),
         backend,
@@ -374,6 +382,25 @@ where
         self.start_renderer(window, self.backend);
     }
 
+    /// Whether an idle blit is worth submitting.
+    ///
+    /// Keepalive is a power policy of the renderer that is running, not a property of having a render thread:
+    /// hardware keeps taking frames while idle so the blit holds the device in an active power state, whereas
+    /// re-rasterising an unchanged frame on the CPU buys nothing. Every backend has a render thread, so the
+    /// host reports which kind it started rather than it being inferred here.
+    ///
+    /// What it is worth paying for is decided by **focus**, and that is the whole point: holding the GPU awake
+    /// is insurance against the next frame arriving late, and a frame only arrives from somebody who is there.
+    /// A window nobody is looking at will not be typed into, so it can sleep at once; a focused one is one key
+    /// press away from needing the GPU, however long it has been still. [`IDLE_GRACE`] is only the backstop
+    /// for the window left focused and abandoned.
+    fn keepalive_due(&self) -> bool {
+        if self.dev.keepalive_interval().is_some() {
+            return true;
+        }
+        self.renderer_keepalive && self.focused && self.last_input.elapsed() < IDLE_GRACE
+    }
+
     /// Whether to submit a frame now, and whether it carries new content. The second of the pass's three
     /// clocks: the frame budget gates the whole pass, this gates submission, `about_to_wait` reports the next
     /// wake. `None` means skip this turn.
@@ -381,8 +408,7 @@ where
         // A continuous region carries new content the tree cannot report: the application repaints its own texture and the draw commands naming it never change. Counting only `is_dirty` here drops such a frame through to the 1 fps keepalive below, which shows a region refilled at sixty once a second.
         let has_content = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
             || self.app.motion_has_continuous();
-        // Keepalive is a power policy of the renderer that is running, not a property of having a render thread: hardware keeps taking frames while idle so an idle blit holds the device in an active state (see `about_to_wait`), whereas re-rasterising an unchanged frame on the CPU buys nothing. Every backend has a render thread, so the host reports this at each start rather than it being inferred here.
-        let needs_keepalive = self.renderer_keepalive || self.dev.keepalive_interval().is_some();
+        let needs_keepalive = self.keepalive_due();
         if !has_content && !needs_keepalive {
             return None;
         }
@@ -567,6 +593,22 @@ where
         // Before dispatch, so a handler running on this very event already sees the state it establishes: a `Shift`-click's press handler has to read the modifiers the click arrived under, and a drag handler has to read the button that started it.
         ui_core::observe_keyboard(&event);
         ui_core::observe_pointer(&event);
+        // Who the keepalive is for, kept here rather than in the match below because it reads across events
+        // the runner otherwise lets straight through.
+        if let Event::FocusChanged { is_focused } = &event {
+            self.focused = *is_focused;
+        }
+        if matches!(
+            event,
+            Event::KeyPressed { .. }
+                | Event::KeyReleased { .. }
+                | Event::PointerMoved { .. }
+                | Event::PointerPressed { .. }
+                | Event::PointerReleased { .. }
+                | Event::Scrolled { .. }
+        ) {
+            self.last_input = std::time::Instant::now();
+        }
         // The four events the runner reads before the app does, matched once. Written as four sequential
         // `if let`s it re-tested the same value each time, and the two that end the dispatch read as though
         // they were guards on the ones above them rather than exits.
@@ -828,15 +870,10 @@ where
             // Against `last_tick`, the clock `on_redraw` actually gates on: reporting a deadline the pass would decline to act on wakes the loop early and it spins re-asking. The two disagree whenever a tick leaves the tree clean, advancing `last_tick` but not `last_frame`.
             Some(FRAME_BUDGET.saturating_sub(self.last_tick.elapsed()))
         } else {
-            let dev_keepalive = self.dev.keepalive_interval();
-            if let Some(interval) = dev_keepalive {
+            if let Some(interval) = self.dev.keepalive_interval() {
                 // Dev plugin drives its own cadence (e.g. FPS counter tick-down).
                 Some(interval)
-            } else if self.renderer_keepalive && self.last_frame.elapsed() < HW_KEEPALIVE_GRACE {
-                // F4: hold the GPU in an active power state at 1fps for a short grace window after the
-                // last content frame (covers interactive bursts), then let it sleep — real input/redraw
-                // events still wake the loop. `last_frame` isn't reset by keepalive blits, so its
-                // elapsed measures true inactivity. Saves ~1 idle GPU wake/sec on battery.
+            } else if self.keepalive_due() {
                 Some(HW_KEEPALIVE_INTERVAL)
             } else {
                 None
@@ -890,6 +927,42 @@ mod tests {
             "generation-test".to_string(),
             SurfaceRenderer::builtin(),
         )
+    }
+
+    /// The keepalive exists so the next frame does not wait for the GPU to clock back up, and only somebody
+    /// who is there can ask for a next frame. What it used to key on was a timer since the last *frame*, which
+    /// measures the wrong thing: a screen being read produces no frames at all, so it slept three seconds into
+    /// somebody looking straight at it.
+    #[test]
+    fn the_gpu_is_held_awake_for_whoever_is_there_to_notice() {
+        let mut handler = handler();
+        handler.renderer_keepalive = true;
+
+        assert!(
+            handler.keepalive_due(),
+            "a focused window keeps the GPU warm however long it has been still"
+        );
+
+        handler.focused = false;
+        assert!(
+            !handler.keepalive_due(),
+            "a window nobody is looking at will not be typed into"
+        );
+
+        handler.focused = true;
+        handler.last_input = std::time::Instant::now() - IDLE_GRACE - FRAME_BUDGET;
+        assert!(
+            !handler.keepalive_due(),
+            "a window left focused and abandoned sleeps on the backstop"
+        );
+    }
+
+    /// A software renderer has no GPU to hold awake, so re-rasterising an unchanged frame buys nothing.
+    #[test]
+    fn the_rasteriser_never_asks_for_an_idle_frame() {
+        let mut handler = handler();
+        handler.renderer_keepalive = false;
+        assert!(!handler.keepalive_due());
     }
 
     /// A rebuilt tree must never hand the renderer a generation it has already drawn — see
