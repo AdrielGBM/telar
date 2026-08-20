@@ -449,3 +449,60 @@ fn axis_aligned_scene_is_pixel_exact_on_every_platform() {
         "and left nothing behind at its untranslated origin"
     );
 }
+
+/// Text inside a matrix that scales comes out at the scaled size — once, not twice.
+///
+/// This backend hands the matrix to the rasteriser, so the glyphs are transformed with everything
+/// else and nothing extra is needed. The hardware one only moves the box and lays the glyphs out
+/// itself, so there it has to be told. The bound below is what says the two agree: ink grows with
+/// the *area*, so twice the scale is about four times the ink. Scaling both the layout and the
+/// raster would be about sixteen.
+#[test]
+fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
+    let inked = |matrix: Option<[f32; 6]>| {
+        let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+            256,
+            128,
+            SoftwareRendererConfig::default(),
+        );
+
+        let mut cmds = Vec::new();
+        if let Some(matrix) = matrix {
+            cmds.push(DrawCommand::PushMatrix { matrix });
+        }
+        cmds.push(DrawCommand::Text {
+            text: Arc::from("MMM"),
+            rect: Rect::new(2.0, 2.0, 60.0, 20.0),
+            style: Arc::new(TextStyle::new(8.0, Color::WHITE)),
+        });
+        if matrix.is_some() {
+            cmds.push(DrawCommand::PopMatrix);
+        }
+
+        renderer.begin_frame(256, 128, 1.0, 0).unwrap();
+        renderer.render_frame(&cmds, Some(Color::BLACK)).unwrap();
+        let rgba = renderer.read_rgba().expect("a frame was drawn");
+        rgba.chunks_exact(4).filter(|px| px[0] > 40).count()
+    };
+
+    let plain = inked(None);
+    let doubled = inked(Some([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]));
+
+    assert!(plain > 0, "the text was drawn at all");
+    assert!(
+        doubled > plain * 2,
+        "at twice the scale the letters got bigger: {plain} then {doubled}"
+    );
+    assert!(
+        doubled < plain * 8,
+        "and only once — this looks like the size was scaled and then the raster too: \
+         {plain} then {doubled}"
+    );
+
+    // And a translation is not a scale, so text that is only moved is the size it was.
+    let moved = inked(Some([1.0, 0.0, 0.0, 1.0, 3.0, 3.0]));
+    assert!(
+        moved.abs_diff(plain) < plain / 4,
+        "moving it changed its size: {plain} then {moved}"
+    );
+}

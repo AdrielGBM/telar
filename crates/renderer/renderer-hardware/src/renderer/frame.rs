@@ -77,6 +77,27 @@ pub(super) struct FrameCtx {
     )>,
 }
 
+/// A text style as it should be laid out under a matrix that scales.
+///
+/// The size and the shadow, which are lengths; not the line height, which is a factor of the size
+/// and follows it on its own. Untouched at scale one, so nothing that is not inside a scaled
+/// subtree pays anything for this.
+fn at_scale(style: renderer_core::TextStyle, scale: f32) -> renderer_core::TextStyle {
+    if (scale - 1.0).abs() < f32::EPSILON {
+        return style;
+    }
+    renderer_core::TextStyle {
+        font_size: style.font_size * scale,
+        shadow: style.shadow.map(|shadow| renderer_core::Shadow {
+            offset_x: shadow.offset_x * scale,
+            offset_y: shadow.offset_y * scale,
+            blur_radius: shadow.blur_radius * scale,
+            spread: shadow.spread * scale,
+            ..shadow
+        }),
+        ..style
+    }
+}
 // The frame's opening load: a clear to the application background, or a Load when it asked for none.
 fn frame_load_op(clear_color: Option<Color>) -> wgpu::LoadOp<wgpu::Color> {
     match clear_color {
@@ -928,7 +949,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 }
                 DrawCommand::Text { text, rect, style } => {
                     let rect = *rect;
-                    let style = **style;
+                    // Laid out at the size the matrix makes it, not at the size it was written with.
+                    // The rect already goes through the matrix below; without this the box grows and
+                    // the letters do not, so a zoomed subtree — a canvas, a thumbnail, a transition
+                    // — comes out with text of the wrong size in a box of the right one.
+                    let style = at_scale(**style, self.draw_state.scale());
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
@@ -1026,7 +1051,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 }
                 DrawCommand::RichText { runs, rect, base } => {
                     let rect = *rect;
-                    let base = **base;
+                    let base = at_scale(**base, self.draw_state.scale());
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();

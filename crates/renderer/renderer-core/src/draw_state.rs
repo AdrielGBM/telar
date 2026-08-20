@@ -46,6 +46,17 @@ impl DrawState {
         }
     }
 
+    /// How much the accumulated matrix scales what is drawn under it.
+    ///
+    /// The square root of the determinant, so a rotation counts as no scale at all and a squash
+    /// counts as the average of its two axes. Text is laid out at a size and not stretched from
+    /// one, so one number is what it can be given.
+    #[inline]
+    pub fn scale(&self) -> f32 {
+        let [a, b, c, d, _, _] = self.cumulative_matrix;
+        (a * d - b * c).abs().sqrt()
+    }
+
     /// Pushes `rect` as a clip, intersected with whatever is already clipping, and returns the effective
     /// scissor.
     ///
@@ -203,5 +214,43 @@ mod tests {
         let mut fresh = DrawState::new();
         let alone = Rect::new(12.0, 34.0, 56.0, 78.0);
         assert_eq!(fresh.push_clip(alone), alone);
+    }
+
+    /// What text is laid out at. The rect a matrix scales already grows; without one number saying
+    /// by how much, the letters inside it would not — which is a box of the right size holding text
+    /// of the wrong one.
+    #[test]
+    fn the_scale_of_a_matrix_is_what_it_makes_things() {
+        let mut state = DrawState::new();
+        assert_eq!(state.scale(), 1.0, "nothing scales nothing");
+
+        state.push_matrix([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]);
+        assert_eq!(state.scale(), 2.0);
+
+        // And it accumulates, which is the whole reason it is read off the cumulative matrix.
+        state.push_matrix([3.0, 0.0, 0.0, 3.0, 0.0, 0.0]);
+        assert_eq!(state.scale(), 6.0);
+
+        state.pop_matrix();
+        assert_eq!(state.scale(), 2.0);
+    }
+
+    /// A translation moves things and does not make them bigger, so text under one is laid out at
+    /// the size it was written with. Every leaf in the tree sits under one of these.
+    #[test]
+    fn moving_something_is_not_scaling_it() {
+        let mut state = DrawState::new();
+        state.push_matrix([1.0, 0.0, 0.0, 1.0, 40.0, 90.0]);
+        assert_eq!(state.scale(), 1.0);
+    }
+
+    /// A rotation is not a scale either, and reading one axis rather than the determinant would say
+    /// it was.
+    #[test]
+    fn turning_something_is_not_scaling_it() {
+        let mut state = DrawState::new();
+        let turn = std::f32::consts::FRAC_PI_4;
+        state.push_matrix([turn.cos(), turn.sin(), -turn.sin(), turn.cos(), 0.0, 0.0]);
+        assert!((state.scale() - 1.0).abs() < 1e-5, "{}", state.scale());
     }
 }
