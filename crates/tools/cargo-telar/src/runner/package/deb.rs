@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use super::super::config::TelarConfig;
+use super::super::config::{TelarConfig, resolve_package};
 use super::{
     create_dir_or_exit, desktop_entry_file, dist_dir, run_bundler_tool, run_release_build,
     stage_binary, write_or_exit,
@@ -15,20 +15,31 @@ fn deb_architecture(arch: &str) -> &str {
     }
 }
 
-fn deb_control_file(name: &str, version: &str, arch: &str, description: &str) -> String {
+fn deb_control_file(
+    name: &str,
+    version: &str,
+    arch: &str,
+    maintainer: &str,
+    description: &str,
+) -> String {
     format!(
-        "Package: {name}\nVersion: {version}\nArchitecture: {arch}\nMaintainer: {name} maintainers <maintainer@example.invalid>\nDescription: {description}\n"
+        "Package: {name}\nVersion: {version}\nArchitecture: {arch}\nMaintainer: {maintainer}\nDescription: {description}\n"
     )
 }
 
 pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarConfig) -> ! {
+    // Resolved before the build: failing on a missing manifest field after a full release compile wastes the one thing the author cannot get back.
+    let Some(maintainer) = resolve_package(&cargo_args).maintainer() else {
+        eprintln!(
+            "[cargo-telar] --format deb needs a maintainer. Add `authors = [\"Name <email>\"]` to the package's Cargo.toml."
+        );
+        std::process::exit(1);
+    };
     let (bin_path, resolved) = run_release_build(cargo_args, config);
     let package_name = resolved.name();
     let version = resolved.version();
     let description = resolved
-        .package
-        .as_ref()
-        .and_then(|p| p.description.clone())
+        .description()
         .unwrap_or_else(|| format!("{package_name} (built with rsx)"));
     let arch = deb_architecture(std::env::consts::ARCH);
 
@@ -46,7 +57,7 @@ pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarConfig) -> ! {
 
     write_or_exit(
         &debian_dir.join("control"),
-        deb_control_file(&package_name, &version, arch, &description),
+        deb_control_file(&package_name, &version, arch, &maintainer, &description),
     );
     stage_binary(&bin_path, &bin_dir.join(&package_name));
     write_or_exit(
@@ -83,11 +94,17 @@ mod tests {
 
     #[test]
     fn deb_control_file_has_required_fields_and_trailing_newline() {
-        let control = deb_control_file("myapp", "1.2.3", "amd64", "A neat app");
+        let control = deb_control_file(
+            "myapp",
+            "1.2.3",
+            "amd64",
+            "Ada <ada@example.org>",
+            "A neat app",
+        );
         assert!(control.contains("Package: myapp\n"));
         assert!(control.contains("Version: 1.2.3\n"));
         assert!(control.contains("Architecture: amd64\n"));
-        assert!(control.contains("Maintainer: myapp maintainers <maintainer@example.invalid>\n"));
+        assert!(control.contains("Maintainer: Ada <ada@example.org>\n"));
         assert!(control.contains("Description: A neat app\n"));
         assert!(control.ends_with('\n'));
     }

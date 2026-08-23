@@ -56,7 +56,19 @@ struct TelarToml {
 
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoWorkspace {
+    #[serde(default)]
     pub(crate) members: Vec<String>,
+    pub(crate) package: Option<CargoWorkspacePackage>,
+}
+// `[workspace.package]` — the values a member inherits with `field.workspace = true`.
+#[derive(Deserialize, Default, Clone)]
+pub(crate) struct CargoWorkspacePackage {
+    #[serde(default)]
+    pub(crate) version: Option<String>,
+    #[serde(default)]
+    pub(crate) authors: Vec<String>,
+    #[serde(default)]
+    pub(crate) description: Option<String>,
 }
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoManifest {
@@ -72,20 +84,47 @@ pub(crate) struct CargoLib {
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoPackage {
     pub(crate) name: String,
-    #[serde(default, deserialize_with = "deserialize_inheritable_version")]
-    pub(crate) version: Option<String>,
     #[serde(default)]
-    pub(crate) description: Option<String>,
+    pub(crate) version: Inheritable<String>,
+    #[serde(default)]
+    pub(crate) authors: Inheritable<Vec<String>>,
+    #[serde(default)]
+    pub(crate) description: Inheritable<String>,
     pub(crate) metadata: Option<CargoPackageMetadata>,
 }
 
-// `version` may be a plain string or a workspace-inherited table (`version = { workspace = true }`); accept either shape and keep only a concrete string so parsing never fails.
-fn deserialize_inheritable_version<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = toml::Value::deserialize(deserializer)?;
-    Ok(value.as_str().map(|s| s.to_owned()))
+// A `[package]` field is written out, inherited from `[workspace.package]` (`version.workspace = true`), or absent. Inherited is kept apart from absent because only the inherited case has an answer in the workspace manifest; collapsing the two is what let a member's real version reach a `.deb` as the hardcoded fallback.
+#[derive(Default, Debug, PartialEq)]
+pub(crate) enum Inheritable<T> {
+    #[default]
+    Absent,
+    FromWorkspace,
+    Set(T),
+}
+
+impl<'de, T: serde::de::DeserializeOwned> Deserialize<'de> for Inheritable<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = toml::Value::deserialize(deserializer)?;
+        if value.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
+            return Ok(Self::FromWorkspace);
+        }
+        T::deserialize(value)
+            .map(Self::Set)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+impl<T: Clone> Inheritable<T> {
+    fn resolve(&self, inherited: impl FnOnce() -> Option<T>) -> Option<T> {
+        match self {
+            Self::Set(value) => Some(value.clone()),
+            Self::FromWorkspace => inherited(),
+            Self::Absent => None,
+        }
+    }
 }
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoPackageMetadata {
@@ -174,6 +213,8 @@ pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
 pub(crate) struct ResolvedPackage {
     pub(crate) workspace_root: PathBuf,
     pub(crate) package: Option<CargoPackage>,
+    // What `field.workspace = true` resolves against. Read once here rather than per getter, since a member that inherits one field usually inherits several.
+    pub(crate) workspace_package: Option<CargoWorkspacePackage>,
     // Hot reload dlopens the package's own cdylib. Without `crate-type = ["cdylib", ..]` cargo never emits one, so the dylib build is dead weight and the runner has to fall back to process restart.
     pub(crate) produces_cdylib: bool,
 }
@@ -190,8 +231,29 @@ impl ResolvedPackage {
     pub(crate) fn version(&self) -> String {
         self.package
             .as_ref()
-            .and_then(|p| p.version.clone())
+            .and_then(|p| {
+                p.version
+                    .resolve(|| self.workspace_package.as_ref()?.version.clone())
+            })
             .unwrap_or_else(|| "0.1.0".to_string())
+    }
+
+    // Debian's `Maintainer` and Cargo's `authors` share the `Name <email>` shape, so the manifest is the one source. There is no honest default: a placeholder address ships inside the package and only surfaces when someone tries to report a bug.
+    pub(crate) fn maintainer(&self) -> Option<String> {
+        self.package
+            .as_ref()
+            .and_then(|p| {
+                p.authors
+                    .resolve(|| Some(self.workspace_package.as_ref()?.authors.clone()))
+            })
+            .and_then(|authors| authors.first().cloned())
+    }
+
+    pub(crate) fn description(&self) -> Option<String> {
+        self.package.as_ref().and_then(|p| {
+            p.description
+                .resolve(|| self.workspace_package.as_ref()?.description.clone())
+        })
     }
 }
 
@@ -204,9 +266,19 @@ pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
         .as_ref()
         .and_then(|m| m.lib.as_ref())
         .is_some_and(|lib| lib.crate_type.iter().any(|kind| kind == "cdylib"));
+    // The member's own manifest when it is also the workspace root, so a single-crate project inherits from itself without a second read.
+    let workspace_package = if workspace_root == dir {
+        manifest.as_ref()
+    } else {
+        None
+    }
+    .and_then(|m| m.workspace.as_ref())
+    .and_then(|w| w.package.clone())
+    .or_else(|| read_manifest_in(&workspace_root)?.workspace?.package);
     ResolvedPackage {
         workspace_root,
         package: manifest.and_then(|m| m.package),
+        workspace_package,
         produces_cdylib,
     }
 }
@@ -384,16 +456,16 @@ mod tests {
     }
 
     #[test]
-    fn workspace_inherited_version_deserializes_to_none() {
-        // `version = { workspace = true }` must not fail parsing; it yields no concrete string.
+    fn workspace_inherited_version_is_recorded_as_inherited() {
+        // `version = { workspace = true }` must not fail parsing; it records that the workspace holds the answer.
         let manifest: CargoManifest = toml::from_str(
             "[package]\nname = \"demo\"\nversion = { workspace = true }\ndescription = \"hi\"\n",
         )
         .expect("workspace-inherited version should parse");
         let pkg = manifest.package.expect("package section");
         assert_eq!(pkg.name, "demo");
-        assert_eq!(pkg.version, None);
-        assert_eq!(pkg.description.as_deref(), Some("hi"));
+        assert_eq!(pkg.version, Inheritable::FromWorkspace);
+        assert_eq!(pkg.description, Inheritable::Set("hi".to_string()));
     }
 
     #[test]
@@ -418,11 +490,83 @@ mod tests {
     }
 
     #[test]
+    fn workspace_inherited_authors_are_recorded_as_inherited() {
+        let manifest: CargoManifest =
+            toml::from_str("[package]\nname = \"demo\"\nauthors = { workspace = true }\n")
+                .expect("workspace-inherited authors should parse");
+        let pkg = manifest.package.expect("package section");
+        assert_eq!(pkg.authors, Inheritable::FromWorkspace);
+    }
+
+    #[test]
+    fn the_dotted_spelling_of_inheritance_is_read_the_same_way() {
+        // `version.workspace = true` is the form cargo's own docs use, and the one hyprshell writes.
+        let manifest: CargoManifest =
+            toml::from_str("[package]\nname = \"demo\"\nversion.workspace = true\n")
+                .expect("dotted inheritance should parse");
+        let pkg = manifest.package.expect("package section");
+        assert_eq!(pkg.version, Inheritable::FromWorkspace);
+    }
+
+    #[test]
+    fn explicit_authors_list_deserializes() {
+        let manifest: CargoManifest = toml::from_str(
+            "[package]\nname = \"demo\"\nauthors = [\"Ada <ada@example.org>\", \"Bo <bo@example.org>\"]\n",
+        )
+        .expect("explicit authors should parse");
+        let pkg = manifest.package.expect("package section");
+        assert_eq!(
+            pkg.authors,
+            Inheritable::Set(vec![
+                "Ada <ada@example.org>".to_string(),
+                "Bo <bo@example.org>".to_string(),
+            ])
+        );
+    }
+
+    #[test]
     fn explicit_version_string_deserializes() {
         let manifest: CargoManifest =
             toml::from_str("[package]\nname = \"demo\"\nversion = \"2.0.1\"\n")
                 .expect("explicit version should parse");
         let pkg = manifest.package.expect("package section");
-        assert_eq!(pkg.version.as_deref(), Some("2.0.1"));
+        assert_eq!(pkg.version, Inheritable::Set("2.0.1".to_string()));
+    }
+
+    #[test]
+    fn an_inherited_field_is_answered_by_the_workspace_not_the_fallback() {
+        // The regression this exists for: a member inheriting its version used to report the hardcoded "0.1.0", so every bundle carried the wrong version the moment the workspace moved off it.
+        let manifest: CargoManifest = toml::from_str(
+            "[package]\nname = \"demo\"\nversion.workspace = true\nauthors.workspace = true\n",
+        )
+        .expect("inherited fields should parse");
+        let resolved = ResolvedPackage {
+            workspace_root: PathBuf::from("/nowhere"),
+            package: manifest.package,
+            workspace_package: Some(CargoWorkspacePackage {
+                version: Some("2.0.0".to_string()),
+                authors: vec!["Ada <ada@example.org>".to_string()],
+                description: None,
+            }),
+            produces_cdylib: false,
+        };
+        assert_eq!(resolved.version(), "2.0.0");
+        assert_eq!(
+            resolved.maintainer().as_deref(),
+            Some("Ada <ada@example.org>")
+        );
+    }
+
+    #[test]
+    fn an_unreadable_manifest_still_falls_back() {
+        let resolved = ResolvedPackage {
+            workspace_root: PathBuf::from("/nowhere"),
+            package: None,
+            workspace_package: None,
+            produces_cdylib: false,
+        };
+        assert_eq!(resolved.name(), "app");
+        assert_eq!(resolved.version(), "0.1.0");
+        assert_eq!(resolved.maintainer(), None);
     }
 }
