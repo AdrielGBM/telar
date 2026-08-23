@@ -247,6 +247,7 @@ impl ResolvedPackage {
                     .resolve(|| Some(self.workspace_package.as_ref()?.authors.clone()))
             })
             .and_then(|authors| authors.first().cloned())
+            .or_else(maintainer_from_env)
     }
 
     pub(crate) fn description(&self) -> Option<String> {
@@ -254,6 +255,27 @@ impl ResolvedPackage {
             p.description
                 .resolve(|| self.workspace_package.as_ref()?.description.clone())
         })
+    }
+}
+
+// dpkg reads the maintainer from `DEBFULLNAME`/`DEBEMAIL`, so honour the same pair: cargo stopped emitting
+// `authors` years ago, and refusing every manifest without it would rule out most projects.
+fn maintainer_from_env() -> Option<String> {
+    maintainer_from(
+        std::env::var("DEBFULLNAME").ok(),
+        std::env::var("DEBEMAIL").ok(),
+    )
+}
+
+fn maintainer_from(name: Option<String>, email: Option<String>) -> Option<String> {
+    let email = email?;
+    let email = email.trim();
+    if email.is_empty() {
+        return None;
+    }
+    match name {
+        Some(name) if !name.trim().is_empty() => Some(format!("{} <{email}>", name.trim())),
+        _ => Some(email.to_string()),
     }
 }
 
@@ -555,6 +577,21 @@ mod tests {
             resolved.maintainer().as_deref(),
             Some("Ada <ada@example.org>")
         );
+    }
+
+    #[test]
+    fn the_debian_environment_names_a_maintainer_when_the_manifest_does_not() {
+        assert_eq!(
+            maintainer_from(Some("Ada".into()), Some("ada@example.org".into())).as_deref(),
+            Some("Ada <ada@example.org>")
+        );
+        // DEBEMAIL alone is a complete answer: dpkg accepts a bare address as the maintainer.
+        assert_eq!(
+            maintainer_from(None, Some("ada@example.org".into())).as_deref(),
+            Some("ada@example.org")
+        );
+        assert_eq!(maintainer_from(Some("Ada".into()), None), None);
+        assert_eq!(maintainer_from(None, Some("   ".into())), None);
     }
 
     #[test]
