@@ -5,40 +5,39 @@
 
 [view]
 col gap:20
-    doc_header kicker:"SURFACES" title:"Gradients" desc:"Fill a box with a linear or radial gradient between two colors — add a middle stop for a three-color blend."
-    example title:"Linear — direction sets the axis"
+    doc_header kicker:"SURFACES" title:"Gradients" desc:"Fill a box with a linear or radial gradient: name the stops in order, and where any of them sits."
+    example title:"Linear — the direction leads, or the run goes top to bottom"
         card
             grid cols:"fit 160" gap:12
                 col @swatch
-                    box gradient:horizontal from:theme.danger to:theme.primary radius:10 width:100% height:72
+                    box fill:linear(horizontal, theme.danger, theme.primary) radius:10 width:100% height:72
                     text "horizontal" font_size:12 color:theme.muted
                 col @swatch
-                    box gradient:vertical from:theme.purple to:theme.success radius:10 width:100% height:72
-                    text "vertical" font_size:12 color:theme.muted
+                    box fill:linear(theme.purple, theme.success) radius:10 width:100% height:72
+                    text "vertical (the default)" font_size:12 color:theme.muted
                 col @swatch
-                    box gradient:diagonal from:theme.warning to:theme.danger radius:10 width:100% height:72
+                    box fill:linear(diagonal, theme.warning, theme.danger) radius:10 width:100% height:72
                     text "diagonal" font_size:12 color:theme.muted
-        code_line code:"box gradient:horizontal from:theme.danger to:theme.primary"
-    example title:"Three stops — add a middle color and its position"
+        code_line code:"box fill:linear(horizontal, theme.danger, theme.primary)"
+    example title:"Three stops — a stop with no position of its own takes an even share"
         card
-            box gradient:horizontal from:theme.primary mid:theme.purple mid_pos:0.5 to:theme.danger radius:10 width:100% height:80
-        code_line code:"box gradient:horizontal from:theme.primary mid:theme.purple mid_pos:0.5 to:theme.danger"
-    example title:"Radial — a burst from the center; gr sets the radius"
+            box fill:linear(horizontal, theme.primary, theme.purple, theme.danger) radius:10 width:100% height:80
+        code_line code:"box fill:linear(horizontal, theme.primary, theme.purple, theme.danger)"
+    example title:"Radial — a burst from the center; a leading number sets the radius"
         card
             grid cols:"fit 160" gap:12
                 col @swatch
-                    box gradient:radial radial_radius:70 from:theme.cyan to:theme.primary radius:10 width:100% height:80
-                    text "radial_radius:70" font_size:12 color:theme.muted
+                    box fill:radial(70, theme.cyan, theme.primary) radius:10 width:100% height:80
+                    text "radius 70" font_size:12 color:theme.muted
                 col @swatch
-                    box gradient:radial from:theme.warning to:theme.danger radius:10 width:100% height:80
+                    box fill:radial(theme.warning, theme.danger) radius:10 width:100% height:80
                     text "default radius" font_size:12 color:theme.muted
                 col @swatch
-                    box gradient:radial radial_radius:80 from:theme.success mid:theme.cyan mid_pos:0.45 to:theme.purple radius:10 width:100% height:80
-                    text "3 stops" font_size:12 color:theme.muted
-        code_line code:"box gradient:radial radial_radius:70 from:theme.cyan to:theme.primary"
+                    box fill:radial(80, theme.success, theme.cyan 0.45, theme.purple) radius:10 width:100% height:80
+                    text "3 stops, the middle at 0.45" font_size:12 color:theme.muted
+        code_line code:"box fill:radial(70, theme.cyan, theme.primary)"
     example title:"Attributes"
         col gap:6
-            prop_row name:"gradient" values:"horizontal·vertical·diagonal·radial" about:"Gradient kind and axis."
-            prop_row name:"from / to" values:"token · #hex" about:"Start and end colors (required)."
-            prop_row name:"mid / mid_pos" values:"color · 0–1" about:"Optional middle stop and its position."
-            prop_row name:"gr" values:"number" about:"Radial radius in px (default: half the shorter side)."
+            prop_row name:"linear(…)" values:"[horizontal·vertical·diagonal,] stop, stop…" about:"A run between two or more stops. Vertical unless the axis leads."
+            prop_row name:"radial(…)" values:"[radius,] stop, stop…" about:"A burst from the center. Half the shorter side unless a radius leads."
+            prop_row name:"stop" values:"color [position]" about:"A color, and where it sits from 0 to 1. Unpositioned stops spread evenly."

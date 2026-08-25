@@ -341,37 +341,11 @@ pub(super) fn clone_block_multiline(idents: &[String], closure: String, pad: &st
 }
 
 /// Assembles a `&[(pos, color)]` gradient stops expression from the resolved `from`, `to`, and optional `mid`/`mid_pos` values.
-pub(super) fn build_gradient_stops(
-    from: &str,
-    to: &str,
-    mid: Option<&str>,
-    mid_pos: f32,
-) -> String {
-    if let Some(m) = mid {
-        format!(
-            "&[(0.0, {from}), ({}, {m}), (1.0, {to})]",
-            format_f32(mid_pos)
-        )
-    } else {
-        format!("&[(0.0, {from}), (1.0, {to})]")
-    }
-}
-
 /// Keys that contribute to a container's paint (`RectStyle`) rather than its layout. Used to pick which class props to merge into an element's paint attributes.
 pub(crate) fn is_paint_key(key: &str) -> bool {
     matches!(
         key,
-        "fill"
-            | "stroke"
-            | "stroke_width"
-            | "radius"
-            | "opacity"
-            | "gradient"
-            | "from"
-            | "to"
-            | "mid"
-            | "mid_pos"
-            | "radial_radius"
+        "fill" | "stroke" | "stroke_width" | "radius" | "opacity"
     ) || key.starts_with("shadow")
         || is_side_key(key)
         || is_corner_key(key)
@@ -409,7 +383,7 @@ pub(super) fn has_paint(pattrs: &[Attr]) -> bool {
     pattrs.iter().any(|a| {
         matches!(
             a.key.as_str(),
-            "fill" | "stroke" | "radius" | "opacity" | "gradient"
+            "fill" | "stroke" | "radius" | "opacity"
         ) || a.key.starts_with("shadow")
             // A corner counts the way `radius` does; a side does not, the way `stroke_width` does not — a
             // thickness with no colour to paint is not yet anything to see.

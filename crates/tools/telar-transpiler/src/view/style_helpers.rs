@@ -83,6 +83,7 @@ impl ViewGen<'_> {
         let mut solid_fill = pattrs
             .iter()
             .find(|a| a.key == "fill")
+            .filter(|_| gradient.is_none())
             .map(|a| self.color_expr(a.value.text()));
         let mut stroke = pattrs
             .iter()

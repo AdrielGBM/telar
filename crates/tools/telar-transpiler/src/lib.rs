@@ -5,6 +5,7 @@ mod components;
 mod discovery;
 mod edges;
 mod error;
+mod gradient;
 mod i18n;
 pub mod naming;
 mod paths;

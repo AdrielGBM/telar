@@ -20,9 +20,9 @@ col gap:20
         code_line code:"box fill:theme.danger opacity:0.3"
     example title:"Layer opacity applies to a gradient and its label together"
         card
-            box @center gradient:horizontal from:theme.primary mid:theme.purple to:theme.danger radius:12 height:80 opacity:0.75
+            box @center fill:linear(horizontal, theme.primary, theme.purple, theme.danger) radius:12 height:80 opacity:0.75
                 text "gradient at 0.75" font_size:16 color:theme.on_primary
-        code_line code:"box gradient:horizontal from:theme.primary to:theme.danger opacity:0.75"
+        code_line code:"box fill:linear(horizontal, theme.primary, theme.danger) opacity:0.75"
     example title:"Nested — outer 0.6 × inner 0.6 combine to about 0.36"
         card
             box fill:theme.primary radius:10 height:120 opacity:0.6 pad:14 gap:8

@@ -1974,6 +1974,60 @@ mod tests {
         assert!(out.rust_code.contains("is not a value of `align`"));
     }
 
+    /// Six keys that meant nothing apart become one value, and the three that sat among the colour keys stop
+    /// reading as properties a box has.
+    #[test]
+    fn a_gradient_is_a_value_of_fill_and_not_six_keys_of_its_own() {
+        let code = crate::transpile_source(
+            "[view]\nbox fill:linear(horizontal, #ff0000, #0000ff)\n    text \"x\"\n",
+            "demo",
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(!code.contains("compile_error!"), "{code}");
+        assert!(
+            code.contains("Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5)"),
+            "the axis leads:\n{code}"
+        );
+
+        let gone = crate::transpile_source(
+            "[view]\nbox gradient:horizontal from:#ff0000 to:#0000ff\n    text \"x\"\n",
+            "demo",
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(
+            gone.contains("`gradient` is not an attribute of `box`"),
+            "{gone}"
+        );
+        assert!(
+            gone.contains("`from` is not an attribute of `box`"),
+            "{gone}"
+        );
+    }
+
+    /// A stop nobody can resolve is reported against the attribute, where inside `linear(…)` there is no
+    /// attribute of its own to point at.
+    #[test]
+    fn a_bad_stop_is_reported_on_the_fill_that_holds_it() {
+        let code = crate::transpile_source(
+            "[view]\nbox fill:linear(#ff0000, nonsuch)\n    text \"x\"\n",
+            "demo",
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(code.contains("`nonsuch` is not a color"), "{code}");
+    }
+
     /// A synonym is cost with nothing bought, and every one of these had a shorter or plainer spelling that
     /// stays. They are errors rather than silences, which is what makes deleting them safe.
     #[test]

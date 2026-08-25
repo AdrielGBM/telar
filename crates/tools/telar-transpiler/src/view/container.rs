@@ -9,8 +9,8 @@ use crate::naming::to_pascal_case;
 use crate::style::format_f32;
 
 use super::signals::{
-    build_gradient_stops, closure_marker, emit_transition_prelude, has_paint, normalize_closure,
-    substitute_handles, substitute_reads, wrap_signal_clones,
+    closure_marker, emit_transition_prelude, has_paint, normalize_closure, substitute_handles,
+    substitute_reads, wrap_signal_clones,
 };
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker, forces_child_vec};
 
@@ -366,55 +366,27 @@ impl ViewGen<'_> {
         format!(".with_transform({call})")
     }
 
-    /// Builds a `Paint::Gradient(...)` expression for a `box` element, using the closure parameter `r` (the rendered `Bounds`) for absolute gradient points.
-    ///
-    /// `gradient:horizontal/vertical/diagonal/radial` with `from:` / `to:` (required), optional `mid:` / `mid_pos:`.
+    /// The `Paint::Gradient(…)` a `fill:linear(…)` or `fill:radial(…)` builds, or `None` for a fill that is a
+    /// plain colour. Uses the paint closure's `r` for the absolute points a gradient needs; see
+    /// [`crate::gradient`] for the value's own shape.
     pub(super) fn box_gradient_paint(&self, attrs: &[Attr]) -> Option<String> {
-        let direction = attrs.iter().find(|a| a.key == "gradient")?.value.text();
-        let from = attrs
+        let value = attrs.iter().find(|a| a.key == "fill")?.value.text().trim();
+        let (kind, args) = crate::gradient::split_call(value)?;
+        let parts = crate::gradient::parse(kind, args)?;
+        let stops: Vec<String> = parts
+            .stops
             .iter()
-            .find(|a| a.key == "from")
-            .map(|a| self.color_expr(a.value.text()))?;
-        let to = attrs
-            .iter()
-            .find(|a| a.key == "to")
-            .map(|a| self.color_expr(a.value.text()))?;
-        let mid = attrs
-            .iter()
-            .find(|a| a.key == "mid")
-            .map(|a| self.color_expr(a.value.text()));
-        let mid_pos = attrs
-            .iter()
-            .find(|a| a.key == "mid_pos")
-            .and_then(|a| a.value.text().parse::<f32>().ok())
-            .unwrap_or(0.5);
-
-        let stops = build_gradient_stops(&from, &to, mid.as_deref(), mid_pos);
-
-        match direction.trim() {
-            "horizontal" => Some(format!(
-                "Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), {stops}))"
-            )),
-            "vertical" => Some(format!(
-                "Paint::Gradient(Gradient::linear(Point::new(r.x + r.width * 0.5, r.y), Point::new(r.x + r.width * 0.5, r.y + r.height), {stops}))"
-            )),
-            "diagonal" => Some(format!(
-                "Paint::Gradient(Gradient::linear(Point::new(r.x, r.y), Point::new(r.x + r.width, r.y + r.height), {stops}))"
-            )),
-            "radial" => {
-                // `radial_radius:N` — explicit pixel radius; default is half the shorter side.
-                let radius_expr = attrs
-                    .iter()
-                    .find(|a| a.key == "radial_radius")
-                    .and_then(|a| a.value.text().parse::<f32>().ok())
-                    .map(format_f32)
-                    .unwrap_or_else(|| "r.width.min(r.height) * 0.5".to_string());
-                Some(format!(
-                    "Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), {radius_expr}, {stops}))"
-                ))
+            .map(|(pos, color)| format!("({}, {})", format_f32(*pos), self.color_expr(color)))
+            .collect();
+        let stops = format!("&[{}]", stops.join(", "));
+        Some(match parts.shape {
+            crate::gradient::Shape::Linear(line) => {
+                format!("Paint::Gradient(Gradient::linear({line}, {stops}))")
             }
-            _ => None,
-        }
+            crate::gradient::Shape::Radial(radius) => format!(
+                "Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), {radius}, {stops}))"
+            ),
+        })
     }
 }
 

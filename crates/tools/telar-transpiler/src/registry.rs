@@ -94,16 +94,7 @@ pub fn is_control_flow_keyword(word: &str) -> bool {
 
 /// Attribute keys whose value is a color (a hex/keyword literal or a `[style]`/theme reference). The single source of truth for color-aware tooling (swatches, hover, go-to-definition, completion).
 pub fn color_attr_keys() -> &'static [&'static str] {
-    &[
-        "color",
-        "fill",
-        "stroke",
-        "outline",
-        "from",
-        "to",
-        "mid",
-        "shadow_color",
-    ]
+    &["color", "fill", "stroke", "outline", "shadow_color"]
 }
 
 /// Named color keywords `color_expr` resolves (see `view/interp.rs`), alongside hex literals and `[style]`/
@@ -170,12 +161,6 @@ const CONTAINER_PAINT: &[&str] = &[
     "shadow_y",
     "shadow_blur",
     "shadow_color",
-    "gradient",
-    "from",
-    "to",
-    "mid",
-    "mid_pos",
-    "radial_radius",
     "opacity",
     "on_press",
     // The non-primary half of `on_press`. Separate because a right- or middle-click otherwise falls through to whatever is behind the box, and folding it into `on_press` would make every pressable box swallow both.
@@ -620,18 +605,13 @@ mod tests {
     }
 
     #[test]
-    fn color_keys_cover_paint_and_gradient_attrs() {
-        for key in [
-            "color",
-            "fill",
-            "stroke",
-            "outline",
-            "from",
-            "to",
-            "mid",
-            "shadow_color",
-        ] {
+    fn color_keys_cover_every_attribute_that_paints() {
+        for key in ["color", "fill", "stroke", "outline", "shadow_color"] {
             assert!(color_attr_keys().contains(&key), "missing {key}");
+        }
+        // A gradient's stops are a value now, so its old keys are not properties a box has.
+        for key in ["gradient", "from", "to", "mid", "mid_pos", "radial_radius"] {
+            assert!(!color_attr_keys().contains(&key), "{key} should be gone");
         }
     }
 }

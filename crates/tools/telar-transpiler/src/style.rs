@@ -371,6 +371,19 @@ pub fn color(value: &str, scope: Scope<'_>) -> Result<(), String> {
     if v.is_empty() {
         return Err("`color` needs a value: a hex literal, `transparent`, a `theme.…` read, a `[style]` constant, or a `$signal`".to_string());
     }
+    // A gradient is a paint and not a colour, and the one place its stops can be checked is here — inside
+    // `linear(…)` there is no attribute for a bad one to be reported against.
+    if let Some((kind, args)) = crate::gradient::split_call(v) {
+        return match crate::gradient::parse(kind, args) {
+            Some(gradient) => gradient
+                .stops
+                .iter()
+                .try_for_each(|(_, stop)| color(stop, scope)),
+            None => Err(format!(
+                "`{v}` is not a gradient: write `{kind}(…)` with two or more stops, each a colour, optionally followed by where it sits"
+            )),
+        };
+    }
     let resolvable = v.starts_with('#')
         || v.starts_with('$')
         || v.contains('(')
