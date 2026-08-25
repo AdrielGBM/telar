@@ -3,12 +3,12 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use telar_parser::{Attr, Element};
+use telar_parser::{Attr, Element, Value};
 
 use crate::registry;
 use crate::style::{PropCall, format_f32, layout_prop_call};
 
-use super::signals::{captured_idents, emit_transition_prelude, wrap_signal_clones};
+use super::signals::{captured_idents, emit_transition_prelude, rust_str, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen};
 
 /// The type size a `text` takes when it names none, baked at transpile time. §1.4 of the styles plan is
@@ -35,6 +35,7 @@ impl ViewGen<'_> {
             if matches!(
                 a.key.as_str(),
                 "size"
+                    | "font_family"
                     | "color"
                     | "weight"
                     | "italic"
@@ -220,6 +221,9 @@ impl ViewGen<'_> {
                 .find(|a| a.key == key)
                 .is_some_and(|a| a.value.is_flag() || a.value.text().trim() == "true")
         };
+        if let Some(family) = attrs.iter().find(|a| a.key == "font_family") {
+            modifiers.push_str(&format!(".with_font_family({})", font_family_expr(family)));
+        }
         if let Some(w) = attrs
             .iter()
             .find(|a| a.key == "weight")
@@ -277,6 +281,18 @@ impl ViewGen<'_> {
         // `color_attr`'s raw value (not `color`, already substituted by `color_expr`) is scanned for `$ident` so a signal-backed color clones itself into this closure, leaving the outer binding usable by sibling widgets.
         let raw_color = color_attr.map(|a| a.value.text()).unwrap_or("");
         wrap_signal_clones(&[raw_color], closure)
+    }
+}
+
+/// The family a `font_family:` names, as an expression `TextStyle::with_font_family` accepts.
+///
+/// A quoted literal is the common case; anything else is the author's own Rust — a `theme.font()` read, a
+/// `[logic]` binding — carried through, because the families an application has are its own vocabulary and
+/// not one the DSL can enumerate.
+pub(super) fn font_family_expr(attr: &Attr) -> String {
+    match &attr.value {
+        Value::Quoted(name) => rust_str(name),
+        value => value.text().trim().to_string(),
     }
 }
 

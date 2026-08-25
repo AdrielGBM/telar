@@ -126,29 +126,28 @@ impl TextureUi {
         scale: f32,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
-        Self::with_fonts(target, scale, Vec::new(), Vec::new(), build)
+        Self::with_fonts(target, scale, Vec::new(), Vec::new(), None, build)
     }
 
-    /// [`new`](Self::new) carrying faces of its own — `font_paths` on disk and `font_data` embedded — in the
-    /// same shape [`AppConfig`](crate::AppConfig) takes them. The reason to reach for it is a face drawn on
-    /// a pixel grid, to pair with [`GlyphRaster::Pixel`](crate::GlyphRaster::Pixel).
+    /// [`new`](Self::new) carrying fonts of its own — `font_paths` on disk, `font_data` embedded, and
+    /// `font_family` naming which of them its text shapes in — in the same shape
+    /// [`AppConfig`](crate::AppConfig) takes them. The reason to reach for it is a face drawn on a pixel
+    /// grid, to pair with [`GlyphRaster::Pixel`](crate::GlyphRaster::Pixel).
     ///
-    /// **Loading a face is not choosing it.** These go into the font database; which one the text actually
-    /// shapes with is the process-wide default family, so a caller that wants its own face has to name it
-    /// with [`set_default_font_family`](crate::set_default_font_family) *before* building this — otherwise
-    /// the face is loaded and the platform's own is drawn, which looks like the file failed to load and did
-    /// not.
+    /// **Loading a face is not choosing it**, which is what `font_family` is for: without it the face is
+    /// loaded and the platform's own is drawn, which looks like the file failed to load and did not.
     ///
-    /// Two things follow from how much of this is process-wide. These faces join the one font database every
-    /// shaper is built from, so they stay loaded for the rest of the process — but a window already drawing
-    /// keeps the shaper it built before they arrived, so a face meant for both still belongs in the app
-    /// config. And there is one family per process: a pixel face here and a different one in the window
-    /// around it is not expressible today, because `TextStyle` has no family axis.
+    /// The faces join the one font database every shaper is built from, so they stay loaded for the rest of
+    /// the process — but a window already drawing keeps the shaper it built before they arrived, so a face
+    /// meant for both still belongs in the app config. The *family*, though, is this surface's own: a pixel
+    /// face here and a different one in the window around it are now two configurations rather than one
+    /// process-wide setting they would have to share.
     pub fn with_fonts(
         target: wgpu::Texture,
         scale: f32,
         font_paths: Vec<std::path::PathBuf>,
         font_data: Vec<Vec<u8>>,
+        font_family: Option<String>,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
         // The tree built below measures its text, and a texture UI can be the only Telar in the process — there may be no runner that installed a measurer.
@@ -158,7 +157,7 @@ impl TextureUi {
             target,
             None,
             false,
-            crate::runner::offscreen_hardware_font_config(font_paths, font_data),
+            crate::runner::offscreen_hardware_font_config(font_paths, font_data, font_family),
         )?;
 
         let surface = Surface::new();

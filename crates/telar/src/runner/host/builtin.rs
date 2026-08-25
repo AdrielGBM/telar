@@ -126,6 +126,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
         let cache_path = crate::runner::font_config::hardware_cache_path(req.app_name, req.paths);
         let font_paths = req.font_paths.to_vec();
         let font_data = req.font_data.to_vec();
+        let font_family = req.font_family.map(str::to_owned);
         let system_fonts = SystemFonts::from_provider(req.paths);
         let android = cfg!(target_os = "android");
         let transparent = req.transparent;
@@ -133,6 +134,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
             let font_config = crate::runner::font_config::build_hardware_font_config(
                 font_paths,
                 font_data,
+                font_family,
                 &system_fonts,
             );
             let built = renderer_hardware::HardwareRenderer::new(
@@ -179,6 +181,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
         let config = crate::runner::font_config::build_software_renderer_config(
             req.font_paths.to_vec(),
             req.font_data.to_vec(),
+            req.font_family.map(str::to_owned),
             &SystemFonts::from_provider(req.paths),
             req.transparent,
         );
@@ -210,6 +213,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
         let config = crate::runner::font_config::build_software_renderer_config(
             req.font_paths.to_vec(),
             req.font_data.to_vec(),
+            req.font_family.map(str::to_owned),
             &SystemFonts::from_provider(req.paths),
             req.transparent,
         );

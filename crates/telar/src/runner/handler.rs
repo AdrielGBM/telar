@@ -72,6 +72,7 @@ where
     pub(super) dev: D,
     pub(super) font_paths: Vec<std::path::PathBuf>,
     pub(super) font_data: Vec<Vec<u8>>,
+    pub(super) font_family: Option<String>,
     pub(super) _window: std::marker::PhantomData<W>,
     // F2: a small free-list the send path refills with the buffers the render thread hands back, instead of allocating a fresh Vec each frame.
     pub(super) command_buf_pool: Vec<Vec<renderer_core::DrawCommand>>,
@@ -131,6 +132,7 @@ pub(super) fn build_app_handler<W, D>(
     paths: Arc<dyn AppPathsProvider>,
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,
+    font_family: Option<String>,
     backend: crate::config::RendererBackend,
     prefs: UserPrefs,
     app_name: String,
@@ -177,6 +179,7 @@ where
         paths,
         font_paths,
         font_data,
+        font_family,
         _window: std::marker::PhantomData,
         command_buf_pool: Vec::new(),
         frame_text: Vec::new(),
@@ -316,6 +319,7 @@ where
             transparent,
             font_paths: &self.font_paths,
             font_data: &self.font_data,
+            font_family: self.font_family.as_deref(),
             paths: self.paths.as_ref(),
             app_name: &self.app_name,
         };
@@ -520,6 +524,7 @@ where
         renderer_text::fonts::install(build_font_config(
             self.font_paths.clone(),
             self.font_data.clone(),
+            self.font_family.clone(),
             &system_fonts,
         ));
         // Offscreen/headless windows have no surface, so a windowed renderer can't create one: rasterize into a
@@ -532,6 +537,7 @@ where
                 transparent,
                 font_paths: &self.font_paths,
                 font_data: &self.font_data,
+                font_family: self.font_family.as_deref(),
                 paths: self.paths.as_ref(),
                 app_name: &self.app_name,
             };
@@ -937,6 +943,7 @@ mod tests {
             Arc::new(services_core::NoPaths),
             Vec::new(),
             Vec::new(),
+            None,
             RendererBackend::Software,
             UserPrefs::default(),
             "generation-test".to_string(),
@@ -1018,6 +1025,7 @@ mod tests {
             Arc::new(services_core::NoPaths),
             Vec::new(),
             Vec::new(),
+            None,
             RendererBackend::Software,
             UserPrefs::default(),
             "generation-test".to_string(),

@@ -88,6 +88,8 @@ pub(super) struct RendererRequest<'a> {
     pub(super) transparent: bool,
     pub(super) font_paths: &'a [std::path::PathBuf],
     pub(super) font_data: &'a [Vec<u8>],
+    /// The family this surface's unstyled text shapes in, from its own `AppConfig`.
+    pub(super) font_family: Option<&'a str>,
     pub(super) paths: &'a dyn services_core::AppPathsProvider,
     /// Names the shader-cache directory, which only the hardware build has.
     #[cfg_attr(not(feature = "hardware"), allow(dead_code))]
@@ -181,6 +183,7 @@ where
         let fonts = super::font_config::build_font_config(
             req.font_paths.to_vec(),
             req.font_data.to_vec(),
+            req.font_family.map(str::to_owned),
             &super::font_config::SystemFonts::from_provider(req.paths),
         );
         self.factory.build(

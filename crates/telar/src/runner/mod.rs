@@ -11,7 +11,6 @@ mod font_config;
 mod frame_thread;
 #[cfg(feature = "hardware")]
 pub(crate) use font_config::offscreen_hardware_font_config;
-pub use font_config::set_default_font_family;
 mod generic;
 mod handler;
 mod host;

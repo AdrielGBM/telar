@@ -133,10 +133,11 @@ pub use renderer_assets::{SvgData, SvgError, VectorCommand};
 pub use renderer_assets::{static_key, svg_cached};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    BorderRadius, BorderWidths, Color, DrawCommand, DrawState, FillRule, GlyphRaster, Gradient,
-    GradientKind, GradientStop, GradientStops, ImageData, ImageFilter, LineCap, LineJoin, Paint,
-    PathData, PathStyle, PathVerb, RectStyle, RendererError, Scale, Shadow, ShapeStyle, Stroke,
-    TextAlign, TextRun, TextStyle, for_each_with_matrix, hash_draw_commands, transform_clip_rect,
+    BorderRadius, BorderWidths, Color, DrawCommand, DrawState, FillRule, FontFamily, GlyphRaster,
+    Gradient, GradientKind, GradientStop, GradientStops, ImageData, ImageFilter, LineCap, LineJoin,
+    Paint, PathData, PathStyle, PathVerb, RectStyle, RendererError, Scale, Shadow, ShapeStyle,
+    Stroke, TextAlign, TextRun, TextStyle, for_each_with_matrix, hash_draw_commands,
+    transform_clip_rect,
 };
 // Backend-author API, the drawing half: a frontend implements `RendererFactory`, installs it with `run_with_platform_and_renderer`, and installs `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]
@@ -147,10 +148,11 @@ pub use renderer_core::{
 
 /// Whether `family` names a font installed on this system.
 ///
-/// [`set_default_font_family`](crate::runner::set_default_font_family) takes any string and falls back silently
-/// when the family is not there, so this is how an application warns instead. Answered by the database the
-/// text shaper already loaded — asking it costs nothing, where a second `fontdb` is a full system font scan
-/// and a second answer that can disagree with the one the text is shaped in.
+/// Both [`AppConfig::font_family`](crate::AppConfig::font_family) and
+/// [`TextStyle::with_font_family`](crate::TextStyle::with_font_family) take any name and fall back silently
+/// when the family is not installed, so this is how an application warns instead. Answered by the database
+/// the text shaper already loaded — asking it costs nothing, where a second `fontdb` is a full system font
+/// scan and a second answer that can disagree with the one the text is shaped in.
 #[cfg(feature = "runtime")]
 pub fn font_family_available(family: &str) -> bool {
     renderer_text::font_family_available(family)
@@ -286,7 +288,6 @@ pub use runner::run_multi_with_platform;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::run_with_platform;
 #[cfg(feature = "runtime")]
-pub use runner::set_default_font_family;
 // The renderer seam, and what a window has to be for the built-in renderers to draw on it.
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::{SurfaceWindow, run_with_platform_and_renderer};

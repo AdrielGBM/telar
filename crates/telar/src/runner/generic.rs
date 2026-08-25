@@ -103,6 +103,7 @@ where
         window,
         font_paths,
         font_data,
+        font_family,
     } = config;
     let window = super::resolved_window(window, &app);
     let handler = build_app_handler::<P::Window, D>(
@@ -110,6 +111,7 @@ where
         paths,
         font_paths,
         font_data,
+        font_family,
         backend,
         prefs,
         app_name.to_owned(),

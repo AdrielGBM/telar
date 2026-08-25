@@ -1988,4 +1988,39 @@ mod tests {
             out.rust_code
         );
     }
+
+    /// B1: the family was a process-wide global, so a `text` could not name one at all — the whole reason
+    /// "one font here and another in the window around it" was inexpressible.
+    #[test]
+    fn a_text_can_name_the_face_it_shapes_in() {
+        let src = "[view]\ntext \"x\" font_family:\"LanaPixel\"\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(
+            out.rust_code.contains(r#".with_font_family("LanaPixel")"#),
+            "{}",
+            out.rust_code
+        );
+    }
+
+    /// The families an application has are its own vocabulary, so an unquoted value is carried through the
+    /// way a `theme.` read or a `[logic]` binding is everywhere else.
+    #[test]
+    fn an_unquoted_family_is_the_authors_own_expression() {
+        let src = "[logic]\nlet face = \"LanaPixel\";\n[view]\ntext \"x\" font_family:face\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(
+            out.rust_code.contains(".with_font_family(face)"),
+            "{}",
+            out.rust_code
+        );
+    }
+
+    /// A `text` naming no family must emit no family call at all, so it keeps shaping in the configured
+    /// sans-serif face exactly as it did before the axis existed.
+    #[test]
+    fn a_text_naming_no_family_is_untouched() {
+        let src = "[view]\ntext \"x\" size:12\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(!out.rust_code.contains("with_font_family"));
+    }
 }

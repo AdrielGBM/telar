@@ -21,12 +21,14 @@ pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
             mut window,
             font_paths,
             font_data,
+            font_family,
         } = config;
         apply_dev_window_overrides(&mut window);
         AppConfig {
             window,
             font_paths,
             font_data,
+            font_family,
         }
     }
 }

@@ -45,6 +45,7 @@ pub fn run_hot_reload_host(
         mut window,
         font_paths,
         font_data,
+        font_family,
     } = config;
     #[cfg(telar_hot_reload)]
     super::desktop::apply_dev_window_overrides(&mut window);
@@ -58,6 +59,7 @@ pub fn run_hot_reload_host(
         paths,
         font_paths,
         font_data,
+        font_family,
         backend,
         prefs,
         app_name.to_owned(),

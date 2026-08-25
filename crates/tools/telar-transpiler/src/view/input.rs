@@ -34,9 +34,15 @@ impl ViewGen<'_> {
             .map(|a| self.color_expr(a.value.text()))
             .unwrap_or_else(|| "Color::BLACK".to_string());
         let color_raw = color_attr.map(|a| a.value.text()).unwrap_or("");
+        let family = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "font_family")
+            .map(|a| format!(".with_font_family({})", super::text::font_family_expr(a)))
+            .unwrap_or_default();
         let style = wrap_signal_clones(
             &[color_raw],
-            format!("move || TextStyle::new({size}, {color})"),
+            format!("move || TextStyle::new({size}, {color}){family}"),
         );
 
         // Remaining attrs are layout (width/height/…); `value`/`size`/`color`/`on_submit` are consumed above.
@@ -44,7 +50,7 @@ impl ViewGen<'_> {
         for a in &el.attributes {
             if matches!(
                 a.key.as_str(),
-                "value" | "size" | "color" | "on_submit" | "placeholder" | "secret"
+                "value" | "size" | "font_family" | "color" | "on_submit" | "placeholder" | "secret"
             ) {
                 continue;
             }

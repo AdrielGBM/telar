@@ -436,6 +436,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         // among its siblings alongside its own type keys.
         "text" => with(&[
             "size",
+            "font_family",
             "color",
             "weight",
             "italic",
@@ -480,6 +481,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         "input" => with(&[
             "value",
             "size",
+            "font_family",
             "color",
             "placeholder",
             "on_submit",

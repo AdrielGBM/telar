@@ -80,6 +80,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
         paths,
         Vec::new(),
         Vec::new(),
+        None,
         backend,
         prefs,
         "telar-window".to_string(),
