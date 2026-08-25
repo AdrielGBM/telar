@@ -90,6 +90,7 @@ pub fn build_surface_handler<W, A>(
     app: A,
     paths: Arc<dyn AppPathsProvider>,
     app_name: &str,
+    fonts: AppConfig,
 ) -> Box<dyn EventHandler<W>>
 where
     W: super::host::SurfaceWindow,
@@ -97,12 +98,20 @@ where
 {
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
+    // A surface opened at runtime carries its own font configuration like any other. It used to be handed
+    // none at all, which was survivable only while a process-wide global named the family behind its back.
+    let AppConfig {
+        window: _,
+        font_paths,
+        font_data,
+        font_family,
+    } = fonts;
     let mut handler = build_app_handler::<W, ()>(
         Box::new(app),
         paths,
-        Vec::new(),
-        Vec::new(),
-        None,
+        font_paths,
+        font_data,
+        font_family,
         backend,
         prefs,
         app_name.to_string(),
