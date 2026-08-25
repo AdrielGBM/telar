@@ -105,9 +105,13 @@ pub fn image(view: wgpu::TextureView, id: u64, width: u32, height: u32) -> Image
 /// **Take it around the submission and nothing else.** Held across a frame it deadlocks, for the reason the
 /// windows have their own rule about: a path that reconfigures while a read guard is alive waits on itself.
 ///
+/// Spelled here against this crate, which is where the doctest compiles; an application reaches the same
+/// function through the facade, as `telar::gpu::submitting()`.
+///
 /// ```no_run
-/// # let (queue, encoder): (telar::gpu::wgpu::Queue, telar::gpu::wgpu::CommandEncoder) = unimplemented!();
-/// let _busy = telar::gpu::submitting();
+/// use telar_renderer_hardware::gpu::{self, wgpu};
+/// # let (queue, encoder): (wgpu::Queue, wgpu::CommandEncoder) = unimplemented!();
+/// let _busy = gpu::submitting();
 /// queue.submit([encoder.finish()]);
 /// ```
 pub fn submitting() -> std::sync::RwLockReadGuard<'static, ()> {
