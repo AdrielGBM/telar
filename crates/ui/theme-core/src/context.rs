@@ -1,13 +1,9 @@
+use std::any::Any;
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use geometry_core::Color;
 use reactive_core::{RwSignal, signal};
-
-// Flexible theme contract: users define their own tokens with whatever names they want. `as_any` is the only requirement so `use_theme` can downcast back to the concrete type.
-pub trait Theme: 'static {
-    fn as_any(&self) -> &dyn std::any::Any;
-}
 
 /// Opt-in semantic-token contract the built-in component catalogue reads through, so a component can resolve a
 /// token without knowing the concrete theme type.
@@ -154,21 +150,19 @@ pub trait ThemeTokens: 'static {
 
 thread_local! {
     // ManuallyDrop suppresses RwSignal's Drop impl so no TLS destructor is registered. Cleanup happens via reset_runtime() which drops the entire Runtime (and its signals slab).
-    static THEME: ManuallyDrop<RwSignal<Option<Rc<dyn Theme>>>> =
-        ManuallyDrop::new(signal(None));
+    // The same value behind two views: the catalogue asks it questions through `ThemeTokens`, and `use_theme` hands the application its own type back. `Rc<dyn Any>` is the whole of what the downcast needs, which is why a theme no longer implements a trait to supply it.
+    static THEME: ManuallyDrop<RwSignal<Option<Rc<dyn Any>>>> = ManuallyDrop::new(signal(None));
     static THEME_TOKENS: ManuallyDrop<RwSignal<Option<Rc<dyn ThemeTokens>>>> =
         ManuallyDrop::new(signal(None));
 }
 
-pub fn set_theme<T: Theme + ThemeTokens + Clone + 'static>(theme: T) {
+pub fn set_theme<T: ThemeTokens + Clone + 'static>(theme: T) {
     let theme = Rc::new(theme);
-    let as_theme: Rc<dyn Theme> = theme.clone();
-    let as_tokens: Rc<dyn ThemeTokens> = theme;
-    THEME.with(|s| s.set(Some(as_theme)));
-    THEME_TOKENS.with(|s| s.set(Some(as_tokens)));
+    THEME.with(|s| s.set(Some(theme.clone() as Rc<dyn Any>)));
+    THEME_TOKENS.with(|s| s.set(Some(theme as Rc<dyn ThemeTokens>)));
 }
 
-pub fn use_theme<T: Theme + Clone + 'static>() -> T {
+pub fn use_theme<T: Clone + 'static>() -> T {
     THEME.with(|s| {
         let theme = s.get().unwrap_or_else(|| {
             panic!(
@@ -177,7 +171,6 @@ pub fn use_theme<T: Theme + Clone + 'static>() -> T {
             )
         });
         theme
-            .as_any()
             .downcast_ref::<T>()
             .unwrap_or_else(|| {
                 panic!(
@@ -243,11 +236,6 @@ mod tests {
 
     #[derive(Clone)]
     struct Blue;
-    impl Theme for Blue {
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-    }
     impl ThemeTokens for Blue {
         fn primary(&self) -> Color {
             Color::rgba(0.0, 0.0, 1.0, 1.0)

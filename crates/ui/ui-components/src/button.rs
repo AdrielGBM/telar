@@ -229,18 +229,11 @@ mod tests {
     /// button kept the padding of the theme it was built under, and only a rebuild caught it up.
     #[test]
     fn switching_theme_re_spaces_the_button() {
-        use std::any::Any;
-
-        use theme_core::{Theme, ThemeTokens, set_theme};
+        use theme_core::{ThemeTokens, set_theme};
         use ui_core::relayout_if_dirty;
 
         #[derive(Clone)]
         struct Spaced(f32);
-        impl Theme for Spaced {
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-        }
         impl ThemeTokens for Spaced {
             fn spacing(&self) -> f32 {
                 self.0
@@ -276,18 +269,11 @@ mod tests {
     /// it still gets smaller.
     #[test]
     fn the_ambient_control_size_scales_a_control_that_never_asked_for_one() {
-        use std::any::Any;
-
-        use theme_core::{ControlSize, Theme, ThemeTokens, set_control_size, set_theme};
+        use theme_core::{ControlSize, ThemeTokens, set_control_size, set_theme};
         use ui_core::relayout_if_dirty;
 
         #[derive(Clone)]
         struct Plain;
-        impl Theme for Plain {
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-        }
         impl ThemeTokens for Plain {
             fn spacing(&self) -> f32 {
                 8.0

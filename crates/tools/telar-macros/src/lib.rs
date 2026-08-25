@@ -8,8 +8,8 @@ mod t_macro;
 mod theme_tokens;
 use app_input::{AppInput, preview_const_ident};
 
-/// Implements [`Theme`](telar::Theme) and [`ThemeTokens`](telar::ThemeTokens) for a theme struct, mapping each
-/// token to the field of the same name.
+/// Implements [`ThemeTokens`](telar::ThemeTokens) for a theme struct, mapping each token to the field of the
+/// same name.
 ///
 /// A token whose built-in is a fixed value has to be answered — silence there is what puts a 4px radius next to
 /// bars the user configured to 10, on the same screen, with nothing failing. `radius_sm`/`_md`/`_lg` are exempt:

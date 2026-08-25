@@ -988,7 +988,7 @@ mod tests {
     use layout_core::AvailableSpace;
     use platform_core::{PointerButton, PointerSource};
     use renderer_core::{Color, ShapeStyle};
-    use theme_core::{Theme, ThemeTokens, set_theme, use_theme};
+    use theme_core::{ThemeTokens, set_theme, use_theme};
 
     use super::*;
     use platform_core::ScrollDelta;
@@ -1431,11 +1431,6 @@ mod tests {
 
     #[derive(Clone)]
     struct TestTheme(Color);
-    impl Theme for TestTheme {
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-    }
     impl ThemeTokens for TestTheme {
         fn primary(&self) -> Color {
             self.0

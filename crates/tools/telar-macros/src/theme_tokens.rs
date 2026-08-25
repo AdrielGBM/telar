@@ -184,12 +184,6 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     }
 
     Ok(quote! {
-        impl #impl_generics ::telar::Theme for #name #ty_generics #where_clause {
-            fn as_any(&self) -> &dyn ::std::any::Any {
-                self
-            }
-        }
-
         impl #impl_generics ::telar::ThemeTokens for #name #ty_generics #where_clause {
             #(#methods)*
         }
@@ -216,7 +210,6 @@ mod tests {
     fn same_named_fields_answer_their_tokens() {
         let out = expand_str(FULL).expect("every token is answered");
         assert!(out.contains("fn primary"), "emits the token methods");
-        assert!(out.contains("fn as_any"), "emits the Theme half too");
     }
 
     /// The regression this derive exists for: a fixed built-in that contradicts the theme around it has to
