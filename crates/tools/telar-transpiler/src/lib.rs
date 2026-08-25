@@ -2173,13 +2173,12 @@ col @card
             "d: compiles to a PathData builder chain:\n{code}"
         );
         assert!(
-            code.contains("Path::static_data(__path_data.clone(),"),
+            code.contains("Path::static_data(LayoutStyle::new()"),
             "draws a Path widget from the baked path data:\n{code}"
         );
-        assert!(
-            code.contains("Canvas::new("),
-            "wrapped in a Canvas so it lays out:\n{code}"
-        );
+        // A path lays itself out now. It used to be wrapped in a `Canvas` to reach a layout at all — a
+        // primitive that could not be a child of a `col` without a widget in between.
+        assert!(!code.contains("Canvas::new("), "{code}");
         assert!(
             code.contains("fill: Some(Paint::Solid(")
                 && code.contains("stroke: Some(Stroke::new(")
@@ -2188,7 +2187,7 @@ col @card
         );
         assert!(
             code.contains(".width(10") && code.contains(".height(10"),
-            "width/height size the wrapping canvas:\n{code}"
+            "width/height size the path's own box:\n{code}"
         );
     }
 

@@ -19,7 +19,6 @@ mod keynav;
 mod layout_item;
 mod layout_leaf;
 mod lazy;
-mod line;
 mod line_gutter;
 mod named_overlay;
 pub mod overlay;
@@ -69,7 +68,6 @@ pub use keyboard::{
 pub use keynav::{KeyNav, KeyNavMove, key_nav_apply, key_nav_apply_grid};
 pub use layout_item::{ClipAxis, ClippedItem, Holding, LayoutItem, box_item};
 pub use lazy::Lazy;
-pub use line::Line;
 pub use line_gutter::LineGutter;
 pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};
 pub use overlay::{Overlay, Placement, anchor_rect};

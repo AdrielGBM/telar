@@ -201,8 +201,8 @@ pub use ui_core::{AssetSource, AssetState};
 pub use ui_core::{
     Axis, Canvas, ChildSlot, Children, ClipAxis, ClippedItem, Component, ComponentList, Container,
     DEFAULT_SCRIM, DragStart, Edge, EventResult, Holding, Image, Inherited, Input, KeyNav,
-    KeyNavMove, LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter, NodeId, NodeVec, Overlay,
-    Path, PointerButtons, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport,
+    KeyNavMove, LayoutItem, LayoutScrollArea, Lazy, LineGutter, NodeId, NodeVec, Overlay, Path,
+    PointerButtons, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport,
     ScrollbarStyle, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
     VirtualList, WindowRoot, anchor_rect, apply_move, box_item, box_transform, close_overlay,
     compute_layout, current_direction, declare, dismiss_depth, dismiss_top, drag_start,

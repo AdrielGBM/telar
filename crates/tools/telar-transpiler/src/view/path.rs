@@ -36,7 +36,7 @@ impl ViewGen<'_> {
 
         let path_style = self.path_style_expr(el);
 
-        // Explicit width/height win; otherwise the path's own extent sizes the wrapping canvas so it doesn't collapse to zero.
+        // Explicit width/height win; otherwise the path's own extent sizes its box so it doesn't collapse to zero.
         let mut layout = self.make_layout_style("path", &el.classes, &el.attributes);
         if let Some((max_x, max_y)) = extent {
             if !el.attributes.iter().any(|a| a.key == "width") && max_x > 0.0 {
@@ -47,7 +47,7 @@ impl ViewGen<'_> {
             }
         }
 
-        // A `$signal` fill/stroke resolves through `color_expr`'s `.get()` branch; clone it into both the outer draw closure (so the outer binding stays reusable) and the inner PathStyle closure (which re-reads it each frame), mirroring how `emit_canvas` clones canvas-child colours.
+        // A `$signal` fill/stroke resolves through `color_expr`'s `.get()` branch; clone it into the style closure, which re-reads it each frame, leaving the outer binding usable by sibling widgets.
         let raw_colors: Vec<&str> = el
             .attributes
             .iter()
@@ -55,8 +55,6 @@ impl ViewGen<'_> {
             .map(|a| a.value.text())
             .collect();
         let style_closure = wrap_signal_clones(&raw_colors, format!("move || {path_style}"));
-        let path_expr = format!("Path::static_data(__path_data.clone(), {style_closure}).view()");
-        let draw_closure = wrap_signal_clones(&raw_colors, format!("move |_r| {path_expr}"));
 
         let err_line = match parse_err {
             Some(e) => format!("{pad}    compile_error!({});\n", rust_str(&e)),
@@ -67,7 +65,7 @@ impl ViewGen<'_> {
             "{pad}let {var} = {{\n\
              {err_line}\
              {pad}    let __path_data = std::sync::Arc::new({data_chain});\n\
-             {pad}    Canvas::new({layout}, {draw_closure})?\n\
+             {pad}    Path::static_data({layout}, __path_data, {style_closure})?\n\
              {pad}}};"
         );
         ChildEmit::Simple { name: var, code }

@@ -20,7 +20,7 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         Point::new(10.0, 120.0),
     ]));
     kids.push(
-        Path::static_data(triangle, move || PathStyle::default().with_fill(primary)).view(),
+        RenderNode::path(triangle, PathStyle::default().with_fill(primary)),
     );
     kids.push(RenderNode::text(
         telar::static_rc_str!("polygon fill"),
@@ -45,12 +45,12 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         Arc::new(PathData::polygon(&pts))
     };
     kids.push(
-        Path::static_data(star, move || {
+        RenderNode::path(
+            star,
             PathStyle::default()
                 .with_fill(warning)
-                .with_stroke(Stroke::new(ink, 1.5))
-        })
-        .view(),
+                .with_stroke(Stroke::new(ink, 1.5)),
+        ),
     );
     kids.push(RenderNode::text(
         telar::static_rc_str!("fill + stroke"),
@@ -78,12 +78,12 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
             .close(),
     );
     kids.push(
-        Path::static_data(donut, move || {
+        RenderNode::path(
+            donut,
             PathStyle::default()
                 .with_fill(purple)
-                .with_fill_rule(FillRule::EvenOdd)
-        })
-        .view(),
+                .with_fill_rule(FillRule::EvenOdd),
+        ),
     );
     kids.push(RenderNode::text(
         telar::static_rc_str!("even-odd fill"),
@@ -103,10 +103,10 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
             .quad_to(Point::new(80.0, 180.0), Point::new(150.0, 250.0)),
     );
     kids.push(
-        Path::static_data(quad, move || {
-            PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round))
-        })
-        .view(),
+        RenderNode::path(
+            quad,
+            PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
+        ),
     );
     kids.push(RenderNode::text(
         telar::static_rc_str!("quad_to arch"),
@@ -125,10 +125,10 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
         Point::new(260.0, 250.0),
     ));
     kids.push(
-        Path::static_data(cubic, move || {
-            PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round))
-        })
-        .view(),
+        RenderNode::path(
+            cubic,
+            PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
+        ),
     );
     kids.push(RenderNode::text(
         telar::static_rc_str!("cubic_to S-curve"),
@@ -170,12 +170,12 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
             .close(),
     );
     kids.push(
-        Path::static_data(circle, move || {
+        RenderNode::path(
+            circle,
             PathStyle::default()
                 .with_fill(primary)
-                .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4)))
-        })
-        .view(),
+                .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
+        ),
     );
     kids.push(RenderNode::text(
         telar::static_rc_str!("path + drop shadow"),
@@ -198,7 +198,7 @@ col gap:20
     example title:"Polygons, curves, fills and a path shadow"
         card
             widget "result"
-        code_line code:"PathData::new().move_to(p).cubic_to(a, b, c)   >   Path::static_data(d, style)"
+        code_line code:"PathData::new().move_to(p).cubic_to(a, b, c)   >   RenderNode::path(d, style)"
     example title:"Declarative paths in [view]"
         card
             row gap:28 align:center
