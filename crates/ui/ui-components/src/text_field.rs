@@ -15,12 +15,9 @@ fn pad_y() -> f32 {
     shared::spacing() * 1.25
 }
 const DEFAULT_WIDTH: f32 = 300.0;
-fn font_size() -> f32 {
-    shared::font_size() * 1.07
-}
 
 fn line_box() -> LayoutStyle {
-    LayoutStyle::new().height(font_size() * 1.4)
+    LayoutStyle::new().height(shared::font_size() * 1.4)
 }
 fn field_box(width: f32) -> LayoutStyle {
     LayoutStyle::new()
@@ -84,7 +81,7 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     let mut input = Input::new(value.clone(), line_box(), move || {
         let c = color();
         TextStyle::new(
-            font_size(),
+            shared::font_size(),
             if c == Color::TRANSPARENT {
                 shared::ink()
             } else {
