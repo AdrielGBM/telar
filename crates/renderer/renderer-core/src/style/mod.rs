@@ -114,6 +114,16 @@ impl TextStyle {
         self
     }
 
+    pub fn with_font_size(mut self, font_size: f32) -> Self {
+        self.font_size = font_size;
+        self
+    }
+
+    pub fn with_paint(mut self, paint: impl Into<Paint>) -> Self {
+        self.paint = paint.into();
+        self
+    }
+
     pub fn with_weight(mut self, weight: u16) -> Self {
         self.weight = weight;
         self

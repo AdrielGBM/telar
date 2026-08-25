@@ -184,7 +184,7 @@ mod tests {
             "the note is not a component call:\n{code}"
         );
         assert_eq!(
-            code.matches("Text::new").count(),
+            code.matches("Text::declaring").count(),
             1,
             "and it adds no widget of its own:\n{code}"
         );
@@ -1790,7 +1790,7 @@ col @card
             "missing hoisted color Animated:\n{code}"
         );
         assert!(
-            code.contains("TextStyle::new(14.0, { __transition_0.retarget(use_theme::<SandboxTheme>().primary()); __transition_0.get() })"),
+            code.contains(".with_paint({ __transition_0.retarget(use_theme::<SandboxTheme>().primary()); __transition_0.get() })"),
             "text color should be wrapped in the transition block:\n{code}"
         );
     }
@@ -1954,7 +1954,7 @@ col @card
             .rust_code;
         assert!(
             code.contains(
-                "{ let accent = accent.clone(); move || TextStyle::new(14.0, accent.get()) }"
+                "{ let accent = accent.clone(); move |__inherited: TextStyle| __inherited.with_paint(accent.get()) }"
             ),
             "text color should reactively read the cloned signal:\n{code}"
         );

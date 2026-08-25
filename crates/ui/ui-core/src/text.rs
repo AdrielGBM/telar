@@ -34,6 +34,12 @@ pub struct Text {
     _remeasure: Option<Effect>,
 }
 
+/// Where a text gets its style: given whole, or derived from what the tree above it declared.
+enum StyleSource {
+    Complete(Rc<dyn Fn() -> TextStyle>),
+    Inheriting(Rc<dyn Fn(TextStyle) -> TextStyle>),
+}
+
 impl Text {
     /// A text leaf whose height is measured from its content at the resolved width, so the box grows to fit
     /// however many lines the text wraps into and pushes following siblings down instead of overflowing.
@@ -46,7 +52,34 @@ impl Text {
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        Self::build(Rc::new(content_fn), None, layout_style, Rc::new(style_fn))
+        Self::build(
+            Rc::new(content_fn),
+            None,
+            layout_style,
+            StyleSource::Complete(Rc::new(style_fn)),
+        )
+    }
+
+    /// A text styled by what the tree above it declared, amended by whatever it says for itself.
+    ///
+    /// The amendment takes the inherited style and returns the final one, rather than naming properties,
+    /// because a leaf has two kinds of thing to say: an override of something inherited (`font_size`) and a
+    /// clamp that could never be inherited (`max_lines`). One closure carries both, and it is the shape a
+    /// caller already amends a `RectStyle` with.
+    ///
+    /// [`new`](Self::new) is the opt-out: passing a whole `TextStyle` is the honest way to say the tree above
+    /// has no business in this one.
+    pub fn declaring(
+        content_fn: impl Fn() -> String + 'static,
+        layout_style: LayoutStyle,
+        style_fn: impl Fn(TextStyle) -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        Self::build(
+            Rc::new(content_fn),
+            None,
+            layout_style,
+            StyleSource::Inheriting(Rc::new(style_fn)),
+        )
     }
 
     /// [`new`](Self::new) with byte ranges that style themselves differently from the paragraph — a bold
@@ -61,7 +94,7 @@ impl Text {
             Rc::new(content_fn),
             Some(Rc::new(spans_fn)),
             layout_style,
-            Rc::new(style_fn),
+            StyleSource::Complete(Rc::new(style_fn)),
         )
     }
 
@@ -69,8 +102,24 @@ impl Text {
         content_fn: Rc<dyn Fn() -> String>,
         spans_fn: Option<Rc<dyn Fn() -> Vec<Span>>>,
         layout_style: LayoutStyle,
-        style: Rc<dyn Fn() -> TextStyle>,
+        source: StyleSource,
     ) -> Result<Self, LayoutError> {
+        // The node does not exist until the leaf is registered, and the measure closure handed to that call already reads the style: a cell filled the moment the node exists lets the style close over a node older than itself.
+        let node_cell = Rc::new(std::cell::Cell::new(None::<layout_core::NodeId>));
+        let style: Rc<dyn Fn() -> TextStyle> = match source {
+            StyleSource::Complete(style_fn) => style_fn,
+            StyleSource::Inheriting(amend) => {
+                let cell = Rc::clone(&node_cell);
+                Rc::new(move || {
+                    let inherited = match cell.get() {
+                        Some(node) => crate::inherit::inherited_text_style(node),
+                        None => crate::inherit::Inherited::initial().text_style(),
+                    };
+                    amend(inherited)
+                })
+            }
+        };
+
         let measure_content = Rc::clone(&content_fn);
         let measure_style = Rc::clone(&style);
         let measure_spans = spans_fn.clone();
@@ -84,6 +133,7 @@ impl Text {
         // Stretch overrides any parent align-items (e.g. center) so text always fills the parent's cross-axis width instead of collapsing to 0.
         let (node, rect) =
             crate::context::new_measured_leaf(layout_style.align_self_stretch(), measure)?;
+        node_cell.set(Some(node));
         // Reads through the measure closure so it subscribes to exactly the signals the measure depends on, and keeps the string it last dirtied for: a signal re-set to its own value would otherwise cost a shaping pass and a relayout of the surface for nothing.
         let dirty_content = Rc::clone(&content_fn);
         let measured = RefCell::new(Option::<String>::None);

@@ -7,17 +7,20 @@
 //! spread across those four places, and everything else is a node saying it wants something different.
 //!
 //! **Resolution is lazy, and that is a decision.** The obvious design resolves top-down in a pass before
-//! layout — but the pass would have to run inside the layout engine, which sits *below* this crate and cannot
-//! name these types. Resolving on read removes the ordering entirely: a style closure that resolves when it
-//! is called is correct whenever it is called, so measurement sees resolved values by construction rather
-//! than by anyone remembering to sequence a pass in front of it. What the eager design bought — one value per
-//! distinct declaration, and a leaf that costs nothing for declarations that are not above it — is kept by
-//! memoizing per node.
+//! layout — but the pass would have to run inside the layout engine, which sits *below* this crate and
+//! cannot name these types. Resolving on read removes the ordering entirely: a style closure that resolves
+//! when it is called is correct whenever it is called, so measurement sees resolved values by construction
+//! rather than by anyone remembering to sequence a pass in front of it.
+//!
+//! What the eager design bought is kept by putting each declaration behind its own signal: a walk reads the
+//! signals of the ancestors that actually declare, so a leaf ends up subscribed to those and nothing else,
+//! and changing one re-runs exactly the leaves beneath it rather than every text on the surface.
 
 use std::rc::Rc;
 
 use layout_core::{Direction, NodeId};
 use platform_core::Cursor;
+use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, Declared, TextStyle};
 use rustc_hash::FxHashMap;
 
@@ -78,89 +81,89 @@ reactive_core::surface_local! {
     context CascadeContext, CascadeGuard;
 }
 
-#[derive(Default)]
 struct Cascade {
-    /// What each node says about its descendants. Empty until markup can declare anything, which is what
-    /// makes every walk below stop at the root on its first hop until then.
-    declared: FxHashMap<NodeId, Declared>,
-    /// The resolved context of every node that has been asked, shared by pointer with every node that
-    /// resolved to the same value.
-    resolved: FxHashMap<NodeId, Rc<Inherited>>,
-    root: Option<Rc<Inherited>>,
+    /// What each declaring node says, behind a signal so reading it *subscribes* the widget that read it.
+    /// Empty until markup can declare anything, which is what makes every walk below cost one map miss per
+    /// ancestor until then.
+    declared: FxHashMap<NodeId, RwSignal<Declared>>,
+    /// Bumped when the *set* of declaring nodes changes, not when one of their values does.
+    ///
+    /// Reading it subscribes every context read to "somebody started or stopped declaring", which is what
+    /// lets a container declare *after* the leaf below it has already rendered — the order a tree is built
+    /// in. A value change does not go through here: it sets that one node's signal, so only the leaves that
+    /// actually read it re-run, which is the property a single global epoch would have thrown away.
+    structure: RwSignal<u64>,
+    root: Rc<Inherited>,
 }
 
-impl Cascade {
-    fn root(&mut self) -> Rc<Inherited> {
-        self.root
-            .get_or_insert_with(|| Rc::new(Inherited::initial()))
-            .clone()
+impl Default for Cascade {
+    fn default() -> Self {
+        Self {
+            declared: FxHashMap::default(),
+            structure: signal(0),
+            root: Rc::new(Inherited::initial()),
+        }
     }
 }
 
 /// Records what `node` says for everything beneath it.
-///
-/// Dropping the whole memo rather than just the affected subtree is deliberate while declarations are rare:
-/// with tens of them in a tree of thousands, walking to find which nodes to invalidate costs more than
-/// letting the next reads re-derive, and a declaration changes at human speed.
 pub fn declare(node: NodeId, declared: Declared) {
-    with_cascade(|c| {
-        if c.declared.get(&node) == Some(&declared) {
-            return;
+    let existing = with_cascade_ref(|c| c.declared.get(&node).cloned());
+    match (existing, declared.is_empty()) {
+        // A value change: only what read this node's signal re-runs.
+        (Some(sig), false) => {
+            if sig.peek() != declared {
+                sig.set(declared);
+            }
         }
-        match declared.is_empty() {
-            true => c.declared.remove(&node),
-            false => c.declared.insert(node, declared),
-        };
-        c.resolved.clear();
-    });
+        (Some(_), true) => undeclare(node),
+        (None, false) => {
+            let structure = with_cascade(|c| {
+                c.declared.insert(node, signal(declared));
+                c.structure.clone()
+            });
+            structure.set(structure.peek().wrapping_add(1));
+        }
+        (None, true) => {}
+    }
 }
 
-/// Forgets what `node` declared, for a node leaving the tree.
+/// Forgets what `node` declared, for a node leaving the tree or stopping.
 pub fn undeclare(node: NodeId) {
-    with_cascade(|c| {
-        if c.declared.remove(&node).is_some() {
-            c.resolved.clear();
-        }
-        c.resolved.remove(&node);
-    });
+    let structure = with_cascade(|c| c.declared.remove(&node).map(|_| c.structure.clone()));
+    if let Some(structure) = structure {
+        structure.set(structure.peek().wrapping_add(1));
+    }
 }
 
 /// The context in force at `node` — everything its ancestors declared, merged in tree order.
 ///
-/// Walks up to the nearest already-resolved ancestor (the root, until something declares) and folds back down
-/// through whatever declared on the way, memoizing each node it passes. The `Rc` is shared with every node
-/// that resolved to the same value, so a tree of thousands holds one pointer each and one `Inherited` per
-/// distinct declaration.
+/// Walks to the root, reading each declaring ancestor's signal on the way, so the caller ends up subscribed
+/// to exactly the declarations that are actually above it and to nothing else. A tree where nothing declares
+/// — every tree, until markup can — walks a handful of map misses and returns the one shared root value
+/// without allocating.
 pub fn context(node: NodeId) -> Rc<Inherited> {
-    // The ancestors with no memo yet, nearest first; the fold below runs them in reverse so a nearer
-    // declaration is applied last and wins.
-    let mut pending: Vec<NodeId> = Vec::new();
+    let (structure, root) = with_cascade_ref(|c| (c.structure.clone(), Rc::clone(&c.root)));
+    // A node that declares nothing has no signal to read, and it is exactly that node that may start.
+    let _ = structure.get();
+
+    let mut chain: Vec<Declared> = Vec::new();
     let mut at = Some(node);
     while let Some(current) = at {
-        if let Some(found) = with_cascade_ref(|c| c.resolved.get(&current).cloned()) {
-            return fold_down(found, pending);
+        if let Some(sig) = with_cascade_ref(|c| c.declared.get(&current).cloned()) {
+            chain.push(sig.get());
         }
-        pending.push(current);
         at = layout_reactive::parent(current);
     }
-    let root = with_cascade(|c| c.root());
-    fold_down(root, pending)
-}
-
-fn fold_down(base: Rc<Inherited>, pending: Vec<NodeId>) -> Rc<Inherited> {
-    if pending.is_empty() {
-        return base;
+    if chain.is_empty() {
+        return root;
     }
-    with_cascade(|c| {
-        let mut resolved = base;
-        for ancestor in pending.into_iter().rev() {
-            if let Some(declared) = c.declared.get(&ancestor) {
-                resolved = Rc::new(resolved.with(declared));
-            }
-            c.resolved.insert(ancestor, resolved.clone());
-        }
-        resolved
-    })
+    // Nearest last, so it is applied last and wins.
+    let mut resolved = (*root).clone();
+    for declared in chain.into_iter().rev() {
+        resolved = resolved.with(&declared);
+    }
+    Rc::new(resolved)
 }
 
 /// The text style a leaf at `node` inherits, before anything it declares itself.

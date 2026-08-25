@@ -4,6 +4,19 @@ use reactive_core::{RwSignal, batch, signal};
 use rustc_hash::FxHashMap;
 
 reactive_core::surface_local! {
+    /// Which node each node hangs from — the tree's *shape*, kept in its own world rather than inside
+    /// [`LAYOUT_RUNTIME`].
+    ///
+    /// It sits apart because of who has to read it and when: a measure closure runs *inside* the layout
+    /// runtime's own borrow, and anything it reaches for that lives in that borrow is a re-entry. Text
+    /// measured against a style its ancestors declared is exactly that reach, and the links it needs are
+    /// structure, not layout state — nothing in a layout pass moves them.
+    slot PARENTS: FxHashMap<NodeId, NodeId> = FxHashMap::default();
+    access with_parents, with_parents_ref;
+    context ParentsContext, ParentsGuard;
+}
+
+reactive_core::surface_local! {
     /// A per-surface layout tree: the taffy engine plus the node→rect-signal registry. The layout tree is
     /// a per-surface world so nodes can be created and laid out from anywhere — including reactive effects
     /// (reactive lists) that fire from an effect body. Under M3 several surfaces share one UI thread, so the
@@ -18,6 +31,7 @@ reactive_core::surface_local! {
 /// calls this at construction; a multi-surface runner instead gives each surface its own [`LayoutContext`].
 pub fn reset_layout_runtime() {
     with_runtime(|rt| *rt = LayoutRuntime::new());
+    with_parents(|p| p.clear());
 }
 
 pub fn new_leaf(style: LayoutStyle) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
@@ -105,7 +119,7 @@ pub fn absolute_rect(node: NodeId) -> Option<Rect> {
 /// than where the compositor draws it. That is the link a cascade has to follow — CSS inherits through the
 /// document, not through the stacking context — and it is the same one [`is_hidden`] already climbs.
 pub fn parent(node: NodeId) -> Option<NodeId> {
-    with_runtime(|rt| rt.parents.get(&node).copied())
+    with_parents_ref(|p| p.get(&node).copied())
 }
 
 /// Whether `node` is `ancestor` or sits anywhere beneath it. Follows the parent links the runtime records, so
@@ -222,7 +236,7 @@ pub fn attach_overlay(node: NodeId) -> bool {
         if rt.engine.add_child(host, node).is_err() {
             return false;
         }
-        rt.parents.insert(node, host);
+        with_parents(|p| p.insert(node, host));
         rt.engine.mark_dirty(host).ok();
         true
     })
@@ -235,7 +249,7 @@ pub fn detach_overlay(node: NodeId) {
         // Remove from the host the overlay actually attached to (recorded in `parents` at attach), NOT the
         // current `overlay_host`: auto-detection may have moved the host to another root (e.g. a nested
         // scroll's content root) since attach, and taffy panics if `node` is not a child of the node removed.
-        if let Some(host) = rt.parents.remove(&node) {
+        if let Some(host) = with_parents(|p| p.remove(&node)) {
             rt.engine.remove_child(host, node).ok();
             rt.engine.mark_dirty(host).ok();
         }
@@ -245,7 +259,6 @@ pub fn detach_overlay(node: NodeId) {
 struct LayoutRuntime {
     engine: LayoutEngine,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
-    parents: FxHashMap<NodeId, NodeId>,
     boundary_nodes: FxHashMap<NodeId, (f32, f32)>,
     // Available space each root was last computed against, so compute_layout can re-run when only the space changed (e.g. a window resize) even though the node itself is clean. Without this, resizing an independently-computed root is silently a no-op and its layout freezes at the first size.
     last_space: FxHashMap<NodeId, (AvailableSpace, AvailableSpace)>,
@@ -277,7 +290,6 @@ impl LayoutRuntime {
         Self {
             engine: LayoutEngine::new(),
             registry: FxHashMap::default(),
-            parents: FxHashMap::default(),
             boundary_nodes: FxHashMap::default(),
             last_space: FxHashMap::default(),
             constrained: Vec::new(),
@@ -331,7 +343,7 @@ impl LayoutRuntime {
         let signal = signal(Rect::default());
         self.registry.insert(node, signal);
         for &child in children {
-            self.parents.insert(child, node);
+            with_parents(|p| p.insert(child, node));
         }
         if let Some(dimensions) = self.engine.is_fixed_size(node) {
             self.boundary_nodes.insert(node, dimensions);
@@ -353,7 +365,7 @@ impl LayoutRuntime {
         // content, computed with `MaxContent`) must NOT become the host, or a portal declared inside a scroll
         // would attach to that scroll and be torn down (and mis-detached) with it.
         if !self.host_pinned
-            && !self.parents.contains_key(&root)
+            && with_parents_ref(|p| !p.contains_key(&root))
             && matches!(height, AvailableSpace::Definite(_))
         {
             self.overlay_host = Some(root);
@@ -456,7 +468,7 @@ impl LayoutRuntime {
         let mut updates: Vec<(RwSignal<Rect>, Rect)> = Vec::new();
         // Only a full walk of a parent-less root runs from the window origin, so only then are the walked
         // rects window-absolute. A sub-boundary or sub-root walk is root-local — don't capture those.
-        let is_window_walk = layout_root == root && !self.parents.contains_key(&root);
+        let is_window_walk = layout_root == root && with_parents_ref(|p| !p.contains_key(&root));
         let mut abs_updates: Vec<(NodeId, f32, f32)> = Vec::new();
         let registry = &self.registry;
         let walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
@@ -509,7 +521,7 @@ impl LayoutRuntime {
             if let Some(&(w, h)) = self.boundary_nodes.get(&node) {
                 return Some((node, w, h));
             }
-            node = *self.parents.get(&node)?;
+            node = with_parents_ref(|p| p.get(&node).copied())?;
         }
     }
 
@@ -518,8 +530,8 @@ impl LayoutRuntime {
             if self.engine.is_display_none(node) {
                 return true;
             }
-            match self.parents.get(&node) {
-                Some(&parent) => node = parent,
+            match with_parents_ref(|p| p.get(&node).copied()) {
+                Some(parent) => node = parent,
                 None => return false,
             }
         }
@@ -530,8 +542,8 @@ impl LayoutRuntime {
             if node == ancestor {
                 return true;
             }
-            match self.parents.get(&node) {
-                Some(&parent) => node = parent,
+            match with_parents_ref(|p| p.get(&node).copied()) {
+                Some(parent) => node = parent,
                 None => return false,
             }
         }
@@ -544,7 +556,7 @@ impl LayoutRuntime {
     fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
         self.engine.set_children(parent, children)?;
         for &child in children {
-            self.parents.insert(child, parent);
+            with_parents(|p| p.insert(child, parent));
         }
         self.engine.mark_dirty(parent).ok();
         Ok(())
@@ -553,7 +565,7 @@ impl LayoutRuntime {
     fn remove_node(&mut self, node: NodeId) {
         self.engine.remove(node);
         self.registry.remove(&node);
-        self.parents.remove(&node);
+        with_parents(|p| p.remove(&node));
         self.boundary_nodes.remove(&node);
         self.last_space.remove(&node);
         self.root_auto.remove(&node);

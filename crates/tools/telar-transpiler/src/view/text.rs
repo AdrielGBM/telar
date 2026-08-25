@@ -11,8 +11,8 @@ use crate::style::{PropCall, format_f32, layout_prop_call};
 use super::signals::{captured_idents, emit_transition_prelude, rust_str, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen};
 
-/// The type size a `text` takes when it names none, baked at transpile time. §1.4 of the styles plan is
-/// about this number; step 6's inheritance is what replaces it with one the root can set.
+/// The size a `size:` value falls back to when it cannot be resolved. A `text` naming no size takes the
+/// inherited one instead, so this only ever stands in for a value already reported as an error.
 const DEFAULT_SIZE: &str = "14.0";
 
 impl ViewGen<'_> {
@@ -81,7 +81,7 @@ impl ViewGen<'_> {
             "{pad}let {var} = {{\n\
              {clones}\
              {prelude}\
-             {pad}    Text::new(\n\
+             {pad}    Text::declaring(\n\
              {pad}        {content_fn},\n\
              {pad}        {layout_style},\n\
              {pad}        {style},\n\
@@ -196,21 +196,23 @@ impl ViewGen<'_> {
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
     ) -> String {
-        let size = attrs
-            .iter()
-            .find(|a| a.key == "size")
-            .map(|a| self.scope().number_or(a.value.text(), DEFAULT_SIZE))
-            .unwrap_or_else(|| DEFAULT_SIZE.to_string());
-        let color_attr = attrs.iter().find(|a| a.key == "color");
-        let mut color = color_attr
-            .map(|a| self.color_expr(a.value.text()))
-            .unwrap_or_else(|| "Color::BLACK".to_string());
-        if let Some(curve) = transitions.get("color") {
-            color = self.wrap_transition(curve, &color, hoists);
-        }
-
-        // Rich-text modifiers: weight (keyword or numeric), italic (flag or bool), align (keyword).
+        // `size:` and `color:` amend what the tree declared rather than building a style from nothing. Each used to bake a literal here, which is why "make the body text 11px" was not a thing a theme could say.
         let mut modifiers = String::new();
+        if let Some(size) = attrs.iter().find(|a| a.key == "size") {
+            let _ = write!(
+                modifiers,
+                ".with_font_size({})",
+                self.scope().number_or(size.value.text(), DEFAULT_SIZE)
+            );
+        }
+        let color_attr = attrs.iter().find(|a| a.key == "color");
+        if let Some(a) = color_attr {
+            let mut color = self.color_expr(a.value.text());
+            if let Some(curve) = transitions.get("color") {
+                color = self.wrap_transition(curve, &color, hoists);
+            }
+            let _ = write!(modifiers, ".with_paint({color})");
+        }
         // A bare flag (`italic`) is the assertion itself; `italic:true` says the same thing the long way, and anything else — `italic:false` most of all — leaves the default alone.
         let asserted = |key: &str| {
             attrs
@@ -274,7 +276,7 @@ impl ViewGen<'_> {
             modifiers.push_str(&format!(".with_raster({variant})"));
         }
 
-        let closure = format!("move || TextStyle::new({size}, {color}){modifiers}");
+        let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
         // `color_attr`'s raw value (not `color`, already substituted by `color_expr`) is scanned for `$ident` so a signal-backed color clones itself into this closure, leaving the outer binding usable by sibling widgets.
         let raw_color = color_attr.map(|a| a.value.text()).unwrap_or("");
         wrap_signal_clones(&[raw_color], closure)

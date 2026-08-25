@@ -154,3 +154,71 @@ fn the_markup_default_and_the_catalogue_default_are_two_different_numbers() {
         markup.font_size
     );
 }
+
+/// The headline case, and the one nothing could express before: an ancestor that draws no text of its own
+/// says what the text beneath it looks like. Asserted through a real frame rather than the cascade's own unit
+/// tests, because the thing being checked is that a `Text` built the ordinary way actually reads it — and
+/// re-reads it, since the declaration lands *after* the leaf has already rendered once, which is the order a
+/// tree is built in.
+#[test]
+fn a_container_can_say_what_the_text_below_it_looks_like() {
+    telar::install_default_text_metrics();
+
+    struct Root(Box<dyn LayoutItem>);
+    impl Component for Root {
+        fn view(&self) -> RenderNode {
+            self.0.view()
+        }
+        fn on_event(&mut self, _: &platform_core::Event) -> ui_core::EventResult {
+            ui_core::EventResult::Ignored
+        }
+        fn debug_name(&self) -> &'static str {
+            "DeclaringRoot"
+        }
+    }
+
+    let leaf = Text::declaring(|| "inherits".to_string(), LayoutStyle::new(), |t| t).unwrap();
+    let outer = Container::new(LayoutStyle::new().flex_column(), vec![box_item(leaf)]).unwrap();
+    let outer_node = outer.layout_node();
+    ui_core::declare(
+        outer_node,
+        telar::Declared::default()
+            .with_font_size(11.0)
+            .with_weight(700),
+    );
+
+    let tree = mount(Root(box_item(outer)), 400, 200);
+    let drawn = |tree: &ui_core::ComponentList| {
+        tree.commands()
+            .iter()
+            .find_map(|c| match c {
+                DrawCommand::Text { style, .. } => Some((**style).clone()),
+                _ => None,
+            })
+            .expect("the tree drew a text command")
+    };
+
+    let style = drawn(&tree);
+    assert_eq!(style.font_size, 11.0, "the leaf takes the declared size");
+    assert_eq!(style.weight, 700, "and the declared weight");
+    assert_eq!(
+        style.raster,
+        telar::GlyphRaster::Smooth,
+        "and keeps the initial value of everything the declaration did not name"
+    );
+
+    // A changed declaration has to reach the leaf too, or a theme switch would resolve right and never repaint.
+    ui_core::declare(outer_node, telar::Declared::default().with_font_size(9.0));
+    assert_eq!(
+        drawn(&tree).font_size,
+        9.0,
+        "a changed declaration repaints"
+    );
+
+    ui_core::undeclare(outer_node);
+    assert_eq!(
+        drawn(&tree).font_size,
+        14.0,
+        "and withdrawing it returns the leaf to the initial row"
+    );
+}
