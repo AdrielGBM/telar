@@ -40,23 +40,23 @@ fn resolved(build: impl FnOnce() -> Box<dyn LayoutItem>) -> TextStyle {
     style.expect("the tree drew a text command")
 }
 
-/// Every field of a `TextStyle` nobody has said anything about. This is the row `Inherited::initial()` has to
-/// reproduce, and the one an application declaring nothing renders against.
+/// Every field of a `TextStyle` nobody has said anything about — resolved through the cascade, so this is
+/// `Inherited::initial()` itself and not a copy of it written out beside it.
+///
+/// The ink is the theme's rather than black: the initial row *is* the theme's answers now, and the built-in
+/// answer for ink follows the light/dark mode. A text that used to be black on a dark page is the bug that
+/// closes.
 #[test]
 fn an_undeclared_text_style_resolves_to_these_exact_values() {
     let style = resolved(|| {
-        box_item(
-            Text::new(
-                || "baseline".to_string(),
-                LayoutStyle::new(),
-                || TextStyle::new(14.0, Color::BLACK),
-            )
-            .unwrap(),
-        )
+        box_item(Text::declaring(|| "baseline".to_string(), LayoutStyle::new(), |t| t).unwrap())
     });
 
     assert_eq!(style.font_size, 14.0);
-    assert_eq!(style.color, telar::Paint::Solid(Color::BLACK));
+    assert_eq!(
+        style.color,
+        telar::Paint::Solid(Color::rgba(0.15, 0.15, 0.2, 1.0))
+    );
     assert_eq!(style.font_family, FontFamily::SansSerif);
     assert_eq!(style.font_weight, 400);
     assert_eq!(style.font_style, telar::FontStyle::Normal);
@@ -105,12 +105,7 @@ fn a_declared_text_style_reaches_the_draw_command_intact() {
 #[test]
 fn nesting_changes_nothing_about_a_text_style() {
     let style = resolved(|| {
-        let leaf = Text::new(
-            || "nested".to_string(),
-            LayoutStyle::new(),
-            || TextStyle::new(14.0, Color::BLACK),
-        )
-        .unwrap();
+        let leaf = Text::declaring(|| "nested".to_string(), LayoutStyle::new(), |t| t).unwrap();
         let inner = Container::new(LayoutStyle::new().flex_column(), vec![box_item(leaf)]).unwrap();
         let outer =
             Container::new(LayoutStyle::new().flex_column(), vec![box_item(inner)]).unwrap();
@@ -123,34 +118,40 @@ fn nesting_changes_nothing_about_a_text_style() {
     assert_eq!(style.raster, Raster::Smooth);
 }
 
-/// The §1.4 split, pinned so the fix is visible when it happens: a `.rsx` `text` bakes `14.0` at transpile
-/// time while the catalogue derives its size from the theme, so a control's label and a plain label beside it
-/// are two different sizes with nothing naming the difference. Both numbers are recorded here; the step that
-/// gives a theme one place to say "body text is 11px" is the step that makes this assertion wrong on purpose.
+/// The §1.4 split, closed: a `text` naming no size and a catalogue widget now read the same number, because
+/// there is only one — the theme's, at the root of the tree. This test used to assert that they *differed*,
+/// and the assertion it makes now is the whole point of the inheritance work.
+///
+/// A theme is registered rather than relying on the built-in row, so a size nobody could have baked is the one
+/// both paths have to arrive at.
 #[test]
-fn the_markup_default_and_the_catalogue_default_are_two_different_numbers() {
-    let markup = resolved(|| {
-        box_item(
-            Text::new(
-                || "label".to_string(),
-                LayoutStyle::new(),
-                || TextStyle::new(14.0, Color::BLACK),
-            )
-            .unwrap(),
-        )
-    });
-    assert_eq!(
-        markup.font_size, 14.0,
-        "the transpiler bakes this literal into every `text` with no `size:`"
-    );
+fn the_markup_default_and_the_catalogue_default_are_one_number() {
+    #[derive(Clone)]
+    struct Eleven;
+    impl telar::ThemeTokens for Eleven {
+        fn font_size(&self) -> f32 {
+            11.0
+        }
+    }
+    /// Answers nothing, so it puts the built-in row back for whatever test shares this thread.
+    #[derive(Clone)]
+    struct Silent;
+    impl telar::ThemeTokens for Silent {}
 
-    // The catalogue's own base, times the ratio `text_field` applies to it. Read through the same public
-    // surface an application would, so the day a theme can set it, this stops matching and says so.
-    let catalogue = 14.0_f32 * 1.07;
-    assert!(
-        (catalogue - markup.font_size).abs() > 0.5,
-        "the two defaults are supposed to differ today: {catalogue} vs {}",
-        markup.font_size
+    telar::set_theme(Eleven);
+    let markup = resolved(|| {
+        box_item(Text::declaring(|| "label".to_string(), LayoutStyle::new(), |t| t).unwrap())
+    });
+    let catalogue = telar::Inherited::initial().text.font_size;
+    telar::set_theme(Silent);
+
+    assert_eq!(
+        markup.font_size, 11.0,
+        "a `text` naming no size takes the theme's"
+    );
+    assert_eq!(
+        catalogue, markup.font_size,
+        "and it is the same row the catalogue resolves against"
     );
 }
 
@@ -179,7 +180,7 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
     let leaf = Text::declaring(|| "inherits".to_string(), LayoutStyle::new(), |t| t).unwrap();
     let outer = Container::new(LayoutStyle::new().flex_column(), vec![box_item(leaf)]).unwrap();
     let outer_node = outer.layout_node();
-    ui_core::declare(
+    telar::declare(
         outer_node,
         telar::Declared::default()
             .with_font_size(11.0)
@@ -214,10 +215,10 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
         "a changed declaration repaints"
     );
 
-    ui_core::undeclare(outer_node);
+    telar::undeclare(outer_node);
     assert_eq!(
         drawn(&tree).font_size,
-        14.0,
+        telar::Inherited::initial().text.font_size,
         "and withdrawing it returns the leaf to the initial row"
     );
 }

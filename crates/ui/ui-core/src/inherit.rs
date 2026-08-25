@@ -21,12 +21,9 @@ use std::rc::Rc;
 use layout_core::{Direction, NodeId};
 use platform_core::Cursor;
 use reactive_core::{RwSignal, signal};
-use renderer_core::{Color, Declared, TextStyle};
+use renderer_core::{Declared, TextStyle};
 use rustc_hash::FxHashMap;
-
-/// The size a text takes when nothing above it says otherwise — the literal the transpiler used to bake into
-/// every `text` with no `size:`, now somewhere a root can set it.
-pub const DEFAULT_FONT_SIZE: f32 = 14.0;
+use theme_core::{ThemeTokens, use_theme_tokens};
 
 /// Everything a node passes to its descendants.
 ///
@@ -46,8 +43,18 @@ impl Inherited {
     /// of four. `telar/tests/text_style_baseline.rs` asserts each of these against a real frame, so moving one
     /// is a decision rather than an accident.
     pub fn initial() -> Self {
+        Self::from_tokens(&*use_theme_tokens())
+    }
+
+    /// The row `tokens` puts at the root of the tree.
+    ///
+    /// This is what makes a theme able to *set a property* rather than only supply a value: "the body text is
+    /// 11px" stops being something every leaf has to be told and becomes one answer at the top. It is also
+    /// where the size a `text` takes when nobody says otherwise now lives — a constant here and a token there
+    /// were two numbers that happened to agree, and setting the theme moved only one of them.
+    pub fn from_tokens(tokens: &dyn ThemeTokens) -> Self {
         Self {
-            text: TextStyle::new(DEFAULT_FONT_SIZE, Color::rgba(0.0, 0.0, 0.0, 1.0)),
+            text: TextStyle::new(tokens.font_size(), tokens.ink()),
             cursor: Cursor::Default,
             direction: Direction::Ltr,
         }
@@ -93,6 +100,9 @@ struct Cascade {
     /// in. A value change does not go through here: it sets that one node's signal, so only the leaves that
     /// actually read it re-run, which is the property a single global epoch would have thrown away.
     structure: RwSignal<u64>,
+    /// The last row the theme resolved to, kept so nodes that resolve to the same value share it rather than
+    /// each holding a copy. Replaced only when the value actually differs — a theme swap and a light/dark
+    /// flip both change it, and neither is something the cascade can be told about.
     root: Rc<Inherited>,
 }
 
@@ -143,7 +153,8 @@ pub fn undeclare(node: NodeId) {
 /// — every tree, until markup can — walks a handful of map misses and returns the one shared root value
 /// without allocating.
 pub fn context(node: NodeId) -> Rc<Inherited> {
-    let (structure, root) = with_cascade_ref(|c| (c.structure.clone(), Rc::clone(&c.root)));
+    let root = root();
+    let structure = with_cascade_ref(|c| c.structure.clone());
     // A node that declares nothing has no signal to read, and it is exactly that node that may start.
     let _ = structure.get();
 
@@ -164,6 +175,22 @@ pub fn context(node: NodeId) -> Rc<Inherited> {
         resolved = resolved.with(&declared);
     }
     Rc::new(resolved)
+}
+
+/// The row the theme puts at the top of the tree.
+///
+/// Resolved on read for the same reason the rest of the cascade is: the theme is a signal, so reading it here
+/// subscribes whatever asked, and a mode switch repaints exactly the text that took a colour from it. The
+/// value is compared rather than the theme handle, because the built-in answers follow the light/dark mode
+/// without the handle ever changing.
+fn root() -> Rc<Inherited> {
+    let resolved = Inherited::initial();
+    with_cascade(|c| {
+        if *c.root != resolved {
+            c.root = Rc::new(resolved);
+        }
+        Rc::clone(&c.root)
+    })
 }
 
 /// The text style a leaf at `node` inherits, before anything it declares itself.
@@ -237,6 +264,35 @@ mod tests {
         assert_eq!(at_leaf.text.font_size, 22.0);
     }
 
+    /// The reason the root is not a constant: a theme saying "the body text is 11px" says it once, at the
+    /// top, instead of every leaf having to be told.
+    #[test]
+    fn the_theme_is_what_sits_at_the_root() {
+        #[derive(Clone)]
+        struct Small;
+        impl ThemeTokens for Small {
+            fn font_size(&self) -> f32 {
+                11.0
+            }
+        }
+
+        /// Answers nothing, so it restores the built-in row — and swapping back is the other half of what is
+        /// being tested, since a root cached against a stale theme would keep serving 11.
+        #[derive(Clone)]
+        struct Silent;
+        impl ThemeTokens for Silent {}
+
+        let (_, _, leaf) = tree();
+        let built_in = context(leaf).text.font_size;
+        assert_ne!(built_in, 11.0, "the built-in row is not already 11");
+
+        theme_core::set_theme(Small);
+        assert_eq!(context(leaf).text.font_size, 11.0);
+
+        theme_core::set_theme(Silent);
+        assert_eq!(context(leaf).text.font_size, built_in);
+    }
+
     /// A memo that outlived the declaration it came from would serve the old value forever, which is the one
     /// way lazy resolution can be wrong.
     #[test]
@@ -247,6 +303,9 @@ mod tests {
         declare(outer, Declared::default().with_font_size(9.0));
         assert_eq!(context(leaf).text.font_size, 9.0);
         declare(outer, Declared::default());
-        assert_eq!(context(leaf).text.font_size, DEFAULT_FONT_SIZE);
+        assert_eq!(
+            context(leaf).text.font_size,
+            Inherited::initial().text.font_size
+        );
     }
 }
