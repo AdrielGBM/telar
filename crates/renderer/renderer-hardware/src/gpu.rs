@@ -90,6 +90,30 @@ pub fn image(view: wgpu::TextureView, id: u64, width: u32, height: u32) -> Image
     ImageData::external(Arc::new(AppTexture { view }), id, width, height)
 }
 
+/// Held while submitting work to the shared queue.
+///
+/// **An application drawing its own content on the lent device has to take this**, and the reason is not
+/// Telar's at all: reconfiguring a surface waits for the queue to drain and then checks that it *stayed*
+/// drained, so a submission that lands during the wait fails the reconfigure outright. `wgpu_core` says as
+/// much where it gives up — the queue "can only be non-empty if another thread is submitting at the same
+/// time" — and the thread doing that is the application, because a resize is handled on Telar's.
+///
+/// Shared, so any number of submitters run at once and only a rebuild excludes them: this is the same lock
+/// every window already takes to advance its own swapchain, and an application composing into Telar's frame
+/// is one more party on the one device.
+///
+/// **Take it around the submission and nothing else.** Held across a frame it deadlocks, for the reason the
+/// windows have their own rule about: a path that reconfigures while a read guard is alive waits on itself.
+///
+/// ```no_run
+/// # let (queue, encoder): (telar::gpu::wgpu::Queue, telar::gpu::wgpu::CommandEncoder) = unimplemented!();
+/// let _busy = telar::gpu::submitting();
+/// queue.submit([encoder.finish()]);
+/// ```
+pub fn submitting() -> std::sync::RwLockReadGuard<'static, ()> {
+    crate::renderer::swapchain_lock()
+}
+
 /// The GPU objects Telar is drawing with, or `None` before its first renderer exists.
 ///
 /// **Not reliably available from [`App::mount`]**, which is the tempting reading and is wrong: the hardware

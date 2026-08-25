@@ -233,7 +233,7 @@ pub(crate) static SHARED_GPU: std::sync::OnceLock<SharedGpu> = std::sync::OnceLo
 static SWAPCHAIN: std::sync::RwLock<()> = std::sync::RwLock::new(());
 
 /// Held while a swapchain is advanced — acquired or presented. Shared: any number of windows at once.
-pub(crate) fn swapchain_lock() -> std::sync::RwLockReadGuard<'static, ()> {
+pub fn swapchain_lock() -> std::sync::RwLockReadGuard<'static, ()> {
     SWAPCHAIN
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
