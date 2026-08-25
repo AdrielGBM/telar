@@ -13,22 +13,24 @@ use super::signals::{
 };
 
 impl ViewGen<'_> {
-    /// The effective paint attributes for an element: its inline attrs followed by the paint props of its
-    /// classes. Inline wins (the paint helpers take the first `.find()` match, and inline attrs come first);
-    /// among multiple classes a later one overrides an earlier one, so classes are appended in REVERSE order
-    /// (the last class's props land ahead of the first's and win the `.find()`).
-    pub(super) fn paint_attrs(&self, el: &Element) -> Vec<Attr> {
+    /// Every attribute in force on an element: its inline attrs followed by its classes' props.
+    ///
+    /// Inline wins, because every reader takes the first `.find()` match and inline attrs come first; among
+    /// several classes a later one overrides an earlier one, so classes are appended in REVERSE order and the
+    /// last class's props land ahead of the first's.
+    ///
+    /// A class carries whatever it was written with. It used to be gated to the paint keys, which is why
+    /// `@heading { font_size: 22 }` compiled and did nothing at all.
+    pub(super) fn effective_attrs(&self, el: &Element) -> Vec<Attr> {
         let mut attrs = el.attributes.clone();
         for name in el.classes.iter().rev() {
             if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
                 for prop in &class.props {
-                    if is_paint_key(&prop.key) {
-                        attrs.push(Attr {
-                            key: prop.key.clone(),
-                            value: Value::Bare(prop.value.clone()),
-                            value_start: 0,
-                        });
-                    }
+                    attrs.push(Attr {
+                        key: prop.key.clone(),
+                        value: Value::Bare(prop.value.clone()),
+                        value_start: 0,
+                    });
                 }
             }
         }
@@ -252,10 +254,10 @@ impl ViewGen<'_> {
             return (specs, errors);
         }
         // No loop-depth gate: a `for` here is a construction loop that runs once per component instance, so the `Animated` hoisted per iteration is already a distinct, persistent handle (see `emit_for`) — identity-by-key would only matter if loops ever gained reactive reconciliation.
-        // A `fill`/`stroke`/`opacity` value may come from the element's class, not only an inline attribute (see `paint_attrs`); a `color` is always inline.
-        let pattrs = self.paint_attrs(el);
+        // A `fill`/`stroke`/`opacity` value may come from the element's class, not only an inline attribute (see `effective_attrs`).
+        let attrs = self.effective_attrs(el);
         let has_value = |prop: &str| {
-            el.attributes.iter().any(|a| a.key == prop) || pattrs.iter().any(|a| a.key == prop)
+            el.attributes.iter().any(|a| a.key == prop) || attrs.iter().any(|a| a.key == prop)
         };
         for attr in el.attributes.iter().filter(|a| a.key == "transition") {
             let (parsed, errs) = crate::transition::parse_transition_value(attr.value.text());

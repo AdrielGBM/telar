@@ -88,10 +88,10 @@ impl ViewGen<'_> {
             .find(|a| a.key == "on_press")
             .is_some_and(|a| !a.value.is_closure());
 
-        let pattrs = self.paint_attrs(el);
-        let hover_call = self.state_style_call(el, "hover_style", "hover_style", &pattrs);
-        let active_call = self.state_style_call(el, "active_style", "active_style", &pattrs);
-        let disabled_call = self.state_style_call(el, "disabled_style", "disabled_style", &pattrs);
+        let attrs = self.effective_attrs(el);
+        let hover_call = self.state_style_call(el, "hover_style", "hover_style", &attrs);
+        let active_call = self.state_style_call(el, "active_style", "active_style", &attrs);
+        let disabled_call = self.state_style_call(el, "disabled_style", "disabled_style", &attrs);
         let disabled = self.disabled_call(el);
         let focus_ring = self.state_style_call(el, "focus_style", "focus_style", &[]);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
@@ -109,15 +109,15 @@ impl ViewGen<'_> {
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
         // What this container says about the text below it. A `col font_size:11` draws no text of its own —
         // it names the size everything under it starts from, the way `body { font-size }` does.
-        let declaring = self.declaring_call(&el.attributes, &transitions, &mut hoists);
+        let declaring = self.declaring_call(&attrs, &transitions, &mut hoists);
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded here because its closure form wires on a plain Container too — `on_press_forwarded` above covers the other case. `box` (`always_style`) skips the check.
         let styling = format!(
             "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}"
         );
         let pieces =
-            if always_style || has_paint(&pattrs) || !styling.is_empty() || on_press_forwarded {
-                Some(self.rect_style_pieces(&pattrs, &transitions, &mut hoists))
+            if always_style || has_paint(&attrs) || !styling.is_empty() || on_press_forwarded {
+                Some(self.rect_style_pieces(&attrs, &transitions, &mut hoists))
             } else {
                 None
             };

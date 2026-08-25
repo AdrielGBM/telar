@@ -28,10 +28,14 @@ impl ViewGen<'_> {
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
-        let style = self.text_style(&el.attributes, &transitions, &mut hoists);
+        // A `text @caption` takes the class's properties too — its size and its colour as much as its width.
+        // The class used to reach a container and stop there, so `@heading { font_size: 22 }` compiled and
+        // did nothing at all.
+        let attrs = self.effective_attrs(el);
+        let style = self.text_style(&attrs, &transitions, &mut hoists);
 
         let mut extra = String::new();
-        for a in &el.attributes {
+        for a in &attrs {
             if matches!(
                 a.key.as_str(),
                 "font_size"
@@ -55,8 +59,7 @@ impl ViewGen<'_> {
             }
         }
         // A leaf measures its own height from the wrapped content, so multi-line text reserves real space; an explicit `height:` pins the box over that, which is all the second constructor ever did.
-        let explicit_height = el
-            .attributes
+        let explicit_height = attrs
             .iter()
             .find(|a| a.key == "height")
             .and_then(

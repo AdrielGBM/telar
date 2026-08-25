@@ -163,6 +163,14 @@ fn generate_constant(c: &StyleConstant) -> String {
     format!("#[allow(dead_code)]\nconst {name}: {ty} = {value};")
 }
 
+/// What a class may carry beyond the layout keys: what a box paints with, and what flows down to the text
+/// below it. Anything else is a typo, and used to be dropped on the floor.
+fn is_style_key(key: &str) -> bool {
+    crate::view::is_paint_key(key)
+        || crate::registry::INHERITABLE_TEXT_KEYS.contains(&key)
+        || matches!(key, "lines" | "ellipsis")
+}
+
 fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
     let mut out = String::new();
     // A class property has no element and so no attribute line; naming the class is what locates it.
@@ -173,7 +181,7 @@ fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
     for prop in &class.props {
         let message = match layout_prop_call(&prop.key, &prop.value, scope) {
             PropCall::Invalid(message) => Some(message),
-            PropCall::Other if !crate::view::is_paint_key(&prop.key) => {
+            PropCall::Other if !is_style_key(&prop.key) => {
                 Some(format!("`{}` is not a style property", prop.key))
             }
             _ => None,

@@ -1955,6 +1955,45 @@ mod tests {
         assert!(out.rust_code.contains("is not a value of `align`"));
     }
 
+    /// `@heading { font_size: 22 }` used to compile and do nothing: a class reached a container's paint and a
+    /// container's layout, and a `text` never looked at its classes at all.
+    #[test]
+    fn a_class_carries_text_properties_to_a_text() {
+        let src = "[style]\n@heading\n    font_size: 22\n    color: #ff0000\n\n[view]\ntext \"x\" @heading\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(!code.contains("compile_error!"), "{code}");
+        assert!(
+            code.contains(".with_font_size(22.0)") && code.contains(".with_color("),
+            "the class's size and colour reach the leaf:\n{code}"
+        );
+    }
+
+    /// An inline attribute is nearer than the class it sits beside, and wins.
+    #[test]
+    fn an_inline_attribute_beats_the_class_beside_it() {
+        let src =
+            "[style]\n@heading\n    font_size: 22\n\n[view]\ntext \"x\" @heading font_size:11\n";
+        let code = crate::transpile_source(src, "demo", None, None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(".with_font_size(11.0)"), "{code}");
+        assert!(!code.contains(".with_font_size(22.0)"), "{code}");
+    }
+
+    /// The same class on a container declares for everything below it instead — one spelling, two reaches.
+    #[test]
+    fn a_class_on_a_container_declares_for_the_subtree() {
+        let src = "[style]\n@heading\n    font_size: 22\n\n[view]\ncol @heading\n    text \"x\"\n";
+        let code = crate::transpile_source(src, "demo", None, None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(".declaring(move || Declared::default().with_font_size(22.0))"),
+            "{code}"
+        );
+    }
+
     /// The line this whole document exists for: a container that draws no text says what the text under it
     /// looks like, and `font_size:` on a `col` used to be a `compile_error!`.
     #[test]
