@@ -69,14 +69,14 @@ fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
         return;
     }
 
-    let clamped = shaped(&mut sh, &base.clone().with_max_lines(2));
+    let clamped = shaped(&mut sh, &base.clone().with_clamp(2, false));
     assert_eq!(
         clamped.layout_runs().count(),
         2,
         "max_lines(2) must leave two visual lines"
     );
 
-    let elided = shaped(&mut sh, &base.clone().with_max_lines(2).with_ellipsis(true));
+    let elided = shaped(&mut sh, &base.clone().with_clamp(2, true));
     assert_eq!(
         elided.layout_runs().count(),
         2,
@@ -101,7 +101,7 @@ fn max_lines_clamps_the_measured_height() {
     if single <= 0.0 || wrapped <= single * 2.0 {
         return;
     }
-    let (_, clamped) = sh.measure_text(text, None, 90.0, &base.with_max_lines(2));
+    let (_, clamped) = sh.measure_text(text, None, 90.0, &base.with_clamp(2, false));
     assert!(
         clamped < wrapped,
         "max_lines must shrink the measured height: wrapped={wrapped} clamped={clamped}"
@@ -487,7 +487,7 @@ fn a_named_family_shapes_in_that_face() {
 
 // The merge's reason for existing: a clamped mixed paragraph gets the `…` a clamped plain one always got.
 // The rich path could not — it held one `&str` per run, and cutting across runs to append an ellipsis was
-// never written, so `with_ellipsis(true)` on a notification body did nothing and said nothing.
+// never written, so a clamped notification body did nothing and said nothing.
 #[test]
 fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
     let mut sh = TextShaper::new();
@@ -498,9 +498,7 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
         width: 90.0,
         height: 10_000.0,
     };
-    let base = TextStyle::new(16.0, Color::BLACK)
-        .with_max_lines(2)
-        .with_ellipsis(true);
+    let base = TextStyle::new(16.0, Color::BLACK).with_clamp(2, true);
     // A bold word early on, so the paragraph is genuinely spanned where the clamp is not.
     let spans = [Span::new(0..5, Declared::default().with_weight(700))];
 

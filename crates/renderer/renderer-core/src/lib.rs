@@ -37,7 +37,7 @@ pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers}
 pub use renderer::{RenderBackend, RendererBuild, RendererFactory};
 pub use shadow::ShadowLayout;
 pub use style::{
-    BorderWidths, Declared, FillRule, FontFamily, GlyphRaster, Gradient, GradientKind,
+    BorderWidths, Clamp, Declared, FillRule, FontFamily, GlyphRaster, Gradient, GradientKind,
     GradientStop, GradientStops, LineCap, LineJoin, Paint, PathStyle, RectStyle, Scale, Shadow,
     ShapeStyle, Span, Stroke, TextAlign, TextStyle, border_inner_shape,
 };

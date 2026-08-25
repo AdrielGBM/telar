@@ -254,7 +254,7 @@ fn make_buffer(
     style: &TextStyle,
 ) -> Buffer {
     let buffer = shape_buffer(font_system, text, spans, rect, style);
-    let Some(max) = style.max_lines.map(usize::from).filter(|&n| n > 0) else {
+    let Some(max) = style.clamp.max_lines() else {
         return buffer;
     };
     // Byte offset (within the single buffer line) where each visual line begins.
@@ -267,7 +267,7 @@ fn make_buffer(
     }
     let cut = line_starts[max].min(text.len());
     let head = text[..cut].trim_end();
-    if !style.ellipsis {
+    if !style.clamp.ellipsis() {
         let clipped = clip_spans(spans, head.len());
         return shape_buffer(font_system, head, clipped.as_deref(), rect, style);
     }

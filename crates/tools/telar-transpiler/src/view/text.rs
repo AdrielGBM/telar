@@ -240,15 +240,14 @@ impl ViewGen<'_> {
         {
             modifiers.push_str(&format!(".with_align({variant})"));
         }
+        // One call, because they are one decision: `ellipsis` without `lines` used to be accepted and do
+        // nothing at all, since the clamp returns before ever reaching it.
         if let Some(n) = attrs
             .iter()
             .find(|a| a.key == "lines")
             .and_then(|a| a.value.text().trim().parse::<u16>().ok())
         {
-            modifiers.push_str(&format!(".with_max_lines({n})"));
-        }
-        if asserted("ellipsis") {
-            modifiers.push_str(".with_ellipsis(true)");
+            modifiers.push_str(&format!(".with_clamp({n}, {})", asserted("ellipsis")));
         }
         // `nowrap`: the label is a token and not prose, so it keeps one line whatever box it is given.
         if asserted("nowrap") {

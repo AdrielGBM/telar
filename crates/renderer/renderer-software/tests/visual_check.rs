@@ -54,23 +54,19 @@ fn visual_check_png() {
         &mut cmds,
         "lines:2 (clamp, no ellipsis)",
         120.0,
-        TextStyle::new(14.0, ink).with_max_lines(2),
+        TextStyle::new(14.0, ink).with_clamp(2, false),
     );
     block(
         &mut cmds,
         "lines:2 ellipsis",
         210.0,
-        TextStyle::new(14.0, ink)
-            .with_max_lines(2)
-            .with_ellipsis(true),
+        TextStyle::new(14.0, ink).with_clamp(2, true),
     );
     block(
         &mut cmds,
         "lines:1 ellipsis (single-line truncation)",
         300.0,
-        TextStyle::new(14.0, ink)
-            .with_max_lines(1)
-            .with_ellipsis(true),
+        TextStyle::new(14.0, ink).with_clamp(1, true),
     );
 
     r.begin_frame(w, h, 1.0, 0).unwrap();

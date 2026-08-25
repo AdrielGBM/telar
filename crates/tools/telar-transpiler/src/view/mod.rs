@@ -1420,15 +1420,21 @@ mod tests {
         );
     }
 
-    // `lines:N` and the `ellipsis` flag become max-lines / ellipsis builder calls.
+    // `lines:N` and the `ellipsis` flag are one decision, so they become one call. An `ellipsis` with no
+    // `lines:` emits nothing at all, where it used to emit a builder the clamp never reached.
     #[test]
     fn text_lines_and_ellipsis() {
         let src = "[view]\ntext \"Long copy here\" lines:2 ellipsis max_width:200\n";
         let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
-        assert!(code.contains(".with_max_lines(2)"), "max_lines:\n{code}");
-        assert!(code.contains(".with_ellipsis(true)"), "ellipsis:\n{code}");
+        assert!(code.contains(".with_clamp(2, true)"), "{code}");
+
+        let unclamped = "[view]\ntext \"Long copy here\" ellipsis\n";
+        let code = crate::transpile_source(unclamped, "demo", None, None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("with_clamp"), "{code}");
     }
 
     // `input` binds `value:$signal` (cloned), builds a size/color text style, forwards layout attrs, and

@@ -1,3 +1,4 @@
+use std::num::NonZeroU16;
 use std::sync::Arc;
 
 mod declared;
@@ -40,6 +41,46 @@ pub enum GlyphRaster {
     Pixel,
 }
 
+/// How text ends when it does not fit.
+///
+/// One decision, so one type. Split across a `max_lines: Option<u16>` and an `ellipsis: bool` it had two
+/// states that meant nothing and were accepted anyway: an ellipsis with no line limit, which the clamp
+/// returns before ever consulting, and a limit of zero lines, which three separate call sites each defended
+/// against with the same `.filter(|&n| n > 0)`. Neither is representable now, and the three filters are gone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Clamp {
+    #[default]
+    None,
+    Lines {
+        max: NonZeroU16,
+        /// Mark the cut with `…` rather than letting the text stop mid-word.
+        ellipsis: bool,
+    },
+}
+
+impl Clamp {
+    /// The line limit, for the shaper's "did this overflow" question.
+    pub fn max_lines(self) -> Option<usize> {
+        match self {
+            Clamp::None => None,
+            Clamp::Lines { max, .. } => Some(max.get() as usize),
+        }
+    }
+
+    pub fn ellipsis(self) -> bool {
+        matches!(self, Clamp::Lines { ellipsis: true, .. })
+    }
+
+    /// A clamp to `max` lines, or [`None`](Clamp::None) when `max` is zero — the state that used to be
+    /// representable and meaningless.
+    pub fn lines(max: u16, ellipsis: bool) -> Self {
+        match NonZeroU16::new(max) {
+            Some(max) => Clamp::Lines { max, ellipsis },
+            None => Clamp::None,
+        }
+    }
+}
+
 /// Which face a run of text shapes in.
 ///
 /// [`SansSerif`](Self::SansSerif) is whatever the surface's font configuration resolves it to — the
@@ -70,10 +111,8 @@ pub struct TextStyle {
     pub weight: u16,
     pub italic: bool,
     pub align: TextAlign,
-    /// Clamp the text to at most this many lines (`None` = unlimited). Lines beyond it are dropped.
-    pub max_lines: Option<u16>,
-    /// When clamped by `max_lines`, replace the overflowing tail with an ellipsis (`…`).
-    pub ellipsis: bool,
+    /// How the text ends when it does not fit. See [`Clamp`].
+    pub clamp: Clamp,
     /// Line height as a multiple of `font_size` (e.g. `1.5`). `None` keeps the shaper's natural line height, so the default renders byte-for-byte as before.
     pub line_height: Option<f32>,
     /// Extra advance in logical pixels added after each glyph. `0.0` uses the font's natural advances.
@@ -99,8 +138,7 @@ impl TextStyle {
             weight: 400,
             italic: false,
             align: TextAlign::Start,
-            max_lines: None,
-            ellipsis: false,
+            clamp: Clamp::None,
             line_height: None,
             letter_spacing: 0.0,
             raster: GlyphRaster::Smooth,
@@ -151,13 +189,9 @@ impl TextStyle {
         self
     }
 
-    pub fn with_max_lines(mut self, max_lines: u16) -> Self {
-        self.max_lines = Some(max_lines);
-        self
-    }
-
-    pub fn with_ellipsis(mut self, ellipsis: bool) -> Self {
-        self.ellipsis = ellipsis;
+    /// Clamps the text to `max` lines, marking the cut with `…` when `ellipsis`. A `max` of zero is no clamp.
+    pub fn with_clamp(mut self, max: u16, ellipsis: bool) -> Self {
+        self.clamp = Clamp::lines(max, ellipsis);
         self
     }
 

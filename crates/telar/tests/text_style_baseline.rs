@@ -60,8 +60,7 @@ fn an_undeclared_text_style_resolves_to_these_exact_values() {
     assert_eq!(style.weight, 400);
     assert!(!style.italic);
     assert_eq!(style.align, TextAlign::Start);
-    assert_eq!(style.max_lines, None);
-    assert!(!style.ellipsis);
+    assert_eq!(style.clamp, telar::Clamp::None);
     assert_eq!(style.line_height, None);
     assert_eq!(style.letter_spacing, 0.0);
     assert_eq!(style.raster, GlyphRaster::Smooth);
@@ -77,8 +76,7 @@ fn a_declared_text_style_reaches_the_draw_command_intact() {
         .with_weight(700)
         .with_italic(true)
         .with_align(TextAlign::Center)
-        .with_max_lines(2)
-        .with_ellipsis(true)
+        .with_clamp(2, true)
         .with_line_height(1.5)
         .with_letter_spacing(0.5)
         .with_raster(GlyphRaster::Pixel)
