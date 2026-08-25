@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use telar_parser::{Attr, Element};
+use telar_parser::{Attr, Element, Value};
 
 use crate::naming::style_function_name;
 use crate::style::{format_f32, layout_prop_call};
@@ -25,9 +25,7 @@ impl ViewGen<'_> {
                     if is_paint_key(&prop.key) {
                         attrs.push(Attr {
                             key: prop.key.clone(),
-                            value: prop.value.clone(),
-                            is_quoted: false,
-                            i18n: false,
+                            value: Value::Bare(prop.value.clone()),
                             value_start: 0,
                         });
                     }
@@ -46,22 +44,22 @@ impl ViewGen<'_> {
         let sx = attrs
             .iter()
             .find(|a| a.key == "shadow_x")
-            .and_then(|a| a.value.parse::<f32>().ok())
+            .and_then(|a| a.value.text().parse::<f32>().ok())
             .unwrap_or(0.0);
         let sy = attrs
             .iter()
             .find(|a| a.key == "shadow_y")
-            .and_then(|a| a.value.parse::<f32>().ok())
+            .and_then(|a| a.value.text().parse::<f32>().ok())
             .unwrap_or(4.0);
         let blur = attrs
             .iter()
             .find(|a| a.key == "shadow_blur")
-            .and_then(|a| a.value.parse::<f32>().ok())
+            .and_then(|a| a.value.text().parse::<f32>().ok())
             .unwrap_or(8.0);
         let color = attrs
             .iter()
             .find(|a| a.key == "shadow_color")
-            .map(|a| self.color_expr(&a.value))
+            .map(|a| self.color_expr(a.value.text()))
             .unwrap_or_else(|| "Color::rgba(0.0, 0.0, 0.0, 0.25)".to_string());
         Some(format!(
             "Some(Shadow::new({}, {}, {}, {}))",
@@ -83,11 +81,11 @@ impl ViewGen<'_> {
         let mut solid_fill = pattrs
             .iter()
             .find(|a| a.key == "fill")
-            .map(|a| self.color_expr(&a.value));
+            .map(|a| self.color_expr(a.value.text()));
         let mut stroke = pattrs
             .iter()
             .find(|a| a.key == "stroke")
-            .map(|a| self.color_expr(&a.value));
+            .map(|a| self.color_expr(a.value.text()));
         if let Some(curve) = transitions.get("fill")
             && let Some(fill) = solid_fill.take()
         {
@@ -101,7 +99,7 @@ impl ViewGen<'_> {
         let stroke_width = pattrs
             .iter()
             .find(|a| a.key == "stroke_width")
-            .and_then(|a| a.value.parse::<f32>().ok())
+            .and_then(|a| a.value.text().parse::<f32>().ok())
             .unwrap_or(1.0);
         let border_widths = self.border_widths_expr(pattrs);
         let radius = self.radius_expr(pattrs);
@@ -128,7 +126,7 @@ impl ViewGen<'_> {
         let raw_values: Vec<&str> = pattrs
             .iter()
             .filter(|a| is_paint_key(&a.key))
-            .map(|a| a.value.as_str())
+            .map(|a| a.value.text())
             .collect();
         let closure = wrap_signal_clones(&raw_values, format!("move |{param}| {rect_style}"));
         (closure, opacity_call)
@@ -188,14 +186,14 @@ impl ViewGen<'_> {
         )
     }
 
-    /// Resolves the `.with_opacity(..)` closure argument for a `StyledContainer`. Opacity is now a closure (T-3.1) so it re-reads reactively: a `$signal` becomes `move || sig.get()` (cloning captured signals), a bare number stays a static `|| 0.5`, and a `transition:opacity` wraps the value in the animation retarget+get block backed by a hoisted `Animated`.
+    /// Resolves the `.with_opacity(..)` closure argument for a `StyledContainer`. Opacity is now a closure (T-3.1) so it re-reads reactively: a `$signal` becomes `move || sig.get()` (cloning captured signals), a bare number stays a static `|| 0.5`, and a `transition(opacity …)` wraps the value in the animation retarget+get block backed by a hoisted `Animated`.
     fn opacity_closure(
         &mut self,
         attr: &Attr,
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
     ) -> String {
-        let value = attr.value.trim();
+        let value = attr.value.text().trim();
         let is_reactive = value.contains('$');
         let is_static = !is_reactive && value.parse::<f32>().is_ok();
         let expr = if is_reactive {
@@ -227,7 +225,7 @@ impl ViewGen<'_> {
         }
     }
 
-    /// Wraps a paint value expression in a `transition:` animation: hoists a persistent `Animated` seeded with the current value and returns the `{ h.retarget(value); h.get() }` block that re-targets it (a no-op when the target is unchanged) and reads the interpolated value. The `Animated` lives in the component's setup scope (built once per instance), so it persists across `view()` re-runs — the continuity requirement in F7 of the design doc.
+    /// Wraps a paint value expression in a `transition(…)` animation: hoists a persistent `Animated` seeded with the current value and returns the `{ h.retarget(value); h.get() }` block that re-targets it (a no-op when the target is unchanged) and reads the interpolated value. The `Animated` lives in the component's setup scope (built once per instance), so it persists across `view()` re-runs — the continuity requirement in F7 of the design doc.
     pub(super) fn wrap_transition(
         &mut self,
         curve: &str,
@@ -247,7 +245,7 @@ impl ViewGen<'_> {
         name
     }
 
-    /// Parses every `transition:` attribute on `el` into `(property, curve)` pairs plus error messages surfaced as `compile_error!`. Errors: an unsupported/unparseable clause, or a property with no matching value attribute to animate.
+    /// Parses every `transition(…)` attribute on `el` into `(property, curve)` pairs plus error messages surfaced as `compile_error!`. Errors: an unsupported/unparseable clause, or a property with no matching value attribute to animate.
     pub(super) fn parse_transitions(&self, el: &Element) -> (Vec<(String, String)>, Vec<String>) {
         let mut specs = Vec::new();
         let mut errors = Vec::new();
@@ -262,12 +260,12 @@ impl ViewGen<'_> {
             el.attributes.iter().any(|a| a.key == prop) || pattrs.iter().any(|a| a.key == prop)
         };
         for attr in el.attributes.iter().filter(|a| a.key == "transition") {
-            let (parsed, errs) = crate::transition::parse_transition_value(&attr.value);
+            let (parsed, errs) = crate::transition::parse_transition_value(attr.value.text());
             errors.extend(errs);
             for spec in parsed {
                 if !has_value(&spec.prop) {
                     errors.push(format!(
-                        "transition:{} has no matching `{}:` value on this element to animate",
+                        "transition `{}` has no matching `{}:` value on this element to animate",
                         spec.prop, spec.prop
                     ));
                     continue;
@@ -336,7 +334,8 @@ impl ViewGen<'_> {
 
         // Inline attributes are applied on top of the base style and take precedence.
         for attr in attrs {
-            if let Some(call) = layout_prop_call(&attr.key, &attr.value, self.theme_type.as_deref())
+            if let Some(call) =
+                layout_prop_call(&attr.key, attr.value.text(), self.theme_type.as_deref())
             {
                 expr.push_str(&call);
             }
@@ -349,9 +348,11 @@ impl ViewGen<'_> {
     pub(super) fn reactive_layout_values(&self, attrs: &[Attr]) -> Vec<String> {
         attrs
             .iter()
-            .filter(|a| !a.is_quoted && a.value.contains('$'))
-            .filter(|a| layout_prop_call(&a.key, &a.value, self.theme_type.as_deref()).is_some())
-            .map(|a| a.value.clone())
+            .filter(|a| !a.value.is_literal() && a.value.text().contains('$'))
+            .filter(|a| {
+                layout_prop_call(&a.key, a.value.text(), self.theme_type.as_deref()).is_some()
+            })
+            .map(|a| a.value.text().to_string())
             .collect()
     }
 
@@ -367,7 +368,7 @@ impl ViewGen<'_> {
         if let Some(is_row) = attrs
             .iter()
             .find(|a| a.key == "direction")
-            .and_then(|a| from_direction(a.value.trim()))
+            .and_then(|a| from_direction(a.value.text().trim()))
         {
             return is_row;
         }

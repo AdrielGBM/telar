@@ -156,10 +156,10 @@ col @card
         );
         let title = text.attributes.iter().find(|a| a.key == "title").unwrap();
         assert_eq!(
-            title.value, "C:\\x",
-            "raw attr value keeps the backslash literal"
+            title.value,
+            Value::Quoted("C:\\x".to_string()),
+            "raw attr value keeps the backslash literal, and reads back as a quoted value"
         );
-        assert!(title.is_quoted);
     }
 
     #[test]
@@ -184,9 +184,7 @@ col @card
             text0.attributes[0],
             Attr {
                 key: "size".into(),
-                value: "14".into(),
-                is_quoted: false,
-                i18n: false,
+                value: Value::Bare("14".into()),
                 value_start: 0
             }
         );
@@ -194,9 +192,7 @@ col @card
             text0.attributes[1],
             Attr {
                 key: "color".into(),
-                value: "dark".into(),
-                is_quoted: false,
-                i18n: false,
+                value: Value::Bare("dark".into()),
                 value_start: 0
             }
         );
@@ -209,9 +205,7 @@ col @card
             row.attributes[0],
             Attr {
                 key: "gap".into(),
-                value: "8".into(),
-                is_quoted: false,
-                i18n: false,
+                value: Value::Bare("8".into()),
                 value_start: 0
             }
         );
@@ -219,7 +213,7 @@ col @card
     }
 
     #[test]
-    fn parses_closure_attribute_to_end_of_line() {
+    fn parses_closure_attribute() {
         let doc = parse(SAMPLE).unwrap();
         let ViewNode::Element(col) = &doc.view.nodes[0] else {
             panic!();
@@ -237,33 +231,36 @@ col @card
             inc.attributes[0],
             Attr {
                 key: "fill".into(),
-                value: "primary".into(),
-                is_quoted: false,
-                i18n: false,
+                value: Value::Bare("primary".into()),
                 value_start: 0
             }
         );
         let on_press = inc.attributes.iter().find(|a| a.key == "on_press").unwrap();
-        assert_eq!(on_press.value, "|| count.update(|n| *n += 1)");
+        assert_eq!(
+            on_press.value,
+            Value::Spec("|| count.update(|n| *n += 1)".into())
+        );
     }
 
     #[test]
-    fn parses_transition_attribute_to_end_of_line() {
-        // Like closures, a `transition:` value runs verbatim to the end of the line so its spaces and comma-separated clauses survive tokenization.
+    fn a_parenthesized_value_keeps_its_spaces_and_commas() {
+        // `key(…)` is the one form that admits a space at depth 0, so a multi-clause spec survives tokenization and the attributes on either side of it still parse as their own.
         let doc = parse(
-            "[view]\nbox fill:primary transition:opacity 200ms ease-out, fill 150ms linear\n",
+            "[view]\nbox fill:primary transition(opacity 200ms ease-out, fill 150ms linear) radius:6\n",
         )
         .unwrap();
         let ViewNode::Element(b) = &doc.view.nodes[0] else {
             panic!("root should be an element");
         };
         let fill = b.attributes.iter().find(|a| a.key == "fill").unwrap();
-        assert_eq!(fill.value, "primary");
+        assert_eq!(fill.value, Value::Bare("primary".into()));
         let transition = b.attributes.iter().find(|a| a.key == "transition").unwrap();
         assert_eq!(
             transition.value,
-            "opacity 200ms ease-out, fill 150ms linear"
+            Value::Spec("opacity 200ms ease-out, fill 150ms linear".into())
         );
+        let radius = b.attributes.iter().find(|a| a.key == "radius").unwrap();
+        assert_eq!(radius.value, Value::Bare("6".into()));
     }
 
     #[test]
@@ -278,51 +275,35 @@ col @card
             panic!("root should be an element");
         };
         let fill = b.attributes.iter().find(|a| a.key == "fill").unwrap();
-        assert_eq!(fill.value, "chip_fill($snap, id)");
+        assert_eq!(fill.value, Value::Bare("chip_fill($snap, id)".into()));
         let radius = b.attributes.iter().find(|a| a.key == "radius").unwrap();
-        assert_eq!(radius.value, "6", "the trailing attribute still parses");
+        assert_eq!(
+            radius.value,
+            Value::Bare("6".into()),
+            "the trailing attribute still parses"
+        );
         let ViewNode::Element(t) = &b.children[0] else {
             panic!("child should be a text element");
         };
         let color = t.attributes.iter().find(|a| a.key == "color").unwrap();
-        assert_eq!(color.value, "text_color($snap, id)");
+        assert_eq!(color.value, Value::Bare("text_color($snap, id)".into()));
         let size = t.attributes.iter().find(|a| a.key == "size").unwrap();
-        assert_eq!(size.value, "13");
+        assert_eq!(size.value, Value::Bare("13".into()));
     }
 
+    /// `transition:` was the one key whose colon value ran to end of line, which is also why it needed a
+    /// bespoke check for the attributes that run swallowed. It obeys the one rule now, so nothing is
+    /// swallowed and nothing has to be last.
     #[test]
-    fn transition_swallowing_trailing_attribute_errors() {
-        // `transition:` runs to end of line, so a following `key:value` attribute would otherwise be
-        // silently absorbed into the transition value instead of parsed as its own attribute.
-        let err = parse("[view]\nbox transition:opacity 300ms align:center\n").unwrap_err();
-        assert_eq!(err.line, 2);
-        assert!(
-            err.message
-                .contains("transition: must be the last attribute on the line")
-        );
-    }
-
-    #[test]
-    fn transition_as_last_attribute_still_parses() {
-        let doc = parse("[view]\nbox transition:opacity 300ms ease-in-out\n").unwrap();
+    fn a_colon_value_ends_at_the_first_space() {
+        let doc = parse("[view]\nbox transition:opacity align:center\n").unwrap();
         let ViewNode::Element(b) = &doc.view.nodes[0] else {
             panic!();
         };
         let transition = b.attributes.iter().find(|a| a.key == "transition").unwrap();
-        assert_eq!(transition.value, "opacity 300ms ease-in-out");
-    }
-
-    #[test]
-    fn transition_paren_form_still_parses() {
-        let doc =
-            parse("[view]\nbox transition(opacity 300ms ease-in-out) align:center\n").unwrap();
-        let ViewNode::Element(b) = &doc.view.nodes[0] else {
-            panic!();
-        };
-        let transition = b.attributes.iter().find(|a| a.key == "transition").unwrap();
-        assert_eq!(transition.value, "opacity 300ms ease-in-out");
+        assert_eq!(transition.value, Value::Bare("opacity".into()));
         let align = b.attributes.iter().find(|a| a.key == "align").unwrap();
-        assert_eq!(align.value, "center");
+        assert_eq!(align.value, Value::Bare("center".into()));
     }
 
     #[test]
@@ -342,14 +323,14 @@ col @card
             reset
                 .attributes
                 .iter()
-                .any(|a| a.key == "ghost" && a.value.is_empty())
+                .any(|a| a.key == "ghost" && a.value.is_flag())
         );
         let on_press = reset
             .attributes
             .iter()
             .find(|a| a.key == "on_press")
             .unwrap();
-        assert_eq!(on_press.value, "|| reset()");
+        assert_eq!(on_press.value, Value::Spec("|| reset()".into()));
     }
 
     #[test]
@@ -465,7 +446,7 @@ col @card
             panic!();
         };
         let on_press = btn.attributes.iter().find(|a| a.key == "on_press").unwrap();
-        assert_eq!(on_press.value, "|ev| handle(ev)");
+        assert_eq!(on_press.value, Value::Spec("|ev| handle(ev)".into()));
     }
 
     #[test]

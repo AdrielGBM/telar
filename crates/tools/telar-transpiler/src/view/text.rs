@@ -44,7 +44,8 @@ impl ViewGen<'_> {
             ) {
                 continue;
             }
-            if let Some(call) = layout_prop_call(&a.key, &a.value, self.theme_type.as_deref()) {
+            if let Some(call) = layout_prop_call(&a.key, a.value.text(), self.theme_type.as_deref())
+            {
                 extra.push_str(&call);
             }
         }
@@ -53,7 +54,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "height")
-            .and_then(|a| layout_prop_call("height", &a.value, self.theme_type.as_deref()));
+            .and_then(|a| layout_prop_call("height", a.value.text(), self.theme_type.as_deref()));
 
         let (ctor, layout_style) = match explicit_height {
             Some(h) => ("Text::new", format!("LayoutStyle::new(){h}{extra}")),
@@ -191,11 +192,11 @@ impl ViewGen<'_> {
         let size = attrs
             .iter()
             .find(|a| a.key == "size")
-            .map(|a| format_number(&a.value, self.theme_type.as_deref()))
+            .map(|a| format_number(a.value.text(), self.theme_type.as_deref()))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = attrs.iter().find(|a| a.key == "color");
         let mut color = color_attr
-            .map(|a| self.color_expr(&a.value))
+            .map(|a| self.color_expr(a.value.text()))
             .unwrap_or_else(|| "Color::BLACK".to_string());
         if let Some(curve) = transitions.get("color") {
             color = self.wrap_transition(curve, &color, hoists);
@@ -203,72 +204,69 @@ impl ViewGen<'_> {
 
         // Rich-text modifiers: weight (keyword or numeric), italic (flag or bool), align (keyword).
         let mut modifiers = String::new();
+        // A bare flag (`italic`) is the assertion itself; `italic:true` says the same thing the long way, and anything else — `italic:false` most of all — leaves the default alone.
+        let asserted = |key: &str| {
+            attrs
+                .iter()
+                .find(|a| a.key == key)
+                .is_some_and(|a| a.value.is_flag() || a.value.text().trim() == "true")
+        };
         if let Some(w) = attrs
             .iter()
             .find(|a| a.key == "weight")
-            .and_then(|a| parse_weight(&a.value))
+            .and_then(|a| parse_weight(a.value.text()))
         {
             modifiers.push_str(&format!(".with_weight({w})"));
         }
-        if let Some(a) = attrs.iter().find(|a| a.key == "italic") {
-            // A bare `italic` flag (empty value) or `italic:true` turns it on; `italic:false` is the default.
-            let v = a.value.trim();
-            if v.is_empty() || v == "true" {
-                modifiers.push_str(".with_italic(true)");
-            }
+        if asserted("italic") {
+            modifiers.push_str(".with_italic(true)");
         }
         if let Some(variant) = attrs
             .iter()
             .find(|a| a.key == "align")
-            .and_then(|a| parse_text_align(&a.value))
+            .and_then(|a| parse_text_align(a.value.text()))
         {
             modifiers.push_str(&format!(".with_align(TextAlign::{variant})"));
         }
         if let Some(n) = attrs
             .iter()
             .find(|a| a.key == "lines")
-            .and_then(|a| a.value.trim().parse::<u16>().ok())
+            .and_then(|a| a.value.text().trim().parse::<u16>().ok())
         {
             modifiers.push_str(&format!(".with_max_lines({n})"));
         }
-        if let Some(a) = attrs.iter().find(|a| a.key == "ellipsis") {
-            let v = a.value.trim();
-            if v.is_empty() || v == "true" {
-                modifiers.push_str(".with_ellipsis(true)");
-            }
+        if asserted("ellipsis") {
+            modifiers.push_str(".with_ellipsis(true)");
         }
         // `nowrap`: the label is a token and not prose, so it keeps one line whatever box it is given.
-        if let Some(a) = attrs.iter().find(|a| a.key == "nowrap") {
-            let v = a.value.trim();
-            if v.is_empty() || v == "true" {
-                modifiers.push_str(".with_no_wrap(true)");
-            }
+        if asserted("nowrap") {
+            modifiers.push_str(".with_no_wrap(true)");
         }
         if let Some(lh) = attrs
             .iter()
             .find(|a| a.key == "line_height")
-            .and_then(|a| a.value.trim().parse::<f32>().ok())
+            .and_then(|a| a.value.text().trim().parse::<f32>().ok())
         {
             modifiers.push_str(&format!(".with_line_height({})", format_f32(lh)));
         }
         if let Some(ls) = attrs
             .iter()
             .find(|a| a.key == "letter_spacing")
-            .and_then(|a| a.value.trim().parse::<f32>().ok())
+            .and_then(|a| a.value.text().trim().parse::<f32>().ok())
         {
             modifiers.push_str(&format!(".with_letter_spacing({})", format_f32(ls)));
         }
         if let Some(variant) = attrs
             .iter()
             .find(|a| a.key == "raster")
-            .and_then(|a| parse_glyph_raster(&a.value))
+            .and_then(|a| parse_glyph_raster(a.value.text()))
         {
             modifiers.push_str(&format!(".with_raster(GlyphRaster::{variant})"));
         }
 
         let closure = format!("move || TextStyle::new({size}, {color}){modifiers}");
         // `color_attr`'s raw value (not `color`, already substituted by `color_expr`) is scanned for `$ident` so a signal-backed color clones itself into this closure, leaving the outer binding usable by sibling widgets.
-        let raw_color = color_attr.map(|a| a.value.as_str()).unwrap_or("");
+        let raw_color = color_attr.map(|a| a.value.text()).unwrap_or("");
         wrap_signal_clones(&[raw_color], closure)
     }
 }

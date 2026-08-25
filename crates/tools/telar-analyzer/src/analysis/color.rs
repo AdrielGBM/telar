@@ -71,12 +71,13 @@ fn collect_view_colors(nodes: &[ViewNode], source: &str, out: &mut Vec<ColorInfo
         match node {
             ViewNode::Element(el) => {
                 for attr in &el.attributes {
-                    // A quoted value is a string literal, never a color.
-                    if attr.is_quoted {
+                    // A value written as a string literal is text, never a color.
+                    if attr.value.is_literal() {
                         continue;
                     }
-                    if let Some(color) = literal_color(&attr.key, &attr.value)
-                        && let Some(range) = byte_range(source, attr.value_start, attr.value.len())
+                    if let Some(color) = literal_color(&attr.key, attr.value.text())
+                        && let Some(range) =
+                            byte_range(source, attr.value_start, attr.value.text().len())
                     {
                         out.push(ColorInformation { range, color });
                     }

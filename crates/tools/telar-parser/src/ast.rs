@@ -142,19 +142,88 @@ pub struct Element {
     pub content_i18n: bool,
 }
 
-/// A `key: value` attribute on an element. The value is kept raw (closures included).
-/// `is_quoted` is `true` when the value was written with double-quotes (`label:"text"`),
-/// allowing callers to distinguish string literals from identifier references.
+/// The form an attribute value was written in — which of the five spellings the parser read, kept rather
+/// than flattened back into a string.
+///
+/// This is syntax, not meaning: `12` is a [`Value::Bare`] whether it sits under `gap` or under `weight`,
+/// because what a token means belongs to the key schema and the parser does not own that. What the form does
+/// settle is how the text reaches the output — a quoted value is data the author typed, a bare one is source
+/// to splice, an i18n key is a catalog lookup — and every consumer used to re-derive that from the text with
+/// its own `starts_with`/`contains` check.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    /// A bare flag (`ghost`): the attribute asserts itself and carries no text.
+    Flag,
+    /// An unquoted value (`12`, `#3d78fa`, `$sig`, `f(x)`), read to the next space at paren depth 0 — so a
+    /// call with arguments still reads whole.
+    Bare(String),
+    /// A string literal (`"Save"` or `r"…"`), de-quoted, with the escapes of the former already interpreted.
+    Quoted(String),
+    /// A `t"buttons.save"` catalog key, kept apart from a plain literal because it resolves through the i18n
+    /// catalog at build time instead of reaching the output as written.
+    I18n(String),
+    /// The text between the balanced parens of the `key(…)` form, the one spelling that admits spaces at
+    /// depth 0 — so it carries closures (`on_press(|| f())`) and space-separated specs
+    /// (`transition(fill 250ms ease-out)`) alike, in any position on the line.
+    Spec(String),
+}
+
+impl Value {
+    /// The value's text, whatever form it was written in. A flag has none, so it reads as `""` — most
+    /// consumers only want the text and are right not to care how it was delimited.
+    pub fn text(&self) -> &str {
+        match self {
+            Value::Flag => "",
+            Value::Bare(text) | Value::Quoted(text) | Value::I18n(text) | Value::Spec(text) => text,
+        }
+    }
+
+    /// Whether the attribute was written as a bare flag, which is the assertion itself: `ghost`, `wrap`,
+    /// `absolute`. Distinct from a value that merely happens to be empty (`label:""`).
+    pub fn is_flag(&self) -> bool {
+        matches!(self, Value::Flag)
+    }
+
+    /// Whether the text came from a plain `"…"` literal, so it is the author's data and never Rust to splice.
+    /// A `t"…"` key is not one: it is a lookup, and treating it as a literal is how a translation silently
+    /// becomes its own key.
+    pub fn is_quoted(&self) -> bool {
+        matches!(self, Value::Quoted(_))
+    }
+
+    /// Whether the value is a `t"…"` catalog key, whose text names a translation rather than being one.
+    pub fn is_i18n(&self) -> bool {
+        matches!(self, Value::I18n(_))
+    }
+
+    /// Whether the value was written as a string literal in either spelling — `"…"` or `t"…"`. The question a
+    /// consumer asks when it wants to know that the text is *not* source it may read identifiers out of.
+    pub fn is_literal(&self) -> bool {
+        matches!(self, Value::Quoted(_) | Value::I18n(_))
+    }
+
+    /// Whether the author wrote a closure out in place, in either spelling Rust accepts, as opposed to
+    /// forwarding a handler expression the caller was given. The transpiler wires the two to different builder
+    /// methods (`.on_press` against `.maybe_on_press`), and used to ask it from two near-identical predicates
+    /// of its own before the question had a value to sit on.
+    pub fn is_closure(&self) -> bool {
+        let text = self.text().trim_start();
+        !self.is_literal()
+            && (text.starts_with('|')
+                || text
+                    .strip_prefix("move")
+                    .is_some_and(|rest| rest.trim_start().starts_with('|')))
+    }
+}
+
+/// A `key:value` attribute on an element. The text is kept raw (closures included) and the [`Value`] variant
+/// records which spelling delimited it.
 #[derive(Debug, Clone)]
 pub struct Attr {
     pub key: String,
-    pub value: String,
-    pub is_quoted: bool,
-    /// `true` when the value was written as an i18n key (`label:t"buttons.save"`): the transpiler emits a
-    /// catalog lookup instead of a literal string. Implies `is_quoted`.
-    pub i18n: bool,
-    /// Byte offset in the source where `value` begins. Lets the transpiler map a closure / pass-through
-    /// attribute value back to source; excluded from `PartialEq` so it stays positional metadata.
+    pub value: Value,
+    /// Byte offset in the source where the value's text begins. Lets the transpiler map a closure /
+    /// pass-through attribute value back to source; excluded from `PartialEq` so it stays positional metadata.
     pub value_start: usize,
 }
 
@@ -162,10 +231,7 @@ pub struct Attr {
 // `Attr` literals with `value_start: 0` and still match a parsed attribute.
 impl PartialEq for Attr {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key
-            && self.value == other.value
-            && self.is_quoted == other.is_quoted
-            && self.i18n == other.i18n
+        self.key == other.key && self.value == other.value
     }
 }
 

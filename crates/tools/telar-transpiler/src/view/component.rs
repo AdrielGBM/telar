@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use telar_parser::{Attr, Element, ViewNode};
+use telar_parser::{Attr, Element, Value, ViewNode};
 
 use crate::naming::{is_ident, to_pascal_case, to_snake_case};
 use crate::style::{format_f32, format_number, hex_to_color_expr};
@@ -145,9 +145,10 @@ impl ViewGen<'_> {
                         self.component_text_attr_expr(attr)
                     } else if bool_fields.iter().any(|f| f == &attr.key) {
                         self.component_bool_attr_expr(attr)
-                    } else if attr.is_quoted && string_fields.iter().any(|f| f == &attr.key) {
+                    } else if attr.value.is_quoted() && string_fields.iter().any(|f| f == &attr.key)
+                    {
                         // The conversion is what the markup cannot express: a value ends at the first space, so `name:"Box select".to_string()` parses as a second attribute, and the only way out was a `[logic]` local per label.
-                        format!("{}.to_string()", rust_str(&attr.value))
+                        format!("{}.to_string()", rust_str(attr.value.text()))
                     } else {
                         self.component_attr_expr(attr)
                     };
@@ -267,7 +268,7 @@ impl ViewGen<'_> {
     /// raw value is scanned for `$idents` to clone in, and `color_expr` applies the same `[style]`/theme
     /// precedence as built-in elements. The Props field is expected to be `Box<dyn Fn() -> Color>`.
     fn component_color_attr_expr(&self, attr: &Attr) -> String {
-        self.boxed_prop_closure(attr, |s, attr| s.color_expr(&attr.value))
+        self.boxed_prop_closure(attr, |s, attr| s.color_expr(attr.value.text()))
     }
 
     /// A reactive string prop (e.g. a button's `label`): a `move ||` closure re-read every frame, so a
@@ -279,18 +280,14 @@ impl ViewGen<'_> {
     /// `$signal` follows state and a value derived from several services follows all of them. The Props field
     /// is expected to be `Box<dyn Fn() -> T>`.
     fn component_reading_attr_expr(&self, attr: &Attr) -> String {
-        self.boxed_prop_closure(attr, |_, attr| substitute_reads(attr.value.trim()))
+        self.boxed_prop_closure(attr, |_, attr| substitute_reads(attr.value.text().trim()))
     }
 
     fn component_text_attr_expr(&self, attr: &Attr) -> String {
-        self.boxed_prop_closure(attr, |s, attr| {
-            if attr.i18n {
-                s.i18n_lookup(&attr.value)
-            } else if attr.is_quoted {
-                format!("{}.to_string()", rust_str(&attr.value))
-            } else {
-                substitute_reads(attr.value.trim())
-            }
+        self.boxed_prop_closure(attr, |s, attr| match &attr.value {
+            Value::I18n(key) => s.i18n_lookup(key),
+            Value::Quoted(text) => format!("{}.to_string()", rust_str(text)),
+            value => substitute_reads(value.text().trim()),
         })
     }
 
@@ -302,12 +299,11 @@ impl ViewGen<'_> {
     /// `$` reads substituted, exactly as a `box`'s own `disabled:` is.
     fn component_bool_attr_expr(&self, attr: &Attr) -> String {
         self.boxed_prop_closure(attr, |_, attr| {
-            let value = attr.value.trim();
             // A bare flag (`disabled` with no value) is the attribute asserting itself, as `wrap` and `absolute` do.
-            if value.is_empty() {
+            if attr.value.is_flag() {
                 "true".to_string()
             } else {
-                substitute_reads(value)
+                substitute_reads(attr.value.text().trim())
             }
         })
     }
@@ -319,7 +315,7 @@ impl ViewGen<'_> {
             return closure;
         }
         let wrapped = wrap_signal_clones(
-            &[attr.value.as_str()],
+            &[attr.value.text()],
             format!("move || {}", body(self, attr)),
         );
         format!("Box::new({wrapped})")
@@ -352,7 +348,7 @@ impl ViewGen<'_> {
                             .attributes
                             .iter()
                             .find(|a| a.key == "slot")
-                            .map(|a| a.value.clone()),
+                            .map(|a| a.value.text().to_string()),
                         _ => None,
                     };
                     // Strip the `slot` attr before emitting a named child, so a component child doesn't receive
@@ -407,7 +403,7 @@ impl ViewGen<'_> {
     pub(super) fn emit_slot(&mut self, el: &Element) -> ChildEmit {
         let pad = self.indent_str();
         let expr = match el.attributes.iter().find(|a| a.key == "name") {
-            Some(a) => format!("__slots.take({})", rust_str(&a.value)),
+            Some(a) => format!("__slots.take({})", rust_str(a.value.text())),
             None => "__slots.take_default()".to_string(),
         };
         ChildEmit::Dynamic {
@@ -416,7 +412,7 @@ impl ViewGen<'_> {
     }
 
     /// Converts a component attribute to a Rust expression:
-    /// - a quoted attr (`label:"text"`) becomes a string literal;
+    /// - a quoted attr (`label:"text"`) becomes a string literal, and a `t"…"` key a catalog lookup;
     /// - a bare flag (`elevated`) or `true`/`false` becomes a `bool`;
     /// - a closure (`on_tap(|| $x += 1)`) becomes a boxed `move` closure with `$signal`s cloned in;
     /// - a lone `$signal` becomes the cloned handle (`count.clone()`);
@@ -425,14 +421,12 @@ impl ViewGen<'_> {
     ///
     /// Simple lowercase identifiers (e.g. `fill:primary`) are routed through `color_expr` so they follow the same [style]-vs-theme precedence as built-in elements. PascalCase or complex expressions are passed through verbatim.
     fn component_attr_expr(&self, attr: &Attr) -> String {
-        if attr.is_quoted {
-            return rust_str(&attr.value);
-        }
-        let v = attr.value.trim();
-        // Bare flag (`elevated`) -> `true`; explicit `true`/`false` pass through as bools.
-        if v.is_empty() {
-            return "true".to_string();
-        }
+        let v = match &attr.value {
+            Value::Quoted(text) => return rust_str(text),
+            Value::I18n(key) => return self.i18n_lookup(key),
+            Value::Flag => return "true".to_string(),
+            value => value.text().trim(),
+        };
         if v == "true" || v == "false" {
             return v.to_string();
         }
@@ -477,7 +471,7 @@ impl ViewGen<'_> {
         if in_style || (self.theme_type.is_some() && looks_like_color_name) {
             return self.color_expr(v);
         }
-        let lead = attr.value.len() - attr.value.trim_start().len();
+        let lead = attr.value.text().len() - attr.value.text().trim_start().len();
         // A lone `[logic]` binding, cloned only where the clone is load-bearing: inside a reactive branch the
         // builder closure runs again and cannot consume its capture, so the binding has to survive the first
         // run. Outside one it is built once and moving is both correct and what the author wrote — cloning
@@ -629,8 +623,7 @@ fn delimiters_balanced(expr: &str) -> bool {
 /// `tint(move || fg.get())` has already said what they mean, and wrapping that again yields a closure returning
 /// a closure — a type error inside generated code, pointing at a line the author never wrote.
 fn already_a_closure(attr: &Attr) -> Option<String> {
-    let value = attr.value.trim();
-    let is_closure = !attr.is_quoted
-        && (value.starts_with('|') || value.starts_with("move |") || value.starts_with("move||"));
-    is_closure.then(|| format!("Box::new({value})"))
+    attr.value
+        .is_closure()
+        .then(|| format!("Box::new({})", attr.value.text().trim()))
 }

@@ -1,6 +1,6 @@
 //! Editable-text `input` emitter: binds `value:$signal` to an `Input` widget with a text style.
 
-use telar_parser::Element;
+use telar_parser::{Element, Value};
 
 use crate::style::{format_number, layout_prop_call};
 
@@ -15,9 +15,9 @@ impl ViewGen<'_> {
         // `value:$signal` binds the field to an `RwSignal<String>`; pass a clone so the binding stays usable
         // elsewhere. A non-`$` value is forwarded verbatim (e.g. an already-owned signal expression).
         let value_expr = match el.attributes.iter().find(|a| a.key == "value") {
-            Some(a) => match a.value.trim().strip_prefix('$') {
+            Some(a) => match a.value.text().trim().strip_prefix('$') {
                 Some(id) => format!("{id}.clone()"),
-                None => a.value.trim().to_string(),
+                None => a.value.text().trim().to_string(),
             },
             None => "Default::default()".to_string(),
         };
@@ -27,13 +27,13 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "size")
-            .map(|a| format_number(&a.value, self.theme_type.as_deref()))
+            .map(|a| format_number(a.value.text(), self.theme_type.as_deref()))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = el.attributes.iter().find(|a| a.key == "color");
         let color = color_attr
-            .map(|a| self.color_expr(&a.value))
+            .map(|a| self.color_expr(a.value.text()))
             .unwrap_or_else(|| "Color::BLACK".to_string());
-        let color_raw = color_attr.map(|a| a.value.as_str()).unwrap_or("");
+        let color_raw = color_attr.map(|a| a.value.text()).unwrap_or("");
         let style = wrap_signal_clones(
             &[color_raw],
             format!("move || TextStyle::new({size}, {color})"),
@@ -48,7 +48,8 @@ impl ViewGen<'_> {
             ) {
                 continue;
             }
-            if let Some(call) = layout_prop_call(&a.key, &a.value, self.theme_type.as_deref()) {
+            if let Some(call) = layout_prop_call(&a.key, a.value.text(), self.theme_type.as_deref())
+            {
                 extra.push_str(&call);
             }
         }
@@ -66,8 +67,8 @@ impl ViewGen<'_> {
             .iter()
             .find(|a| a.key == "on_submit")
             .map(|a| {
-                let closure = substitute_handles(&normalize_closure(&a.value));
-                wrap_signal_clones(&[a.value.as_str()], format!("move {closure}"))
+                let closure = substitute_handles(&normalize_closure(a.value.text()));
+                wrap_signal_clones(&[a.value.text()], format!("move {closure}"))
             });
 
         // The hint shown while the field is empty: a quoted literal, a `t"…"` translation, or any expression
@@ -77,14 +78,10 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "placeholder")
-            .map(|a| {
-                if a.i18n {
-                    self.i18n_lookup(&a.value)
-                } else if a.is_quoted {
-                    format!("{}.to_string()", rust_str(&a.value))
-                } else {
-                    a.value.trim().to_string()
-                }
+            .map(|a| match &a.value {
+                Value::I18n(key) => self.i18n_lookup(key),
+                Value::Quoted(text) => format!("{}.to_string()", rust_str(text)),
+                value => value.text().trim().to_string(),
             });
 
         let mut tail = String::new();

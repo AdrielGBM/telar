@@ -574,7 +574,7 @@ impl<'a> ViewGen<'a> {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "clip") else {
             return emit;
         };
-        let axis = match attr.value.trim() {
+        let axis = match attr.value.text().trim() {
             "" | "both" => "Both",
             "x" => "Horizontal",
             "y" => "Vertical",

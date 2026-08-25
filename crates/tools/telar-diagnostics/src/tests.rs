@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use telar_parser::{
-    Attr, Element, ParseError, RsxDocument, StyleClass, StyleSection, ViewNode, ViewSection,
+    Attr, Element, ParseError, RsxDocument, StyleClass, StyleSection, Value, ViewNode, ViewSection,
 };
 
 use crate::{CatalogView, Diagnostic, Severity, ThemeView, semantic_diagnostics};
@@ -69,9 +69,7 @@ fn undefined_style_class_warns() {
 fn unknown_color_errors_only_when_theme_configured() {
     let attr = Attr {
         key: "color".into(),
-        value: "nope".into(),
-        is_quoted: false,
-        i18n: false,
+        value: Value::Bare("nope".into()),
         value_start: 0,
     };
     let doc = document(
@@ -100,9 +98,7 @@ fn themed_doc_with_attrs(attrs: Vec<(&str, &str)>) -> RsxDocument {
         .into_iter()
         .map(|(key, value)| Attr {
             key: key.into(),
-            value: value.into(),
-            is_quoted: false,
-            i18n: false,
+            value: Value::Bare(value.into()),
             value_start: 0,
         })
         .collect();
@@ -293,9 +289,7 @@ fn unknown_i18n_key_in_markup_warns() {
 fn known_i18n_key_is_ok_in_content_and_in_an_attribute() {
     let attr = Attr {
         key: "label".into(),
-        value: "buttons.save".into(),
-        is_quoted: true,
-        i18n: true,
+        value: Value::I18n("buttons.save".into()),
         value_start: 0,
     };
     let mut el = i18n_element("nav.title", 3);
@@ -310,9 +304,7 @@ fn known_i18n_key_is_ok_in_content_and_in_an_attribute() {
 fn unknown_i18n_key_in_an_attribute_warns_and_names_the_attribute() {
     let attr = Attr {
         key: "label".into(),
-        value: "buttons.sav".into(),
-        is_quoted: true,
-        i18n: true,
+        value: Value::I18n("buttons.sav".into()),
         value_start: 0,
     };
     let doc = document(
@@ -339,12 +331,10 @@ fn a_project_without_a_catalog_gets_no_key_diagnostics() {
 
 #[test]
 fn a_plain_quoted_string_is_not_checked_as_a_key() {
-    // `label:"Save"` is a literal, not a lookup; only the `t"…"` form carries `i18n: true`.
+    // `label:"Save"` is a literal, not a lookup; only the `t"…"` form is a `Value::I18n`.
     let attr = Attr {
         key: "label".into(),
-        value: "Save".into(),
-        is_quoted: true,
-        i18n: false,
+        value: Value::Quoted("Save".into()),
         value_start: 0,
     };
     let doc = document(
@@ -361,9 +351,7 @@ fn unknown_theme_path_errors_in_a_non_color_attribute() {
     // `pad:` never reaches the colour check, so without this pass a typo'd token is silent until rustc.
     let attr = Attr {
         key: "pad".into(),
-        value: "theme.guttr".into(),
-        is_quoted: false,
-        i18n: false,
+        value: Value::Bare("theme.guttr".into()),
         value_start: 0,
     };
     let fields = HashSet::from(["gutter".to_string()]);
@@ -393,9 +381,7 @@ fn known_theme_path_is_ok_and_a_bare_ident_is_not_treated_as_one() {
     for value in ["theme.gutter", "card_gap", "12"] {
         let attr = Attr {
             key: "pad".into(),
-            value: value.into(),
-            is_quoted: false,
-            i18n: false,
+            value: Value::Bare(value.into()),
             value_start: 0,
         };
         let doc = document(

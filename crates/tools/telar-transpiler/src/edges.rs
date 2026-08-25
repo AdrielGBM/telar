@@ -142,12 +142,15 @@ pub fn collect(
         .iter()
         .filter_map(|a| {
             let suffix = a.key.strip_prefix(prefix)?;
-            Some((target(suffix)?, a.value.as_str()))
+            Some((target(suffix)?, a.value.text()))
         })
         .collect();
     named.sort_by_key(|(t, _)| t.specificity());
 
-    let bare = attrs.iter().find(|a| a.key == base).map(|a| a.value.trim());
+    let bare = attrs
+        .iter()
+        .find(|a| a.key == base)
+        .map(|a| a.value.text().trim());
     let mut edges = Edges::default();
 
     // The one-value form survives only if it is the whole story: a single token, and no edge named apart from it.
@@ -182,13 +185,12 @@ pub fn collect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use telar_parser::Value;
 
     fn attr(key: &str, value: &str) -> Attr {
         Attr {
             key: key.to_string(),
-            value: value.to_string(),
-            is_quoted: false,
-            i18n: false,
+            value: Value::Bare(value.to_string()),
             value_start: 0,
         }
     }

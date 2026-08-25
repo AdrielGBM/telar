@@ -252,7 +252,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         keys
     };
     match tag {
-        // `transition:` animates a paint/color property (see `transition::parse_transition_value`), so it is offered on the tags whose codegen wires it: `text` (color), `box`/containers (fill/stroke/opacity).
+        // `transition(…)` animates a paint/color property (see `transition::parse_transition_value`), so it is offered on the tags whose codegen wires it: `text` (color), `box`/containers (fill/stroke/opacity).
         // A `text` is a leaf, but it is a leaf *in a flex box*: it takes the layout keys that size and place it
         // among its siblings alongside its own type keys.
         "text" => with(&[
@@ -341,7 +341,7 @@ mod tests {
         let svg = tag_attr_keys("svg");
         assert!(svg.contains(&"src") && svg.contains(&"tint") && svg.contains(&"gap"));
         assert!(tag_attr_keys("feature_card").is_empty());
-        // `transition:` is offered on the tags whose codegen wires it.
+        // `transition(…)` is offered on the tags whose codegen wires it.
         assert!(tag_attr_keys("box").contains(&"transition"));
         assert!(tag_attr_keys("text").contains(&"transition"));
         assert!(tag_attr_keys("col").contains(&"transition"));

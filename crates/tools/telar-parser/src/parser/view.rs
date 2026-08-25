@@ -362,9 +362,10 @@ fn split_match_header(rest: &str) -> Option<(String, Option<String>, Option<Stri
 
 /// Parses an element header line into tag, classes, attrs, and quoted content.
 ///
-/// Tokens are consumed left to right. A bare `@name` is a class; a quoted string
-/// is the content; `key:value` is an attribute. When an attribute value begins
-/// with `||` or `|args|`, the entire remainder of the line becomes that value.
+/// Tokens are consumed left to right. A bare `@name` is a class; a quoted string is the content; `key:value`
+/// is an attribute. Two rules delimit a value and there are no exceptions to them: `key:value` is one token
+/// with its parens balanced, and `key(…)` is anything wanting a space at depth 0. Which of the two was
+/// written — and whether the text was quoted or an i18n key — is what the resulting [`Value`] records.
 fn parse_element_header(
     content: &str,
     line: usize,
@@ -407,9 +408,7 @@ fn parse_element_header(
             continue;
         }
 
-        // Read one whitespace-delimited token, but be aware it may contain a closure value.
         let token_start = i;
-        // First find where the `key:` part ends (if any) to detect closure values. We scan the token up to the first whitespace, while watching for a `:` that introduces a closure value spanning the rest of the line.
         let mut j = i;
         let mut colon_at: Option<usize> = None;
         let mut paren_at: Option<usize> = None;
@@ -423,9 +422,7 @@ fn parse_element_header(
                 colon_at = Some(j);
                 break;
             }
-            // `key(expr)`: a parenthesized value (closure or spec), delimited by balanced parens so it
-            // does not run to end of line and attribute order stops mattering — e.g. `on_press(|| f())`
-            // and `transition(fill 250ms ease-out)` can sit on one line in any order.
+            // `key(expr)`: the form for a value wanting a space, delimited by balanced parens so it does not run to end of line and attribute order stops mattering — `on_press(|| f())` and `transition(fill 250ms ease-out)` sit on one line in any order.
             if chars[j] == '(' {
                 paren_at = Some(j);
                 break;
@@ -446,9 +443,7 @@ fn parse_element_header(
             }
             element.attributes.push(Attr {
                 key: key.trim().to_string(),
-                value: value.trim().to_string(),
-                is_quoted: false,
-                i18n: false,
+                value: Value::Spec(value.trim().to_string()),
                 value_start: content_start + byte_at(&chars, vs),
             });
             i = next;
@@ -471,36 +466,6 @@ fn parse_element_header(
                 });
             }
 
-            // A `transition:` value is a space-separated spec (`opacity 200ms ease-out`), optionally comma-separated for several properties, so — like a closure value — it runs verbatim to the end of the line.
-            if key.trim() == "transition" {
-                let value: String = chars[val_start..].iter().collect();
-                // A real transition value never has a `:` at paren/bracket depth 0 (durations, easings,
-                // and `spring(...)`/`cubic-bezier(...)` keep their colons, if any, nested inside parens).
-                // A depth-0 `:` means a trailing attribute got swallowed by the run-to-EOL scan above.
-                let mut depth = 0i32;
-                for c in value.chars() {
-                    match c {
-                        '(' | '[' => depth += 1,
-                        ')' | ']' => depth -= 1,
-                        ':' if depth == 0 => {
-                            return Err(ParseError {
-                                message: "transition: must be the last attribute on the line; move the trailing attribute(s) before it, or wrap the value as transition(...)".to_string(),
-                                line,
-                            });
-                        }
-                        _ => {}
-                    }
-                }
-                element.attributes.push(Attr {
-                    key: key.trim().to_string(),
-                    value: value.trim().to_string(),
-                    is_quoted: false,
-                    i18n: false,
-                    value_start: content_start + byte_at(&chars, val_start),
-                });
-                break;
-            }
-
             let mut k = val_start;
             // Allow quoted attribute values, escaped (`"…"`), raw (`r"…"`), or an i18n key (`t"…"`).
             if let Some((str_at, is_key)) = string_start(&chars, k) {
@@ -511,9 +476,11 @@ fn parse_element_header(
                     })?;
                 element.attributes.push(Attr {
                     key: key.trim().to_string(),
-                    value: text,
-                    is_quoted: true,
-                    i18n: is_key,
+                    value: if is_key {
+                        Value::I18n(text)
+                    } else {
+                        Value::Quoted(text)
+                    },
                     value_start: content_start + byte_at(&chars, content_at),
                 });
                 i = next;
@@ -540,9 +507,7 @@ fn parse_element_header(
             check_hex_value(&value, line)?;
             element.attributes.push(Attr {
                 key: key.trim().to_string(),
-                value,
-                is_quoted: false,
-                i18n: false,
+                value: Value::Bare(value),
                 value_start: content_start + byte_at(&chars, val_start),
             });
             i = k;
@@ -565,9 +530,7 @@ fn parse_element_header(
             // A bare token after the tag is a flag-style attribute (e.g. `ghost`).
             element.attributes.push(Attr {
                 key: token,
-                value: String::new(),
-                is_quoted: false,
-                i18n: false,
+                value: Value::Flag,
                 value_start: content_start + byte_at(&chars, token_start),
             });
         }

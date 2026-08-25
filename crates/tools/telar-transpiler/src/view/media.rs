@@ -1,6 +1,6 @@
 //! Media emitters: `img`/`image` and `svg`.
 
-use telar_parser::{Attr, Element};
+use telar_parser::{Attr, Element, Value};
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ViewGen, expr_marker};
@@ -8,7 +8,7 @@ use super::{ChildEmit, ViewGen, expr_marker};
 /// Parses the shared `fit:` attribute (CSS `object-fit`) for `img`/`svg` into a reactive `ObjectFit` closure. Absent or unrecognized values default to `Contain` (preserve aspect ratio, letterbox), matching the widget defaults.
 fn fit_closure(attributes: &[Attr]) -> &'static str {
     match attributes.iter().find(|a| a.key == "fit") {
-        Some(a) => match a.value.trim().to_ascii_lowercase().as_str() {
+        Some(a) => match a.value.text().trim().to_ascii_lowercase().as_str() {
             "fill" => "move || ObjectFit::Fill",
             "cover" => "move || ObjectFit::Cover",
             "contain-integer" => "move || ObjectFit::ContainInteger",
@@ -69,7 +69,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "filter")
-            .map(|a| match a.value.trim() {
+            .map(|a| match a.value.text().trim() {
                 "Nearest" | "nearest" => "ImageFilter::Nearest",
                 _ => "ImageFilter::Linear",
             })
@@ -156,7 +156,7 @@ impl ViewGen<'_> {
         let Some(a) = tint_attr else {
             return "|| None".to_string();
         };
-        let v = a.value.trim();
+        let v = a.value.text().trim();
         if v.is_empty() {
             return "|| None".to_string();
         }
@@ -169,7 +169,7 @@ impl ViewGen<'_> {
         let Some(a) = stroke_attr else {
             return "|| None".to_string();
         };
-        let v = a.value.trim();
+        let v = a.value.text().trim();
         if v.is_empty() {
             return "|| None".to_string();
         }
@@ -185,21 +185,21 @@ impl ViewGen<'_> {
     /// - Quoted, non-empty `src:"path"` is a static asset baked at build time: `setup` declares a `static LazyLock<Arc<Data>>` built once, `data_fn` clones the shared `Arc` per reactive call.
     /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). Signals are cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `svg tint:$sig` / `box fill:$sig`.
     /// - Non-quoted, `$`-free `src:expr` is a constant `Arc<Data>` handle: `setup` hoists it into `__src` once and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
-    /// - Missing or empty `src` falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
+    /// - Missing, empty, or written in a form that cannot name an asset (a bare flag, a `t"…"` key) falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
     fn media_src_binding(&mut self, src_attr: Option<&Attr>, kind: MediaKind) -> (String, String) {
         let pad = self.indent_str();
-        match src_attr {
-            Some(a) if a.is_quoted && !a.value.trim().is_empty() => {
-                self.bake_asset_binding(a.value.trim(), kind, &pad)
+        match src_attr.map(|a| (a, &a.value)) {
+            Some((_, Value::Quoted(path))) if !path.trim().is_empty() => {
+                self.bake_asset_binding(path.trim(), kind, &pad)
             }
-            Some(a) if !a.is_quoted && a.value.contains('$') && !a.value.trim().is_empty() => {
-                let v = a.value.trim();
-                let data_fn = wrap_signal_clones(&[v], format!("move || {}", substitute_reads(v)));
-                (String::new(), data_fn)
-            }
-            Some(a) if !a.is_quoted && !a.value.trim().is_empty() => {
-                let v = a.value.trim();
-                let lead = a.value.len() - a.value.trim_start().len();
+            Some((a, Value::Bare(expr) | Value::Spec(expr))) if !expr.trim().is_empty() => {
+                let v = expr.trim();
+                if v.contains('$') {
+                    let data_fn =
+                        wrap_signal_clones(&[v], format!("move || {}", substitute_reads(v)));
+                    return (String::new(), data_fn);
+                }
+                let lead = expr.len() - expr.trim_start().len();
                 let src = format!("{}{v}", expr_marker(a.value_start + lead, v.len()));
                 (
                     format!("{pad}    let __src = {src}.clone();\n"),

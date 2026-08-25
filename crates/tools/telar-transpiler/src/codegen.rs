@@ -1200,7 +1200,7 @@ fn slot_context_expr(nodes: &[ViewNode]) -> Option<String> {
             .attributes
             .iter()
             .find(|a| a.key == "in")
-            .map(|a| a.value.trim().to_string())
+            .map(|a| a.value.text().trim().to_string())
             .or_else(|| slot_context_expr(&el.children)),
         ViewNode::Element(el) => slot_context_expr(&el.children),
         ViewNode::IfBlock(b) => slot_context_expr(&b.then_branch)

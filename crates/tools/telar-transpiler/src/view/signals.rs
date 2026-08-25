@@ -111,12 +111,12 @@ pub(super) fn closure_marker(attr: Option<&Attr>) -> String {
     let Some(attr) = attr else {
         return String::new();
     };
-    let trimmed = attr.value.trim_start();
+    let trimmed = attr.value.text().trim_start();
     if !trimmed.starts_with('|') {
         return String::new();
     }
-    let lead = attr.value.len() - trimmed.len();
-    expr_marker(attr.value_start + lead, attr.value.trim().len())
+    let lead = attr.value.text().len() - trimmed.len();
+    expr_marker(attr.value_start + lead, attr.value.text().trim().len())
 }
 
 /// The parser strips `on_press:` leaving `|| expr` or `|ev| expr`. Ensure the value is a closure; wrap bare expressions in a zero-arg closure. Then desugar a lone compound-assignment on a signal.
@@ -290,7 +290,7 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
                     out.push(content.clone());
                 }
                 for attr in &el.attributes {
-                    out.push(attr.value.clone());
+                    out.push(attr.value.text().to_string());
                 }
                 collect_snippets(&el.children, out);
             }
@@ -389,7 +389,7 @@ pub(super) fn is_corner_key(key: &str) -> bool {
         .is_some_and(|s| crate::edges::corner_target(s).is_some())
 }
 
-/// Writes a styled widget's `transition:` prelude into its construction block: `compile_error!` lines for any diagnostics, then the hoisted `let __transition_N = motion::Animated::new(...)` handles. Both are emitted before the widget constructor so the animation handles are in scope for the closures that capture them, and the block runs once per instance (F7) so the animations persist across `view()` re-runs.
+/// Writes a styled widget's `transition(…)` prelude into its construction block: `compile_error!` lines for any diagnostics, then the hoisted `let __transition_N = motion::Animated::new(...)` handles. Both are emitted before the widget constructor so the animation handles are in scope for the closures that capture them, and the block runs once per instance (F7) so the animations persist across `view()` re-runs.
 pub(super) fn emit_transition_prelude(
     code: &mut String,
     inner_pad: &str,

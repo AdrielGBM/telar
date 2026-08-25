@@ -23,9 +23,9 @@ fn collect(nodes: &[ViewNode], source: &str, file_dir: &Path, out: &mut Vec<Docu
                 if matches!(el.tag.as_str(), "img" | "image" | "svg") {
                     for attr in &el.attributes {
                         if attr.key == "src"
-                            && attr.is_quoted
+                            && attr.value.is_quoted()
                             && let Some(link) =
-                                link_for(&attr.value, attr.value_start, source, file_dir)
+                                link_for(attr.value.text(), attr.value_start, source, file_dir)
                         {
                             out.push(link);
                         }

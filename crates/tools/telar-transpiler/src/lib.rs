@@ -1118,7 +1118,7 @@ col @card
     }
 
     /// A transform is read per frame from a closure the renderer already re-runs, so animating one costs a
-    /// repaint and no relayout — which is what lets `transition:` reach past paint without breaking the
+    /// repaint and no relayout — which is what lets `transition(…)` reach past paint without breaking the
     /// invariant the whole design rests on. It is also the half of a sliding indicator that is not `track_rect`.
     #[test]
     fn a_transform_can_be_transitioned() {
@@ -1437,8 +1437,8 @@ col @card
 
     #[test]
     fn transition_opacity_hoists_animated_and_wraps_reactive_read() {
-        // A `transition:opacity` over a reactive `opacity:$sig`: the Animated is hoisted into setup (built once), and the opacity closure re-targets it to the current value and reads it.
-        let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox opacity:$fade transition:opacity 200ms ease-out\n    text \"hi\"\n";
+        // A `transition(opacity …)` over a reactive `opacity:$sig`: the Animated is hoisted into setup (built once), and the opacity closure re-targets it to the current value and reads it.
+        let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox opacity:$fade transition(opacity 200ms ease-out)\n    text \"hi\"\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
@@ -1454,7 +1454,7 @@ col @card
 
     #[test]
     fn transition_fill_with_theme_color_and_cubic_bezier() {
-        let src = "[view]\nbox fill:primary transition:fill 150ms cubic-bezier(0.4,0,0.2,1)\n    text \"x\"\n";
+        let src = "[view]\nbox fill:primary transition(fill 150ms cubic-bezier(0.4,0,0.2,1))\n    text \"x\"\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1470,7 +1470,7 @@ col @card
 
     #[test]
     fn transition_fill_spring() {
-        let src = "[view]\nbox fill:#3d78fa transition:fill spring(170,26)\n";
+        let src = "[view]\nbox fill:#3d78fa transition(fill spring(170,26))\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
@@ -1486,7 +1486,7 @@ col @card
 
     #[test]
     fn transition_multiple_properties_comma_separated() {
-        let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox fill:#3d78fa opacity:$fade transition:opacity 200ms, fill 150ms linear\n";
+        let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox fill:#3d78fa opacity:$fade transition(opacity 200ms, fill 150ms linear)\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
@@ -1513,7 +1513,7 @@ col @card
 
     #[test]
     fn transition_unsupported_property_emits_compile_error() {
-        let src = "[view]\nbox fill:#3d78fa transition:radius 200ms\n";
+        let src = "[view]\nbox fill:#3d78fa transition(radius 200ms)\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
@@ -1525,20 +1525,20 @@ col @card
 
     #[test]
     fn transition_invalid_duration_emits_compile_error() {
-        let src = "[view]\nbox opacity:0.5 transition:opacity 200\n";
+        let src = "[view]\nbox opacity:0.5 transition(opacity 200)\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("compile_error!(\"transition:opacity has an invalid duration `200`"),
+            code.contains("compile_error!(\"transition `opacity` has an invalid duration `200`"),
             "invalid duration should emit a compile_error:\n{code}"
         );
     }
 
     #[test]
     fn transition_inside_for_loop_hoists_animated_per_iteration() {
-        // `for` is a construction loop (runs once per component instance, pushing one widget per item into `__children`), not a reactive list needing key-based identity; the `Animated` for a `transition:` inside its body must sit inside the loop's own per-iteration `let __sbox_N = { .. }` block, so a fresh, persistent handle is installed for every item.
-        let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition:fill 200ms\n";
+        // `for` is a construction loop (runs once per component instance, pushing one widget per item into `__children`), not a reactive list needing key-based identity; the `Animated` for a `transition(…)` inside its body must sit inside the loop's own per-iteration `let __sbox_N = { .. }` block, so a fresh, persistent handle is installed for every item.
+        let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition(fill 200ms)\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
@@ -1568,8 +1568,8 @@ col @card
 
     #[test]
     fn transition_inside_for_loop_uses_distinct_counters_per_element() {
-        // Two elements with `transition:` in the same loop body are two distinct code sites, so the global `transition_count` must still hand out unique names for each — not one shared name reused per iteration.
-        let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition:fill 150ms\n        box stroke:#111111 transition:stroke 150ms\n";
+        // Two elements with `transition(…)` in the same loop body are two distinct code sites, so the global `transition_count` must still hand out unique names for each — not one shared name reused per iteration.
+        let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition(fill 150ms)\n        box stroke:#111111 transition(stroke 150ms)\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
@@ -1615,7 +1615,7 @@ col @card
     #[test]
     fn transition_fill_from_class_is_wired_without_false_error() {
         // The fill comes from the `@card` class, not an inline attribute; it must still be animatable (no spurious "no matching value").
-        let src = "[style]\n@card\n    fill: #3d78fa\n    radius: 12\n[view]\ncol @card transition:fill 150ms\n    text \"x\"\n";
+        let src = "[style]\n@card\n    fill: #3d78fa\n    radius: 12\n[view]\ncol @card transition(fill 150ms)\n    text \"x\"\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
@@ -1689,6 +1689,30 @@ col @card
         );
     }
 
+    /// `key(…)` is the only spelling left that admits a space, so every value needing one has to arrive
+    /// through it. A consumer that only ever saw the quoted or comma-joined spelling would drop the
+    /// parenthesized one silently, which is the one failure this grammar cannot afford.
+    #[test]
+    fn the_parenthesized_form_reaches_every_multi_token_value() {
+        let stroke = paint_code("box stroke:#ff0000 stroke_width(0 0 1 0)");
+        assert!(
+            stroke.contains("border_widths: BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)"),
+            "stroke_width:\n{stroke}"
+        );
+        let cols = paint_code("grid cols(1fr 2fr)");
+        assert!(
+            cols.contains(".display_grid().grid_template_columns("),
+            "cols:\n{cols}"
+        );
+        let drag = paint_code("box drag_button(secondary auxiliary)");
+        assert!(
+            drag.contains(
+                ".drag_button(PointerButton::Secondary).drag_button(PointerButton::Auxiliary)"
+            ),
+            "drag_button:\n{drag}"
+        );
+    }
+
     #[test]
     fn a_named_side_needs_no_shorthand() {
         let code = paint_code("box stroke:#ff0000 stroke_bottom:1");
@@ -1757,7 +1781,7 @@ col @card
 
     #[test]
     fn transition_color_on_text_wraps_text_style() {
-        let src = "[view]\ntext \"hi\" color:primary transition:color 120ms\n";
+        let src = "[view]\ntext \"hi\" color:primary transition(color 120ms)\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1869,7 +1893,7 @@ col @card
 
     #[test]
     fn fill_signal_reads_reactively_and_clones_into_the_closure() {
-        // No `transition:`: `fill:$accent` must still re-evaluate every time the styling closure runs, and must clone `accent` into that closure so the outer binding (declared in `[logic]`) stays usable elsewhere.
+        // No `transition(…)`: `fill:$accent` must still re-evaluate every time the styling closure runs, and must clone `accent` into that closure so the outer binding (declared in `[logic]`) stays usable elsewhere.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
@@ -1887,7 +1911,7 @@ col @card
     #[test]
     fn fill_signal_with_spring_transition_seeds_and_retargets_from_the_same_read() {
         // The `Animated`'s initial value and every `retarget` call must both read through the same `accent.get()` expression — the transition mechanism wraps a `$signal` fill exactly like it already does theme colors.
-        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent transition:fill spring(170, 26)\n";
+        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent transition(fill spring(170, 26))\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;

@@ -1,17 +1,17 @@
-//! Parses the `transition:` attribute value into per-property animation curves for the `motion` engine.
+//! Parses the `transition(…)` attribute value into per-property animation curves for the `motion` engine.
 //!
-//! Syntax (see `docs/animations.md` → Design → `.rsx` transition syntax): `transition:<prop> <duration> [<easing>|spring(k,c)]`, with several properties separated by commas. `<duration>` is `200ms`/`0.3s`; easing keywords are `linear|ease-in|ease-out|ease-in-out` or `cubic-bezier(a,b,c,d)`; the easing defaults to `ease-out` when omitted; a `spring(stiffness, damping)` replaces the duration+easing entirely.
+//! Syntax (see `docs/animations.md` → Design → `.rsx` transition syntax): `transition(<prop> <duration> [<easing>|spring(k,c)])`, with several properties separated by commas. `<duration>` is `200ms`/`0.3s`; easing keywords are `linear|ease-in|ease-out|ease-in-out` or `cubic-bezier(a,b,c,d)`; the easing defaults to `ease-out` when omitted; a `spring(stiffness, damping)` replaces the duration+easing entirely.
 
 use crate::style::format_f32;
 
-/// One `transition:<prop> …` clause resolved to codegen strings.
+/// One `<prop> <duration> …` clause of a `transition(…)` value, resolved to codegen strings.
 pub(crate) struct TransitionSpec {
     pub prop: String,
     /// The `motion::` curve expression, e.g. `motion::tween(std::time::Duration::from_millis(200), motion::Easing::EaseOut)` or `motion::spring(170.0, 26.0)`.
     pub curve: String,
 }
 
-/// Properties a `transition:` can animate (F5 in `docs/animations.md`).
+/// Properties a `transition(…)` can animate (F5 in `docs/animations.md`).
 ///
 /// Paint and transform, and deliberately not the layout box. Both halves are read per frame from a closure the
 /// renderer already re-runs, so animating them costs a repaint and nothing else — the "no relayout" invariant
@@ -33,7 +33,7 @@ const SUPPORTED_PROPS: &[&str] = &[
     "translate_y",
 ];
 
-/// Parses a `transition:` value into resolved specs plus human-readable error messages (a malformed clause becomes an error but does not abort the others). Parentheses are respected so the commas inside `cubic-bezier(...)`/`spring(...)` never split clauses.
+/// Parses a `transition(…)` value into resolved specs plus human-readable error messages (a malformed clause becomes an error but does not abort the others). Parentheses are respected so the commas inside `cubic-bezier(...)`/`spring(...)` never split clauses.
 pub(crate) fn parse_transition_value(value: &str) -> (Vec<TransitionSpec>, Vec<String>) {
     let mut specs = Vec::new();
     let mut errors = Vec::new();
@@ -64,7 +64,7 @@ fn parse_clause(clause: &str) -> Result<TransitionSpec, String> {
     }
     let second = tokens.get(1).ok_or_else(|| {
         format!(
-            "transition:{prop} needs a duration (e.g. `200ms`) or a `spring(stiffness, damping)`"
+            "transition `{prop}` needs a duration (e.g. `200ms`) or a `spring(stiffness, damping)`"
         )
     })?;
 
@@ -72,13 +72,13 @@ fn parse_clause(clause: &str) -> Result<TransitionSpec, String> {
         .strip_prefix("spring(")
         .and_then(|s| s.strip_suffix(')'))
     {
-        let curve = parse_spring(inner).map_err(|e| format!("transition:{prop} {e}"))?;
+        let curve = parse_spring(inner).map_err(|e| format!("transition `{prop}` {e}"))?;
         return Ok(TransitionSpec { prop, curve });
     }
 
-    let duration = parse_duration(second).map_err(|e| format!("transition:{prop} {e}"))?;
+    let duration = parse_duration(second).map_err(|e| format!("transition `{prop}` {e}"))?;
     let easing = match tokens.get(2) {
-        Some(e) => parse_easing(e).map_err(|m| format!("transition:{prop} {m}"))?,
+        Some(e) => parse_easing(e).map_err(|m| format!("transition `{prop}` {m}"))?,
         None => "motion::Easing::EaseOut".to_string(),
     };
     Ok(TransitionSpec {

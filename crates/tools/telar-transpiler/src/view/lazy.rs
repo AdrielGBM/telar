@@ -35,7 +35,7 @@ impl ViewGen<'_> {
         let cond = el.attributes.iter().find(|a| a.key == "when");
         let visible = match cond {
             Some(attr) => {
-                let raw = attr.value.trim();
+                let raw = attr.value.text().trim();
                 wrap_signal_clones(&[raw], format!("move || {}", substitute_reads(raw)))
             }
             // Without a condition there is nothing to defer *until*, which is almost certainly a mistake rather than a request to build immediately.

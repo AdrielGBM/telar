@@ -3,8 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use telar_parser::format::is_closure_value;
-use telar_parser::{Attr, Element};
+use telar_parser::{Attr, Element, Value};
 
 use crate::naming::to_pascal_case;
 use crate::style::format_f32;
@@ -49,17 +48,17 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "cursor")
-            .map(|a| format!(".cursor(Cursor::{})", to_pascal_case(a.value.trim())))
+            .map(|a| format!(".cursor(Cursor::{})", to_pascal_case(a.value.text().trim())))
             .unwrap_or_default();
-        // `drag_button:secondary,auxiliary` — the buttons that may start this box's drag, on top of the
-        // primary one that always can. Comma-separated because an attribute value stops at the first space.
+        // `drag_button(secondary auxiliary)` — the buttons that may start this box's drag, on top of the primary one that always can. Commas are taken as separators too, for the one-token `drag_button:secondary,auxiliary` spelling that predates the parenthesized form.
         let drag_button = el
             .attributes
             .iter()
             .find(|a| a.key == "drag_button")
             .map(|a| {
                 a.value
-                    .split(',')
+                    .text()
+                    .split([',', ' '])
                     .filter(|b| !b.trim().is_empty())
                     .map(|b| format!(".drag_button(PointerButton::{})", to_pascal_case(b.trim())))
                     .collect::<String>()
@@ -70,7 +69,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "drag_threshold")
-            .and_then(|a| a.value.trim().parse::<f32>().ok())
+            .and_then(|a| a.value.text().trim().parse::<f32>().ok())
             .map(|px| format!(".drag_threshold({})", format_f32(px)))
             .unwrap_or_default();
         // A bare flag, like `absolute`: an attribute with no value is the assertion itself.
@@ -78,7 +77,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "click_through")
-            .filter(|a| !matches!(a.value.trim(), "false"))
+            .filter(|a| !matches!(a.value.text().trim(), "false"))
             .map(|_| ".click_through(true)".to_string())
             .unwrap_or_default();
         let on_press = self.on_press_call(el);
@@ -87,7 +86,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "on_press")
-            .is_some_and(|a| !is_closure_value(&a.value));
+            .is_some_and(|a| !a.value.is_closure());
 
         let pattrs = self.paint_attrs(el);
         let hover_call = self.state_style_call(el, "hover_style", "hover_style", &pattrs);
@@ -218,7 +217,7 @@ impl ViewGen<'_> {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
-        let mut merged = parse_inline_paint_attrs(&attr.value);
+        let mut merged = parse_inline_paint_attrs(attr.value.text());
         merged.extend(base.iter().cloned());
         let mut hoists: Vec<String> = Vec::new();
         let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
@@ -234,9 +233,9 @@ impl ViewGen<'_> {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "disabled") else {
             return String::new();
         };
-        let value = attr.value.trim();
-        // A bare `disabled` flag with no value is the HTML spelling, and means it always is.
-        if value.is_empty() || value == "true" {
+        let value = attr.value.text().trim();
+        // A bare `disabled` flag is the HTML spelling, and means it always is.
+        if attr.value.is_flag() || value == "true" {
             return ".disabled(|| true)".to_string();
         }
         let read = substitute_reads(value);
@@ -257,9 +256,9 @@ impl ViewGen<'_> {
         // through the `maybe_` form so `None` leaves the box untouched. A wrapper component has no other way to
         // say "only if my caller gave me one": a no-op stand-in still reports the event handled, which turns a
         // chip with nothing to do into one that swallows the click.
-        if !is_closure_value(&attr.value) {
-            let marker = expr_marker(attr.value_start, attr.value.len());
-            return format!(".maybe_{method}({marker}{})", attr.value.trim());
+        if !attr.value.is_closure() {
+            let marker = expr_marker(attr.value_start, attr.value.text().len());
+            return format!(".maybe_{method}({marker}{})", attr.value.text().trim());
         }
         format!(".{method}({})", self.emit_closure_value(attr))
     }
@@ -269,14 +268,14 @@ impl ViewGen<'_> {
     /// completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component
     /// closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
     pub(super) fn emit_closure_value(&self, attr: &Attr) -> String {
-        let closure = substitute_handles(&normalize_closure(&attr.value));
+        let closure = substitute_handles(&normalize_closure(attr.value.text()));
         // A `$` substitution breaks the byte-for-byte span, so only a `$`-free closure carries a marker.
-        let marker = if attr.value.contains('$') {
+        let marker = if attr.value.text().contains('$') {
             String::new()
         } else {
             closure_marker(Some(attr))
         };
-        wrap_signal_clones(&[attr.value.as_str()], format!("move {marker}{closure}"))
+        wrap_signal_clones(&[attr.value.text()], format!("move {marker}{closure}"))
     }
 
     fn on_press_call(&self, el: &Element) -> String {
@@ -298,7 +297,7 @@ impl ViewGen<'_> {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "track_rect") else {
             return String::new();
         };
-        let target = attr.value.trim().trim_start_matches('$');
+        let target = attr.value.text().trim().trim_start_matches('$');
         if target.is_empty() {
             return String::new();
         }
@@ -326,7 +325,7 @@ impl ViewGen<'_> {
             el.attributes
                 .iter()
                 .find(|a| a.key == key)
-                .map(|a| a.value.trim().to_string())
+                .map(|a| a.value.text().trim().to_string())
         };
         let scale = raw("scale");
         let rotate = raw("rotate").unwrap_or_else(|| "0".into());
@@ -336,8 +335,7 @@ impl ViewGen<'_> {
         let scale_y = raw("scale_y").or(scale).unwrap_or_else(|| "1".into());
         let tx = raw("translate_x").unwrap_or_else(|| "0".into());
         let ty = raw("translate_y").unwrap_or_else(|| "0".into());
-        // Paired with the property each value came from, so a `transition:` names the axis it animates. `scale`
-        // stands in for both axes when neither was given its own value, matching how the value itself resolves.
+        // Paired with the property each value came from, so a `transition(…)` names the axis it animates. `scale` stands in for both axes when neither was given its own value, matching how the value itself resolves.
         let axis_prop = |own: &'static str| match transitions.contains_key(own) {
             true => own,
             false => "scale",
@@ -370,23 +368,23 @@ impl ViewGen<'_> {
     ///
     /// `gradient:horizontal/vertical/diagonal/radial` with `from:` / `to:` (required), optional `mid:` / `mid_pos:`.
     pub(super) fn box_gradient_paint(&self, attrs: &[Attr]) -> Option<String> {
-        let direction = attrs.iter().find(|a| a.key == "gradient")?.value.clone();
+        let direction = attrs.iter().find(|a| a.key == "gradient")?.value.text();
         let from = attrs
             .iter()
             .find(|a| a.key == "from")
-            .map(|a| self.color_expr(&a.value))?;
+            .map(|a| self.color_expr(a.value.text()))?;
         let to = attrs
             .iter()
             .find(|a| a.key == "to")
-            .map(|a| self.color_expr(&a.value))?;
+            .map(|a| self.color_expr(a.value.text()))?;
         let mid = attrs
             .iter()
             .find(|a| a.key == "mid")
-            .map(|a| self.color_expr(&a.value));
+            .map(|a| self.color_expr(a.value.text()));
         let mid_pos = attrs
             .iter()
             .find(|a| a.key == "mid_pos")
-            .and_then(|a| a.value.parse::<f32>().ok())
+            .and_then(|a| a.value.text().parse::<f32>().ok())
             .unwrap_or(0.5);
 
         let stops = build_gradient_stops(&from, &to, mid.as_deref(), mid_pos);
@@ -406,7 +404,7 @@ impl ViewGen<'_> {
                 let radius_expr = attrs
                     .iter()
                     .find(|a| a.key == "radial_radius")
-                    .and_then(|a| a.value.parse::<f32>().ok())
+                    .and_then(|a| a.value.text().parse::<f32>().ok())
                     .map(format_f32)
                     .unwrap_or_else(|| "r.width.min(r.height) * 0.5".to_string());
                 Some(format!(
@@ -428,9 +426,7 @@ fn parse_inline_paint_attrs(value: &str) -> Vec<Attr> {
             let (key, val) = tok.split_once(':')?;
             Some(Attr {
                 key: key.to_string(),
-                value: val.to_string(),
-                is_quoted: false,
-                i18n: false,
+                value: Value::Bare(val.to_string()),
                 value_start: 0,
             })
         })

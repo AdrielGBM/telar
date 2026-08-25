@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::{
-    Attr, Element, Preview, RsxDocument, Section, StyleClass, StyleConstant, StyleValue, ViewNode,
-    header_section, parse,
+    Attr, Element, Preview, RsxDocument, Section, StyleClass, StyleConstant, StyleValue, Value,
+    ViewNode, header_section, parse,
 };
 
 const INDENT: &str = "    ";
@@ -383,18 +383,16 @@ fn escape_rsx_string(s: &str) -> String {
     out
 }
 
+/// Re-emits an attribute in the form it was written in. One arm per [`Value`] variant, because the variant is
+/// the whole of what decides the spelling: guessing it back from the text is what used to turn a `t"…"` key
+/// into a plain literal and a `transition(…)` into a colon the parser reads as one token.
 fn format_attr(attr: &Attr) -> String {
-    if attr.is_quoted {
-        format!("{}:\"{}\"", attr.key, escape_rsx_string(&attr.value))
-    } else if attr.value.is_empty() {
-        // Bare flag attribute, e.g. `ghost`.
-        attr.key.clone()
-    } else if is_closure_value(&attr.value) || takes_a_parenthesized_value(&attr.key) {
-        // A closure value uses the parenthesized form `key(|…| …)` — the colon form is gone, since it ran to end of line and swallowed any following attributes. `move |…|` counts: re-emitting one with a colon produces a line the parser then reads as the attribute `key:move` followed by garbage, so formatting would break the file it just formatted.
-        // A paint list is the same story: its value is itself `key:value` pairs, so `hover_style:fill:x stroke:y` is a spelling nothing can read back.
-        format!("{}({})", attr.key, attr.value)
-    } else {
-        format!("{}:{}", attr.key, attr.value)
+    match &attr.value {
+        Value::Flag => attr.key.clone(),
+        Value::Bare(text) => format!("{}:{text}", attr.key),
+        Value::Quoted(text) => format!("{}:\"{}\"", attr.key, escape_rsx_string(text)),
+        Value::I18n(key) => format!("{}:t\"{}\"", attr.key, escape_rsx_string(key)),
+        Value::Spec(text) => format!("{}({text})", attr.key),
     }
 }
 
@@ -572,6 +570,18 @@ mod tests {
         assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }
 
+    /// An attribute must come back in the form it was written in, because the form is what it means: a `t"…"`
+    /// re-emitted as a plain literal turns a catalog lookup into its own key, and a parenthesized spec
+    /// re-emitted with a colon becomes one attribute followed by a run of stray flags. Both were possible
+    /// while the spelling was guessed from the text rather than read off the value.
+    #[test]
+    fn an_i18n_key_and_a_parenthesized_spec_survive_a_round_trip() {
+        let src = "[view]\nbox transition(fill 250ms ease-out)\n    btn label:t\"buttons.save\"\n";
+        let out = format_document(src).unwrap();
+        assert_eq!(out, src);
+        assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
+    }
+
     /// Losing the `virtual` clause would turn a list that builds ten rows into one that builds ten thousand,
     /// silently, on the next format.
     #[test]
@@ -648,23 +658,4 @@ mod tests {
             "and formatting is idempotent"
         );
     }
-}
-
-/// Whether `key` is written in the parenthesized form regardless of what its value looks like: an event
-/// handler, which reads as a call and must accept a closure, and a paint list, whose value is itself
-/// `key:value` pairs. Keeping the spelling uniform is the point — an `on_press` that took the colon form for a
-/// forwarded handler and parens for a closure would teach two spellings for one thing.
-fn takes_a_parenthesized_value(key: &str) -> bool {
-    key.starts_with("on_") || matches!(key, "hover_style" | "active_style")
-}
-
-/// Whether an attribute value is a closure written out in place, in either spelling the DSL accepts — as
-/// opposed to a handler expression the caller is forwarding. The formatter keeps the two spellings apart and
-/// the transpiler wires them to different methods, so both read it from here rather than each testing its own.
-pub fn is_closure_value(value: &str) -> bool {
-    let value = value.trim_start();
-    value.starts_with('|')
-        || value
-            .strip_prefix("move")
-            .is_some_and(|rest| rest.trim_start().starts_with('|'))
 }

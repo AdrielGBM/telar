@@ -4,6 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::Element;
 
+use super::signals::rust_str;
 use super::{ChildEmit, ChildMode, ViewGen, wrap_as_single_content};
 
 impl ViewGen<'_> {
@@ -18,7 +19,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|attr| attr.key == "keep")
-            .map(|attr| format!("\"{}\"", attr.value.trim_matches('"')));
+            .map(|attr| rust_str(attr.value.text()));
         // A `virtual` loop anywhere under this scroll needs its live viewport, and only the closure forms hand
         // one over — so the constructor's shape follows what the subtree asked for. Every other scroll keeps the
         // cheaper form it had.

@@ -19,7 +19,7 @@ impl ViewGen<'_> {
 
         // Parse the `d:` path-data string into an absolute `PathData` builder chain at compile time. A missing/invalid `d` becomes a `compile_error!` on this element's line (via the source map).
         let (data_chain, extent, parse_err) = match el.attributes.iter().find(|a| a.key == "d") {
-            Some(a) => match parse_path_data(&a.value) {
+            Some(a) => match parse_path_data(a.value.text()) {
                 Ok(built) => (built.chain, Some((built.max_x, built.max_y)), None),
                 Err(e) => (
                     "PathData::new()".to_string(),
@@ -52,7 +52,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .filter(|a| crate::registry::color_attr_keys().contains(&a.key.as_str()))
-            .map(|a| a.value.as_str())
+            .map(|a| a.value.text())
             .collect();
         let style_closure = wrap_signal_clones(&raw_colors, format!("move || {path_style}"));
         let path_expr = format!("Path::static_data(__path_data.clone(), {style_closure}).view()");
@@ -79,16 +79,16 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "fill")
-            .map(|a| format!("Some(Paint::Solid({}))", self.color_expr(&a.value)))
+            .map(|a| format!("Some(Paint::Solid({}))", self.color_expr(a.value.text())))
             .unwrap_or_else(|| "None".to_string());
         let stroke = match el.attributes.iter().find(|a| a.key == "stroke") {
             Some(a) => {
-                let color = self.color_expr(&a.value);
+                let color = self.color_expr(a.value.text());
                 let width = el
                     .attributes
                     .iter()
                     .find(|a| a.key == "stroke_width")
-                    .and_then(|a| a.value.trim().parse::<f32>().ok())
+                    .and_then(|a| a.value.text().trim().parse::<f32>().ok())
                     .unwrap_or(1.0);
                 format!("Some(Stroke::new({color}, {}))", format_f32(width))
             }
@@ -98,7 +98,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "fill_rule")
-            .map(|a| a.value.trim().to_ascii_lowercase())
+            .map(|a| a.value.text().trim().to_ascii_lowercase())
         {
             Some(v) if v == "even_odd" || v == "even-odd" || v == "evenodd" => "FillRule::EvenOdd",
             _ => "FillRule::Winding",

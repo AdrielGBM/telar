@@ -166,21 +166,19 @@ fn check_element(el: &Element, ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<
         let theme_fields = ctx.theme.map(|t| t.theme_fields);
         for attr in &el.attributes {
             if color_attr_keys().contains(&attr.key.as_str()) {
-                let val = &attr.value;
+                let val = attr.value.text();
                 if val.starts_with('{')
                     || val.starts_with('#')
                     || val.starts_with('$')
                     || val.starts_with("Color::")
                     // An explicit `theme.field` is validated by `check_theme_paths`, which knows the dotted form.
                     || val.starts_with("theme.")
-                    || color_keywords().contains(&val.as_str())
+                    || color_keywords().contains(&val)
                 {
                     continue;
                 }
-                let known = ctx.local_constants.contains(val.as_str())
-                    || theme_fields
-                        .map(|f| f.contains(val.as_str()))
-                        .unwrap_or(false);
+                let known = ctx.local_constants.contains(val)
+                    || theme_fields.map(|f| f.contains(val)).unwrap_or(false);
                 if !known {
                     diagnostics.push(Diagnostic::error(
                         format!("Unknown color `{val}` — not in [style] constants or theme fields"),
@@ -205,7 +203,7 @@ fn check_theme_paths(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec
         return;
     };
     for attr in &el.attributes {
-        let Some(field) = attr.value.trim().strip_prefix("theme.") else {
+        let Some(field) = attr.value.text().trim().strip_prefix("theme.") else {
             continue;
         };
         if field.is_empty() || !is_ident(field) || theme.theme_fields.contains(field) {
@@ -249,8 +247,8 @@ fn check_i18n_keys(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec<D
         check(content, "t\"…\"");
     }
     for attr in &el.attributes {
-        if attr.i18n {
-            check(&attr.value, &format!("`{}:`", attr.key));
+        if attr.value.is_i18n() {
+            check(attr.value.text(), &format!("`{}:`", attr.key));
         }
     }
 }
