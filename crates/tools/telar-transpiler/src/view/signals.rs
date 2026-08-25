@@ -432,14 +432,16 @@ pub(super) fn build_rect_style(
             .map(|g| format!("Some({g})"))
             .or_else(|| solid_fill.map(|f| format!("Some(Paint::Solid({f}))")))
             .unwrap_or_else(|| "None".to_string());
-        let stroke_s = stroke
-            .map(|s| format!("Some(Stroke::new({s}, {}))", format_f32(stroke_width)))
-            .unwrap_or_else(|| "None".to_string());
+        // Spelled out only when the box named an edge; otherwise the plain `stroke_width` on all four sides.
+        let widths_s =
+            border_widths.unwrap_or_else(|| format!("[{}; 4]", format_f32(stroke_width)));
+        let border_s = match stroke {
+            Some(s) => format!("Some(Border {{ paint: Paint::Solid({s}), widths: {widths_s} }})"),
+            None => "None".to_string(),
+        };
         let shadow_s = shadow.unwrap_or_else(|| "None".to_string());
-        // Named only when the box named an edge, so every box that wants a plain frame emits exactly what it did before.
-        let widths_s = border_widths.unwrap_or_else(|| "BorderWidths::Uniform".to_string());
         format!(
-            "RectStyle {{ fill: {fill_s}, stroke: {stroke_s}, shadow: {shadow_s}, radius: {radius}, border_widths: {widths_s} }}"
+            "RectStyle {{ fill: {fill_s}, border: {border_s}, shadow: {shadow_s}, radius: {radius} }}"
         )
     } else {
         match solid_fill {

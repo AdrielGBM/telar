@@ -4,17 +4,15 @@ use crate::{BorderRadius, Color};
 
 use super::paint::{FillRule, Paint, Shadow, Stroke};
 
+/// What a fillable shape shares. The outline is *not* here: a path is stroked, with a cap and a join that
+/// mean something along an open curve, and a box is framed, with a thickness per side that a path has no use
+/// for. They were one method while a rect carried a `Stroke` it only ever read two fields of.
 pub trait ShapeStyle: Sized {
     fn fill_mut(&mut self) -> &mut Option<Paint>;
-    fn stroke_mut(&mut self) -> &mut Option<Stroke>;
     fn shadow_mut(&mut self) -> &mut Option<Shadow>;
 
     fn with_fill(mut self, fill: impl Into<Paint>) -> Self {
         *self.fill_mut() = Some(fill.into());
-        self
-    }
-    fn with_stroke(mut self, stroke: Stroke) -> Self {
-        *self.stroke_mut() = Some(stroke);
         self
     }
     fn with_shadow(mut self, shadow: Shadow) -> Self {
@@ -23,58 +21,51 @@ pub trait ShapeStyle: Sized {
     }
 }
 
-/// How thick a rect's border is on each side.
+/// A box's frame: what it is painted with, and how thick it is on each side.
 ///
-/// [`Uniform`](Self::Uniform) is everything a [`Stroke`] on its own can say, and all a path or a line ever
-/// means by width: one number, applied the whole way round. [`PerSide`](Self::PerSide) is the case a box has
-/// and a path does not — a rule under a header, a divider down one edge — where a side of `0.0` is simply not
-/// there. Which is why the four numbers live on the rect rather than on the stroke they share a colour with.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum BorderWidths {
-    #[default]
-    Uniform,
-    PerSide {
-        top: f32,
-        right: f32,
-        bottom: f32,
-        left: f32,
-    },
+/// One value where a rect used to carry a [`Stroke`] beside a separate `BorderWidths` whose uniform case
+/// resolved against that stroke's `width` — so the thickness was defined in two places at once, and two of
+/// the stroke's four fields were dead: no rect path in either renderer has ever read `cap` or `join`. A
+/// `Stroke` still means all four things for a [`PathStyle`] and a line, where they all matter.
+///
+/// Four numbers rather than one because a side of `0.0` is simply not there: a rule under a header, a
+/// divider down one edge. `Border::uniform` is the common case spelled once.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Border {
+    pub paint: Paint,
+    /// Thicknesses in `[top, right, bottom, left]` order.
+    pub widths: [f32; 4],
 }
 
-impl BorderWidths {
-    pub fn per_side(top: f32, right: f32, bottom: f32, left: f32) -> Self {
-        Self::PerSide {
-            top,
-            right,
-            bottom,
-            left,
+impl Border {
+    /// The same thickness the whole way round.
+    pub fn uniform(paint: impl Into<Paint>, width: f32) -> Self {
+        Self {
+            paint: paint.into(),
+            widths: [width; 4],
         }
     }
 
-    /// The four thicknesses in `[top, right, bottom, left]` order, with [`Uniform`](Self::Uniform) taking its
-    /// number from the stroke it belongs to.
-    pub fn resolve(self, stroke_width: f32) -> [f32; 4] {
-        match self {
-            Self::Uniform => [stroke_width; 4],
-            Self::PerSide {
-                top,
-                right,
-                bottom,
-                left,
-            } => [top, right, bottom, left],
+    pub fn per_side(paint: impl Into<Paint>, top: f32, right: f32, bottom: f32, left: f32) -> Self {
+        Self {
+            paint: paint.into(),
+            widths: [top, right, bottom, left],
         }
+    }
+
+    /// Whether this frame puts anything on screen at all — every side at zero draws nothing.
+    pub fn is_visible(&self) -> bool {
+        self.widths.iter().any(|w| *w > 0.0)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct RectStyle {
     pub fill: Option<Paint>,
-    pub stroke: Option<Stroke>,
+    /// The frame around the box. See [`Border`].
+    pub border: Option<Border>,
     pub shadow: Option<Shadow>,
     pub radius: BorderRadius,
-    /// Which sides of the border are drawn and how thick each is; see [`BorderWidths`]. Read it through
-    /// [`border`](Self::border) rather than directly, so the uniform case resolves against `stroke.width`.
-    pub border_widths: BorderWidths,
 }
 
 impl RectStyle {
@@ -91,22 +82,16 @@ impl RectStyle {
         self
     }
 
-    /// Draws the stroke on the named sides only, at the named thicknesses. See [`BorderWidths`].
-    pub fn with_border_widths(mut self, widths: BorderWidths) -> Self {
-        self.border_widths = widths;
+    pub fn with_border(mut self, border: Border) -> Self {
+        self.border = Some(border);
         self
     }
 
     /// The border this style actually paints: its paint, and the four thicknesses in
-    /// `[top, right, bottom, left]` order. `None` when there is nothing to draw — no stroke at all, or every
-    /// side sitting at zero.
-    pub fn border(&self) -> Option<(Paint, [f32; 4])> {
-        let stroke = self.stroke?;
-        let widths = self.border_widths.resolve(stroke.width);
-        widths
-            .iter()
-            .any(|w| *w > 0.0)
-            .then_some((stroke.paint, widths))
+    /// `[top, right, bottom, left]` order. `None` when there is nothing to draw.
+    pub fn painted_border(&self) -> Option<(Paint, [f32; 4])> {
+        let border = self.border?;
+        border.is_visible().then_some((border.paint, border.widths))
     }
 }
 
@@ -151,9 +136,6 @@ impl ShapeStyle for RectStyle {
     fn fill_mut(&mut self) -> &mut Option<Paint> {
         &mut self.fill
     }
-    fn stroke_mut(&mut self) -> &mut Option<Stroke> {
-        &mut self.stroke
-    }
     fn shadow_mut(&mut self) -> &mut Option<Shadow> {
         &mut self.shadow
     }
@@ -172,14 +154,18 @@ impl PathStyle {
         self.fill_rule = rule;
         self
     }
+
+    /// Strokes the path. A cap and a join mean something along an open curve, which is why this is the
+    /// path's own and not a box's frame.
+    pub fn with_stroke(mut self, stroke: Stroke) -> Self {
+        self.stroke = Some(stroke);
+        self
+    }
 }
 
 impl ShapeStyle for PathStyle {
     fn fill_mut(&mut self) -> &mut Option<Paint> {
         &mut self.fill
-    }
-    fn stroke_mut(&mut self) -> &mut Option<Stroke> {
-        &mut self.stroke
     }
     fn shadow_mut(&mut self) -> &mut Option<Shadow> {
         &mut self.shadow
@@ -195,37 +181,37 @@ mod border_tests {
     }
 
     #[test]
-    fn a_plain_stroke_still_means_all_four_sides() {
-        let style = RectStyle::default().with_stroke(Stroke::new(Color::BLACK, 2.0));
-        assert_eq!(style.border(), Some((Paint::Solid(Color::BLACK), [2.0; 4])));
+    fn a_uniform_border_means_all_four_sides() {
+        let style = RectStyle::default().with_border(Border::uniform(Color::BLACK, 2.0));
+        assert_eq!(
+            style.painted_border(),
+            Some((Paint::Solid(Color::BLACK), [2.0; 4]))
+        );
     }
 
-    /// The whole point of the type: a colour with no side to paint it on draws nothing, rather than falling
-    /// back to the stroke's own width and framing the box.
+    /// The whole point of the type: a colour with no side to paint it on draws nothing.
     #[test]
     fn every_side_at_zero_is_no_border_at_all() {
-        let style = RectStyle::default()
-            .with_stroke(Stroke::new(Color::BLACK, 2.0))
-            .with_border_widths(BorderWidths::per_side(0.0, 0.0, 0.0, 0.0));
-        assert_eq!(style.border(), None);
+        let style =
+            RectStyle::default().with_border(Border::per_side(Color::BLACK, 0.0, 0.0, 0.0, 0.0));
+        assert_eq!(style.painted_border(), None);
     }
 
     #[test]
-    fn a_side_of_its_own_overrides_the_strokes_width() {
-        let style = RectStyle::default()
-            .with_stroke(Stroke::new(Color::BLACK, 2.0))
-            .with_border_widths(BorderWidths::per_side(0.0, 0.0, 1.0, 0.0));
+    fn one_named_side_is_the_whole_frame() {
+        let style =
+            RectStyle::default().with_border(Border::per_side(Color::BLACK, 0.0, 0.0, 1.0, 0.0));
         assert_eq!(
-            style.border(),
+            style.painted_border(),
             Some((Paint::Solid(Color::BLACK), [0.0, 0.0, 1.0, 0.0]))
         );
     }
 
+    /// Thicknesses with no paint to draw them in used to be representable — a `border_widths` beside a
+    /// `stroke: None`. Now there is nothing to construct.
     #[test]
-    fn a_colourless_box_has_no_border_however_thick_its_sides_are() {
-        let style =
-            RectStyle::default().with_border_widths(BorderWidths::per_side(4.0, 4.0, 4.0, 4.0));
-        assert_eq!(style.border(), None);
+    fn a_box_with_no_border_paints_none() {
+        assert_eq!(RectStyle::default().painted_border(), None);
     }
 
     /// A side at zero leaves the inner edge flush with the outer one there, which is what makes the ring

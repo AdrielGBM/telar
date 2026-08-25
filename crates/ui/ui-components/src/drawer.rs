@@ -1,6 +1,6 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
-use renderer_core::{Color, RectStyle, ShapeStyle, Stroke};
+use renderer_core::{Border, Color, RectStyle, ShapeStyle};
 use ui_core::{LayoutItem, Slots, StyledContainer, box_item};
 
 use crate::scrim;
@@ -98,7 +98,7 @@ fn build_open_drawer(
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), shared::surface))
-                .with_stroke(Stroke::new(shared::border(), 1.0))
+                .with_border(Border::uniform(shared::border(), 1.0))
         },
         body,
     )?

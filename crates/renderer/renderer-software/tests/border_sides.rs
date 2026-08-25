@@ -8,9 +8,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use platform_headless::HeadlessWindow;
-use renderer_core::{
-    BorderRadius, BorderWidths, Color, DrawCommand, RectStyle, RenderBackend, ShapeStyle, Stroke,
-};
+use renderer_core::{Border, BorderRadius, Color, DrawCommand, RectStyle, RenderBackend};
 use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 const W: u32 = 40;
@@ -44,17 +42,18 @@ fn red_at(pixels: &[u8], x: u32, y: u32) -> u8 {
     pixels[((y * W + x) * 4) as usize]
 }
 
-fn bordered(widths: BorderWidths) -> RectStyle {
-    RectStyle::default()
-        .with_stroke(Stroke::new(Color::RED, 1.0))
-        .with_border_widths(widths)
+fn bordered(widths: [f32; 4]) -> RectStyle {
+    RectStyle::default().with_border(Border {
+        paint: Color::RED.into(),
+        widths,
+    })
 }
 
 /// The whole feature in one assertion: a rule under a header paints its own edge and leaves the other three
-/// alone. A stroke that ignored the sides would light up all four.
+/// alone. A border that ignored the sides would light up all four.
 #[test]
 fn a_bottom_border_paints_the_bottom_edge_and_nothing_else() {
-    let pixels = render(bordered(BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)));
+    let pixels = render(bordered([0.0, 0.0, 1.0, 0.0]));
 
     assert!(
         red_at(&pixels, 20, 39) > 200,
@@ -72,8 +71,8 @@ fn a_bottom_border_paints_the_bottom_edge_and_nothing_else() {
 /// The same box under the uniform form still frames all four sides, so the per-side path did not become the
 /// only path.
 #[test]
-fn a_plain_stroke_still_frames_the_whole_box() {
-    let pixels = render(bordered(BorderWidths::Uniform));
+fn a_uniform_border_still_frames_the_whole_box() {
+    let pixels = render(bordered([1.0; 4]));
 
     for (x, y, edge) in [
         (20, 0, "top"),
@@ -93,7 +92,7 @@ fn a_plain_stroke_still_frames_the_whole_box() {
 /// "which sides" flag could never express.
 #[test]
 fn sides_keep_their_own_thicknesses() {
-    let pixels = render(bordered(BorderWidths::per_side(4.0, 0.0, 1.0, 0.0)));
+    let pixels = render(bordered([4.0, 0.0, 1.0, 0.0]));
 
     assert!(red_at(&pixels, 20, 3) > 200, "the top is four rows deep");
     assert_eq!(red_at(&pixels, 20, 4), 0, "and stops after the fourth");
@@ -104,9 +103,7 @@ fn sides_keep_their_own_thicknesses() {
 /// A rounded box with one side has to keep the corner arc that side runs into, or the rule ends in a notch.
 #[test]
 fn a_rounded_box_keeps_the_arc_its_one_side_runs_into() {
-    let pixels = render(
-        bordered(BorderWidths::per_side(0.0, 0.0, 2.0, 2.0)).with_radius(BorderRadius::all(8.0)),
-    );
+    let pixels = render(bordered([0.0, 0.0, 2.0, 2.0]).with_radius(BorderRadius::all(8.0)));
 
     assert!(
         red_at(&pixels, 3, 36) > 100,
@@ -123,7 +120,7 @@ fn a_rounded_box_keeps_the_arc_its_one_side_runs_into() {
 /// it fills the box rather than vanishing.
 #[test]
 fn a_border_thicker_than_its_box_fills_it() {
-    let pixels = render(bordered(BorderWidths::per_side(30.0, 0.0, 30.0, 0.0)));
+    let pixels = render(bordered([30.0, 0.0, 30.0, 0.0]));
 
     for y in [0, 20, 39] {
         assert!(
@@ -137,7 +134,7 @@ fn a_border_thicker_than_its_box_fills_it() {
 /// do not — the same interior both backends derive from `border_inner_shape`.
 #[test]
 fn the_fill_meets_the_border_only_where_there_is_one() {
-    let mut style = bordered(BorderWidths::per_side(0.0, 0.0, 6.0, 0.0));
+    let mut style = bordered([0.0, 0.0, 6.0, 0.0]);
     style.fill = Some(Color::from_rgb_u8(0, 0, 255).into());
     let pixels = render(style);
 

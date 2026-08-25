@@ -950,7 +950,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             if let DrawCommand::Rect { rect, style } = cmd
                 && (rect.width <= 0.0
                     || rect.height <= 0.0
-                    || (style.fill.is_none() && style.stroke.is_none()))
+                    || (style.fill.is_none() && style.painted_border().is_none()))
             {
                 continue;
             }

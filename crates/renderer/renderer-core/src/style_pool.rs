@@ -3,7 +3,7 @@ use std::hash::Hasher;
 use rustc_hash::FxHasher;
 
 use crate::{
-    BorderRadius, BorderWidths, Declared, FillRule, FontFamily, FontStyle, Gradient, GradientKind,
+    Border, BorderRadius, Declared, FillRule, FontFamily, FontStyle, Gradient, GradientKind,
     LineHeight, Paint, PathStyle, Raster, RectStyle, Shadow, Stroke, TextShadow, TextStyle,
     TextWrap,
 };
@@ -12,25 +12,20 @@ use crate::{
 pub fn hash_rect_style(s: &RectStyle) -> u64 {
     let mut h = FxHasher::default();
     hash_opt_paint(s.fill.as_ref(), &mut h);
-    hash_opt_stroke(s.stroke.as_ref(), &mut h);
+    hash_opt_border(s.border.as_ref(), &mut h);
     hash_opt_shadow(s.shadow.as_ref(), &mut h);
     hash_border_radius(&s.radius, &mut h);
-    hash_border_widths(&s.border_widths, &mut h);
     h.finish()
 }
 
-fn hash_border_widths(w: &BorderWidths, h: &mut FxHasher) {
-    match w {
-        BorderWidths::Uniform => h.write_u8(0),
-        BorderWidths::PerSide {
-            top,
-            right,
-            bottom,
-            left,
-        } => {
+fn hash_opt_border(b: Option<&Border>, h: &mut FxHasher) {
+    match b {
+        None => h.write_u8(0),
+        Some(border) => {
             h.write_u8(1);
-            for v in [top, right, bottom, left] {
-                h.write_u32(v.to_bits());
+            hash_paint(&border.paint, h);
+            for w in border.widths {
+                h.write_u32(w.to_bits());
             }
         }
     }

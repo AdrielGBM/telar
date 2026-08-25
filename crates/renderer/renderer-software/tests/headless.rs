@@ -3,8 +3,8 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 use platform_headless::HeadlessWindow;
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
-    ShapeStyle, Stroke, TextStyle,
+    Border, BorderRadius, Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend,
+    Shadow, ShapeStyle, Stroke, TextStyle,
 };
 use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
@@ -102,7 +102,7 @@ fn dense_ui() -> Vec<DrawCommand> {
     );
     let panel_border: Arc<RectStyle> = Arc::new(
         RectStyle::default()
-            .with_stroke(Stroke::new(Color::from_rgb_u8(70, 78, 96), 1.5))
+            .with_border(Border::uniform(Color::from_rgb_u8(70, 78, 96), 1.5))
             .with_radius(BorderRadius::all(6.0)),
     );
     // Small blur/spread so the shadow pixmap stays under the async threshold and is computed inline (deterministic, no background threads).

@@ -7,7 +7,7 @@ use geometry_core::Rect;
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use platform_core::{Key, NamedKey};
 use reactive_core::{RwSignal, effect, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
 use ui_core::focus::Role;
 use ui_core::{
     Children, Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item,
@@ -383,7 +383,7 @@ fn trigger_rect_style(color: &dyn Fn() -> Color, bordered: bool) -> RectStyle {
     let accent = shared::resolve(color, shared::accent);
     RectStyle::default()
         .with_fill(shared::surface())
-        .with_stroke(Stroke::new(accent, 1.0))
+        .with_border(Border::uniform(accent, 1.0))
         .with_radius(radius)
 }
 
@@ -413,7 +413,7 @@ fn caret() -> Result<Box<dyn LayoutItem>, LayoutError> {
 fn panel_rect_style() -> RectStyle {
     RectStyle::default()
         .with_fill(shared::surface())
-        .with_stroke(Stroke::new(shared::border(), 1.0))
+        .with_border(Border::uniform(shared::border(), 1.0))
         .with_radius(BorderRadius::all(shared::radius()))
 }
 

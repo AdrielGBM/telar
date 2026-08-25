@@ -237,7 +237,7 @@ pub(crate) fn draw_rect(
         pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, clip);
     }
 
-    if let Some((border_paint, widths)) = style.border()
+    if let Some((border_paint, widths)) = style.painted_border()
         && let Some(path) = build_border_path(rect, style.radius, widths)
     {
         let mut paint = fill_to_paint(border_paint);

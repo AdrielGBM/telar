@@ -4,7 +4,7 @@ use platform_core::{
     Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, WindowCommand,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
-use renderer_core::{Color, RectStyle, ShapeStyle, Stroke};
+use renderer_core::{Border, Color, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -686,18 +686,10 @@ impl Component for StyledContainer {
                 let ring = ring(r);
                 RectStyle {
                     fill: ring.fill.or(base.fill),
-                    stroke: ring.stroke.or(base.stroke),
+                    border: ring.border.or(base.border),
                     shadow: ring.shadow.or(base.shadow),
                     // The ring sits on the box's shape rather than choosing one of its own.
                     radius: base.radius,
-                    // Sides travel with whichever stroke won, and a ring goes all the way round: a box
-                    // wearing its border on one edge must not lend that edge to the ring and leave the
-                    // keyboard pointing at three sides of nothing.
-                    border_widths: if ring.stroke.is_some() {
-                        ring.border_widths
-                    } else {
-                        base.border_widths
-                    },
                 }
             }
             _ => style(r),
@@ -960,7 +952,7 @@ fn default_focus_ring() -> RectStyle {
     let accent = use_theme_tokens()
         .map(|t| t.primary())
         .unwrap_or(Color::rgba(0.26, 0.38, 0.93, 1.0));
-    RectStyle::default().with_stroke(Stroke::new(accent, 2.0))
+    RectStyle::default().with_border(Border::uniform(accent, 2.0))
 }
 
 /// Builds the affine matrix for a box's declarative `rotate`/`scale`/`translate` attributes, pivoting
@@ -1777,7 +1769,7 @@ mod tests {
     fn a_focus_ring_is_drawn_over_the_state_that_won_not_instead_of_it() {
         reset_layout_runtime();
         let hover_fill = Color::rgba(0.9, 0.9, 0.9, 1.0);
-        let ring = renderer_core::Stroke::new(Color::rgba(0.0, 0.4, 1.0, 1.0), 2.0);
+        let ring = Border::uniform(Color::rgba(0.0, 0.4, 1.0, 1.0), 2.0);
         let mut card = StyledContainer::new(
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
@@ -1786,7 +1778,7 @@ mod tests {
         .unwrap()
         .hover_style(move |_r| RectStyle::default().with_fill(hover_fill))
         .focus_style(move |_r| RectStyle {
-            stroke: Some(ring),
+            border: Some(ring),
             ..RectStyle::default()
         });
         compute_layout(
@@ -1810,7 +1802,7 @@ mod tests {
             Some(renderer_core::Paint::Solid(hover_fill)),
             "the hover fill survives the ring"
         );
-        assert_eq!(painted.stroke, Some(ring), "and the ring is drawn over it");
+        assert_eq!(painted.border, Some(ring), "and the ring is drawn over it");
         focus::release(id);
     }
 
@@ -1820,7 +1812,7 @@ mod tests {
     #[test]
     fn a_tap_takes_focus_without_drawing_a_ring() {
         reset_layout_runtime();
-        let ring = renderer_core::Stroke::new(Color::rgba(0.0, 0.4, 1.0, 1.0), 2.0);
+        let ring = Border::uniform(Color::rgba(0.0, 0.4, 1.0, 1.0), 2.0);
         let mut card = StyledContainer::new(
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default(),
@@ -1828,7 +1820,7 @@ mod tests {
         )
         .unwrap()
         .focus_style(move |_r| RectStyle {
-            stroke: Some(ring),
+            border: Some(ring),
             ..RectStyle::default()
         });
         compute_layout(
@@ -1842,14 +1834,14 @@ mod tests {
         card.on_event(&press(100.0, 50.0, PointerSource::Mouse));
         assert!(focus::is_focused(id), "the tap did take focus");
         assert_eq!(
-            rect_style(&card.view()).and_then(|s| s.stroke),
+            rect_style(&card.view()).and_then(|s| s.border),
             None,
             "but drew no ring for it"
         );
 
         // Reached with the keyboard instead, and the ring is exactly what says so.
         focus::request(id);
-        assert_eq!(rect_style(&card.view()).and_then(|s| s.stroke), Some(ring));
+        assert_eq!(rect_style(&card.view()).and_then(|s| s.border), Some(ring));
         focus::release(id);
     }
 

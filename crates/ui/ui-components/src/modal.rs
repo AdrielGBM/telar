@@ -1,6 +1,6 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item};
 
@@ -132,7 +132,7 @@ fn build_open_modal(
         move |_r| {
             RectStyle::default()
                 .with_fill(shared::resolve(color.as_ref(), shared::surface))
-                .with_stroke(Stroke::new(shared::border(), 1.0))
+                .with_border(Border::uniform(shared::border(), 1.0))
                 .with_radius(BorderRadius::all(dialog_radius()))
         },
         dialog_children,

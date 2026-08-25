@@ -1671,7 +1671,7 @@ col @card
     fn the_stroke_width_shorthand_names_one_side() {
         let code = paint_code("box stroke:#ff0000 stroke_width:\"0 0 1 0\"");
         assert!(
-            code.contains("border_widths: BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)"),
+            code.contains("widths: [0.0, 0.0, 1.0, 0.0]"),
             "the four values reach the style in CSS order:\n{code}"
         );
     }
@@ -1682,9 +1682,8 @@ col @card
     fn a_plain_stroke_width_stays_uniform() {
         let code = paint_code("box stroke:#ff0000 stroke_width:2");
         assert!(
-            code.contains("Stroke::new(Color::rgba(255.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0), 2.0)")
-                && code.contains("border_widths: BorderWidths::Uniform"),
-            "a uniform border carries its width on the stroke alone:\n{code}"
+            code.contains("paint: Paint::Solid(Color::rgba(255.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0)), widths: [2.0; 4]"),
+            "a uniform border puts its one width on all four sides:\n{code}"
         );
     }
 
@@ -1695,7 +1694,7 @@ col @card
     fn the_parenthesized_form_reaches_every_multi_token_value() {
         let stroke = paint_code("box stroke:#ff0000 stroke_width(0 0 1 0)");
         assert!(
-            stroke.contains("border_widths: BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)"),
+            stroke.contains("widths: [0.0, 0.0, 1.0, 0.0]"),
             "stroke_width:\n{stroke}"
         );
         let cols = paint_code("grid cols(1fr 2fr)");
@@ -1716,7 +1715,7 @@ col @card
     fn a_named_side_needs_no_shorthand() {
         let code = paint_code("box stroke:#ff0000 stroke_bottom:1");
         assert!(
-            code.contains("border_widths: BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)"),
+            code.contains("widths: [0.0, 0.0, 1.0, 0.0]"),
             "an unnamed side is not drawn, the way CSS leaves it styleless:\n{code}"
         );
     }
@@ -1937,7 +1936,7 @@ col @card
             .rust_code;
         assert!(
             code.contains(
-                "{ let accent = accent.clone(); move |_| RectStyle { fill: None, stroke: Some(Stroke::new(accent.get(), 1.0)), shadow: None, radius: BorderRadius::zero(), border_widths: BorderWidths::Uniform } }"
+                "{ let accent = accent.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(accent.get()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }"
             ),
             "stroke should reactively read the cloned signal:\n{code}"
         );

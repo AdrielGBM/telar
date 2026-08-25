@@ -2,7 +2,7 @@ use geometry_core::{Point, Rect};
 
 use super::gradient::{Gradient, GradientKind};
 use super::paint::{Paint, Shadow, Stroke};
-use super::shape::{BorderWidths, PathStyle, RectStyle};
+use super::shape::{Border, PathStyle, RectStyle};
 use super::{Declared, Scale, Span, TextShadow, TextStyle};
 use crate::BorderRadius;
 
@@ -74,22 +74,11 @@ impl Scale for BorderRadius {
     }
 }
 
-impl Scale for BorderWidths {
+impl Scale for Border {
     fn scale(self, sf: f32) -> Self {
-        match self {
-            // Uniform carries no number of its own: it defers to the stroke, which scales itself.
-            BorderWidths::Uniform => self,
-            BorderWidths::PerSide {
-                top,
-                right,
-                bottom,
-                left,
-            } => BorderWidths::PerSide {
-                top: top * sf,
-                right: right * sf,
-                bottom: bottom * sf,
-                left: left * sf,
-            },
+        Border {
+            paint: self.paint.scale(sf),
+            widths: self.widths.map(|w| w * sf),
         }
     }
 }
@@ -98,10 +87,9 @@ impl Scale for RectStyle {
     fn scale(self, sf: f32) -> Self {
         RectStyle {
             fill: self.fill.map(|p| p.scale(sf)),
-            stroke: self.stroke.map(|s| s.scale(sf)),
+            border: self.border.map(|b| b.scale(sf)),
             shadow: self.shadow.map(|s| s.scale(sf)),
             radius: self.radius.scale(sf),
-            border_widths: self.border_widths.scale(sf),
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::shared;
 use crate::shared::props_default;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::{Input, LayoutItem, StyledContainer, box_item, style_follows};
 
 fn box_radius() -> f32 {
@@ -105,7 +105,7 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         |_r| {
             RectStyle::default()
                 .with_fill(shared::surface_alt())
-                .with_stroke(Stroke::new(shared::border(), 1.0))
+                .with_border(Border::uniform(shared::border(), 1.0))
                 .with_radius(BorderRadius::all(box_radius()))
         },
         vec![box_item(field)],

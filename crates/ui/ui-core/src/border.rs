@@ -6,7 +6,7 @@
 //! inside the style closure the renderer re-runs — which is also what makes a live LTR/RTL switch repaint
 //! instead of needing the tree rebuilt.
 
-use renderer_core::{BorderRadius, BorderWidths};
+use renderer_core::BorderRadius;
 
 use crate::context::use_direction;
 
@@ -22,7 +22,7 @@ pub fn logical_border_widths(
     left: f32,
     start: Option<f32>,
     end: Option<f32>,
-) -> BorderWidths {
+) -> [f32; 4] {
     let (mut left, mut right) = (left, right);
     let rtl = use_direction().is_rtl();
     if let Some(w) = start {
@@ -31,7 +31,7 @@ pub fn logical_border_widths(
     if let Some(w) = end {
         if rtl { left = w } else { right = w }
     }
-    BorderWidths::per_side(top, right, bottom, left)
+    [top, right, bottom, left]
 }
 
 /// Corner radii where `start`/`end`, when given, round the two corners on that edge.
@@ -83,12 +83,12 @@ mod tests {
         set_direction(Direction::Ltr);
         assert_eq!(
             logical_border_widths(0.0, 0.0, 0.0, 0.0, Some(2.0), None),
-            BorderWidths::per_side(0.0, 0.0, 0.0, 2.0)
+            [0.0, 0.0, 0.0, 2.0]
         );
         set_direction(Direction::Rtl);
         assert_eq!(
             logical_border_widths(0.0, 0.0, 0.0, 0.0, Some(2.0), None),
-            BorderWidths::per_side(0.0, 2.0, 0.0, 0.0)
+            [0.0, 2.0, 0.0, 0.0]
         );
         set_direction(Direction::Ltr);
     }
@@ -99,7 +99,7 @@ mod tests {
             set_direction(direction);
             assert_eq!(
                 logical_border_widths(0.0, 0.0, 0.0, 1.0, None, None),
-                BorderWidths::per_side(0.0, 0.0, 0.0, 1.0),
+                [0.0, 0.0, 0.0, 1.0],
                 "{direction:?}"
             );
         }
@@ -112,12 +112,12 @@ mod tests {
         set_direction(Direction::Ltr);
         assert_eq!(
             logical_border_widths(0.0, 0.0, 0.0, 1.0, Some(2.0), None),
-            BorderWidths::per_side(0.0, 0.0, 0.0, 2.0)
+            [0.0, 0.0, 0.0, 2.0]
         );
         set_direction(Direction::Rtl);
         assert_eq!(
             logical_border_widths(0.0, 0.0, 0.0, 1.0, Some(2.0), None),
-            BorderWidths::per_side(0.0, 2.0, 0.0, 1.0),
+            [0.0, 2.0, 0.0, 1.0],
             "the left keeps what it was given: start went to the other edge"
         );
         set_direction(Direction::Ltr);

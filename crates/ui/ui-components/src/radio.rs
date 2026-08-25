@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
@@ -84,7 +84,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             };
             RectStyle::default()
                 .with_fill(shared::surface())
-                .with_stroke(Stroke::new(stroke, 1.5))
+                .with_border(Border::uniform(stroke, 1.5))
                 .with_radius(BorderRadius::all(9.0))
         },
         vec![box_item(dot)],

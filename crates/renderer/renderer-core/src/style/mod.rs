@@ -10,7 +10,7 @@ mod shape;
 pub use declared::{Declared, Span};
 pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};
-pub use shape::{BorderWidths, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
+pub use shape::{Border, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
 
 /// Horizontal alignment of text within its box. `Start` is the writing-direction start (left in LTR).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

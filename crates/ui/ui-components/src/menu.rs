@@ -129,7 +129,7 @@ fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
         let cmds = tree.commands().to_vec();
         let bordered_boxes = cmds
             .iter()
-            .filter(|c| matches!(c, DrawCommand::Rect { style, .. } if style.stroke.is_some()))
+            .filter(|c| matches!(c, DrawCommand::Rect { style, .. } if style.border.is_some()))
             .count();
         let paths = cmds
             .iter()
@@ -196,7 +196,7 @@ fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
         .commands()
         .iter()
         .find_map(|c| match c {
-            DrawCommand::Rect { style, .. } if style.stroke.is_some() => Some(style.clone()),
+            DrawCommand::Rect { style, .. } if style.border.is_some() => Some(style.clone()),
             _ => None,
         })
         .expect("a bordered trigger is painted");
@@ -212,7 +212,7 @@ fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
         "and so does their fill"
     );
     assert!(
-        trigger.stroke.is_some(),
+        trigger.border.is_some(),
         "while the component keeps the border it decided a field wears"
     );
 }

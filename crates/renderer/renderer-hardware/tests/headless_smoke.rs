@@ -158,7 +158,10 @@ fn a_gradient_stroke_varies_along_a_rect_border() {
         rect: Rect::new(x0, 4.0, x1 - x0, 32.0),
         style: Arc::new(RectStyle {
             fill: None,
-            stroke: Some(Stroke::new(red_to_blue(x0, x1, 4.0), 6.0)),
+            border: Some(renderer_core::Border::uniform(
+                red_to_blue(x0, x1, 4.0),
+                6.0,
+            )),
             ..Default::default()
         }),
     }];
@@ -741,9 +744,13 @@ fn a_bottom_border_paints_only_the_bottom_edge_on_the_gpu() {
     let cmds = vec![DrawCommand::Rect {
         rect: Rect::new(0.0, 0.0, 40.0, 40.0),
         style: Arc::new(
-            RectStyle::default()
-                .with_stroke(Stroke::new(Color::RED, 1.0))
-                .with_border_widths(renderer_core::BorderWidths::per_side(0.0, 0.0, 1.0, 0.0)),
+            RectStyle::default().with_border(renderer_core::Border::per_side(
+                Color::RED,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+            )),
         ),
     }];
 
@@ -780,9 +787,13 @@ fn sides_keep_their_own_thicknesses_on_the_gpu() {
     let cmds = vec![DrawCommand::Rect {
         rect: Rect::new(0.0, 0.0, 40.0, 40.0),
         style: Arc::new(
-            RectStyle::default()
-                .with_stroke(Stroke::new(Color::RED, 1.0))
-                .with_border_widths(renderer_core::BorderWidths::per_side(4.0, 0.0, 1.0, 0.0)),
+            RectStyle::default().with_border(renderer_core::Border::per_side(
+                Color::RED,
+                4.0,
+                0.0,
+                1.0,
+                0.0,
+            )),
         ),
     }];
 

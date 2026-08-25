@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::signal;
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
@@ -127,7 +127,7 @@ fn variant_rect(
                 .with_radius(radius)
         } else {
             RectStyle::default()
-                .with_stroke(Stroke::new(outline_c, 1.5))
+                .with_border(Border::uniform(outline_c, 1.5))
                 .with_radius(radius)
         };
     }

@@ -132,10 +132,10 @@ impl ViewGen<'_> {
         (closure, opacity_call)
     }
 
-    /// The `BorderWidths` for a box, or `None` when the plain `stroke_width` says all it needs to.
+    /// The four border thicknesses for a box, or `None` when the plain `stroke_width` says all it needs to.
     ///
-    /// `None` is not "no border": it is [`BorderWidths::Uniform`], which takes its number from the stroke
-    /// itself. Only a box that named an edge carries four.
+    /// `None` is not "no border": it is that one width on every side. Only a box that named an edge carries
+    /// four of its own.
     pub(super) fn border_widths_expr(&self, pattrs: &[Attr]) -> Option<String> {
         let edges = crate::edges::collect(
             pattrs,
@@ -152,7 +152,7 @@ impl ViewGen<'_> {
             let (start, end) = edges.logical_args();
             format!("logical_border_widths({top}, {right}, {bottom}, {left}, {start}, {end})")
         } else {
-            format!("BorderWidths::per_side({top}, {right}, {bottom}, {left})")
+            format!("[{top}, {right}, {bottom}, {left}]")
         })
     }
 

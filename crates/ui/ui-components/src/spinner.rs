@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use motion_core::{Easing, Keyframes, Repeat};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
@@ -84,7 +84,7 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                 .map(|t| t.muted())
                 .unwrap_or(shared::DEFAULT_TRACK);
             RectStyle::default()
-                .with_stroke(Stroke::new(stroke, size * TRACK_STROKE_FRACTION))
+                .with_border(Border::uniform(stroke, size * TRACK_STROKE_FRACTION))
                 .with_radius(BorderRadius::all(size / 2.0))
         },
         vec![box_item(rotor)],

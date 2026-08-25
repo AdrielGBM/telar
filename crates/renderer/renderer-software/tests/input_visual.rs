@@ -9,7 +9,7 @@ use layout_core::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle};
 use platform_core::{Event, PointerButton, PointerSource};
 use platform_headless::HeadlessWindow;
 use reactive_core::signal;
-use renderer_core::{BorderRadius, Color, RectStyle, RenderBackend, ShapeStyle, Stroke, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, RenderBackend, ShapeStyle, TextStyle};
 use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use ui_core::{
     Container, Input, LayoutItem, Overlay, StyledContainer, Text, box_item, box_transform,
@@ -43,7 +43,7 @@ fn input_visual_png() {
         |_r| {
             RectStyle::default()
                 .with_fill(Color::from_rgb_u8(30, 33, 40))
-                .with_stroke(Stroke::new(Color::from_rgb_u8(90, 130, 246), 1.5))
+                .with_border(Border::uniform(Color::from_rgb_u8(90, 130, 246), 1.5))
                 .with_radius(BorderRadius::all(8.0))
         },
         vec![box_item(input)],
@@ -206,7 +206,7 @@ fn overlay_visual_png() {
         |_r| {
             RectStyle::default()
                 .with_fill(Color::from_rgb_u8(60, 66, 82))
-                .with_stroke(Stroke::new(Color::from_rgb_u8(90, 130, 246), 1.5))
+                .with_border(Border::uniform(Color::from_rgb_u8(90, 130, 246), 1.5))
                 .with_radius(BorderRadius::all(10.0))
         },
         vec![box_item(dialog_label)],

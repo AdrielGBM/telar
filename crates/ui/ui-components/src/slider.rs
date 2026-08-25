@@ -3,7 +3,7 @@ use std::rc::Rc;
 use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
@@ -129,7 +129,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             let fill = shared::resolve(thumb_color.as_ref(), || shared::accent());
             RectStyle::default()
                 .with_fill(fill)
-                .with_stroke(Stroke::new(Color::WHITE, 2.0))
+                .with_border(Border::uniform(Color::WHITE, 2.0))
                 .with_radius(BorderRadius::all(thumb_size() / 2.0))
         },
         vec![],

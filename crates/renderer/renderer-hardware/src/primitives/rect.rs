@@ -85,7 +85,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         .unwrap_or_else(super::EncodedFill::none);
 
     // Encoded the same way as the fill, so a gradient stroke keeps its whole ramp instead of collapsing to its first stop. For a solid stroke the encoder puts the colour in `fill_color`, which is what `stroke_color` uploads; for a gradient it leaves that transparent and fills the gradient slots.
-    let (stroke, stroke_widths) = match style.border() {
+    let (stroke, stroke_widths) = match style.painted_border() {
         Some((paint, widths)) => (encode_fill_style::<4>(&paint, matrix), widths),
         None => (super::EncodedFill::none(), [0.0; 4]),
     };
