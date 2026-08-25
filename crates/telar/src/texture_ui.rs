@@ -139,11 +139,11 @@ impl TextureUi {
     /// the face is loaded and the platform's own is drawn, which looks like the file failed to load and did
     /// not.
     ///
-    /// Two things follow from that default being process-wide. Only the *first* renderer in the process
-    /// settles the shared text shaper, so a UI built after a window is already open draws with the window's
-    /// faces and these are ignored — a face meant for both belongs in the app config. And there is one
-    /// family per process: a pixel face here and a different one in the window around it is not expressible
-    /// today, because `TextStyle` has no family axis.
+    /// Two things follow from how much of this is process-wide. These faces join the one font database every
+    /// shaper is built from, so they stay loaded for the rest of the process — but a window already drawing
+    /// keeps the shaper it built before they arrived, so a face meant for both still belongs in the app
+    /// config. And there is one family per process: a pixel face here and a different one in the window
+    /// around it is not expressible today, because `TextStyle` has no family axis.
     pub fn with_fonts(
         target: wgpu::Texture,
         scale: f32,
@@ -151,9 +151,7 @@ impl TextureUi {
         font_data: Vec<Vec<u8>>,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
-        // The tree built below measures its text, and a texture UI can be the only Telar in the process — there
-        // may be no runner that installed a measurer. Deliberately not `set_measure_font_config`: that is
-        // per-thread state a window's runner owns, and overriding it would re-measure that window's tree.
+        // The tree built below measures its text, and a texture UI can be the only Telar in the process — there may be no runner that installed a measurer.
         crate::install_default_text_metrics();
         let (width, height) = (target.width(), target.height());
         let renderer = HardwareRenderer::for_texture(

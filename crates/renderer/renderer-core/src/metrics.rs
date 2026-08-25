@@ -52,7 +52,7 @@ fn metrics() -> Arc<dyn TextMetrics> {
         .expect(
             "no TextMetrics installed, so nothing can size text: install one with \
              renderer_core::set_text_metrics (renderer_text::ShaperMetrics is the raster default, and \
-             renderer_text::set_measure_font_config installs it for you)",
+             building any renderer_text::TextShaper installs it for you)",
         )
 }
 

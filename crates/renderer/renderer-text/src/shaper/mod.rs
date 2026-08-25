@@ -21,6 +21,8 @@ pub use atlas::{ATLAS_SIZE, GlyphAtlas, GlyphInfo};
 pub use cache::{TextCacheKey, make_text_cache_key, text_style_bits};
 pub use colr::ColrGlyph;
 
+use crate::fonts::{self, Fonts};
+
 use cache::{GlyphPositions, ShapingCacheKey};
 
 /// Line height as a multiple of font size, applied uniformly at layout time. Exposed so widgets that vertically place text (e.g. centering a button label) center against the exact box the renderer uses.
@@ -262,52 +264,28 @@ impl TextShaper {
     }
 
     pub fn with_config(config: TextShaperConfig) -> Self {
-        let font_system = {
-            let font = config.font;
-            let needs_custom_db = font.system_fonts_dir.is_some()
-                || !font.extra_font_paths.is_empty()
-                || !font.font_data.is_empty();
+        let TextShaperConfig {
+            raster,
+            shaping,
+            font,
+        } = config;
+        Self::in_fonts(&fonts::install(font), raster, shaping)
+    }
 
-            let mut font_system = if needs_custom_db {
-                let mut db = fontdb::Database::new();
-                if let Some(ref dir) = font.system_fonts_dir {
-                    db.load_fonts_dir(dir);
-                } else {
-                    db.load_system_fonts();
-                }
-                for path in &font.extra_font_paths {
-                    db.load_font_file(path).ok();
-                }
-                for data in font.font_data {
-                    db.load_font_data(data);
-                }
-                let locale = std::env::var("LANG").unwrap_or_else(|_| "en-US".to_string());
-                FontSystem::new_with_locale_and_db(locale, db)
-            } else {
-                FontSystem::new()
-            };
-            // Route the default (`Family::SansSerif`) face to the first configured candidate that resolves — the theme's chosen font family, or an OEM stack. Applied to whichever db built the system (custom dir or default system fonts), so a plain-desktop app still honors the family.
-            let db = font_system.db_mut();
-            for name in &font.sans_serif_family_candidates {
-                if db
-                    .query(&fontdb::Query {
-                        families: &[fontdb::Family::Name(name)],
-                        ..fontdb::Query::default()
-                    })
-                    .is_some()
-                {
-                    db.set_sans_serif_family(name.as_str());
-                    break;
-                }
-            }
-            font_system
-        };
+    /// A shaper over faces already installed, for the measuring shaper: it shapes in whatever the process
+    /// shapes in, so it has no configuration of its own to offer beyond the cache budgets.
+    pub(crate) fn with_fonts(fonts: &Fonts) -> Self {
+        let defaults = TextShaperConfig::default();
+        Self::in_fonts(fonts, defaults.raster, defaults.shaping)
+    }
+
+    fn in_fonts(fonts: &Fonts, raster: Policy, shaping: Policy) -> Self {
         Self {
-            font_system,
+            font_system: fonts.font_system(),
             swash_cache: SwashCache::new(),
             atlas: GlyphAtlas::new(),
-            raster_cache: Cache::new(config.raster, |pixels| pixels.len()),
-            shaping_cache: Cache::new(config.shaping, |positions| {
+            raster_cache: Cache::new(raster, |pixels| pixels.len()),
+            shaping_cache: Cache::new(shaping, |positions| {
                 positions
                     .len()
                     .saturating_mul(size_of::<(CacheKey, i32, i32)>())

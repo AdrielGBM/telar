@@ -516,8 +516,8 @@ where
     fn on_resume(&mut self, window: &W) -> bool {
         let _surface = self.enter_surface();
         let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-        // Point the layout-time text measurer at the same fonts as the renderer, on this (the layout) thread, before any layout runs. Otherwise it falls back to system defaults and aborts on Android ("no default font found").
-        renderer_text::set_measure_font_config(build_font_config(
+        // Load the app's faces before the tree below measures a word of text. Building a renderer loads them too — that is what makes measure and draw agree — but a hardware renderer builds on its own thread, so waiting for it would leave the first layout sized in the platform's fonts. The renderer's own load then finds these already there and clones the database instead of scanning again.
+        renderer_text::fonts::install(build_font_config(
             self.font_paths.clone(),
             self.font_data.clone(),
             &system_fonts,

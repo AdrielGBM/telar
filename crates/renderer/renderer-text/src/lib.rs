@@ -1,10 +1,10 @@
 pub mod colr;
+pub mod fonts;
 mod measure;
 mod shaper;
 
 pub use measure::{
     ShaperMetrics, font_family_available, measure_ink_bounds, measure_rich_text, measure_text,
-    set_measure_font_config,
 };
 pub use shaper::{
     ATLAS_SIZE, ColrGlyph, GlyphAtlas, GlyphInfo, LINE_HEIGHT_FACTOR, TextCacheKey, TextShaper,
