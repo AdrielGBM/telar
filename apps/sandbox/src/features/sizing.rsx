@@ -21,17 +21,17 @@ col gap:20
         code_line code:"box min_width:200 grow:1   (also max_width, min_height, max_height)"
     example title:"Grid — fixed column count with repeat(3, 1fr)"
         card
-            grid cols:3 gap:10
+            grid cols:3 gap:10 font_size:13 color:theme.on_primary
                 box @center fill:theme.cyan radius:6 height:44
-                    text "1" font_size:13 color:theme.on_primary
+                    text "1"
                 box @center fill:theme.cyan radius:6 height:44
-                    text "2" font_size:13 color:theme.on_primary
+                    text "2"
                 box @center fill:theme.cyan radius:6 height:44
-                    text "3" font_size:13 color:theme.on_primary
+                    text "3"
                 box @center fill:theme.cyan radius:6 height:44 span:2
-                    text "span 2" font_size:13 color:theme.on_primary
+                    text "span 2"
                 box @center fill:theme.cyan radius:6 height:44
-                    text "5" font_size:13 color:theme.on_primary
+                    text "5"
         code_line code:"grid cols:3 gap:10      >      box span:2"
     example title:"Grid — explicit fractional tracks"
         card

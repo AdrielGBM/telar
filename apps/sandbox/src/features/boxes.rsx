@@ -23,15 +23,15 @@ col gap:20
         code_line code:"box fill:theme.primary radius:10      box stroke:theme.primary stroke_width:2"
     example title:"Corner radius — from sharp to a full pill"
         card
-            row gap:14 wrap align:center
+            row gap:14 wrap align:center font_size:13 color:theme.on_primary text_align:center
                 box @center fill:theme.purple radius:0 width:110 height:64
-                    text "0" font_size:13 color:theme.on_primary text_align:center
+                    text "0"
                 box @center fill:theme.purple radius:8 width:110 height:64
-                    text "8" font_size:13 color:theme.on_primary text_align:center
+                    text "8"
                 box @center fill:theme.purple radius:20 width:110 height:64
-                    text "20" font_size:13 color:theme.on_primary text_align:center
+                    text "20"
                 box @center fill:theme.purple radius:40 width:130 height:56
-                    text "pill" font_size:13 color:theme.on_primary text_align:center
+                    text "pill"
         code_line code:"box radius:0   ·   radius:8   ·   radius:20   ·   radius:40"
     example title:"Stroke width — a plain box makes a hairline or a heavy border"
         card

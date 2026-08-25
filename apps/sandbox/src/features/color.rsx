@@ -13,47 +13,47 @@ col gap:20
     doc_header kicker:"FOUNDATIONS" title:"Color & theme" desc:"Colors are semantic tokens, not fixed values. Every token resolves through the active theme — switch it in the sidebar and the whole app recolors reactively."
     example title:"Accent tokens"
         card
-            grid cols:"fit 120" gap:12
+            grid cols:"fit 120" gap:12 font_size:12 color:theme.ink
                 col @swatch
                     box @chip fill:theme.primary
-                    text "primary" font_size:12 color:theme.ink
+                    text "primary"
                 col @swatch
                     box @chip fill:theme.success
-                    text "success" font_size:12 color:theme.ink
+                    text "success"
                 col @swatch
                     box @chip fill:theme.danger
-                    text "danger" font_size:12 color:theme.ink
+                    text "danger"
                 col @swatch
                     box @chip fill:theme.warning
-                    text "warning" font_size:12 color:theme.ink
+                    text "warning"
                 col @swatch
                     box @chip fill:theme.purple
-                    text "purple" font_size:12 color:theme.ink
+                    text "purple"
                 col @swatch
                     box @chip fill:theme.cyan
-                    text "cyan" font_size:12 color:theme.ink
+                    text "cyan"
         code_line code:"box fill:theme.primary   ·   fill:theme.success   ·   fill:theme.danger …"
     example title:"Neutrals & surfaces (outlined so light tones stay visible)"
         card
-            grid cols:"fit 120" gap:12
+            grid cols:"fit 120" gap:12 font_size:12 color:theme.ink
                 col @swatch
                     box @chip fill:theme.ink stroke:theme.border
-                    text "ink" font_size:12 color:theme.ink
+                    text "ink"
                 col @swatch
                     box @chip fill:theme.muted stroke:theme.border
-                    text "muted" font_size:12 color:theme.ink
+                    text "muted"
                 col @swatch
                     box @chip fill:theme.surface stroke:theme.border
-                    text "surface" font_size:12 color:theme.ink
+                    text "surface"
                 col @swatch
                     box @chip fill:theme.surface_alt stroke:theme.border
-                    text "surface_alt" font_size:12 color:theme.ink
+                    text "surface_alt"
                 col @swatch
                     box @chip fill:theme.border stroke:theme.border
-                    text "border" font_size:12 color:theme.ink
+                    text "border"
                 col @swatch
                     box @chip fill:theme.background stroke:theme.border
-                    text "background" font_size:12 color:theme.ink
+                    text "background"
         code_line code:"box fill:theme.surface stroke:theme.border   (card recipe)"
     example title:"One-off colors — inline hex when a token does not fit"
         card
