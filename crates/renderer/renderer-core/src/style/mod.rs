@@ -22,19 +22,25 @@ pub enum TextAlign {
     Justify,
 }
 
-/// Which grid the glyphs are rasterized onto.
+/// How samples meet the pixel grid — for glyphs and for pictures alike.
 ///
-/// An axis of the style, like weight or slant — not a mode the whole renderer enters. Shaping,
-/// wrapping, bidi and the font stack are the same either way; only where a glyph lands and how its
-/// coverage is resolved change.
+/// One property, because it is one question. It used to be two enums with no connection and disagreeing
+/// defaults: `Raster::{Smooth, Pixel}` for text and `Raster::{Nearest, Linear}` for images, so an
+/// application wanting a crisp pixel grid had to know both names and set both, everywhere. A pixel-art
+/// application says `raster:pixel` once and every glyph and every picture beneath it lands on whole pixels.
+///
+/// An axis of the style, like weight or slant — not a mode the whole renderer enters. Shaping, wrapping,
+/// bidi and the font stack are the same either way; only where a sample lands and how its coverage is
+/// resolved change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum GlyphRaster {
-    /// Subpixel origins and blended coverage: the sharpest text a screen can show at UI sizes.
+pub enum Raster {
+    /// Subpixel origins and blended coverage: the sharpest text a screen can show at UI sizes, and a
+    /// bilinear filter for a picture drawn at anything but its own size.
     #[default]
     Smooth,
-    /// Whole-pixel origins and coverage resolved to on or off.
+    /// Whole-pixel origins and coverage resolved to on or off; nearest-neighbour for a picture.
     ///
-    /// What a font drawn on a pixel grid needs: a glyph shared between two columns, or an edge left
+    /// What artwork drawn on a pixel grid needs: a glyph shared between two columns, or an edge left
     /// half-lit, is the grid the artist drew being taken apart. With a face designed at the size it is
     /// used, this reproduces a bitmap font's output without Telar growing a second font format —
     /// cosmic-text still shapes, wraps and falls back exactly as before.
@@ -193,8 +199,8 @@ pub struct TextStyle {
     pub line_height: LineHeight,
     /// Extra advance in logical pixels added after each glyph. `0.0` uses the font's natural advances.
     pub letter_spacing: f32,
-    /// Which grid the glyphs land on. See [`GlyphRaster`].
-    pub raster: GlyphRaster,
+    /// Which grid the glyphs land on. See [`Raster`].
+    pub raster: Raster,
     /// Whether the text wraps into its box. See [`TextWrap`].
     pub text_wrap: TextWrap,
 }
@@ -212,7 +218,7 @@ impl TextStyle {
             clamp: Clamp::None,
             line_height: LineHeight::Natural,
             letter_spacing: 0.0,
-            raster: GlyphRaster::Smooth,
+            raster: Raster::Smooth,
             text_wrap: TextWrap::Wrap,
         }
     }
@@ -276,8 +282,8 @@ impl TextStyle {
         self
     }
 
-    /// Puts the glyphs on whole pixels with coverage resolved to on or off. See [`GlyphRaster`].
-    pub fn with_raster(mut self, raster: GlyphRaster) -> Self {
+    /// Puts the glyphs on whole pixels with coverage resolved to on or off. See [`Raster`].
+    pub fn with_raster(mut self, raster: Raster) -> Self {
         self.raster = raster;
         self
     }

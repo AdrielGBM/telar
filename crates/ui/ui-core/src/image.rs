@@ -3,7 +3,7 @@ use std::sync::Arc;
 use geometry_core::{ObjectFit, Rect};
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
-use renderer_core::{BorderRadius, DrawCommand, ImageData, ImageFilter};
+use renderer_core::{BorderRadius, DrawCommand, ImageData, Raster};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
@@ -12,7 +12,7 @@ use crate::layout_leaf::LayoutLeaf;
 pub struct Image {
     data: Box<dyn Fn() -> Arc<ImageData>>,
     leaf: LayoutLeaf,
-    filter: Box<dyn Fn() -> ImageFilter>,
+    raster: Box<dyn Fn() -> Raster>,
     fit: Box<dyn Fn() -> ObjectFit>,
     radius: BorderRadius,
 }
@@ -21,7 +21,7 @@ impl Image {
     pub fn new(
         layout_style: LayoutStyle,
         data_fn: impl Fn() -> Arc<ImageData> + 'static,
-        filter_fn: impl Fn() -> ImageFilter + 'static,
+        raster_fn: impl Fn() -> Raster + 'static,
         fit_fn: impl Fn() -> ObjectFit + 'static,
     ) -> Result<Self, LayoutError> {
         // A side left at `auto` falls back to the bitmap's intrinsic size; a single px side derives the other from the intrinsic aspect ratio; a percent side is left untouched.
@@ -34,7 +34,7 @@ impl Image {
         Ok(Self {
             data: Box::new(data_fn),
             leaf,
-            filter: Box::new(filter_fn),
+            raster: Box::new(raster_fn),
             fit: Box::new(fit_fn),
             radius: BorderRadius::zero(),
         })
@@ -81,7 +81,7 @@ impl Component for Image {
         let image = RenderNode::Primitive(DrawCommand::Image {
             data,
             rect: content,
-            filter: (self.filter)(),
+            raster: (self.raster)(),
         });
         // Cover overflows the box; clip it to the local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll. A radius is the other reason to clip, and it applies to a `Contain` fit that overflows nothing too.
         let node = if clip || !self.radius.is_zero() {
@@ -119,7 +119,7 @@ mod tests {
         let image = Image::new(
             LayoutStyle::new(),
             move || Arc::clone(&data),
-            || ImageFilter::Linear,
+            || Raster::Smooth,
             || ObjectFit::Contain,
         )
         .unwrap();
@@ -149,7 +149,7 @@ mod tests {
         let image = Image::new(
             LayoutStyle::new().width(40.0).height(20.0),
             move || Arc::clone(&data),
-            || ImageFilter::Linear,
+            || Raster::Smooth,
             || ObjectFit::Contain,
         )
         .unwrap()
@@ -182,7 +182,7 @@ mod tests {
         let image = Image::new(
             LayoutStyle::new().width(100.0),
             move || Arc::clone(&data),
-            || ImageFilter::Linear,
+            || Raster::Smooth,
             || ObjectFit::Contain,
         )
         .unwrap();

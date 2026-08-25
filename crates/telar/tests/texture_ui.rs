@@ -255,7 +255,7 @@ fn two_texture_uis_lay_out_against_their_own_targets() {
 // A leaf that draws a line of text at a deliberately half-pixel origin — where the smooth raster's blend and the pixel raster's on/off coverage differ, and where a linear atlas sample would smear either.
 struct Label {
     node: NodeId,
-    raster: telar::GlyphRaster,
+    raster: telar::Raster,
 }
 
 impl Component for Label {
@@ -307,12 +307,12 @@ fn pixel_raster_reaches_the_application_texture_without_a_blended_edge() {
             .count()
     };
 
-    let smooth = render_with(telar::GlyphRaster::Smooth);
+    let smooth = render_with(telar::Raster::Smooth);
     if blended(&smooth) == 0 {
         eprintln!("skipping: no text was drawn (no fonts on this machine)");
         return;
     }
-    let pixel = render_with(telar::GlyphRaster::Pixel);
+    let pixel = render_with(telar::Raster::Pixel);
     assert!(
         blended(&pixel) == 0,
         "the pixel raster left {} blended pixels in the application's texture",

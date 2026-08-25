@@ -1,19 +1,6 @@
 use wide::u32x4;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
-/// How a picture's samples meet the pixel grid. The glyph half of the same question is `GlyphRaster`.
-///
-/// `Linear` is the default on both sides of the boundary now: the `.rsx` emitter has always defaulted an
-/// unspecified `filter:` to it while this said `Nearest`, so one property answered its own question two ways
-/// depending on which side asked. Filtered is the right default for a UI toolkit — at an integer scale the
-/// two agree, and only a scaled picture differs — and pixel art is the case that says so explicitly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum ImageFilter {
-    Nearest,
-    #[default]
-    Linear,
-}
-
 /// A texture an application rendered itself, handed to Telar to place in the frame.
 ///
 /// Deliberately opaque here: this crate is the vocabulary the CPU rasterizer shares with the GPU one, and

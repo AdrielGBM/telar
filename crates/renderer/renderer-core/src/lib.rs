@@ -27,7 +27,7 @@ pub use error::RendererError;
 pub use font_config::FontConfig;
 pub use geometry_core::{BorderRadius, Color};
 pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
-pub use image::{ExternalTexture, ImageData, ImageFilter, premultiply_rgba};
+pub use image::{ExternalTexture, ImageData, premultiply_rgba};
 pub use metrics::{
     TextMetrics, line_height, measure_ink_bounds, measure_text, set_default_text_metrics,
     set_text_metrics,
@@ -37,8 +37,8 @@ pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers}
 pub use renderer::{RenderBackend, RendererBuild, RendererFactory};
 pub use shadow::ShadowLayout;
 pub use style::{
-    BorderWidths, Clamp, Declared, FillRule, FontFamily, FontStyle, GlyphRaster, Gradient,
-    GradientKind, GradientStop, GradientStops, LineCap, LineHeight, LineJoin, Paint, PathStyle,
+    BorderWidths, Clamp, Declared, FillRule, FontFamily, FontStyle, Gradient, GradientKind,
+    GradientStop, GradientStops, LineCap, LineHeight, LineJoin, Paint, PathStyle, Raster,
     RectStyle, Scale, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextShadow, TextStyle, TextWrap,
     border_inner_shape,
 };

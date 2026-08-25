@@ -165,14 +165,14 @@ pub(crate) struct SharedImages {
     pub(crate) bind_group_layout: wgpu::BindGroupLayout,
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
-    textures: Cache<(u64, renderer_core::ImageFilter), GpuImage>,
+    textures: Cache<(u64, renderer_core::Raster), GpuImage>,
     /// Bind groups over textures the application owns, kept apart from `textures` because neither of that
     /// cache's rules holds here: it evicts by the bytes it is holding, and an app-owned texture costs it
     /// none, while its entries keep their texture alive by RAII, which is not ours to do. A bind group does
     /// keep the view it was built from alive, so an entry stays valid even if the application drops its
     /// handle — leaving a plain count as the only bound needed. A `None` entry remembers a handle this
     /// backend cannot read, so the refusal is decided and reported once rather than every frame.
-    external: lru::LruCache<(u64, renderer_core::ImageFilter), Option<wgpu::BindGroup>>,
+    external: lru::LruCache<(u64, renderer_core::Raster), Option<wgpu::BindGroup>>,
 }
 
 /// How many app-owned handles are remembered at once, drawable or not. A window shows one or two
@@ -231,7 +231,7 @@ impl SharedImages {
         device: &Device,
         queue: &Queue,
         image: &std::sync::Arc<renderer_core::ImageData>,
-        filter: renderer_core::ImageFilter,
+        filter: renderer_core::Raster,
     ) -> Option<wgpu::BindGroup> {
         let key = (image.id, filter);
         if let Some(handle) = image.external_texture() {
@@ -270,7 +270,7 @@ impl SharedImages {
         &self,
         device: &Device,
         view: &wgpu::TextureView,
-        filter: renderer_core::ImageFilter,
+        filter: renderer_core::Raster,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("telar-image-texture-bg"),
@@ -283,8 +283,8 @@ impl SharedImages {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(match filter {
-                        renderer_core::ImageFilter::Nearest => &self.sampler_nearest,
-                        renderer_core::ImageFilter::Linear => &self.sampler_linear,
+                        renderer_core::Raster::Pixel => &self.sampler_nearest,
+                        renderer_core::Raster::Smooth => &self.sampler_linear,
                     }),
                 },
             ],
@@ -296,7 +296,7 @@ impl SharedImages {
         device: &Device,
         queue: &Queue,
         image: &std::sync::Arc<renderer_core::ImageData>,
-        filter: renderer_core::ImageFilter,
+        filter: renderer_core::Raster,
     ) -> GpuImage {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("telar-image-texture"),

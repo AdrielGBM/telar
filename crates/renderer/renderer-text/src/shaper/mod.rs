@@ -4,9 +4,7 @@ use cosmic_text::{
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
-use renderer_core::{
-    FontFamily, FontStyle, GlyphRaster, Paint, Span, TextAlign, TextStyle, TextWrap,
-};
+use renderer_core::{FontFamily, FontStyle, Paint, Raster, Span, TextAlign, TextStyle, TextWrap};
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
@@ -75,10 +73,10 @@ pub(crate) fn effective_line_height(style: &TextStyle) -> f32 {
 /// The cache-key flags `raster` implies. `PIXEL_FONT` makes swash round the fractional offset it bakes
 /// into the glyph image, and — because it rides in the [`CacheKey`] — keeps a pixel-grid glyph from
 /// sharing an atlas slot with the smooth raster of the same glyph at the same size.
-fn raster_flags(raster: GlyphRaster) -> CacheKeyFlags {
+fn raster_flags(raster: Raster) -> CacheKeyFlags {
     match raster {
-        GlyphRaster::Smooth => CacheKeyFlags::empty(),
-        GlyphRaster::Pixel => CacheKeyFlags::PIXEL_FONT,
+        Raster::Smooth => CacheKeyFlags::empty(),
+        Raster::Pixel => CacheKeyFlags::PIXEL_FONT,
     }
 }
 
@@ -92,9 +90,9 @@ pub(crate) fn physical_glyph(
     glyph: &LayoutGlyph,
     offset: (f32, f32),
     scale: f32,
-    raster: GlyphRaster,
+    raster: Raster,
 ) -> PhysicalGlyph {
-    if raster == GlyphRaster::Smooth {
+    if raster == Raster::Smooth {
         return glyph.physical(offset, scale);
     }
     let x_offset = glyph.font_size * glyph.x_offset;
@@ -118,11 +116,11 @@ pub(crate) fn physical_glyph(
 const PIXEL_COVERAGE_THRESHOLD: u8 = 128;
 
 /// Resolves one glyph pixel's coverage under `raster`: blended as the rasterizer produced it, or on/off.
-pub(crate) fn resolve_coverage(alpha: u8, raster: GlyphRaster) -> u8 {
+pub(crate) fn resolve_coverage(alpha: u8, raster: Raster) -> u8 {
     match raster {
-        GlyphRaster::Smooth => alpha,
-        GlyphRaster::Pixel if alpha >= PIXEL_COVERAGE_THRESHOLD => u8::MAX,
-        GlyphRaster::Pixel => 0,
+        Raster::Smooth => alpha,
+        Raster::Pixel if alpha >= PIXEL_COVERAGE_THRESHOLD => u8::MAX,
+        Raster::Pixel => 0,
     }
 }
 
@@ -146,7 +144,7 @@ fn text_attrs(style: &TextStyle) -> Attrs<'_> {
     if style.letter_spacing != 0.0 {
         attrs = attrs.letter_spacing(style.letter_spacing);
     }
-    if style.raster != GlyphRaster::Smooth {
+    if style.raster != Raster::Smooth {
         attrs = attrs.cache_key_flags(raster_flags(style.raster));
     }
     attrs

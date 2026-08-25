@@ -128,7 +128,7 @@ fn text_style_bits_default_unchanged_and_spacing_perturbs() {
         "letter_spacing must perturb the bits"
     );
     assert_ne!(bits_lh, bits_ls, "the two axes must not alias each other");
-    let bits_pixel = text_style_bits(&base.clone().with_raster(GlyphRaster::Pixel));
+    let bits_pixel = text_style_bits(&base.clone().with_raster(Raster::Pixel));
     assert_ne!(
         bits_pixel, bits_default,
         "the raster grid must perturb the bits, or a smooth raster is served to a pixel style"
@@ -168,7 +168,7 @@ fn pixel_raster_leaves_no_partial_coverage() {
         "Hamburgefonstiv",
         None,
         rect,
-        &base.with_raster(GlyphRaster::Pixel),
+        &base.with_raster(Raster::Pixel),
     );
     assert_eq!(
         partial(&pixel),
@@ -198,13 +198,13 @@ fn pixel_raster_collapses_the_subpixel_bins_smooth_keeps() {
     };
     let key_at = |dx: f32, raster| physical_glyph(glyph, (dx, 0.0), 1.0, raster).cache_key;
     assert_eq!(
-        key_at(0.0, GlyphRaster::Pixel),
-        key_at(0.5, GlyphRaster::Pixel),
+        key_at(0.0, Raster::Pixel),
+        key_at(0.5, Raster::Pixel),
         "a half-pixel shift must not mint a second raster of the same glyph"
     );
     assert_ne!(
-        key_at(0.0, GlyphRaster::Smooth),
-        key_at(0.5, GlyphRaster::Smooth),
+        key_at(0.0, Raster::Smooth),
+        key_at(0.5, Raster::Smooth),
         "the smooth raster is supposed to keep subpixel positions; this test proves nothing without it"
     );
 }
@@ -230,7 +230,7 @@ fn pixel_raster_shapes_under_its_own_cache_key() {
     let Some(smooth) = flags(&base, &mut sh) else {
         return;
     };
-    let pixel = flags(&base.with_raster(GlyphRaster::Pixel), &mut sh).expect("same string shapes");
+    let pixel = flags(&base.with_raster(Raster::Pixel), &mut sh).expect("same string shapes");
     assert!(!smooth.contains(CacheKeyFlags::PIXEL_FONT));
     assert!(pixel.contains(CacheKeyFlags::PIXEL_FONT));
 }

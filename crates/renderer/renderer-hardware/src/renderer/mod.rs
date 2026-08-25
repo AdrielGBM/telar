@@ -7,8 +7,7 @@ use rustc_hash::FxHasher;
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, ImageFilter, RenderBackend, RendererError, expand_fill_layers,
-    hash_pod_slice,
+    Color, DrawCommand, Raster, RenderBackend, RendererError, expand_fill_layers, hash_pod_slice,
 };
 
 use wgpu::util::DeviceExt;
@@ -115,7 +114,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     batch_rect_start: Option<u32>,
     batch_text_start: Option<u32>,
     batch_line_start: Option<u32>,
-    batch_image_key: Option<(u64, ImageFilter)>,
+    batch_image_key: Option<(u64, Raster)>,
     batch_image_start: Option<u32>,
     batch_image_bind_group: Option<wgpu::BindGroup>,
     draw_state: renderer_core::DrawState,

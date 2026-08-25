@@ -1099,11 +1099,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         )
                     });
                 }
-                DrawCommand::Image { data, rect, filter } => {
+                DrawCommand::Image { data, rect, raster } => {
                     self.flush_rect();
                     self.flush_text();
                     self.flush_line();
-                    let key = (data.id, *filter);
+                    let key = (data.id, *raster);
                     if self.batch_image_start.is_none() || self.batch_image_key != Some(key) {
                         self.flush_image();
                         self.batch_image_key = Some(key);
@@ -1111,7 +1111,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         self.batch_image_bind_group = crate::caches::with_shared(|caches| {
                             caches
                                 .images
-                                .bind_group(&self.device, &self.queue, &data, *filter)
+                                .bind_group(&self.device, &self.queue, &data, *raster)
                         })
                         .flatten();
                     }
@@ -1760,10 +1760,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         j += 1;
                     }
                     if j - i > 1 {
-                        // ImageFilter is not Ord; map it to a u8 for sorting.
-                        let filter_ord = |f: ImageFilter| match f {
-                            ImageFilter::Nearest => 0u8,
-                            ImageFilter::Linear => 1u8,
+                        // Raster is not Ord; map it to a u8 for sorting.
+                        let filter_ord = |f: Raster| match f {
+                            Raster::Pixel => 0u8,
+                            Raster::Smooth => 1u8,
                         };
                         steps[i..j].sort_by(|a, b| {
                             let (ka, kb) = match (a, b) {

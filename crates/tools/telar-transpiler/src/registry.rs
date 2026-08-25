@@ -300,17 +300,16 @@ pub const FIT_VALUES: &[(&str, &str)] = &[
     ("contain_integer", "ObjectFit::ContainInteger"),
 ];
 
-/// `filter:` on `img`: how a picture's samples meet the pixel grid.
-pub const FILTER_VALUES: &[(&str, &str)] = &[
-    ("linear", "ImageFilter::Linear"),
-    ("nearest", "ImageFilter::Nearest"),
-];
-
-/// `raster:` on `text`: which grid the glyphs land on. The image half of the same question is `filter:`.
+/// `raster:` — how samples meet the pixel grid, for a glyph and for a picture alike.
+///
+/// One key now, where `text` said `raster:` and `img` said `filter:` for the same decision in two
+/// vocabularies. `linear`/`nearest` remain as the picture's own words for the two ends.
 pub const RASTER_VALUES: &[(&str, &str)] = &[
-    ("smooth", "GlyphRaster::Smooth"),
-    ("subpixel", "GlyphRaster::Smooth"),
-    ("pixel", "GlyphRaster::Pixel"),
+    ("smooth", "Raster::Smooth"),
+    ("subpixel", "Raster::Smooth"),
+    ("linear", "Raster::Smooth"),
+    ("pixel", "Raster::Pixel"),
+    ("nearest", "Raster::Pixel"),
 ];
 
 /// `align:` on a `text`, which is a different property from a container's `align:` of the same name: where
@@ -359,8 +358,7 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         "absolute" => return Some(ValueKind::Keywords(ABSOLUTE_VALUES)),
         "wrap" => return Some(ValueKind::Keywords(WRAP_VALUES)),
         "fit" => return Some(ValueKind::Keywords(FIT_VALUES)),
-        "filter" => return Some(ValueKind::Keywords(FILTER_VALUES)),
-        "raster" if tag == "text" => return Some(ValueKind::Keywords(RASTER_VALUES)),
+        "raster" => return Some(ValueKind::Keywords(RASTER_VALUES)),
         "width" | "height" | "min_width" | "min_height" | "max_width" | "max_height" | "basis"
         | "flex_basis" => return Some(ValueKind::Dimension),
         "aspect" | "aspect_ratio" | "padding" | "pad" | "padding_x" | "pad_x" | "padding_y"
@@ -475,7 +473,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         }
         // `radius` rounds the picture itself, in every form a `box` takes it; a leaf takes no other paint key.
         "img" | "image" => {
-            let mut keys = with(&["src", "fit", "filter", "radius"]);
+            let mut keys = with(&["src", "fit", "raster", "radius"]);
             keys.extend(CONTAINER_PAINT.iter().filter(|k| k.starts_with("radius_")));
             keys
         }

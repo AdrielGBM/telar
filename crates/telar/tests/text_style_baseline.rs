@@ -12,7 +12,7 @@
 use renderer_core::TextWrap;
 use telar::testing::mount;
 use telar::{
-    Color, Component, Container, DrawCommand, FontFamily, GlyphRaster, LayoutItem, LayoutStyle,
+    Color, Component, Container, DrawCommand, FontFamily, LayoutItem, LayoutStyle, Raster,
     RenderNode, Text, TextAlign, TextStyle, box_item,
 };
 
@@ -64,7 +64,7 @@ fn an_undeclared_text_style_resolves_to_these_exact_values() {
     assert_eq!(style.clamp, telar::Clamp::None);
     assert_eq!(style.line_height, telar::LineHeight::Natural);
     assert_eq!(style.letter_spacing, 0.0);
-    assert_eq!(style.raster, GlyphRaster::Smooth);
+    assert_eq!(style.raster, Raster::Smooth);
     assert_eq!(style.text_wrap, telar::TextWrap::Wrap);
     assert_eq!(style.text_shadow, telar::TextShadow::None);
 }
@@ -80,7 +80,7 @@ fn a_declared_text_style_reaches_the_draw_command_intact() {
         .with_clamp(2, true)
         .with_line_height(1.5)
         .with_letter_spacing(0.5)
-        .with_raster(GlyphRaster::Pixel)
+        .with_raster(Raster::Pixel)
         .with_text_wrap(TextWrap::NoWrap)
         .with_font_family("Some Face");
 
@@ -120,7 +120,7 @@ fn nesting_changes_nothing_about_a_text_style() {
     assert_eq!(style.font_size, 14.0);
     assert_eq!(style.font_weight, 400);
     assert_eq!(style.font_family, FontFamily::SansSerif);
-    assert_eq!(style.raster, GlyphRaster::Smooth);
+    assert_eq!(style.raster, Raster::Smooth);
 }
 
 /// The §1.4 split, pinned so the fix is visible when it happens: a `.rsx` `text` bakes `14.0` at transpile
@@ -202,7 +202,7 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
     assert_eq!(style.font_weight, 700, "and the declared weight");
     assert_eq!(
         style.raster,
-        telar::GlyphRaster::Smooth,
+        telar::Raster::Smooth,
         "and keeps the initial value of everything the declaration did not name"
     );
 

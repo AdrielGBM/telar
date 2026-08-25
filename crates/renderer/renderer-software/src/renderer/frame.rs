@@ -369,7 +369,7 @@ where
                         );
                     });
                 }
-                DrawCommand::Image { data, rect, filter } => {
+                DrawCommand::Image { data, rect, raster } => {
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -381,7 +381,7 @@ where
                         None
                     };
                     crate::primitives::image::draw_image(
-                        pixmap, data, *rect, *filter, transform, clip,
+                        pixmap, data, *rect, *raster, transform, clip,
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {

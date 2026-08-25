@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use platform_headless::HeadlessWindow;
-use renderer_core::{Color, DrawCommand, ImageFilter, RenderBackend};
+use renderer_core::{Color, DrawCommand, Raster, RenderBackend};
 use renderer_text::TextShaperConfig;
 use telar_renderer_hardware::{
     HardwareRenderer,
@@ -75,7 +75,7 @@ fn telar_composes_a_texture_the_application_filled() {
             &[DrawCommand::Image {
                 data,
                 rect: Rect::new(0.0, 0.0, w as f32, h as f32),
-                filter: ImageFilter::Nearest,
+                raster: Raster::Pixel,
             }],
             Some(Color::rgb(0.0, 0.0, 0.0)),
         )

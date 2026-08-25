@@ -40,14 +40,14 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 rect.height.to_bits().hash(h);
                 hash_text_style(style).hash(h);
             }
-            DrawCommand::Image { data, rect, filter } => {
+            DrawCommand::Image { data, rect, raster } => {
                 2u8.hash(h);
                 data.id.hash(h);
                 rect.x.to_bits().hash(h);
                 rect.y.to_bits().hash(h);
                 rect.width.to_bits().hash(h);
                 rect.height.to_bits().hash(h);
-                (*filter as u8).hash(h);
+                (*raster as u8).hash(h);
             }
             DrawCommand::Line { p1, p2, style } => {
                 3u8.hash(h);

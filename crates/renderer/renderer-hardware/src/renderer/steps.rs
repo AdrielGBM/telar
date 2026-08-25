@@ -1,6 +1,6 @@
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::ImageFilter;
+use renderer_core::Raster;
 
 use super::HardwareRenderer;
 
@@ -21,7 +21,7 @@ pub(super) enum DrawStep {
         start: u32,
         end: u32,
         bind_group: wgpu::BindGroup,
-        key: (u64, ImageFilter),
+        key: (u64, Raster),
     },
     PathDraw {
         index_start: u32,
@@ -136,7 +136,7 @@ pub(super) fn flush_image_batch(
     pending_steps: &mut Vec<DrawStep>,
     batch_image_start: &mut Option<u32>,
     batch_image_bind_group: &mut Option<wgpu::BindGroup>,
-    batch_image_key: &mut Option<(u64, ImageFilter)>,
+    batch_image_key: &mut Option<(u64, Raster)>,
     pending_image_instances_len: u32,
 ) {
     if let (Some(start), Some(bind_group), Some(key)) = (

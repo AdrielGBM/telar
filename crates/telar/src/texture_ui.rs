@@ -14,7 +14,7 @@
 //!   window chrome around it are two trees at two resolutions in one window. A viewport that renders at half
 //!   resolution while it is being dragged is the same axis from the other end.
 //! - **On which grid the text lands.** That one is a `TextStyle` axis
-//!   ([`GlyphRaster`](crate::GlyphRaster)), not a property of this type, so it is available to a window tree
+//!   ([`Raster`](crate::Raster)), not a property of this type, so it is available to a window tree
 //!   as much as to this one.
 //!
 //! The tree here is a real Telar tree: layout, hit-testing, scroll, overlays, motion and i18n all work. It
@@ -132,7 +132,7 @@ impl TextureUi {
     /// [`new`](Self::new) carrying fonts of its own — `font_paths` on disk, `font_data` embedded, and
     /// `font_family` naming which of them its text shapes in — in the same shape
     /// [`AppConfig`](crate::AppConfig) takes them. The reason to reach for it is a face drawn on a pixel
-    /// grid, to pair with [`GlyphRaster::Pixel`](crate::GlyphRaster::Pixel).
+    /// grid, to pair with [`Raster::Pixel`](crate::Raster::Pixel).
     ///
     /// **Loading a face is not choosing it**, which is what `font_family` is for: without it the face is
     /// loaded and the platform's own is drawn, which looks like the file failed to load and did not.

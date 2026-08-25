@@ -3,7 +3,7 @@ use super::cache::{make_text_cache_key, text_style_bits};
 use super::{make_buffer, physical_glyph, resolve_coverage};
 use cosmic_text::{Buffer, Color as CosmicColor};
 use geometry_core::Rect;
-use renderer_core::{GlyphRaster, Span, TextStyle, premultiply_rgba};
+use renderer_core::{Raster, Span, TextStyle, premultiply_rgba};
 use std::sync::Arc;
 
 impl TextShaper {
@@ -18,10 +18,10 @@ impl TextShaper {
         &mut self,
         buffer: &mut Buffer,
         default: CosmicColor,
-        raster: GlyphRaster,
+        raster: Raster,
         mut callback: impl FnMut(i32, i32, u32, u32, CosmicColor),
     ) {
-        if raster == GlyphRaster::Smooth {
+        if raster == Raster::Smooth {
             buffer.draw(
                 &mut self.font_system,
                 &mut self.swash_cache,

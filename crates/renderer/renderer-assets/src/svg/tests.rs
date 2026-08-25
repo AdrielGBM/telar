@@ -307,12 +307,12 @@ mod equivalence {
                         (
                             DrawCommand::Image {
                                 rect: rd,
-                                filter: fd,
+                                raster: fd,
                                 ..
                             },
                             DrawCommand::Image {
                                 rect: rb,
-                                filter: fb,
+                                raster: fb,
                                 ..
                             },
                         ) => {

@@ -65,12 +65,12 @@ impl ViewGen<'_> {
             MediaKind::Image,
         );
 
-        let filter = el
+        let raster = el
             .attributes
             .iter()
-            .find(|a| a.key == "filter")
-            .and_then(|a| registry::keyword(registry::FILTER_VALUES, a.value.text().trim()))
-            .unwrap_or("ImageFilter::Linear");
+            .find(|a| a.key == "raster")
+            .and_then(|a| registry::keyword(registry::RASTER_VALUES, a.value.text().trim()))
+            .unwrap_or("Raster::Smooth");
 
         let fit = fit_closure(&el.attributes);
 
@@ -96,7 +96,7 @@ impl ViewGen<'_> {
              {pad}    Image::new(\n\
              {pad}        {layout_style},\n\
              {pad}        {data_fn},\n\
-             {pad}        move || {filter},\n\
+             {pad}        move || {raster},\n\
              {pad}        {fit},\n\
              {pad}    )?{radius}\n\
              {pad}}};"

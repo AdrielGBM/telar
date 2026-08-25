@@ -1,4 +1,4 @@
-use renderer_core::{Color, FontFamily, GlyphRaster, LineHeight, TextStyle, TextWrap};
+use renderer_core::{Color, FontFamily, LineHeight, Raster, TextStyle, TextWrap};
 use rustc_hash::FxHasher;
 use std::hash::{Hash, Hasher};
 
@@ -16,7 +16,7 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
     if style.font_family == FontFamily::SansSerif
         && style.line_height == LineHeight::Natural
         && style.letter_spacing == 0.0
-        && style.raster == GlyphRaster::Smooth
+        && style.raster == Raster::Smooth
     {
         return packed;
     }

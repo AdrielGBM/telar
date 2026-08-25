@@ -1,6 +1,5 @@
 use super::{
-    FontFamily, FontStyle, GlyphRaster, LineHeight, Paint, TextAlign, TextShadow, TextStyle,
-    TextWrap,
+    FontFamily, FontStyle, LineHeight, Paint, Raster, TextAlign, TextShadow, TextStyle, TextWrap,
 };
 
 /// What one place says about the text style around it, each field `None` where it says nothing.
@@ -28,7 +27,7 @@ pub struct Declared {
     pub text_align: Option<TextAlign>,
     pub text_wrap: Option<TextWrap>,
     pub text_shadow: Option<TextShadow>,
-    pub raster: Option<GlyphRaster>,
+    pub raster: Option<Raster>,
 }
 
 impl Declared {
@@ -105,7 +104,7 @@ impl Declared {
         self
     }
 
-    pub fn with_raster(mut self, raster: GlyphRaster) -> Self {
+    pub fn with_raster(mut self, raster: Raster) -> Self {
         self.raster = Some(raster);
         self
     }

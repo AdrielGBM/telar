@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use renderer_cache::Cache;
-use renderer_core::{ImageData, ImageFilter};
+use renderer_core::{ImageData, Raster};
 
 /// Composite cache key for shadow pixmaps: (width, height, spread, blur_radius, color_rgba8, radius_tl, radius_tr, radius_br, radius_bl). Bits are packed as `to_bits()` for floats so equality is byte-exact.
 pub(crate) type ShadowCacheKey = (u32, u32, u32, u32, u32, u32, u32, u32, u32);
@@ -20,7 +20,7 @@ pub(crate) fn draw_image(
     pixmap: &mut tiny_skia::Pixmap,
     data: &Arc<ImageData>,
     rect: Rect,
-    filter: ImageFilter,
+    filter: Raster,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
 ) {
@@ -29,8 +29,8 @@ pub(crate) fn draw_image(
         return;
     };
     let quality = match filter {
-        ImageFilter::Nearest => tiny_skia::FilterQuality::Nearest,
-        ImageFilter::Linear => tiny_skia::FilterQuality::Bilinear,
+        Raster::Pixel => tiny_skia::FilterQuality::Nearest,
+        Raster::Smooth => tiny_skia::FilterQuality::Bilinear,
     };
     let paint = tiny_skia::PixmapPaint {
         blend_mode: tiny_skia::BlendMode::SourceOver,

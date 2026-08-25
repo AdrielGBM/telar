@@ -5,7 +5,7 @@ use super::{
 };
 use cosmic_text::{CacheKey, SwashContent};
 use geometry_core::{Color, Rect};
-use renderer_core::{GlyphRaster, Span, TextStyle, TextWrap};
+use renderer_core::{Raster, Span, TextStyle, TextWrap};
 
 use super::atlas::GlyphInfo;
 
@@ -129,15 +129,15 @@ impl TextShaper {
         font_size: f32,
         scale_factor: f32,
         color: Color,
-        raster: GlyphRaster,
+        raster: Raster,
         out: &mut Vec<GlyphInfo>,
     ) {
         let tint = color.to_array();
         let identity_tint = [1.0, 1.0, 1.0, 1.0];
         // px/py and the placement offsets are whole physical pixels; the text box's own origin is not, and under the pixel raster that is the last place a fraction can get in. It matters more here than it reads: the atlas is sampled with a linear filter, so a quad landing half a texel off smears every glyph edge back into the blend the raster exists to remove. Snapped in *physical* space, since that is the grid the sampler resolves against.
         let (origin_x, origin_y) = match raster {
-            GlyphRaster::Smooth => (rect.x * scale_factor, rect.y * scale_factor),
-            GlyphRaster::Pixel => (
+            Raster::Smooth => (rect.x * scale_factor, rect.y * scale_factor),
+            Raster::Pixel => (
                 (rect.x * scale_factor).round(),
                 (rect.y * scale_factor).round(),
             ),

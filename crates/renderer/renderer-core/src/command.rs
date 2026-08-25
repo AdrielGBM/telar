@@ -3,7 +3,7 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 
 use crate::{
-    BorderRadius, ImageData, ImageFilter, PathData, PathStyle, RectStyle, Span, Stroke, TextStyle,
+    BorderRadius, ImageData, PathData, PathStyle, Raster, RectStyle, Span, Stroke, TextStyle,
 };
 
 #[derive(Debug, Clone)]
@@ -28,7 +28,8 @@ pub enum DrawCommand {
     Image {
         data: Arc<ImageData>,
         rect: Rect,
-        filter: ImageFilter,
+        /// How this picture's samples meet the pixel grid — the same property a glyph takes.
+        raster: Raster,
     },
     Line {
         p1: Point,
@@ -86,15 +87,15 @@ impl PartialEq for DrawCommand {
             (
                 DrawCommand::Image {
                     data: d1,
-                    rect: r1,
-                    filter: f1,
+                    rect: rect1,
+                    raster: raster1,
                 },
                 DrawCommand::Image {
                     data: d2,
-                    rect: r2,
-                    filter: f2,
+                    rect: rect2,
+                    raster: raster2,
                 },
-            ) => d1.id == d2.id && r1 == r2 && f1 == f2,
+            ) => d1.id == d2.id && rect1 == rect2 && raster1 == raster2,
             (
                 DrawCommand::Line {
                     p1: p1a,

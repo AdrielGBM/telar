@@ -3,8 +3,8 @@ use std::hash::Hasher;
 use rustc_hash::FxHasher;
 
 use crate::{
-    BorderRadius, BorderWidths, Declared, FillRule, FontFamily, FontStyle, GlyphRaster, Gradient,
-    GradientKind, LineHeight, Paint, PathStyle, RectStyle, Shadow, Stroke, TextShadow, TextStyle,
+    BorderRadius, BorderWidths, Declared, FillRule, FontFamily, FontStyle, Gradient, GradientKind,
+    LineHeight, Paint, PathStyle, Raster, RectStyle, Shadow, Stroke, TextShadow, TextStyle,
     TextWrap,
 };
 
@@ -111,8 +111,8 @@ pub fn hash_declared(d: &Declared) -> u64 {
     }
     h.write_u8(match d.raster {
         None => 0,
-        Some(GlyphRaster::Smooth) => 1,
-        Some(GlyphRaster::Pixel) => 2,
+        Some(Raster::Smooth) => 1,
+        Some(Raster::Pixel) => 2,
     });
     h.finish()
 }

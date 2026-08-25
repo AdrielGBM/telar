@@ -93,10 +93,10 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             rect: rect.scale(sf),
             style: Arc::new((**style).clone().scale(sf)),
         },
-        DrawCommand::Image { data, rect, filter } => DrawCommand::Image {
+        DrawCommand::Image { data, rect, raster } => DrawCommand::Image {
             data: data.clone(),
             rect: rect.scale(sf),
-            filter: *filter,
+            raster: *raster,
         },
         DrawCommand::Line { p1, p2, style } => DrawCommand::Line {
             p1: p1.scale(sf),

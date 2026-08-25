@@ -2132,7 +2132,7 @@ col @card
         );
     }
 
-    // `raster:pixel` reaches the style as the `GlyphRaster` axis, so a UI drawn on a pixel grid is writable in the DSL rather than only from Rust. An unknown value is ignored, like every other keyword attribute.
+    // `raster:pixel` reaches the style as the `Raster` axis, so a UI drawn on a pixel grid is writable in the DSL rather than only from Rust. An unknown value is ignored, like every other keyword attribute.
     #[test]
     fn text_raster_selects_the_glyph_grid() {
         let code = transpile_source(
@@ -2145,7 +2145,7 @@ col @card
         .unwrap()
         .rust_code;
         assert!(
-            code.contains(".with_raster(GlyphRaster::Pixel)"),
+            code.contains(".with_raster(Raster::Pixel)"),
             "raster:pixel:\n{code}"
         );
         let smooth = transpile_source("[view]\ntext \"Hi\"\n", "demo", None, None, None)
