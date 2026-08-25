@@ -116,6 +116,12 @@ impl Default for Cascade {
     }
 }
 
+/// Forgets every declaration, for a tree being replaced wholesale. See
+/// [`reset_layout_runtime`](crate::context::reset_layout_runtime) for why it cannot be done separately.
+pub(crate) fn reset_cascade() {
+    with_cascade(|c| *c = Cascade::default());
+}
+
 /// Records what `node` says for everything beneath it.
 pub fn declare(node: NodeId, declared: Declared) {
     let existing = with_cascade_ref(|c| c.declared.get(&node).cloned());
@@ -274,6 +280,33 @@ mod tests {
         let at_leaf = context(leaf);
         assert_eq!(at_leaf.text.font_weight, 700);
         assert_eq!(at_leaf.text.font_size, 22.0);
+    }
+
+    /// A remount builds a whole new tree, and the runtime hands out the same `NodeId`s again. A declaration
+    /// that outlived its tree would land on whatever is built on that id next — text the wrong size under a
+    /// node nobody declared for, which is not a failure anything reports.
+    #[test]
+    fn a_new_tree_inherits_nothing_from_the_one_it_replaced() {
+        let (outer, _, _) = tree();
+        declare(outer, Declared::default().with_font_size(11.0));
+        assert_eq!(context(outer).text.font_size, 11.0);
+
+        // What a remount does, and only that: `tree()` clears the cascade by hand, which is the very thing
+        // being tested. The same shape is rebuilt so the ids come back in the same order.
+        crate::context::reset_layout_runtime();
+        let (leaf, _) = layout_reactive::new_leaf(LayoutStyle::new()).unwrap();
+        let inner = layout_reactive::new_container(LayoutStyle::new(), &[leaf]).unwrap();
+        let again = layout_reactive::new_container(LayoutStyle::new(), &[inner]).unwrap();
+
+        assert_eq!(
+            again, outer,
+            "the id was recycled, which is the whole hazard"
+        );
+        assert_eq!(
+            context(leaf).text.font_size,
+            Inherited::initial().text.font_size,
+            "and the new tree inherits nothing from the one it replaced"
+        );
     }
 
     /// The reason the root is not a constant: a theme saying "the body text is 11px" says it once, at the
