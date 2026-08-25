@@ -31,17 +31,42 @@ impl From<SizeDimension> for Dimension {
     }
 }
 
+/// For padding and gap, which resolve against the containing block but have no `auto` to fall back on —
+/// CSS has none there either, and taffy's type says so. `Auto` is the caller asking for a size decision on a
+/// property that makes none, so it is nothing.
+impl From<SizeDimension> for LengthPercentage {
+    fn from(d: SizeDimension) -> Self {
+        match d {
+            SizeDimension::Px(v) => LengthPercentage::length(v),
+            SizeDimension::Percent(v) => LengthPercentage::percent(v),
+            SizeDimension::Auto => LengthPercentage::length(0.0),
+        }
+    }
+}
+
+/// For margin and inset, where `auto` is a real answer: it is what centres a block and what leaves an edge
+/// unpinned.
+impl From<SizeDimension> for LengthPercentageAuto {
+    fn from(d: SizeDimension) -> Self {
+        match d {
+            SizeDimension::Px(v) => LengthPercentageAuto::length(v),
+            SizeDimension::Percent(v) => LengthPercentageAuto::percent(v),
+            SizeDimension::Auto => LengthPercentageAuto::auto(),
+        }
+    }
+}
+
 /// The parts of a style that cannot be turned into physical edges until a [`Direction`] is known. Kept
 /// alongside the resolved `taffy::Style` rather than folded into it, so a direction flip can re-resolve the
 /// original intent instead of trying to un-swap edges it can no longer tell apart from physical ones.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct LogicalStyle {
-    pub(crate) padding_start: Option<f32>,
-    pub(crate) padding_end: Option<f32>,
-    pub(crate) margin_start: Option<f32>,
-    pub(crate) margin_end: Option<f32>,
-    pub(crate) inset_start: Option<f32>,
-    pub(crate) inset_end: Option<f32>,
+    pub(crate) padding_start: Option<SizeDimension>,
+    pub(crate) padding_end: Option<SizeDimension>,
+    pub(crate) margin_start: Option<SizeDimension>,
+    pub(crate) margin_end: Option<SizeDimension>,
+    pub(crate) inset_start: Option<SizeDimension>,
+    pub(crate) inset_end: Option<SizeDimension>,
     /// Set by [`LayoutStyle::flex_row`]: the main axis is the inline axis, so it reverses under RTL. An
     /// explicit [`LayoutStyle::flex_row_reverse`] leaves this clear — it means "reversed" in either direction.
     pub(crate) row_follows_direction: bool,
@@ -197,14 +222,14 @@ impl LayoutStyle {
 
     /// Inset from the top edge, for a node already taken out of flow. Physical, not logical: `top` does not
     /// swap under RTL the way [`inset_start`](Self::inset_start) does.
-    pub fn inset_top(mut self, px: f32) -> Self {
-        self.inner.inset.top = LengthPercentageAuto::length(px);
+    pub fn inset_top(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.inner.inset.top = size.into().into();
         self
     }
 
     /// Inset from the bottom edge, for a node already taken out of flow.
-    pub fn inset_bottom(mut self, px: f32) -> Self {
-        self.inner.inset.bottom = LengthPercentageAuto::length(px);
+    pub fn inset_bottom(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.inner.inset.bottom = size.into().into();
         self
     }
 
@@ -280,8 +305,8 @@ impl LayoutStyle {
         self
     }
 
-    pub fn padding_all(mut self, px: f32) -> Self {
-        let value = LengthPercentage::length(px);
+    pub fn padding_all(mut self, size: impl Into<SizeDimension>) -> Self {
+        let value: LengthPercentage = size.into().into();
         self.inner.padding = taffy::geometry::Rect {
             left: value,
             right: value,
@@ -291,25 +316,27 @@ impl LayoutStyle {
         self
     }
 
-    pub fn padding_horizontal(mut self, px: f32) -> Self {
-        self.inner.padding.left = LengthPercentage::length(px);
-        self.inner.padding.right = LengthPercentage::length(px);
+    pub fn padding_horizontal(mut self, size: impl Into<SizeDimension>) -> Self {
+        let value: LengthPercentage = size.into().into();
+        self.inner.padding.left = value;
+        self.inner.padding.right = value;
         self
     }
 
-    pub fn padding_vertical(mut self, px: f32) -> Self {
-        self.inner.padding.top = LengthPercentage::length(px);
-        self.inner.padding.bottom = LengthPercentage::length(px);
+    pub fn padding_vertical(mut self, size: impl Into<SizeDimension>) -> Self {
+        let value: LengthPercentage = size.into().into();
+        self.inner.padding.top = value;
+        self.inner.padding.bottom = value;
         self
     }
 
-    pub fn padding_top(mut self, px: f32) -> Self {
-        self.inner.padding.top = LengthPercentage::length(px);
+    pub fn padding_top(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.inner.padding.top = size.into().into();
         self
     }
 
-    pub fn padding_bottom(mut self, px: f32) -> Self {
-        self.inner.padding.bottom = LengthPercentage::length(px);
+    pub fn padding_bottom(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.inner.padding.bottom = size.into().into();
         self
     }
 
@@ -325,15 +352,15 @@ impl LayoutStyle {
 
     /// Padding on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under
     /// [`Direction::Rtl`].
-    pub fn padding_start(mut self, px: f32) -> Self {
-        self.logical.padding_start = Some(px);
+    pub fn padding_start(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.logical.padding_start = Some(size.into());
         self
     }
 
     /// Padding on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under
     /// [`Direction::Rtl`].
-    pub fn padding_end(mut self, px: f32) -> Self {
-        self.logical.padding_end = Some(px);
+    pub fn padding_end(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.logical.padding_end = Some(size.into());
         self
     }
 
@@ -346,28 +373,28 @@ impl LayoutStyle {
     }
 
     /// Margin on the edge the block axis starts from — the top, in every writing mode this engine supports.
-    pub fn margin_block_start(mut self, px: f32) -> Self {
-        self.inner.margin.top = LengthPercentageAuto::length(px);
+    pub fn margin_block_start(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.inner.margin.top = size.into().into();
         self
     }
 
     /// Margin on the edge the block axis ends at — the bottom.
-    pub fn margin_block_end(mut self, px: f32) -> Self {
-        self.inner.margin.bottom = LengthPercentageAuto::length(px);
+    pub fn margin_block_end(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.inner.margin.bottom = size.into().into();
         self
     }
 
     /// Margin on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under
     /// [`Direction::Rtl`].
-    pub fn margin_inline_start(mut self, px: f32) -> Self {
-        self.logical.margin_start = Some(px);
+    pub fn margin_inline_start(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.logical.margin_start = Some(size.into());
         self
     }
 
     /// Margin on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under
     /// [`Direction::Rtl`].
-    pub fn margin_inline_end(mut self, px: f32) -> Self {
-        self.logical.margin_end = Some(px);
+    pub fn margin_inline_end(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.logical.margin_end = Some(size.into());
         self
     }
 
@@ -384,32 +411,33 @@ impl LayoutStyle {
 
     /// Inset from the edge the text starts from, for a node already taken out of flow (see
     /// [`absolute_fill`](Self::absolute_fill)); ignored on an in-flow node, as `inset` is in CSS.
-    pub fn inset_start(mut self, px: f32) -> Self {
-        self.logical.inset_start = Some(px);
+    pub fn inset_start(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.logical.inset_start = Some(size.into());
         self
     }
 
     /// Inset from the edge the text runs towards, for a node already taken out of flow.
-    pub fn inset_end(mut self, px: f32) -> Self {
-        self.logical.inset_end = Some(px);
+    pub fn inset_end(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.logical.inset_end = Some(size.into());
         self
     }
 
-    pub fn gap(mut self, px: f32) -> Self {
+    pub fn gap(mut self, size: impl Into<SizeDimension>) -> Self {
+        let value: LengthPercentage = size.into().into();
         self.inner.gap = taffy::geometry::Size {
-            width: LengthPercentage::length(px),
-            height: LengthPercentage::length(px),
+            width: value,
+            height: value,
         };
         self
     }
 
-    pub fn gap_x(mut self, px: f32) -> Self {
-        self.inner.gap.width = LengthPercentage::length(px);
+    pub fn gap_x(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.inner.gap.width = size.into().into();
         self
     }
 
-    pub fn gap_y(mut self, px: f32) -> Self {
-        self.inner.gap.height = LengthPercentage::length(px);
+    pub fn gap_y(mut self, size: impl Into<SizeDimension>) -> Self {
+        self.inner.gap.height = size.into().into();
         self
     }
 
@@ -506,19 +534,19 @@ impl LayoutStyle {
         } else {
             (Edge::Left, Edge::Right)
         };
-        for (edge, px) in [(start, logical.padding_start), (end, logical.padding_end)] {
-            if let Some(px) = px {
-                *edge.of_mut(&mut style.padding) = LengthPercentage::length(px);
+        for (edge, size) in [(start, logical.padding_start), (end, logical.padding_end)] {
+            if let Some(size) = size {
+                *edge.of_mut(&mut style.padding) = size.into();
             }
         }
-        for (edge, px) in [(start, logical.margin_start), (end, logical.margin_end)] {
-            if let Some(px) = px {
-                *edge.of_mut(&mut style.margin) = LengthPercentageAuto::length(px);
+        for (edge, size) in [(start, logical.margin_start), (end, logical.margin_end)] {
+            if let Some(size) = size {
+                *edge.of_mut(&mut style.margin) = size.into();
             }
         }
-        for (edge, px) in [(start, logical.inset_start), (end, logical.inset_end)] {
-            if let Some(px) = px {
-                *edge.of_mut(&mut style.inset) = LengthPercentageAuto::length(px);
+        for (edge, size) in [(start, logical.inset_start), (end, logical.inset_end)] {
+            if let Some(size) = size {
+                *edge.of_mut(&mut style.inset) = size.into();
             }
         }
         style
@@ -739,8 +767,8 @@ mod tests {
         let style = LayoutStyle::new().margin(Margin::symmetric(6.0, 12.0));
         assert_eq!(style.inner.margin.top, LengthPercentageAuto::length(6.0));
         assert_eq!(style.inner.margin.bottom, LengthPercentageAuto::length(6.0));
-        assert_eq!(style.logical.margin_start, Some(12.0));
-        assert_eq!(style.logical.margin_end, Some(12.0));
+        assert_eq!(style.logical.margin_start, Some(SizeDimension::Px(12.0)));
+        assert_eq!(style.logical.margin_end, Some(SizeDimension::Px(12.0)));
     }
 
     // What `margin_from_left` exists for: an x already in physical viewport coordinates must not mirror.

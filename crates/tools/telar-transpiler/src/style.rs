@@ -241,26 +241,26 @@ fn layout_call(key: &str, value: &str, scope: Scope<'_>) -> Result<Option<String
         // Per-child cross-axis alignment override, e.g. `self:stretch` over a parent `align:center`, or
         // `self:center` to keep a fixed-size child centered instead of stretched.
         "self" => format!(".{}()", keyword(key, value, registry::SELF_VALUES)?),
-        "padding" | "pad" => format!(".padding_all({})", format_number(value, scope)?),
-        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value, scope)?),
-        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value, scope)?),
+        "padding" | "pad" => format!(".padding_all({})", dimension(value, scope)?),
+        "padding_x" | "pad_x" => format!(".padding_horizontal({})", dimension(value, scope)?),
+        "padding_y" | "pad_y" => format!(".padding_vertical({})", dimension(value, scope)?),
         // Logical edges: resolved to left/right against the active writing direction at layout time, so one build serves LTR and RTL.
         "padding_start" | "pad_start" => {
-            format!(".padding_start({})", format_number(value, scope)?)
+            format!(".padding_start({})", dimension(value, scope)?)
         }
-        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value, scope)?),
-        "margin_start" => format!(".margin_inline_start({})", format_number(value, scope)?),
-        "margin_end" => format!(".margin_inline_end({})", format_number(value, scope)?),
-        "inset_start" => format!(".inset_start({})", format_number(value, scope)?),
-        "inset_end" => format!(".inset_end({})", format_number(value, scope)?),
-        "inset_top" => format!(".inset_top({})", format_number(value, scope)?),
-        "inset_bottom" => format!(".inset_bottom({})", format_number(value, scope)?),
+        "padding_end" | "pad_end" => format!(".padding_end({})", dimension(value, scope)?),
+        "margin_start" => format!(".margin_inline_start({})", dimension(value, scope)?),
+        "margin_end" => format!(".margin_inline_end({})", dimension(value, scope)?),
+        "inset_start" => format!(".inset_start({})", dimension(value, scope)?),
+        "inset_end" => format!(".inset_end({})", dimension(value, scope)?),
+        "inset_top" => format!(".inset_top({})", dimension(value, scope)?),
+        "inset_bottom" => format!(".inset_bottom({})", dimension(value, scope)?),
         // Out of flow, pinned only by the insets the author names. `absolute_fill` is the all-four-at-zero
         // shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
         "absolute" => format!(".{}()", keyword(key, value, registry::ABSOLUTE_VALUES)?),
-        "gap" => format!(".gap({})", format_number(value, scope)?),
-        "gap_x" => format!(".gap_x({})", format_number(value, scope)?),
-        "gap_y" => format!(".gap_y({})", format_number(value, scope)?),
+        "gap" => format!(".gap({})", dimension(value, scope)?),
+        "gap_x" => format!(".gap_x({})", dimension(value, scope)?),
+        "gap_y" => format!(".gap_y({})", dimension(value, scope)?),
         "grow" => format!(".flex_grow({})", format_number(value, scope)?),
         "shrink" => format!(".flex_shrink({})", format_number(value, scope)?),
         "span" => format!(".grid_column_span({})", track_count(key, value)?),
@@ -719,15 +719,28 @@ mod tests {
         }
     }
 
-    /// A percentage falls where the key has no meaning for one, rather than through the old escape into a
-    /// rustc error about `50%` in generated Rust.
+    /// A percentage resolves against the containing block wherever CSS says it does — every length, not the
+    /// six size keys that happened to call the parser that knew about `%`.
     #[test]
-    fn a_percentage_is_a_size_and_a_number_is_everything_else() {
-        assert_eq!(
-            call("width", "50%").as_deref(),
-            Some(".width(SizeDimension::Percent(0.5))")
-        );
-        assert!(invalid("pad", "50%").is_some());
+    fn a_percentage_is_a_length_wherever_a_length_is() {
+        for key in [
+            "width",
+            "pad",
+            "padding_x",
+            "gap",
+            "margin_start",
+            "inset_top",
+        ] {
+            assert!(
+                call(key, "50%")
+                    .as_deref()
+                    .is_some_and(|c| c.contains("SizeDimension::Percent(0.5)")),
+                "`{key}:50%` should resolve"
+            );
+        }
+        // A ratio is not a length, and half of nothing is not a meaning either of these has.
+        assert!(invalid("grow", "50%").is_some());
+        assert!(invalid("aspect", "50%").is_some());
     }
 
     /// S3: a value outside a closed keyword set now says what the set is, on the attribute, instead of the

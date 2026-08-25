@@ -394,12 +394,18 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         "wrap" => return Some(ValueKind::Keywords(WRAP_VALUES)),
         "fit" => return Some(ValueKind::Keywords(FIT_VALUES)),
         "raster" => return Some(ValueKind::Keywords(RASTER_VALUES)),
+        // Every length resolves against the containing block where CSS says it does: sizes, and now the
+        // edges and gaps too. `%` used to work on six size keys and nowhere else, so `padding:50%` was a
+        // fact about which helper the emitter happened to call.
         "width" | "height" | "min_width" | "min_height" | "max_width" | "max_height" | "basis"
-        | "flex_basis" => return Some(ValueKind::Dimension),
-        "aspect" | "aspect_ratio" | "padding" | "pad" | "padding_x" | "pad_x" | "padding_y"
-        | "pad_y" | "padding_start" | "pad_start" | "padding_end" | "pad_end" | "margin_start"
+        | "flex_basis" | "padding" | "pad" | "padding_x" | "pad_x" | "padding_y" | "pad_y"
+        | "padding_start" | "pad_start" | "padding_end" | "pad_end" | "margin_start"
         | "margin_end" | "inset_start" | "inset_end" | "inset_top" | "inset_bottom" | "gap"
-        | "gap_x" | "gap_y" | "grow" | "shrink" => return Some(ValueKind::Number),
+        | "gap_x" | "gap_y" => {
+            return Some(ValueKind::Dimension);
+        }
+        // Ratios, not lengths: half of nothing is not a meaning either of them has.
+        "aspect" | "aspect_ratio" | "grow" | "shrink" => return Some(ValueKind::Number),
         "font_size" => return Some(ValueKind::Number),
         // A stroke *width* on an `svg`, where every other tag means a colour by the same name.
         "stroke" if tag == "svg" => return Some(ValueKind::Number),
