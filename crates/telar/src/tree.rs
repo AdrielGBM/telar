@@ -3,13 +3,14 @@
 //! An app's widgets, signals, layout nodes and overlays all live in thread-locals. In a normal build there is one
 //! copy of each and it does not matter who mounts the tree. Under hot reload the app is a dylib with its own
 //! copies: a tree mounted on the host's side registers its segment effects in the *host's* reactive runtime while
-//! `view()` reads the *dylib's* signals, so no subscription is ever established and nothing re-renders on its own
-//! (the historical `bump_force_ticks` workaround, which only fires on input events — so an animation, a
-//! background thread's result or a timer stays invisible until the user moves the mouse).
+//! `view()` reads the *dylib's* signals, so no subscription is ever established and nothing re-renders on its own.
+//! The workaround was `bump_force_ticks`, which re-ran every segment and only fired on input events — so an
+//! animation, a background thread's result or a timer stayed invisible until the user moved the mouse.
 //!
 //! So mounting is the app's job: [`App::mount`](crate::app::App::mount) hands the runner a [`UiTree`] it drives
 //! through this trait, and a dylib-backed app mounts a [`HotTree`] inside itself. Same shape the plugin subsystem
-//! already uses for embedded UIs (`crate::plugin::PluginInstance`).
+//! already uses for embedded UIs (`crate::plugin::PluginInstance`). The seam is what removed the workaround:
+//! with the tree mounted where its signals live, nothing needs waking by hand.
 
 use std::cell::Ref;
 use std::ops::Deref;
@@ -54,10 +55,6 @@ pub trait UiTree {
     /// Pre-order walk for the devtools inspector.
     fn walk(&self, out: &mut Vec<SegmentNodeInfo>);
 
-    /// Re-run every segment's view effect. Only a tree whose signals live in another runtime than its effects
-    /// needs this; one that owns both re-renders from its own subscriptions and leaves it a no-op.
-    fn bump_force_ticks(&self) {}
-
     /// Closes the frame for the input registries this tree's widgets read. A tree in this process shares the
     /// runner's, so the runner's own call covers it; one behind a dylib boundary has a second set of them.
     fn end_frame(&self) {}
@@ -92,10 +89,6 @@ impl UiTree for LocalTree {
     fn walk(&self, out: &mut Vec<SegmentNodeInfo>) {
         self.0.walk_tree(out);
     }
-
-    // `bump_force_ticks` is left the trait's no-op: this tree's effects and the signals they read are the
-    // same runtime's, so it re-renders from its own subscriptions. `telar/tests/local_tree_repaints.rs`
-    // holds that, for a changed signal and for a resize — the two things a frame depends on.
 }
 
 /// A tree that lives on the *app's* side of a hot-reload boundary: the dylib mounts it (so its segment effects

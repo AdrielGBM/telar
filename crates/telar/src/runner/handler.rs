@@ -290,10 +290,6 @@ where
                     self.mount_tree(window);
                     // A successful reload clears any banner from the previous failed build.
                     self.dev.set_build_error(None);
-                    // The incoming dylib's segments subscribe to signals created in the old one's runtime, so nothing wakes them without this.
-                    if let Some(ref mut tree) = self.tree {
-                        tree.bump_force_ticks();
-                    }
                     tracing::info!("hot reloaded: {}", new_path.display());
                     window.request_redraw();
                     true
@@ -694,10 +690,6 @@ where
         // Drag must run inside the pointer-press dispatch it originated from, so this sits right after the walk.
         let window_command_applied = self.apply_window_commands(window);
         if handled == EventResult::Handled || window_command_applied {
-            #[cfg(feature = "dev")]
-            if let Some(tree) = &self.tree {
-                tree.bump_force_ticks();
-            }
             // Flush reactive effects immediately so on_redraw() in the same cycle finds tree_dirty=true rather than deferring to the next cycle.
             end_batch();
             begin_batch();

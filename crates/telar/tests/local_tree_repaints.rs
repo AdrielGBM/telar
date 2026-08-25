@@ -1,13 +1,14 @@
-//! Whether a tree in this process needs anything forcing it to re-render.
+//! Whether the tree the runner drives needs anything forcing it to re-render.
 //!
-//! `bump_force_ticks` re-runs *every* segment's view effect by setting one signal they all read. It exists
-//! for the case where a tree's effects and the signals they read live in different reactive runtimes — a
-//! dylib mounted by the host — where no subscription is ever established and nothing wakes on its own.
+//! `bump_force_ticks` re-ran *every* segment's view effect by setting one signal they all read — O(tree) work
+//! in a design whose whole point is that a change wakes only what read it. It was there for the case where a
+//! tree's effects and the signals they read live in different reactive runtimes, which is what a dylib
+//! mounted by the host used to be; the `UiTree`/`HotTree` seam moved the mount to where the signals are, and
+//! the runner's calls outlived the reason for them.
 //!
-//! A [`LocalTree`] is by construction not that case, and the trait says so: "Only a tree whose signals live
-//! in another runtime than its effects needs this; one that owns both re-renders from its own subscriptions
-//! and leaves it a no-op." This is that claim, checked on the two things a frame depends on — the state a
-//! widget reads, and the layout it is placed by.
+//! This is the claim that replaced them, on the two things a frame depends on: the state a widget reads, and
+//! the layout it is placed by. The hot-reload half was checked the only way it can be — a `cargo telar dev`
+//! session with both calls removed, editing an `.rsx` and watching the window take the change.
 
 use telar::{
     Color, Component, DrawCommand, EventResult, LayoutItem, LayoutStyle, LocalTree, RectStyle,
