@@ -11,6 +11,7 @@
 //! what it means on any other widget. See [`Children`] for the ordering problem this had to solve first —
 //! a child is an argument, so without it a row would be built before the menu it belongs to exists.
 
+use renderer_core::TextWrap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -334,7 +335,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
         content.push(box_item(Text::new(
             move || label(),
             LayoutStyle::new(),
-            || TextStyle::new(shared::font_size(), shared::ink()).with_no_wrap(true),
+            || TextStyle::new(shared::font_size(), shared::ink()).with_text_wrap(TextWrap::NoWrap),
         )?));
     } else {
         content.extend(supplied);
@@ -342,7 +343,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
     if let Some(hint) = hint {
         content.push(box_item(Text::new(hint, LayoutStyle::new(), || {
             TextStyle::new(shared::font_size() * 0.9, shared::ink().with_alpha(0.65))
-                .with_no_wrap(true)
+                .with_text_wrap(TextWrap::NoWrap)
         })?));
     }
 
@@ -431,7 +432,7 @@ pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     }
     let text = Text::new(props.label, LayoutStyle::new(), || {
         TextStyle::new(shared::font_size() * 0.85, shared::ink().with_alpha(0.65))
-            .with_no_wrap(true)
+            .with_text_wrap(TextWrap::NoWrap)
     })?;
     let heading = StyledContainer::new(
         LayoutStyle::new()

@@ -71,7 +71,7 @@ pub fn command_visual_rect(
         DrawCommand::Text { rect, style, .. } => {
             // Glyphs can extend outside rect: ascenders above rect.y and the line height may exceed rect.height. Expand the visual rect to cover the real glyph extent so that dirty-rect computation and culling never under-estimate the painted area.
             let font_size = style.font_size;
-            let shadow = style.shadow;
+            let shadow = style.text_shadow.cast();
             let line_h = font_size * font_metrics.line_height_factor;
             let ascender_overshoot = font_size * font_metrics.ascender_ratio;
             let extra_bottom = (line_h - rect.height).max(0.0);

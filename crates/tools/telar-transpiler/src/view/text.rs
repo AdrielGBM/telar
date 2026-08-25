@@ -238,7 +238,7 @@ impl ViewGen<'_> {
             .find(|a| a.key == "align")
             .and_then(|a| registry::keyword(registry::TEXT_ALIGN_VALUES, a.value.text().trim()))
         {
-            modifiers.push_str(&format!(".with_align({variant})"));
+            modifiers.push_str(&format!(".with_text_align({variant})"));
         }
         // One call, because they are one decision: `ellipsis` without `lines` used to be accepted and do
         // nothing at all, since the clamp returns before ever reaching it.
@@ -251,7 +251,7 @@ impl ViewGen<'_> {
         }
         // `nowrap`: the label is a token and not prose, so it keeps one line whatever box it is given.
         if asserted("nowrap") {
-            modifiers.push_str(".with_no_wrap(true)");
+            modifiers.push_str(".with_text_wrap(TextWrap::NoWrap)");
         }
         if let Some(lh) = attrs
             .iter()

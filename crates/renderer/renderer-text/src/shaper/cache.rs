@@ -1,4 +1,4 @@
-use renderer_core::{Color, FontFamily, GlyphRaster, TextStyle};
+use renderer_core::{Color, FontFamily, GlyphRaster, LineHeight, TextStyle, TextWrap};
 use rustc_hash::FxHasher;
 use std::hash::{Hash, Hasher};
 
@@ -9,12 +9,12 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
     let lines = style.clamp.max_lines().unwrap_or(0).min(255) as u32;
     let packed = (style.weight as u32)
         | ((style.italic as u32) << 16)
-        | ((style.align as u32) << 17)
+        | ((style.text_align as u32) << 17)
         | (lines << 19)
         | ((style.clamp.ellipsis() as u32) << 27)
-        | ((style.no_wrap as u32) << 28);
+        | (((style.text_wrap == TextWrap::NoWrap) as u32) << 28);
     if style.font_family == FontFamily::SansSerif
-        && style.line_height.is_none()
+        && style.line_height == LineHeight::Natural
         && style.letter_spacing == 0.0
         && style.raster == GlyphRaster::Smooth
     {
@@ -23,7 +23,7 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
     let mut h = FxHasher::default();
     packed.hash(&mut h);
     style.font_family.hash(&mut h);
-    style.line_height.map(f32::to_bits).hash(&mut h);
+    style.line_height.factor().map(f32::to_bits).hash(&mut h);
     style.letter_spacing.to_bits().hash(&mut h);
     style.raster.hash(&mut h);
     h.finish() as u32

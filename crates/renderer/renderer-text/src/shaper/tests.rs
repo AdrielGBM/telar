@@ -1,6 +1,7 @@
 use super::cache::{hash_text, text_style_bits};
 use super::*;
 use geometry_core::Rect;
+use renderer_core::TextWrap;
 use renderer_core::{Color, Declared, Span, TextStyle};
 
 // Text positions are logical, so a multi-line block must occupy the same vertical extent regardless of the device scale factor. cosmic-text's `physical` adds the y-offset unscaled, so passing the line baseline there unscaled collapsed every line onto the first one at high-DPI (e.g. Android).
@@ -437,7 +438,12 @@ fn a_no_wrap_style_measures_one_line_however_narrow_the_box() {
     let style = TextStyle::new(14.0, Color::BLACK);
     let text = "Frame selected";
     let (wrapped_w, wrapped_h) = crate::measure_text(text, None, 40.0, &style);
-    let (flat_w, flat_h) = crate::measure_text(text, None, 40.0, &style.clone().with_no_wrap(true));
+    let (flat_w, flat_h) = crate::measure_text(
+        text,
+        None,
+        40.0,
+        &style.clone().with_text_wrap(TextWrap::NoWrap),
+    );
     assert!(
         flat_h < wrapped_h,
         "wrapping stacks lines ({wrapped_h}) that no-wrap does not ({flat_h})"

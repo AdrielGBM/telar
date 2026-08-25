@@ -5,7 +5,7 @@ use super::{
 };
 use cosmic_text::{CacheKey, SwashContent};
 use geometry_core::{Color, Rect};
-use renderer_core::{GlyphRaster, Span, TextStyle};
+use renderer_core::{GlyphRaster, Span, TextStyle, TextWrap};
 
 use super::atlas::GlyphInfo;
 
@@ -283,7 +283,7 @@ impl TextShaper {
         // A no-wrap style has no wrap width to be zero: it measures its natural width whatever box it was
         // offered, which is the whole point of asking for one line.
         let width_u32 = max_width.ceil() as u32;
-        if width_u32 == 0 && !style.no_wrap {
+        if width_u32 == 0 && style.text_wrap == TextWrap::Wrap {
             return (0.0, 0.0);
         }
 

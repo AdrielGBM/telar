@@ -22,13 +22,15 @@ fn clock_like(text: &str) -> Vec<DrawCommand> {
         spans: None,
         text: Arc::from(text),
         rect: Rect::new(20.0, 20.0, 600.0, 200.0),
-        style: Arc::new(TextStyle::new(140.0, Color::WHITE).with_shadow(Shadow {
-            color: Color::from_rgb_u8(255, 0, 0),
-            blur_radius: 12.0,
-            offset_x: 0.0,
-            offset_y: 0.0,
-            spread: 0.0,
-        })),
+        style: Arc::new(
+            TextStyle::new(140.0, Color::WHITE).with_text_shadow(Shadow {
+                color: Color::from_rgb_u8(255, 0, 0),
+                blur_radius: 12.0,
+                offset_x: 0.0,
+                offset_y: 0.0,
+                spread: 0.0,
+            }),
+        ),
     }]
 }
 

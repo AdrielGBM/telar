@@ -1,5 +1,6 @@
 //! Shared dropdown scaffold (constants, style fns, trigger + overlay/backdrop/anchoring) behind `menu` and `select`.
 
+use renderer_core::TextWrap;
 use std::rc::Rc;
 
 use geometry_core::Rect;
@@ -135,7 +136,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     // `no_wrap`: a trigger's label is the *name* of a control, and splitting `File` across two lines to make
     // room for the caret beside it turns one word into two.
     let label_text = Text::new(trigger_label, LayoutStyle::new(), || {
-        TextStyle::new(shared::font_size(), shared::ink()).with_no_wrap(true)
+        TextStyle::new(shared::font_size(), shared::ink()).with_text_wrap(TextWrap::NoWrap)
     })?;
     let trigger_style = {
         let color = color.clone();

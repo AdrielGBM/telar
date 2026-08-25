@@ -38,7 +38,8 @@ pub use renderer::{RenderBackend, RendererBuild, RendererFactory};
 pub use shadow::ShadowLayout;
 pub use style::{
     BorderWidths, Clamp, Declared, FillRule, FontFamily, GlyphRaster, Gradient, GradientKind,
-    GradientStop, GradientStops, LineCap, LineJoin, Paint, PathStyle, RectStyle, Scale, Shadow,
-    ShapeStyle, Span, Stroke, TextAlign, TextStyle, border_inner_shape,
+    GradientStop, GradientStops, LineCap, LineHeight, LineJoin, Paint, PathStyle, RectStyle, Scale,
+    Shadow, ShapeStyle, Span, Stroke, TextAlign, TextShadow, TextStyle, TextWrap,
+    border_inner_shape,
 };
 pub use style_pool::{hash_declared, hash_path_style};

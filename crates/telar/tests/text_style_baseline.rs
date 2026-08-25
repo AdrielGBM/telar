@@ -9,6 +9,7 @@
 //! "which weight did it decide on". Every number here is a *current* value, not a desired one — a change to
 //! any of them is either a regression or a decision, and both should have to be made on purpose.
 
+use renderer_core::TextWrap;
 use telar::testing::mount;
 use telar::{
     Color, Component, Container, DrawCommand, FontFamily, GlyphRaster, LayoutItem, LayoutStyle,
@@ -59,13 +60,13 @@ fn an_undeclared_text_style_resolves_to_these_exact_values() {
     assert_eq!(style.font_family, FontFamily::SansSerif);
     assert_eq!(style.weight, 400);
     assert!(!style.italic);
-    assert_eq!(style.align, TextAlign::Start);
+    assert_eq!(style.text_align, TextAlign::Start);
     assert_eq!(style.clamp, telar::Clamp::None);
-    assert_eq!(style.line_height, None);
+    assert_eq!(style.line_height, telar::LineHeight::Natural);
     assert_eq!(style.letter_spacing, 0.0);
     assert_eq!(style.raster, GlyphRaster::Smooth);
-    assert!(!style.no_wrap);
-    assert_eq!(style.shadow, None);
+    assert_eq!(style.text_wrap, telar::TextWrap::Wrap);
+    assert_eq!(style.text_shadow, telar::TextShadow::None);
 }
 
 /// A style declared on a leaf reaches the command unchanged. Nothing between the widget and the renderer may
@@ -75,12 +76,12 @@ fn a_declared_text_style_reaches_the_draw_command_intact() {
     let declared = TextStyle::new(11.0, Color::WHITE)
         .with_weight(700)
         .with_italic(true)
-        .with_align(TextAlign::Center)
+        .with_text_align(TextAlign::Center)
         .with_clamp(2, true)
         .with_line_height(1.5)
         .with_letter_spacing(0.5)
         .with_raster(GlyphRaster::Pixel)
-        .with_no_wrap(true)
+        .with_text_wrap(TextWrap::NoWrap)
         .with_font_family("Some Face");
 
     let expected = declared.clone();

@@ -4,7 +4,7 @@ use cosmic_text::{
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
-use renderer_core::{FontFamily, GlyphRaster, Paint, Span, TextAlign, TextStyle};
+use renderer_core::{FontFamily, GlyphRaster, Paint, Span, TextAlign, TextStyle, TextWrap};
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
@@ -67,7 +67,7 @@ pub struct TextShaper {
 
 /// The buffer line height in pixels for `style`: `line_height` (a multiple of font size) when set, else the natural `LINE_HEIGHT_FACTOR`. Shared by shaping and measuring so both reserve the same vertical space.
 pub(crate) fn effective_line_height(style: &TextStyle) -> f32 {
-    style.font_size * style.line_height.unwrap_or(LINE_HEIGHT_FACTOR)
+    style.font_size * style.line_height.factor().unwrap_or(LINE_HEIGHT_FACTOR)
 }
 
 /// The cache-key flags `raster` implies. `PIXEL_FONT` makes swash round the fractional offset it bakes
@@ -192,7 +192,7 @@ fn shape_buffer(
     let mut buffer = Buffer::new(font_system, metrics);
     // `None` width is cosmic-text for "do not wrap": the line grows past the box instead of breaking, which
     // is what a label that is really a token wants.
-    let wrap_width = (!style.no_wrap).then_some(rect.width);
+    let wrap_width = (!(style.text_wrap == TextWrap::NoWrap)).then_some(rect.width);
     buffer.set_size(wrap_width, Some(rect.height));
     let attrs = text_attrs(style);
     // Uniform text takes `set_text` rather than a one-span `set_rich_text`: same call underneath, but this is the one the byte-exact software golden was recorded against.
@@ -220,7 +220,7 @@ fn shape_buffer(
         }
     }
     // Alignment shifts glyph x within the line box; applied before shaping so positions bake it in.
-    if let Some(a) = cosmic_align(style.align) {
+    if let Some(a) = cosmic_align(style.text_align) {
         for line in buffer.lines.iter_mut() {
             line.set_align(Some(a));
         }

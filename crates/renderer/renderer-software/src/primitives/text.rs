@@ -123,7 +123,7 @@ pub(crate) fn draw_text(
     >,
     recent_text_shadow: &mut Option<(TextShadowCacheKey, u32, u32)>,
 ) {
-    if let Some(shadow) = style.shadow {
+    if let Some(shadow) = style.text_shadow.cast() {
         // The same ceil the shaper applies, computed here so the shadow's key and geometry are known without paying for a raster the cache may already have made unnecessary.
         let texture_width = rect.width.ceil() as u32;
         let texture_height = rect.height.ceil() as u32;

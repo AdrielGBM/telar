@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::signal;
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle, TextWrap};
 use ui_core::{
     Container, LayoutItem, Overlay, Placement, ReactiveList, Slots, StyledContainer, Text,
     box_item, track_layout,
@@ -239,10 +239,10 @@ impl Content {
         let name = Text::new(
             move || text(),
             LayoutStyle::new(),
-            || TextStyle::new(bubble_text_size(), BUBBLE_INK).with_no_wrap(true),
+            || TextStyle::new(bubble_text_size(), BUBBLE_INK).with_text_wrap(TextWrap::NoWrap),
         )?;
         let key = optional_line(shortcut, || {
-            TextStyle::new(bubble_text_size() * 0.9, dim(0.6)).with_no_wrap(true)
+            TextStyle::new(bubble_text_size() * 0.9, dim(0.6)).with_text_wrap(TextWrap::NoWrap)
         })?;
         // The shortcut is pushed apart with `SPACE_BETWEEN` and not with a growing spacer: a spacer wants all
         // the width there is, so the bubble took its 240px maximum whatever it said. This way the row
@@ -303,6 +303,7 @@ mod tests {
     use super::*;
     use crate::harness::moved;
     use layout_core::AvailableSpace;
+    use renderer_core::LineHeight;
 
     use renderer_core::DrawCommand;
     use ui_core::{ComponentList, compute_layout, new_container, relayout_if_dirty};
@@ -454,8 +455,15 @@ mod tests {
                 })
                 .unwrap_or_else(|| panic!("`{needle}` is drawn"))
         };
-        assert_eq!(leading_of("Name regions"), Some(DESCRIPTION_LEADING));
-        assert_eq!(leading_of("Setup"), None, "the name never wraps");
+        assert_eq!(
+            leading_of("Name regions"),
+            LineHeight::Times(DESCRIPTION_LEADING)
+        );
+        assert_eq!(
+            leading_of("Setup"),
+            LineHeight::Natural,
+            "the name never wraps"
+        );
     }
 
     /// A bubble is as wide as what it says, up to its cap. It was taking the cap whatever it had to say,

@@ -39,7 +39,7 @@ pub fn hash_text_style(s: &TextStyle) -> u64 {
     let mut h = FxHasher::default();
     h.write_u32(s.font_size.to_bits());
     hash_paint(&s.paint, &mut h);
-    hash_opt_shadow(s.shadow.as_ref(), &mut h);
+    hash_opt_shadow(s.text_shadow.cast().as_ref(), &mut h);
     h.finish()
 }
 

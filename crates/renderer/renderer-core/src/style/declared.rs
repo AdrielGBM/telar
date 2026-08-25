@@ -1,4 +1,6 @@
-use super::{FontFamily, GlyphRaster, Paint, TextStyle};
+use super::{
+    FontFamily, GlyphRaster, LineHeight, Paint, TextAlign, TextShadow, TextStyle, TextWrap,
+};
 
 /// What one place says about the text style around it, each field `None` where it says nothing.
 ///
@@ -9,10 +11,10 @@ use super::{FontFamily, GlyphRaster, Paint, TextStyle};
 /// the same data, so they are one type: a span is a cascade child whose extent is a byte range instead of a
 /// subtree.
 ///
-/// Deliberately smaller than the set of properties that will eventually flow down a tree: the ones missing
-/// (`line_height`, `shadow`) are already `Option` on `TextStyle`, and nesting that inside this one would make
-/// `Option<Option<T>>`, where the two layers mean different things. They arrive when they carry their own
-/// absence as a value.
+/// Every field is an `Option` of a type that already carries its own absence where it has one — `LineHeight`
+/// rather than `Option<f32>`, `TextShadow` rather than `Option<Shadow>`. Without that the two would nest into
+/// an `Option<Option<T>>` whose layers mean entirely different things: "this node says nothing" and "this
+/// node says: none".
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Declared {
     pub font_family: Option<FontFamily>,
@@ -20,7 +22,11 @@ pub struct Declared {
     pub paint: Option<Paint>,
     pub weight: Option<u16>,
     pub italic: Option<bool>,
+    pub line_height: Option<LineHeight>,
     pub letter_spacing: Option<f32>,
+    pub text_align: Option<TextAlign>,
+    pub text_wrap: Option<TextWrap>,
+    pub text_shadow: Option<TextShadow>,
     pub raster: Option<GlyphRaster>,
 }
 
@@ -43,8 +49,20 @@ impl Declared {
         if let Some(italic) = self.italic {
             out.italic = italic;
         }
+        if let Some(line_height) = self.line_height {
+            out.line_height = line_height;
+        }
         if let Some(letter_spacing) = self.letter_spacing {
             out.letter_spacing = letter_spacing;
+        }
+        if let Some(text_align) = self.text_align {
+            out.text_align = text_align;
+        }
+        if let Some(text_wrap) = self.text_wrap {
+            out.text_wrap = text_wrap;
+        }
+        if let Some(text_shadow) = self.text_shadow {
+            out.text_shadow = text_shadow;
         }
         if let Some(raster) = self.raster {
             out.raster = raster;

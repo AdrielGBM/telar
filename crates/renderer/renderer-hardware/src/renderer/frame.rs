@@ -123,13 +123,18 @@ fn at_scale(style: renderer_core::TextStyle, scale: f32) -> renderer_core::TextS
     }
     renderer_core::TextStyle {
         font_size: style.font_size * scale,
-        shadow: style.shadow.map(|shadow| renderer_core::Shadow {
-            offset_x: shadow.offset_x * scale,
-            offset_y: shadow.offset_y * scale,
-            blur_radius: shadow.blur_radius * scale,
-            spread: shadow.spread * scale,
-            ..shadow
-        }),
+        text_shadow: match style.text_shadow {
+            renderer_core::TextShadow::None => renderer_core::TextShadow::None,
+            renderer_core::TextShadow::Cast(shadow) => {
+                renderer_core::TextShadow::Cast(renderer_core::Shadow {
+                    offset_x: shadow.offset_x * scale,
+                    offset_y: shadow.offset_y * scale,
+                    blur_radius: shadow.blur_radius * scale,
+                    spread: shadow.spread * scale,
+                    ..shadow
+                })
+            }
+        },
         ..style
     }
 }
@@ -1008,7 +1013,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         (text_tx2 - text_tx).abs(),
                         (text_ty2 - text_ty).abs(),
                     );
-                    if let Some(shadow) = style.shadow {
+                    if let Some(shadow) = style.text_shadow.cast() {
                         self.flush_text();
 
                         let shadow_rect = Rect::new(
@@ -1035,7 +1040,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
                         let shadow_style = renderer_core::TextStyle {
                             paint: renderer_core::Paint::Solid(shadow.color),
-                            shadow: None,
+                            text_shadow: renderer_core::TextShadow::None,
                             ..style.clone()
                         };
                         // A shadow is one colour: the spans keep the metrics that place each glyph and give up the paint that would punch the text's own colours through it.

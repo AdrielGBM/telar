@@ -41,6 +41,66 @@ pub enum GlyphRaster {
     Pixel,
 }
 
+/// Whether text wraps into its box or keeps one line whatever width it is given.
+///
+/// [`NoWrap`](Self::NoWrap) is what a label in a toolbar, a status bar or a table cell wants: it is a *name*,
+/// and a name broken across two lines to fit a column reads as two things. Wrapping is right for prose and
+/// wrong for everything that is really a token, so it belongs to the style rather than the box — the same
+/// text is a label in one place and a paragraph in another.
+///
+/// Positive rather than a `no_wrap: bool`, and named apart from the container's `wrap:` (which is flex-wrap)
+/// that its old spelling was one character away from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum TextWrap {
+    #[default]
+    Wrap,
+    NoWrap,
+}
+
+/// The height of a line, as a multiple of the font size.
+///
+/// A value rather than an `Option<f32>`, because a property that flows down a tree has to be able to tell
+/// "nobody said" from "somebody said: the font's own" — and an `Option` inside a partial style would nest
+/// two different meanings of nothing. CSS spells the same distinction `line-height: normal`.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum LineHeight {
+    /// Whatever the shaper's natural line height is for the face and size.
+    #[default]
+    Natural,
+    Times(f32),
+}
+
+impl LineHeight {
+    /// The multiple to apply, or `None` for the shaper's own.
+    pub fn factor(self) -> Option<f32> {
+        match self {
+            LineHeight::Natural => None,
+            LineHeight::Times(n) => Some(n),
+        }
+    }
+}
+
+/// A shadow cast behind the glyphs, or none.
+///
+/// Carries its own absence for the same reason [`LineHeight`] does. Named apart from `RectStyle`'s shadow,
+/// which is the identical type on a field of the identical name — but one inherits and the other must never,
+/// so under a cascade a bare `shadow:` could not be resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum TextShadow {
+    #[default]
+    None,
+    Cast(Shadow),
+}
+
+impl TextShadow {
+    pub fn cast(self) -> Option<Shadow> {
+        match self {
+            TextShadow::None => None,
+            TextShadow::Cast(shadow) => Some(shadow),
+        }
+    }
+}
+
 /// How text ends when it does not fit.
 ///
 /// One decision, so one type. Split across a `max_lines: Option<u16>` and an `ellipsis: bool` it had two
@@ -104,28 +164,24 @@ impl<T: AsRef<str>> From<T> for FontFamily {
 pub struct TextStyle {
     pub font_size: f32,
     pub paint: Paint,
-    pub shadow: Option<Shadow>,
+    /// A shadow behind the glyphs. See [`TextShadow`].
+    pub text_shadow: TextShadow,
     /// The face to shape in. See [`FontFamily`].
     pub font_family: FontFamily,
     /// OpenType weight axis: 400 is normal, 700 is bold. Selects the matching font face.
     pub weight: u16,
     pub italic: bool,
-    pub align: TextAlign,
+    pub text_align: TextAlign,
     /// How the text ends when it does not fit. See [`Clamp`].
     pub clamp: Clamp,
-    /// Line height as a multiple of `font_size` (e.g. `1.5`). `None` keeps the shaper's natural line height, so the default renders byte-for-byte as before.
-    pub line_height: Option<f32>,
+    /// The height of a line, as a multiple of `font_size`. See [`LineHeight`].
+    pub line_height: LineHeight,
     /// Extra advance in logical pixels added after each glyph. `0.0` uses the font's natural advances.
     pub letter_spacing: f32,
     /// Which grid the glyphs land on. See [`GlyphRaster`].
     pub raster: GlyphRaster,
-    /// Keep the text on one line whatever width it is given, instead of wrapping into the box.
-    ///
-    /// What a label in a toolbar, a status bar or a table cell wants: it is a *name*, and a name broken
-    /// across two lines to fit a column reads as two things. Wrapping is the right default for prose and the
-    /// wrong one for everything that is really a token, so it is a property of the style rather than of the
-    /// box — the same text is a label in one place and a paragraph in another.
-    pub no_wrap: bool,
+    /// Whether the text wraps into its box. See [`TextWrap`].
+    pub text_wrap: TextWrap,
 }
 
 impl TextStyle {
@@ -133,22 +189,22 @@ impl TextStyle {
         Self {
             font_size,
             paint: paint.into(),
-            shadow: None,
+            text_shadow: TextShadow::None,
             font_family: FontFamily::SansSerif,
             weight: 400,
             italic: false,
-            align: TextAlign::Start,
+            text_align: TextAlign::Start,
             clamp: Clamp::None,
-            line_height: None,
+            line_height: LineHeight::Natural,
             letter_spacing: 0.0,
             raster: GlyphRaster::Smooth,
-            no_wrap: false,
+            text_wrap: TextWrap::Wrap,
         }
     }
 
-    /// Keeps the text on one line; see [`no_wrap`](Self::no_wrap).
-    pub fn with_no_wrap(mut self, no_wrap: bool) -> Self {
-        self.no_wrap = no_wrap;
+    /// Keeps the text on one line; see [`TextWrap`].
+    pub fn with_text_wrap(mut self, text_wrap: TextWrap) -> Self {
+        self.text_wrap = text_wrap;
         self
     }
 
@@ -174,8 +230,8 @@ impl TextStyle {
     }
 
     /// Drops a shadow behind the glyphs — what keeps text legible over an image the style knows nothing about.
-    pub fn with_shadow(mut self, shadow: Shadow) -> Self {
-        self.shadow = Some(shadow);
+    pub fn with_text_shadow(mut self, shadow: Shadow) -> Self {
+        self.text_shadow = TextShadow::Cast(shadow);
         self
     }
 
@@ -184,8 +240,8 @@ impl TextStyle {
         self
     }
 
-    pub fn with_align(mut self, align: TextAlign) -> Self {
-        self.align = align;
+    pub fn with_text_align(mut self, text_align: TextAlign) -> Self {
+        self.text_align = text_align;
         self
     }
 
@@ -195,8 +251,8 @@ impl TextStyle {
         self
     }
 
-    pub fn with_line_height(mut self, line_height: f32) -> Self {
-        self.line_height = Some(line_height);
+    pub fn with_line_height(mut self, times: f32) -> Self {
+        self.line_height = LineHeight::Times(times);
         self
     }
 
@@ -236,7 +292,7 @@ mod tests {
     #[test]
     fn text_style_defaults_to_natural_spacing() {
         let style = TextStyle::new(16.0, Color::BLACK);
-        assert_eq!(style.line_height, None);
+        assert_eq!(style.line_height, LineHeight::Natural);
         assert_eq!(style.letter_spacing, 0.0);
     }
 
@@ -245,7 +301,7 @@ mod tests {
         let style = TextStyle::new(16.0, Color::BLACK)
             .with_line_height(1.5)
             .with_letter_spacing(2.0);
-        assert_eq!(style.line_height, Some(1.5));
+        assert_eq!(style.line_height, LineHeight::Times(1.5));
         assert_eq!(style.letter_spacing, 2.0);
     }
 }

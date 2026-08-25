@@ -11,7 +11,7 @@ use geometry_core::{Point, Rect};
 use platform_headless::HeadlessWindow;
 use renderer_core::{
     Color, DrawCommand, Gradient, Paint, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
-    ShapeStyle, Stroke, TextStyle,
+    ShapeStyle, Stroke, TextShadow, TextStyle,
 };
 use renderer_text::TextShaperConfig;
 use telar_renderer_hardware::HardwareRenderer;
@@ -543,7 +543,7 @@ fn golden_scene() -> Vec<DrawCommand> {
 
     // A shadowed heading: exercises the ShadowKind::Text resolve path.
     let heading_style = Arc::new(TextStyle {
-        shadow: Some(Shadow::new(1.0, 2.0, 4.0, Color::rgba(0.0, 0.0, 0.0, 0.7))),
+        text_shadow: TextShadow::Cast(Shadow::new(1.0, 2.0, 4.0, Color::rgba(0.0, 0.0, 0.0, 0.7))),
         ..TextStyle::new(22.0, Color::WHITE)
     });
     cmds.push(DrawCommand::Text {

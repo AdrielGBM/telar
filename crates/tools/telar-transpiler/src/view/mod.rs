@@ -1394,7 +1394,7 @@ mod tests {
         );
         assert!(code.contains(".with_italic(true)"), "italic flag:\n{code}");
         assert!(
-            code.contains(".with_align(TextAlign::Center)"),
+            code.contains(".with_text_align(TextAlign::Center)"),
             "align:\n{code}"
         );
     }
@@ -1411,7 +1411,7 @@ mod tests {
             "numeric weight:\n{code}"
         );
         assert!(
-            code.contains(".with_align(TextAlign::End)"),
+            code.contains(".with_text_align(TextAlign::End)"),
             "align end:\n{code}"
         );
         assert!(
