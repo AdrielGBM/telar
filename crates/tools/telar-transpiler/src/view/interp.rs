@@ -103,11 +103,8 @@ impl ViewGen<'_> {
         if v.starts_with("Color::") {
             return v.to_string();
         }
-        match v {
-            "white" => return "Color::WHITE".to_string(),
-            "black" => return "Color::BLACK".to_string(),
-            "transparent" => return "Color::TRANSPARENT".to_string(),
-            _ => {}
+        if v == "transparent" {
+            return "Color::TRANSPARENT".to_string();
         }
         if self.is_local(v) {
             return v.to_string();

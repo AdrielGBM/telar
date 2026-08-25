@@ -674,6 +674,10 @@ impl<'a> ViewGen<'a> {
         match kind {
             // Only a flag key carries the empty spelling, so a valueless `align` is caught here too.
             ValueKind::Keywords(table) => crate::style::keyword(&attr.key, value, table).err(),
+            // A number is the axis itself; the names are steps of it, so either spelling is the same value.
+            ValueKind::KeywordsOrNumber(table) => (value.parse::<f32>().is_err())
+                .then(|| crate::style::keyword(&attr.key, value, table).err())
+                .flatten(),
             ValueKind::Number => crate::style::format_number(value, self.scope()).err(),
             ValueKind::Dimension => crate::style::dimension(value, self.scope()).err(),
             ValueKind::Edges => value
@@ -1953,6 +1957,92 @@ mod tests {
         let container = "[view]\ncol align:justify\n    text \"x\"\n";
         let out = crate::transpile_source(container, "demo", None, None, None).unwrap();
         assert!(out.rust_code.contains("is not a value of `align`"));
+    }
+
+    /// A synonym is cost with nothing bought, and every one of these had a shorter or plainer spelling that
+    /// stays. They are errors rather than silences, which is what makes deleting them safe.
+    #[test]
+    fn a_second_spelling_of_a_value_is_not_a_value() {
+        for (src, expected) in [
+            ("[view]\ntext \"x\" font_weight:demibold\n", "`semibold`"),
+            ("[view]\ntext \"x\" font_weight:black\n", "`heavy`"),
+            (
+                "[view]\ncol wrap:wrap\n    text \"x\"\n",
+                "`wrap` takes no value",
+            ),
+            (
+                "[view]\ntext \"x\" lines:2 ellipsis:true\n",
+                "`ellipsis` takes no value",
+            ),
+            (
+                "[view]\ngrid cols(240px 1fr)\n    text \"x\"\n",
+                "is not a track list",
+            ),
+        ] {
+            let code = crate::transpile_source(src, "demo", None, None, None)
+                .unwrap()
+                .rust_code;
+            assert!(
+                code.contains(expected),
+                "expected {expected:?} for {src:?}:\n{code}"
+            );
+        }
+    }
+
+    /// `white` and `black` stop being colours, so the name falls through to what a bare ident means — a
+    /// `[style]` constant — instead of quietly painting one.
+    #[test]
+    fn a_named_colour_is_only_transparent_now() {
+        let code =
+            crate::transpile_source("[view]\ntext \"x\" color:white\n", "demo", None, None, None)
+                .unwrap()
+                .rust_code;
+        assert!(!code.contains("Color::WHITE"), "{code}");
+
+        let kept = crate::transpile_source(
+            "[view]\ntext \"x\" color:transparent\n",
+            "demo",
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(kept.contains("Color::TRANSPARENT"), "{kept}");
+    }
+
+    /// The spellings that stay, so the trim is a trim and not an amputation.
+    #[test]
+    fn the_one_spelling_of_each_still_works() {
+        for (src, expected) in [
+            (
+                "[view]\ntext \"x\" font_weight:semibold\n",
+                ".with_font_weight(600)",
+            ),
+            (
+                "[view]\ntext \"x\" font_weight:heavy\n",
+                ".with_font_weight(900)",
+            ),
+            (
+                "[view]\ntext \"x\" font_weight:600\n",
+                ".with_font_weight(600)",
+            ),
+            ("[view]\ncol wrap\n    text \"x\"\n", ".flex_wrap()"),
+            (
+                "[view]\ntext \"x\" lines:2 ellipsis\n",
+                ".with_clamp(2, true)",
+            ),
+            (
+                "[view]\ngrid cols(240 1fr)\n    text \"x\"\n",
+                "TemplateTrack::px(240.0)",
+            ),
+        ] {
+            let code = crate::transpile_source(src, "demo", None, None, None)
+                .unwrap()
+                .rust_code;
+            assert!(!code.contains("compile_error!"), "{src:?}:\n{code}");
+            assert!(code.contains(expected), "{src:?}:\n{code}");
+        }
     }
 
     /// `@heading { font_size: 22 }` used to compile and do nothing: a class reached a container's paint and a

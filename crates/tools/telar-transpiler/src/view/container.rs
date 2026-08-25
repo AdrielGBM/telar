@@ -77,7 +77,6 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "click_through")
-            .filter(|a| !matches!(a.value.text().trim(), "false"))
             .map(|_| ".click_through(true)".to_string())
             .unwrap_or_default();
         let on_press = self.on_press_call(el);
@@ -238,7 +237,7 @@ impl ViewGen<'_> {
         };
         let value = attr.value.text().trim();
         // A bare `disabled` flag is the HTML spelling, and means it always is.
-        if attr.value.is_flag() || value == "true" {
+        if attr.value.is_flag() {
             return ".disabled(|| true)".to_string();
         }
         let read = substitute_reads(value);

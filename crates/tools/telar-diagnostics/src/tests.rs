@@ -118,7 +118,7 @@ fn recognized_color_value_forms_produce_no_diagnostic_under_theme() {
     };
 
     for (key, value) in [
-        ("fill", "white"),
+        ("fill", "transparent"),
         ("stroke", "$accent"),
         ("fill", "Color::RED"),
         ("from", "brand"),

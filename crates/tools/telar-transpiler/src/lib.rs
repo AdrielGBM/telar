@@ -1961,14 +1961,14 @@ col @card
     #[test]
     fn hex_theme_and_keyword_colors_are_unaffected_by_signal_support() {
         // Regression guard: adding the `$ident` branch to `color_expr` must not touch the pre-existing hex/theme/keyword paths.
-        let src = "[view]\nbox fill:#3d78fa stroke:white\n    text \"x\" color:primary\n";
+        let src = "[view]\nbox fill:#3d78fa stroke:transparent\n    text \"x\" color:primary\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;
         assert!(
             code.contains("Color::rgba(61.0 / 255.0, 120.0 / 255.0, 250.0 / 255.0, 255.0 / 255.0)")
         );
-        assert!(code.contains("Color::WHITE"));
+        assert!(code.contains("Color::TRANSPARENT"));
         assert!(code.contains("use_theme::<SandboxTheme>().primary()"));
         assert!(
             !code.contains(".clone()"),

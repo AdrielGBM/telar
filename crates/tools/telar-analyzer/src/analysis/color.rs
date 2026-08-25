@@ -1,6 +1,6 @@
 //! `textDocument/documentColor` + `colorPresentation`: inline swatches and a color picker for the `.rsx` styling DSL.
 //!
-//! v1 scope is **color literals** — hex (`#rgb`/`#rrggbb`/`#rrggbbaa`) and the three keyword colors (`white`/`black`/`transparent`) — at the two places they appear with position info: `[style]` constant values and `[view]` attribute values. These are unambiguously editable, so the picker can write a hex back without clobbering a theme binding. Theme-token references (`color:primary` where `primary` is a theme field) are intentionally skipped: resolving them to RGBA would require evaluating the theme's Rust, and rewriting them to a hex would drop the reactive binding.
+//! v1 scope is **color literals** — hex (`#rgb`/`#rrggbb`/`#rrggbbaa`) and the one keyword colour (`transparent`) — at the two places they appear with position info: `[style]` constant values and `[view]` attribute values. These are unambiguously editable, so the picker can write a hex back without clobbering a theme binding. Theme-token references (`color:primary` where `primary` is a theme field) are intentionally skipped: resolving them to RGBA would require evaluating the theme's Rust, and rewriting them to a hex would drop the reactive binding.
 
 use lsp_types::{Color, ColorInformation, ColorPresentation, Range};
 use telar_parser::{RsxDocument, ViewNode};
@@ -209,8 +209,7 @@ mod tests {
 
     #[test]
     fn view_hex_and_keyword_attrs_get_swatches_but_quoted_and_tokens_do_not() {
-        let src =
-            "[view]\nbox fill:#ff0000 stroke:white color:primary\n    text label:\"#nothex\"\n";
+        let src = "[view]\nbox fill:#ff0000 stroke:transparent color:primary\n    text label:\"#nothex\"\n";
         let doc = parse(src).unwrap();
         let infos = document_colors(&doc, src);
         // Inline hex.
@@ -219,7 +218,10 @@ mod tests {
             "hex attr swatch"
         );
         // Keyword under a color key.
-        assert!(color_at(&infos, src, "white").is_some(), "keyword swatch");
+        assert!(
+            color_at(&infos, src, "transparent").is_some(),
+            "keyword swatch"
+        );
         // A theme-token reference is skipped (no RGBA, would clobber the binding).
         assert!(
             color_at(&infos, src, "primary").is_none(),

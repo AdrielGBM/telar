@@ -86,10 +86,10 @@ mod tests {
 
     #[test]
     fn keyword_color_hovers_a_swatch() {
-        // `fill:white` is a completion candidate and a swatch, so it must hover consistently too.
-        let src = "[view]\nbox fill:white\n";
-        let text = hover_text(src, 1, 11).expect("hover over the `white` keyword");
-        assert_eq!(text, "■ #ffffff — white");
+        // `fill:transparent` is a completion candidate and a swatch, so it must hover consistently too.
+        let src = "[view]\nbox fill:transparent\n";
+        let text = hover_text(src, 1, 11).expect("hover over the `transparent` keyword");
+        assert_eq!(text, "■ #00000000 — transparent");
     }
 
     #[test]

@@ -109,15 +109,18 @@ pub fn color_attr_keys() -> &'static [&'static str] {
 /// Named color keywords `color_expr` resolves (see `view/interp.rs`), alongside hex literals and `[style]`/
 /// theme/`$signal` references. The single source of truth so completion, hover and swatch tooling agree.
 pub fn color_keywords() -> &'static [&'static str] {
-    &["white", "black", "transparent"]
+    &["transparent"]
 }
 
-/// The RGBA a keyword color resolves to, matching the `Color::WHITE`/`BLACK`/`TRANSPARENT` constants
-/// `color_expr` emits (see `view/interp.rs`). `None` for anything outside [`color_keywords`].
+/// The RGBA the one keyword colour resolves to, matching the `Color::TRANSPARENT` constant `color_expr`
+/// emits (see `view/interp.rs`). `None` for anything outside [`color_keywords`].
+///
+/// It is kept because it says something no literal can: `#00000000` reads as opaque black at a glance.
+/// `white` and `black` went with the rest of a palette the language never had — there was no `red` — and in a
+/// themed toolkit a literal `white` is the mistake the theme exists to prevent: the value wanted is `surface`
+/// or `ink`. An application with a palette of its own writes it as `[style]` constants.
 pub fn keyword_color_rgba(name: &str) -> Option<[u8; 4]> {
     match name {
-        "white" => Some([255, 255, 255, 255]),
-        "black" => Some([0, 0, 0, 255]),
         "transparent" => Some([0, 0, 0, 0]),
         _ => None,
     }
@@ -278,18 +281,16 @@ pub const AXIS_VALUES: &[(&str, &str)] = &[
 
 /// `absolute` — out of flow, pinned by the insets the author names; `absolute:fill` is the all-four-at-zero
 /// shorthand. The empty spelling is the bare flag.
-pub const ABSOLUTE_VALUES: &[(&str, &str)] = &[
-    ("", "absolute"),
-    ("true", "absolute"),
-    ("fill", "absolute_fill"),
-];
+pub const ABSOLUTE_VALUES: &[(&str, &str)] = &[("", "absolute"), ("fill", "absolute_fill")];
 
 /// `wrap` — a flag, spelled bare or as its own name.
-pub const WRAP_VALUES: &[(&str, &str)] = &[
-    ("", "flex_wrap"),
-    ("wrap", "flex_wrap"),
-    ("true", "flex_wrap"),
-];
+pub const WRAP_VALUES: &[(&str, &str)] = &[("", "flex_wrap")];
+
+/// A key that is the assertion itself: writing it turns the thing on and leaving it out leaves it off.
+///
+/// `:true` and `:false` were exact synonyms of a shorter spelling and of no spelling at all, so a value here
+/// is a mistake now rather than a third way of saying one of two things.
+pub const FLAG_VALUES: &[(&str, &str)] = &[("", "true")];
 
 /// `fit:` on `img`/`svg` (CSS `object-fit`): how the picture is scaled into the box it was given.
 pub const FIT_VALUES: &[(&str, &str)] = &[
@@ -309,6 +310,24 @@ pub const RASTER_VALUES: &[(&str, &str)] = &[
     ("linear", "Raster::Smooth"),
     ("pixel", "Raster::Pixel"),
     ("nearest", "Raster::Pixel"),
+];
+
+/// `font_weight:` — the OpenType weight axis, named.
+///
+/// One spelling per step, where there were sixteen for nine values: `semibold`, `semi-bold` and `demibold`
+/// were one weight, and a synonym is cost with nothing bought. `heavy` for 900 rather than CSS's `black`,
+/// because `font_weight` is writable on a container now and `col font_weight:black color:black` would be two
+/// meanings of one word on one line.
+pub const FONT_WEIGHT_VALUES: &[(&str, &str)] = &[
+    ("thin", "100"),
+    ("extralight", "200"),
+    ("light", "300"),
+    ("normal", "400"),
+    ("medium", "500"),
+    ("semibold", "600"),
+    ("bold", "700"),
+    ("extrabold", "800"),
+    ("heavy", "900"),
 ];
 
 /// `font_style:` — the slant of the face.
@@ -353,6 +372,9 @@ pub const TEXT_ALIGN_VALUES: &[(&str, &str)] = &[
 pub enum ValueKind {
     /// A closed set of spellings, each paired with the Rust name it generates. Also the completion list.
     Keywords(&'static [(&'static str, &'static str)]),
+    /// A closed set of spellings *or* a plain number, for the one axis that is genuinely both: an OpenType
+    /// weight *is* a number, and the names are the nine steps of it everyone actually writes.
+    KeywordsOrNumber(&'static [(&'static str, &'static str)]),
     /// A number: a literal, a `$signal`, a `theme.…` read, a `[style]` constant, or a binding in scope.
     Number,
     /// A number that may also be a percentage of the containing block.
@@ -370,6 +392,8 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         "text_align" => return Some(ValueKind::Keywords(TEXT_ALIGN_VALUES)),
         "text_wrap" => return Some(ValueKind::Keywords(TEXT_WRAP_VALUES)),
         "font_style" => return Some(ValueKind::Keywords(FONT_STYLE_VALUES)),
+        "ellipsis" | "click_through" | "secret" => return Some(ValueKind::Keywords(FLAG_VALUES)),
+        "font_weight" => return Some(ValueKind::KeywordsOrNumber(FONT_WEIGHT_VALUES)),
         "align" => return Some(ValueKind::Keywords(ALIGN_VALUES)),
         "justify" => return Some(ValueKind::Keywords(JUSTIFY_VALUES)),
         "self" => return Some(ValueKind::Keywords(SELF_VALUES)),
@@ -579,11 +603,13 @@ mod tests {
 
     #[test]
     fn color_keywords_match_keyword_color_rgba() {
-        assert_eq!(color_keywords(), &["white", "black", "transparent"]);
-        assert_eq!(keyword_color_rgba("white"), Some([255, 255, 255, 255]));
-        assert_eq!(keyword_color_rgba("black"), Some([0, 0, 0, 255]));
+        assert_eq!(color_keywords(), &["transparent"]);
         assert_eq!(keyword_color_rgba("transparent"), Some([0, 0, 0, 0]));
         assert_eq!(keyword_color_rgba("cerulean"), None);
+        // The palette the language never had: three named colours with no `red` among them, and in a themed
+        // toolkit the two that went are the ones a theme exists to supply.
+        assert_eq!(keyword_color_rgba("white"), None);
+        assert_eq!(keyword_color_rgba("black"), None);
     }
 
     #[test]

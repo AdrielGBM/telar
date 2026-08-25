@@ -200,13 +200,8 @@ impl ViewGen<'_> {
         hoists: &mut Vec<String>,
     ) -> String {
         let mut modifiers = self.inheritable_modifiers(attrs, transitions, hoists);
-        // A bare flag (`ellipsis`) is the assertion itself; `ellipsis:true` says the same thing the long way, and anything else — `ellipsis:false` most of all — leaves the default alone.
-        let asserted = |key: &str| {
-            attrs
-                .iter()
-                .find(|a| a.key == key)
-                .is_some_and(|a| a.value.is_flag() || a.value.text().trim() == "true")
-        };
+        // A bare flag is the assertion itself, and now the only spelling of it.
+        let asserted = |key: &str| attrs.iter().any(|a| a.key == key && a.value.is_flag());
         // One call, because they are one decision: `ellipsis` without `lines` used to be accepted and do
         // nothing at all, since the clamp returns before ever reaching it. Not inheritable, and cannot be:
         // clamping a *subtree* to two lines means nothing.
@@ -352,17 +347,5 @@ fn parse_weight(value: &str) -> Option<String> {
     if let Ok(n) = v.parse::<u16>() {
         return Some(n.to_string());
     }
-    let n = match v {
-        "thin" | "hairline" => 100,
-        "extralight" | "extra-light" | "ultralight" => 200,
-        "light" => 300,
-        "normal" | "regular" => 400,
-        "medium" => 500,
-        "semibold" | "semi-bold" | "demibold" => 600,
-        "bold" => 700,
-        "extrabold" | "extra-bold" | "ultrabold" => 800,
-        "black" | "heavy" => 900,
-        _ => return None,
-    };
-    Some(n.to_string())
+    registry::keyword(registry::FONT_WEIGHT_VALUES, v).map(str::to_string)
 }

@@ -302,6 +302,9 @@ pub fn keyword(
             None => String::new(),
         };
         let flag = table.iter().any(|(name, _)| name.is_empty());
+        if spellings.is_empty() {
+            return format!("`{key}` takes no value: writing it is the assertion itself");
+        }
         let bare = if flag { ", or the bare flag" } else { "" };
         match value.is_empty() {
             true => format!("`{key}` needs a value: expected {expected}"),
@@ -323,7 +326,7 @@ fn parse_grid_template(value: &str) -> Option<String> {
     let s = value.trim();
     let tokens: Vec<&str> = s.split_whitespace().collect();
     if let [kind @ ("fill" | "fit"), min] = tokens.as_slice() {
-        let min_px = min.trim_end_matches("px").parse::<f32>().ok()?;
+        let min_px = min.parse::<f32>().ok()?;
         let repeat = if *kind == "fill" { "fill" } else { "fit" };
         return Some(format!(
             "TemplateTrack::{repeat}(TemplateTrack::minmax(TemplateTrack::px({}), TemplateTrack::fr(1.0)))",
@@ -339,14 +342,12 @@ fn parse_grid_template(value: &str) -> Option<String> {
     tracks.map(|v| v.join(", "))
 }
 
+/// One track of a `cols(…)` list. `fr` earns its suffix — it is a real unit with no other spelling — where
+/// `px` was the implicit unit everywhere else in the language and a second spelling of a bare number here.
 fn parse_track_token(s: &str) -> Option<String> {
     if let Some(rest) = s.strip_suffix("fr") {
         let n: f32 = rest.parse().ok()?;
         return Some(format!("TemplateTrack::fr({})", format_f32(n)));
-    }
-    if let Some(rest) = s.strip_suffix("px") {
-        let n: f32 = rest.parse().ok()?;
-        return Some(format!("TemplateTrack::px({})", format_f32(n)));
     }
     if s == "auto" {
         return Some("TemplateTrack::auto()".to_string());
