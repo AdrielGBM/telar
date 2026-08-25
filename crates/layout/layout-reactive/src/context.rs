@@ -98,6 +98,16 @@ pub fn absolute_rect(node: NodeId) -> Option<Rect> {
     })
 }
 
+/// The node `node` hangs from, or `None` at a root.
+///
+/// The **layout-tree** parent, which is not always the visual one: a portalled overlay is recorded against
+/// the host it attached to, so anything walking up from inside one arrives where the markup put it rather
+/// than where the compositor draws it. That is the link a cascade has to follow — CSS inherits through the
+/// document, not through the stacking context — and it is the same one [`is_hidden`] already climbs.
+pub fn parent(node: NodeId) -> Option<NodeId> {
+    with_runtime(|rt| rt.parents.get(&node).copied())
+}
+
 /// Whether `node` is `ancestor` or sits anywhere beneath it. Follows the parent links the runtime records, so
 /// it crosses into a separately-computed sub-root (a scroll's content) the way the layout tree does.
 pub fn is_descendant_of(node: NodeId, ancestor: NodeId) -> bool {

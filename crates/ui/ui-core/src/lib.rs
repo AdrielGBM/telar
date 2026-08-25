@@ -10,6 +10,7 @@ pub mod dismiss;
 mod drag;
 pub mod focus;
 mod image;
+mod inherit;
 mod input;
 mod input_region;
 mod kept;
@@ -57,6 +58,7 @@ pub use context::{
 pub use dismiss::{dismiss_depth, dismiss_top, use_dismiss_depth};
 pub use drag::{DragStart, drag_start, drag_travel};
 pub use image::Image;
+pub use inherit::{Inherited, context, declare, inherited_text_style, undeclare};
 pub use input::Input;
 pub use input_region::interactive_rects;
 pub use kept::kept;
