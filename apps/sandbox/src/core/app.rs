@@ -220,7 +220,7 @@ impl SourcePage {
         let heading = Text::new(
             move || file.to_string(),
             LayoutStyle::new(),
-            || TextStyle::new(20.0, theme().ink).with_weight(700),
+            || TextStyle::new(20.0, theme().ink).with_font_weight(700),
         )?;
         let listing = Text::new(
             move || source.to_string(),

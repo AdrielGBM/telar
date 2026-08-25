@@ -4,7 +4,9 @@ use cosmic_text::{
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
-use renderer_core::{FontFamily, GlyphRaster, Paint, Span, TextAlign, TextStyle, TextWrap};
+use renderer_core::{
+    FontFamily, FontStyle, GlyphRaster, Paint, Span, TextAlign, TextStyle, TextWrap,
+};
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
@@ -138,12 +140,8 @@ fn cosmic_align(align: TextAlign) -> Option<Align> {
 fn text_attrs(style: &TextStyle) -> Attrs<'_> {
     let mut attrs = Attrs::new()
         .family(cosmic_family(&style.font_family))
-        .weight(Weight(style.weight))
-        .style(if style.italic {
-            Style::Italic
-        } else {
-            Style::Normal
-        });
+        .weight(Weight(style.font_weight))
+        .style(cosmic_style(style.font_style));
     // Only set letter spacing when non-default so unspaced text keeps cosmic-text's exact default shaping (and the byte-golden).
     if style.letter_spacing != 0.0 {
         attrs = attrs.letter_spacing(style.letter_spacing);
@@ -291,6 +289,16 @@ fn make_buffer(
         while end > 0 && head.as_bytes()[end - 1].is_ascii_whitespace() {
             end -= 1;
         }
+    }
+}
+
+/// The cosmic-text slant for a style's [`FontStyle`]. `Oblique` was modelled by the shaper all along and
+/// unreachable from the vocabulary until it stopped being a boolean.
+fn cosmic_style(font_style: FontStyle) -> Style {
+    match font_style {
+        FontStyle::Normal => Style::Normal,
+        FontStyle::Italic => Style::Italic,
+        FontStyle::Oblique => Style::Oblique,
     }
 }
 

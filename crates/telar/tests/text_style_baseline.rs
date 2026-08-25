@@ -58,8 +58,8 @@ fn an_undeclared_text_style_resolves_to_these_exact_values() {
     assert_eq!(style.font_size, 14.0);
     assert_eq!(style.paint, telar::Paint::Solid(Color::BLACK));
     assert_eq!(style.font_family, FontFamily::SansSerif);
-    assert_eq!(style.weight, 400);
-    assert!(!style.italic);
+    assert_eq!(style.font_weight, 400);
+    assert_eq!(style.font_style, telar::FontStyle::Normal);
     assert_eq!(style.text_align, TextAlign::Start);
     assert_eq!(style.clamp, telar::Clamp::None);
     assert_eq!(style.line_height, telar::LineHeight::Natural);
@@ -74,8 +74,8 @@ fn an_undeclared_text_style_resolves_to_these_exact_values() {
 #[test]
 fn a_declared_text_style_reaches_the_draw_command_intact() {
     let declared = TextStyle::new(11.0, Color::WHITE)
-        .with_weight(700)
-        .with_italic(true)
+        .with_font_weight(700)
+        .with_font_style(telar::FontStyle::Italic)
         .with_text_align(TextAlign::Center)
         .with_clamp(2, true)
         .with_line_height(1.5)
@@ -118,7 +118,7 @@ fn nesting_changes_nothing_about_a_text_style() {
     });
 
     assert_eq!(style.font_size, 14.0);
-    assert_eq!(style.weight, 400);
+    assert_eq!(style.font_weight, 400);
     assert_eq!(style.font_family, FontFamily::SansSerif);
     assert_eq!(style.raster, GlyphRaster::Smooth);
 }
@@ -183,7 +183,7 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
         outer_node,
         telar::Declared::default()
             .with_font_size(11.0)
-            .with_weight(700),
+            .with_font_weight(700),
     );
 
     let tree = mount(Root(box_item(outer)), 400, 200);
@@ -199,7 +199,7 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
 
     let style = drawn(&tree);
     assert_eq!(style.font_size, 11.0, "the leaf takes the declared size");
-    assert_eq!(style.weight, 700, "and the declared weight");
+    assert_eq!(style.font_weight, 700, "and the declared weight");
     assert_eq!(
         style.raster,
         telar::GlyphRaster::Smooth,

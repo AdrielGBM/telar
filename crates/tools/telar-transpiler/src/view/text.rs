@@ -228,10 +228,10 @@ impl ViewGen<'_> {
             .find(|a| a.key == "weight")
             .and_then(|a| parse_weight(a.value.text()))
         {
-            modifiers.push_str(&format!(".with_weight({w})"));
+            modifiers.push_str(&format!(".with_font_weight({w})"));
         }
         if asserted("italic") {
-            modifiers.push_str(".with_italic(true)");
+            modifiers.push_str(".with_font_style(FontStyle::Italic)");
         }
         if let Some(variant) = attrs
             .iter()

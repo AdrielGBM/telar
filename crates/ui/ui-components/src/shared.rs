@@ -223,7 +223,7 @@ pub(crate) fn heading_style() -> TextStyle {
     let color = use_theme_tokens()
         .map(|t| t.primary())
         .unwrap_or(Color::rgba(0.1, 0.1, 0.12, 1.0));
-    TextStyle::new(20.0, color).with_weight(600)
+    TextStyle::new(20.0, color).with_font_weight(600)
 }
 
 /// The caption size for a control that carries one above it. 0.85 of the body size, which is what `badge`,

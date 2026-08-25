@@ -209,8 +209,8 @@ mod tests {
         declare(outer, Declared::default().with_font_size(11.0));
         assert_eq!(context(leaf).text.font_size, 11.0);
         assert_eq!(
-            context(leaf).text.weight,
-            Inherited::initial().text.weight,
+            context(leaf).text.font_weight,
+            Inherited::initial().text.font_weight,
             "a declaration says nothing about the properties it did not name"
         );
     }
@@ -230,10 +230,10 @@ mod tests {
     #[test]
     fn declarations_compose_down_the_tree() {
         let (outer, inner, leaf) = tree();
-        declare(outer, Declared::default().with_weight(700));
+        declare(outer, Declared::default().with_font_weight(700));
         declare(inner, Declared::default().with_font_size(22.0));
         let at_leaf = context(leaf);
-        assert_eq!(at_leaf.text.weight, 700);
+        assert_eq!(at_leaf.text.font_weight, 700);
         assert_eq!(at_leaf.text.font_size, 22.0);
     }
 

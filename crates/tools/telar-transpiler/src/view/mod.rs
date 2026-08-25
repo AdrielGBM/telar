@@ -1389,10 +1389,13 @@ mod tests {
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains(".with_weight(700)"),
+            code.contains(".with_font_weight(700)"),
             "weight keyword:\n{code}"
         );
-        assert!(code.contains(".with_italic(true)"), "italic flag:\n{code}");
+        assert!(
+            code.contains(".with_font_style(FontStyle::Italic)"),
+            "italic flag:\n{code}"
+        );
         assert!(
             code.contains(".with_text_align(TextAlign::Center)"),
             "align:\n{code}"
@@ -1407,7 +1410,7 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains(".with_weight(600)"),
+            code.contains(".with_font_weight(600)"),
             "numeric weight:\n{code}"
         );
         assert!(

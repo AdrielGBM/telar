@@ -3,8 +3,9 @@ use std::hash::Hasher;
 use rustc_hash::FxHasher;
 
 use crate::{
-    BorderRadius, BorderWidths, Declared, FillRule, FontFamily, GlyphRaster, Gradient,
-    GradientKind, Paint, PathStyle, RectStyle, Shadow, Stroke, TextStyle,
+    BorderRadius, BorderWidths, Declared, FillRule, FontFamily, FontStyle, GlyphRaster, Gradient,
+    GradientKind, LineHeight, Paint, PathStyle, RectStyle, Shadow, Stroke, TextShadow, TextStyle,
+    TextWrap,
 };
 
 // Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`; each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
@@ -69,19 +70,45 @@ pub fn hash_declared(d: &Declared) -> u64 {
     }
     hash_opt_f32(d.font_size, &mut h);
     hash_opt_paint(d.paint.as_ref(), &mut h);
-    match d.weight {
+    match d.font_weight {
         None => h.write_u8(0),
         Some(w) => {
             h.write_u8(1);
             h.write_u16(w);
         }
     }
-    h.write_u8(match d.italic {
+    h.write_u8(match d.font_style {
         None => 0,
-        Some(false) => 1,
-        Some(true) => 2,
+        Some(FontStyle::Normal) => 1,
+        Some(FontStyle::Italic) => 2,
+        Some(FontStyle::Oblique) => 3,
     });
+    match d.line_height {
+        None => h.write_u8(0),
+        Some(LineHeight::Natural) => h.write_u8(1),
+        Some(LineHeight::Times(n)) => {
+            h.write_u8(2);
+            h.write_u32(n.to_bits());
+        }
+    }
     hash_opt_f32(d.letter_spacing, &mut h);
+    h.write_u8(match d.text_align {
+        None => 0,
+        Some(align) => 1 + align as u8,
+    });
+    h.write_u8(match d.text_wrap {
+        None => 0,
+        Some(TextWrap::Wrap) => 1,
+        Some(TextWrap::NoWrap) => 2,
+    });
+    match d.text_shadow {
+        None => h.write_u8(0),
+        Some(TextShadow::None) => h.write_u8(1),
+        Some(TextShadow::Cast(shadow)) => {
+            h.write_u8(2);
+            hash_opt_shadow(Some(&shadow), &mut h);
+        }
+    }
     h.write_u8(match d.raster {
         None => 0,
         Some(GlyphRaster::Smooth) => 1,

@@ -41,6 +41,20 @@ pub enum GlyphRaster {
     Pixel,
 }
 
+/// The slant of a face.
+///
+/// Three-valued rather than an `italic: bool`, because the shaper already models all three and only two were
+/// ever reachable: cosmic-text has `Style::Oblique`, and nothing could ask for it. A boolean named after a
+/// three-valued property would have been a worse name than the one it replaced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum FontStyle {
+    #[default]
+    Normal,
+    Italic,
+    /// A slanted upright face, where italic is a differently drawn one.
+    Oblique,
+}
+
 /// Whether text wraps into its box or keeps one line whatever width it is given.
 ///
 /// [`NoWrap`](Self::NoWrap) is what a label in a toolbar, a status bar or a table cell wants: it is a *name*,
@@ -169,8 +183,9 @@ pub struct TextStyle {
     /// The face to shape in. See [`FontFamily`].
     pub font_family: FontFamily,
     /// OpenType weight axis: 400 is normal, 700 is bold. Selects the matching font face.
-    pub weight: u16,
-    pub italic: bool,
+    pub font_weight: u16,
+    /// The slant of the face. See [`FontStyle`].
+    pub font_style: FontStyle,
     pub text_align: TextAlign,
     /// How the text ends when it does not fit. See [`Clamp`].
     pub clamp: Clamp,
@@ -191,8 +206,8 @@ impl TextStyle {
             paint: paint.into(),
             text_shadow: TextShadow::None,
             font_family: FontFamily::SansSerif,
-            weight: 400,
-            italic: false,
+            font_weight: 400,
+            font_style: FontStyle::Normal,
             text_align: TextAlign::Start,
             clamp: Clamp::None,
             line_height: LineHeight::Natural,
@@ -218,8 +233,8 @@ impl TextStyle {
         self
     }
 
-    pub fn with_weight(mut self, weight: u16) -> Self {
-        self.weight = weight;
+    pub fn with_font_weight(mut self, font_weight: u16) -> Self {
+        self.font_weight = font_weight;
         self
     }
 
@@ -235,8 +250,8 @@ impl TextStyle {
         self
     }
 
-    pub fn with_italic(mut self, italic: bool) -> Self {
-        self.italic = italic;
+    pub fn with_font_style(mut self, font_style: FontStyle) -> Self {
+        self.font_style = font_style;
         self
     }
 

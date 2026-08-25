@@ -506,7 +506,7 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
     };
     let base = TextStyle::new(16.0, Color::BLACK).with_clamp(2, true);
     // A bold word early on, so the paragraph is genuinely spanned where the clamp is not.
-    let spans = [Span::new(0..5, Declared::default().with_weight(700))];
+    let spans = [Span::new(0..5, Declared::default().with_font_weight(700))];
 
     let plain = make_buffer(&mut sh.font_system, text, None, rect, &base);
     if plain.layout_runs().count() < 2 {
@@ -543,7 +543,7 @@ fn a_span_restyles_only_its_own_range() {
     };
     let style = TextStyle::new(16.0, Color::BLACK);
     let text = "aaa bbb";
-    let spans = [Span::new(4..7, Declared::default().with_weight(900))];
+    let spans = [Span::new(4..7, Declared::default().with_font_weight(900))];
     let buffer = make_buffer(&mut sh.font_system, text, Some(&spans), rect, &style);
     let weights: Vec<(usize, u16)> = buffer
         .layout_runs()

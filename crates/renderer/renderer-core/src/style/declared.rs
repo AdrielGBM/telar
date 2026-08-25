@@ -1,5 +1,6 @@
 use super::{
-    FontFamily, GlyphRaster, LineHeight, Paint, TextAlign, TextShadow, TextStyle, TextWrap,
+    FontFamily, FontStyle, GlyphRaster, LineHeight, Paint, TextAlign, TextShadow, TextStyle,
+    TextWrap,
 };
 
 /// What one place says about the text style around it, each field `None` where it says nothing.
@@ -20,8 +21,8 @@ pub struct Declared {
     pub font_family: Option<FontFamily>,
     pub font_size: Option<f32>,
     pub paint: Option<Paint>,
-    pub weight: Option<u16>,
-    pub italic: Option<bool>,
+    pub font_weight: Option<u16>,
+    pub font_style: Option<FontStyle>,
     pub line_height: Option<LineHeight>,
     pub letter_spacing: Option<f32>,
     pub text_align: Option<TextAlign>,
@@ -43,11 +44,11 @@ impl Declared {
         if let Some(paint) = self.paint {
             out.paint = paint;
         }
-        if let Some(weight) = self.weight {
-            out.weight = weight;
+        if let Some(font_weight) = self.font_weight {
+            out.font_weight = font_weight;
         }
-        if let Some(italic) = self.italic {
-            out.italic = italic;
+        if let Some(font_style) = self.font_style {
+            out.font_style = font_style;
         }
         if let Some(line_height) = self.line_height {
             out.line_height = line_height;
@@ -74,13 +75,13 @@ impl Declared {
         *self == Self::default()
     }
 
-    pub fn with_weight(mut self, weight: u16) -> Self {
-        self.weight = Some(weight);
+    pub fn with_font_weight(mut self, font_weight: u16) -> Self {
+        self.font_weight = Some(font_weight);
         self
     }
 
-    pub fn with_italic(mut self, italic: bool) -> Self {
-        self.italic = Some(italic);
+    pub fn with_font_style(mut self, font_style: FontStyle) -> Self {
+        self.font_style = Some(font_style);
         self
     }
 

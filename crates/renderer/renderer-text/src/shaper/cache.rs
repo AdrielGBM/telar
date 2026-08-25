@@ -7,8 +7,8 @@ use std::hash::{Hash, Hasher};
 /// `font_family`/`line_height`/`letter_spacing`/`raster` do not fit that layout losslessly. With all four at their defaults the packed value is returned verbatim — keeping existing keys and the byte-exact software golden untouched — and anything else folds every axis into a full 32-bit hash. This keeps `text_style_bits`'s `u32` contract so callers across crates (e.g. the software renderer's pixmap cache) distinguish them for free, without any signature change.
 pub fn text_style_bits(style: &TextStyle) -> u32 {
     let lines = style.clamp.max_lines().unwrap_or(0).min(255) as u32;
-    let packed = (style.weight as u32)
-        | ((style.italic as u32) << 16)
+    let packed = (style.font_weight as u32)
+        | ((style.font_style as u32) << 16)
         | ((style.text_align as u32) << 17)
         | (lines << 19)
         | ((style.clamp.ellipsis() as u32) << 27)
