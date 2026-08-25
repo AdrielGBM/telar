@@ -25,9 +25,7 @@ pub struct ScrollbarStyle {
 
 impl Default for ScrollbarStyle {
     fn default() -> Self {
-        let color = use_theme_tokens()
-            .map(|t| t.scrollbar())
-            .unwrap_or(Color::rgba(0.5, 0.5, 0.6, 0.6));
+        let color = use_theme_tokens().scrollbar();
         Self {
             color,
             width: 8.0,

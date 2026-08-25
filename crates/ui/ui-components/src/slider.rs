@@ -4,7 +4,6 @@ use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
-use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
@@ -145,11 +144,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let track = StyledContainer::new(
         track_box(width),
         move |_r| {
-            let fill = shared::resolve(track_color.as_ref(), || {
-                use_theme_tokens()
-                    .map(|t| t.muted())
-                    .unwrap_or(shared::DEFAULT_TRACK)
-            });
+            let fill = shared::resolve(track_color.as_ref(), shared::muted);
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(track_height() / 2.0))

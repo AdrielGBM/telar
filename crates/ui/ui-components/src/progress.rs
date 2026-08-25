@@ -1,7 +1,6 @@
 use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
-use theme_core::use_theme_tokens;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
@@ -90,11 +89,7 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
             })
             .height(height),
         move |_r| {
-            let fill = shared::resolve(track_color.as_ref(), || {
-                use_theme_tokens()
-                    .map(|t| t.muted())
-                    .unwrap_or(shared::DEFAULT_TRACK)
-            });
+            let fill = shared::resolve(track_color.as_ref(), shared::muted);
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(height / 2.0))

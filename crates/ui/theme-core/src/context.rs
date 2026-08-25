@@ -189,6 +189,82 @@ pub fn use_theme<T: Theme + Clone + 'static>() -> T {
     })
 }
 
-pub fn use_theme_tokens() -> Option<Rc<dyn ThemeTokens>> {
-    THEME_TOKENS.with(|s| s.get())
+/// The tokens in force: the registered theme, or the trait's own answers when nothing is registered.
+///
+/// Not an `Option`, because no theme registered is not a different set of values — it is this same table
+/// with nobody having overridden it. Every caller that had to handle the `None` supplied a fallback of its
+/// own, and those fallbacks became a second palette that drifted: the focus ring's accent and
+/// [`primary`](ThemeTokens::primary) were different blues, and [`ink`](ThemeTokens::ink) and
+/// [`surface`](ThemeTokens::surface) follow the light/dark mode here while the constants standing in for
+/// them did not — so an application that registered no theme could not reach the mode-following default at
+/// all.
+pub fn use_theme_tokens() -> Rc<dyn ThemeTokens> {
+    match THEME_TOKENS.with(|s| s.get()) {
+        Some(tokens) => tokens,
+        None => DEFAULT_TOKENS.with(Rc::clone),
+    }
+}
+
+struct DefaultTokens;
+impl ThemeTokens for DefaultTokens {}
+
+thread_local! {
+    static DEFAULT_TOKENS: Rc<dyn ThemeTokens> = Rc::new(DefaultTokens);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The whole reason this is not an `Option`: every caller that had to handle a missing theme wrote its
+    /// own flat constant, and none of them followed the mode — so the careful mode-following default was
+    /// unreachable on exactly the path that runs when nobody has configured anything.
+    #[test]
+    fn an_unregistered_theme_still_follows_the_mode() {
+        crate::register_mode("light", || {});
+        crate::register_mode("dark", || {});
+        crate::follow_system("light", "dark");
+
+        crate::set_system_dark(false);
+        let light_ink = use_theme_tokens().ink();
+        crate::set_system_dark(true);
+        let dark_ink = use_theme_tokens().ink();
+
+        assert!(
+            light_ink.r < 0.5,
+            "dark ink on a light page, got {light_ink:?}"
+        );
+        assert!(
+            dark_ink.r > 0.5,
+            "light ink on a dark page, got {dark_ink:?}"
+        );
+        crate::set_system_dark(false);
+    }
+
+    #[derive(Clone)]
+    struct Blue;
+    impl Theme for Blue {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl ThemeTokens for Blue {
+        fn primary(&self) -> Color {
+            Color::rgba(0.0, 0.0, 1.0, 1.0)
+        }
+    }
+
+    /// A theme answering one question keeps the table's answers for the rest, which is what makes
+    /// `impl ThemeTokens for MyTheme {}` a valid theme.
+    #[test]
+    fn a_registered_theme_overrides_only_what_it_answers() {
+        set_theme(Blue);
+        assert_eq!(
+            use_theme_tokens().primary(),
+            Color::rgba(0.0, 0.0, 1.0, 1.0)
+        );
+        assert_eq!(use_theme_tokens().radius(), DefaultTokens.radius());
+        THEME_TOKENS.with(|s| s.set(None));
+        THEME.with(|s| s.set(None));
+    }
 }

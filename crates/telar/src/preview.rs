@@ -96,12 +96,8 @@ impl App for PreviewApp {
     /// that reads as a broken preview rather than as a mismatched background. `ThemeTokens` has no page-background
     /// token to ask for directly, so the ink's own lightness is the proxy.
     fn clear_color(&self) -> Option<Color> {
-        let light_ink = crate::use_theme_tokens()
-            .map(|tokens| {
-                let ink = tokens.ink();
-                ink.r * 0.299 + ink.g * 0.587 + ink.b * 0.114 > 0.5
-            })
-            .unwrap_or(false);
+        let ink = crate::use_theme_tokens().ink();
+        let light_ink = ink.r * 0.299 + ink.g * 0.587 + ink.b * 0.114 > 0.5;
         Some(if light_ink {
             Color::rgba(0.12, 0.12, 0.15, 1.0)
         } else {

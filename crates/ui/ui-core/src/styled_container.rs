@@ -4,7 +4,7 @@ use platform_core::{
     Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, WindowCommand,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
-use renderer_core::{Border, Color, RectStyle};
+use renderer_core::{Border, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -949,10 +949,7 @@ impl Drop for StyledContainer {
 /// radius is deliberately absent: the compositing path takes that from the box, since a ring sits on a shape
 /// it does not get to reshape.
 fn default_focus_ring() -> RectStyle {
-    let accent = use_theme_tokens()
-        .map(|t| t.primary())
-        .unwrap_or(Color::rgba(0.26, 0.38, 0.93, 1.0));
-    RectStyle::default().with_border(Border::uniform(accent, 2.0))
+    RectStyle::default().with_border(Border::uniform(use_theme_tokens().primary(), 2.0))
 }
 
 /// Builds the affine matrix for a box's declarative `rotate`/`scale`/`translate` attributes, pivoting

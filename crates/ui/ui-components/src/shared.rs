@@ -1,5 +1,6 @@
-//! Internal helpers shared across the widget catalogue: the reactive-colour resolver, the common accent/surface
-//! fallback constants, and the labelled-control row scaffold. Not part of the public API (`pub(crate)`).
+//! Internal helpers shared across the widget catalogue: the reactive-colour resolver, the named theme reads
+//! every component paints from, and the labelled-control row scaffold. Not part of the public API
+//! (`pub(crate)`).
 
 use std::rc::Rc;
 
@@ -40,27 +41,10 @@ pub(crate) fn amend(style: RectStyle, over: &SurfaceStyle) -> RectStyle {
     }
 }
 
-/// Fallback accent when no reactive `color` is supplied and no theme is active (matches `Button`'s default primary).
-pub(crate) const DEFAULT_ACCENT: Color = Color::rgba(0.24, 0.47, 0.98, 1.0);
-/// Opaque white surface fallback shared by `modal` and `drawer` when their `color` is unset.
-pub(crate) const DEFAULT_SURFACE: Color = Color::rgba(1.0, 1.0, 1.0, 1.0);
-/// Default text ink for the catalogue (labels, titles, values). `ThemeTokens` exposes no ink token, so
-/// this is the shared fallback for text that isn't an accent.
-pub(crate) const INK: Color = Color::rgba(0.15, 0.15, 0.2, 1.0);
-/// Muted rail/track fallback shared by `slider`/`progress`/`spinner` when their `track_color` is unset.
-pub(crate) const DEFAULT_TRACK: Color = Color::rgba(0.5, 0.5, 0.6, 0.3);
-/// Quiet surface-alt fallback (chip/tag backgrounds) when no theme is active.
-pub(crate) const SURFACE_ALT: Color = Color::rgba(0.5, 0.5, 0.55, 0.1);
-/// Hairline border fallback when no theme is active.
-pub(crate) const BORDER: Color = Color::rgba(0.5, 0.5, 0.55, 0.35);
-/// Secondary-text fallback for captions and placeholders when no theme is active. Distinct from `tabs`'s own
-/// `INK_MUTED`, which is an opaque grey for an inactive tab label rather than this translucent one.
-pub(crate) const INK_MUTED: Color = Color::rgba(0.5, 0.5, 0.6, 0.6);
-
-/// Theme-resolved text ink (`ink`), falling back to [`INK`] when no theme is active. Call it
-/// INSIDE a style closure so widget text recolours when the theme switches (e.g. dark mode).
+/// The catalogue's text ink. Call it INSIDE a style closure so widget text recolours when the theme switches
+/// (e.g. dark mode).
 pub(crate) fn ink() -> Color {
-    use_theme_tokens().map(|t| t.ink()).unwrap_or(INK)
+    use_theme_tokens().ink()
 }
 /// Readable ink for a label sitting on `fill`: whichever of the theme's `ink` and `on_primary` contrasts
 /// with it more.
@@ -71,9 +55,7 @@ pub(crate) fn ink() -> Color {
 /// free to pass any colour at all — which the `fill:` prop already lets them do.
 pub(crate) fn ink_on(fill: Color) -> Color {
     let dark = ink();
-    let light = use_theme_tokens()
-        .map(|t| t.on_primary())
-        .unwrap_or(Color::rgba(1.0, 1.0, 1.0, 1.0));
+    let light = use_theme_tokens().on_primary();
     if contrast(fill, dark) >= contrast(fill, light) {
         dark
     } else {
@@ -91,52 +73,43 @@ fn luminance(c: Color) -> f32 {
     0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 }
 
-/// Theme-resolved panel surface (`surface`), falling back to [`DEFAULT_SURFACE`].
+/// The panel surface a floating thing sits on.
 pub(crate) fn surface() -> Color {
-    use_theme_tokens()
-        .map(|t| t.surface())
-        .unwrap_or(DEFAULT_SURFACE)
+    use_theme_tokens().surface()
 }
-/// Theme-resolved quiet surface (`surface_alt`), falling back to [`SURFACE_ALT`].
+/// The quiet surface behind a chip or a tag.
 pub(crate) fn surface_alt() -> Color {
-    use_theme_tokens()
-        .map(|t| t.surface_alt())
-        .unwrap_or(SURFACE_ALT)
+    use_theme_tokens().surface_alt()
 }
-/// Theme-resolved hairline border (`border`), falling back to [`BORDER`].
+/// The hairline border and divider tone.
 pub(crate) fn border() -> Color {
-    use_theme_tokens().map(|t| t.border()).unwrap_or(BORDER)
+    use_theme_tokens().border()
 }
-/// Theme-resolved accent (`primary`), falling back to [`DEFAULT_ACCENT`].
 pub(crate) fn accent() -> Color {
-    use_theme_tokens()
-        .map(|t| t.primary())
-        .unwrap_or(DEFAULT_ACCENT)
+    use_theme_tokens().primary()
 }
-/// Readable ink for a label sitting on [`accent`], falling back to white.
+/// Readable ink for a label sitting on [`accent`].
 pub(crate) fn on_accent() -> Color {
-    use_theme_tokens()
-        .map(|t| t.on_primary())
-        .unwrap_or(Color::rgba(1.0, 1.0, 1.0, 1.0))
+    use_theme_tokens().on_primary()
 }
-/// Theme-resolved secondary text (`muted`), falling back to [`INK_MUTED`].
+/// Secondary text: captions, placeholders, and the rail a slider or a spinner runs along.
 pub(crate) fn muted() -> Color {
-    use_theme_tokens().map(|t| t.muted()).unwrap_or(INK_MUTED)
+    use_theme_tokens().muted()
 }
 
 /// Base corner radius from the theme. A component that wants a different shape multiplies this rather than
 /// declaring its own constant, so one theme number still moves it.
 pub(crate) fn radius() -> f32 {
-    use_theme_tokens().map(|t| t.radius()).unwrap_or(4.0)
+    use_theme_tokens().radius()
 }
 /// The steps either side of [`radius`], for the shapes that are not a card: a chip or a row rounds less, a
 /// panel or a bubble sits between. Every one of these was a literal in the component that drew it, which
 /// meant a theme could move its base radius and watch half the catalogue ignore it.
 pub(crate) fn radius_sm() -> f32 {
-    use_theme_tokens().map(|t| t.radius_sm()).unwrap_or(2.4)
+    use_theme_tokens().radius_sm()
 }
 pub(crate) fn radius_md() -> f32 {
-    use_theme_tokens().map(|t| t.radius_md()).unwrap_or(3.2)
+    use_theme_tokens().radius_md()
 }
 /// Base spacing unit from the theme, and what a component derives its own padding from.
 ///
@@ -144,7 +117,7 @@ pub(crate) fn radius_md() -> f32 {
 /// smaller here: each component keeps its own proportions and the unit underneath them moves. See
 /// `theme-core`'s `density` module for why that is one number rather than a size matrix per component.
 pub(crate) fn spacing() -> f32 {
-    use_theme_tokens().map(|t| t.spacing()).unwrap_or(8.0) * theme_core::control_scale()
+    use_theme_tokens().spacing() * theme_core::control_scale()
 }
 /// Base body text size from the theme, scaled by the ambient control size.
 ///
@@ -152,11 +125,11 @@ pub(crate) fn spacing() -> f32 {
 /// instead of asking for a named role. Naming the roles here would decide for every application which roles it
 /// is allowed to have, and a theme's own vocabulary belongs to its own type.
 pub(crate) fn font_size() -> f32 {
-    use_theme_tokens().map(|t| t.font_size()).unwrap_or(14.0) * theme_core::control_scale()
+    use_theme_tokens().font_size() * theme_core::control_scale()
 }
 /// Default standalone icon size from the theme, scaled by the ambient control size.
 pub(crate) fn icon_size() -> f32 {
-    use_theme_tokens().map(|t| t.icon_size()).unwrap_or(16.0) * theme_core::control_scale()
+    use_theme_tokens().icon_size() * theme_core::control_scale()
 }
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`.
@@ -217,13 +190,8 @@ pub(crate) use props_default;
 
 /// The shared title text style, re-read every frame so it tracks the active theme. Three consumers: `heading`,
 /// `section` and `modal`'s title.
-///
-/// Its fallback is deliberately not [`accent`] — swapping this for the accent repaints every modal title.
 pub(crate) fn heading_style() -> TextStyle {
-    let color = use_theme_tokens()
-        .map(|t| t.primary())
-        .unwrap_or(Color::rgba(0.1, 0.1, 0.12, 1.0));
-    TextStyle::new(20.0, color).with_font_weight(600)
+    TextStyle::new(20.0, accent()).with_font_weight(600)
 }
 
 /// The caption size for a control that carries one above it. 0.85 of the body size, which is what `badge`,
