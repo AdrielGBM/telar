@@ -6,6 +6,13 @@
 //! say otherwise. This is the one table they collapse into: [`Inherited::initial`] holds the values that were
 //! spread across those four places, and everything else is a node saying it wants something different.
 //!
+//! **Two types, because they answer different questions.** [`Inherited`] is a *complete* row — every
+//! property has a value here, which is what a leaf needs to draw. [`Declared`](renderer_core::Declared) is a
+//! *partial* one, every field an `Option`, which is what a node saying "bold from here down" needs and what
+//! a complete style could never express: a whole `TextStyle` carries a value for every field it did not mean
+//! to change, and overwrites with it. The same partial type is what a byte range of a paragraph uses, which
+//! is not a coincidence — a span is a cascade child whose extent is a range instead of a subtree.
+//!
 //! **Resolution is lazy, and that is a decision.** The obvious design resolves top-down in a pass before
 //! layout — but the pass would have to run inside the layout engine, which sits *below* this crate and
 //! cannot name these types. Resolving on read removes the ordering entirely: a style closure that resolves

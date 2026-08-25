@@ -1,3 +1,27 @@
+//! The application's vocabulary of named values, and the root of what flows down its tree.
+//!
+//! A theme is one of four layers that decide what a property is worth here, and knowing which is which is
+//! most of knowing where to put something:
+//!
+//! | | Owns | Scope |
+//! | --- | --- | --- |
+//! | **`[style]`** | named constants and classes | one `.rsx` file, resolved at transpile time, no runtime cost |
+//! | **The theme** | the application's value vocabulary, and the root [`Inherited`] | the application, swappable at runtime |
+//! | **`Inherited`** | which property has which value *here* | a subtree, resolved per node |
+//! | **An attribute** | one property on one node | one node |
+//!
+//! Each overrides the one above it. The middle two are the ones that did not exist: for a long time there
+//! was a theme and there was an attribute and nothing in between, which is why everything in between had to
+//! be a global — a process-wide font family, a thread-local control size, a catalogue reading tokens behind
+//! the markup's back and arriving at a different answer from the `text` beside it.
+//!
+//! What a theme is *not* is a second channel beside the cascade. [`set_theme`] fills the root of it: a token
+//! this trait defines is the value every layer below starts from, so "the body text is 11px" is a theme
+//! change rather than something every leaf has to be told. See `telar-ui-core`'s `inherit` module for how
+//! that value reaches a node.
+//!
+//! [`Inherited`]: https://docs.rs/telar-ui-core/latest/telar_ui_core/struct.Inherited.html
+
 mod context;
 mod density;
 mod mode;
