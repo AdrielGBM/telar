@@ -369,7 +369,7 @@ impl ViewGen<'_> {
         };
         if let Some(is_row) = attrs
             .iter()
-            .find(|a| a.key == "direction")
+            .find(|a| a.key == "axis")
             .and_then(|a| from_direction(a.value.text().trim()))
         {
             return is_row;
@@ -379,7 +379,7 @@ impl ViewGen<'_> {
                 .classes
                 .iter()
                 .find(|c| &c.name == name)
-                .and_then(|c| c.props.iter().find(|p| p.key == "direction"))
+                .and_then(|c| c.props.iter().find(|p| p.key == "axis"))
                 .and_then(|p| from_direction(p.value.trim()))
             {
                 return is_row;
@@ -393,7 +393,7 @@ impl ViewGen<'_> {
         self.classes
             .iter()
             .find(|c| c.name == class_name)
-            .map(|c| c.props.iter().any(|p| p.key == "direction"))
+            .map(|c| c.props.iter().any(|p| p.key == "axis"))
             .unwrap_or(false)
     }
 }

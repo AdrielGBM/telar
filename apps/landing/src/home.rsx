@@ -12,41 +12,41 @@ let radial_img = Arc::new(make_radial_alpha(640, 400));
 primary: #4361ee
 
 @page
-    direction: col
+    axis: col
 
 @navband
-    direction: col
+    axis: col
     align: center
     padding_x: 24
     padding_y: 14
 
 @footband
-    direction: col
+    axis: col
     align: center
     padding_x: 24
     padding_y: 40
 
 @band
-    direction: col
+    axis: col
     align: center
     padding_x: 24
     padding_y: 64
 
 @wrap
-    direction: col
+    axis: col
     width: 100%
     max_width: 1120
     gap: 40
 
 @navwrap
-    direction: row
+    axis: row
     width: 100%
     max_width: 1120
     align: center
     justify: between
 
 @footwrap
-    direction: row
+    axis: row
     width: 100%
     max_width: 1120
     justify: between
@@ -78,16 +78,16 @@ col @page
         col @wrap gap:24
             text "Trusted primitives" size:14 color:muted
             row gap:20 wrap
-                box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 direction:col align:center
+                box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 axis:col align:center
                     text "60 fps" size:30 color:primary
                     text "software + wgpu" size:13 color:muted
-                box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 direction:col align:center
+                box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 axis:col align:center
                     text "25" size:30 color:primary
                     text "modular crates" size:13 color:muted
-                box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 direction:col align:center
+                box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 axis:col align:center
                     text "2" size:30 color:primary
                     text "render backends" size:13 color:muted
-                box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 direction:col align:center
+                box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 axis:col align:center
                     text "0" size:30 color:primary
                     text "runtime GC pauses" size:13 color:muted
     box @band fill:surface

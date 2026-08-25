@@ -358,7 +358,7 @@ pub(super) fn build_gradient_stops(
 }
 
 /// Keys that contribute to a container's paint (`RectStyle`) rather than its layout. Used to pick which class props to merge into an element's paint attributes.
-pub(super) fn is_paint_key(key: &str) -> bool {
+pub(crate) fn is_paint_key(key: &str) -> bool {
     matches!(
         key,
         "fill"

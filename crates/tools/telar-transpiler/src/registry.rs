@@ -76,7 +76,7 @@ pub fn layout_attr_keys() -> &'static [&'static str] {
         "wrap",
         "cursor",
         "self",
-        "direction",
+        "axis",
         "align",
         "justify",
     ]
@@ -264,9 +264,13 @@ pub const SELF_VALUES: &[(&str, &str)] = &[
     ("end", "align_self_end"),
 ];
 
-/// `direction:` — which way a container lays its children out. `row_reverse` is reversed in both writing
+/// `axis:` — which way a container lays its children out. `row_reverse` is reversed in both writing
 /// directions, unlike `row`, which follows the active one.
-pub const DIRECTION_VALUES: &[(&str, &str)] = &[
+///
+/// Named for the axis rather than the direction because `direction` is the *writing* direction everywhere
+/// else, and this attribute had taken the word for the wrong property. The axis is already implied by the
+/// `col`/`row`/`grid` tag; this exists only to override it.
+pub const AXIS_VALUES: &[(&str, &str)] = &[
     ("col", "flex_column"),
     ("column", "flex_column"),
     ("row", "flex_row"),
@@ -351,7 +355,7 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         "align" => return Some(ValueKind::Keywords(ALIGN_VALUES)),
         "justify" => return Some(ValueKind::Keywords(JUSTIFY_VALUES)),
         "self" => return Some(ValueKind::Keywords(SELF_VALUES)),
-        "direction" => return Some(ValueKind::Keywords(DIRECTION_VALUES)),
+        "axis" => return Some(ValueKind::Keywords(AXIS_VALUES)),
         "absolute" => return Some(ValueKind::Keywords(ABSOLUTE_VALUES)),
         "wrap" => return Some(ValueKind::Keywords(WRAP_VALUES)),
         "fit" => return Some(ValueKind::Keywords(FIT_VALUES)),

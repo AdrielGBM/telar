@@ -321,7 +321,7 @@ dark: #141424
     width: 240
     padding: 20
     gap: 12
-    direction: col
+    axis: col
     align: center
 
 [view]
@@ -339,7 +339,7 @@ let count = signal(0i32);
     width: 240
     padding: 20
     gap: 12
-    direction: col
+    axis: col
     align: center
 
 [view]

@@ -166,8 +166,19 @@ fn generate_constant(c: &StyleConstant) -> String {
 fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
     let mut out = String::new();
     // A class property has no element and so no attribute line; naming the class is what locates it.
+    //
+    // The *key* is checked here as well as the value, which an element's attributes get from
+    // `unknown_attr_errors` and a class never did: a class property nobody recognises is dropped on the
+    // floor, so a renamed key goes on compiling and quietly stops laying the class out.
     for prop in &class.props {
-        if let PropCall::Invalid(message) = layout_prop_call(&prop.key, &prop.value, scope) {
+        let message = match layout_prop_call(&prop.key, &prop.value, scope) {
+            PropCall::Invalid(message) => Some(message),
+            PropCall::Other if !crate::view::is_paint_key(&prop.key) => {
+                Some(format!("`{}` is not a style property", prop.key))
+            }
+            _ => None,
+        };
+        if let Some(message) = message {
             let _ = writeln!(
                 out,
                 "compile_error!({});",
@@ -250,7 +261,7 @@ fn layout_call(key: &str, value: &str, scope: Scope<'_>) -> Result<Option<String
             })?;
             format!(".display_grid().grid_template_columns(vec![{tracks}])")
         }
-        "direction" => format!(".{}()", keyword(key, value, registry::DIRECTION_VALUES)?),
+        "axis" => format!(".{}()", keyword(key, value, registry::AXIS_VALUES)?),
         "align" => format!(
             ".align_items({})",
             keyword(key, value, registry::ALIGN_VALUES)?
@@ -497,9 +508,9 @@ mod tests {
 
     #[test]
     fn direction_row_reverse_is_the_physical_one() {
-        assert_eq!(call("direction", "row").as_deref(), Some(".flex_row()"));
+        assert_eq!(call("axis", "row").as_deref(), Some(".flex_row()"));
         assert_eq!(
-            call("direction", "row_reverse").as_deref(),
+            call("axis", "row_reverse").as_deref(),
             Some(".flex_row_reverse()")
         );
     }
@@ -670,7 +681,7 @@ mod tests {
         assert!(message.contains("`align:centre` is not a value of `align`"));
         assert!(message.contains("`center`") && message.contains("`stretch`"));
         assert!(invalid("justify", "middle").is_some());
-        assert!(invalid("direction", "sideways").is_some());
+        assert!(invalid("axis", "sideways").is_some());
         assert!(invalid("self", "middle").is_some());
     }
 
@@ -724,5 +735,43 @@ mod tests {
         let out = generate_style_section(&section, None);
         assert!(out.contains("compile_error!"));
         assert!(out.contains("in `@card`"), "{out}");
+    }
+
+    /// A class property nobody recognises used to be dropped on the floor, which is how a renamed key goes
+    /// on compiling and quietly stops laying the class out. Element attributes have been checked this way
+    /// since keys were checked at all; classes never were.
+    #[test]
+    fn a_class_property_with_an_unknown_key_is_rejected() {
+        let section = StyleSection {
+            constants: Vec::new(),
+            classes: vec![StyleClass {
+                name: "card".into(),
+                props: vec![StyleProp {
+                    key: "direction".into(),
+                    value: "col".into(),
+                }],
+                line: 1,
+            }],
+        };
+        let out = generate_style_section(&section, None);
+        assert!(out.contains("`direction` is not a style property"), "{out}");
+    }
+
+    /// A paint key is not a layout property and must not be mistaken for an unknown one: it reaches the
+    /// `RectStyle` by another path entirely.
+    #[test]
+    fn a_paint_property_in_a_class_is_not_mistaken_for_an_unknown_key() {
+        let section = StyleSection {
+            constants: Vec::new(),
+            classes: vec![StyleClass {
+                name: "card".into(),
+                props: vec![StyleProp {
+                    key: "fill".into(),
+                    value: "#fff".into(),
+                }],
+                line: 1,
+            }],
+        };
+        assert!(!generate_style_section(&section, None).contains("compile_error!"));
     }
 }
