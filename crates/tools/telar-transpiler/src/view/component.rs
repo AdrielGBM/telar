@@ -5,7 +5,7 @@ use std::fmt::Write;
 use telar_parser::{Attr, Element, Value, ViewNode};
 
 use crate::naming::{is_ident, to_pascal_case, to_snake_case};
-use crate::style::{format_f32, format_number, hex_to_color_expr};
+use crate::style::{format_f32, hex_to_color_expr};
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
@@ -236,7 +236,7 @@ impl ViewGen<'_> {
             let _ = write!(
                 chain,
                 ".with_radius(BorderRadius::all({}))",
-                format_number(radius, self.theme_type.as_deref())
+                self.scope().number_or_error(radius)
             );
         }
         if chain.is_empty() {

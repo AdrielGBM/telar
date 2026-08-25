@@ -7,7 +7,11 @@
 
 use telar_parser::Attr;
 
-use crate::style::format_number;
+use crate::style::Scope;
+
+/// What an edge whose value the key cannot mean contributes, once `value_kind` has reported it on the
+/// attribute: the build stops before any of these edges reach a `BorderRadius`.
+const ZERO: &str = "0.0";
 
 /// Where a suffixed attribute puts its value.
 pub enum EdgeTarget {
@@ -136,7 +140,7 @@ pub fn collect(
     base: &str,
     prefix: &str,
     target: fn(&str) -> Option<EdgeTarget>,
-    theme: Option<&str>,
+    scope: Scope<'_>,
 ) -> Edges {
     let mut named: Vec<(EdgeTarget, &str)> = attrs
         .iter()
@@ -158,17 +162,17 @@ pub fn collect(
         && named.is_empty()
         && value.split_whitespace().count() == 1
     {
-        edges.uniform = Some(format_number(value, theme));
+        edges.uniform = Some(scope.number_or(value, ZERO));
         return edges;
     }
 
     if let Some(values) = bare.and_then(expand_shorthand) {
         for (slot, value) in edges.slots.iter_mut().zip(values) {
-            *slot = Some(format_number(value, theme));
+            *slot = Some(scope.number_or(value, ZERO));
         }
     }
     for (t, value) in named {
-        let value = format_number(value.trim(), theme);
+        let value = scope.number_or(value.trim(), ZERO);
         match t {
             EdgeTarget::Slots(indices) => {
                 for i in indices {
@@ -213,7 +217,7 @@ mod tests {
             "stroke_width",
             "stroke_",
             side_target,
-            None,
+            Scope::default(),
         );
         assert!(
             edges.uniform.is_none(),
@@ -234,7 +238,7 @@ mod tests {
             "stroke_width",
             "stroke_",
             side_target,
-            None,
+            Scope::default(),
         );
         assert_eq!(edges.uniform.as_deref(), Some("2.0"));
     }
@@ -247,7 +251,7 @@ mod tests {
             "stroke_width",
             "stroke_",
             side_target,
-            None,
+            Scope::default(),
         );
         assert_eq!(
             edges.resolved("0.0"),
@@ -264,7 +268,7 @@ mod tests {
             "radius",
             "radius_",
             corner_target,
-            None,
+            Scope::default(),
         );
         assert_eq!(
             written_backwards.resolved("0.0"),
@@ -283,7 +287,7 @@ mod tests {
             "radius",
             "radius_",
             corner_target,
-            None,
+            Scope::default(),
         );
         assert_eq!(
             edges.resolved("0.0"),
@@ -298,7 +302,7 @@ mod tests {
             "stroke_width",
             "stroke_",
             side_target,
-            None,
+            Scope::default(),
         );
         assert!(edges.has_logical());
         assert_eq!(edges.logical_args(), ("None".into(), "Some(1.0)".into()));
@@ -311,7 +315,7 @@ mod tests {
             "radius",
             "radius_",
             corner_target,
-            None,
+            Scope::default(),
         );
         assert!(edges.is_empty());
     }

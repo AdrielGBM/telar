@@ -233,6 +233,185 @@ pub const THEME_COLOR_TOKENS: &[&str] = &[
     "highlight_high",
 ];
 
+/// `align:` on a container: where children sit across the axis they are not laid along.
+pub const ALIGN_VALUES: &[(&str, &str)] = &[
+    ("center", "AlignItems::CENTER"),
+    ("start", "AlignItems::START"),
+    ("end", "AlignItems::END"),
+    ("stretch", "AlignItems::STRETCH"),
+    ("flex-start", "AlignItems::FLEX_START"),
+    ("flex-end", "AlignItems::FLEX_END"),
+];
+
+/// `justify:` on a container: how the free space along the layout axis is distributed.
+pub const JUSTIFY_VALUES: &[(&str, &str)] = &[
+    ("center", "JustifyContent::CENTER"),
+    ("start", "JustifyContent::START"),
+    ("end", "JustifyContent::END"),
+    ("between", "JustifyContent::SPACE_BETWEEN"),
+    ("space-between", "JustifyContent::SPACE_BETWEEN"),
+    ("around", "JustifyContent::SPACE_AROUND"),
+    ("space-around", "JustifyContent::SPACE_AROUND"),
+    ("evenly", "JustifyContent::SPACE_EVENLY"),
+    ("space-evenly", "JustifyContent::SPACE_EVENLY"),
+];
+
+/// `self:` — one child's override of its parent's `align:`. Paired with the `LayoutStyle` builder it calls.
+pub const SELF_VALUES: &[(&str, &str)] = &[
+    ("stretch", "align_self_stretch"),
+    ("center", "align_self_center"),
+    ("start", "align_self_start"),
+    ("end", "align_self_end"),
+];
+
+/// `direction:` — which way a container lays its children out. `row_reverse` is reversed in both writing
+/// directions, unlike `row`, which follows the active one.
+pub const DIRECTION_VALUES: &[(&str, &str)] = &[
+    ("col", "flex_column"),
+    ("column", "flex_column"),
+    ("row", "flex_row"),
+    ("row_reverse", "flex_row_reverse"),
+];
+
+/// `absolute` — out of flow, pinned by the insets the author names; `absolute:fill` is the all-four-at-zero
+/// shorthand. The empty spelling is the bare flag.
+pub const ABSOLUTE_VALUES: &[(&str, &str)] = &[
+    ("", "absolute"),
+    ("true", "absolute"),
+    ("fill", "absolute_fill"),
+];
+
+/// `wrap` — a flag, spelled bare or as its own name.
+pub const WRAP_VALUES: &[(&str, &str)] = &[
+    ("", "flex_wrap"),
+    ("wrap", "flex_wrap"),
+    ("true", "flex_wrap"),
+];
+
+/// `fit:` on `img`/`svg` (CSS `object-fit`): how the picture is scaled into the box it was given.
+pub const FIT_VALUES: &[(&str, &str)] = &[
+    ("contain", "ObjectFit::Contain"),
+    ("fill", "ObjectFit::Fill"),
+    ("cover", "ObjectFit::Cover"),
+    ("contain_integer", "ObjectFit::ContainInteger"),
+];
+
+/// `filter:` on `img`: how a picture's samples meet the pixel grid.
+pub const FILTER_VALUES: &[(&str, &str)] = &[
+    ("linear", "ImageFilter::Linear"),
+    ("nearest", "ImageFilter::Nearest"),
+];
+
+/// `raster:` on `text`: which grid the glyphs land on. The image half of the same question is `filter:`.
+pub const RASTER_VALUES: &[(&str, &str)] = &[
+    ("smooth", "GlyphRaster::Smooth"),
+    ("subpixel", "GlyphRaster::Smooth"),
+    ("pixel", "GlyphRaster::Pixel"),
+];
+
+/// `align:` on a `text`, which is a different property from a container's `align:` of the same name: where
+/// the lines sit inside the text's own box, not where the box sits among its siblings.
+pub const TEXT_ALIGN_VALUES: &[(&str, &str)] = &[
+    ("start", "TextAlign::Start"),
+    ("left", "TextAlign::Start"),
+    ("center", "TextAlign::Center"),
+    ("centre", "TextAlign::Center"),
+    ("end", "TextAlign::End"),
+    ("right", "TextAlign::End"),
+    ("justify", "TextAlign::Justify"),
+    ("justified", "TextAlign::Justify"),
+];
+
+/// What an attribute's value has to be for its key to mean anything, so a value outside it is a build error
+/// on the attribute instead of a property quietly dropped or quietly defaulted.
+///
+/// The counterpart to [`tag_attr_keys`]: that answers which keys a tag has, this answers what those keys
+/// take. A key absent from [`value_kind`] carries a value only rustc can judge — a string, a callback, an
+/// expression — and is left alone.
+pub enum ValueKind {
+    /// A closed set of spellings, each paired with the Rust name it generates. Also the completion list.
+    Keywords(&'static [(&'static str, &'static str)]),
+    /// A number: a literal, a `$signal`, a `theme.…` read, a `[style]` constant, or a binding in scope.
+    Number,
+    /// A number that may also be a percentage of the containing block.
+    Dimension,
+    /// One number per edge: a single value, or the CSS 2/3/4-value shorthand.
+    Edges,
+}
+
+/// The value schema of `tag`'s `key`, or `None` when the key takes a free-form value.
+///
+/// Tag-aware because one name is two properties: `align` on a container places children across the layout
+/// axis, and `align` on a `text` places lines inside the leaf's own box — different closed sets, and a value
+/// legal under one (`justify`) is a typo under the other.
+pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
+    let text_like = matches!(tag, "text" | "input");
+    match key {
+        "align" if tag == "text" => return Some(ValueKind::Keywords(TEXT_ALIGN_VALUES)),
+        "align" => return Some(ValueKind::Keywords(ALIGN_VALUES)),
+        "justify" => return Some(ValueKind::Keywords(JUSTIFY_VALUES)),
+        "self" => return Some(ValueKind::Keywords(SELF_VALUES)),
+        "direction" => return Some(ValueKind::Keywords(DIRECTION_VALUES)),
+        "absolute" => return Some(ValueKind::Keywords(ABSOLUTE_VALUES)),
+        "wrap" => return Some(ValueKind::Keywords(WRAP_VALUES)),
+        "fit" => return Some(ValueKind::Keywords(FIT_VALUES)),
+        "filter" => return Some(ValueKind::Keywords(FILTER_VALUES)),
+        "raster" if tag == "text" => return Some(ValueKind::Keywords(RASTER_VALUES)),
+        "width" | "height" | "min_width" | "min_height" | "max_width" | "max_height" | "basis"
+        | "flex_basis" => return Some(ValueKind::Dimension),
+        "aspect" | "aspect_ratio" | "padding" | "pad" | "padding_x" | "pad_x" | "padding_y"
+        | "pad_y" | "padding_start" | "pad_start" | "padding_end" | "pad_end" | "margin_start"
+        | "margin_end" | "inset_start" | "inset_end" | "inset_top" | "inset_bottom" | "gap"
+        | "gap_x" | "gap_y" | "grow" | "shrink" => return Some(ValueKind::Number),
+        "size" if text_like => return Some(ValueKind::Number),
+        // A stroke *width* on an `svg`, where every other tag means a colour by the same name.
+        "stroke" if tag == "svg" => return Some(ValueKind::Number),
+        _ => {}
+    }
+    // A `path`'s stroke is one plain width, not the four `crate::edges` collects for a box.
+    let edged = key == "radius"
+        || key.strip_prefix("radius_").is_some_and(corner_suffix)
+        || (tag != "path"
+            && (key == "stroke_width" || key.strip_prefix("stroke_").is_some_and(side_suffix)));
+    edged.then_some(ValueKind::Edges)
+}
+
+/// Whether `suffix` names an edge of `radius_*`. Mirrors `crate::edges::corner_target`.
+fn corner_suffix(suffix: &str) -> bool {
+    matches!(
+        suffix,
+        "top"
+            | "bottom"
+            | "left"
+            | "right"
+            | "top_left"
+            | "top_right"
+            | "bottom_right"
+            | "bottom_left"
+            | "start"
+            | "end"
+    )
+}
+
+/// Whether `suffix` names a side of `stroke_*`. Mirrors `crate::edges::side_target`.
+fn side_suffix(suffix: &str) -> bool {
+    matches!(
+        suffix,
+        "top" | "right" | "bottom" | "left" | "x" | "y" | "start" | "end"
+    )
+}
+
+/// The Rust name a keyword spelling generates, or `None` when the set does not contain it.
+pub fn keyword(
+    table: &'static [(&'static str, &'static str)],
+    value: &str,
+) -> Option<&'static str> {
+    table
+        .iter()
+        .find(|(name, _)| *name == value)
+        .map(|(_, rust)| *rust)
+}
+
 /// Declarative affine transform attribute keys (see `container::transform_call`, which gates
 /// `.with_transform` emission on this exact list — shared here so codegen and completion cannot drift).
 pub const TRANSFORM_ATTR_KEYS: &[&str] = &[

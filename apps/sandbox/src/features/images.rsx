@@ -23,12 +23,12 @@ col gap:20
         card
             row gap:20 align:end wrap
                 col @swatch
-                    img src:checker filter:Linear width:120 height:120
+                    img src:checker filter:linear width:120 height:120
                     text "Linear" size:12 color:muted
                 col @swatch
-                    img src:checker filter:Nearest width:120 height:120
+                    img src:checker filter:nearest width:120 height:120
                     text "Nearest" size:12 color:muted
-        code_line code:"img src:checker filter:Nearest   (a 64px bitmap upscaled to 120)"
+        code_line code:"img src:checker filter:nearest   (a 64px bitmap upscaled to 120)"
     example title:"object-fit — how the bitmap fills a non-square box"
         card
             row gap:20 wrap align:start
@@ -46,7 +46,7 @@ col gap:20
         card
             row gap:20 align:center
                 img src:"dot.png" width:64 height:64
-                img src:"dot.png" filter:Nearest width:96 height:96
+                img src:"dot.png" filter:nearest width:96 height:96
         code_line code:"img src:'assets/dot.png'   (decoded + baked, no runtime loader)"
     example title:"Attributes"
         col gap:6

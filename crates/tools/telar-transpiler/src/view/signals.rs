@@ -89,7 +89,7 @@ pub(super) fn pattern_idents(pattern: &str) -> Vec<String> {
 /// Renders a Rust string literal, escaping quotes, backslashes, and control chars. Newlines/tabs are
 /// escaped (not emitted raw) so a decoded newline in `.rsx` content stays a single line in the generated
 /// source — [`crate::view::resolve_source_map`] splits the body on `\n`, so a raw newline would desync it.
-pub(super) fn rust_str(s: &str) -> String {
+pub(crate) fn rust_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for c in s.chars() {

@@ -87,6 +87,19 @@ pub(crate) fn is_ident(s: &str) -> bool {
     chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
 
+/// Whether `s` is a path expression the author could have written in Rust: a name, a field access, an
+/// associated path.
+///
+/// The line between a value the markup cannot resolve and a value the markup should reject. A `[logic]`
+/// binding, a `const`, a props field and a `crate::` path are all names this crate has no way to enumerate,
+/// so they are carried through for rustc to look up — and rustc's "cannot find value" lands on the right
+/// `.rsx` line through the source map. A value that is not a name at all (`1O`, `12px`, `50%`) can never
+/// resolve to anything and is the author's typo, which is the case worth a message of our own.
+pub(crate) fn is_path_expr(s: &str) -> bool {
+    let s = s.strip_prefix("::").unwrap_or(s);
+    !s.is_empty() && s.replace("::", ".").split('.').all(is_ident)
+}
+
 /// If `bytes[i]` opens a string, raw string, char literal or comment, returns the index just past it, so an
 /// identifier scan skips its contents — a name embedded in `"text"` or `// note` is not a real reference to
 /// it. A `'a` lifetime tick (no closing quote) is left alone; escaped char literals (`'\n'`) are handled.

@@ -17,10 +17,12 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-use telar_parser::{Element, IfBlock, StyleClass, StyleConstant, ViewNode};
+use telar_parser::{Attr, Element, IfBlock, StyleClass, StyleConstant, ViewNode};
 
 use crate::naming::contains_ident;
-use signals::rust_str;
+use crate::registry::ValueKind;
+use crate::style::Scope;
+pub(crate) use signals::rust_str;
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
 const SRC_PUSH: &str = "//@RSX@PUSH:";
@@ -383,6 +385,16 @@ impl<'a> ViewGen<'a> {
         self.locals.iter().any(|local| local == name)
     }
 
+    /// What a bare value written in this view resolves against: the theme, the file's `[style]` constants,
+    /// and the `[logic]` bindings — everything an attribute can name without spelling out Rust.
+    pub(super) fn scope(&self) -> Scope<'_> {
+        Scope {
+            theme: self.theme_type.as_deref(),
+            constants: self.constants,
+            locals: &self.locals,
+        }
+    }
+
     /// The first signal `code` mentions by name, skipping strings and comments.
     ///
     /// Names, not types: `[logic]` is spliced through verbatim and never type-checked here, so the only thing
@@ -631,13 +643,52 @@ impl<'a> ViewGen<'a> {
             .collect()
     }
 
+    /// Names any attribute whose value its key cannot mean, instead of dropping the property or quietly
+    /// substituting a default for it.
+    ///
+    /// The counterpart to [`Self::unknown_attr_errors`]: that one rejects a key the tag does not have, this
+    /// one rejects a value the key does not take. Between them the language stops being strict about keys
+    /// and silent about values — before this, `align:centre` laid out unaligned and `fit:covr` fitted the
+    /// other way, both with nothing to point at.
+    fn value_errors(&self, el: &Element) -> String {
+        if !crate::registry::is_builtin_tag(&el.tag) {
+            return String::new();
+        }
+        let pad = self.indent_str();
+        el.attributes
+            .iter()
+            .filter_map(|attr| self.attr_value_error(&el.tag, attr))
+            .map(|message| format!("{pad}compile_error!({});\n", rust_str(&message)))
+            .collect()
+    }
+
+    /// Why `attr`'s value is not one its key takes, or `None` when it is (or when the key takes anything).
+    fn attr_value_error(&self, tag: &str, attr: &Attr) -> Option<String> {
+        let value = attr.value.text().trim();
+        let Some(kind) = crate::registry::value_kind(tag, &attr.key) else {
+            return match crate::style::layout_prop_call(&attr.key, value, self.scope()) {
+                crate::style::PropCall::Invalid(message) => Some(message),
+                _ => None,
+            };
+        };
+        match kind {
+            // Only a flag key carries the empty spelling, so a valueless `align` is caught here too.
+            ValueKind::Keywords(table) => crate::style::keyword(&attr.key, value, table).err(),
+            ValueKind::Number => crate::style::format_number(value, self.scope()).err(),
+            ValueKind::Dimension => crate::style::dimension(value, self.scope()).err(),
+            ValueKind::Edges => value
+                .split_whitespace()
+                .find_map(|token| crate::style::format_number(token, self.scope()).err()),
+        }
+    }
+
     fn emit_element(&mut self, el: &Element) -> ChildEmit {
-        let unknown = self.unknown_attr_errors(el);
+        let errors = format!("{}{}", self.unknown_attr_errors(el), self.value_errors(el));
         let emit = self.emit_element_inner(el);
-        if unknown.is_empty() {
+        if errors.is_empty() {
             return emit;
         }
-        emit.map_code(|code| format!("{unknown}{code}"))
+        emit.map_code(|code| format!("{errors}{code}"))
     }
 
     fn emit_element_inner(&mut self, el: &Element) -> ChildEmit {
@@ -1849,5 +1900,92 @@ mod tests {
                 out.rust_code
             );
         }
+    }
+
+    /// The language used to be strict about keys and silent about values: a misspelled `align` laid out
+    /// unaligned, with the attribute simply skipped and nothing to point at.
+    #[test]
+    fn a_misspelled_keyword_stops_the_build_the_way_a_misspelled_key_does() {
+        let src = "[view]\ncol align:centre\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(
+            out.rust_code.contains("is not a value of `align`"),
+            "{}",
+            out.rust_code
+        );
+    }
+
+    /// `img fit:covr` used to be *replaced by a default* rather than skipped, so the picture came out fitted
+    /// the other way with nothing anywhere saying so.
+    #[test]
+    fn a_media_keyword_is_rejected_instead_of_defaulted() {
+        let src = "[view]\nimg src:\"a.png\" fit:covr\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(
+            out.rust_code.contains("is not a value of `fit`"),
+            "{}",
+            out.rust_code
+        );
+    }
+
+    /// A `text`'s `align` is a different property from a container's `align` of the same name, so it takes a
+    /// different closed set: `justify` is a paragraph, and a typo under either must not pass as the other.
+    #[test]
+    fn align_is_checked_against_the_set_its_own_tag_has() {
+        let paragraph = "[view]\ntext \"x\" align:justify\n";
+        let out = crate::transpile_source(paragraph, "demo", None, None, None).unwrap();
+        assert!(
+            !out.rust_code.contains("compile_error!"),
+            "{}",
+            out.rust_code
+        );
+        assert!(out.rust_code.contains("TextAlign::Justify"));
+
+        let container = "[view]\ncol align:justify\n    text \"x\"\n";
+        let out = crate::transpile_source(container, "demo", None, None, None).unwrap();
+        assert!(out.rust_code.contains("is not a value of `align`"));
+    }
+
+    /// T6's victim: `gap:1O` used to be emitted as `.gap(1O)` and reported by rustc against generated code.
+    #[test]
+    fn a_mistyped_number_is_an_rsx_error_not_a_rustc_one() {
+        let src = "[view]\ncol gap:1O\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(
+            out.rust_code.contains("is not a number"),
+            "{}",
+            out.rust_code
+        );
+        assert!(!out.rust_code.contains(".gap(1O)"));
+    }
+
+    /// The names the transpiler cannot enumerate — a `[logic]` binding, a `const`, a props field — still
+    /// reach rustc, which names them against this `.rsx` line through the source map.
+    #[test]
+    fn a_name_the_author_has_in_scope_is_still_carried_through() {
+        let src =
+            "[logic]\nlet gutter = 8.0;\n[view]\ncol gap:gutter pad:props.pad\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(
+            !out.rust_code.contains("compile_error!"),
+            "{}",
+            out.rust_code
+        );
+        assert!(out.rust_code.contains(".gap(gutter)"));
+        assert!(out.rust_code.contains(".padding_all(props.pad)"));
+    }
+
+    /// §6.3: `generate_constant` has always emitted `const SIZE_*` and nothing ever resolved a name to one,
+    /// so every numeric `[style]` constant was dead in the file that declared it.
+    #[test]
+    fn a_numeric_style_constant_reaches_the_attribute_that_names_it() {
+        let src = "[style]\ncard_gap: 6\n\n[view]\ncol gap:card_gap\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(out.rust_code.contains("const SIZE_CARD_GAP: f32 = 6.0;"));
+        assert!(
+            out.rust_code.contains(".gap(SIZE_CARD_GAP)"),
+            "{}",
+            out.rust_code
+        );
     }
 }

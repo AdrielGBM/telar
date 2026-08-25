@@ -2,20 +2,20 @@
 
 use telar_parser::{Attr, Element, Value};
 
+use crate::registry;
+
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ViewGen, expr_marker};
 
-/// Parses the shared `fit:` attribute (CSS `object-fit`) for `img`/`svg` into a reactive `ObjectFit` closure. Absent or unrecognized values default to `Contain` (preserve aspect ratio, letterbox), matching the widget defaults.
-fn fit_closure(attributes: &[Attr]) -> &'static str {
-    match attributes.iter().find(|a| a.key == "fit") {
-        Some(a) => match a.value.text().trim().to_ascii_lowercase().as_str() {
-            "fill" => "move || ObjectFit::Fill",
-            "cover" => "move || ObjectFit::Cover",
-            "contain-integer" => "move || ObjectFit::ContainInteger",
-            _ => "move || ObjectFit::Contain",
-        },
-        None => "move || ObjectFit::Contain",
-    }
+/// The shared `fit:` attribute (CSS `object-fit`) for `img`/`svg`, as a reactive `ObjectFit` closure. An
+/// absent `fit:` preserves the aspect ratio and letterboxes, matching the widget default.
+fn fit_closure(attributes: &[Attr]) -> String {
+    let variant = attributes
+        .iter()
+        .find(|a| a.key == "fit")
+        .and_then(|a| registry::keyword(registry::FIT_VALUES, a.value.text().trim()))
+        .unwrap_or("ObjectFit::Contain");
+    format!("move || {variant}")
 }
 
 /// Which media widget a `src` binding is for; selects the runtime data type, the baked-asset `static` prefix, the missing-`src` placeholder identifier, and the baker used at build time.
@@ -69,10 +69,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "filter")
-            .map(|a| match a.value.text().trim() {
-                "Nearest" | "nearest" => "ImageFilter::Nearest",
-                _ => "ImageFilter::Linear",
-            })
+            .and_then(|a| registry::keyword(registry::FILTER_VALUES, a.value.text().trim()))
             .unwrap_or("ImageFilter::Linear");
 
         let fit = fit_closure(&el.attributes);
@@ -173,7 +170,7 @@ impl ViewGen<'_> {
         if v.is_empty() {
             return "|| None".to_string();
         }
-        let expr = substitute_reads(&crate::style::format_number(v, self.theme_type.as_deref()));
+        let expr = substitute_reads(&self.scope().number_or(v, "1.0"));
         // `.into()` rather than `Some(…)`, so both a width and an already-optional one work: std gives
         // `From<T> for Option<T>` and the identity `From<T> for T`, and `with_stroke`'s parameter fixes the
         // target. A theme that carries "no override" as `None` can then be passed straight through.

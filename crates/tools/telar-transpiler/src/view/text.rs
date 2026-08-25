@@ -5,10 +5,15 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element};
 
-use crate::style::{format_f32, format_number, layout_prop_call};
+use crate::registry;
+use crate::style::{PropCall, format_f32, layout_prop_call};
 
 use super::signals::{captured_idents, emit_transition_prelude, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen};
+
+/// The type size a `text` takes when it names none, baked at transpile time. §1.4 of the styles plan is
+/// about this number; step 6's inheritance is what replaces it with one the root can set.
+const DEFAULT_SIZE: &str = "14.0";
 
 impl ViewGen<'_> {
     pub(super) fn emit_text(&mut self, el: &Element) -> ChildEmit {
@@ -44,8 +49,7 @@ impl ViewGen<'_> {
             ) {
                 continue;
             }
-            if let Some(call) = layout_prop_call(&a.key, a.value.text(), self.theme_type.as_deref())
-            {
+            if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text(), self.scope()) {
                 extra.push_str(&call);
             }
         }
@@ -54,7 +58,12 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "height")
-            .and_then(|a| layout_prop_call("height", a.value.text(), self.theme_type.as_deref()));
+            .and_then(
+                |a| match layout_prop_call("height", a.value.text(), self.scope()) {
+                    PropCall::Call(call) => Some(call),
+                    _ => None,
+                },
+            );
 
         let (ctor, layout_style) = match explicit_height {
             Some(h) => ("Text::new", format!("LayoutStyle::new(){h}{extra}")),
@@ -192,8 +201,8 @@ impl ViewGen<'_> {
         let size = attrs
             .iter()
             .find(|a| a.key == "size")
-            .map(|a| format_number(a.value.text(), self.theme_type.as_deref()))
-            .unwrap_or_else(|| "14.0".to_string());
+            .map(|a| self.scope().number_or(a.value.text(), DEFAULT_SIZE))
+            .unwrap_or_else(|| DEFAULT_SIZE.to_string());
         let color_attr = attrs.iter().find(|a| a.key == "color");
         let mut color = color_attr
             .map(|a| self.color_expr(a.value.text()))
@@ -224,9 +233,9 @@ impl ViewGen<'_> {
         if let Some(variant) = attrs
             .iter()
             .find(|a| a.key == "align")
-            .and_then(|a| parse_text_align(a.value.text()))
+            .and_then(|a| registry::keyword(registry::TEXT_ALIGN_VALUES, a.value.text().trim()))
         {
-            modifiers.push_str(&format!(".with_align(TextAlign::{variant})"));
+            modifiers.push_str(&format!(".with_align({variant})"));
         }
         if let Some(n) = attrs
             .iter()
@@ -259,9 +268,9 @@ impl ViewGen<'_> {
         if let Some(variant) = attrs
             .iter()
             .find(|a| a.key == "raster")
-            .and_then(|a| parse_glyph_raster(a.value.text()))
+            .and_then(|a| registry::keyword(registry::RASTER_VALUES, a.value.text().trim()))
         {
-            modifiers.push_str(&format!(".with_raster(GlyphRaster::{variant})"));
+            modifiers.push_str(&format!(".with_raster({variant})"));
         }
 
         let closure = format!("move || TextStyle::new({size}, {color}){modifiers}");
@@ -290,24 +299,4 @@ fn parse_weight(value: &str) -> Option<String> {
         _ => return None,
     };
     Some(n.to_string())
-}
-
-/// Maps a `raster:` value to a `GlyphRaster` variant name — which grid the glyphs land on.
-fn parse_glyph_raster(value: &str) -> Option<&'static str> {
-    Some(match value.trim() {
-        "smooth" | "subpixel" => "Smooth",
-        "pixel" => "Pixel",
-        _ => return None,
-    })
-}
-
-/// Maps an `align:` value to a `TextAlign` variant name.
-fn parse_text_align(value: &str) -> Option<&'static str> {
-    Some(match value.trim() {
-        "left" | "start" => "Start",
-        "center" | "centre" => "Center",
-        "right" | "end" => "End",
-        "justify" | "justified" => "Justify",
-        _ => return None,
-    })
 }

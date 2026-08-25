@@ -2,7 +2,7 @@
 
 use telar_parser::{Element, Value};
 
-use crate::style::{format_number, layout_prop_call};
+use crate::style::{PropCall, layout_prop_call};
 
 use super::signals::{normalize_closure, rust_str, substitute_handles, wrap_signal_clones};
 use super::{ChildEmit, ViewGen};
@@ -27,7 +27,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "size")
-            .map(|a| format_number(a.value.text(), self.theme_type.as_deref()))
+            .map(|a| self.scope().number_or(a.value.text(), "14.0"))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = el.attributes.iter().find(|a| a.key == "color");
         let color = color_attr
@@ -48,8 +48,7 @@ impl ViewGen<'_> {
             ) {
                 continue;
             }
-            if let Some(call) = layout_prop_call(&a.key, a.value.text(), self.theme_type.as_deref())
-            {
+            if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text(), self.scope()) {
                 extra.push_str(&call);
             }
         }

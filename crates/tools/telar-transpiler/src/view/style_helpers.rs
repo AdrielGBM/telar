@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use telar_parser::{Attr, Element, Value};
 
 use crate::naming::style_function_name;
-use crate::style::{format_f32, layout_prop_call};
+use crate::style::{PropCall, format_f32, layout_prop_call};
 
 use super::ViewGen;
 use super::signals::{
@@ -142,7 +142,7 @@ impl ViewGen<'_> {
             "stroke_width",
             "stroke_",
             crate::edges::side_target,
-            self.theme_type.as_deref(),
+            self.scope(),
         );
         if edges.uniform.is_some() || edges.is_empty() {
             return None;
@@ -164,10 +164,8 @@ impl ViewGen<'_> {
             "radius",
             "radius_",
             crate::edges::corner_target,
-            self.theme_type.as_deref(),
+            self.scope(),
         );
-        // `format_number` keeps a numeric literal (`radius:8`) but forwards a variable/const (`radius:rad`)
-        // verbatim, so a dynamic radius works like `fill`/`pad` do — not silently dropped to zero.
         if let Some(all) = edges.uniform {
             return format!("BorderRadius::all({all})");
         }
@@ -291,8 +289,8 @@ impl ViewGen<'_> {
             for name in rest {
                 if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
                     for prop in &class.props {
-                        if let Some(call) =
-                            layout_prop_call(&prop.key, &prop.value, self.theme_type.as_deref())
+                        if let PropCall::Call(call) =
+                            layout_prop_call(&prop.key, &prop.value, self.scope())
                         {
                             base.push_str(&call);
                         }
@@ -333,9 +331,10 @@ impl ViewGen<'_> {
         };
 
         // Inline attributes are applied on top of the base style and take precedence.
+        // A value the key cannot mean is dropped here and reported by `value_errors` instead.
         for attr in attrs {
-            if let Some(call) =
-                layout_prop_call(&attr.key, attr.value.text(), self.theme_type.as_deref())
+            if let PropCall::Call(call) =
+                layout_prop_call(&attr.key, attr.value.text(), self.scope())
             {
                 expr.push_str(&call);
             }
@@ -350,7 +349,10 @@ impl ViewGen<'_> {
             .iter()
             .filter(|a| !a.value.is_literal() && a.value.text().contains('$'))
             .filter(|a| {
-                layout_prop_call(&a.key, a.value.text(), self.theme_type.as_deref()).is_some()
+                matches!(
+                    layout_prop_call(&a.key, a.value.text(), self.scope()),
+                    PropCall::Call(_)
+                )
             })
             .map(|a| a.value.text().to_string())
             .collect()
