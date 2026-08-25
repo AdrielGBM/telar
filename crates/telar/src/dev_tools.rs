@@ -6,7 +6,7 @@ use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, Stroke, TextStyle,
+    Border, BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle,
 };
 use ui_tree::SegmentNodeInfo;
 
@@ -20,6 +20,7 @@ fn rect_command(rect: Rect, style: RectStyle) -> DrawCommand {
 fn text_command(text: std::sync::Arc<str>, rect: Rect, style: TextStyle) -> DrawCommand {
     DrawCommand::Text {
         text,
+        spans: None,
         rect,
         style: std::sync::Arc::new(style),
     }
@@ -136,7 +137,7 @@ impl DevPlugin for DevTools {
                     node.rect,
                     RectStyle::default()
                         .with_fill(Paint::Solid(HIGHLIGHT_FILL))
-                        .with_stroke(Stroke::new(HIGHLIGHT_BORDER, 1.5)),
+                        .with_border(Border::uniform(HIGHLIGHT_BORDER, 1.5)),
                 ));
             }
 

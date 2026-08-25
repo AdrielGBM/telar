@@ -24,7 +24,7 @@ use layout_core::AvailableSpace;
 use platform_core::{Event, WindowCommand};
 use renderer_core::{BorderRadius, Color, DrawCommand};
 use ui_core::{ComponentList, EventResult, NodeId, Surface, compute_layout, mark_dirty};
-use ui_tree::{Component, NodeVec, RenderNode};
+use ui_tree::{Component, RenderNode};
 
 use crate::app_context::AppCtx;
 
