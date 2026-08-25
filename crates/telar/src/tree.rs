@@ -93,9 +93,9 @@ impl UiTree for LocalTree {
         self.0.walk_tree(out);
     }
 
-    fn bump_force_ticks(&self) {
-        self.0.bump_force_ticks();
-    }
+    // `bump_force_ticks` is left the trait's no-op: this tree's effects and the signals they read are the
+    // same runtime's, so it re-renders from its own subscriptions. `telar/tests/local_tree_repaints.rs`
+    // holds that, for a changed signal and for a resize — the two things a frame depends on.
 }
 
 /// A tree that lives on the *app's* side of a hot-reload boundary: the dylib mounts it (so its segment effects
