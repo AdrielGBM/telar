@@ -11,23 +11,23 @@ col gap:20
             row gap:20 wrap align:center
                 col gap:8 align:center
                     box fill:surface radius:10 width:150 height:76 shadow_y:2 shadow_blur:6 shadow_color:#0000002e
-                    text "low" size:12 color:muted
+                    text "low" font_size:12 color:muted
                 col gap:8 align:center
                     box fill:surface radius:10 width:150 height:76 shadow_y:6 shadow_blur:16 shadow_color:#00000033
-                    text "medium" size:12 color:muted
+                    text "medium" font_size:12 color:muted
                 col gap:8 align:center
                     box fill:surface radius:10 width:150 height:76 shadow_y:12 shadow_blur:28 shadow_color:#0000003d
-                    text "high" size:12 color:muted
+                    text "high" font_size:12 color:muted
         code_line code:"box shadow_y:6 shadow_blur:16 shadow_color:#00000033"
     example title:"Colored glows — a shadow the same hue as the fill"
         card pad:24
             row gap:20 wrap
                 box @center fill:primary radius:12 width:150 height:72 shadow_y:8 shadow_blur:22 shadow_color:primary
-                    text "primary" size:12 color:on_primary
+                    text "primary" font_size:12 color:on_primary
                 box @center fill:danger radius:12 width:150 height:72 shadow_y:8 shadow_blur:22 shadow_color:danger
-                    text "danger" size:12 color:on_primary
+                    text "danger" font_size:12 color:on_primary
                 box @center fill:purple radius:12 width:150 height:72 shadow_y:8 shadow_blur:22 shadow_color:purple
-                    text "purple" size:12 color:on_primary
+                    text "purple" font_size:12 color:on_primary
         code_line code:"box fill:primary shadow_y:8 shadow_blur:22 shadow_color:primary"
     example title:"Offset — push the shadow on the x and y axes"
         card pad:24

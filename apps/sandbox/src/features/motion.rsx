@@ -91,6 +91,6 @@ col gap:20
         card gap:12
             row gap:12 align:center
                 widget "progress_bar"
-                text "{$progress.round()}%" size:12 color:muted
+                text "{$progress.round()}%" font_size:12 color:muted
                 button label:"Replay" fill:primary on_press(|| { $progress.restart() })
         code_line code:"Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)"

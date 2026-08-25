@@ -9,9 +9,9 @@ pub struct Props {
 
 [view]
 row gap:12 align:start
-    text "{props.name}" size:13 color:ink width:120
-    text "{props.values}" size:13 color:primary width:190
-    text "{props.about}" size:13 color:muted grow:1
+    text "{props.name}" font_size:13 color:ink width:120
+    text "{props.values}" font_size:13 color:primary width:190
+    text "{props.about}" font_size:13 color:muted grow:1
 
 [preview "Prop row"]
 prop_row name:"align" values:"start · center · end · stretch" about:"Cross-axis alignment of children."

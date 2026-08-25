@@ -7,7 +7,7 @@ col gap:20
     example title:"badge — a small solid accent tag"
         card gap:10
             row gap:8 align:center
-                text "Inbox" size:15 color:ink
+                text "Inbox" font_size:15 color:ink
                 badge label:"12"
                 badge label:"NEW" color:success
                 badge label:"BETA" color:purple
@@ -18,7 +18,7 @@ col gap:20
                 chip label:"design"
                 chip label:"rust"
                 chip label:"removable" on_close(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) })
-            text "chips · {$tags}" size:13 color:muted
+            text "chips · {$tags}" font_size:13 color:muted
         code_line code:"chip label:'removable' on_close:|| remove()"
     example title:"Attributes"
         col gap:6

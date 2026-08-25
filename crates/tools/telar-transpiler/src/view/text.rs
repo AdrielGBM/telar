@@ -11,7 +11,7 @@ use crate::style::{PropCall, format_f32, layout_prop_call};
 use super::signals::{captured_idents, emit_transition_prelude, rust_str, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen};
 
-/// The size a `size:` value falls back to when it cannot be resolved. A `text` naming no size takes the
+/// The size a `font_size:` value falls back to when it cannot be resolved. A `text` naming no size takes the
 /// inherited one instead, so this only ever stands in for a value already reported as an error.
 const DEFAULT_SIZE: &str = "14.0";
 
@@ -34,15 +34,15 @@ impl ViewGen<'_> {
         for a in &el.attributes {
             if matches!(
                 a.key.as_str(),
-                "size"
+                "font_size"
                     | "font_family"
                     | "color"
-                    | "weight"
-                    | "italic"
-                    | "align"
+                    | "font_weight"
+                    | "font_style"
+                    | "text_align"
                     | "lines"
                     | "ellipsis"
-                    | "nowrap"
+                    | "text_wrap"
                     | "height"
                     | "line_height"
                     | "letter_spacing"
@@ -196,9 +196,9 @@ impl ViewGen<'_> {
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
     ) -> String {
-        // `size:` and `color:` amend what the tree declared rather than building a style from nothing. Each used to bake a literal here, which is why "make the body text 11px" was not a thing a theme could say.
+        // `font_size:` and `color:` amend what the tree declared rather than building a style from nothing. Each used to bake a literal here, which is why "make the body text 11px" was not a thing a theme could say.
         let mut modifiers = String::new();
-        if let Some(size) = attrs.iter().find(|a| a.key == "size") {
+        if let Some(size) = attrs.iter().find(|a| a.key == "font_size") {
             let _ = write!(
                 modifiers,
                 ".with_font_size({})",
@@ -213,7 +213,7 @@ impl ViewGen<'_> {
             }
             let _ = write!(modifiers, ".with_color({color})");
         }
-        // A bare flag (`italic`) is the assertion itself; `italic:true` says the same thing the long way, and anything else — `italic:false` most of all — leaves the default alone.
+        // A bare flag (`ellipsis`) is the assertion itself; `ellipsis:true` says the same thing the long way, and anything else — `ellipsis:false` most of all — leaves the default alone.
         let asserted = |key: &str| {
             attrs
                 .iter()
@@ -225,17 +225,21 @@ impl ViewGen<'_> {
         }
         if let Some(w) = attrs
             .iter()
-            .find(|a| a.key == "weight")
+            .find(|a| a.key == "font_weight")
             .and_then(|a| parse_weight(a.value.text()))
         {
             modifiers.push_str(&format!(".with_font_weight({w})"));
         }
-        if asserted("italic") {
-            modifiers.push_str(".with_font_style(FontStyle::Italic)");
+        if let Some(variant) = attrs
+            .iter()
+            .find(|a| a.key == "font_style")
+            .and_then(|a| registry::keyword(registry::FONT_STYLE_VALUES, a.value.text().trim()))
+        {
+            modifiers.push_str(&format!(".with_font_style({variant})"));
         }
         if let Some(variant) = attrs
             .iter()
-            .find(|a| a.key == "align")
+            .find(|a| a.key == "text_align")
             .and_then(|a| registry::keyword(registry::TEXT_ALIGN_VALUES, a.value.text().trim()))
         {
             modifiers.push_str(&format!(".with_text_align({variant})"));
@@ -249,9 +253,12 @@ impl ViewGen<'_> {
         {
             modifiers.push_str(&format!(".with_clamp({n}, {})", asserted("ellipsis")));
         }
-        // `nowrap`: the label is a token and not prose, so it keeps one line whatever box it is given.
-        if asserted("nowrap") {
-            modifiers.push_str(".with_text_wrap(TextWrap::NoWrap)");
+        if let Some(variant) = attrs
+            .iter()
+            .find(|a| a.key == "text_wrap")
+            .and_then(|a| registry::keyword(registry::TEXT_WRAP_VALUES, a.value.text().trim()))
+        {
+            modifiers.push_str(&format!(".with_text_wrap({variant})"));
         }
         if let Some(lh) = attrs
             .iter()
@@ -294,7 +301,7 @@ pub(super) fn font_family_expr(attr: &Attr) -> String {
     }
 }
 
-/// Maps a `weight:` value — a keyword (`thin`…`black`) or a numeric 100–900 — to the OpenType weight number.
+/// Maps a `font_weight:` value — a keyword (`thin`…`black`) or a numeric 100–900 — to the OpenType weight number.
 fn parse_weight(value: &str) -> Option<String> {
     let v = value.trim();
     if let Ok(n) = v.parse::<u16>() {

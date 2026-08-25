@@ -22,7 +22,7 @@ col gap:20
         code_line code:"button label:'Filled' fill:primary   ·   outline:primary   ·   ghost"
     example title:"on_press — every click runs a closure that mutates a signal"
         card gap:12
-            text "Clicks · {$clicks}" size:18 color:ink
+            text "Clicks · {$clicks}" font_size:18 color:ink
             row gap:10
                 button label:"+1" fill:primary on_press(|| $clicks += 1)
                 button label:"+10" fill:primary on_press(|| $clicks += 10)
@@ -31,25 +31,25 @@ col gap:20
     example title:"A whole box is clickable — on_press works on any container, not just buttons"
         card gap:10
             box @center fill:surface_alt radius:10 pad:20 on_press(|| $clicks += 1)
-                text "Tap anywhere in this card · {$clicks}" size:14 color:ink
-            text "The card itself takes on_press; a child button would still win its own taps." size:12 color:muted
+                text "Tap anywhere in this card · {$clicks}" font_size:14 color:ink
+            text "The card itself takes on_press; a child button would still win its own taps." font_size:12 color:muted
         code_line code:"box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)"
     example title:"hover — a container restyles while the pointer is over it (mouse only)"
         card gap:10
             row gap:10 wrap
                 box @center fill:surface_alt radius:10 pad:16 hover_style(fill:primary) width:150 height:64
-                    text "Fill on hover" size:13 color:ink
+                    text "Fill on hover" font_size:13 color:ink
                 box @center fill:surface_alt stroke:border radius:10 pad:16 hover_style(stroke:primary) radius:16 width:150 height:64
-                    text "Stroke + radius" size:13 color:ink
-            text "Each box carries its own hover_style(...) — different hovers in one file, no signals." size:12 color:muted
+                    text "Stroke + radius" font_size:13 color:ink
+            text "Each box carries its own hover_style(...) — different hovers in one file, no signals." font_size:12 color:muted
         code_line code:"box fill:surface_alt hover_style(fill:primary)      (swap style while hovered)"
     example title:"Event callbacks — on_hover (a bool) and on_key (global shortcut)"
         card gap:10
             box fill:surface_alt radius:10 pad:16 on_hover(|h| $hovering.set(h))
-                text "hover me — hovering: {$hovering}" size:14 color:ink
+                text "hover me — hovering: {$hovering}" font_size:14 color:ink
             col on_key(|_k| $keys += 1)
-                text "keys pressed anywhere: {$keys}" size:14 color:muted
-            text "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key." size:12 color:muted
+                text "keys pressed anywhere: {$keys}" font_size:14 color:muted
+            text "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key." font_size:12 color:muted
         code_line code:"box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)"
     example title:"Attributes"
         col gap:6

@@ -311,8 +311,28 @@ pub const RASTER_VALUES: &[(&str, &str)] = &[
     ("nearest", "Raster::Pixel"),
 ];
 
-/// `align:` on a `text`, which is a different property from a container's `align:` of the same name: where
-/// the lines sit inside the text's own box, not where the box sits among its siblings.
+/// `font_style:` — the slant of the face.
+///
+/// Three-valued where the markup had a bare `italic` flag, because the shaper has modelled oblique all
+/// along and nothing could ask for it.
+pub const FONT_STYLE_VALUES: &[(&str, &str)] = &[
+    ("normal", "FontStyle::Normal"),
+    ("italic", "FontStyle::Italic"),
+    ("oblique", "FontStyle::Oblique"),
+];
+
+/// `text_wrap:` — whether text wraps into its box or keeps one line.
+///
+/// Named apart from the container's `wrap:`, which is flex-wrap and one character away from the `nowrap`
+/// flag this replaces.
+pub const TEXT_WRAP_VALUES: &[(&str, &str)] = &[
+    ("wrap", "TextWrap::Wrap"),
+    ("nowrap", "TextWrap::NoWrap"),
+    ("no_wrap", "TextWrap::NoWrap"),
+];
+
+/// `text_align:` — where the lines sit inside the text's own box, as against a container's `align:`, which
+/// places the box among its siblings.
 pub const TEXT_ALIGN_VALUES: &[(&str, &str)] = &[
     ("start", "TextAlign::Start"),
     ("left", "TextAlign::Start"),
@@ -349,7 +369,9 @@ pub enum ValueKind {
 pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
     let text_like = matches!(tag, "text" | "input");
     match key {
-        "align" if tag == "text" => return Some(ValueKind::Keywords(TEXT_ALIGN_VALUES)),
+        "text_align" => return Some(ValueKind::Keywords(TEXT_ALIGN_VALUES)),
+        "text_wrap" => return Some(ValueKind::Keywords(TEXT_WRAP_VALUES)),
+        "font_style" => return Some(ValueKind::Keywords(FONT_STYLE_VALUES)),
         "align" => return Some(ValueKind::Keywords(ALIGN_VALUES)),
         "justify" => return Some(ValueKind::Keywords(JUSTIFY_VALUES)),
         "self" => return Some(ValueKind::Keywords(SELF_VALUES)),
@@ -364,7 +386,7 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         | "pad_y" | "padding_start" | "pad_start" | "padding_end" | "pad_end" | "margin_start"
         | "margin_end" | "inset_start" | "inset_end" | "inset_top" | "inset_bottom" | "gap"
         | "gap_x" | "gap_y" | "grow" | "shrink" => return Some(ValueKind::Number),
-        "size" if text_like => return Some(ValueKind::Number),
+        "font_size" if text_like => return Some(ValueKind::Number),
         // A stroke *width* on an `svg`, where every other tag means a colour by the same name.
         "stroke" if tag == "svg" => return Some(ValueKind::Number),
         _ => {}
@@ -436,15 +458,15 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         // A `text` is a leaf, but it is a leaf *in a flex box*: it takes the layout keys that size and place it
         // among its siblings alongside its own type keys.
         "text" => with(&[
-            "size",
+            "font_size",
             "font_family",
             "color",
-            "weight",
-            "italic",
-            "align",
+            "font_weight",
+            "font_style",
+            "text_align",
             "lines",
             "ellipsis",
-            "nowrap",
+            "text_wrap",
             "line_height",
             "letter_spacing",
             "raster",
@@ -481,7 +503,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
         "input" => with(&[
             "value",
-            "size",
+            "font_size",
             "font_family",
             "color",
             "placeholder",

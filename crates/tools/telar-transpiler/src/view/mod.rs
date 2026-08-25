@@ -1382,10 +1382,10 @@ mod tests {
         );
     }
 
-    // Rich text: weight keyword, italic flag, and alignment become TextStyle builder calls.
+    // Rich text: a weight keyword, a slant and an alignment become TextStyle builder calls.
     #[test]
     fn text_rich_weight_italic_align() {
-        let src = "[view]\ntext \"Hi\" weight:bold italic align:center\n";
+        let src = "[view]\ntext \"Hi\" font_weight:bold font_style:italic text_align:center\n";
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -1394,7 +1394,7 @@ mod tests {
         );
         assert!(
             code.contains(".with_font_style(FontStyle::Italic)"),
-            "italic flag:\n{code}"
+            "slant:\n{code}"
         );
         assert!(
             code.contains(".with_text_align(TextAlign::Center)"),
@@ -1402,10 +1402,10 @@ mod tests {
         );
     }
 
-    // Numeric weight and `align:right` map correctly; absent italic emits no builder call.
+    // Numeric weight and `text_align:right` map correctly; an absent slant emits no builder call.
     #[test]
     fn text_rich_numeric_weight_and_align_end() {
-        let src = "[view]\ntext \"Hi\" weight:600 align:right\n";
+        let src = "[view]\ntext \"Hi\" font_weight:600 text_align:right\n";
         let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
@@ -1418,8 +1418,8 @@ mod tests {
             "align end:\n{code}"
         );
         assert!(
-            !code.contains(".with_italic"),
-            "no italic when absent:\n{code}"
+            !code.contains(".with_font_style"),
+            "no slant when absent:\n{code}"
         );
     }
 
@@ -1444,7 +1444,7 @@ mod tests {
     // wires an optional `on_submit`.
     #[test]
     fn input_binds_value_style_and_submit() {
-        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name size:16 color:primary width:200 on_submit(|| $name.set(String::new()))\n";
+        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:primary width:200 on_submit(|| $name.set(String::new()))\n";
         let code = crate::transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1941,7 +1941,7 @@ mod tests {
     /// different closed set: `justify` is a paragraph, and a typo under either must not pass as the other.
     #[test]
     fn align_is_checked_against_the_set_its_own_tag_has() {
-        let paragraph = "[view]\ntext \"x\" align:justify\n";
+        let paragraph = "[view]\ntext \"x\" text_align:justify\n";
         let out = crate::transpile_source(paragraph, "demo", None, None, None).unwrap();
         assert!(
             !out.rust_code.contains("compile_error!"),
@@ -2028,7 +2028,7 @@ mod tests {
     /// sans-serif face exactly as it did before the axis existed.
     #[test]
     fn a_text_naming_no_family_is_untouched() {
-        let src = "[view]\ntext \"x\" size:12\n";
+        let src = "[view]\ntext \"x\" font_size:12\n";
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(!out.rust_code.contains("with_font_family"));
     }

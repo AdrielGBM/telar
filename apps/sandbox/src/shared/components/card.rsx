@@ -16,6 +16,6 @@ box fill:surface stroke:border radius:12 pad:props.pad gap:props.gap
 
 [preview "Card"]
 card gap:8
-    text "Header" size:16 color:ink slot:"header"
-    text "A card is the standard surface panel." size:13 color:muted
-    text "Bare children stack with the gap you pass; slot:\"header\" pins a header on top." size:13 color:muted
+    text "Header" font_size:16 color:ink slot:"header"
+    text "A card is the standard surface panel." font_size:13 color:muted
+    text "Bare children stack with the gap you pass; slot:\"header\" pins a header on top." font_size:13 color:muted

@@ -8,7 +8,7 @@ col gap:20
         card gap:10
             row gap:16 align:center
                 stepper value:$qty min:0 max:10 step:1
-                text "qty · {$qty}" size:14 color:muted
+                text "qty · {$qty}" font_size:14 color:muted
         code_line code:"stepper value:$qty min:0 max:10 step:1"
     example title:"Attributes"
         col gap:6

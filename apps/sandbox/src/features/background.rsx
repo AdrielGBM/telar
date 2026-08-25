@@ -59,7 +59,7 @@ col gap:20
     example title:"spawn_task — one result, delivered on the UI thread"
         card gap:12
             row gap:12 align:center
-                text "sum(1..2M) · {$total}" size:16 color:ink
+                text "sum(1..2M) · {$total}" font_size:16 color:ink
                 if $busy
                     spinner size:20
             row gap:10
@@ -67,7 +67,7 @@ col gap:20
                 button label:"Bounce" outline:primary on_press(|| { $beat.retarget(if $beat.get() > 1.0 { 1.0 } else { 1.4 }) })
             row gap:16 align:center
                 box fill:primary radius:12 width:48 height:48 scale:$beat
-                text "Press Compute, then Bounce — the spring keeps settling while the worker blocks." size:12 color:muted
+                text "Press Compute, then Bounce — the spring keeps settling while the worker blocks." font_size:12 color:muted
         code_line code:"spawn_task(|| slow_sum(n), move |sum| total.set(sum.to_string()))"
     example title:"spawn_stream — many values, in order, one frame after the other"
         card gap:12
@@ -76,11 +76,11 @@ col gap:20
                 button label:"Cancel" outline:danger on_press(|| { if let Some(task) = $scan.borrow_mut().take() { task.cancel(); } $scanning.set(false); })
                 if $scanning
                     spinner size:20
-            text "{$found.len()} crates" size:14 color:muted
+            text "{$found.len()} crates" font_size:14 color:muted
             for name in $found key name.clone()
                 row gap:8 align:center pad_y:2
                     box fill:success radius:4 width:6 height:6
-                    text "{name}" size:13 color:ink
+                    text "{name}" font_size:13 color:ink
         code_line code:"spawn_stream(walk_project, move |name| found.update(|v| v.push(name)))"
     example title:"The rules"
         col gap:6

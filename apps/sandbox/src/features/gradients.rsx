@@ -11,13 +11,13 @@ col gap:20
             grid cols:"fit 160" gap:12
                 col @swatch
                     box gradient:horizontal from:danger to:primary radius:10 width:100% height:72
-                    text "horizontal" size:12 color:muted
+                    text "horizontal" font_size:12 color:muted
                 col @swatch
                     box gradient:vertical from:purple to:success radius:10 width:100% height:72
-                    text "vertical" size:12 color:muted
+                    text "vertical" font_size:12 color:muted
                 col @swatch
                     box gradient:diagonal from:warning to:danger radius:10 width:100% height:72
-                    text "diagonal" size:12 color:muted
+                    text "diagonal" font_size:12 color:muted
         code_line code:"box gradient:horizontal from:danger to:primary"
     example title:"Three stops — add a middle color and its position"
         card
@@ -28,13 +28,13 @@ col gap:20
             grid cols:"fit 160" gap:12
                 col @swatch
                     box gradient:radial radial_radius:70 from:cyan to:primary radius:10 width:100% height:80
-                    text "radial_radius:70" size:12 color:muted
+                    text "radial_radius:70" font_size:12 color:muted
                 col @swatch
                     box gradient:radial from:warning to:danger radius:10 width:100% height:80
-                    text "default radius" size:12 color:muted
+                    text "default radius" font_size:12 color:muted
                 col @swatch
                     box gradient:radial radial_radius:80 from:success mid:cyan mid_pos:0.45 to:purple radius:10 width:100% height:80
-                    text "3 stops" size:12 color:muted
+                    text "3 stops" font_size:12 color:muted
         code_line code:"box gradient:radial radial_radius:70 from:cyan to:primary"
     example title:"Attributes"
         col gap:6

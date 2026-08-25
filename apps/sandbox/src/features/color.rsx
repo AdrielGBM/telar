@@ -16,44 +16,44 @@ col gap:20
             grid cols:"fit 120" gap:12
                 col @swatch
                     box @chip fill:primary
-                    text "primary" size:12 color:ink
+                    text "primary" font_size:12 color:ink
                 col @swatch
                     box @chip fill:success
-                    text "success" size:12 color:ink
+                    text "success" font_size:12 color:ink
                 col @swatch
                     box @chip fill:danger
-                    text "danger" size:12 color:ink
+                    text "danger" font_size:12 color:ink
                 col @swatch
                     box @chip fill:warning
-                    text "warning" size:12 color:ink
+                    text "warning" font_size:12 color:ink
                 col @swatch
                     box @chip fill:purple
-                    text "purple" size:12 color:ink
+                    text "purple" font_size:12 color:ink
                 col @swatch
                     box @chip fill:cyan
-                    text "cyan" size:12 color:ink
+                    text "cyan" font_size:12 color:ink
         code_line code:"box fill:primary   ·   fill:success   ·   fill:danger …"
     example title:"Neutrals & surfaces (outlined so light tones stay visible)"
         card
             grid cols:"fit 120" gap:12
                 col @swatch
                     box @chip fill:ink stroke:border
-                    text "ink" size:12 color:ink
+                    text "ink" font_size:12 color:ink
                 col @swatch
                     box @chip fill:muted stroke:border
-                    text "muted" size:12 color:ink
+                    text "muted" font_size:12 color:ink
                 col @swatch
                     box @chip fill:surface stroke:border
-                    text "surface" size:12 color:ink
+                    text "surface" font_size:12 color:ink
                 col @swatch
                     box @chip fill:surface_alt stroke:border
-                    text "surface_alt" size:12 color:ink
+                    text "surface_alt" font_size:12 color:ink
                 col @swatch
                     box @chip fill:border stroke:border
-                    text "border" size:12 color:ink
+                    text "border" font_size:12 color:ink
                 col @swatch
                     box @chip fill:background stroke:border
-                    text "background" size:12 color:ink
+                    text "background" font_size:12 color:ink
         code_line code:"box fill:surface stroke:border   (card recipe)"
     example title:"One-off colors — inline hex when a token does not fit"
         card
@@ -64,6 +64,6 @@ col gap:20
         code_line code:"box fill:#4ecdc4      (also #rgb and #rrggbbaa)"
     example title:"Reactive theming"
         card gap:8
-            text "Because color:primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." size:13 color:muted
-            text "Try the Modern / Pastel / Midnight buttons in the sidebar." size:13 color:primary
+            text "Because color:primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." font_size:13 color:muted
+            text "Try the Modern / Pastel / Midnight buttons in the sidebar." font_size:13 color:primary
         code_line code:"on_press:|| set_mode(\"midnight\")"

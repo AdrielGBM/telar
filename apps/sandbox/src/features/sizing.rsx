@@ -23,15 +23,15 @@ col gap:20
         card
             grid cols:3 gap:10
                 box @center fill:cyan radius:6 height:44
-                    text "1" size:13 color:on_primary
+                    text "1" font_size:13 color:on_primary
                 box @center fill:cyan radius:6 height:44
-                    text "2" size:13 color:on_primary
+                    text "2" font_size:13 color:on_primary
                 box @center fill:cyan radius:6 height:44
-                    text "3" size:13 color:on_primary
+                    text "3" font_size:13 color:on_primary
                 box @center fill:cyan radius:6 height:44 span:2
-                    text "span 2" size:13 color:on_primary
+                    text "span 2" font_size:13 color:on_primary
                 box @center fill:cyan radius:6 height:44
-                    text "5" size:13 color:on_primary
+                    text "5" font_size:13 color:on_primary
         code_line code:"grid cols:3 gap:10      >      box span:2"
     example title:"Grid — explicit fractional tracks"
         card

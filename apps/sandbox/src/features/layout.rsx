@@ -46,10 +46,10 @@ col gap:20
         card
             box fill:surface_alt radius:10 pad:14 gap:8 max_width:260
                 row justify:between align:center
-                    text "Storage" size:13 color:ink
-                    text "78%" size:13 color:primary
+                    text "Storage" font_size:13 color:ink
+                    text "78%" font_size:13 color:primary
                 box fill:border radius:4 height:8
-                text "3.1 GB of 4 GB used" size:11 color:muted
+                text "3.1 GB of 4 GB used" font_size:11 color:muted
         code_line code:"box pad:14 gap:8   >   row justify:between   >   text …"
     example title:"scroll — a bounded viewport that scrolls its overflowing content"
         card
@@ -57,7 +57,7 @@ col gap:20
                 col gap:8 pad_x:2 width:100%
                     for i in 0..12
                         box fill:surface_alt stroke:border radius:8 pad_x:14 pad_y:10
-                            text "Scrollable item {i}" size:13 color:ink
+                            text "Scrollable item {i}" font_size:13 color:ink
         code_line code:"scroll height:160   >   col …   >   for i in 0..12   >   box …"
     example title:"Attributes"
         col gap:6

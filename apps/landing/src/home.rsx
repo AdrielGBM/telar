@@ -56,45 +56,45 @@ primary: #4361ee
 col @page
     box @navband fill:surface
         row @navwrap
-            text "▲ rsx" size:20 color:dark
+            text "▲ rsx" font_size:20 color:dark
             row gap:24 align:center
-                text "Features" size:14 color:muted
-                text "Gallery" size:14 color:muted
-                text "Pricing" size:14 color:muted
+                text "Features" font_size:14 color:muted
+                text "Gallery" font_size:14 color:muted
+                text "Pricing" font_size:14 color:muted
                 button label:"Get started" fill:primary on_press(|| $signups.update(|n| *n += 1))
     box @band fill:surface
         col @wrap
             row gap:48 wrap align:center
                 col grow:1 min_width:320 gap:20
-                    text "Native UIs in Rust, without the boilerplate" size:40 color:dark
-                    text "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android." size:18 color:muted
+                    text "Native UIs in Rust, without the boilerplate" font_size:40 color:dark
+                    text "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android." font_size:18 color:muted
                     row gap:12 wrap
                         button label:"Get started" fill:primary on_press(|| $signups.update(|n| *n += 1))
                         button label:"Read the docs" outline:primary
-                    text "{$spots_left} of 200 early-access seats left" size:13 color:accent
+                    text "{$spots_left} of 200 early-access seats left" font_size:13 color:accent
                 col grow:1 min_width:320
                     img src:gradient_img width:100% height:320
     box @band fill:surface_alt
         col @wrap gap:24
-            text "Trusted primitives" size:14 color:muted
+            text "Trusted primitives" font_size:14 color:muted
             row gap:20 wrap
                 box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 axis:col align:center
-                    text "60 fps" size:30 color:primary
-                    text "software + wgpu" size:13 color:muted
+                    text "60 fps" font_size:30 color:primary
+                    text "software + wgpu" font_size:13 color:muted
                 box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 axis:col align:center
-                    text "25" size:30 color:primary
-                    text "modular crates" size:13 color:muted
+                    text "25" font_size:30 color:primary
+                    text "modular crates" font_size:13 color:muted
                 box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 axis:col align:center
-                    text "2" size:30 color:primary
-                    text "render backends" size:13 color:muted
+                    text "2" font_size:30 color:primary
+                    text "render backends" font_size:13 color:muted
                 box fill:surface stroke:border radius:14 grow:1 min_width:170 pad:24 gap:6 axis:col align:center
-                    text "0" size:30 color:primary
-                    text "runtime GC pauses" size:13 color:muted
+                    text "0" font_size:30 color:primary
+                    text "runtime GC pauses" font_size:13 color:muted
     box @band fill:surface
         col @wrap gap:28
             col gap:8
-                text "Everything you need" size:28 color:dark
-                text "Composable building blocks that scale from a button to a full app." size:16 color:muted
+                text "Everything you need" font_size:28 color:dark
+                text "Composable building blocks that scale from a button to a full app." font_size:16 color:muted
             row gap:24 wrap
                 feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirty-tracking and scroll-blit detection."
                 feature_card icon:"🧩" title:"Composable" body:"Signals, memos and reusable .rsx components compose right inside the markup."
@@ -103,47 +103,47 @@ col @page
     box @band fill:surface_alt
         col @wrap gap:28
             col gap:8
-                text "Built-in rendering" size:28 color:dark
-                text "Gradients, images, paths and shadows — all GPU-accelerated." size:16 color:muted
+                text "Built-in rendering" font_size:28 color:dark
+                text "Gradients, images, paths and shadows — all GPU-accelerated." font_size:16 color:muted
             row gap:20 wrap
                 col grow:1 min_width:280 gap:8
                     img src:gradient_img width:100% height:200
-                    text "Linear gradients" size:13 color:muted
+                    text "Linear gradients" font_size:13 color:muted
                 col grow:1 min_width:280 gap:8
                     img src:checker_img width:100% height:200
-                    text "Bitmap images" size:13 color:muted
+                    text "Bitmap images" font_size:13 color:muted
                 col grow:1 min_width:280 gap:8
                     img src:radial_img width:100% height:200
-                    text "Radial alpha" size:13 color:muted
+                    text "Radial alpha" font_size:13 color:muted
     box @band fill:surface
         col @wrap
             row gap:48 wrap align:center
                 col grow:1 min_width:300
                     img src:checker_img width:100% height:280
                 col grow:1 min_width:300 gap:14
-                    text "Reactivity that stays out of your way" size:26 color:dark
-                    text "Fine-grained signals update only the widgets that depend on them — no virtual DOM, no diffing, no re-render storms." size:16 color:muted
-                    text "→ signal, memo, effect" size:14 color:primary
+                    text "Reactivity that stays out of your way" font_size:26 color:dark
+                    text "Fine-grained signals update only the widgets that depend on them — no virtual DOM, no diffing, no re-render storms." font_size:16 color:muted
+                    text "→ signal, memo, effect" font_size:14 color:primary
     box @band fill:primary
         col @wrap align:center gap:16
-            text "Join the private beta" size:30 color:on_primary
-            text "{$spots_left} of 200 seats remaining" size:16 color:on_primary
+            text "Join the private beta" font_size:30 color:on_primary
+            text "{$spots_left} of 200 seats remaining" font_size:16 color:on_primary
             row gap:12 align:center wrap
                 button label:"Reserve a seat" fill:accent on_press(|| $signups.update(|n| *n += 1))
-                text "{$signups} developers reserved" size:14 color:on_primary
+                text "{$signups} developers reserved" font_size:14 color:on_primary
     box @footband fill:dark
         row @footwrap
             col gap:8 grow:1 min_width:200
-                text "▲ rsx" size:18 color:on_primary
-                text "Native UI framework for Rust." size:13 color:on_dark
+                text "▲ rsx" font_size:18 color:on_primary
+                text "Native UI framework for Rust." font_size:13 color:on_dark
             col gap:6 min_width:140
-                text "Product" size:13 color:on_primary
-                text "Features" size:13 color:on_dark
-                text "Gallery" size:13 color:on_dark
+                text "Product" font_size:13 color:on_primary
+                text "Features" font_size:13 color:on_dark
+                text "Gallery" font_size:13 color:on_dark
             col gap:6 min_width:140
-                text "Developers" size:13 color:on_primary
-                text "Docs" size:13 color:on_dark
-                text "Examples" size:13 color:on_dark
+                text "Developers" font_size:13 color:on_primary
+                text "Docs" font_size:13 color:on_dark
+                text "Examples" font_size:13 color:on_dark
 
 [preview "Landing — full page"]
 home

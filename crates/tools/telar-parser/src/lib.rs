@@ -61,8 +61,8 @@ muted:    #808098
 [view]
 
 col @card
-    text "Count: {count}"   size:14  color:dark
-    text "Double: {double}" size:12  color:muted
+    text "Count: {count}"   font_size:14  color:dark
+    text "Double: {double}" font_size:12  color:muted
     row  gap:8
         btn "Increment"  fill:primary   on_press(|| count.update(|n| *n += 1))
         btn "Decrement"  outline:danger  on_press(|| count.update(|n| *n -= 1))
@@ -183,7 +183,7 @@ col @card
         assert_eq!(
             text0.attributes[0],
             Attr {
-                key: "size".into(),
+                key: "font_size".into(),
                 value: Value::Bare("14".into()),
                 value_start: 0
             }
@@ -268,7 +268,7 @@ col @card
         // A computed colon value balances parens: `fill:chip_fill($snap, id)` is read whole (the space after
         // the comma is nested inside `(...)`), and a following attribute on the same line still parses.
         let doc = parse(
-            "[view]\nbox fill:chip_fill($snap, id) radius:6\n    text \"x\" color:text_color($snap, id) size:13\n",
+            "[view]\nbox fill:chip_fill($snap, id) radius:6\n    text \"x\" color:text_color($snap, id) font_size:13\n",
         )
         .unwrap();
         let ViewNode::Element(b) = &doc.view.nodes[0] else {
@@ -287,7 +287,7 @@ col @card
         };
         let color = t.attributes.iter().find(|a| a.key == "color").unwrap();
         assert_eq!(color.value, Value::Bare("text_color($snap, id)".into()));
-        let size = t.attributes.iter().find(|a| a.key == "size").unwrap();
+        let size = t.attributes.iter().find(|a| a.key == "font_size").unwrap();
         assert_eq!(size.value, Value::Bare("13".into()));
     }
 

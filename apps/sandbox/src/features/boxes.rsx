@@ -15,23 +15,23 @@ col gap:20
         card
             row gap:14 wrap
                 box @center fill:primary radius:10 width:150 height:70
-                    text "fill" size:13 color:on_primary align:center
+                    text "fill" font_size:13 color:on_primary text_align:center
                 box @center stroke:primary stroke_width:2 radius:10 width:150 height:70
-                    text "stroke" size:13 color:primary align:center
+                    text "stroke" font_size:13 color:primary text_align:center
                 box @center fill:surface_alt stroke:primary stroke_width:2 radius:10 width:150 height:70
-                    text "fill + stroke" size:13 color:ink align:center
+                    text "fill + stroke" font_size:13 color:ink text_align:center
         code_line code:"box fill:primary radius:10      box stroke:primary stroke_width:2"
     example title:"Corner radius — from sharp to a full pill"
         card
             row gap:14 wrap align:center
                 box @center fill:purple radius:0 width:110 height:64
-                    text "0" size:13 color:on_primary align:center
+                    text "0" font_size:13 color:on_primary text_align:center
                 box @center fill:purple radius:8 width:110 height:64
-                    text "8" size:13 color:on_primary align:center
+                    text "8" font_size:13 color:on_primary text_align:center
                 box @center fill:purple radius:20 width:110 height:64
-                    text "20" size:13 color:on_primary align:center
+                    text "20" font_size:13 color:on_primary text_align:center
                 box @center fill:purple radius:40 width:130 height:56
-                    text "pill" size:13 color:on_primary align:center
+                    text "pill" font_size:13 color:on_primary text_align:center
         code_line code:"box radius:0   ·   radius:8   ·   radius:20   ·   radius:40"
     example title:"Stroke width — a plain box makes a hairline or a heavy border"
         card
@@ -44,32 +44,32 @@ col gap:20
         card
             row gap:14 wrap align:center
                 box @center fill:surface_alt stroke:success stroke_width:"0 0 2 0" width:150 height:70
-                    text "bottom" size:13 color:ink align:center
+                    text "bottom" font_size:13 color:ink text_align:center
                 box @center fill:surface_alt stroke:success stroke_end:2 width:150 height:70
-                    text "end" size:13 color:ink align:center
+                    text "end" font_size:13 color:ink text_align:center
                 box @center fill:surface_alt stroke:success stroke_width:"3 0 1 0" width:150 height:70
-                    text "3 top · 1 bottom" size:13 color:ink align:center
+                    text "3 top · 1 bottom" font_size:13 color:ink text_align:center
         code_line code:"box stroke:success stroke_width:'0 0 2 0'   ·   stroke_end:2   (start/end follow RTL)"
     example title:"Corners one at a time — a panel that meets an edge"
         card
             row gap:14 wrap align:center
                 box @center fill:purple radius:"16 16 0 0" width:130 height:64
-                    text "top only" size:13 color:on_primary align:center
+                    text "top only" font_size:13 color:on_primary text_align:center
                 box @center fill:purple radius:16 radius_bottom:0 width:130 height:64
-                    text "radius_bottom:0" size:13 color:on_primary align:center
+                    text "radius_bottom:0" font_size:13 color:on_primary text_align:center
                 box @center fill:purple radius_start:20 width:130 height:64
-                    text "start" size:13 color:on_primary align:center
+                    text "start" font_size:13 color:on_primary text_align:center
         code_line code:"box radius:'16 16 0 0'   ·   radius:16 radius_bottom:0   ·   radius_start:20"
     example title:"Content alignment inside a box"
         card
             box @center fill:surface_alt radius:10 width:100% height:96
-                text "align:center justify:center" size:13 color:ink align:center
+                text "align:center justify:center" font_size:13 color:ink text_align:center
         code_line code:"box align:center justify:center   (a box is a flex column)"
     example title:"Class composition — a layout class and a paint recipe on one element"
         card
             row gap:14 wrap
                 box @center @tile width:150 height:70
-                    text "@center @tile" size:13 color:ink align:center
+                    text "@center @tile" font_size:13 color:ink text_align:center
         code_line code:"box @center @tile   ([style] classes compose: last wins, inline still overrides)"
     example title:"Attributes"
         col gap:6

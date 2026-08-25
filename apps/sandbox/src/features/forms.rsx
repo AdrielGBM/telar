@@ -10,19 +10,19 @@ col gap:20
     example title:"checkbox — a bound bool; tap the box or its label to toggle"
         card gap:10
             checkbox checked:$agree label:"I agree to the terms"
-            text "agree · {$agree}" size:14 color:muted
+            text "agree · {$agree}" font_size:14 color:muted
         code_line code:"checkbox checked:$agree label:'I agree to the terms'"
     example title:"toggle — a switch over the same kind of bool signal"
         card gap:10
             toggle checked:$notify label:"Email notifications"
-            text "notify · {$notify}" size:14 color:muted
+            text "notify · {$notify}" font_size:14 color:muted
         code_line code:"toggle checked:$notify label:'Email notifications'"
     example title:"radio — several buttons share one signal; each carries a distinct value"
         card gap:10
             radio selected:$choice value:0u32 label:"Small"
             radio selected:$choice value:1u32 label:"Medium"
             radio selected:$choice value:2u32 label:"Large"
-            text "choice · {$choice}" size:14 color:muted
+            text "choice · {$choice}" font_size:14 color:muted
         code_line code:"radio selected:$choice value:0u32 label:'Small'      (a group shares one signal)"
     example title:"Attributes"
         col gap:6

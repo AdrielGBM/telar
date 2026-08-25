@@ -26,7 +26,7 @@ impl ViewGen<'_> {
         let size = el
             .attributes
             .iter()
-            .find(|a| a.key == "size")
+            .find(|a| a.key == "font_size")
             .map(|a| self.scope().number_or(a.value.text(), "14.0"))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = el.attributes.iter().find(|a| a.key == "color");
@@ -50,7 +50,13 @@ impl ViewGen<'_> {
         for a in &el.attributes {
             if matches!(
                 a.key.as_str(),
-                "value" | "size" | "font_family" | "color" | "on_submit" | "placeholder" | "secret"
+                "value"
+                    | "font_size"
+                    | "font_family"
+                    | "color"
+                    | "on_submit"
+                    | "placeholder"
+                    | "secret"
             ) {
                 continue;
             }

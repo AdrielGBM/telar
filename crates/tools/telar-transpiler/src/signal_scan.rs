@@ -21,7 +21,7 @@ pub enum SignalKind {
 /// Every identifier the logic zone binds with a top-level `let`, so a bare name in the view resolves to the
 /// binding the author wrote three lines above instead of an ambient theme token that happens to share its
 /// spelling. Without this the shadowing runs the wrong way: `let size = props.size` is unreachable from
-/// `size:size`, and a binding named after a real token (`radius`, `spacing`, `muted`) silently reads the theme.
+/// `font_size:size`, and a binding named after a real token (`radius`, `spacing`, `muted`) silently reads the theme.
 ///
 /// Only bindings at the zone's own indentation count — anything deeper belongs to a nested `fn` or block and is
 /// not in scope where the view is emitted. Destructuring patterns contribute every name they bind.

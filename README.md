@@ -23,10 +23,10 @@ pub struct Props {
 }
 
 [view]
-box fill:surface stroke:border radius:16 width:300 pad:24 gap:10 direction:col
-    text "{props.icon}" size:32
-    text "{props.title}" size:18 color:dark
-    text "{props.body}" size:14 color:muted
+box fill:surface stroke:border radius:16 width:300 pad:24 gap:10 axis:col
+    text "{props.icon}" font_size:32
+    text "{props.title}" font_size:18 color:dark
+    text "{props.body}" font_size:14 color:muted
 
 [preview "Fast"]
 feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirty tracking."
