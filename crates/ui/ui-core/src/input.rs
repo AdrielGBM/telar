@@ -285,7 +285,7 @@ impl Component for Input {
         let r = self.leaf.rect.get();
         let text = self.value.get();
         let style = (self.style)();
-        let paint = style.paint;
+        let paint = style.color;
         let full = Rect {
             x: 0.0,
             y: 0.0,
@@ -295,12 +295,12 @@ impl Component for Input {
         // Empty value → draw the muted placeholder in the text's place (the field itself stays live: the
         // caret and hit-test still work, so it's tappable/typable from empty).
         let text_node = if text.is_empty() && !self.placeholder.is_empty() {
-            let muted = match style.paint {
+            let muted = match style.color {
                 Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * 0.5)),
                 _ => Paint::Solid(Color::rgba(0.5, 0.5, 0.55, 0.5)),
             };
             let mut ph_style = style.clone();
-            ph_style.paint = muted;
+            ph_style.color = muted;
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
             RenderNode::text(self.shown(&text), full, style.clone())
@@ -323,7 +323,7 @@ impl Component for Input {
                     .0
                 };
                 let (start, end) = (measure(from), measure(to));
-                let fill = match style.paint {
+                let fill = match style.color {
                     Paint::Solid(c) => c.with_alpha(0.25),
                     _ => Color::rgba(0.4, 0.6, 0.9, 0.3),
                 };

@@ -912,9 +912,8 @@ col @card
     }
 
     #[test]
-    fn svg_generates_src_tint_and_layout() {
-        let src =
-            "[view]\ncol\n    svg src:props.icon tint:Color::hex(\"#ff5722\") width:24 height:24\n";
+    fn svg_generates_src_color_and_layout() {
+        let src = "[view]\ncol\n    svg src:props.icon color:Color::hex(\"#ff5722\") width:24 height:24\n";
         let out = transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(code.contains("Svg::new("), "missing Svg::new:\n{code}");
@@ -928,7 +927,7 @@ col @card
         );
         assert!(
             code.contains("move || Some(Color::hex(\"#ff5722\")),"),
-            "missing tint closure:\n{code}"
+            "missing colour closure:\n{code}"
         );
         assert!(
             code.contains(".width(24.0)") && code.contains(".height(24.0)"),
@@ -937,19 +936,19 @@ col @card
     }
 
     #[test]
-    fn svg_tint_signal_reads_reactively_and_clones_into_the_closure() {
-        // `tint:$accent` must share `fill`/`stroke`'s `$ident` resolution (via `color_expr`) and clone the signal into the tint closure so the outer binding stays usable elsewhere, matching `box fill:$sig`.
-        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\ncol\n    svg src:props.icon tint:$accent width:24 height:24\n";
+    fn svg_color_signal_reads_reactively_and_clones_into_the_closure() {
+        // `color:$accent` must share `fill`/`stroke`'s `$ident` resolution (via `color_expr`) and clone the signal into the colour closure so the outer binding stays usable elsewhere, matching `box fill:$sig`.
+        let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\ncol\n    svg src:props.icon color:$accent width:24 height:24\n";
         let code = transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
             !code.contains("compile_error!"),
-            "a signal tint must not error:\n{code}"
+            "a signal colour must not error:\n{code}"
         );
         assert!(
             code.contains("{ let accent = accent.clone(); move || Some(accent.get()) }"),
-            "tint should reactively read the cloned signal:\n{code}"
+            "the colour should reactively read the cloned signal:\n{code}"
         );
     }
 
@@ -1244,12 +1243,12 @@ col @card
     }
 
     #[test]
-    fn svg_without_tint_generates_none() {
+    fn svg_without_color_generates_none() {
         let src = "[view]\ncol\n    svg src:props.icon\n";
         let out = transpile_source(src, "demo", None, None, None).unwrap();
         assert!(
             out.rust_code.contains("|| None,"),
-            "missing default tint closure:\n{}",
+            "missing default colour closure:\n{}",
             out.rust_code
         );
     }
@@ -1388,11 +1387,11 @@ col @card
     }
 
     #[test]
-    fn svg_tint_token_resolves_through_theme() {
-        // `tint:accent` must resolve the bare token through `use_theme` exactly like `color:`/`fill:`, so
+    fn svg_color_token_resolves_through_theme() {
+        // `color:accent` must resolve the bare token through `use_theme` exactly like `color:`/`fill:`, so
         // an icon tints from a theme token without a verbose `use_theme::<T>()` expression — and re-reads
         // it each frame so a runtime theme switch recolors the glyph.
-        let src = "[view]\ncol\n    svg src:props.icon tint:accent width:18 height:18\n";
+        let src = "[view]\ncol\n    svg src:props.icon color:accent width:18 height:18\n";
         let code = transpile_source(src, "demo", Some("NordTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1406,7 +1405,7 @@ col @card
     fn svg_src_signal_is_reactive_and_clones_the_handle() {
         // `src:$glyph` must re-read the signal on every `view()` so an adaptive icon swaps its glyph when
         // the bound state changes — not freeze the handle captured at construction (`let __src = …`).
-        let src = "[logic]\nlet glyph = signal(props.icon.clone());\n[view]\ncol\n    svg src:$glyph tint:accent width:18 height:18\n";
+        let src = "[logic]\nlet glyph = signal(props.icon.clone());\n[view]\ncol\n    svg src:$glyph color:accent width:18 height:18\n";
         let code = transpile_source(src, "demo", Some("NordTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1790,7 +1789,7 @@ col @card
             "missing hoisted color Animated:\n{code}"
         );
         assert!(
-            code.contains(".with_paint({ __transition_0.retarget(use_theme::<SandboxTheme>().primary()); __transition_0.get() })"),
+            code.contains(".with_color({ __transition_0.retarget(use_theme::<SandboxTheme>().primary()); __transition_0.get() })"),
             "text color should be wrapped in the transition block:\n{code}"
         );
     }
@@ -1954,7 +1953,7 @@ col @card
             .rust_code;
         assert!(
             code.contains(
-                "{ let accent = accent.clone(); move |__inherited: TextStyle| __inherited.with_paint(accent.get()) }"
+                "{ let accent = accent.clone(); move |__inherited: TextStyle| __inherited.with_color(accent.get()) }"
             ),
             "text color should reactively read the cloned signal:\n{code}"
         );
@@ -1982,7 +1981,7 @@ col @card
     fn quoted_svg_src_bakes_static_asset_at_build_time() {
         // A quoted `src:"path"` resolves against `base_dir` and bakes the SVG into a shared `static LazyLock<Arc<SvgData>>`; `tint` still flows through its own dynamic closure.
         let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-        let src = "[view]\ncol\n    svg src:\"icon.svg\" tint:Color::WHITE width:24 height:24\n";
+        let src = "[view]\ncol\n    svg src:\"icon.svg\" color:Color::WHITE width:24 height:24\n";
         let code = transpile_source(src, "demo", None, Some(base.as_path()), None)
             .unwrap()
             .rust_code;

@@ -183,7 +183,9 @@ impl<T: AsRef<str>> From<T> for FontFamily {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextStyle {
     pub font_size: f32,
-    pub paint: Paint,
+    /// The ink the glyphs are painted with. A `Paint` rather than a `Color`, the way modern CSS `color:`
+    /// also accepts more than a plain colour.
+    pub color: Paint,
     /// A shadow behind the glyphs. See [`TextShadow`].
     pub text_shadow: TextShadow,
     /// The face to shape in. See [`FontFamily`].
@@ -206,10 +208,10 @@ pub struct TextStyle {
 }
 
 impl TextStyle {
-    pub fn new(font_size: f32, paint: impl Into<Paint>) -> Self {
+    pub fn new(font_size: f32, color: impl Into<Paint>) -> Self {
         Self {
             font_size,
-            paint: paint.into(),
+            color: color.into(),
             text_shadow: TextShadow::None,
             font_family: FontFamily::SansSerif,
             font_weight: 400,
@@ -234,8 +236,8 @@ impl TextStyle {
         self
     }
 
-    pub fn with_paint(mut self, paint: impl Into<Paint>) -> Self {
-        self.paint = paint.into();
+    pub fn with_color(mut self, color: impl Into<Paint>) -> Self {
+        self.color = color.into();
         self
     }
 
@@ -307,7 +309,7 @@ mod tests {
     #[test]
     fn text_style_new_stores_color() {
         let style = TextStyle::new(12.0, Color::WHITE);
-        assert_eq!(style.paint, Paint::Solid(Color::WHITE));
+        assert_eq!(style.color, Paint::Solid(Color::WHITE));
     }
 
     #[test]

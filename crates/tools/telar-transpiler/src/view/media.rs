@@ -105,7 +105,7 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Mirrors `emit_image`: the `src` resolves either to a build-time-baked static asset (quoted `src:"path"`) or a verbatim `Arc<SvgData>` expression (dynamic). `tint` is optional and, unlike `src`, is embedded directly in its closure since a `Color` is cheap to recompute per call.
+    /// Mirrors `emit_image`: the `src` resolves either to a build-time-baked static asset (quoted `src:"path"`) or a verbatim `Arc<SvgData>` expression (dynamic). `color` is optional and, unlike `src`, is embedded directly in its closure since a `Color` is cheap to recompute per call.
     pub(super) fn emit_svg(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_variable_name("svg");
         let pad = self.indent_str();
@@ -115,7 +115,7 @@ impl ViewGen<'_> {
             MediaKind::Svg,
         );
 
-        let tint_fn = self.svg_tint_closure(el.attributes.iter().find(|a| a.key == "tint"));
+        let color_fn = self.svg_color_closure(el.attributes.iter().find(|a| a.key == "color"));
         let stroke = el.attributes.iter().find(|a| a.key == "stroke");
         let stroke_call = match stroke {
             Some(_) => format!(".with_stroke({})", self.svg_stroke_closure(stroke)),
@@ -132,7 +132,7 @@ impl ViewGen<'_> {
              {pad}    Svg::new(\n\
              {pad}        {layout_style},\n\
              {pad}        {data_fn},\n\
-             {pad}        {tint_fn},\n\
+             {pad}        {color_fn},\n\
              {pad}        {fit},\n\
              {pad}    )?{stroke_call}\n\
              {pad}}};"
@@ -141,16 +141,16 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Resolves `tint:` into a `move || Option<Color>` closure, sharing `fill`/`stroke`/`color`'s
-    /// [`color_expr`](ViewGen::color_expr) resolution: a bare theme token (`tint:accent`), a `$signal`
-    /// read, an inline `#hex`, a CSS keyword, and an arbitrary color expression (`tint:theme().primary`,
-    /// recognized by its `(`) all resolve identically — so an icon tints from a theme token the same way
+    /// Resolves `color:` into a `move || Option<Color>` closure, sharing `fill`/`stroke`/`color`'s
+    /// [`color_expr`](ViewGen::color_expr) resolution: a bare theme token (`color:accent`), a `$signal`
+    /// read, an inline `#hex`, a CSS keyword, and an arbitrary color expression (`color:theme().primary`,
+    /// recognized by its `(`) all resolve identically — so an icon takes its ink from a theme token the same way
     /// text takes `color:`. A token re-reads `use_theme` on every `view()`, so a runtime theme switch
     /// recolors the glyph; any `$signal` referenced is cloned into the closure via `wrap_signal_clones`
-    /// so the outer handle stays usable, mirroring `box fill:$sig`. Missing or empty `tint` keeps the
+    /// so the outer handle stays usable, mirroring `box fill:$sig`. Missing or empty `color` keeps the
     /// SVG's own colors (`None`).
-    fn svg_tint_closure(&self, tint_attr: Option<&Attr>) -> String {
-        let Some(a) = tint_attr else {
+    fn svg_color_closure(&self, color_attr: Option<&Attr>) -> String {
+        let Some(a) = color_attr else {
             return "|| None".to_string();
         };
         let v = a.value.text().trim();
@@ -180,7 +180,7 @@ impl ViewGen<'_> {
     /// Resolves a media widget's `src` attribute into `(setup, data_fn)` fragments that slot into its construction block.
     ///
     /// - Quoted, non-empty `src:"path"` is a static asset baked at build time: `setup` declares a `static LazyLock<Arc<Data>>` built once, `data_fn` clones the shared `Arc` per reactive call.
-    /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). Signals are cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `svg tint:$sig` / `box fill:$sig`.
+    /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). Signals are cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `svg color:$sig` / `box fill:$sig`.
     /// - Non-quoted, `$`-free `src:expr` is a constant `Arc<Data>` handle: `setup` hoists it into `__src` once and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
     /// - Missing, empty, or written in a form that cannot name an asset (a bare flag, a `t"…"` key) falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
     fn media_src_binding(&mut self, src_attr: Option<&Attr>, kind: MediaKind) -> (String, String) {

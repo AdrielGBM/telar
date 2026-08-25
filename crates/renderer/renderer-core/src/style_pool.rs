@@ -39,7 +39,7 @@ fn hash_border_widths(w: &BorderWidths, h: &mut FxHasher) {
 pub fn hash_text_style(s: &TextStyle) -> u64 {
     let mut h = FxHasher::default();
     h.write_u32(s.font_size.to_bits());
-    hash_paint(&s.paint, &mut h);
+    hash_paint(&s.color, &mut h);
     hash_opt_shadow(s.text_shadow.cast().as_ref(), &mut h);
     h.finish()
 }
@@ -69,7 +69,7 @@ pub fn hash_declared(d: &Declared) -> u64 {
         }
     }
     hash_opt_f32(d.font_size, &mut h);
-    hash_opt_paint(d.paint.as_ref(), &mut h);
+    hash_opt_paint(d.color.as_ref(), &mut h);
     match d.font_weight {
         None => h.write_u8(0),
         Some(w) => {

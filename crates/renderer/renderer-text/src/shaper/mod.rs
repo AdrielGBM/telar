@@ -206,7 +206,7 @@ fn shape_buffer(
                             effective_line_height(run_style),
                         ));
                     }
-                    if let Paint::Solid(color) = run_style.paint {
+                    if let Paint::Solid(color) = run_style.color {
                         run_attrs = run_attrs.color(to_cosmic_color(color));
                     }
                     (*slice, run_attrs)

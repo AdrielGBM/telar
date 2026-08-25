@@ -27,7 +27,7 @@ impl TextShaper {
         out.clear();
 
         let font_size = style.font_size;
-        let color = style.paint.solid_color();
+        let color = style.color.solid_color();
         let width = rect.width.ceil() as u32;
         let height = rect.height.ceil() as u32;
 

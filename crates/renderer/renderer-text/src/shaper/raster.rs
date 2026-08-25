@@ -74,7 +74,7 @@ impl TextShaper {
     ) -> (Arc<[u8]>, u32, u32) {
         let spans = spans.filter(|s| !s.is_empty());
         let font_size = style.font_size;
-        let color = style.paint.solid_color();
+        let color = style.color.solid_color();
         let width = rect.width.ceil() as u32;
         let height = rect.height.ceil() as u32;
 

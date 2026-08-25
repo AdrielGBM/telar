@@ -103,7 +103,6 @@ pub fn color_attr_keys() -> &'static [&'static str] {
         "to",
         "mid",
         "shadow_color",
-        "tint",
     ]
 }
 
@@ -489,7 +488,7 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "on_submit",
             "secret",
         ]),
-        "svg" => with(&["src", "tint", "stroke", "fit"]),
+        "svg" => with(&["src", "color", "stroke", "fit"]),
         // `lazy` holds its subtree back until `when:` is true.
         "lazy" => with(&["when"]),
         // `path` draws SVG path-data (`d:`) with a solid fill/stroke; sized by width/height like a leaf.
@@ -522,7 +521,7 @@ mod tests {
         assert!(tag_attr_keys("img").contains(&"src"));
         // `svg` exposes `src` (required) and `tint` (optional).
         let svg = tag_attr_keys("svg");
-        assert!(svg.contains(&"src") && svg.contains(&"tint") && svg.contains(&"gap"));
+        assert!(svg.contains(&"src") && svg.contains(&"color") && svg.contains(&"gap"));
         assert!(tag_attr_keys("feature_card").is_empty());
         // `transition(…)` is offered on the tags whose codegen wires it.
         assert!(tag_attr_keys("box").contains(&"transition"));
@@ -556,7 +555,6 @@ mod tests {
             "to",
             "mid",
             "shadow_color",
-            "tint",
         ] {
             assert!(color_attr_keys().contains(&key), "missing {key}");
         }

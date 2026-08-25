@@ -56,7 +56,7 @@ fn an_undeclared_text_style_resolves_to_these_exact_values() {
     });
 
     assert_eq!(style.font_size, 14.0);
-    assert_eq!(style.paint, telar::Paint::Solid(Color::BLACK));
+    assert_eq!(style.color, telar::Paint::Solid(Color::BLACK));
     assert_eq!(style.font_family, FontFamily::SansSerif);
     assert_eq!(style.font_weight, 400);
     assert_eq!(style.font_style, telar::FontStyle::Normal);

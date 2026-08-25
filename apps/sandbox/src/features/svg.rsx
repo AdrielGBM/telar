@@ -21,11 +21,11 @@ col gap:20
     example title:"Tint — recolor a monochrome glyph (reads the active theme)"
         card
             row gap:20 align:center
-                svg src:icon tint:theme().primary width:48 height:48
-                svg src:icon tint:theme().success width:48 height:48
-                svg src:icon tint:theme().danger width:48 height:48
-                svg src:icon tint:theme().purple width:48 height:48
-        code_line code:"svg src:icon tint:theme().primary"
+                svg src:icon color:theme().primary width:48 height:48
+                svg src:icon color:theme().success width:48 height:48
+                svg src:icon color:theme().danger width:48 height:48
+                svg src:icon color:theme().purple width:48 height:48
+        code_line code:"svg src:icon color:theme().primary"
     example title:"Full-color vectors and a raster fallback for filters"
         card
             row gap:24 align:center
@@ -46,5 +46,5 @@ col gap:20
     example title:"Attributes"
         col gap:6
             prop_row name:"src" values:"Arc<SvgData> · 'path'" about:"Runtime vector, or a baked file path."
-            prop_row name:"tint" values:"Color expr" about:"Recolor a glyph, e.g. theme().primary."
+            prop_row name:"color" values:"Color expr" about:"Recolor a glyph, e.g. theme().primary."
             prop_row name:"fit" values:"contain · cover · fill" about:"Aspect handling in the box."

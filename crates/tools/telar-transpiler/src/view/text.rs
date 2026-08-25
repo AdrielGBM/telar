@@ -211,7 +211,7 @@ impl ViewGen<'_> {
             if let Some(curve) = transitions.get("color") {
                 color = self.wrap_transition(curve, &color, hoists);
             }
-            let _ = write!(modifiers, ".with_paint({color})");
+            let _ = write!(modifiers, ".with_color({color})");
         }
         // A bare flag (`italic`) is the assertion itself; `italic:true` says the same thing the long way, and anything else — `italic:false` most of all — leaves the default alone.
         let asserted = |key: &str| {

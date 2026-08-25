@@ -110,7 +110,7 @@ fn unpainted_spans(
             .iter()
             .cloned()
             .map(|mut s| {
-                s.over.paint = None;
+                s.over.color = None;
                 s
             })
             .collect(),
@@ -1039,7 +1039,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         let texture_height = shadow_layout.texture_height;
 
                         let shadow_style = renderer_core::TextStyle {
-                            paint: renderer_core::Paint::Solid(shadow.color),
+                            color: renderer_core::Paint::Solid(shadow.color),
                             text_shadow: renderer_core::TextShadow::None,
                             ..style.clone()
                         };

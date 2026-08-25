@@ -121,7 +121,7 @@ impl Scale for TextStyle {
     fn scale(self, sf: f32) -> Self {
         TextStyle {
             font_size: self.font_size * sf,
-            paint: self.paint.scale(sf),
+            color: self.color.scale(sf),
             text_shadow: match self.text_shadow {
                 TextShadow::None => TextShadow::None,
                 TextShadow::Cast(shadow) => TextShadow::Cast(shadow.scale(sf)),
@@ -137,7 +137,7 @@ impl Scale for Declared {
     fn scale(self, sf: f32) -> Self {
         Declared {
             font_size: self.font_size.map(|v| v * sf),
-            paint: self.paint.map(|p| p.scale(sf)),
+            color: self.color.map(|c| c.scale(sf)),
             letter_spacing: self.letter_spacing.map(|v| v * sf),
             ..self
         }

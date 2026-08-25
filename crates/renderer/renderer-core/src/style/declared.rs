@@ -19,7 +19,7 @@ use super::{
 pub struct Declared {
     pub font_family: Option<FontFamily>,
     pub font_size: Option<f32>,
-    pub paint: Option<Paint>,
+    pub color: Option<Paint>,
     pub font_weight: Option<u16>,
     pub font_style: Option<FontStyle>,
     pub line_height: Option<LineHeight>,
@@ -40,8 +40,8 @@ impl Declared {
         if let Some(size) = self.font_size {
             out.font_size = size;
         }
-        if let Some(paint) = self.paint {
-            out.paint = paint;
+        if let Some(color) = self.color {
+            out.color = color;
         }
         if let Some(font_weight) = self.font_weight {
             out.font_weight = font_weight;
@@ -84,8 +84,8 @@ impl Declared {
         self
     }
 
-    pub fn with_paint(mut self, paint: impl Into<Paint>) -> Self {
-        self.paint = Some(paint.into());
+    pub fn with_color(mut self, color: impl Into<Paint>) -> Self {
+        self.color = Some(color.into());
         self
     }
 

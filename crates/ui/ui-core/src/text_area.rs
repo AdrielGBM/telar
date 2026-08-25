@@ -307,12 +307,12 @@ impl Component for TextArea {
             height: r.height.max(line_h),
         };
         let text_node = if text.is_empty() && !self.placeholder.is_empty() {
-            let muted = match style.paint {
+            let muted = match style.color {
                 Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * 0.5)),
                 _ => Paint::Solid(Color::rgba(0.5, 0.5, 0.55, 0.5)),
             };
             let mut ph_style = style.clone();
-            ph_style.paint = muted;
+            ph_style.color = muted;
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
             RenderNode::text(Arc::<str>::from(text.as_str()), full, style.clone())
@@ -341,7 +341,7 @@ impl Component for TextArea {
                         // rather than a gap the eye reads as the selection having ended.
                         caret_x(&text, end, &style).max(x0 + line_h * 0.35)
                     };
-                    let fill = match style.paint {
+                    let fill = match style.color {
                         Paint::Solid(c) => c.with_alpha(0.25),
                         _ => Color::rgba(0.4, 0.6, 0.9, 0.3),
                     };
@@ -365,7 +365,7 @@ impl Component for TextArea {
                 height: line_h,
             };
             let caret_node =
-                RenderNode::rect(caret_rect, RectStyle::default().with_fill(style.paint));
+                RenderNode::rect(caret_rect, RectStyle::default().with_fill(style.color));
             let layers = match highlight {
                 Some(highlight) => vec![highlight, text_node, caret_node],
                 None => vec![text_node, caret_node],
