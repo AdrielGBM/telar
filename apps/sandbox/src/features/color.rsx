@@ -15,46 +15,46 @@ col gap:20
         card
             grid cols:"fit 120" gap:12
                 col @swatch
-                    box @chip fill:primary
-                    text "primary" font_size:12 color:ink
+                    box @chip fill:theme.primary
+                    text "primary" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:success
-                    text "success" font_size:12 color:ink
+                    box @chip fill:theme.success
+                    text "success" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:danger
-                    text "danger" font_size:12 color:ink
+                    box @chip fill:theme.danger
+                    text "danger" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:warning
-                    text "warning" font_size:12 color:ink
+                    box @chip fill:theme.warning
+                    text "warning" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:purple
-                    text "purple" font_size:12 color:ink
+                    box @chip fill:theme.purple
+                    text "purple" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:cyan
-                    text "cyan" font_size:12 color:ink
-        code_line code:"box fill:primary   ·   fill:success   ·   fill:danger …"
+                    box @chip fill:theme.cyan
+                    text "cyan" font_size:12 color:theme.ink
+        code_line code:"box fill:theme.primary   ·   fill:theme.success   ·   fill:theme.danger …"
     example title:"Neutrals & surfaces (outlined so light tones stay visible)"
         card
             grid cols:"fit 120" gap:12
                 col @swatch
-                    box @chip fill:ink stroke:border
-                    text "ink" font_size:12 color:ink
+                    box @chip fill:theme.ink stroke:theme.border
+                    text "ink" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:muted stroke:border
-                    text "muted" font_size:12 color:ink
+                    box @chip fill:theme.muted stroke:theme.border
+                    text "muted" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:surface stroke:border
-                    text "surface" font_size:12 color:ink
+                    box @chip fill:theme.surface stroke:theme.border
+                    text "surface" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:surface_alt stroke:border
-                    text "surface_alt" font_size:12 color:ink
+                    box @chip fill:theme.surface_alt stroke:theme.border
+                    text "surface_alt" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:border stroke:border
-                    text "border" font_size:12 color:ink
+                    box @chip fill:theme.border stroke:theme.border
+                    text "border" font_size:12 color:theme.ink
                 col @swatch
-                    box @chip fill:background stroke:border
-                    text "background" font_size:12 color:ink
-        code_line code:"box fill:surface stroke:border   (card recipe)"
+                    box @chip fill:theme.background stroke:theme.border
+                    text "background" font_size:12 color:theme.ink
+        code_line code:"box fill:theme.surface stroke:theme.border   (card recipe)"
     example title:"One-off colors — inline hex when a token does not fit"
         card
             row gap:12
@@ -64,6 +64,6 @@ col gap:20
         code_line code:"box fill:#4ecdc4      (also #rgb and #rrggbbaa)"
     example title:"Reactive theming"
         card gap:8
-            text "Because color:primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." font_size:13 color:muted
-            text "Try the Modern / Pastel / Midnight buttons in the sidebar." font_size:13 color:primary
+            text "Because color:theme.primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." font_size:13 color:theme.muted
+            text "Try the Modern / Pastel / Midnight buttons in the sidebar." font_size:13 color:theme.primary
         code_line code:"on_press:|| set_mode(\"midnight\")"

@@ -9,5 +9,5 @@ col gap:20
         card gap:10
             text_field value:$name label:"Name" placeholder:"Type your name"
             text_field value:$query placeholder:"Search…"
-            text "Hello, {$name}" font_size:14 color:muted
+            text "Hello, {$name}" font_size:14 color:theme.muted
         code_line code:"text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)"

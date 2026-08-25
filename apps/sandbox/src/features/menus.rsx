@@ -15,14 +15,14 @@ col gap:20
                 item label:"Small"
                 item label:"Medium"
                 item label:"Large"
-            text "Size · {$picked}" font_size:14 color:muted
+            text "Size · {$picked}" font_size:14 color:theme.muted
         code_line code:"select selected:$picked / item label:'Small' / item label:'Medium'"
     example title:"menu — a click-triggered list of one-shot actions"
         card gap:10
             menu label:"Actions" on_select(|i| $action.set(i))
                 item label:"Rename"
                 item label:"Duplicate"
-            text "Last action index · {$action}" font_size:14 color:muted
+            text "Last action index · {$action}" font_size:14 color:theme.muted
         code_line code:"menu label:'Actions'   >   item label:'Rename'"
     example title:"A menu is a compound component — its rows are markup, not a list of strings"
         card gap:10

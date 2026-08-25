@@ -129,7 +129,7 @@ mod tests {
         let logic = "let muted = telar::Color::WHITE;\nlet size = 16.0;\n";
         let out = transpile_source(
             &format!(
-                "[logic]\n{logic}\n[view]\nbox fill:muted\n    spinner color:accent size:size\n"
+                "[logic]\n{logic}\n[view]\nbox fill:muted\n    spinner color:theme.accent size:size\n"
             ),
             "demo",
             Some("crate::Theme"),
@@ -326,7 +326,7 @@ dark: #141424
 
 [view]
 col @card
-    text "Count: {$count}" size:14 color:dark
+    text "Count: {$count}" font_size:14 color:dark
     button label:"Increment" fill:primary on_press(|| $count.update(|n| *n += 1))
 "#;
 
@@ -344,8 +344,8 @@ let count = signal(0i32);
 
 [view]
 col @card
-    text "Count: {$count}" size:14 color:dark
-    button label:"Increment" fill:primary on_press(|| $count.update(|n| *n += 1))
+    text "Count: {$count}" font_size:14 color:theme.dark
+    button label:"Increment" fill:theme.primary on_press(|| $count.update(|n| *n += 1))
 "#;
 
     #[test]
@@ -666,18 +666,21 @@ col @card
         assert!(!code[fn_start..].contains("COLOR_PRIMARY"));
     }
 
+    /// A `[style]` colour is what a bare name in that file means, theme or no theme. It used to be the other
+    /// way round — with a theme active the constant was skipped as dead and every use of the name resolved
+    /// to the theme's own token instead, so a file could declare `primary: #3d78fa` and never once paint it.
     #[test]
-    fn style_declared_colors_resolve_via_theme_when_active() {
-        // With a theme configured, [style]-declared colors resolve reactively through use_theme like undeclared ones, and their now-dead COLOR_* consts are omitted.
+    fn a_style_declared_color_is_what_its_own_file_means_by_the_name() {
         let out = transpile_source(COUNTER, "counter", Some("SandboxTheme"), None, None).unwrap();
         let code = out.rust_code;
-        assert!(code.contains("use_theme::<SandboxTheme>().primary()"));
-        assert!(code.contains("use_theme::<SandboxTheme>().dark"));
-        // The now-unused color consts are not emitted.
-        assert!(!code.contains("const COLOR_PRIMARY"));
-        assert!(!code.contains("const COLOR_DARK"));
+        assert!(code.contains("const COLOR_PRIMARY"), "{code}");
+        assert!(code.contains("const COLOR_DARK"), "{code}");
         let fn_start = code.find("pub fn counter").unwrap();
-        assert!(!code[fn_start..].contains("COLOR_PRIMARY"));
+        assert!(code[fn_start..].contains("COLOR_PRIMARY"), "{code}");
+        assert!(
+            !code.contains("use_theme::<SandboxTheme>().primary()"),
+            "the file's own name wins over the theme's:\n{code}"
+        );
     }
 
     #[test]
@@ -1391,7 +1394,7 @@ col @card
         // `color:accent` must resolve the bare token through `use_theme` exactly like `color:`/`fill:`, so
         // an icon tints from a theme token without a verbose `use_theme::<T>()` expression — and re-reads
         // it each frame so a runtime theme switch recolors the glyph.
-        let src = "[view]\ncol\n    svg src:props.icon color:accent width:18 height:18\n";
+        let src = "[view]\ncol\n    svg src:props.icon color:theme.accent width:18 height:18\n";
         let code = transpile_source(src, "demo", Some("NordTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1405,7 +1408,7 @@ col @card
     fn svg_src_signal_is_reactive_and_clones_the_handle() {
         // `src:$glyph` must re-read the signal on every `view()` so an adaptive icon swaps its glyph when
         // the bound state changes — not freeze the handle captured at construction (`let __src = …`).
-        let src = "[logic]\nlet glyph = signal(props.icon.clone());\n[view]\ncol\n    svg src:$glyph color:accent width:18 height:18\n";
+        let src = "[logic]\nlet glyph = signal(props.icon.clone());\n[view]\ncol\n    svg src:$glyph color:theme.accent width:18 height:18\n";
         let code = transpile_source(src, "demo", Some("NordTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1453,7 +1456,7 @@ col @card
 
     #[test]
     fn transition_fill_with_theme_color_and_cubic_bezier() {
-        let src = "[view]\nbox fill:primary transition(fill 150ms cubic-bezier(0.4,0,0.2,1))\n    text \"x\"\n";
+        let src = "[view]\nbox fill:theme.primary transition(fill 150ms cubic-bezier(0.4,0,0.2,1))\n    text \"x\"\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1779,7 +1782,7 @@ col @card
 
     #[test]
     fn transition_color_on_text_wraps_text_style() {
-        let src = "[view]\ntext \"hi\" color:primary transition(color 120ms)\n";
+        let src = "[view]\ntext \"hi\" color:theme.primary transition(color 120ms)\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1961,7 +1964,8 @@ col @card
     #[test]
     fn hex_theme_and_keyword_colors_are_unaffected_by_signal_support() {
         // Regression guard: adding the `$ident` branch to `color_expr` must not touch the pre-existing hex/theme/keyword paths.
-        let src = "[view]\nbox fill:#3d78fa stroke:transparent\n    text \"x\" color:primary\n";
+        let src =
+            "[view]\nbox fill:#3d78fa stroke:transparent\n    text \"x\" color:theme.primary\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;

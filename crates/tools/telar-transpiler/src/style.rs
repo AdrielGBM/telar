@@ -93,10 +93,14 @@ pub fn theme_field_expr(value: &str, theme: Option<&str>) -> Option<String> {
     if !balanced(tail) {
         return None;
     }
-    Some(format!(
-        "use_theme::<{theme}>().{}{tail}",
-        to_snake_case(&head)
-    ))
+    let name = to_snake_case(&head);
+    // A name the token trait defines is read through the trait, not as a field, so a theme that answers it
+    // with an expression rather than a same-named field still answers it — and so the markup and the widget
+    // catalogue cannot mean two different colours by one word.
+    if tail.is_empty() && registry::THEME_COLOR_TOKENS.contains(&name.as_str()) {
+        return Some(format!("use_theme::<{theme}>().{name}()"));
+    }
+    Some(format!("use_theme::<{theme}>().{name}{tail}"))
 }
 
 /// Whether every bracket in `s` is closed, so a half-written call falls through to the arm that would have
@@ -116,17 +120,17 @@ fn balanced(s: &str) -> bool {
     depth == 0
 }
 
-/// Renders all constants and style functions for the document's style section. When a theme is active, `[style]` color constants are omitted: color references resolve through `use_theme` instead (see `color_expr`), so they react to theme switches. Number/raw constants are always emitted.
+/// Renders all constants and style functions for the document's style section.
+///
+/// Every constant is emitted, colours included. They used to be skipped whenever a theme was active, on the
+/// reasoning that a bare name reached the theme and the constant would be dead — which is exactly what made
+/// the `[style]` block silently dead instead: a file could declare `primary: #4361ee` and watch every
+/// `fill:primary` in it resolve to the theme's own primary.
 pub fn generate_style_section(section: &StyleSection, theme: Option<&str>) -> String {
-    let theme_active = theme.is_some();
     let mut out = String::new();
 
     let mut emitted_const = false;
     for c in &section.constants {
-        // With a theme active the color const would be dead code (every use goes through use_theme), so skip it.
-        if theme_active && matches!(c.value, StyleValue::Hex(_)) {
-            continue;
-        }
         out.push_str(&generate_constant(c));
         out.push('\n');
         emitted_const = true;
@@ -354,6 +358,37 @@ fn parse_track_token(s: &str) -> Option<String> {
     }
     let n: f32 = s.parse().ok()?;
     Some(format!("TemplateTrack::px({})", format_f32(n)))
+}
+
+/// Whether `value` names a colour this file can resolve, or the message naming what a colour may be.
+///
+/// A bare name is a `[style]` constant and nothing else. It used to be three namespaces under one spelling,
+/// resolved by precedence — a constant, then a token of the theme trait, then *any* remaining name as a field
+/// on the theme — so a typo compiled to a field access and failed in rustc against code the author never
+/// wrote. `theme.x` is the theme's own spelling and now its only one.
+pub fn color(value: &str, scope: Scope<'_>) -> Result<(), String> {
+    let v = value.trim();
+    if v.is_empty() {
+        return Err("`color` needs a value: a hex literal, `transparent`, a `theme.…` read, a `[style]` constant, or a `$signal`".to_string());
+    }
+    let resolvable = v.starts_with('#')
+        || v.starts_with('$')
+        || v.contains('(')
+        || v.starts_with("Color::")
+        || v == "transparent"
+        || theme_field_expr(v, scope.theme).is_some()
+        || scope.constants.iter().any(|c| c.name == v)
+        || scope.locals.iter().any(|l| l == v)
+        // A qualified name is the author's own Rust and only rustc can judge it. A *bare* one is not: that
+        // is the spelling a `[style]` constant has, and letting an unknown one through is what made a typo
+        // a rustc error against generated code.
+        || ((v.contains("::") || v.contains('.')) && crate::naming::is_path_expr(v));
+    if resolvable {
+        return Ok(());
+    }
+    Err(format!(
+        "`{v}` is not a color: write a hex literal, `transparent`, `theme.{v}`, a `[style]` constant, or a `$signal`"
+    ))
 }
 
 /// Resolves a numeric value to the Rust expression it stands for, or reports why it is not a number.

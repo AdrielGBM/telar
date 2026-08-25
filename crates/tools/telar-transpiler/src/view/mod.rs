@@ -683,6 +683,7 @@ impl<'a> ViewGen<'a> {
             ValueKind::Edges => value
                 .split_whitespace()
                 .find_map(|token| crate::style::format_number(token, self.scope()).err()),
+            ValueKind::Color => crate::style::color(value, self.scope()).err(),
         }
     }
 
@@ -1448,7 +1449,7 @@ mod tests {
     // wires an optional `on_submit`.
     #[test]
     fn input_binds_value_style_and_submit() {
-        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:primary width:200 on_submit(|| $name.set(String::new()))\n";
+        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:theme.primary width:200 on_submit(|| $name.set(String::new()))\n";
         let code = crate::transpile_source(src, "demo", Some("SandboxTheme"), None, None)
             .unwrap()
             .rust_code;
@@ -1883,15 +1884,29 @@ mod tests {
     // A bare color token (no `(`/`$`) must still resolve through the theme, not be swept into the expression
     // arm — guards the computed-expression detection from misfiring on ordinary tokens.
     #[test]
-    fn bare_color_token_still_resolves_via_theme() {
-        let src = "[view]\nbox fill:primary\n    text \"x\"\n";
+    fn a_theme_read_is_the_one_spelling_that_reaches_the_theme() {
+        let src = "[view]\nbox fill:theme.primary\n    text \"x\"\n";
         let code = crate::transpile_source(src, "demo", Some("MyTheme"), None, None)
             .unwrap()
             .rust_code;
         assert!(
             code.contains("use_theme::<MyTheme>().primary()"),
-            "a bare token resolves via the theme:\n{code}"
+            "a token name is read through the trait:\n{code}"
         );
+
+        // A bare name is a `[style]` constant, so an undeclared one is a mistake on its own line rather than
+        // a field access on the theme that fails in rustc.
+        let bare = crate::transpile_source(
+            "[view]\nbox fill:primary\n    text \"x\"\n",
+            "demo",
+            Some("MyTheme"),
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(bare.contains("`primary` is not a color"), "{bare}");
+        assert!(bare.contains("theme.primary"), "and says so:\n{bare}");
     }
 
     // Every name in `builtin_tags()` must have a real dispatch arm in `emit_element`; a tag missing one

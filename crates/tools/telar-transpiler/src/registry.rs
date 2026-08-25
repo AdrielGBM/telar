@@ -381,6 +381,9 @@ pub enum ValueKind {
     Dimension,
     /// One number per edge: a single value, or the CSS 2/3/4-value shorthand.
     Edges,
+    /// A colour: a hex literal, `transparent`, a `theme.…` read, a `[style]` constant, a `$signal`, or an
+    /// expression that yields one.
+    Color,
 }
 
 /// The value schema of `tag`'s `key`, or `None` when the key takes a free-form value.
@@ -394,6 +397,10 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         "font_style" => return Some(ValueKind::Keywords(FONT_STYLE_VALUES)),
         "ellipsis" | "click_through" | "secret" => return Some(ValueKind::Keywords(FLAG_VALUES)),
         "font_weight" => return Some(ValueKind::KeywordsOrNumber(FONT_WEIGHT_VALUES)),
+        // A stroke *width* on an `svg`, where every other tag means a colour by the same name; a `path`'s
+        // fill rule is a keyword, not a paint.
+        _ if key != "stroke" && color_attr_keys().contains(&key) => return Some(ValueKind::Color),
+        "stroke" if tag != "svg" && tag != "path" => return Some(ValueKind::Color),
         "align" => return Some(ValueKind::Keywords(ALIGN_VALUES)),
         "justify" => return Some(ValueKind::Keywords(JUSTIFY_VALUES)),
         "self" => return Some(ValueKind::Keywords(SELF_VALUES)),

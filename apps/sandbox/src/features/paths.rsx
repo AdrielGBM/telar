@@ -202,10 +202,10 @@ col gap:20
     example title:"Declarative paths in [view]"
         card
             row gap:28 align:center
-                path d:"M0,0 L100,0 L50,80 Z" fill:primary stroke:ink stroke_width:2 width:100 height:80
-                path d:"M6,42 L34,70 L74,14" stroke:success stroke_width:7 width:80 height:80
-                path d:"M40,2 L50,30 L80,30 L56,48 L64,78 L40,60 L16,78 L24,48 L0,30 L30,30 Z" fill:warning stroke:ink stroke_width:1 width:80 height:80
-        code_line code:"path d:\"M0,0 L100,0 L50,80 Z\" fill:primary stroke:ink stroke_width:2 width:100 height:80"
+                path d:"M0,0 L100,0 L50,80 Z" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80
+                path d:"M6,42 L34,70 L74,14" stroke:theme.success stroke_width:7 width:80 height:80
+                path d:"M40,2 L50,30 L80,30 L56,48 L64,78 L40,60 L16,78 L24,48 L0,30 L30,30 Z" fill:theme.warning stroke:theme.ink stroke_width:1 width:80 height:80
+        code_line code:"path d:\"M0,0 L100,0 L50,80 Z\" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80"
     example title:"The PathData API"
         col gap:6
             prop_row name:"move_to / line_to" values:"Point" about:"Start a subpath, add a straight segment."

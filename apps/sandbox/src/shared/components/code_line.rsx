@@ -7,8 +7,8 @@ pub struct Props {
 }
 
 [view]
-box fill:code_bg radius:8 pad_x:12 pad_y:8
-    text "{props.code}" font_size:12 color:code_fg
+box fill:theme.code_bg radius:8 pad_x:12 pad_y:8
+    text "{props.code}" font_size:12 color:theme.code_fg
 
 [preview "Code line"]
 code_line code:"box fill:primary radius:8 width:120 height:80"

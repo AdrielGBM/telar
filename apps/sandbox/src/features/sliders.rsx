@@ -8,12 +8,12 @@ col gap:20
     example title:"min / max — the value reads back in your range, not 0..1"
         card gap:8
             slider value:$volume min:0 max:100 step:1 width:260
-            text "Volume · {$volume}%" font_size:14 color:muted
+            text "Volume · {$volume}%" font_size:14 color:theme.muted
         code_line code:"slider value:$volume min:0 max:100 step:1 width:260"
     example title:"label + step — a captioned, quantized range"
         card gap:8
             slider value:$temp min:60 max:80 step:5 label:"Temperature" width:260
-            text "{$temp}°F" font_size:14 color:muted
+            text "{$temp}°F" font_size:14 color:theme.muted
         code_line code:"slider value:$temp min:60 max:80 step:5 label:'Temperature'"
     example title:"Attributes"
         col gap:6

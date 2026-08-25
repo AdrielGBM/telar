@@ -1,6 +1,6 @@
 //! Text interpolation and color resolution for the view emitters.
 
-use crate::naming::{constant_name, is_ident, to_snake_case};
+use crate::naming::{constant_name, is_ident};
 use crate::style::hex_to_color_expr;
 
 use super::ViewGen;
@@ -109,17 +109,10 @@ impl ViewGen<'_> {
         if self.is_local(v) {
             return v.to_string();
         }
-        if let Some(theme) = &self.theme_type {
-            let name = to_snake_case(v);
-            // A name the trait defines resolves through the trait, so the DSL and the catalogue cannot mean
-            // two different colours by one word (see `THEME_COLOR_TOKENS`); anything else is the theme's own
-            // vocabulary and stays a field.
-            let call = crate::registry::THEME_COLOR_TOKENS.contains(&name.as_str());
-            return match call {
-                true => format!("use_theme::<{theme}>().{name}()"),
-                false => format!("use_theme::<{theme}>().{name}"),
-            };
-        }
+        // A bare ident is a `[style]` constant and nothing else. It used to be three namespaces under one
+        // spelling — a constant, then a token, then *any* remaining name as a field on the theme — resolved
+        // by precedence, so `color:typo` compiled to `use_theme::<T>().typo` and failed in rustc rather than
+        // in the markup. The theme has an explicit spelling of its own, and `theme.x` is now the only one.
         constant_name("COLOR_", v)
     }
 

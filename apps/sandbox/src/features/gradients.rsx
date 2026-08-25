@@ -10,32 +10,32 @@ col gap:20
         card
             grid cols:"fit 160" gap:12
                 col @swatch
-                    box gradient:horizontal from:danger to:primary radius:10 width:100% height:72
-                    text "horizontal" font_size:12 color:muted
+                    box gradient:horizontal from:theme.danger to:theme.primary radius:10 width:100% height:72
+                    text "horizontal" font_size:12 color:theme.muted
                 col @swatch
-                    box gradient:vertical from:purple to:success radius:10 width:100% height:72
-                    text "vertical" font_size:12 color:muted
+                    box gradient:vertical from:theme.purple to:theme.success radius:10 width:100% height:72
+                    text "vertical" font_size:12 color:theme.muted
                 col @swatch
-                    box gradient:diagonal from:warning to:danger radius:10 width:100% height:72
-                    text "diagonal" font_size:12 color:muted
-        code_line code:"box gradient:horizontal from:danger to:primary"
+                    box gradient:diagonal from:theme.warning to:theme.danger radius:10 width:100% height:72
+                    text "diagonal" font_size:12 color:theme.muted
+        code_line code:"box gradient:horizontal from:theme.danger to:theme.primary"
     example title:"Three stops — add a middle color and its position"
         card
-            box gradient:horizontal from:primary mid:purple mid_pos:0.5 to:danger radius:10 width:100% height:80
-        code_line code:"box gradient:horizontal from:primary mid:purple mid_pos:0.5 to:danger"
+            box gradient:horizontal from:theme.primary mid:theme.purple mid_pos:0.5 to:theme.danger radius:10 width:100% height:80
+        code_line code:"box gradient:horizontal from:theme.primary mid:theme.purple mid_pos:0.5 to:theme.danger"
     example title:"Radial — a burst from the center; gr sets the radius"
         card
             grid cols:"fit 160" gap:12
                 col @swatch
-                    box gradient:radial radial_radius:70 from:cyan to:primary radius:10 width:100% height:80
-                    text "radial_radius:70" font_size:12 color:muted
+                    box gradient:radial radial_radius:70 from:theme.cyan to:theme.primary radius:10 width:100% height:80
+                    text "radial_radius:70" font_size:12 color:theme.muted
                 col @swatch
-                    box gradient:radial from:warning to:danger radius:10 width:100% height:80
-                    text "default radius" font_size:12 color:muted
+                    box gradient:radial from:theme.warning to:theme.danger radius:10 width:100% height:80
+                    text "default radius" font_size:12 color:theme.muted
                 col @swatch
-                    box gradient:radial radial_radius:80 from:success mid:cyan mid_pos:0.45 to:purple radius:10 width:100% height:80
-                    text "3 stops" font_size:12 color:muted
-        code_line code:"box gradient:radial radial_radius:70 from:cyan to:primary"
+                    box gradient:radial radial_radius:80 from:theme.success mid:theme.cyan mid_pos:0.45 to:theme.purple radius:10 width:100% height:80
+                    text "3 stops" font_size:12 color:theme.muted
+        code_line code:"box gradient:radial radial_radius:70 from:theme.cyan to:theme.primary"
     example title:"Attributes"
         col gap:6
             prop_row name:"gradient" values:"horizontal·vertical·diagonal·radial" about:"Gradient kind and axis."

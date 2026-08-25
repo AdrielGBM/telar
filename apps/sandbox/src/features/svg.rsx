@@ -31,10 +31,10 @@ col gap:20
             row gap:24 align:center
                 col gap:6 align:center
                     svg src:logo width:88 height:88
-                    text "gradient + shapes" font_size:12 color:muted
+                    text "gradient + shapes" font_size:12 color:theme.muted
                 col gap:6 align:center
                     svg src:blurred width:88 height:88
-                    text "feGaussianBlur → raster" font_size:12 color:muted
+                    text "feGaussianBlur → raster" font_size:12 color:theme.muted
         code_line code:"svg src:logo width:88 height:88"
     example title:"A vector baked from disk at build time (no runtime parser)"
         card

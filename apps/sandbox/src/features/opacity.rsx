@@ -9,24 +9,24 @@ col gap:20
     example title:"A single fill at descending opacity"
         card
             row gap:14 wrap
-                box @center fill:danger radius:10 width:120 height:72 opacity:1.0
-                    text "1.0" font_size:16 color:on_primary
-                box @center fill:danger radius:10 width:120 height:72 opacity:0.6
-                    text "0.6" font_size:16 color:on_primary
-                box @center fill:danger radius:10 width:120 height:72 opacity:0.3
-                    text "0.3" font_size:16 color:on_primary
-                box @center fill:danger radius:10 width:120 height:72 opacity:0.1
-                    text "0.1" font_size:16 color:on_primary
-        code_line code:"box fill:danger opacity:0.3"
+                box @center fill:theme.danger radius:10 width:120 height:72 opacity:1.0
+                    text "1.0" font_size:16 color:theme.on_primary
+                box @center fill:theme.danger radius:10 width:120 height:72 opacity:0.6
+                    text "0.6" font_size:16 color:theme.on_primary
+                box @center fill:theme.danger radius:10 width:120 height:72 opacity:0.3
+                    text "0.3" font_size:16 color:theme.on_primary
+                box @center fill:theme.danger radius:10 width:120 height:72 opacity:0.1
+                    text "0.1" font_size:16 color:theme.on_primary
+        code_line code:"box fill:theme.danger opacity:0.3"
     example title:"Layer opacity applies to a gradient and its label together"
         card
-            box @center gradient:horizontal from:primary mid:purple to:danger radius:12 height:80 opacity:0.75
-                text "gradient at 0.75" font_size:16 color:on_primary
-        code_line code:"box gradient:horizontal from:primary to:danger opacity:0.75"
+            box @center gradient:horizontal from:theme.primary mid:theme.purple to:theme.danger radius:12 height:80 opacity:0.75
+                text "gradient at 0.75" font_size:16 color:theme.on_primary
+        code_line code:"box gradient:horizontal from:theme.primary to:theme.danger opacity:0.75"
     example title:"Nested — outer 0.6 × inner 0.6 combine to about 0.36"
         card
-            box fill:primary radius:10 height:120 opacity:0.6 pad:14 gap:8
-                text "outer · 0.6" font_size:12 color:on_primary
-                box @center fill:danger radius:8 grow:1 opacity:0.6
-                    text "inner · 0.6" font_size:14 color:on_primary
+            box fill:theme.primary radius:10 height:120 opacity:0.6 pad:14 gap:8
+                text "outer · 0.6" font_size:12 color:theme.on_primary
+                box @center fill:theme.danger radius:8 grow:1 opacity:0.6
+                    text "inner · 0.6" font_size:14 color:theme.on_primary
         code_line code:"box opacity:0.6   >   box opacity:0.6   (layers multiply)"
