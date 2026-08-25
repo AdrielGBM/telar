@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
-use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
@@ -20,12 +20,9 @@ fn radius() -> f32 {
 fn gap() -> f32 {
     shared::spacing() * 0.75
 }
-fn font_size() -> f32 {
-    shared::font_size() * 0.93
-}
-fn close_size() -> f32 {
-    shared::font_size() * 0.85
-}
+/// A chip's label and its close glyph, as shares of the text around them.
+const TEXT_RATIO: f32 = 0.93;
+const CLOSE_RATIO: f32 = 0.85;
 fn dot_size() -> f32 {
     shared::spacing() * 0.75
 }
@@ -89,20 +86,18 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         children.push(box_item(dot));
     }
 
-    // `auto` (measured leaf) so the label gets its intrinsic WIDTH in this row; a plain `Text::new` only
-    // stretches its cross-axis, leaving width 0 and the label invisible.
-    let label_widget = Text::new(
+    let label_widget = Text::declaring(
         move || label(),
         LayoutStyle::new(),
-        || TextStyle::new(font_size(), shared::ink()),
+        |t| shared::control_text(t, TEXT_RATIO),
     )?;
     children.push(box_item(label_widget));
 
     if let Some(cb) = on_close {
-        let close_label = Text::new(
+        let close_label = Text::declaring(
             || "×".to_string(),
             LayoutStyle::new(),
-            || TextStyle::new(close_size(), shared::ink()),
+            |t| shared::control_text(t, CLOSE_RATIO),
         )?;
         let close = StyledContainer::new(
             LayoutStyle::new().flex_row(),

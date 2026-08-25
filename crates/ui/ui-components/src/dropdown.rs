@@ -7,7 +7,7 @@ use geometry_core::Rect;
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use platform_core::{Key, NamedKey};
 use reactive_core::{RwSignal, effect, signal};
-use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, Stroke, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
 use ui_core::focus::Role;
 use ui_core::{
     Children, Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item,
@@ -132,11 +132,10 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         }
     };
     // Trigger: a bordered button with the label; a tap toggles `open`.
-    // `auto` (measured) so the label has width in this row; `single_line` only sets height → width 0 → invisible.
     // `no_wrap`: a trigger's label is the *name* of a control, and splitting `File` across two lines to make
     // room for the caret beside it turns one word into two.
-    let label_text = Text::new(trigger_label, LayoutStyle::new(), || {
-        TextStyle::new(shared::font_size(), shared::ink()).with_text_wrap(TextWrap::NoWrap)
+    let label_text = Text::declaring(trigger_label, LayoutStyle::new(), |t| {
+        shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap)
     })?;
     let trigger_style = {
         let color = color.clone();

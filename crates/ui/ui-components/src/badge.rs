@@ -11,9 +11,8 @@ fn pad_x() -> f32 {
 fn pad_y() -> f32 {
     shared::spacing() * 0.25
 }
-fn font_size() -> f32 {
-    shared::font_size() * 0.85
-}
+/// A badge's share of the text around it: a tag reads as an annotation, not as a sentence.
+const TEXT_RATIO: f32 = 0.85;
 fn radius() -> f32 {
     shared::radius() * 2.5
 }
@@ -45,10 +44,7 @@ props_default!(BadgeProps {
 pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let BadgeProps { label, color } = props;
 
-    // `auto` (measured leaf) so the label has intrinsic width inside the pill; a stretched `Text::new` would
-    // collapse to 0-wide, like `button`'s label. An empty label still measures fine (0-wide), so the pill
-    // just shrinks to its padding rather than panicking.
-    let label_widget = Text::new(move || label(), LayoutStyle::new(), on_accent_style)?;
+    let label_widget = Text::declaring(move || label(), LayoutStyle::new(), on_accent_style)?;
 
     let container = StyledContainer::new(
         pill(),
@@ -70,9 +66,8 @@ fn fill_default() -> Color {
 
 /// The label's on-accent colour, re-read every frame so it tracks the active theme (mirrors `button`'s
 /// no-variant label default: the theme's `on_primary()`, or white with no theme installed).
-fn on_accent_style() -> TextStyle {
-    let color = shared::on_accent();
-    TextStyle::new(font_size(), color)
+fn on_accent_style(inherited: TextStyle) -> TextStyle {
+    shared::control_text(inherited, TEXT_RATIO).with_color(shared::on_accent())
 }
 
 #[cfg(test)]

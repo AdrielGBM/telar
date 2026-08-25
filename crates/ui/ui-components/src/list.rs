@@ -18,12 +18,18 @@ use std::time::{Duration, Instant};
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, Margin};
 use reactive_core::RwSignal;
-use renderer_core::{RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item, use_context};
 
 use crate::shared;
 use crate::shared::props_default;
+
+/// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them
+/// read as secondary without becoming a second colour a theme has to answer for.
+const HINT_RATIO: f32 = 0.9;
+const HEADING_RATIO: f32 = 0.85;
+const QUIET_ALPHA: f32 = 0.65;
 
 /// What a row needs to know about the list it is in, and what the list needs to learn from its rows.
 ///
@@ -315,7 +321,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
 
     let mut content: Vec<Box<dyn LayoutItem>> = Vec::new();
     if let Some(checked) = checked {
-        content.push(box_item(Text::new(
+        content.push(box_item(Text::declaring(
             move || {
                 if checked() {
                     "✓".into()
@@ -324,7 +330,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
                 }
             },
             LayoutStyle::new().width(14.0),
-            || TextStyle::new(shared::font_size(), shared::ink()),
+            |t| shared::control_text(t, 1.0),
         )?));
     }
     // Markup children are the row's content when there are any: an icon beside a label, two lines, a swatch.
@@ -332,17 +338,18 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
     let mut given = children;
     let supplied = given.take_default();
     if supplied.is_empty() {
-        content.push(box_item(Text::new(
+        content.push(box_item(Text::declaring(
             move || label(),
             LayoutStyle::new(),
-            || TextStyle::new(shared::font_size(), shared::ink()).with_text_wrap(TextWrap::NoWrap),
+            |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
         )?));
     } else {
         content.extend(supplied);
     }
     if let Some(hint) = hint {
-        content.push(box_item(Text::new(hint, LayoutStyle::new(), || {
-            TextStyle::new(shared::font_size() * 0.9, shared::ink().with_alpha(0.65))
+        content.push(box_item(Text::declaring(hint, LayoutStyle::new(), |t| {
+            shared::control_text(t, HINT_RATIO)
+                .with_color(shared::ink().with_alpha(QUIET_ALPHA))
                 .with_text_wrap(TextWrap::NoWrap)
         })?));
     }
@@ -430,8 +437,9 @@ pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
     }
-    let text = Text::new(props.label, LayoutStyle::new(), || {
-        TextStyle::new(shared::font_size() * 0.85, shared::ink().with_alpha(0.65))
+    let text = Text::declaring(props.label, LayoutStyle::new(), |t| {
+        shared::control_text(t, HEADING_RATIO)
+            .with_color(shared::ink().with_alpha(QUIET_ALPHA))
             .with_text_wrap(TextWrap::NoWrap)
     })?;
     let heading = StyledContainer::new(

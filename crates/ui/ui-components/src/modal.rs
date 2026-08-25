@@ -1,6 +1,6 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::RwSignal;
-use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item};
 
@@ -19,9 +19,8 @@ fn dialog_pad() -> f32 {
 fn dialog_gap() -> f32 {
     shared::spacing() * 1.5
 }
-fn close_size() -> f32 {
-    shared::font_size() * 0.93
-}
+/// The close glyph's share of the text around it.
+const CLOSE_RATIO: f32 = 0.93;
 
 fn header_row() -> LayoutStyle {
     LayoutStyle::new()
@@ -101,14 +100,12 @@ fn build_open_modal(
     color: Box<dyn Fn() -> Color>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    // `auto` (measured) so the title/Close get their intrinsic WIDTH in the header row; a plain `Text::new`
-    // only stretches its cross-axis (height in a row), leaving width 0 and the text invisible.
-    let heading = Text::new(move || title(), LayoutStyle::new(), heading_style)?;
+    let heading = Text::declaring(move || title(), LayoutStyle::new(), heading_style)?;
 
-    let close_label = Text::new(
+    let close_label = Text::declaring(
         || "Close".to_string(),
         LayoutStyle::new(),
-        || TextStyle::new(close_size(), shared::ink()),
+        |t| shared::control_text(t, CLOSE_RATIO),
     )?;
     let close = StyledContainer::new(
         LayoutStyle::new().flex_row(),
@@ -166,10 +163,10 @@ mod tests {
     }
 
     fn slot_with_body(label: &'static str) -> Slots {
-        let body = Text::new(
+        let body = Text::declaring(
             move || label.to_string(),
             LayoutStyle::new().height(20.0),
-            || TextStyle::new(14.0, Color::BLACK),
+            |t| t,
         )
         .unwrap();
         let mut slots = Slots::new();

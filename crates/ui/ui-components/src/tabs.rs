@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
@@ -70,10 +70,10 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     for (i, label) in items.into_iter().enumerate() {
         let idx = i as u32;
         let label_selected = selected.clone();
-        let label_widget = Text::new(
+        let label_widget = Text::declaring(
             move || label.to_string(),
             LayoutStyle::new(),
-            move || TextStyle::new(shared::font_size(), tab_ink(label_selected.get() == idx)),
+            move |t| shared::control_text(t, 1.0).with_color(tab_ink(label_selected.get() == idx)),
         )?;
 
         let base_selected = selected.clone();

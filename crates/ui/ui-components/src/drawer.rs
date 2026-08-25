@@ -126,7 +126,7 @@ mod tests {
     use super::*;
     use layout_core::AvailableSpace;
     use reactive_core::signal;
-    use renderer_core::{DrawCommand, TextStyle};
+    use renderer_core::DrawCommand;
     use ui_core::{ComponentList, Text, compute_layout, new_container, relayout_if_dirty};
 
     fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
@@ -135,10 +135,10 @@ mod tests {
     }
 
     fn slot_with_body(label: &'static str) -> Slots {
-        let body = Text::new(
+        let body = Text::declaring(
             move || label.to_string(),
             LayoutStyle::new().height(20.0),
-            || TextStyle::new(14.0, Color::BLACK),
+            |t| t,
         )
         .unwrap();
         let mut slots = Slots::new();

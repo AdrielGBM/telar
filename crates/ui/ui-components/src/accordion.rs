@@ -3,7 +3,7 @@ use std::rc::Rc;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{Effect, RwSignal, effect, signal};
-use renderer_core::{Color, RectStyle, TextStyle};
+use renderer_core::{Color, RectStyle};
 use ui_core::focus::Role;
 use ui_core::{
     ClippedItem, Component, Container, EventResult, LayoutItem, RenderNode, Slots, StyledContainer,
@@ -19,9 +19,8 @@ fn pad_x() -> f32 {
 fn pad_y() -> f32 {
     shared::spacing() * 1.25
 }
-fn caret_size() -> f32 {
-    shared::font_size() * 0.85
-}
+/// The caret's share of the text beside it.
+const CARET_RATIO: f32 = 0.85;
 const CARET_CLOSED: &str = "\u{25B8}"; // ▸
 const CARET_OPEN: &str = "\u{25BE}"; // ▾
 
@@ -72,7 +71,7 @@ pub fn accordion(
     // Caret flips glyph with `open`; its colour is the same reactive accent as the rest of the catalogue.
     let caret_open = open.clone();
     let caret_color = color.clone();
-    let caret = Text::new(
+    let caret = Text::declaring(
         move || {
             if caret_open.get() {
                 CARET_OPEN
@@ -82,16 +81,16 @@ pub fn accordion(
             .to_string()
         },
         LayoutStyle::new(),
-        move || {
+        move |t| {
             let accent = shared::resolve(caret_color.as_ref(), || shared::accent());
-            TextStyle::new(caret_size(), accent)
+            shared::control_text(t, CARET_RATIO).with_color(accent)
         },
     )?;
 
-    let title_widget = Text::new(
+    let title_widget = Text::declaring(
         move || title(),
         LayoutStyle::new(),
-        || TextStyle::new(shared::font_size(), shared::ink()),
+        |t| shared::control_text(t, 1.0),
     )?;
 
     let announced_open = open.clone();
@@ -166,10 +165,10 @@ mod tests {
     use crate::harness::{press, release};
 
     fn slot_with_body(label: &'static str) -> Slots {
-        let body = Text::new(
+        let body = Text::declaring(
             move || label.to_string(),
             LayoutStyle::new().height(20.0),
-            || TextStyle::new(14.0, Color::BLACK),
+            |t| t,
         )
         .unwrap();
         let mut slots = Slots::new();

@@ -124,9 +124,40 @@ pub(crate) fn spacing() -> f32 {
 /// A component scales this by a ratio of its own — `font_size() * 1.4` for a heading, `* 0.85` for a caption —
 /// instead of asking for a named role. Naming the roles here would decide for every application which roles it
 /// is allowed to have, and a theme's own vocabulary belongs to its own type.
+///
+/// For the *text* of a control, prefer [`control_text`]: this reads the theme directly and so cannot see a
+/// container that declared a size for the region the control sits in.
 pub(crate) fn font_size() -> f32 {
     use_theme_tokens().font_size() * theme_core::control_scale()
 }
+
+/// A single line's box height, as a multiple of the text in it.
+pub(crate) const LINE_LEADING: f32 = 1.4;
+/// A caption's share of the text it labels.
+pub(crate) const CAPTION_RATIO: f32 = 0.85;
+/// A title's share of the body text around it.
+pub(crate) const HEADING_RATIO: f32 = 1.4;
+
+/// The text a control draws: whatever the tree above it says, at the ambient control density, at this
+/// control's own ratio to the body size around it.
+///
+/// The ratio is how a component says "a caption" or "a close glyph" — a proportion of the text beside it
+/// rather than a number of its own. Taking the inherited style as the starting point is the whole of B9's
+/// fix: a field's label and a plain label next to it can no longer be two sizes, because there is one size
+/// and each control names its distance from it.
+pub(crate) fn control_text(inherited: TextStyle, ratio: f32) -> TextStyle {
+    let size = inherited.font_size * theme_core::control_scale() * ratio;
+    inherited.with_font_size(size)
+}
+
+/// [`control_text`]'s size on its own, for the box a control sizes to hold that text.
+///
+/// Takes the node rather than the style because a box is sized outside the closure that styles its text —
+/// and reading the context here is what makes the box follow a declaration the text is already following.
+pub(crate) fn control_text_size(node: ui_core::NodeId, ratio: f32) -> f32 {
+    control_text(ui_core::inherited_text_style(node), ratio).font_size
+}
+
 /// Default standalone icon size from the theme, scaled by the ambient control size.
 pub(crate) fn icon_size() -> f32 {
     use_theme_tokens().icon_size() * theme_core::control_scale()
@@ -190,18 +221,17 @@ pub(crate) use props_default;
 
 /// The shared title text style, re-read every frame so it tracks the active theme. Three consumers: `heading`,
 /// `section` and `modal`'s title.
-pub(crate) fn heading_style() -> TextStyle {
-    TextStyle::new(20.0, accent()).with_font_weight(600)
+///
+/// A ratio of the text around it, where it used to be a flat 20px — so a theme that made its body text 11px
+/// left every title at the size a 14px body wanted.
+pub(crate) fn heading_style(inherited: TextStyle) -> TextStyle {
+    control_text(inherited, HEADING_RATIO)
+        .with_color(accent())
+        .with_font_weight(600)
 }
 
-/// The caption size for a control that carries one above it. 0.85 of the body size, which is what `badge`,
-/// `tooltip` and `list`'s group heading already use — `slider` had drifted to 0.93 on its own.
-pub(crate) fn caption_size() -> f32 {
-    font_size() * 0.85
-}
-
-fn caption_box() -> LayoutStyle {
-    LayoutStyle::new().height(caption_size() * 1.4)
+fn caption_box(text_size: f32) -> LayoutStyle {
+    LayoutStyle::new().height(text_size * LINE_LEADING)
 }
 
 fn caption_column(width: f32) -> LayoutStyle {
@@ -221,10 +251,10 @@ pub(crate) fn captioned(
     if label().is_empty() {
         return Ok(box_item(control));
     }
-    let caption = Text::new(
+    let caption = Text::declaring(
         move || label(),
-        caption_box(),
-        || TextStyle::new(caption_size(), muted()),
+        caption_box(font_size() * CAPTION_RATIO),
+        |t| control_text(t, CAPTION_RATIO).with_color(muted()),
     )?;
     // The caption is a leaf, so its own node's style is followed from here — the column outlives it and is where an effect belonging to this subtree wants to be owned.
     let caption_node = caption.layout_node();
@@ -233,7 +263,9 @@ pub(crate) fn captioned(
         vec![box_item(caption), box_item(control)],
     )?
     .styled_by(move || caption_column(width))
-    .keeping(style_follows(caption_node, caption_box));
+    .keeping(style_follows(caption_node, move || {
+        caption_box(control_text_size(caption_node, CAPTION_RATIO))
+    }));
     Ok(box_item(col))
 }
 
@@ -246,11 +278,10 @@ pub(crate) fn labelled_control(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut children: Vec<Box<dyn LayoutItem>> = vec![box_item(control)];
     if !label().is_empty() {
-        // `auto` (measured leaf) so the label gets its intrinsic WIDTH in this row; a plain `Text::new` only stretches its cross-axis (height here), leaving width 0 and the label invisible.
-        let text = Text::new(
+        let text = Text::declaring(
             move || label(),
             LayoutStyle::new(),
-            || TextStyle::new(font_size(), ink()),
+            |t| control_text(t, 1.0),
         )?;
         children.push(box_item(text));
     }

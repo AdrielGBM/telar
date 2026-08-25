@@ -198,6 +198,18 @@ pub fn inherited_text_style(node: NodeId) -> TextStyle {
     context(node).text_style()
 }
 
+/// A style closure that resolves against what `node` inherits, amended by `amend`.
+///
+/// The shape every leaf that inherits needs, in one place: read the context *inside* the closure, so the
+/// widget re-runs when a declaration above it moves rather than baking whatever was in force when it was
+/// built.
+pub(crate) fn inheriting(
+    node: NodeId,
+    amend: impl Fn(TextStyle) -> TextStyle + 'static,
+) -> Rc<dyn Fn() -> TextStyle> {
+    Rc::new(move || amend(inherited_text_style(node)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

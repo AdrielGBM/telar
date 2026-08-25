@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
@@ -105,10 +105,8 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         }
     })?;
 
-    // A measured leaf (`Text::new`) so the readout has intrinsic width in this row; a stretched
-    // `Text::new`/`single_line` would collapse to 0-wide, per `button.rs`'s label.
     let display_value = value.clone();
-    let display = Text::new(
+    let display = Text::declaring(
         move || {
             let v = display_value.get();
             if v.fract() == 0.0 {
@@ -118,7 +116,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             }
         },
         LayoutStyle::new(),
-        || TextStyle::new(shared::font_size(), shared::ink()),
+        |t| shared::control_text(t, 1.0),
     )?;
 
     let row = Container::new(
@@ -144,15 +142,10 @@ fn stepper_button(
     // The glyph reads the same fill the box paints, so a light accent (a neutral palette's `primary` in
     // dark mode) gets a dark glyph instead of a white one lost in its own button.
     let glyph_fill = color.clone();
-    let glyph_widget = Text::new(
+    let glyph_widget = Text::declaring(
         move || glyph.to_string(),
         LayoutStyle::new(),
-        move || {
-            TextStyle::new(
-                shared::font_size(),
-                shared::ink_on(button_fill(&glyph_fill)),
-            )
-        },
+        move |t| shared::control_text(t, 1.0).with_color(shared::ink_on(button_fill(&glyph_fill))),
     )?;
     let container = StyledContainer::new(
         button_box(),

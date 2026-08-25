@@ -2,7 +2,7 @@ use crate::shared;
 use crate::shared::props_default;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::{Input, LayoutItem, StyledContainer, box_item, style_follows};
 
 fn box_radius() -> f32 {
@@ -16,8 +16,8 @@ fn pad_y() -> f32 {
 }
 const DEFAULT_WIDTH: f32 = 300.0;
 
-fn line_box() -> LayoutStyle {
-    LayoutStyle::new().height(shared::font_size() * 1.4)
+fn line_box(text_size: f32) -> LayoutStyle {
+    LayoutStyle::new().height(text_size * shared::LINE_LEADING)
 }
 fn field_box(width: f32) -> LayoutStyle {
     LayoutStyle::new()
@@ -78,16 +78,12 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     // Always a live `Input` (with a muted placeholder shown while empty) so the field is tappable/typable
     // from a cold start — a swapped-in placeholder `Text` takes no focus, so an empty field couldn't be
     // clicked to begin typing.
-    let mut input = Input::new(value.clone(), line_box(), move || {
-        let c = color();
-        TextStyle::new(
-            shared::font_size(),
-            if c == Color::TRANSPARENT {
-                shared::ink()
-            } else {
-                c
-            },
-        )
+    let mut input = Input::declaring(value.clone(), line_box(shared::font_size()), move |t| {
+        let t = shared::control_text(t, 1.0);
+        match color() {
+            c if c == Color::TRANSPARENT => t,
+            c => t.with_color(c),
+        }
     })?
     .placeholder(placeholder());
     if let Some(cb) = on_submit {
@@ -108,7 +104,9 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         vec![box_item(field)],
     )?
     .styled_by(move || field_box(width))
-    .keeping(style_follows(line_node, line_box));
+    .keeping(style_follows(line_node, move || {
+        line_box(shared::control_text_size(line_node, 1.0))
+    }));
 
     shared::captioned(box_item(box_), label, width)
 }
@@ -149,6 +147,47 @@ mod tests {
     fn find_text(cmds: &[DrawCommand], needle: &str) -> bool {
         cmds.iter()
             .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
+    }
+
+    /// The §1.4 bug, made unwritable: a properties panel that says its region is 11px used to get a field at
+    /// 14.98 among 11px labels, with no attribute to correct it — `TextFieldProps` has no size.
+    #[test]
+    fn a_field_takes_the_size_the_region_around_it_declared() {
+        let value = signal("hi".to_string());
+        crate::test_support::fresh_layout_runtime();
+        let field = text_field(TextFieldProps {
+            value: Some(value.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(200.0),
+            &[field.layout_node()],
+        )
+        .unwrap();
+        ui_core::declare(
+            root,
+            renderer_core::Declared::default().with_font_size(11.0),
+        );
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+
+        let tree = ComponentList::new(field);
+        let size = tree
+            .commands()
+            .iter()
+            .find_map(|c| match c {
+                DrawCommand::Text { text, style, .. } if text.as_ref() == "hi" => {
+                    Some(style.font_size)
+                }
+                _ => None,
+            })
+            .expect("the field drew its value");
+        assert_eq!(size, 11.0);
     }
 
     // A controlled, non-empty value renders through the real Input (not the placeholder).

@@ -45,6 +45,27 @@ impl Input {
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
+        Self::build(value, layout_style, |_| Rc::new(style_fn))
+    }
+
+    /// A field styled by what the tree above it declared, amended by whatever it says for itself — the
+    /// counterpart of [`Text::declaring`](crate::Text::declaring), and what keeps a field's text the same
+    /// size as the labels beside it.
+    pub fn declaring(
+        value: RwSignal<String>,
+        layout_style: LayoutStyle,
+        style_fn: impl Fn(TextStyle) -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        Self::build(value, layout_style, |node| {
+            crate::inherit::inheriting(node, style_fn)
+        })
+    }
+
+    fn build(
+        value: RwSignal<String>,
+        layout_style: LayoutStyle,
+        style: impl FnOnce(layout_core::NodeId) -> Rc<dyn Fn() -> TextStyle>,
+    ) -> Result<Self, LayoutError> {
         let leaf = LayoutLeaf::register(layout_style)?;
         let caret = value.with(|s| s.len());
         let id = focus::next_id();
@@ -55,7 +76,7 @@ impl Input {
             value,
             caret: signal(caret),
             anchor: signal(None),
-            style: Rc::new(style_fn),
+            style: style(leaf.node),
             id,
             leaf,
             on_submit: None,

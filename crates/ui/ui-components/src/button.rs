@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::signal;
-use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
@@ -70,23 +70,18 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // its text to white on hover).
     let hovered = signal(false);
 
-    // The label must be a measured leaf (`Text::new`) so it has intrinsic width inside the button's row;
-    // a stretched `Text::new`/`single_line` would collapse to 0-wide and render nothing.
     let (label_fill, label_outline, label_hover) =
         (Rc::clone(&fill), Rc::clone(&outline), hovered.clone());
-    let label_widget = Text::new(
+    let label_widget = Text::declaring(
         move || label(),
         LayoutStyle::new(),
-        move || {
-            TextStyle::new(
-                shared::font_size(),
-                label_color(
-                    label_fill.as_ref(),
-                    label_outline.as_ref(),
-                    ghost,
-                    label_hover.get(),
-                ),
-            )
+        move |t| {
+            shared::control_text(t, 1.0).with_color(label_color(
+                label_fill.as_ref(),
+                label_outline.as_ref(),
+                ghost,
+                label_hover.get(),
+            ))
         },
     )?;
 
