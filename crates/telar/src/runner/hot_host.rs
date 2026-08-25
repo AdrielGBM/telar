@@ -48,7 +48,7 @@ pub fn run_hot_reload_host(
         font_family,
     } = config;
     #[cfg(telar_hot_reload)]
-    super::desktop::apply_dev_window_overrides(&mut window);
+    super::dev_window::apply_dev_window_overrides(&mut window);
     if let Some(custom) = initial_app.window_config() {
         window = custom;
     }

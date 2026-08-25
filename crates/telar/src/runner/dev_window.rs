@@ -34,7 +34,7 @@ pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
 }
 
 #[cfg(telar_hot_reload)]
-fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
+pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
     if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_TITLE") {
         config.title = v;
     }
