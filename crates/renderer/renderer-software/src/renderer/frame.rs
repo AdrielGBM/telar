@@ -329,7 +329,7 @@ where
                 }
                 DrawCommand::Text { text, rect, style } => {
                     let rect = *rect;
-                    let style = **style;
+                    let style = (**style).clone();
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {
@@ -365,7 +365,7 @@ where
                 }
                 DrawCommand::RichText { runs, rect, base } => {
                     let rect = *rect;
-                    let base = **base;
+                    let base = (**base).clone();
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
                         top
                     } else {

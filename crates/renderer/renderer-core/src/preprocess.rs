@@ -85,12 +85,12 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
         DrawCommand::Text { text, rect, style } => DrawCommand::Text {
             text: text.clone(),
             rect: rect.scale(sf),
-            style: Arc::new((**style).scale(sf)),
+            style: Arc::new((**style).clone().scale(sf)),
         },
         DrawCommand::RichText { runs, rect, base } => DrawCommand::RichText {
             runs: runs.clone(),
             rect: rect.scale(sf),
-            base: Arc::new((**base).scale(sf)),
+            base: Arc::new((**base).clone().scale(sf)),
         },
         DrawCommand::Image { data, rect, filter } => DrawCommand::Image {
             data: data.clone(),
@@ -185,7 +185,7 @@ impl ScaleScratch {
 }
 
 #[inline]
-fn scaled_style_arc<T: Scale + Copy>(
+fn scaled_style_arc<T: Scale + Clone>(
     cache: &mut FxHashMap<usize, Arc<T>>,
     style: &Arc<T>,
     sf: f32,
@@ -193,7 +193,7 @@ fn scaled_style_arc<T: Scale + Copy>(
     let key = Arc::as_ptr(style) as usize;
     cache
         .entry(key)
-        .or_insert_with(|| Arc::new((**style).scale(sf)))
+        .or_insert_with(|| Arc::new((**style).clone().scale(sf)))
         .clone()
 }
 

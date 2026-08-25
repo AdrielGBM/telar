@@ -195,13 +195,19 @@ mod tests {
         let text_a = Text::new(
             || "A".to_string(),
             LayoutStyle::new().width(50.0).height(20.0),
-            move || text_style,
+            {
+                let text_style = text_style.clone();
+                move || text_style.clone()
+            },
         )
         .unwrap();
         let text_b = Text::new(
             || "B".to_string(),
             LayoutStyle::new().width(50.0).height(20.0),
-            move || text_style,
+            {
+                let text_style = text_style.clone();
+                move || text_style.clone()
+            },
         )
         .unwrap();
         let container = Container::new(

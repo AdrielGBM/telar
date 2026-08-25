@@ -69,14 +69,14 @@ fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
         return;
     }
 
-    let clamped = shaped(&mut sh, &base.with_max_lines(2));
+    let clamped = shaped(&mut sh, &base.clone().with_max_lines(2));
     assert_eq!(
         clamped.layout_runs().count(),
         2,
         "max_lines(2) must leave two visual lines"
     );
 
-    let elided = shaped(&mut sh, &base.with_max_lines(2).with_ellipsis(true));
+    let elided = shaped(&mut sh, &base.clone().with_max_lines(2).with_ellipsis(true));
     assert_eq!(
         elided.layout_runs().count(),
         2,
@@ -119,19 +119,27 @@ fn text_style_bits_default_unchanged_and_spacing_perturbs() {
     // The packed layout for a plain 400-weight style is exactly the weight value.
     assert_eq!(text_style_bits(&base), 400);
     let bits_default = text_style_bits(&base);
-    let bits_lh = text_style_bits(&base.with_line_height(1.5));
-    let bits_ls = text_style_bits(&base.with_letter_spacing(2.0));
+    let bits_lh = text_style_bits(&base.clone().with_line_height(1.5));
+    let bits_ls = text_style_bits(&base.clone().with_letter_spacing(2.0));
     assert_ne!(bits_lh, bits_default, "line_height must perturb the bits");
     assert_ne!(
         bits_ls, bits_default,
         "letter_spacing must perturb the bits"
     );
     assert_ne!(bits_lh, bits_ls, "the two axes must not alias each other");
-    let bits_pixel = text_style_bits(&base.with_raster(GlyphRaster::Pixel));
+    let bits_pixel = text_style_bits(&base.clone().with_raster(GlyphRaster::Pixel));
     assert_ne!(
         bits_pixel, bits_default,
         "the raster grid must perturb the bits, or a smooth raster is served to a pixel style"
     );
+    // Two families are two sets of glyphs for one string: a shared key serves one face's raster for the other.
+    let bits_family = text_style_bits(&base.clone().with_font_family("LanaPixel"));
+    let bits_other = text_style_bits(&base.clone().with_font_family("Inter"));
+    assert_ne!(
+        bits_family, bits_default,
+        "a named family must perturb the bits"
+    );
+    assert_ne!(bits_family, bits_other, "two families must not share a key");
 }
 
 // Coverage under the pixel raster is ink or nothing: a glyph half-covering a pixel is the grid the artist drew being taken apart. Skipped rather than failed on a font-less machine, where nothing is inked at all.
@@ -436,5 +444,42 @@ fn a_no_wrap_style_measures_one_line_however_narrow_the_box() {
     assert!(
         flat_w > wrapped_w,
         "and it reports the width it needs ({flat_w}) rather than the box it was offered ({wrapped_w})"
+    );
+}
+
+// Driven off two families the machine actually has, so this tests face selection rather than font installation.
+#[test]
+fn a_named_family_shapes_in_that_face() {
+    let mut sh = TextShaper::new();
+    let mut names: Vec<String> = sh
+        .font_system
+        .db()
+        .faces()
+        .filter_map(|face| face.families.first().map(|(name, _)| name.clone()))
+        .collect();
+    names.sort();
+    names.dedup();
+    let [first, second] = &names[..] else {
+        return;
+    };
+
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 10_000.0,
+        height: 1000.0,
+    };
+    let face_of = |sh: &mut TextShaper, family: &str| {
+        let style = TextStyle::new(16.0, Color::BLACK).with_font_family(family);
+        let buffer = make_buffer(&mut sh.font_system, "Ag", rect, &style);
+        buffer
+            .layout_runs()
+            .next()
+            .and_then(|run| run.glyphs.first().map(|g| g.font_id))
+    };
+    assert_ne!(
+        face_of(&mut sh, first),
+        face_of(&mut sh, second),
+        "two different families must shape in two different faces"
     );
 }

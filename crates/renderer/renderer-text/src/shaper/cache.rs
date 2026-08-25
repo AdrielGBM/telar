@@ -1,10 +1,10 @@
-use renderer_core::{Color, GlyphRaster, TextStyle};
+use renderer_core::{Color, FontFamily, GlyphRaster, TextStyle};
 use rustc_hash::FxHasher;
 use std::hash::{Hash, Hasher};
 
 /// Packs the shaping-relevant style axes into one `u32` so every cache key distinguishes e.g. bold from normal, or 2-line-clamped from unclamped, text of the same string — otherwise they would collide and one variant's glyphs/positions/truncation would be served for the other. Layout: `weight` bits 0-15, `italic` bit 16, `align` bits 17-18, `max_lines` bits 19-26 (0 = unlimited), `ellipsis` bit 27.
 ///
-/// `line_height`/`letter_spacing`/`raster` do not fit that layout losslessly. With all three at their defaults the packed value is returned verbatim — keeping existing keys and the byte-exact software golden untouched — and anything else folds every axis into a full 32-bit hash. This keeps `text_style_bits`'s `u32` contract so callers across crates (e.g. the software renderer's pixmap cache) distinguish them for free, without any signature change.
+/// `font_family`/`line_height`/`letter_spacing`/`raster` do not fit that layout losslessly. With all four at their defaults the packed value is returned verbatim — keeping existing keys and the byte-exact software golden untouched — and anything else folds every axis into a full 32-bit hash. This keeps `text_style_bits`'s `u32` contract so callers across crates (e.g. the software renderer's pixmap cache) distinguish them for free, without any signature change.
 pub fn text_style_bits(style: &TextStyle) -> u32 {
     let lines = style.max_lines.map_or(0, |n| n.min(255) as u32);
     let packed = (style.weight as u32)
@@ -13,7 +13,8 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
         | (lines << 19)
         | ((style.ellipsis as u32) << 27)
         | ((style.no_wrap as u32) << 28);
-    if style.line_height.is_none()
+    if style.font_family == FontFamily::SansSerif
+        && style.line_height.is_none()
         && style.letter_spacing == 0.0
         && style.raster == GlyphRaster::Smooth
     {
@@ -21,6 +22,7 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
     }
     let mut h = FxHasher::default();
     packed.hash(&mut h);
+    style.font_family.hash(&mut h);
     style.line_height.map(f32::to_bits).hash(&mut h);
     style.letter_spacing.to_bits().hash(&mut h);
     style.raster.hash(&mut h);

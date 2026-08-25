@@ -953,7 +953,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     // The rect already goes through the matrix below; without this the box grows and
                     // the letters do not, so a zoomed subtree — a canvas, a thumbnail, a transition
                     // — comes out with text of the wrong size in a box of the right one.
-                    let style = at_scale(**style, self.draw_state.scale());
+                    let style = at_scale((**style).clone(), self.draw_state.scale());
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();
@@ -995,7 +995,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         let shadow_style = renderer_core::TextStyle {
                             paint: renderer_core::Paint::Solid(shadow.color),
                             shadow: None,
-                            ..style
+                            ..style.clone()
                         };
                         let instance_start = self.pending_shadow_instances.len() as u32;
                         crate::caches::with_shared(|caches| {
@@ -1051,7 +1051,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 }
                 DrawCommand::RichText { runs, rect, base } => {
                     let rect = *rect;
-                    let base = at_scale(**base, self.draw_state.scale());
+                    let base = at_scale((**base).clone(), self.draw_state.scale());
                     self.flush_rect();
                     self.flush_line();
                     self.flush_image();

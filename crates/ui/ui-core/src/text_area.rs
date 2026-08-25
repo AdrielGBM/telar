@@ -311,11 +311,11 @@ impl Component for TextArea {
                 Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * 0.5)),
                 _ => Paint::Solid(Color::rgba(0.5, 0.5, 0.55, 0.5)),
             };
-            let mut ph_style = style;
+            let mut ph_style = style.clone();
             ph_style.paint = muted;
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
-            RenderNode::text(Arc::<str>::from(text.as_str()), full, style)
+            RenderNode::text(Arc::<str>::from(text.as_str()), full, style.clone())
         };
 
         if focus::is_focused(self.id) {

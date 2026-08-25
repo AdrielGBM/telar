@@ -285,6 +285,7 @@ impl Component for Input {
         let r = self.leaf.rect.get();
         let text = self.value.get();
         let style = (self.style)();
+        let paint = style.paint;
         let full = Rect {
             x: 0.0,
             y: 0.0,
@@ -298,11 +299,11 @@ impl Component for Input {
                 Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * 0.5)),
                 _ => Paint::Solid(Color::rgba(0.5, 0.5, 0.55, 0.5)),
             };
-            let mut ph_style = style;
+            let mut ph_style = style.clone();
             ph_style.paint = muted;
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
-            RenderNode::text(self.shown(&text), full, style)
+            RenderNode::text(self.shown(&text), full, style.clone())
         };
 
         // The caret is drawn only while focused; reading `is_focused` subscribes this view to focus moves.
@@ -341,8 +342,7 @@ impl Component for Input {
                 width: CARET_WIDTH,
                 height: line_h,
             };
-            let caret_node =
-                RenderNode::rect(caret_rect, RectStyle::default().with_fill(style.paint));
+            let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(paint));
             let layers = match highlight {
                 Some(highlight) => vec![highlight, text_node, caret_node],
                 None => vec![text_node, caret_node],

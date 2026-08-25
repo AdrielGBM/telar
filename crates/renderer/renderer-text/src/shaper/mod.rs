@@ -1,10 +1,10 @@
 use cosmic_text::{
-    Align, Attrs, Buffer, CacheKey, CacheKeyFlags, Color as CosmicColor, FontSystem, LayoutGlyph,
-    Metrics, PhysicalGlyph, Shaping, Style, SwashCache, Weight, fontdb,
+    Align, Attrs, Buffer, CacheKey, CacheKeyFlags, Color as CosmicColor, Family, FontSystem,
+    LayoutGlyph, Metrics, PhysicalGlyph, Shaping, Style, SwashCache, Weight, fontdb,
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
-use renderer_core::{GlyphRaster, TextAlign, TextRun, TextStyle};
+use renderer_core::{FontFamily, GlyphRaster, TextAlign, TextRun, TextStyle};
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
@@ -143,6 +143,7 @@ fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Te
     let wrap_width = (!style.no_wrap).then_some(rect.width);
     buffer.set_size(wrap_width, Some(rect.height));
     let mut attrs = Attrs::new()
+        .family(cosmic_family(&style.font_family))
         .weight(Weight(style.weight))
         .style(if style.italic {
             Style::Italic
@@ -219,6 +220,7 @@ pub(crate) fn make_buffer_rich(
     buffer.set_size(Some(rect.width), Some(rect.height));
     let spans = runs.iter().map(|run| {
         let mut attrs = Attrs::new()
+            .family(cosmic_family(&base.font_family))
             .weight(Weight(run.weight))
             .style(if run.italic {
                 Style::Italic
@@ -242,6 +244,18 @@ pub(crate) fn make_buffer_rich(
     );
     buffer.shape_until_scroll(font_system, false);
     buffer
+}
+
+/// The cosmic-text family a style asks for.
+///
+/// `SansSerif` is the database's own routed default, which [`Fonts::font_system`] has already pointed at the
+/// configured family — so a style naming nothing shapes exactly as it did before there was an axis to name,
+/// and a style naming a face reaches it without displacing anyone else's.
+fn cosmic_family(family: &FontFamily) -> Family<'_> {
+    match family {
+        FontFamily::SansSerif => Family::SansSerif,
+        FontFamily::Named(name) => Family::Name(name),
+    }
 }
 
 fn to_cosmic_color(color: Color) -> CosmicColor {

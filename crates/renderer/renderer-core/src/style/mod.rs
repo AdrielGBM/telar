@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 mod gradient;
 mod paint;
 mod scale;
@@ -36,11 +38,32 @@ pub enum GlyphRaster {
     Pixel,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Which face a run of text shapes in.
+///
+/// [`SansSerif`](Self::SansSerif) is whatever the surface's font configuration resolves it to — the
+/// application's own family, an OEM stack, or the platform's default — and it is a *value* rather than a
+/// `None` on purpose: a property that flows down a tree has to be able to tell "nobody named a family"
+/// from "somebody named the default one", and an `Option` collapses those into the same thing.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub enum FontFamily {
+    #[default]
+    SansSerif,
+    Named(Arc<str>),
+}
+
+impl<T: AsRef<str>> From<T> for FontFamily {
+    fn from(name: T) -> Self {
+        FontFamily::Named(name.as_ref().into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextStyle {
     pub font_size: f32,
     pub paint: Paint,
     pub shadow: Option<Shadow>,
+    /// The face to shape in. See [`FontFamily`].
+    pub font_family: FontFamily,
     /// OpenType weight axis: 400 is normal, 700 is bold. Selects the matching font face.
     pub weight: u16,
     pub italic: bool,
@@ -70,6 +93,7 @@ impl TextStyle {
             font_size,
             paint: paint.into(),
             shadow: None,
+            font_family: FontFamily::SansSerif,
             weight: 400,
             italic: false,
             align: TextAlign::Start,
@@ -90,6 +114,12 @@ impl TextStyle {
 
     pub fn with_weight(mut self, weight: u16) -> Self {
         self.weight = weight;
+        self
+    }
+
+    /// Shapes this text in `family` instead of the configured sans-serif face.
+    pub fn with_font_family(mut self, family: impl Into<FontFamily>) -> Self {
+        self.font_family = family.into();
         self
     }
 
