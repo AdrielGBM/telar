@@ -263,7 +263,6 @@ struct LayoutRuntime {
     // Available space each root was last computed against, so compute_layout can re-run when only the space changed (e.g. a window resize) even though the node itself is clean. Without this, resizing an independently-computed root is silently a no-op and its layout freezes at the first size.
     last_space: FxHashMap<NodeId, (AvailableSpace, AvailableSpace)>,
     // Nodes with a definite `max-width`, their original style, and the width pinned on the previous compute (`None` = unpinned). taffy sizes a max-width box's intrinsic height at its uncapped width, so a wrapping child reports a 1-line height and the box ends up too short. compute_layout pins each resolved width as a definite width and re-runs so heights are correct. The stored pin lets the undo pass stay idempotent: an unpinned box whose space did not change is left untouched.
-    constrained: Vec<(NodeId, LayoutStyle, Option<f32>)>,
     // Whether each compute-root's width/height were originally `auto`, captured the first time it is computed. An auto-sized root fills the definite space it is computed in, so a top-level page need not declare width:100% to avoid collapsing to its content width.
     root_auto: FxHashMap<NodeId, (bool, bool)>,
     // The parent-less (top-level) root last computed against the window — the layout host that `overlay`s
@@ -292,19 +291,12 @@ impl LayoutRuntime {
             registry: FxHashMap::default(),
             boundary_nodes: FxHashMap::default(),
             last_space: FxHashMap::default(),
-            constrained: Vec::new(),
             root_auto: FxHashMap::default(),
             overlay_host: None,
             host_pinned: false,
             abs_pos: FxHashMap::default(),
             #[cfg(debug_assertions)]
             is_computing: false,
-        }
-    }
-
-    fn track_constrained(&mut self, node: NodeId, style: &LayoutStyle) {
-        if style.max_width_px().is_some() {
-            self.constrained.push((node, style.clone(), None));
         }
     }
 
@@ -318,7 +310,6 @@ impl LayoutRuntime {
         if let Some(dimensions) = self.engine.is_fixed_size(node) {
             self.boundary_nodes.insert(node, dimensions);
         }
-        self.track_constrained(node, &style);
         Ok((node, signal))
     }
 
@@ -330,7 +321,6 @@ impl LayoutRuntime {
         let node = self.engine.new_measured_leaf(style.clone(), measure)?;
         let signal = signal(Rect::default());
         self.registry.insert(node, signal.clone());
-        self.track_constrained(node, &style);
         Ok((node, signal))
     }
 
@@ -348,7 +338,6 @@ impl LayoutRuntime {
         if let Some(dimensions) = self.engine.is_fixed_size(node) {
             self.boundary_nodes.insert(node, dimensions);
         }
-        self.track_constrained(node, &style);
         Ok(node)
     }
 
@@ -387,18 +376,6 @@ impl LayoutRuntime {
                 v
             }
         };
-        // Undo any width pins from a previous layout so each max-width box resolves against the new available space before we re-pin it after the first pass. Idempotent: only touch a box when the space changed (everything must re-resolve) or it actually carried a pin to lift. Leaving unpinned boxes alone when the space is unchanged avoids dirtying their ancestors, which would otherwise force find_boundary_root to fall back to global_root every frame. This runs before the root-fill below so that when the root itself is a max-width box, restoring its original (auto-width) style does not clobber the definite width the fill assigns.
-        for i in 0..self.constrained.len() {
-            let node = self.constrained[i].0;
-            let had_pin = self.constrained[i].2.is_some();
-            if !is_space_changed && !had_pin {
-                continue;
-            }
-            let style = self.constrained[i].1.clone();
-            self.engine.set_style(node, style).ok();
-            self.engine.mark_dirty(node).ok();
-            self.constrained[i].2 = None;
-        }
         let mut did_fill_root = false;
         if width_auto {
             let w = match width {
@@ -439,30 +416,6 @@ impl LayoutRuntime {
             self.find_boundary_root(&dirty_nodes, root, width, height);
         self.engine
             .compute_layout(layout_root, layout_width, layout_height)?;
-        // Second pass: pin each max-width box to the width it just resolved to, so a re-layout sizes its wrapping children at the capped width (correct line count / height) instead of taffy's uncapped 1-line intrinsic estimate.
-        let mut did_pin_any = false;
-        for i in 0..self.constrained.len() {
-            let node = self.constrained[i].0;
-            let style = self.constrained[i].1.clone();
-            let Some(max_w) = style.max_width_px() else {
-                continue;
-            };
-            if !self.is_in_subtree(node, layout_root) {
-                continue;
-            }
-            if let Ok(layout) = self.engine.layout(node) {
-                if layout.width > 0.0 && layout.width <= max_w + 0.5 {
-                    self.engine.set_style(node, style.width(layout.width)).ok();
-                    self.engine.mark_dirty(node).ok();
-                    self.constrained[i].2 = Some(layout.width);
-                    did_pin_any = true;
-                }
-            }
-        }
-        if did_pin_any {
-            self.engine
-                .compute_layout(layout_root, layout_width, layout_height)?;
-        }
         // Collect the changed rects while holding the runtime borrow, but apply them (`sig.set`) only
         // after the caller releases it: a set flushes effects, one of which may re-enter the runtime.
         let mut updates: Vec<(RwSignal<Rect>, Rect)> = Vec::new();
@@ -570,7 +523,6 @@ impl LayoutRuntime {
         self.last_space.remove(&node);
         self.root_auto.remove(&node);
         self.abs_pos.remove(&node);
-        self.constrained.retain(|(n, _, _)| *n != node);
     }
 }
 
@@ -581,9 +533,10 @@ mod tests {
 
     use super::*;
 
-    // The premise the whole `constrained` two-pass exists for, and the only test that reaches it: a child whose HEIGHT depends on the width it is given. The fixed-size children below cannot show it — their height is the same at every width — so until this existed the mechanism had no guard at all.
-    //
-    // It passes with the pin pass disabled, on taffy 0.13: the workaround was written against 0.11 and the behaviour appears to be gone, which would make the undo pass, the re-pin pass and the extra `compute_layout` dead weight. Not deleted on that evidence alone — one synthetic measure fn is not `apps/landing`'s wrapping bands, and the failure mode is a layout quietly wrong rather than one that fails to build.
+    // A child whose HEIGHT depends on the width it is given, which is the case a `max-width` box used to get
+    // wrong: taffy 0.11 measured it at its uncapped one-line intrinsic width, so `layout-reactive` pinned
+    // every capped box to its resolved width and laid out a second time. That pass is gone — the behaviour
+    // went with taffy 0.13, and `telar/tests/max_width_wrapping.rs` is the same case through the real shaper.
     #[test]
     fn a_maxwidth_box_measures_its_content_at_the_capped_width() {
         reset_layout_runtime();
@@ -760,7 +713,7 @@ mod tests {
         );
     }
 
-    // Re-running compute_layout against the SAME available space (root re-dirtied by an unrelated change) must keep the max-width box correctly sized: the idempotent undo must still lift and re-pin a previously pinned box so its wrapped height holds.
+    // Re-running compute_layout against the SAME available space (root re-dirtied by an unrelated change) must leave the max-width box where it was: a layout that drifts between two identical inputs is one nobody can reason about.
     #[test]
     fn maxwidth_box_stable_across_recompute() {
         reset_layout_runtime();
@@ -813,7 +766,7 @@ mod tests {
         );
     }
 
-    // Regression: the resize undo pass used to overwrite a constrained node's whole style from its construction-time LayoutStyle, silently reverting an out-of-band set_display(false) along with the width pin.
+    // A max-width box hidden out of band stays hidden across a resize. The pin pass used to restore each capped node's whole construction-time style, taking an out-of-band `set_display(false)` with it.
     #[test]
     fn hidden_maxwidth_box_stays_hidden_after_a_resize() {
         reset_layout_runtime();

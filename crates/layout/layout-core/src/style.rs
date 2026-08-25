@@ -274,12 +274,6 @@ impl LayoutStyle {
         self
     }
 
-    /// The node's `max-width` in pixels if it is a definite length, else `None`
-    /// (e.g. percent or unset). Used by the layout pass to pin a resolved width.
-    pub fn max_width_px(&self) -> Option<f32> {
-        self.inner.max_size.width.into_option()
-    }
-
     pub fn max_width(mut self, dim: impl Into<SizeDimension>) -> Self {
         self.inner.max_size.width = dim.into().into();
         self
