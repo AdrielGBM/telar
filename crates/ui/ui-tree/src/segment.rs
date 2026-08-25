@@ -196,7 +196,7 @@ impl Segment {
         let mut bounds = Rect::default();
         for (cmd, _) in self.own_commands.borrow().iter() {
             // The renderer's own answer to "what does this command paint", rather than a second list of
-            // arms: the local copy knew four commands, so a `RichText` contributed nothing and a
+            // arms: the local copy knew four commands, so a spanned paragraph contributed nothing and a
             // notification card — whose whole body is one — inspected as an empty rect.
             let Some(rect) = renderer_core::culling::command_visual_rect(
                 cmd,

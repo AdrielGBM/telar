@@ -40,7 +40,7 @@ impl TextShaper {
             return;
         }
         let start_len = out.len();
-        let buffer = make_buffer(&mut self.font_system, text, rect, style);
+        let buffer = make_buffer(&mut self.font_system, text, None, rect, style);
         let color = style.paint.solid_color();
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {

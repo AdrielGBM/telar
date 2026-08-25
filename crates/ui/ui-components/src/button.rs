@@ -10,7 +10,7 @@ use crate::shared;
 use crate::shared::props_default;
 
 /// Padding a button reserves around its label, derived from the theme's spacing unit rather than fixed so one
-/// theme number moves it. `Text::auto` measures the label at its full line box (taller than a bare
+/// theme number moves it. `Text::new` measures the label at its full line box (taller than a bare
 /// `font_size * line_height`), which is why the vertical share is the lighter of the two.
 fn pad_x() -> f32 {
     shared::spacing() * 1.75
@@ -20,7 +20,7 @@ fn pad_y() -> f32 {
 }
 
 /// A row so the label's measured width sets the box's main-axis size (a column would collapse the cross axis:
-/// `Text::auto` sets `align_self_stretch`, which fights content-sizing and renders 0-wide).
+/// `Text::new` sets `align_self_stretch`, which fights content-sizing and renders 0-wide).
 fn shell() -> LayoutStyle {
     LayoutStyle::new()
         .flex_row()
@@ -70,11 +70,11 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // its text to white on hover).
     let hovered = signal(false);
 
-    // The label must be a measured leaf (`Text::auto`) so it has intrinsic width inside the button's row;
+    // The label must be a measured leaf (`Text::new`) so it has intrinsic width inside the button's row;
     // a stretched `Text::new`/`single_line` would collapse to 0-wide and render nothing.
     let (label_fill, label_outline, label_hover) =
         (Rc::clone(&fill), Rc::clone(&outline), hovered.clone());
-    let label_widget = Text::auto(
+    let label_widget = Text::new(
         move || label(),
         LayoutStyle::new(),
         move || {

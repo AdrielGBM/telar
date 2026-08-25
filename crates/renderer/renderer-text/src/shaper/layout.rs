@@ -1,19 +1,24 @@
 use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
 use super::{
-    effective_line_height, from_cosmic_color, make_buffer, make_buffer_rich, physical_glyph,
-    resolve_coverage,
+    effective_line_height, from_cosmic_color, make_buffer, physical_glyph, resolve_coverage,
 };
 use cosmic_text::{CacheKey, SwashContent};
 use geometry_core::{Color, Rect};
-use renderer_core::{GlyphRaster, TextRun, TextStyle};
+use renderer_core::{GlyphRaster, Span, TextStyle};
 
 use super::atlas::GlyphInfo;
 
 impl TextShaper {
+    /// Lays `text` into `rect`, `spans` colouring and restyling the byte ranges that differ from `style`.
+    ///
+    /// A paragraph with spans skips the shaping cache, as the rich path always did: they are few and short,
+    /// and each glyph carries its own colour, which the position-only cache entry has no room for. The glyph
+    /// atlas still caches every raster either way.
     pub fn layout_glyphs(
         &mut self,
         text: &str,
+        spans: Option<&[Span]>,
         rect: Rect,
         style: &TextStyle,
         scale_factor: f32,
@@ -30,6 +35,39 @@ impl TextShaper {
             return;
         }
 
+        if let Some(spans) = spans.filter(|s| !s.is_empty()) {
+            let buffer = make_buffer(&mut self.font_system, text, Some(spans), rect, style);
+            let mut glyphs: Vec<(CacheKey, i32, i32, Color)> = Vec::new();
+            for run in buffer.layout_runs() {
+                for glyph in run.glyphs.iter() {
+                    let physical = physical_glyph(
+                        glyph,
+                        (0., run.line_y * scale_factor),
+                        scale_factor,
+                        style.raster,
+                    );
+                    let glyph_color = glyph.color_opt.map(from_cosmic_color).unwrap_or(color);
+                    glyphs.push((physical.cache_key, physical.x, physical.y, glyph_color));
+                }
+            }
+            drop(buffer);
+            out.reserve(glyphs.len());
+            for (cache_key, px, py, glyph_color) in glyphs {
+                self.emit_glyph(
+                    cache_key,
+                    px,
+                    py,
+                    rect,
+                    font_size,
+                    scale_factor,
+                    glyph_color,
+                    style.raster,
+                    out,
+                );
+            }
+            return;
+        }
+
         let shaping_key = ShapingCacheKey {
             text_hash: hash_text(text),
             font_size_bits: font_size.to_bits(),
@@ -42,7 +80,7 @@ impl TextShaper {
             if let Some(cached) = self.shaping_cache.get(&shaping_key) {
                 cached.clone()
             } else {
-                let buffer = make_buffer(&mut self.font_system, text, rect, style);
+                let buffer = make_buffer(&mut self.font_system, text, None, rect, style);
                 let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
                 for run in buffer.layout_runs() {
                     for glyph in run.glyphs.iter() {
@@ -76,92 +114,6 @@ impl TextShaper {
                 out,
             );
         }
-    }
-
-    /// Lays out a rich-text paragraph — styled `runs` — into `rect`, colouring each glyph by its run's own
-    /// colour (bold/italic fall out of cosmic-text's shaping). `base.max_lines` clamps by visual line. No
-    /// shaping cache: rich paragraphs are few and short, and the glyph atlas still caches every raster.
-    pub fn layout_glyphs_rich(
-        &mut self,
-        runs: &[TextRun],
-        rect: Rect,
-        base: &TextStyle,
-        scale_factor: f32,
-        out: &mut Vec<GlyphInfo>,
-    ) {
-        out.clear();
-        let width = rect.width.ceil() as u32;
-        let height = rect.height.ceil() as u32;
-        if width == 0 || height == 0 || runs.iter().all(|r| r.text.is_empty()) {
-            return;
-        }
-        let base_color = base.paint.solid_color();
-        let max_lines = base.max_lines.map(usize::from).filter(|&n| n > 0);
-        let buffer = make_buffer_rich(&mut self.font_system, runs, rect, base);
-        let mut glyphs: Vec<(CacheKey, i32, i32, Color)> = Vec::new();
-        for (line, run) in buffer.layout_runs().enumerate() {
-            if max_lines.is_some_and(|max| line >= max) {
-                break;
-            }
-            for glyph in run.glyphs.iter() {
-                let physical = physical_glyph(
-                    glyph,
-                    (0., run.line_y * scale_factor),
-                    scale_factor,
-                    base.raster,
-                );
-                let color = glyph.color_opt.map(from_cosmic_color).unwrap_or(base_color);
-                glyphs.push((physical.cache_key, physical.x, physical.y, color));
-            }
-        }
-        drop(buffer);
-        out.reserve(glyphs.len());
-        for (cache_key, px, py, color) in glyphs {
-            self.emit_glyph(
-                cache_key,
-                px,
-                py,
-                rect,
-                base.font_size,
-                scale_factor,
-                color,
-                base.raster,
-                out,
-            );
-        }
-    }
-
-    /// Measures a rich paragraph wrapped to `max_width`, clamped to `base.max_lines` visual lines — the rich
-    /// counterpart of [`measure_text`](Self::measure_text), so a rich-text leaf reserves the height its runs
-    /// actually need.
-    pub fn measure_rich_text(
-        &mut self,
-        runs: &[TextRun],
-        max_width: f32,
-        base: &TextStyle,
-    ) -> (f32, f32) {
-        if runs.iter().all(|r| r.text.is_empty()) || max_width.ceil() as u32 == 0 {
-            return (0.0, 0.0);
-        }
-        let rect = Rect {
-            x: 0.0,
-            y: 0.0,
-            width: max_width,
-            height: 100000.0,
-        };
-        let buffer = make_buffer_rich(&mut self.font_system, runs, rect, base);
-        let line_height = effective_line_height(base);
-        let max_lines = base.max_lines.map(usize::from).filter(|&n| n > 0);
-        let mut width: f32 = 0.0;
-        let mut height: f32 = 0.0;
-        for (line, run) in buffer.layout_runs().enumerate() {
-            if max_lines.is_some_and(|max| line >= max) {
-                break;
-            }
-            height = run.line_top + line_height;
-            width = width.max(run.line_w);
-        }
-        (width.ceil(), height)
     }
 
     /// Fetches (rasterizing and atlas-caching on a miss) one shaped glyph and appends its quad to `out`, tinted
@@ -317,7 +269,13 @@ impl TextShaper {
         });
     }
 
-    pub fn measure_text(&mut self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
+    pub fn measure_text(
+        &mut self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> (f32, f32) {
         if text.is_empty() {
             return (0.0, 0.0);
         }
@@ -329,13 +287,17 @@ impl TextShaper {
             return (0.0, 0.0);
         }
 
+        // Uncached like `layout_glyphs`: the key is the paragraph's own style, which two paragraphs differing only in spans would share.
+        let spans = spans.filter(|s| !s.is_empty());
         let cache_key = (
             hash_text(text),
             max_width.to_bits(),
             style.font_size.to_bits(),
             text_style_bits(style),
         );
-        if let Some(&cached) = self.measure_cache.get(&cache_key) {
+        if spans.is_none()
+            && let Some(&cached) = self.measure_cache.get(&cache_key)
+        {
             return cached;
         }
 
@@ -346,7 +308,7 @@ impl TextShaper {
             height: 100000.0,
         };
         // make_buffer already applies max_lines/ellipsis, so the measured extent reflects the clamp.
-        let buffer = make_buffer(&mut self.font_system, text, rect, style);
+        let buffer = make_buffer(&mut self.font_system, text, spans, rect, style);
 
         let mut width: f32 = 0.0;
         let mut height: f32 = 0.0;
@@ -361,7 +323,9 @@ impl TextShaper {
 
         // Round the wrap width up so sub-pixel rounding never re-wraps the last glyph.
         let result = (width.ceil(), height);
-        self.measure_cache.insert(cache_key, result);
+        if spans.is_none() {
+            self.measure_cache.insert(cache_key, result);
+        }
         result
     }
 
@@ -386,7 +350,7 @@ impl TextShaper {
             width: max_width,
             height: 100000.0,
         };
-        let buffer = make_buffer(&mut self.font_system, text, rect, style);
+        let buffer = make_buffer(&mut self.font_system, text, None, rect, style);
         // Collect (cache_key, baseline_y) first so the immutable `layout_runs` borrow ends before the
         // mutable `swash_cache` lookups below.
         let mut glyphs: Vec<(CacheKey, i32)> = Vec::new();

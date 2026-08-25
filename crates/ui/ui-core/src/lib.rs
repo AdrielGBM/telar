@@ -28,7 +28,6 @@ mod press;
 mod reactive_list;
 mod rect;
 mod reorder;
-mod rich_text;
 mod scroll_area;
 mod scroll_page;
 pub mod scroll_region;
@@ -79,7 +78,6 @@ pub use pointer::{
 pub use reactive_list::ReactiveList;
 pub use rect::Rectangle;
 pub use reorder::{Axis, apply_move, insertion_index};
-pub use rich_text::RichText;
 pub use scroll_area::{LayoutScrollArea, ScrollViewport, ScrollbarStyle};
 pub use scroll_page::ScrollPage;
 pub use scroll_region::visible_rect;

@@ -45,7 +45,8 @@ impl LineGutter {
             let line_h = crate::text_metrics::line_height(s.font_size);
             let n = (measure_count)().max(1);
             // Width of the widest (last) number; height from the line count — matching the editor's own metric.
-            let width = crate::text_metrics::measure_text(&n.to_string(), NO_WRAP_WIDTH, &s).0;
+            let width =
+                crate::text_metrics::measure_text(&n.to_string(), None, NO_WRAP_WIDTH, &s).0;
             (width, n as f32 * line_h)
         });
         let (node, rect) = new_measured_leaf(layout_style, measure)?;

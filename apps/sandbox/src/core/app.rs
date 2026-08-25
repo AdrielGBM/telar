@@ -172,7 +172,7 @@ fn build_source_link(
     section: usize,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let file = section_def(section).file;
-    let label = Text::auto(
+    let label = Text::new(
         move || format!("View source \u{2192} {file}"),
         LayoutStyle::new(),
         || TextStyle::new(13.0, theme().primary),
@@ -217,12 +217,12 @@ impl SourcePage {
     fn new(section: usize) -> Result<Self, LayoutError> {
         let def = section_def(section);
         let (file, source) = (def.file, def.source);
-        let heading = Text::auto(
+        let heading = Text::new(
             move || file.to_string(),
             LayoutStyle::new(),
             || TextStyle::new(20.0, theme().ink).with_weight(700),
         )?;
-        let listing = Text::auto(
+        let listing = Text::new(
             move || source.to_string(),
             LayoutStyle::new(),
             || TextStyle::new(12.5, theme().ink).with_line_height(1.6),
@@ -329,7 +329,7 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
     let live =
         move |stacks: &TabStacks<usize, SectionRoute>| use_dismiss_depth() > 0 || stacks.can_pop();
     let on_label = stacks.clone();
-    let label = Text::auto(
+    let label = Text::new(
         || "\u{2190} Back".to_string(),
         LayoutStyle::new(),
         move || {
@@ -376,7 +376,7 @@ fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIte
     for (i, def) in SECTIONS.iter().enumerate() {
         let title = def.title;
         let on_label = stacks.clone();
-        let label = Text::auto(
+        let label = Text::new(
             move || title.to_string(),
             LayoutStyle::new(),
             move || {
@@ -440,7 +440,7 @@ fn build_sidebar(
 /// Mobile top bar: a hamburger button (toggles `menu_open`) next to the wordmark. Shown only below the breakpoint.
 fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let toggle = menu_open.clone();
-    let glyph = Text::auto(
+    let glyph = Text::new(
         || "\u{2630}".to_string(),
         LayoutStyle::new(),
         || TextStyle::new(20.0, theme().ink),

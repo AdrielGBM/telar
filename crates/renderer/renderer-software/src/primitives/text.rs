@@ -109,6 +109,7 @@ pub(crate) fn draw_text(
     pixmap: &mut tiny_skia::Pixmap,
     shaper: &mut renderer_text::TextShaper,
     text: &str,
+    spans: Option<&[renderer_core::Span]>,
     rect: Rect,
     style: &TextStyle,
     transform: tiny_skia::Transform,
@@ -222,7 +223,7 @@ pub(crate) fn draw_text(
                 rect.height,
                 current_clip_rect,
             ) {
-                blit_body(pixmap, shaper, text, rect, style, transform, clip);
+                blit_body(pixmap, shaper, text, spans, rect, style, transform, clip);
             }
         }
 
@@ -240,7 +241,7 @@ pub(crate) fn draw_text(
         return;
     }
 
-    blit_body(pixmap, shaper, text, rect, style, transform, clip);
+    blit_body(pixmap, shaper, text, spans, rect, style, transform, clip);
     draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
 }
 
@@ -251,55 +252,19 @@ pub(crate) fn draw_text(
 /// doubled what every cached label cost and, having neither a byte budget nor an admission rule, quietly kept the
 /// strings the shaper's admission had just decided were not worth keeping. `PixmapRef` borrows those bytes instead,
 /// so the copy and the cache both go.
+#[allow(clippy::too_many_arguments)]
 fn blit_body(
     pixmap: &mut tiny_skia::Pixmap,
     shaper: &mut renderer_text::TextShaper,
     text: &str,
+    spans: Option<&[renderer_core::Span]>,
     rect: Rect,
     style: &TextStyle,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
 ) {
     // rasterize, not rasterize_alpha + tint, so colour emoji keep their own colours instead of being multiplied by the text colour.
-    let (pixels, width, height) = shaper.rasterize(text, rect, style);
-    let Some(src) = tiny_skia::PixmapRef::from_bytes(&pixels, width, height) else {
-        return;
-    };
-    pixmap.draw_pixmap(
-        rect.x as i32,
-        rect.y as i32,
-        src,
-        &tiny_skia::PixmapPaint {
-            blend_mode: tiny_skia::BlendMode::SourceOver,
-            ..Default::default()
-        },
-        transform,
-        clip,
-    );
-}
-
-/// Draws a rich-text paragraph: rasterizes the styled runs to one colour block (each run in its own colour)
-/// and blits it. No shadow or block cache — the rich path serves dynamic notification bodies, not hot UI text.
-pub(crate) fn draw_rich_text(
-    pixmap: &mut tiny_skia::Pixmap,
-    shaper: &mut renderer_text::TextShaper,
-    runs: &[renderer_core::TextRun],
-    rect: Rect,
-    base: &TextStyle,
-    transform: tiny_skia::Transform,
-    clip: Option<&tiny_skia::Mask>,
-    current_clip_rect: Option<Rect>,
-) {
-    if !renderer_core::culling::overlaps(
-        rect.x + transform.tx,
-        rect.y + transform.ty,
-        rect.width,
-        rect.height,
-        current_clip_rect,
-    ) {
-        return;
-    }
-    let (pixels, width, height) = shaper.rasterize_rich(runs, rect, base);
+    let (pixels, width, height) = shaper.rasterize(text, spans, rect, style);
     let Some(src) = tiny_skia::PixmapRef::from_bytes(&pixels, width, height) else {
         return;
     };

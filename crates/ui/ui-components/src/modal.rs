@@ -103,9 +103,9 @@ fn build_open_modal(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // `auto` (measured) so the title/Close get their intrinsic WIDTH in the header row; a plain `Text::new`
     // only stretches its cross-axis (height in a row), leaving width 0 and the text invisible.
-    let heading = Text::auto(move || title(), LayoutStyle::new(), heading_style)?;
+    let heading = Text::new(move || title(), LayoutStyle::new(), heading_style)?;
 
-    let close_label = Text::auto(
+    let close_label = Text::new(
         || "Close".to_string(),
         LayoutStyle::new(),
         || TextStyle::new(close_size(), shared::ink()),

@@ -2,9 +2,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use renderer_core::{
-    BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, TextRun, TextStyle,
-};
+use renderer_core::{BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, Span, TextStyle};
 
 thread_local! {
     static NODE_VEC_POOL: RefCell<Vec<Vec<RenderNode>>> = const { RefCell::new(Vec::new()) };
@@ -101,16 +99,24 @@ impl RenderNode {
     pub fn text(text: impl Into<Arc<str>>, rect: Rect, style: TextStyle) -> Self {
         Self::Primitive(DrawCommand::Text {
             text: text.into(),
+            spans: None,
             rect,
             style: Arc::new(style),
         })
     }
 
-    pub fn rich_text(runs: Arc<[TextRun]>, rect: Rect, base: TextStyle) -> Self {
-        Self::Primitive(DrawCommand::RichText {
-            runs,
+    /// [`text`](Self::text) with byte ranges that style themselves differently from the paragraph.
+    pub fn spanned_text(
+        text: impl Into<Arc<str>>,
+        spans: Arc<[Span]>,
+        rect: Rect,
+        style: TextStyle,
+    ) -> Self {
+        Self::Primitive(DrawCommand::Text {
+            text: text.into(),
+            spans: (!spans.is_empty()).then_some(spans),
             rect,
-            base: Arc::new(base),
+            style: Arc::new(style),
         })
     }
 

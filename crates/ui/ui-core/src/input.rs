@@ -314,7 +314,13 @@ impl Component for Input {
             // is already guaranteed to contrast with.
             let highlight = self.selection(&text).map(|(from, to)| {
                 let measure = |upto: usize| {
-                    crate::text_metrics::measure_text(&self.shown(&text[..upto]), 1.0e6, &style).0
+                    crate::text_metrics::measure_text(
+                        &self.shown(&text[..upto]),
+                        None,
+                        1.0e6,
+                        &style,
+                    )
+                    .0
                 };
                 let (start, end) = (measure(from), measure(to));
                 let fill = match style.paint {
@@ -334,7 +340,7 @@ impl Component for Input {
             // Measured against what is *drawn*: a mask character is not the width of the character it hides,
             // so measuring the real prefix would put the caret somewhere the text is not.
             let prefix = self.shown(&text[..caret]);
-            let (prefix_w, _) = crate::text_metrics::measure_text(&prefix, 1.0e6, &style);
+            let (prefix_w, _) = crate::text_metrics::measure_text(&prefix, None, 1.0e6, &style);
             let line_h = crate::text_metrics::line_height(style.font_size);
             let caret_rect = Rect {
                 x: prefix_w,

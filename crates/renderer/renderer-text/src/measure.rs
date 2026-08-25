@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use renderer_core::{TextRun, TextStyle};
+use renderer_core::{Span, TextStyle};
 
 use crate::TextShaper;
 use crate::fonts::{self, Fonts};
@@ -33,12 +33,14 @@ fn with_shaper<R>(f: impl FnOnce(&mut TextShaper) -> R) -> R {
 pub struct ShaperMetrics;
 
 impl renderer_core::TextMetrics for ShaperMetrics {
-    fn measure(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
-        measure_text(text, max_width, style)
-    }
-
-    fn measure_runs(&self, runs: &[TextRun], max_width: f32, base: &TextStyle) -> (f32, f32) {
-        measure_rich_text(runs, max_width, base)
+    fn measure(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> (f32, f32) {
+        measure_text(text, spans, max_width, style)
     }
 
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
@@ -54,14 +56,13 @@ impl renderer_core::TextMetrics for ShaperMetrics {
 /// change glyph advances and `max_lines`/`ellipsis` clamp the extent, so measure and draw must agree by
 /// using the same style. Intended for layout-time text sizing on the UI thread so a text node reserves
 /// the height its lines actually need.
-pub fn measure_text(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
-    with_shaper(|shaper| shaper.measure_text(text, max_width, style))
-}
-
-/// Measures a rich paragraph (styled runs) wrapped to `max_width` for layout-time sizing, so a rich-text node
-/// reserves the height its runs need. The rich counterpart of [`measure_text`].
-pub fn measure_rich_text(runs: &[TextRun], max_width: f32, base: &TextStyle) -> (f32, f32) {
-    with_shaper(|shaper| shaper.measure_rich_text(runs, max_width, base))
+pub fn measure_text(
+    text: &str,
+    spans: Option<&[Span]>,
+    max_width: f32,
+    style: &TextStyle,
+) -> (f32, f32) {
+    with_shaper(|shaper| shaper.measure_text(text, spans, max_width, style))
 }
 
 /// The text's ink bounding box `(ink_top, ink_height)` from the top of its layout rect — the actual drawn
@@ -88,8 +89,8 @@ mod tests {
     #[test]
     fn measured_width_does_not_rewrap() {
         let style = renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK);
-        let (w, h_unbounded) = measure_text("Features", 1.0e6, &style);
-        let (_, h_at_measured) = measure_text("Features", w, &style);
+        let (w, h_unbounded) = measure_text("Features", None, 1.0e6, &style);
+        let (_, h_at_measured) = measure_text("Features", None, w, &style);
         assert!(
             (h_unbounded - h_at_measured).abs() < 0.5,
             "box at measured width re-wrapped: w={w} h0={h_unbounded} h1={h_at_measured}"

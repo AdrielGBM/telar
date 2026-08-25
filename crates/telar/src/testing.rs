@@ -23,9 +23,6 @@ pub fn texts(tree: &ComponentList) -> Vec<String> {
         .iter()
         .filter_map(|command| match command {
             DrawCommand::Text { text, .. } => Some(text.to_string()),
-            DrawCommand::RichText { runs, .. } => {
-                Some(runs.iter().map(|run| run.text.to_string()).collect())
-            }
             _ => None,
         })
         .collect()
@@ -40,11 +37,6 @@ pub fn find_text(tree: &ComponentList, needle: &str) -> bool {
 pub fn rect_of(tree: &ComponentList, needle: &str) -> Option<Rect> {
     tree.commands().iter().find_map(|command| match command {
         DrawCommand::Text { rect, text, .. } if text.contains(needle) => Some(*rect),
-        DrawCommand::RichText { rect, runs, .. }
-            if runs.iter().any(|run| run.text.contains(needle)) =>
-        {
-            Some(*rect)
-        }
         _ => None,
     })
 }
@@ -59,9 +51,6 @@ pub fn painted_rect(command: &DrawCommand) -> Option<Rect> {
     match command {
         DrawCommand::Rect { rect, .. } | DrawCommand::Image { rect, .. } => Some(*rect),
         DrawCommand::Text { rect, text, .. } => (!text.is_empty()).then_some(*rect),
-        DrawCommand::RichText { rect, runs, .. } => {
-            runs.iter().any(|run| !run.text.is_empty()).then_some(*rect)
-        }
         // A viewport clipped to nothing is the canonical shape of the bug this distinction exists for: the
         // content inside keeps its own honest rects and is cut away wholesale, so only the clip shows the fault.
         DrawCommand::PushClip { rect, .. } => Some(*rect),

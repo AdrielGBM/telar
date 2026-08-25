@@ -261,6 +261,7 @@ struct Label {
 impl Component for Label {
     fn view(&self) -> RenderNode {
         RenderNode::Primitive(telar::DrawCommand::Text {
+            spans: None,
             text: std::sync::Arc::from("Hamburgefonstiv"),
             rect: Rect::new(4.5, 4.5, 200.0, 24.0),
             style: std::sync::Arc::new(

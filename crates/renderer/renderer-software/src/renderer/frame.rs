@@ -327,7 +327,12 @@ where
                         );
                     });
                 }
-                DrawCommand::Text { text, rect, style } => {
+                DrawCommand::Text {
+                    text,
+                    spans,
+                    rect,
+                    style,
+                } => {
                     let rect = *rect;
                     let style = (**style).clone();
                     let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
@@ -351,6 +356,7 @@ where
                             pixmap,
                             &mut c.text_shaper,
                             text,
+                            spans.as_deref(),
                             rect,
                             &style,
                             transform,
@@ -360,37 +366,6 @@ where
                             &mut c.text_shadow_cache,
                             &mut c.pending_text_shadows,
                             &mut c.recent_text_shadow,
-                        );
-                    });
-                }
-                DrawCommand::RichText { runs, rect, base } => {
-                    let rect = *rect;
-                    let base = (**base).clone();
-                    let pixmap = if let Some((top, _, _, _)) = self.layer_stack.last_mut() {
-                        top
-                    } else {
-                        self.pixmap.as_mut().unwrap()
-                    };
-                    let clip = if self.draw_state.current_clip().is_some() && !inside_layer {
-                        self.clip_mask_buffer.as_ref()
-                    } else {
-                        None
-                    };
-                    let outer_clip = if inside_layer {
-                        None
-                    } else {
-                        self.draw_state.current_clip()
-                    };
-                    crate::caches::with_caches(|c| {
-                        crate::primitives::text::draw_rich_text(
-                            pixmap,
-                            &mut c.text_shaper,
-                            runs,
-                            rect,
-                            &base,
-                            transform,
-                            clip,
-                            outer_clip,
                         );
                     });
                 }

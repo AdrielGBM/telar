@@ -85,9 +85,6 @@ fn drawn_text(commands: &[DrawCommand]) -> Vec<(String, Rect)> {
         .iter()
         .filter_map(|command| match command {
             DrawCommand::Text { text, rect, .. } => Some((text.to_string(), *rect)),
-            DrawCommand::RichText { runs, rect, .. } => {
-                Some((runs.iter().map(|r| r.text.as_ref()).collect(), *rect))
-            }
             _ => None,
         })
         .filter(|(text, _)| !text.trim().is_empty())
@@ -128,6 +125,7 @@ mod tests {
 
     fn text_at(text: &str, rect: Rect) -> DrawCommand {
         DrawCommand::Text {
+            spans: None,
             text: Arc::from(text),
             rect,
             style: Arc::new(TextStyle::new(12.0, renderer_core::Color::BLACK)),

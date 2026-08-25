@@ -827,13 +827,7 @@ where
         self.frame_text.extend(
             frame_commands
                 .iter()
-                .filter(|c| {
-                    matches!(
-                        c,
-                        renderer_core::DrawCommand::Text { .. }
-                            | renderer_core::DrawCommand::RichText { .. }
-                    )
-                })
+                .filter(|c| matches!(c, renderer_core::DrawCommand::Text { .. }))
                 .cloned(),
         );
         // The message owns its commands from here on; release the borrows of the tree and the dev plugin so

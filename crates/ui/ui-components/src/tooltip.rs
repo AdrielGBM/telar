@@ -236,7 +236,7 @@ impl Content {
         } = self;
         // `auto` (measured) so each line gets its intrinsic WIDTH in the row; a plain `Text::new` only
         // stretches its cross-axis, leaving width 0 and the bubble empty.
-        let name = Text::auto(
+        let name = Text::new(
             move || text(),
             LayoutStyle::new(),
             || TextStyle::new(bubble_text_size(), BUBBLE_INK).with_no_wrap(true),
@@ -283,7 +283,7 @@ fn optional_line(
                 )?));
             }
             let text = text.clone();
-            Ok(box_item(Text::auto(
+            Ok(box_item(Text::new(
                 move || text(),
                 LayoutStyle::new(),
                 style.clone(),

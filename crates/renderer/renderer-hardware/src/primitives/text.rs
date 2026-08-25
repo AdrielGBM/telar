@@ -59,9 +59,11 @@ impl TextPipeline {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_text(
     shaper: &mut renderer_text::TextShaper,
     text: &str,
+    spans: Option<&[renderer_core::Span]>,
     rect: Rect,
     style: &TextStyle,
     scale_factor: f32,
@@ -69,26 +71,7 @@ pub(crate) fn prepare_text(
     glyph_scratch: &mut Vec<renderer_text::GlyphInfo>,
 ) {
     glyph_scratch.clear();
-    shaper.layout_glyphs(text, rect, style, scale_factor, glyph_scratch);
-    out.extend(glyph_scratch.iter().map(|g| TextInstance {
-        dest_rect: g.dest_rect,
-        uv_min: g.uv_min,
-        uv_max: g.uv_max,
-        color: g.color,
-    }));
-}
-
-pub(crate) fn prepare_rich_text(
-    shaper: &mut renderer_text::TextShaper,
-    runs: &[renderer_core::TextRun],
-    rect: Rect,
-    base: &TextStyle,
-    scale_factor: f32,
-    out: &mut Vec<TextInstance>,
-    glyph_scratch: &mut Vec<renderer_text::GlyphInfo>,
-) {
-    glyph_scratch.clear();
-    shaper.layout_glyphs_rich(runs, rect, base, scale_factor, glyph_scratch);
+    shaper.layout_glyphs(text, spans, rect, style, scale_factor, glyph_scratch);
     out.extend(glyph_scratch.iter().map(|g| TextInstance {
         dest_rect: g.dest_rect,
         uv_min: g.uv_min,

@@ -72,6 +72,7 @@ fn dense_ui() -> Vec<DrawCommand> {
         style: panel_fill.clone(),
     });
     cmds.push(DrawCommand::Text {
+        spans: None,
         text: title.clone(),
         rect: Rect::new(16.0, 14.0, 400.0, 24.0),
         style: title_style.clone(),
@@ -135,11 +136,13 @@ fn dense_ui() -> Vec<DrawCommand> {
             cmds.push(DrawCommand::PopMatrix);
             // Two text lines.
             cmds.push(DrawCommand::Text {
+                spans: None,
                 text: label.clone(),
                 rect: Rect::new(x + 40.0, y + 16.0, cell_w - 56.0, 20.0),
                 style: label_style.clone(),
             });
             cmds.push(DrawCommand::Text {
+                spans: None,
                 text: label.clone(),
                 rect: Rect::new(x + 16.0, y + 64.0, cell_w - 32.0, 20.0),
                 style: label_style.clone(),

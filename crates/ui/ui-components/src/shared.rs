@@ -279,7 +279,7 @@ pub(crate) fn labelled_control(
     let mut children: Vec<Box<dyn LayoutItem>> = vec![box_item(control)];
     if !label().is_empty() {
         // `auto` (measured leaf) so the label gets its intrinsic WIDTH in this row; a plain `Text::new` only stretches its cross-axis (height here), leaving width 0 and the label invisible.
-        let text = Text::auto(
+        let text = Text::new(
             move || label(),
             LayoutStyle::new(),
             || TextStyle::new(font_size(), ink()),

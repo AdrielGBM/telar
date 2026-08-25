@@ -1,18 +1,22 @@
 use std::sync::{Arc, RwLock};
 
-use crate::{TextRun, TextStyle};
+use crate::{Span, TextStyle};
 
 /// How much room a string takes — all a widget tree needs to know about text before anything is drawn.
 ///
 /// A seam rather than a call into the shaper, because the answer belongs to the target: on a raster surface it is
 /// cosmic-text's shaped advance, on a terminal it is `unicode-width` times a cell.
 pub trait TextMetrics: Send + Sync + 'static {
-    /// The logical `(width, height)` of `text` wrapped to `max_width` under `style`. Weight, slant, `max_lines`
-    /// and `ellipsis` all change the extent, so measuring and drawing must be handed the same style.
-    fn measure(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32);
-
-    /// The same for a paragraph of styled runs, each measured against `base` wherever it overrides nothing.
-    fn measure_runs(&self, runs: &[TextRun], max_width: f32, base: &TextStyle) -> (f32, f32);
+    /// The logical `(width, height)` of `text` wrapped to `max_width` under `style`, with `spans` overriding
+    /// it over their byte ranges. Weight, slant, `max_lines` and `ellipsis` all change the extent, so
+    /// measuring and drawing must be handed the same style — and the same spans.
+    fn measure(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> (f32, f32);
 
     /// The drawn glyph extent `(ink_top, ink_height)` from the top of the layout rect, so a widget can optically
     /// centre a short run against something that is not text.
@@ -57,13 +61,13 @@ fn metrics() -> Arc<dyn TextMetrics> {
 }
 
 /// Measures the logical `(width, height)` of `text` wrapped to `max_width`. See [`TextMetrics::measure`].
-pub fn measure_text(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
-    metrics().measure(text, max_width, style)
-}
-
-/// Measures a paragraph of styled runs. See [`TextMetrics::measure_runs`].
-pub fn measure_rich_text(runs: &[TextRun], max_width: f32, base: &TextStyle) -> (f32, f32) {
-    metrics().measure_runs(runs, max_width, base)
+pub fn measure_text(
+    text: &str,
+    spans: Option<&[Span]>,
+    max_width: f32,
+    style: &TextStyle,
+) -> (f32, f32) {
+    metrics().measure(text, spans, max_width, style)
 }
 
 /// The text's drawn glyph extent `(ink_top, ink_height)`. See [`TextMetrics::ink_bounds`].
@@ -83,16 +87,14 @@ mod tests {
     struct Fixed(f32);
 
     impl TextMetrics for Fixed {
-        fn measure(&self, text: &str, _max_width: f32, _style: &TextStyle) -> (f32, f32) {
-            (text.chars().count() as f32 * self.0, self.0)
-        }
-        fn measure_runs(
+        fn measure(
             &self,
-            _runs: &[TextRun],
+            text: &str,
+            _spans: Option<&[Span]>,
             _max_width: f32,
-            _base: &TextStyle,
+            _style: &TextStyle,
         ) -> (f32, f32) {
-            (0.0, self.0)
+            (text.chars().count() as f32 * self.0, self.0)
         }
         fn ink_bounds(&self, _text: &str, _max_width: f32, _style: &TextStyle) -> (f32, f32) {
             (0.0, self.0)
@@ -111,7 +113,7 @@ mod tests {
             set_default_text_metrics(Fixed(10.0)),
             "the first default install takes"
         );
-        assert_eq!(measure_text("ab", 1.0e6, &style).0, 20.0);
+        assert_eq!(measure_text("ab", None, 1.0e6, &style).0, 20.0);
 
         assert!(
             !set_default_text_metrics(Fixed(1.0)),

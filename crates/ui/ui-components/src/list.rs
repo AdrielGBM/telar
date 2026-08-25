@@ -314,7 +314,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
 
     let mut content: Vec<Box<dyn LayoutItem>> = Vec::new();
     if let Some(checked) = checked {
-        content.push(box_item(Text::auto(
+        content.push(box_item(Text::new(
             move || {
                 if checked() {
                     "✓".into()
@@ -331,7 +331,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
     let mut given = children;
     let supplied = given.take_default();
     if supplied.is_empty() {
-        content.push(box_item(Text::auto(
+        content.push(box_item(Text::new(
             move || label(),
             LayoutStyle::new(),
             || TextStyle::new(shared::font_size(), shared::ink()).with_no_wrap(true),
@@ -340,7 +340,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
         content.extend(supplied);
     }
     if let Some(hint) = hint {
-        content.push(box_item(Text::auto(hint, LayoutStyle::new(), || {
+        content.push(box_item(Text::new(hint, LayoutStyle::new(), || {
             TextStyle::new(shared::font_size() * 0.9, shared::ink().with_alpha(0.65))
                 .with_no_wrap(true)
         })?));
@@ -429,7 +429,7 @@ pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
     }
-    let text = Text::auto(props.label, LayoutStyle::new(), || {
+    let text = Text::new(props.label, LayoutStyle::new(), || {
         TextStyle::new(shared::font_size() * 0.85, shared::ink().with_alpha(0.65))
             .with_no_wrap(true)
     })?;

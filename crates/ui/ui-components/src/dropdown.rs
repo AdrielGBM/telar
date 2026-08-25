@@ -134,7 +134,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     // `auto` (measured) so the label has width in this row; `single_line` only sets height → width 0 → invisible.
     // `no_wrap`: a trigger's label is the *name* of a control, and splitting `File` across two lines to make
     // room for the caret beside it turns one word into two.
-    let label_text = Text::auto(trigger_label, LayoutStyle::new(), || {
+    let label_text = Text::new(trigger_label, LayoutStyle::new(), || {
         TextStyle::new(shared::font_size(), shared::ink()).with_no_wrap(true)
     })?;
     let trigger_style = {

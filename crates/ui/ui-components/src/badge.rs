@@ -48,7 +48,7 @@ pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // `auto` (measured leaf) so the label has intrinsic width inside the pill; a stretched `Text::new` would
     // collapse to 0-wide, like `button`'s label. An empty label still measures fine (0-wide), so the pill
     // just shrinks to its padding rather than panicking.
-    let label_widget = Text::auto(move || label(), LayoutStyle::new(), on_accent_style)?;
+    let label_widget = Text::new(move || label(), LayoutStyle::new(), on_accent_style)?;
 
     let container = StyledContainer::new(
         pill(),

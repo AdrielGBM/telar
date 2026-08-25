@@ -34,7 +34,7 @@ fn button_box() -> LayoutStyle {
 }
 
 /// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see
-/// `button.rs`) plus a reactive `Text::auto` readout; lives in `ui-components`, not the kernel. `value` is
+/// `button.rs`) plus a reactive `Text::new` readout; lives in `ui-components`, not the kernel. `value` is
 /// `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own `signal(min)`).
 pub struct StepperProps {
     /// Bound value. `None` (the default) is uncontrolled — the widget makes its own `signal(min)`.
@@ -105,10 +105,10 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         }
     })?;
 
-    // A measured leaf (`Text::auto`) so the readout has intrinsic width in this row; a stretched
+    // A measured leaf (`Text::new`) so the readout has intrinsic width in this row; a stretched
     // `Text::new`/`single_line` would collapse to 0-wide, per `button.rs`'s label.
     let display_value = value.clone();
-    let display = Text::auto(
+    let display = Text::new(
         move || {
             let v = display_value.get();
             if v.fract() == 0.0 {
@@ -144,7 +144,7 @@ fn stepper_button(
     // The glyph reads the same fill the box paints, so a light accent (a neutral palette's `primary` in
     // dark mode) gets a dark glyph instead of a white one lost in its own button.
     let glyph_fill = color.clone();
-    let glyph_widget = Text::auto(
+    let glyph_widget = Text::new(
         move || glyph.to_string(),
         LayoutStyle::new(),
         move || {

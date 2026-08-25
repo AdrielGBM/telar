@@ -89,26 +89,6 @@ pub fn command_visual_rect(
                 None => r,
             })
         }
-        DrawCommand::RichText { rect, base, .. } => {
-            // Same glyph overshoot as `Text`, driven by the paragraph's base metrics.
-            let font_size = base.font_size;
-            let line_h = font_size * font_metrics.line_height_factor;
-            let ascender_overshoot = font_size * font_metrics.ascender_ratio;
-            let extra_bottom = (line_h - rect.height).max(0.0);
-            let r = transform_clip_rect(
-                matrix,
-                Rect::new(
-                    rect.x,
-                    rect.y - ascender_overshoot,
-                    rect.width,
-                    rect.height + ascender_overshoot + extra_bottom,
-                ),
-            );
-            Some(match base.shadow {
-                Some(s) => expand_for_shadow(r, s.blur_radius, s.spread, s.offset_x, s.offset_y),
-                None => r,
-            })
-        }
         DrawCommand::Image { rect, .. } => Some(transform_clip_rect(matrix, *rect)),
         DrawCommand::Line { p1, p2, style } => {
             let half_w = style.width / 2.0;

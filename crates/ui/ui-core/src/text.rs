@@ -6,7 +6,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use reactive_core::{Effect, effect};
-use renderer_core::TextStyle;
+use renderer_core::{Span, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::mark_dirty;
@@ -22,52 +22,66 @@ const REFERENCE_WIDTH: f32 = 1_000.0;
 
 pub struct Text {
     content: Rc<dyn Fn() -> String>,
+    // The byte ranges that restyle themselves, or `None` for a paragraph that does not have any.
+    spans: Option<Rc<dyn Fn() -> Vec<Span>>>,
     cached_content: RefCell<(String, Arc<str>)>,
     // Glyph-band memo for optical vertical centering: font_size bits -> (ink_top, ink_height, line_height).
     // Keyed on the size and not on the text, because the band is measured from a reference run — see `view`.
     cached_ink: RefCell<Option<(u32, f32, f32, f32)>>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
-    // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and `view` shapes the new one into that box — a label that grew soft-wraps into a slot built for the old text. `None` for `Text::new`, whose size is its style.
+    // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and `view` shapes the new one into that box — a label that grew soft-wraps into a slot built for the old text.
     _remeasure: Option<Effect>,
 }
 
 impl Text {
+    /// A text leaf whose height is measured from its content at the resolved width, so the box grows to fit
+    /// however many lines the text wraps into and pushes following siblings down instead of overflowing.
+    ///
+    /// There is no fixed-height counterpart: an explicit `height` in `layout_style` pins the box, which is
+    /// what the second constructor was for. Choosing between them by whether the markup happened to write a
+    /// height meant the same label measured or did not depending on a detail of how it was asked for.
     pub fn new(
         content_fn: impl Fn() -> String + 'static,
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        // Stretch overrides any parent align-items (e.g. center) so text always fills the parent's cross-axis width instead of collapsing to 0.
-        let leaf = LayoutLeaf::register(layout_style.align_self_stretch())?;
-        Ok(Self {
-            content: Rc::new(content_fn),
-            cached_content: RefCell::new((String::new(), Arc::from(""))),
-            cached_ink: RefCell::new(None),
-            style: Rc::new(style_fn),
-            leaf,
-            _remeasure: None,
-        })
+        Self::build(Rc::new(content_fn), None, layout_style, Rc::new(style_fn))
     }
 
-    /// Like [`Text::new`], but the leaf's height is measured from the content at its
-    /// resolved width, so the box grows to fit however many lines the text wraps
-    /// into and pushes following siblings down instead of overflowing onto them.
-    pub fn auto(
+    /// [`new`](Self::new) with byte ranges that style themselves differently from the paragraph — a bold
+    /// word, a coloured link — shaped and wrapped as one text rather than as separate widgets.
+    pub fn spanned(
         content_fn: impl Fn() -> String + 'static,
+        spans_fn: impl Fn() -> Vec<Span> + 'static,
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        let content_fn: Rc<dyn Fn() -> String> = Rc::new(content_fn);
-        let style: Rc<dyn Fn() -> TextStyle> = Rc::new(style_fn);
+        Self::build(
+            Rc::new(content_fn),
+            Some(Rc::new(spans_fn)),
+            layout_style,
+            Rc::new(style_fn),
+        )
+    }
 
+    fn build(
+        content_fn: Rc<dyn Fn() -> String>,
+        spans_fn: Option<Rc<dyn Fn() -> Vec<Span>>>,
+        layout_style: LayoutStyle,
+        style: Rc<dyn Fn() -> TextStyle>,
+    ) -> Result<Self, LayoutError> {
         let measure_content = Rc::clone(&content_fn);
         let measure_style = Rc::clone(&style);
+        let measure_spans = spans_fn.clone();
         let measure = Box::new(move |max_width: f32| {
             let s = (measure_style)();
-            crate::text_metrics::measure_text(&(measure_content)(), max_width, &s)
+            // Measured with its spans, because they change the extent: a box measured without them wraps differently from the text drawn into it.
+            let spans = measure_spans.as_ref().map(|f| f());
+            crate::text_metrics::measure_text(&(measure_content)(), spans.as_deref(), max_width, &s)
         });
 
+        // Stretch overrides any parent align-items (e.g. center) so text always fills the parent's cross-axis width instead of collapsing to 0.
         let (node, rect) =
             crate::context::new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         // Reads through the measure closure so it subscribes to exactly the signals the measure depends on, and keeps the string it last dirtied for: a signal re-set to its own value would otherwise cost a shaping pass and a relayout of the surface for nothing.
@@ -83,6 +97,7 @@ impl Text {
         });
         Ok(Self {
             content: content_fn,
+            spans: spans_fn,
             cached_content: RefCell::new((String::new(), Arc::from(""))),
             cached_ink: RefCell::new(None),
             style,
@@ -134,7 +149,7 @@ impl Component for Text {
                     let (top, h) =
                         crate::text_metrics::measure_ink_bounds(REFERENCE, REFERENCE_WIDTH, &style);
                     let (_, line) =
-                        crate::text_metrics::measure_text(REFERENCE, REFERENCE_WIDTH, &style);
+                        crate::text_metrics::measure_text(REFERENCE, None, REFERENCE_WIDTH, &style);
                     *cache = Some((key, top, h, line));
                     (top, h, line)
                 }
@@ -145,7 +160,7 @@ impl Component for Text {
         // property of the font at this size, so it applies once however many lines there are, while
         // centring against the band alone would push an N-line block down by (N-1)/2 lines — which is what
         // a two-line tooltip did, sinking its second line out of the bubble.
-        let (_, text_height) = crate::text_metrics::measure_text(&text, r.width, &style);
+        let (_, text_height) = crate::text_metrics::measure_text(&text, None, r.width, &style);
         let nudge = if ink_height > 0.0 {
             reference_line / 2.0 - ink_top - ink_height / 2.0
         } else {
@@ -164,8 +179,11 @@ impl Component for Text {
         let y = ((slack / 2.0 + nudge).clamp(0.0, slack)).round();
         // Render the full line box so nothing clips.
         let line_height = text_height;
-        self.leaf.at_layout_position(RenderNode::text(
+        let spans: Option<std::sync::Arc<[Span]>> =
+            self.spans.as_ref().map(|f| std::sync::Arc::from(f()));
+        self.leaf.at_layout_position(RenderNode::spanned_text(
             text,
+            spans.unwrap_or_else(|| std::sync::Arc::from([].as_slice())),
             Rect {
                 x: 0.0,
                 y,
@@ -206,7 +224,7 @@ mod tests {
                     lines when the available width is small, and fewer lines when it is wide.";
         let height_at = |w: f32| -> f32 {
             reset_layout_runtime();
-            let t = Text::auto(
+            let t = Text::new(
                 move || long.to_string(),
                 LayoutStyle::new(),
                 || TextStyle::new(16.0, Color::BLACK),
@@ -342,7 +360,7 @@ mod tests {
         }
         reset_layout_runtime();
         for size in [11.0_f32, 13.0, 15.0, 24.0] {
-            let text = Text::auto(
+            let text = Text::new(
                 || "Ag".to_string(),
                 LayoutStyle::new().width(200.0),
                 move || TextStyle::new(size, Color::BLACK),
@@ -378,7 +396,7 @@ mod tests {
     fn a_wrapped_block_is_not_pushed_down_by_the_lines_it_gained() {
         reset_layout_runtime();
         let style = || TextStyle::new(13.0, Color::BLACK);
-        let text = Text::auto(
+        let text = Text::new(
             || "Name regions and say what the model is made of".to_string(),
             LayoutStyle::new(),
             style,
@@ -396,9 +414,10 @@ mod tests {
         )
         .unwrap();
 
-        let (_, one_line) = crate::text_metrics::measure_text("Hxg", 1_000.0, &style());
+        let (_, one_line) = crate::text_metrics::measure_text("Hxg", None, 1_000.0, &style());
         let (_, block) = crate::text_metrics::measure_text(
             "Name regions and say what the model is made of",
+            None,
             150.0,
             &style(),
         );
@@ -436,7 +455,7 @@ mod tests {
         reset_layout_runtime();
         let title = signal(String::from("Desktop"));
         let read = title.read_only();
-        let label = Text::auto(
+        let label = Text::new(
             move || read.get(),
             LayoutStyle::new(),
             || TextStyle::new(13.0, Color::BLACK),

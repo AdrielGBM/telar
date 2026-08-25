@@ -72,7 +72,7 @@ pub fn accordion(
     // Caret flips glyph with `open`; its colour is the same reactive accent as the rest of the catalogue.
     let caret_open = open.clone();
     let caret_color = color.clone();
-    let caret = Text::auto(
+    let caret = Text::new(
         move || {
             if caret_open.get() {
                 CARET_OPEN
@@ -88,7 +88,7 @@ pub fn accordion(
         },
     )?;
 
-    let title_widget = Text::auto(
+    let title_widget = Text::new(
         move || title(),
         LayoutStyle::new(),
         || TextStyle::new(shared::font_size(), shared::ink()),

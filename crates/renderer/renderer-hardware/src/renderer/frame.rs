@@ -82,6 +82,41 @@ pub(super) struct FrameCtx {
 /// The size and the shadow, which are lengths; not the line height, which is a factor of the size
 /// and follows it on its own. Untouched at scale one, so nothing that is not inside a scaled
 /// subtree pays anything for this.
+/// A paragraph's spans at the same matrix scale as its style, so a span with a size of its own is not left
+/// at the unscaled one inside a zoomed subtree.
+fn spans_at_scale(
+    spans: &Option<std::sync::Arc<[renderer_core::Span]>>,
+    scale: f32,
+) -> Option<std::sync::Arc<[renderer_core::Span]>> {
+    let spans = spans.as_ref()?;
+    if (scale - 1.0).abs() < f32::EPSILON {
+        return Some(spans.clone());
+    }
+    Some(
+        spans
+            .iter()
+            .cloned()
+            .map(|s| renderer_core::Scale::scale(s, scale))
+            .collect(),
+    )
+}
+
+fn unpainted_spans(
+    spans: &Option<std::sync::Arc<[renderer_core::Span]>>,
+) -> Option<std::sync::Arc<[renderer_core::Span]>> {
+    let spans = spans.as_ref()?;
+    Some(
+        spans
+            .iter()
+            .cloned()
+            .map(|mut s| {
+                s.over.paint = None;
+                s
+            })
+            .collect(),
+    )
+}
+
 fn at_scale(style: renderer_core::TextStyle, scale: f32) -> renderer_core::TextStyle {
     if (scale - 1.0).abs() < f32::EPSILON {
         return style;
@@ -947,8 +982,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     );
                     self.pending_instances.push(inst);
                 }
-                DrawCommand::Text { text, rect, style } => {
+                DrawCommand::Text {
+                    text,
+                    spans,
+                    rect,
+                    style,
+                } => {
                     let rect = *rect;
+                    let spans = spans_at_scale(spans, self.draw_state.scale());
                     // Laid out at the size the matrix makes it, not at the size it was written with.
                     // The rect already goes through the matrix below; without this the box grows and
                     // the letters do not, so a zoomed subtree — a canvas, a thumbnail, a transition
@@ -997,11 +1038,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             shadow: None,
                             ..style.clone()
                         };
+                        // A shadow is one colour: the spans keep the metrics that place each glyph and give up the paint that would punch the text's own colours through it.
+                        let shadow_spans = unpainted_spans(&spans);
                         let instance_start = self.pending_shadow_instances.len() as u32;
                         crate::caches::with_shared(|caches| {
                             crate::primitives::text::prepare_text(
                                 &mut caches.text_shaper,
                                 text,
+                                shadow_spans.as_deref(),
                                 shadow_rect,
                                 &shadow_style,
                                 self.scale_factor,
@@ -1041,34 +1085,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         crate::primitives::text::prepare_text(
                             &mut caches.text_shaper,
                             text,
+                            spans.as_deref(),
                             translated,
                             &style,
-                            self.scale_factor,
-                            &mut self.pending_text_instances,
-                            &mut self.glyph_scratch,
-                        )
-                    });
-                }
-                DrawCommand::RichText { runs, rect, base } => {
-                    let rect = *rect;
-                    let base = at_scale((**base).clone(), self.draw_state.scale());
-                    self.flush_rect();
-                    self.flush_line();
-                    self.flush_image();
-                    let (tx, ty) = self.draw_state.apply_point(rect.x, rect.y);
-                    let (tx2, ty2) = self
-                        .draw_state
-                        .apply_point(rect.x + rect.width, rect.y + rect.height);
-                    let translated = Rect::new(tx, ty, (tx2 - tx).abs(), (ty2 - ty).abs());
-                    if self.batch_text_start.is_none() {
-                        self.batch_text_start = Some(self.pending_text_instances.len() as u32);
-                    }
-                    crate::caches::with_shared(|caches| {
-                        crate::primitives::text::prepare_rich_text(
-                            &mut caches.text_shaper,
-                            runs,
-                            translated,
-                            &base,
                             self.scale_factor,
                             &mut self.pending_text_instances,
                             &mut self.glyph_scratch,

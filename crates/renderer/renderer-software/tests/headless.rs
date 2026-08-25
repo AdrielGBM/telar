@@ -22,6 +22,7 @@ fn headless_renders_visible_pixels() {
             style: Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(200, 60, 60))),
         },
         DrawCommand::Text {
+            spans: None,
             text: Arc::from("hi"),
             rect: Rect::new(10.0, 10.0, 40.0, 16.0),
             style: Arc::new(TextStyle::new(12.0, Color::WHITE)),
@@ -145,6 +146,7 @@ fn dense_ui() -> Vec<DrawCommand> {
         style: panel_fill.clone(),
     });
     cmds.push(DrawCommand::Text {
+        spans: None,
         text: title.clone(),
         rect: Rect::new(16.0, 14.0, 400.0, 24.0),
         style: title_style.clone(),
@@ -208,11 +210,13 @@ fn dense_ui() -> Vec<DrawCommand> {
             cmds.push(DrawCommand::PopMatrix);
             // Two text lines.
             cmds.push(DrawCommand::Text {
+                spans: None,
                 text: label.clone(),
                 rect: Rect::new(x + 40.0, y + 16.0, cell_w - 56.0, 20.0),
                 style: label_style.clone(),
             });
             cmds.push(DrawCommand::Text {
+                spans: None,
                 text: label.clone(),
                 rect: Rect::new(x + 16.0, y + 64.0, cell_w - 32.0, 20.0),
                 style: label_style.clone(),
@@ -471,6 +475,7 @@ fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
             cmds.push(DrawCommand::PushMatrix { matrix });
         }
         cmds.push(DrawCommand::Text {
+            spans: None,
             text: Arc::from("MMM"),
             rect: Rect::new(2.0, 2.0, 60.0, 20.0),
             style: Arc::new(TextStyle::new(8.0, Color::WHITE)),

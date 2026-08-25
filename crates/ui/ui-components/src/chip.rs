@@ -91,7 +91,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
     // `auto` (measured leaf) so the label gets its intrinsic WIDTH in this row; a plain `Text::new` only
     // stretches its cross-axis, leaving width 0 and the label invisible.
-    let label_widget = Text::auto(
+    let label_widget = Text::new(
         move || label(),
         LayoutStyle::new(),
         || TextStyle::new(font_size(), shared::ink()),
@@ -99,7 +99,7 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     children.push(box_item(label_widget));
 
     if let Some(cb) = on_close {
-        let close_label = Text::auto(
+        let close_label = Text::new(
             || "×".to_string(),
             LayoutStyle::new(),
             || TextStyle::new(close_size(), shared::ink()),

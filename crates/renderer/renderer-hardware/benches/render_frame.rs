@@ -57,6 +57,7 @@ fn dense_ui() -> Vec<DrawCommand> {
                 style: card_style.clone(),
             });
             cmds.push(DrawCommand::Text {
+                spans: None,
                 text: Arc::from("Widget label"),
                 rect: Rect::new(x + 12.0, y + 12.0, cell_w - pad - 24.0, 20.0),
                 style: text_style.clone(),
@@ -90,6 +91,7 @@ fn dense_ui() -> Vec<DrawCommand> {
     });
     for i in 0..6 {
         cmds.push(DrawCommand::Text {
+            spans: None,
             text: Arc::from("Overlay content line"),
             rect: Rect::new(360.0, 280.0 + i as f32 * 32.0, 560.0, 24.0),
             style: text_style.clone(),

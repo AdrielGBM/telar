@@ -136,7 +136,7 @@ pub use renderer_core::{
     BorderRadius, BorderWidths, Color, DrawCommand, DrawState, FillRule, FontFamily, GlyphRaster,
     Gradient, GradientKind, GradientStop, GradientStops, ImageData, ImageFilter, LineCap, LineJoin,
     Paint, PathData, PathStyle, PathVerb, RectStyle, RendererError, Scale, Shadow, ShapeStyle,
-    Stroke, TextAlign, TextRun, TextStyle, for_each_with_matrix, hash_draw_commands,
+    Span, Stroke, TextAlign, TextStyle, for_each_with_matrix, hash_draw_commands,
     transform_clip_rect,
 };
 // Backend-author API, the drawing half: a frontend implements `RendererFactory`, installs it with `run_with_platform_and_renderer`, and installs `TextMetrics` for whatever "how wide is this string" means on its surface.
@@ -202,7 +202,7 @@ pub use ui_core::{
     Axis, Canvas, ChildSlot, Children, ClipAxis, ClippedItem, Component, ComponentList, Container,
     DEFAULT_SCRIM, DragStart, Edge, EventResult, Holding, Image, Input, KeyNav, KeyNavMove,
     LayoutItem, LayoutScrollArea, Lazy, Line, LineGutter, NodeId, NodeVec, Overlay, Path,
-    PointerButtons, ReactiveList, Rectangle, RenderNode, RichText, ScrollPage, ScrollViewport,
+    PointerButtons, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport,
     ScrollbarStyle, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
     VirtualList, WindowRoot, anchor_rect, apply_move, box_item, box_transform, close_overlay,
     compute_layout, current_direction, dismiss_depth, dismiss_top, drag_start, drag_travel, focus,

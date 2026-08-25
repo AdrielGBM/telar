@@ -3,7 +3,7 @@ use std::sync::Arc;
 use rustc_hash::FxHashMap;
 
 use crate::style::Scale;
-use crate::{Color, DrawCommand, Paint, PathData, PathStyle, RectStyle, TextStyle};
+use crate::{Color, DrawCommand, Paint, PathData, PathStyle, RectStyle, Span, TextStyle};
 
 fn fill_layer_alpha(style: &RectStyle) -> Option<f32> {
     // Skip when a shadow is present: shadow.color.a controls shadow opacity independently and would be incorrectly scaled inside a fill-alpha layer.
@@ -82,15 +82,16 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             rect: rect.scale(sf),
             style: Arc::new((**style).scale(sf)),
         },
-        DrawCommand::Text { text, rect, style } => DrawCommand::Text {
+        DrawCommand::Text {
+            text,
+            spans,
+            rect,
+            style,
+        } => DrawCommand::Text {
             text: text.clone(),
+            spans: scaled_spans(spans, sf),
             rect: rect.scale(sf),
             style: Arc::new((**style).clone().scale(sf)),
-        },
-        DrawCommand::RichText { runs, rect, base } => DrawCommand::RichText {
-            runs: runs.clone(),
-            rect: rect.scale(sf),
-            base: Arc::new((**base).clone().scale(sf)),
         },
         DrawCommand::Image { data, rect, filter } => DrawCommand::Image {
             data: data.clone(),
@@ -184,6 +185,14 @@ impl ScaleScratch {
     }
 }
 
+/// A paragraph's spans at the device scale. A span can set its own size and letter spacing, which are logical
+/// pixels like the paragraph's and have to follow the same factor, or a `<b>` at an explicit size would come
+/// out at the logical one on a HiDPI screen.
+fn scaled_spans(spans: &Option<Arc<[Span]>>, sf: f32) -> Option<Arc<[Span]>> {
+    let spans = spans.as_ref()?;
+    Some(spans.iter().cloned().map(|s| s.scale(sf)).collect())
+}
+
 #[inline]
 fn scaled_style_arc<T: Scale + Clone>(
     cache: &mut FxHashMap<usize, Arc<T>>,
@@ -223,8 +232,14 @@ fn scale_command_cached(
             rect: rect.scale(sf),
             style: scaled_style_arc(rect_styles, style, sf),
         },
-        DrawCommand::Text { text, rect, style } => DrawCommand::Text {
+        DrawCommand::Text {
+            text,
+            spans,
+            rect,
+            style,
+        } => DrawCommand::Text {
             text: text.clone(),
+            spans: scaled_spans(spans, sf),
             rect: rect.scale(sf),
             style: scaled_style_arc(text_styles, style, sf),
         },

@@ -30,11 +30,13 @@ fn visual_check_png() {
     // Each block: a label, then the paragraph in a 300px-wide box with a given clamp.
     let block = |cmds: &mut Vec<DrawCommand>, label: &str, y: f32, style: TextStyle| {
         cmds.push(DrawCommand::Text {
+            spans: None,
             text: Arc::from(label),
             rect: Rect::new(20.0, y, 480.0, 18.0),
             style: Arc::new(TextStyle::new(12.0, muted)),
         });
         cmds.push(DrawCommand::Text {
+            spans: None,
             text: Arc::from(para),
             rect: Rect::new(20.0, y + 20.0, 300.0, 200.0),
             style: Arc::new(style),

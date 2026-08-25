@@ -184,7 +184,7 @@ mod tests {
             "the note is not a component call:\n{code}"
         );
         assert_eq!(
-            code.matches("Text::auto").count(),
+            code.matches("Text::new").count(),
             1,
             "and it adds no widget of its own:\n{code}"
         );

@@ -1,7 +1,7 @@
 use super::cache::{hash_text, text_style_bits};
 use super::*;
 use geometry_core::Rect;
-use renderer_core::{Color, TextStyle};
+use renderer_core::{Color, Declared, Span, TextStyle};
 
 // Text positions are logical, so a multi-line block must occupy the same vertical extent regardless of the device scale factor. cosmic-text's `physical` adds the y-offset unscaled, so passing the line baseline there unscaled collapsed every line onto the first one at high-DPI (e.g. Android).
 #[test]
@@ -17,7 +17,7 @@ fn line_layout_is_scale_independent() {
     let style = TextStyle::new(20.0, renderer_core::Color::rgba(0.0, 0.0, 0.0, 1.0));
     let bottom_extent = |sh: &mut TextShaper, sf: f32| -> f32 {
         let mut out = Vec::new();
-        sh.layout_glyphs(text, rect, &style, sf, &mut out);
+        sh.layout_glyphs(text, None, rect, &style, sf, &mut out);
         out.iter().map(|g| g.dest_rect[1]).fold(0.0_f32, f32::max)
     };
     let at_1x = bottom_extent(&mut sh, 1.0);
@@ -35,11 +35,11 @@ fn larger_line_height_increases_measured_height() {
     let mut sh = TextShaper::new();
     let text = "Line height affects the reserved vertical space";
     let base = TextStyle::new(16.0, Color::BLACK);
-    let (_, h_natural) = sh.measure_text(text, 120.0, &base);
+    let (_, h_natural) = sh.measure_text(text, None, 120.0, &base);
     if h_natural <= 0.0 {
         return;
     }
-    let (_, h_tall) = sh.measure_text(text, 120.0, &base.with_line_height(2.5));
+    let (_, h_tall) = sh.measure_text(text, None, 120.0, &base.with_line_height(2.5));
     assert!(
         h_tall > h_natural,
         "a larger line_height should increase measured height: natural={h_natural} tall={h_tall}"
@@ -62,7 +62,7 @@ fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
     };
     let base = TextStyle::new(16.0, Color::BLACK);
     let shaped = |sh: &mut TextShaper, style: &TextStyle| {
-        make_buffer(&mut sh.font_system, text, rect, style)
+        make_buffer(&mut sh.font_system, text, None, rect, style)
     };
 
     if shaped(&mut sh, &base).layout_runs().count() <= 2 {
@@ -96,12 +96,12 @@ fn max_lines_clamps_the_measured_height() {
     let mut sh = TextShaper::new();
     let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
     let base = TextStyle::new(16.0, Color::BLACK);
-    let (_, wrapped) = sh.measure_text(text, 90.0, &base);
-    let (_, single) = sh.measure_text("alpha", 90.0, &base);
+    let (_, wrapped) = sh.measure_text(text, None, 90.0, &base);
+    let (_, single) = sh.measure_text("alpha", None, 90.0, &base);
     if single <= 0.0 || wrapped <= single * 2.0 {
         return;
     }
-    let (_, clamped) = sh.measure_text(text, 90.0, &base.with_max_lines(2));
+    let (_, clamped) = sh.measure_text(text, None, 90.0, &base.with_max_lines(2));
     assert!(
         clamped < wrapped,
         "max_lines must shrink the measured height: wrapped={wrapped} clamped={clamped}"
@@ -153,7 +153,7 @@ fn pixel_raster_leaves_no_partial_coverage() {
         height: 40.0,
     };
     let base = TextStyle::new(16.0, Color::WHITE);
-    let (smooth, _, _) = sh.rasterize("Hamburgefonstiv", rect, &base);
+    let (smooth, _, _) = sh.rasterize("Hamburgefonstiv", None, rect, &base);
     let partial = |pixels: &[u8]| {
         pixels
             .chunks_exact(4)
@@ -165,6 +165,7 @@ fn pixel_raster_leaves_no_partial_coverage() {
     }
     let (pixel, _, _) = sh.rasterize(
         "Hamburgefonstiv",
+        None,
         rect,
         &base.with_raster(GlyphRaster::Pixel),
     );
@@ -186,7 +187,7 @@ fn pixel_raster_collapses_the_subpixel_bins_smooth_keeps() {
         height: 40.0,
     };
     let style = TextStyle::new(16.0, Color::WHITE);
-    let buffer = make_buffer(&mut sh.font_system, "Hi", rect, &style);
+    let buffer = make_buffer(&mut sh.font_system, "Hi", None, rect, &style);
     let Some(glyph) = buffer
         .layout_runs()
         .flat_map(|run| run.glyphs.iter())
@@ -219,7 +220,7 @@ fn pixel_raster_shapes_under_its_own_cache_key() {
     };
     let base = TextStyle::new(16.0, Color::WHITE);
     let flags = |style: &TextStyle, sh: &mut TextShaper| {
-        make_buffer(&mut sh.font_system, "Hi", rect, style)
+        make_buffer(&mut sh.font_system, "Hi", None, rect, style)
             .layout_runs()
             .flat_map(|run| run.glyphs.iter())
             .next()
@@ -261,7 +262,7 @@ fn text_shaper_with_font_data_empty_vec() {
 #[ignore]
 fn measure_text_returns_nonzero_for_text() {
     let mut shaper = TextShaper::new();
-    let (w, h) = shaper.measure_text("hello", 500.0, &TextStyle::new(16.0, Color::BLACK));
+    let (w, h) = shaper.measure_text("hello", None, 500.0, &TextStyle::new(16.0, Color::BLACK));
     assert!(
         w > 0.0 && h > 0.0,
         "Systems without installed fonts may not render text correctly"
@@ -271,7 +272,7 @@ fn measure_text_returns_nonzero_for_text() {
 #[test]
 fn measure_text_empty_returns_zero() {
     let mut shaper = TextShaper::new();
-    let (w, h) = shaper.measure_text("", 500.0, &TextStyle::new(16.0, Color::BLACK));
+    let (w, h) = shaper.measure_text("", None, 500.0, &TextStyle::new(16.0, Color::BLACK));
     assert_eq!(w, 0.0);
     assert_eq!(h, 0.0);
 }
@@ -289,11 +290,11 @@ fn measure_cache_keeps_hot_entry_past_cap() {
         16.0f32.to_bits(),
         text_style_bits(&style),
     );
-    sh.measure_text(hot, 200.0, &style);
+    sh.measure_text(hot, None, 200.0, &style);
     for i in 0..(cap_entries as u32 + 50) {
-        sh.measure_text(&format!("cold entry {i}"), 200.0, &style);
+        sh.measure_text(&format!("cold entry {i}"), None, 200.0, &style);
         // Keep the hot entry most-recently-used so the LRU never evicts it.
-        sh.measure_text(hot, 200.0, &style);
+        sh.measure_text(hot, None, 200.0, &style);
     }
     assert!(sh.measure_cache.contains(&hot_key));
     assert!(sh.measure_cache.len() <= cap_entries);
@@ -345,14 +346,14 @@ fn a_string_rasterized_once_is_not_kept_and_a_second_sighting_keeps_it() {
         height: 24.0,
     };
 
-    shaper.rasterize("14:32:07", rect, &style);
+    shaper.rasterize("14:32:07", None, rect, &style);
     assert_eq!(
         shaper.raster_cache.len(),
         0,
         "a clock's seconds are drawn once and never asked for again"
     );
 
-    shaper.rasterize("14:32:07", rect, &style);
+    shaper.rasterize("14:32:07", None, rect, &style);
     assert_eq!(
         shaper.raster_cache.len(),
         1,
@@ -372,7 +373,7 @@ fn an_idle_sweep_keeps_the_glyph_rasters_a_shell_actually_uses() {
         width: 200.0,
         height: 24.0,
     };
-    sh.rasterize("workspace 1", rect, &style);
+    sh.rasterize("workspace 1", None, rect, &style);
     let resident = sh.swash_cache.image_cache.len();
 
     sh.sweep_idle();
@@ -399,7 +400,7 @@ fn shaped_positions_are_kept_on_the_first_sighting() {
     };
     let mut out = Vec::new();
 
-    shaper.layout_glyphs("ui label", rect, &style, 1.0, &mut out);
+    shaper.layout_glyphs("ui label", None, rect, &style, 1.0, &mut out);
     assert_eq!(shaper.shaping_cache.len(), 1);
 }
 
@@ -409,7 +410,7 @@ fn a_text_box_measures_its_line_heights_and_nothing_more() {
     let mut sh = TextShaper::new();
     let style = TextStyle::new(16.0, Color::BLACK).with_line_height(1.5);
     let line_height = 16.0 * 1.5;
-    let (_, one) = sh.measure_text("Una línea", 400.0, &style);
+    let (_, one) = sh.measure_text("Una línea", None, 400.0, &style);
     if one <= 0.0 {
         return;
     }
@@ -419,7 +420,7 @@ fn a_text_box_measures_its_line_heights_and_nothing_more() {
     );
 
     // A width narrow enough to force a wrap, so the second line's contribution is the line height too.
-    let (_, two) = sh.measure_text("Una línea que no cabe entera", 60.0, &style);
+    let (_, two) = sh.measure_text("Una línea que no cabe entera", None, 60.0, &style);
     let lines = (two / line_height).round();
     assert!(lines >= 2.0, "the text did not wrap: {two}");
     assert!(
@@ -435,8 +436,8 @@ fn a_text_box_measures_its_line_heights_and_nothing_more() {
 fn a_no_wrap_style_measures_one_line_however_narrow_the_box() {
     let style = TextStyle::new(14.0, Color::BLACK);
     let text = "Frame selected";
-    let (wrapped_w, wrapped_h) = crate::measure_text(text, 40.0, &style);
-    let (flat_w, flat_h) = crate::measure_text(text, 40.0, &style.clone().with_no_wrap(true));
+    let (wrapped_w, wrapped_h) = crate::measure_text(text, None, 40.0, &style);
+    let (flat_w, flat_h) = crate::measure_text(text, None, 40.0, &style.clone().with_no_wrap(true));
     assert!(
         flat_h < wrapped_h,
         "wrapping stacks lines ({wrapped_h}) that no-wrap does not ({flat_h})"
@@ -471,7 +472,7 @@ fn a_named_family_shapes_in_that_face() {
     };
     let face_of = |sh: &mut TextShaper, family: &str| {
         let style = TextStyle::new(16.0, Color::BLACK).with_font_family(family);
-        let buffer = make_buffer(&mut sh.font_system, "Ag", rect, &style);
+        let buffer = make_buffer(&mut sh.font_system, "Ag", None, rect, &style);
         buffer
             .layout_runs()
             .next()
@@ -481,5 +482,93 @@ fn a_named_family_shapes_in_that_face() {
         face_of(&mut sh, first),
         face_of(&mut sh, second),
         "two different families must shape in two different faces"
+    );
+}
+
+// The merge's reason for existing: a clamped mixed paragraph gets the `…` a clamped plain one always got.
+// The rich path could not — it held one `&str` per run, and cutting across runs to append an ellipsis was
+// never written, so `with_ellipsis(true)` on a notification body did nothing and said nothing.
+#[test]
+fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
+    let mut sh = TextShaper::new();
+    let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 90.0,
+        height: 10_000.0,
+    };
+    let base = TextStyle::new(16.0, Color::BLACK)
+        .with_max_lines(2)
+        .with_ellipsis(true);
+    // A bold word early on, so the paragraph is genuinely spanned where the clamp is not.
+    let spans = [Span::new(0..5, Declared::default().with_weight(700))];
+
+    let plain = make_buffer(&mut sh.font_system, text, None, rect, &base);
+    if plain.layout_runs().count() < 2 {
+        return;
+    }
+    let elided: String = plain.lines.iter().map(|line| line.text()).collect();
+    if !elided.ends_with('\u{2026}') {
+        return;
+    }
+
+    let spanned = make_buffer(&mut sh.font_system, text, Some(&spans), rect, &base);
+    assert_eq!(
+        spanned.layout_runs().count(),
+        2,
+        "the clamp must hold for a spanned paragraph too"
+    );
+    let spanned_text: String = spanned.lines.iter().map(|line| line.text()).collect();
+    assert!(
+        spanned_text.ends_with('\u{2026}'),
+        "a spanned paragraph must be elided like a plain one: {spanned_text:?}"
+    );
+}
+
+// A span restyles its own bytes and nothing else, which is what makes it a cascade child rather than a
+// separate widget: the text either side of it keeps the paragraph's style.
+#[test]
+fn a_span_restyles_only_its_own_range() {
+    let mut sh = TextShaper::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 10_000.0,
+        height: 1000.0,
+    };
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let text = "aaa bbb";
+    let spans = [Span::new(4..7, Declared::default().with_weight(900))];
+    let buffer = make_buffer(&mut sh.font_system, text, Some(&spans), rect, &style);
+    let weights: Vec<(usize, u16)> = buffer
+        .layout_runs()
+        .flat_map(|run| run.glyphs.iter().map(|g| (g.start, g.font_weight.0)))
+        .collect();
+    if weights.is_empty() {
+        return;
+    }
+    for (start, weight) in weights {
+        let expected = if start >= 4 { 900 } else { 400 };
+        assert_eq!(weight, expected, "byte {start} took the wrong weight");
+    }
+}
+
+// A span may set a size of its own — something a `TextRun` could not express at all, which is why
+// `hogar-shell` keeps its notification summary and body as two widgets instead of one paragraph.
+#[test]
+fn a_span_can_change_the_size_mid_paragraph() {
+    let mut sh = TextShaper::new();
+    let style = TextStyle::new(12.0, Color::BLACK);
+    let text = "small large";
+    let spans = [Span::new(6..11, Declared::default().with_font_size(32.0))];
+    let (plain_w, _) = sh.measure_text(text, None, 10_000.0, &style);
+    if plain_w <= 0.0 {
+        return;
+    }
+    let (spanned_w, _) = sh.measure_text(text, Some(&spans), 10_000.0, &style);
+    assert!(
+        spanned_w > plain_w,
+        "a span at 32px must measure wider than the same text at 12px: {plain_w} vs {spanned_w}"
     );
 }

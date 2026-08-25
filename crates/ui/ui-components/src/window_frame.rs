@@ -126,14 +126,14 @@ pub fn window_frame(
     let title = title.into();
     let title_color = style.title_text;
     let font_size = style.font_size;
-    let title_label = box_item(Text::auto(
+    let title_label = box_item(Text::new(
         move || title.clone(),
         LayoutStyle::new(),
         move || TextStyle::new(font_size, title_color),
     )?);
 
     let close_color = style.close;
-    let close_label = box_item(Text::auto(
+    let close_label = box_item(Text::new(
         || "\u{2715}".to_string(),
         LayoutStyle::new(),
         move || TextStyle::new(font_size, close_color),
@@ -159,7 +159,7 @@ pub fn window_frame(
     let control_button = |glyph: &'static str,
                           command: platform_core::WindowCommand|
      -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let label = box_item(Text::auto(
+        let label = box_item(Text::new(
             move || glyph.to_string(),
             LayoutStyle::new(),
             move || TextStyle::new(font_size, close_color),

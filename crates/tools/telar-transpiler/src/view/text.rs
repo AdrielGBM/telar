@@ -54,7 +54,7 @@ impl ViewGen<'_> {
                 extra.push_str(&call);
             }
         }
-        // An explicit `height:` pins the box; otherwise the leaf measures its own height from the wrapped content (`Text::auto`) so multi-line text reserves real space and pushes following siblings down instead of overflowing.
+        // A leaf measures its own height from the wrapped content, so multi-line text reserves real space; an explicit `height:` pins the box over that, which is all the second constructor ever did.
         let explicit_height = el
             .attributes
             .iter()
@@ -64,12 +64,9 @@ impl ViewGen<'_> {
                     PropCall::Call(call) => Some(call),
                     _ => None,
                 },
-            );
-
-        let (ctor, layout_style) = match explicit_height {
-            Some(h) => ("Text::new", format!("LayoutStyle::new(){h}{extra}")),
-            None => ("Text::auto", format!("LayoutStyle::new(){extra}")),
-        };
+            )
+            .unwrap_or_default();
+        let layout_style = format!("LayoutStyle::new(){explicit_height}{extra}");
 
         // Each `move` closure consumes its captures; clone the signals they use into block locals so both closures can capture independently. Scan the raw `content` (still carrying `$`), not the substituted `content_fn`.
         let clones = self.clone_bindings(&[content, style.as_str()], &pad, "    ");
@@ -84,7 +81,7 @@ impl ViewGen<'_> {
             "{pad}let {var} = {{\n\
              {clones}\
              {prelude}\
-             {pad}    {ctor}(\n\
+             {pad}    Text::new(\n\
              {pad}        {content_fn},\n\
              {pad}        {layout_style},\n\
              {pad}        {style},\n\

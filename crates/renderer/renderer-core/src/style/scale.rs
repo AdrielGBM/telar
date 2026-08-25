@@ -3,7 +3,7 @@ use geometry_core::{Point, Rect};
 use super::gradient::{Gradient, GradientKind};
 use super::paint::{Paint, Shadow, Stroke};
 use super::shape::{BorderWidths, PathStyle, RectStyle};
-use super::{Scale, TextStyle};
+use super::{Declared, Scale, Span, TextStyle};
 use crate::BorderRadius;
 
 // `Scale` is local to renderer-core, so the orphan rules permit implementing it for these foreign value types here rather than adding arithmetic to the geometry-core crate.
@@ -125,6 +125,26 @@ impl Scale for TextStyle {
             shadow: self.shadow.map(|s| s.scale(sf)),
             // letter_spacing is a pixel advance, so it scales with font_size; line_height is a unitless multiple and rides along via `..self`.
             letter_spacing: self.letter_spacing * sf,
+            ..self
+        }
+    }
+}
+
+impl Scale for Declared {
+    fn scale(self, sf: f32) -> Self {
+        Declared {
+            font_size: self.font_size.map(|v| v * sf),
+            paint: self.paint.map(|p| p.scale(sf)),
+            letter_spacing: self.letter_spacing.map(|v| v * sf),
+            ..self
+        }
+    }
+}
+
+impl Scale for Span {
+    fn scale(self, sf: f32) -> Self {
+        Span {
+            over: self.over.scale(sf),
             ..self
         }
     }

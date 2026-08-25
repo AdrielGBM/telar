@@ -1,9 +1,9 @@
 use super::TextShaper;
 use super::cache::{make_text_cache_key, text_style_bits};
-use super::{make_buffer, make_buffer_rich, physical_glyph, resolve_coverage};
+use super::{make_buffer, physical_glyph, resolve_coverage};
 use cosmic_text::{Buffer, Color as CosmicColor};
 use geometry_core::Rect;
-use renderer_core::{GlyphRaster, TextRun, TextStyle, premultiply_rgba};
+use renderer_core::{GlyphRaster, Span, TextStyle, premultiply_rgba};
 use std::sync::Arc;
 
 impl TextShaper {
@@ -60,12 +60,19 @@ impl TextShaper {
         }
     }
 
+    /// Rasterizes a paragraph to a premultiplied RGBA block. `Buffer::draw` honours each glyph's own
+    /// `color_opt`, so a span paints in its own colour; `style`'s only covers glyphs without one.
+    ///
+    /// Spanned paragraphs are uncached, for the same reason `measure_text` does not cache them: the key is the
+    /// paragraph's own style, which two paragraphs differing only in spans would share.
     pub fn rasterize(
         &mut self,
         text: &str,
+        spans: Option<&[Span]>,
         rect: Rect,
         style: &TextStyle,
     ) -> (Arc<[u8]>, u32, u32) {
+        let spans = spans.filter(|s| !s.is_empty());
         let font_size = style.font_size;
         let color = style.paint.solid_color();
         let width = rect.width.ceil() as u32;
@@ -84,7 +91,9 @@ impl TextShaper {
             return (Arc::from([].as_slice()), 0, 0);
         }
 
-        if let Some(cached) = self.raster_cache.get(&key) {
+        if spans.is_none()
+            && let Some(cached) = self.raster_cache.get(&key)
+        {
             return (Arc::clone(cached), width, height);
         }
 
@@ -92,7 +101,7 @@ impl TextShaper {
         let [r, g, b, a] = rgba;
         let cosmic_color = CosmicColor::rgba(r, g, b, a);
 
-        let mut buffer = make_buffer(&mut self.font_system, text, rect, style);
+        let mut buffer = make_buffer(&mut self.font_system, text, spans, rect, style);
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
         self.draw_buffer(
@@ -126,56 +135,11 @@ impl TextShaper {
 
         premultiply_rgba(&mut pixels);
         let arc: Arc<[u8]> = Arc::from(pixels.into_boxed_slice());
-        self.raster_cache.insert(key, arc.clone());
-
-        (arc, width, height)
-    }
-
-    /// Rasterizes a rich paragraph (styled runs) to a premultiplied RGBA block. `Buffer::draw` honours each
-    /// glyph's own `color_opt` (set per run by `make_buffer_rich`), so runs paint in their own colours; the
-    /// `default` colour only covers glyphs without one. Uncached — rich blocks are dynamic and few.
-    pub fn rasterize_rich(
-        &mut self,
-        runs: &[TextRun],
-        rect: Rect,
-        base: &TextStyle,
-    ) -> (Arc<[u8]>, u32, u32) {
-        let width = rect.width.ceil() as u32;
-        let height = rect.height.ceil() as u32;
-        if width == 0 || height == 0 {
-            return (Arc::from([].as_slice()), 0, 0);
+        if spans.is_none() {
+            self.raster_cache.insert(key, arc.clone());
         }
 
-        let [r, g, b, a] = base.paint.solid_color().to_rgba8();
-        let default = CosmicColor::rgba(r, g, b, a);
-        let mut buffer = make_buffer_rich(&mut self.font_system, runs, rect, base);
-
-        let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
-        self.draw_buffer(
-            &mut buffer,
-            default,
-            base.raster,
-            |bx, by, bw, bh, color| {
-                let col_start = ((-bx).max(0)) as usize;
-                let col_end = ((width as i32 - bx).max(0) as usize).min(bw as usize);
-                let row_start = ((-by).max(0)) as usize;
-                let row_end = ((height as i32 - by).max(0) as usize).min(bh as usize);
-                for row in row_start..row_end {
-                    for col in col_start..col_end {
-                        let px = (bx + col as i32) as usize;
-                        let py = (by + row as i32) as usize;
-                        let idx = (py * width as usize + px) * 4;
-                        pixels[idx] = color.r();
-                        pixels[idx + 1] = color.g();
-                        pixels[idx + 2] = color.b();
-                        pixels[idx + 3] = color.a();
-                    }
-                }
-            },
-        );
-
-        premultiply_rgba(&mut pixels);
-        (Arc::from(pixels.into_boxed_slice()), width, height)
+        (arc, width, height)
     }
 
     /// Rasterizes `text` white-on-transparent, for a caller that will tint and blur it into a shadow.
@@ -199,7 +163,7 @@ impl TextShaper {
 
         let white = CosmicColor::rgba(255, 255, 255, 255);
 
-        let mut buffer = make_buffer(&mut self.font_system, text, rect, style);
+        let mut buffer = make_buffer(&mut self.font_system, text, None, rect, style);
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
         self.draw_buffer(&mut buffer, white, style.raster, |bx, by, bw, bh, color| {

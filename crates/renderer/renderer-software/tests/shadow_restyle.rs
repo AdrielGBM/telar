@@ -19,6 +19,7 @@ const H: u32 = 320;
 /// the only path this test is about.
 fn clock_like(text: &str) -> Vec<DrawCommand> {
     vec![DrawCommand::Text {
+        spans: None,
         text: Arc::from(text),
         rect: Rect::new(20.0, 20.0, 600.0, 200.0),
         style: Arc::new(TextStyle::new(140.0, Color::WHITE).with_shadow(Shadow {

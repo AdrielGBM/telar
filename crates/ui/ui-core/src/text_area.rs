@@ -467,7 +467,13 @@ fn nth_line_bounds(text: &str, n: usize) -> (usize, usize) {
 /// Pixel x of the caret within its line (the advance of the line's prefix up to `caret`).
 fn caret_x(text: &str, caret: usize, style: &TextStyle) -> f32 {
     let (start, _) = line_bounds(text, caret);
-    crate::text_metrics::measure_text(&text[start..caret.min(text.len())], NO_WRAP_WIDTH, style).0
+    crate::text_metrics::measure_text(
+        &text[start..caret.min(text.len())],
+        None,
+        NO_WRAP_WIDTH,
+        style,
+    )
+    .0
 }
 
 /// The byte offset within line `n` whose caret x is closest to `x` — used for click-to-position and vertical
@@ -479,7 +485,7 @@ fn offset_at_line_x(text: &str, style: &TextStyle, n: usize, x: f32) -> usize {
     let mut best_dx = f32::MAX;
     let mut idx = 0;
     loop {
-        let w = crate::text_metrics::measure_text(&line[..idx], NO_WRAP_WIDTH, style).0;
+        let w = crate::text_metrics::measure_text(&line[..idx], None, NO_WRAP_WIDTH, style).0;
         let dx = (w - x).abs();
         if dx < best_dx {
             best_dx = dx;

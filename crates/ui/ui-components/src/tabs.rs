@@ -70,7 +70,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     for (i, label) in items.into_iter().enumerate() {
         let idx = i as u32;
         let label_selected = selected.clone();
-        let label_widget = Text::auto(
+        let label_widget = Text::new(
             move || label.to_string(),
             LayoutStyle::new(),
             move || TextStyle::new(shared::font_size(), tab_ink(label_selected.get() == idx)),
@@ -155,7 +155,7 @@ mod tests {
     }
 
     // Pressing the last tab sets the bound `selected` signal to its index. With exactly two (content-sized,
-    // `Text::auto`) tabs and no `flex_grow`/stretch on the row, its right edge sits flush against the second
+    // `Text::new`) tabs and no `flex_grow`/stretch on the row, its right edge sits flush against the second
     // tab's own padding, so a point just inside that edge deterministically lands on index 1 — without
     // hardcoding font metrics to compute the boundary between the two pills.
     #[test]

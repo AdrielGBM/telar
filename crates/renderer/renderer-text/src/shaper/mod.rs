@@ -4,7 +4,7 @@ use cosmic_text::{
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
-use renderer_core::{FontFamily, GlyphRaster, TextAlign, TextRun, TextStyle};
+use renderer_core::{FontFamily, GlyphRaster, Paint, Span, TextAlign, TextStyle};
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
@@ -134,14 +134,8 @@ fn cosmic_align(align: TextAlign) -> Option<Align> {
     }
 }
 
-fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &TextStyle) -> Buffer {
-    let font_size = style.font_size;
-    let metrics = Metrics::new(font_size, effective_line_height(style));
-    let mut buffer = Buffer::new(font_system, metrics);
-    // `None` width is cosmic-text for "do not wrap": the line grows past the box instead of breaking, which
-    // is what a label that is really a token wants.
-    let wrap_width = (!style.no_wrap).then_some(rect.width);
-    buffer.set_size(wrap_width, Some(rect.height));
+/// The cosmic-text attributes one resolved style asks for.
+fn text_attrs(style: &TextStyle) -> Attrs<'_> {
     let mut attrs = Attrs::new()
         .family(cosmic_family(&style.font_family))
         .weight(Weight(style.weight))
@@ -157,7 +151,74 @@ fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Te
     if style.raster != GlyphRaster::Smooth {
         attrs = attrs.cache_key_flags(raster_flags(style.raster));
     }
-    buffer.set_text(text, &attrs, Shaping::Advanced, None);
+    attrs
+}
+
+/// The paragraph cut into runs of one style each: every span in order, with the paragraph's own style filling
+/// the gaps between them. Spans are expected sorted and non-overlapping; anything reaching backwards or past
+/// the end is clamped rather than trusted, since they are byte offsets that outlived the text they indexed.
+fn styled_runs<'a>(text: &'a str, spans: &[Span], style: &TextStyle) -> Vec<(&'a str, TextStyle)> {
+    let mut runs = Vec::with_capacity(spans.len() * 2 + 1);
+    let mut at = 0usize;
+    for span in spans {
+        let start = (span.range.start as usize).clamp(at, text.len());
+        let end = (span.range.end as usize).clamp(start, text.len());
+        if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
+            continue;
+        }
+        if start > at {
+            runs.push((&text[at..start], style.clone()));
+        }
+        if end > start {
+            runs.push((&text[start..end], span.over.over(style)));
+        }
+        at = end;
+    }
+    if at < text.len() {
+        runs.push((&text[at..], style.clone()));
+    }
+    runs
+}
+
+fn shape_buffer(
+    font_system: &mut FontSystem,
+    text: &str,
+    spans: Option<&[Span]>,
+    rect: Rect,
+    style: &TextStyle,
+) -> Buffer {
+    let font_size = style.font_size;
+    let metrics = Metrics::new(font_size, effective_line_height(style));
+    let mut buffer = Buffer::new(font_system, metrics);
+    // `None` width is cosmic-text for "do not wrap": the line grows past the box instead of breaking, which
+    // is what a label that is really a token wants.
+    let wrap_width = (!style.no_wrap).then_some(rect.width);
+    buffer.set_size(wrap_width, Some(rect.height));
+    let attrs = text_attrs(style);
+    // Uniform text takes `set_text` rather than a one-span `set_rich_text`: same call underneath, but this is the one the byte-exact software golden was recorded against.
+    match spans.filter(|s| !s.is_empty()) {
+        None => buffer.set_text(text, &attrs, Shaping::Advanced, None),
+        Some(spans) => {
+            let runs = styled_runs(text, spans, style);
+            let resolved: Vec<(&str, Attrs<'_>)> = runs
+                .iter()
+                .map(|(slice, run_style)| {
+                    let mut run_attrs = text_attrs(run_style);
+                    if run_style.font_size != style.font_size {
+                        run_attrs = run_attrs.metrics(Metrics::new(
+                            run_style.font_size,
+                            effective_line_height(run_style),
+                        ));
+                    }
+                    if let Paint::Solid(color) = run_style.paint {
+                        run_attrs = run_attrs.color(to_cosmic_color(color));
+                    }
+                    (*slice, run_attrs)
+                })
+                .collect();
+            buffer.set_rich_text(resolved, &attrs, Shaping::Advanced, None);
+        }
+    }
     // Alignment shifts glyph x within the line box; applied before shaping so positions bake it in.
     if let Some(a) = cosmic_align(style.align) {
         for line in buffer.lines.iter_mut() {
@@ -168,9 +229,31 @@ fn shape_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Te
     buffer
 }
 
+/// `spans` cut to the first `len` bytes, for a paragraph the clamp has truncated. Without this a clamped
+/// mixed paragraph would carry ranges reaching past the text it now holds.
+fn clip_spans(spans: Option<&[Span]>, len: usize) -> Option<Vec<Span>> {
+    let spans = spans?;
+    Some(
+        spans
+            .iter()
+            .filter(|s| (s.range.start as usize) < len)
+            .map(|s| Span {
+                range: s.range.start..s.range.end.min(len as u32),
+                over: s.over.clone(),
+            })
+            .collect(),
+    )
+}
+
 /// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and (with ellipsis) `…` is appended and characters are dropped until it fits. Single logical line per call is assumed for the cut offset (UI labels), which is the common clamp case.
-fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &TextStyle) -> Buffer {
-    let buffer = shape_buffer(font_system, text, rect, style);
+fn make_buffer(
+    font_system: &mut FontSystem,
+    text: &str,
+    spans: Option<&[Span]>,
+    rect: Rect,
+    style: &TextStyle,
+) -> Buffer {
+    let buffer = shape_buffer(font_system, text, spans, rect, style);
     let Some(max) = style.max_lines.map(usize::from).filter(|&n| n > 0) else {
         return buffer;
     };
@@ -185,13 +268,16 @@ fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Tex
     let cut = line_starts[max].min(text.len());
     let head = text[..cut].trim_end();
     if !style.ellipsis {
-        return shape_buffer(font_system, head, rect, style);
+        let clipped = clip_spans(spans, head.len());
+        return shape_buffer(font_system, head, clipped.as_deref(), rect, style);
     }
     // Ellipsis: append `…`, dropping trailing chars until the result fits in `max` lines.
+    // The `…` takes the paragraph's own style, as CSS gives it the block's, and the spans are cut to what survives.
     let mut end = head.len();
     loop {
         let candidate = format!("{}\u{2026}", &head[..end]);
-        let b = shape_buffer(font_system, &candidate, rect, style);
+        let clipped = clip_spans(spans, end);
+        let b = shape_buffer(font_system, &candidate, clipped.as_deref(), rect, style);
         if b.layout_runs().count() <= max {
             return b;
         }
@@ -206,44 +292,6 @@ fn make_buffer(font_system: &mut FontSystem, text: &str, rect: Rect, style: &Tex
             end -= 1;
         }
     }
-}
-
-/// Shapes a rich-text paragraph (`runs`) into `rect` using the base metrics, giving each run its own weight, slant, and colour via a per-span `Attrs`. `max_lines`/`ellipsis` are not applied here — cosmic-text has no cross-run truncation, so the caller clamps by visual line instead.
-pub(crate) fn make_buffer_rich(
-    font_system: &mut FontSystem,
-    runs: &[TextRun],
-    rect: Rect,
-    base: &TextStyle,
-) -> Buffer {
-    let metrics = Metrics::new(base.font_size, effective_line_height(base));
-    let mut buffer = Buffer::new(font_system, metrics);
-    buffer.set_size(Some(rect.width), Some(rect.height));
-    let spans = runs.iter().map(|run| {
-        let mut attrs = Attrs::new()
-            .family(cosmic_family(&base.font_family))
-            .weight(Weight(run.weight))
-            .style(if run.italic {
-                Style::Italic
-            } else {
-                Style::Normal
-            })
-            .color(to_cosmic_color(run.color));
-        if base.letter_spacing != 0.0 {
-            attrs = attrs.letter_spacing(base.letter_spacing);
-        }
-        if base.raster != GlyphRaster::Smooth {
-            attrs = attrs.cache_key_flags(raster_flags(base.raster));
-        }
-        (run.text.as_ref(), attrs)
-    });
-    buffer.set_rich_text(
-        spans,
-        &Attrs::new(),
-        Shaping::Advanced,
-        cosmic_align(base.align),
-    );
-    buffer.shape_until_scroll(font_system, false);
-    buffer
 }
 
 /// The cosmic-text family a style asks for.

@@ -3,8 +3,8 @@ use std::hash::Hasher;
 use rustc_hash::FxHasher;
 
 use crate::{
-    BorderRadius, BorderWidths, FillRule, Gradient, GradientKind, Paint, PathStyle, RectStyle,
-    Shadow, Stroke, TextStyle,
+    BorderRadius, BorderWidths, Declared, FillRule, FontFamily, GlyphRaster, Gradient,
+    GradientKind, Paint, PathStyle, RectStyle, Shadow, Stroke, TextStyle,
 };
 
 // Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`; each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
@@ -53,6 +53,51 @@ pub fn hash_path_style(s: &PathStyle) -> u64 {
         FillRule::EvenOdd => 1,
     });
     h.finish()
+}
+
+/// Hashes a span's overrides. Every field, unlike [`hash_text_style`], because a span exists precisely to
+/// differ in one of them: a bold range and a plain one over identical text must not hash alike.
+pub fn hash_declared(d: &Declared) -> u64 {
+    let mut h = FxHasher::default();
+    match &d.font_family {
+        None => h.write_u8(0),
+        Some(FontFamily::SansSerif) => h.write_u8(1),
+        Some(FontFamily::Named(name)) => {
+            h.write_u8(2);
+            h.write(name.as_bytes());
+        }
+    }
+    hash_opt_f32(d.font_size, &mut h);
+    hash_opt_paint(d.paint.as_ref(), &mut h);
+    match d.weight {
+        None => h.write_u8(0),
+        Some(w) => {
+            h.write_u8(1);
+            h.write_u16(w);
+        }
+    }
+    h.write_u8(match d.italic {
+        None => 0,
+        Some(false) => 1,
+        Some(true) => 2,
+    });
+    hash_opt_f32(d.letter_spacing, &mut h);
+    h.write_u8(match d.raster {
+        None => 0,
+        Some(GlyphRaster::Smooth) => 1,
+        Some(GlyphRaster::Pixel) => 2,
+    });
+    h.finish()
+}
+
+fn hash_opt_f32(v: Option<f32>, h: &mut FxHasher) {
+    match v {
+        None => h.write_u8(0),
+        Some(v) => {
+            h.write_u8(1);
+            h.write_u32(v.to_bits());
+        }
+    }
 }
 
 fn hash_opt_paint(p: Option<&Paint>, h: &mut FxHasher) {

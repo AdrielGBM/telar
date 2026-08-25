@@ -3,19 +3,8 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 
 use crate::{
-    BorderRadius, Color, ImageData, ImageFilter, PathData, PathStyle, RectStyle, Stroke, TextStyle,
+    BorderRadius, ImageData, ImageFilter, PathData, PathStyle, RectStyle, Span, Stroke, TextStyle,
 };
-
-/// One inline run of a rich-text paragraph: a slice of text with its own weight, slant, and colour. Paragraph
-/// metrics (font size, line height, wrapping, alignment) live on the [`DrawCommand::RichText`] `base` style,
-/// so a run overrides only what varies inline (bold, italic, a link's colour).
-#[derive(Debug, Clone, PartialEq)]
-pub struct TextRun {
-    pub text: Arc<str>,
-    pub weight: u16,
-    pub italic: bool,
-    pub color: Color,
-}
 
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
@@ -23,17 +12,18 @@ pub enum DrawCommand {
         rect: Rect,
         style: Arc<RectStyle>,
     },
+    /// A paragraph, uniform or mixed. `style` is the paragraph's; `spans` are the byte ranges that differ
+    /// from it — `None`, overwhelmingly the common case, is text that does not.
+    ///
+    /// One command rather than two because mixed text is not a different kind of thing from text: the shaper
+    /// builds one span or many through the same call, and every layer above it was carrying a parallel
+    /// function for a distinction that stopped at the boundary. Keeping the text whole is also what lets a
+    /// clamp re-shape it with an ellipsis, which per-run text could never be cut across.
     Text {
         text: Arc<str>,
+        spans: Option<Arc<[Span]>>,
         rect: Rect,
         style: Arc<TextStyle>,
-    },
-    /// A paragraph of mixed-style runs shaped and wrapped as one (freedesktop notification body markup, etc.).
-    /// `base` supplies the shared metrics; each run carries its own weight/italic/colour.
-    RichText {
-        runs: Arc<[TextRun]>,
-        rect: Rect,
-        base: Arc<TextStyle>,
     },
     Image {
         data: Arc<ImageData>,
@@ -81,27 +71,18 @@ impl PartialEq for DrawCommand {
             (
                 DrawCommand::Text {
                     text: t1,
+                    spans: p1,
                     rect: r1,
                     style: s1,
                 },
                 DrawCommand::Text {
                     text: t2,
+                    spans: p2,
                     rect: r2,
                     style: s2,
                 },
-            ) => *t1 == *t2 && r1 == r2 && s1 == s2,
-            (
-                DrawCommand::RichText {
-                    runs: u1,
-                    rect: r1,
-                    base: b1,
-                },
-                DrawCommand::RichText {
-                    runs: u2,
-                    rect: r2,
-                    base: b2,
-                },
-            ) => (Arc::ptr_eq(u1, u2) || u1 == u2) && r1 == r2 && b1 == b2,
+                // Pointer-equal is the cheap case; comparing ranges keeps a rebuilt-but-identical paragraph equal.
+            ) => *t1 == *t2 && spans_eq(p1, p2) && r1 == r2 && s1 == s2,
             (
                 DrawCommand::Image {
                     data: d1,
@@ -165,5 +146,13 @@ impl PartialEq for DrawCommand {
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
             _ => false,
         }
+    }
+}
+
+fn spans_eq(a: &Option<Arc<[Span]>>, b: &Option<Arc<[Span]>>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => Arc::ptr_eq(a, b) || a == b,
+        _ => false,
     }
 }
