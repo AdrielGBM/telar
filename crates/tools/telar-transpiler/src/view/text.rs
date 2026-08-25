@@ -196,6 +196,39 @@ impl ViewGen<'_> {
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
     ) -> String {
+        let mut modifiers = self.inheritable_modifiers(attrs, transitions, hoists);
+        // A bare flag (`ellipsis`) is the assertion itself; `ellipsis:true` says the same thing the long way, and anything else — `ellipsis:false` most of all — leaves the default alone.
+        let asserted = |key: &str| {
+            attrs
+                .iter()
+                .find(|a| a.key == key)
+                .is_some_and(|a| a.value.is_flag() || a.value.text().trim() == "true")
+        };
+        // One call, because they are one decision: `ellipsis` without `lines` used to be accepted and do
+        // nothing at all, since the clamp returns before ever reaching it. Not inheritable, and cannot be:
+        // clamping a *subtree* to two lines means nothing.
+        if let Some(n) = attrs
+            .iter()
+            .find(|a| a.key == "lines")
+            .and_then(|a| a.value.text().trim().parse::<u16>().ok())
+        {
+            modifiers.push_str(&format!(".with_clamp({n}, {})", asserted("ellipsis")));
+        }
+
+        let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
+        // `color`'s raw value (not the substituted expression) is scanned for `$ident` so a signal-backed colour clones itself into this closure, leaving the outer binding usable by sibling widgets.
+        wrap_signal_clones(&[raw_color_value(attrs)], closure)
+    }
+
+    /// The builder calls for the text properties that flow down a tree, in the spelling both
+    /// `TextStyle` and `Declared` answer to — which is what lets a `text` and the container above it be
+    /// written the same way and mean the same thing at different reaches.
+    pub(super) fn inheritable_modifiers(
+        &mut self,
+        attrs: &[Attr],
+        transitions: &HashMap<String, String>,
+        hoists: &mut Vec<String>,
+    ) -> String {
         // `font_size:` and `color:` amend what the tree declared rather than building a style from nothing. Each used to bake a literal here, which is why "make the body text 11px" was not a thing a theme could say.
         let mut modifiers = String::new();
         if let Some(size) = attrs.iter().find(|a| a.key == "font_size") {
@@ -213,13 +246,6 @@ impl ViewGen<'_> {
             }
             let _ = write!(modifiers, ".with_color({color})");
         }
-        // A bare flag (`ellipsis`) is the assertion itself; `ellipsis:true` says the same thing the long way, and anything else — `ellipsis:false` most of all — leaves the default alone.
-        let asserted = |key: &str| {
-            attrs
-                .iter()
-                .find(|a| a.key == key)
-                .is_some_and(|a| a.value.is_flag() || a.value.text().trim() == "true")
-        };
         if let Some(family) = attrs.iter().find(|a| a.key == "font_family") {
             modifiers.push_str(&format!(".with_font_family({})", font_family_expr(family)));
         }
@@ -243,15 +269,6 @@ impl ViewGen<'_> {
             .and_then(|a| registry::keyword(registry::TEXT_ALIGN_VALUES, a.value.text().trim()))
         {
             modifiers.push_str(&format!(".with_text_align({variant})"));
-        }
-        // One call, because they are one decision: `ellipsis` without `lines` used to be accepted and do
-        // nothing at all, since the clamp returns before ever reaching it.
-        if let Some(n) = attrs
-            .iter()
-            .find(|a| a.key == "lines")
-            .and_then(|a| a.value.text().trim().parse::<u16>().ok())
-        {
-            modifiers.push_str(&format!(".with_clamp({n}, {})", asserted("ellipsis")));
         }
         if let Some(variant) = attrs
             .iter()
@@ -281,12 +298,37 @@ impl ViewGen<'_> {
         {
             modifiers.push_str(&format!(".with_raster({variant})"));
         }
-
-        let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
-        // `color_attr`'s raw value (not `color`, already substituted by `color_expr`) is scanned for `$ident` so a signal-backed color clones itself into this closure, leaving the outer binding usable by sibling widgets.
-        let raw_color = color_attr.map(|a| a.value.text()).unwrap_or("");
-        wrap_signal_clones(&[raw_color], closure)
+        modifiers
     }
+
+    /// The `.declaring(…)` a container wears, or nothing at all when it names no property that inherits.
+    pub(super) fn declaring_call(
+        &mut self,
+        attrs: &[Attr],
+        transitions: &HashMap<String, String>,
+        hoists: &mut Vec<String>,
+    ) -> String {
+        let modifiers = self.inheritable_modifiers(attrs, transitions, hoists);
+        if modifiers.is_empty() {
+            return String::new();
+        }
+        let closure = format!("move || Declared::default(){modifiers}");
+        format!(
+            ".declaring({})",
+            wrap_signal_clones(&[raw_color_value(attrs)], closure)
+        )
+    }
+}
+
+/// A `color:`'s value as the author wrote it, before `color_expr` substitutes it — scanned for `$ident` so a
+/// signal-backed colour clones itself into the closure that reads it, leaving the outer binding usable by
+/// sibling widgets.
+fn raw_color_value(attrs: &[Attr]) -> &str {
+    attrs
+        .iter()
+        .find(|a| a.key == "color")
+        .map(|a| a.value.text())
+        .unwrap_or("")
 }
 
 /// The family a `font_family:` names, as an expression `TextStyle::with_font_family` accepts.

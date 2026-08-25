@@ -1955,6 +1955,48 @@ mod tests {
         assert!(out.rust_code.contains("is not a value of `align`"));
     }
 
+    /// The line this whole document exists for: a container that draws no text says what the text under it
+    /// looks like, and `font_size:` on a `col` used to be a `compile_error!`.
+    #[test]
+    fn a_container_declares_the_text_below_it() {
+        let src = "[view]\ncol font_size:11 color:#ff0000 raster:pixel\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        let code = &out.rust_code;
+        assert!(!code.contains("compile_error!"), "{code}");
+        assert!(
+            code.contains(
+                ".declaring(move || Declared::default().with_font_size(11.0).with_color("
+            ),
+            "size and colour reach the declaration:\n{code}"
+        );
+        assert!(
+            code.contains(".with_raster(Raster::Pixel))"),
+            "and so does the raster:\n{code}"
+        );
+    }
+
+    /// A clamp is one paragraph's business, so it stays where it was and never reaches a container.
+    #[test]
+    fn a_container_cannot_clamp_the_text_below_it() {
+        let src = "[view]\ncol lines:2\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(
+            out.rust_code
+                .contains("`lines` is not an attribute of `col`"),
+            "{}",
+            out.rust_code
+        );
+    }
+
+    /// A container naming nothing inheritable declares nothing, so the map the cascade walks stays empty for
+    /// every tree that does not use the feature.
+    #[test]
+    fn a_container_that_says_nothing_declares_nothing() {
+        let src = "[view]\ncol gap:8\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
+        assert!(!out.rust_code.contains(".declaring("), "{}", out.rust_code);
+    }
+
     /// T6's victim: `gap:1O` used to be emitted as `.gap(1O)` and reported by rustc against generated code.
     #[test]
     fn a_mistyped_number_is_an_rsx_error_not_a_rustc_one() {

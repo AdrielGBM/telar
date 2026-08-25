@@ -108,6 +108,21 @@ impl Declared {
         self.raster = Some(raster);
         self
     }
+
+    pub fn with_line_height(mut self, times: f32) -> Self {
+        self.line_height = Some(LineHeight::Times(times));
+        self
+    }
+
+    pub fn with_text_align(mut self, text_align: TextAlign) -> Self {
+        self.text_align = Some(text_align);
+        self
+    }
+
+    pub fn with_text_wrap(mut self, text_wrap: TextWrap) -> Self {
+        self.text_wrap = Some(text_wrap);
+        self
+    }
 }
 
 /// A byte range of a paragraph that styles itself differently from the paragraph.

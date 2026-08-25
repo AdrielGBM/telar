@@ -2,6 +2,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, PointerButton};
 use reactive_core::RwSignal;
+use renderer_core::Declared;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::child_host::{ChildSlot, DynHost};
@@ -73,6 +74,18 @@ impl Container {
     pub fn keeping(mut self, subscription: reactive_core::Effect) -> Self {
         self.kept_effects.push(subscription);
         self
+    }
+
+    /// Says what the text below this container looks like — everything under it, not the container itself,
+    /// which draws no text at all.
+    ///
+    /// Re-run when a signal the declaration read changes, and withdrawn when this container goes, so a
+    /// subtree that is rebuilt does not inherit from the one it replaced.
+    pub fn declaring(self, declared: impl Fn() -> Declared + 'static) -> Self {
+        let node = self.node;
+        self.keeping(reactive_core::effect(move || {
+            crate::inherit::declare(node, declared())
+        }))
     }
 
     /// Keeps this container's layout style in step with the reactive state it was built from — see
@@ -175,6 +188,7 @@ impl Component for Container {
 impl Drop for Container {
     fn drop(&mut self) {
         crate::input_region::unregister_interactive(self.node);
+        crate::inherit::undeclare(self.node);
     }
 }
 
@@ -188,6 +202,24 @@ mod tests {
     use super::*;
     use crate::context::{compute_layout, new_container};
     use crate::text::Text;
+
+    /// A declaration outliving the container that made it would reach whatever is built on that node next,
+    /// which is what a rebuilt subtree does every time it is rebuilt.
+    #[test]
+    fn a_container_takes_its_declaration_with_it() {
+        reset_layout_runtime();
+        let container = Container::new(LayoutStyle::new(), vec![])
+            .unwrap()
+            .declaring(|| Declared::default().with_font_size(11.0));
+        let node = container.node;
+        assert_eq!(crate::inherit::context(node).text.font_size, 11.0);
+
+        drop(container);
+        assert_eq!(
+            crate::inherit::context(node).text.font_size,
+            crate::inherit::Inherited::initial().text.font_size
+        );
+    }
 
     fn make_container_with_labels() -> Container {
         reset_layout_runtime();

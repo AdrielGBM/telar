@@ -107,6 +107,9 @@ impl ViewGen<'_> {
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
+        // What this container says about the text below it. A `col font_size:11` draws no text of its own —
+        // it names the size everything under it starts from, the way `body { font-size }` does.
+        let declaring = self.declaring_call(&el.attributes, &transitions, &mut hoists);
 
         // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded here because its closure form wires on a plain Container too — `on_press_forwarded` above covers the other case. `box` (`always_style`) skips the check.
         let styling = format!(
@@ -158,13 +161,13 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}{styled_by}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{styled_by}{terminator}"
+                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{styled_by}{declaring}{terminator}"
                 );
             }
         }

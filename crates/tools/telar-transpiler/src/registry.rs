@@ -363,11 +363,9 @@ pub enum ValueKind {
 
 /// The value schema of `tag`'s `key`, or `None` when the key takes a free-form value.
 ///
-/// Tag-aware because one name is two properties: `align` on a container places children across the layout
-/// axis, and `align` on a `text` places lines inside the leaf's own box — different closed sets, and a value
-/// legal under one (`justify`) is a typo under the other.
+/// Tag-aware because one name is still two properties: `stroke` is a colour on a box and a *width* on an
+/// `svg`, and the four edges a box collects are one plain number on a `path`.
 pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
-    let text_like = matches!(tag, "text" | "input");
     match key {
         "text_align" => return Some(ValueKind::Keywords(TEXT_ALIGN_VALUES)),
         "text_wrap" => return Some(ValueKind::Keywords(TEXT_WRAP_VALUES)),
@@ -386,7 +384,7 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         | "pad_y" | "padding_start" | "pad_start" | "padding_end" | "pad_end" | "margin_start"
         | "margin_end" | "inset_start" | "inset_end" | "inset_top" | "inset_bottom" | "gap"
         | "gap_x" | "gap_y" | "grow" | "shrink" => return Some(ValueKind::Number),
-        "font_size" if text_like => return Some(ValueKind::Number),
+        "font_size" => return Some(ValueKind::Number),
         // A stroke *width* on an `svg`, where every other tag means a colour by the same name.
         "stroke" if tag == "svg" => return Some(ValueKind::Number),
         _ => {}
@@ -437,6 +435,26 @@ pub fn keyword(
 
 /// Declarative affine transform attribute keys (see `container::transform_call`, which gates
 /// `.with_transform` emission on this exact list — shared here so codegen and completion cannot drift).
+/// The text properties that flow down the tree, so a container may name any of them for everything beneath
+/// it and a leaf takes what it did not name itself.
+///
+/// The same set on a container and on a `text`, which is the point: `font_size:11` means one thing, and
+/// where it is written decides how far it reaches rather than what it says. Absent from it are the
+/// properties that clamp *one* paragraph — `lines`, `ellipsis` — which would be nonsense applied to a
+/// subtree, and which [`renderer_core::Declared`] has no way to spell for the same reason.
+pub const INHERITABLE_TEXT_KEYS: &[&str] = &[
+    "font_size",
+    "font_family",
+    "font_weight",
+    "font_style",
+    "color",
+    "text_align",
+    "text_wrap",
+    "line_height",
+    "letter_spacing",
+    "raster",
+];
+
 pub const TRANSFORM_ATTR_KEYS: &[&str] = &[
     "rotate",
     "scale",
@@ -481,12 +499,14 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         "grid" => {
             let mut keys = with(CONTAINER_PAINT);
             keys.extend_from_slice(TRANSFORM_ATTR_KEYS);
+            keys.extend_from_slice(INHERITABLE_TEXT_KEYS);
             keys.extend_from_slice(&["cols", "span", "row_span"]);
             keys
         }
         "col" | "row" | "box" => {
             let mut keys = with(CONTAINER_PAINT);
             keys.extend_from_slice(TRANSFORM_ATTR_KEYS);
+            keys.extend_from_slice(INHERITABLE_TEXT_KEYS);
             // A box is a grid *item* wherever its parent is a grid, so it carries the placement keys even
             // though it is not itself one.
             keys.extend_from_slice(&["span", "row_span"]);

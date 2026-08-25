@@ -4,7 +4,7 @@ use platform_core::{
     Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, WindowCommand,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
-use renderer_core::{Border, RectStyle};
+use renderer_core::{Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -416,6 +416,13 @@ impl StyledContainer {
     pub fn keeping(mut self, subscription: Effect) -> Self {
         self.kept_effects.push(subscription);
         self
+    }
+
+    /// Says what the text below this box looks like — see
+    /// [`Container::declaring`](crate::Container::declaring).
+    pub fn declaring(self, declared: impl Fn() -> Declared + 'static) -> Self {
+        let node = self.node;
+        self.keeping(effect(move || crate::inherit::declare(node, declared())))
     }
 
     /// Keeps the box's *layout* style in step with the reactive state it was built from — the theme's metric
@@ -939,6 +946,7 @@ impl Drop for StyledContainer {
             focus::unregister_scope(scope);
         }
         crate::input_region::unregister_interactive(self.node);
+        crate::inherit::undeclare(self.node);
     }
 }
 

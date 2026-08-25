@@ -155,6 +155,33 @@ fn the_markup_default_and_the_catalogue_default_are_one_number() {
     );
 }
 
+/// The line the whole plan was written for, and the shape it takes in markup: a container names a size and a
+/// raster once, and a leaf that says nothing takes both.
+///
+/// Built the way generated code builds it — `Container::declaring` under a `Text::declaring` — because the
+/// transpiler's own tests can only prove it *emitted* the call.
+#[test]
+fn a_container_declares_the_text_below_it() {
+    let style = resolved(|| {
+        let leaf = Text::declaring(|| "under".to_string(), LayoutStyle::new(), |t| t).unwrap();
+        let outer = Container::new(LayoutStyle::new().flex_column(), vec![box_item(leaf)])
+            .unwrap()
+            .declaring(|| {
+                telar::Declared::default()
+                    .with_font_size(11.0)
+                    .with_raster(Raster::Pixel)
+            });
+        box_item(outer)
+    });
+
+    assert_eq!(style.font_size, 11.0);
+    assert_eq!(style.raster, Raster::Pixel);
+    assert_eq!(
+        style.font_weight, 400,
+        "and nothing the declaration did not name"
+    );
+}
+
 /// The headline case, and the one nothing could express before: an ancestor that draws no text of its own
 /// says what the text beneath it looks like. Asserted through a real frame rather than the cascade's own unit
 /// tests, because the thing being checked is that a `Text` built the ordinary way actually reads it — and
