@@ -39,3 +39,6 @@ ra_ap_paths = "=0.0.347"
 anyhow = "1.0.103"
 ra_ap_proc_macro_api = "=0.0.347"
 ra_ap_hir = "=0.0.347"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.189"

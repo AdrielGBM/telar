@@ -2,7 +2,8 @@
 //!
 //! Replaces the tower-lsp runtime: it frames JSON-RPC over stdin/stdout, routes requests and notifications to [`Backend`] methods, and writes replies through the [`OutgoingSender`] channel. State-mutating notifications (`didOpen` / `didChange` / `didClose`) are awaited in order; requests are spawned so a slow `rustfmt` run never stalls the read loop.
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
+use std::time::Duration;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -17,7 +18,7 @@ pub async fn run() {
     let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
     let backend = Arc::new(Backend::new(OutgoingSender::new(tx)));
 
-    spawn_shutdown_signals(backend.clone());
+    spawn_shutdown_signals(Arc::downgrade(&backend));
 
     // A single writer task owns stdout so server-originated messages never interleave.
     let writer = tokio::spawn(async move {
@@ -46,6 +47,9 @@ pub async fn run() {
         let method = method.to_string();
         let params = message.get("params").cloned().unwrap_or(Value::Null);
         let id = message.get("id").cloned().filter(|id| !id.is_null());
+        if method == "initialize" {
+            watch_client_process(&params, Arc::downgrade(&backend));
+        }
 
         match id {
             Some(id) => {
@@ -64,12 +68,30 @@ pub async fn run() {
 
     backend.release_analyzer();
     drop(backend);
-    let _ = writer.await;
+    // The writer ends only once the last `Arc<Backend>` drops and closes the outgoing channel, so a request handler still wedged on the analyzer mutex would otherwise strand the process here with the client already gone.
+    let _ = tokio::time::timeout(SHUTDOWN_GRACE, writer).await;
+}
+
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
+
+/// Long, because this only backstops the client deaths that stdin EOF already covers.
+#[cfg(unix)]
+const CLIENT_POLL: Duration = Duration::from_secs(10);
+
+/// Releases the analyzer and ends the process, for the paths that cannot unwind through [`run`].
+#[cfg(unix)]
+async fn exit_now(backend: &Weak<Backend>) -> ! {
+    // Off the runtime thread: releasing waits on the analyzer mutex, which a blocking query may hold.
+    if let Some(backend) = backend.upgrade() {
+        let _ = tokio::task::spawn_blocking(move || backend.release_analyzer()).await;
+    }
+    std::process::exit(0);
 }
 
 /// Releases the analyzer before the process dies on SIGTERM/SIGHUP, which is how an editor usually terminates us when it does not get to send `exit`. SIGKILL stays out of reach: the child is spawned inside `ra_ap_proc_macro_api`, so `PR_SET_PDEATHSIG` is not ours to set without hand-rolling that spawn against the pinned `ra_ap_*` snapshot.
+// Holds a `Weak`, never an `Arc`: this task outlives the read loop by design, so a strong handle would keep `Backend` — and with it the outgoing channel's only sender — alive past the `drop` in [`run`], leaving the writer awaiting a channel that can never close and the process alive forever.
 #[cfg(unix)]
-fn spawn_shutdown_signals(backend: Arc<Backend>) {
+fn spawn_shutdown_signals(backend: Weak<Backend>) {
     use tokio::signal::unix::{SignalKind, signal};
 
     tokio::spawn(async move {
@@ -83,14 +105,38 @@ fn spawn_shutdown_signals(backend: Arc<Backend>) {
             _ = term.recv() => {}
             _ = hup.recv() => {}
         }
-        // Off the runtime thread: releasing waits on the analyzer mutex, which a blocking query may hold.
-        let _ = tokio::task::spawn_blocking(move || backend.release_analyzer()).await;
-        std::process::exit(0);
+        exit_now(&backend).await;
     });
 }
 
 #[cfg(not(unix))]
-fn spawn_shutdown_signals(_backend: Arc<Backend>) {}
+fn spawn_shutdown_signals(_backend: Weak<Backend>) {}
+
+/// Exits when the client vanishes without closing stdin. `initialize` carries `processId` so a server can detect exactly this; stdio normally delivers EOF first, so this only backstops a client that leaked the pipe's write end to a surviving child.
+#[cfg(unix)]
+fn watch_client_process(params: &Value, backend: Weak<Backend>) {
+    let Some(pid) = params.get("processId").and_then(Value::as_i64) else {
+        return;
+    };
+    let Ok(pid) = i32::try_from(pid) else { return };
+
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(CLIENT_POLL).await;
+            // Signal 0 runs the existence and permission checks without delivering anything, and only ESRCH proves the pid is gone rather than merely unreachable.
+            if unsafe { libc::kill(pid, 0) } == 0 {
+                continue;
+            }
+            if std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH) {
+                continue;
+            }
+            exit_now(&backend).await;
+        }
+    });
+}
+
+#[cfg(not(unix))]
+fn watch_client_process(_params: &Value, _backend: Weak<Backend>) {}
 
 async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Result<Value, Value> {
     let result = match method {

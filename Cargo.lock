@@ -5436,6 +5436,7 @@ name = "telar-analyzer"
 version = "0.1.6"
 dependencies = [
  "anyhow",
+ "libc",
  "lsp-types",
  "ra_ap_hir",
  "ra_ap_ide",
