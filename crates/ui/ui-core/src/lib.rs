@@ -7,6 +7,7 @@ mod child_host;
 mod container;
 mod context;
 pub mod dismiss;
+mod disposal;
 mod drag;
 pub mod focus;
 mod image;

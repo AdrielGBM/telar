@@ -10,8 +10,8 @@ use platform_core::Event;
 use reactive_core::{Effect, RwSignal, effect, signal};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::context::{new_container, remove_node, set_children, track_layout};
-use crate::layout_item::{Child, LayoutItem, TrackedChildren, make_child};
+use crate::context::{new_container, set_children, track_layout};
+use crate::layout_item::{Child, LayoutItem, TrackedChildren, build_child, dispose_child};
 use crate::pointer::dispatch_container_event;
 
 /// A key erased to a `u64` so the list state stays non-generic. A collision would reuse the wrong item's
@@ -271,7 +271,7 @@ fn reconcile<Item, KeyFn, B, Sync>(
         sync(&item, k);
         let child = match old.remove(&k) {
             Some(existing) => existing,
-            None => make_child(build(item).expect("reactive list item build")),
+            None => build_child(|| build(item).expect("reactive list item build")),
         };
         nodes.push(child.node());
         children.push(child);
@@ -283,10 +283,10 @@ fn reconcile<Item, KeyFn, B, Sync>(
     drop(st);
 
     // Reorder/insert/drop in the layout tree, then free the nodes of items that went away. set_children
-    // first so the disposed nodes are detached before remove_node frees them.
+    // first so the disposed nodes are detached before their owners withdraw and the ids are freed.
     let _ = set_children(container, &nodes);
     for (_, child) in old {
-        remove_node(child.node());
+        dispose_child(&child);
     }
 }
 
@@ -609,5 +609,44 @@ mod tests {
 
         assert_eq!(items.peek(), vec![1, 3]);
         assert_eq!(list.state.borrow().children.len(), 2);
+    }
+
+    /// A row that leaves takes what its build made, including what a surviving handle would otherwise pin.
+    ///
+    /// The escaping clone is not contrived: `hot_state` does exactly this on purpose, holding a signal past
+    /// the component that made it so the value survives a reload. Under the handle refcount that is
+    /// indistinguishable from a leak — the storage lives as long as the clone, and rebuilding a row ten
+    /// times leaves ten of them. The owner is what tells the two apart.
+    #[test]
+    fn rebuilding_a_row_does_not_accumulate_what_its_build_created() {
+        reset_layout_runtime();
+        let escaped: Rc<RefCell<Vec<RwSignal<usize>>>> = Rc::new(RefCell::new(Vec::new()));
+        let items = signal(vec![0usize]);
+        let source = items.clone();
+        let kept = Rc::clone(&escaped);
+        let list = ReactiveList::new(
+            move || source.get(),
+            |n: &usize| *n,
+            move |n: usize| {
+                let per_row = signal(n);
+                kept.borrow_mut().push(per_row.clone());
+                leaf()
+            },
+            0.0,
+        )
+        .unwrap();
+
+        let one_row = reactive_core::live_signal_count();
+        for generation in 1..=10usize {
+            items.set(vec![generation]);
+        }
+
+        assert_eq!(escaped.borrow().len(), 11, "every generation built a row");
+        assert_eq!(
+            reactive_core::live_signal_count(),
+            one_row,
+            "eleven rows built, one row's worth of state alive"
+        );
+        assert_eq!(list.state.borrow().children.len(), 1);
     }
 }

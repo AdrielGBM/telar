@@ -10,6 +10,10 @@
 //! The cell holds a raw pointer and has no `Drop`, so no TLS destructor is registered — dlclosing a
 //! hot-reload dylib on thread exit stays safe (same reasoning as the reactive runtime cell). The ambient
 //! instance is intentionally leaked; per-surface instances are freed when their `Context` drops.
+//!
+//! Both instances build their contents inside [`detached`](crate::detached), because a slot initialises on
+//! first access and that access is somebody's build. Without it a surface's world is adopted by whichever
+//! reactive owner happened to be running — see that module.
 
 /// Generates a swappable per-surface thread-local plus its `Context`/`Guard`. See the module docs.
 ///
@@ -31,7 +35,7 @@ macro_rules! surface_local {
         thread_local! {
             static $slot: ::std::cell::Cell<$crate::SurfaceSlot<$ty>> = {
                 let ambient = ::std::boxed::Box::into_raw(::std::boxed::Box::new(
-                    ::std::cell::RefCell::new($init),
+                    ::std::cell::RefCell::new($crate::detached(|| $init)),
                 ));
                 ::std::cell::Cell::new($crate::SurfaceSlot {
                     live: ambient,
@@ -96,7 +100,7 @@ macro_rules! surface_local {
             pub fn new() -> Self {
                 Self {
                     ptr: ::std::boxed::Box::into_raw(::std::boxed::Box::new(
-                        ::std::cell::RefCell::new($init),
+                        ::std::cell::RefCell::new($crate::detached(|| $init)),
                     )),
                 }
             }

@@ -22,8 +22,8 @@ use platform_core::Event;
 use reactive_core::{Effect, RwSignal, effect, signal};
 use ui_tree::{EventResult, RenderNode};
 
-use crate::context::{container_is_row, remove_node, set_children, set_leading_margin};
-use crate::layout_item::{Child, LayoutItem, make_child};
+use crate::context::{container_is_row, set_children, set_leading_margin};
+use crate::layout_item::{Child, LayoutItem, build_child, dispose_child, make_child};
 use crate::pointer::dispatch_container_event;
 
 fn hash_key<K: Hash>(k: &K) -> u64 {
@@ -183,7 +183,7 @@ fn reconcile_slot<Item, KeyFn, B>(
         let k = keyer(&item, idx);
         let child = match old.remove(&k) {
             Some(existing) => existing,
-            None => make_child(build(item).expect("fragment item build")),
+            None => build_child(|| build(item).expect("fragment item build")),
         };
         new_items.push(child);
         keys.push(k);
@@ -216,7 +216,7 @@ fn reconcile_slot<Item, KeyFn, B>(
         }
     }
     for (_, child) in old {
-        remove_node(child.node());
+        dispose_child(&child);
     }
     version.update(|v| *v = v.wrapping_add(1));
 }

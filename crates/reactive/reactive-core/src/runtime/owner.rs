@@ -104,19 +104,29 @@ impl Drop for OwnerGuard {
 
 // Both take the runtime rather than reaching for it, so recording an owner costs nothing beyond a push on the borrow the creation already holds.
 pub(crate) fn attach_signal(rt: &mut Runtime, id: SignalId) {
-    if let Some(owner) = rt.owner_stack.last().copied()
-        && let Some(entry) = rt.owners.get_mut(owner)
-    {
+    if let Some(entry) = owning(rt) {
         entry.signals.push(id);
     }
 }
 
 pub(crate) fn attach_effect(rt: &mut Runtime, id: EffectId) {
-    if let Some(owner) = rt.owner_stack.last().copied()
-        && let Some(entry) = rt.owners.get_mut(owner)
-    {
+    if let Some(entry) = owning(rt) {
         entry.effects.push(id);
     }
+}
+
+/// The owner a creation right now belongs to, or `None` if it belongs to nobody.
+///
+/// Nobody covers two different cases. Outside every scope there is no owner to attribute to. Inside
+/// [`detached`](reactive_local::detached) there is one and it is the wrong one: a `surface_local!` world
+/// initialises on first access, and the first access is somebody's build, so the surface's own state would
+/// be adopted by whatever row or branch happened to touch it — and freed when that row went away.
+fn owning(rt: &mut Runtime) -> Option<&mut OwnerEntry> {
+    if reactive_local::is_detached() {
+        return None;
+    }
+    let owner = rt.owner_stack.last().copied()?;
+    rt.owners.get_mut(owner)
 }
 
 /// Disposes an owner and everything below it, children first.
@@ -150,6 +160,20 @@ pub fn dispose_surface_owners(surface: SurfaceHandle) {
     for root in roots {
         dispose_owner(root);
     }
+}
+
+/// How many signals the runtime is holding.
+///
+/// The arenas are private, so a lifetime that nothing frees is otherwise invisible — a test can watch a
+/// row rebuild ten times and see only that it still renders. Owner-scoped disposal makes the count the
+/// evidence: it is flat when disposal runs, and climbs when it does not.
+pub fn live_signal_count() -> usize {
+    RUNTIME.with(|rt| rt.borrow().signals.len())
+}
+
+/// How many effects the runtime is holding. See [`live_signal_count`].
+pub fn live_effect_count() -> usize {
+    RUNTIME.with(|rt| rt.borrow().effects.len())
 }
 
 /// Removes an owner's subtree from the arena and hands back what it held, deepest owner first.

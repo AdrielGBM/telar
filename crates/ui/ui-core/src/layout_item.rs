@@ -4,10 +4,11 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use reactive_core::RwSignal;
+use reactive_core::{OwnerId, RwSignal, owner_scope};
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::{new_container, track_layout};
+use crate::disposal::retire;
 use crate::layout_leaf::LayoutLeaf;
 
 /// A container child. The boxed widget is shared (`Rc<RefCell<…>>`) between event dispatch (which
@@ -25,6 +26,9 @@ pub(crate) struct Child {
     /// runs from inside one of these children's own event handlers — a row deleting itself, a strip
     /// committing a reorder.
     node: layout_core::NodeId,
+    /// The owner everything this child's build created belongs to, for the children whose lifetime is their
+    /// own. `None` for a child handed in already built, whose lifetime is somebody else's.
+    owner: Option<OwnerId>,
 }
 
 impl Child {
@@ -46,7 +50,27 @@ pub(crate) fn make_child(widget: Box<dyn LayoutItem>) -> Child {
         rect,
         segment,
         node,
+        owner: None,
     }
+}
+
+/// Builds a child that owns its own lifetime — a reactive list's row, an `if` branch — under a fresh owner,
+/// so [`dispose_child`] frees everything the build made rather than waiting for the last handle to drop.
+///
+/// The scope covers `make_child` as well as the build: the rect signal and the render segment's effect are
+/// per-item too, and an item that leaves has no more use for either.
+pub(crate) fn build_child(build: impl FnOnce() -> Box<dyn LayoutItem>) -> Child {
+    let scope = owner_scope();
+    let owner = scope.id();
+    let mut child = make_child(build());
+    drop(scope);
+    child.owner = Some(owner);
+    child
+}
+
+/// Retires a child: what it created, and the layout node it created it on. See [`crate::disposal`] for when.
+pub(crate) fn dispose_child(child: &Child) {
+    retire(child.owner, child.node());
 }
 
 pub(crate) type TrackedChildren = Vec<Child>;

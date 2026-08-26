@@ -196,6 +196,7 @@ pub(crate) fn dispatch_container_event(
     children: &mut crate::layout_item::TrackedChildren,
     event: &Event,
 ) -> EventResult {
+    let _dispatching = crate::disposal::dispatching();
     // Moves AND releases broadcast to every child regardless of position: a widget that armed a press or
     // began a drag inside its bounds must still receive the release even when the pointer has since moved
     // outside (pointer-capture semantics). Each widget's release handler is guarded by its own armed/drag

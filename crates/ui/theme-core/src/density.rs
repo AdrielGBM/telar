@@ -14,7 +14,7 @@
 
 use std::mem::ManuallyDrop;
 
-use reactive_core::{RwSignal, signal};
+use reactive_core::{RwSignal, detached, signal};
 
 /// How large the controls in this part of the tree are, in the sense SwiftUI's `controlSize` means: a
 /// preference the *container* expresses and each control interprets, not a size any one of them is given.
@@ -47,7 +47,7 @@ thread_local! {
     // `ManuallyDrop` for the same reason the theme signals are: no TLS destructor, cleanup goes through the
     // runtime being dropped.
     static CONTROL_SIZE: ManuallyDrop<RwSignal<ControlSize>> =
-        ManuallyDrop::new(signal(ControlSize::Regular));
+        ManuallyDrop::new(detached(|| signal(ControlSize::Regular)));
 }
 
 /// Sets the ambient control size. Reactive: everything that read it re-runs, so a switch re-spaces the

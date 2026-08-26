@@ -9,12 +9,12 @@
 use std::mem::ManuallyDrop;
 
 use layout_core::Direction;
-use reactive_core::{RwSignal, signal};
+use reactive_core::{RwSignal, detached, signal};
 
 thread_local! {
     // ManuallyDrop mirrors theme-core's signals: no TLS destructor is registered, so unmapping the dylib on dlclose stays safe.
     static DIRECTION: ManuallyDrop<RwSignal<Direction>> =
-        ManuallyDrop::new(signal(Direction::Ltr));
+        ManuallyDrop::new(detached(|| signal(Direction::Ltr)));
 }
 
 /// Sets the writing direction every surface lays out against, taking effect on the next layout pass.

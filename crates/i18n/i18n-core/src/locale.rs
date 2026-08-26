@@ -7,12 +7,12 @@
 
 use std::mem::ManuallyDrop;
 
-use reactive_core::{RwSignal, signal};
+use reactive_core::{RwSignal, detached, signal};
 
 thread_local! {
     // ManuallyDrop mirrors theme-core's signals: no TLS destructor is registered, so unmapping the dylib on
     // dlclose stays safe. Cleanup happens via reset_runtime() dropping the whole Runtime.
-    static LOCALE: ManuallyDrop<RwSignal<Option<String>>> = ManuallyDrop::new(signal(None));
+    static LOCALE: ManuallyDrop<RwSignal<Option<String>>> = ManuallyDrop::new(detached(|| signal(None)));
 }
 
 /// Sets the active locale (a BCP-47 tag such as `"en"` or `"es"`), re-rendering every translated string that

@@ -15,13 +15,12 @@ mod task;
 
 pub use effect::{Effect, effect};
 pub use memo::{Memo, memo};
-pub use reactive_local::{SurfaceSlot, surface_local};
+pub use reactive_local::{SurfaceSlot, detached, surface_local};
 pub use runtime::{
-    FlushNotifyHandle, SurfaceEnterGuard, SurfaceHandle, batch, begin_batch, current_surface,
-    end_batch, reset_runtime, set_current_surface, set_flush_notify, set_surface_enter_hook,
-};
-pub use runtime::{
-    OwnerGuard, OwnerId, current_owner, dispose_owner, dispose_surface_owners, owner_scope,
+    FlushNotifyHandle, OwnerGuard, OwnerId, SurfaceEnterGuard, SurfaceHandle, batch, begin_batch,
+    current_owner, current_surface, dispose_owner, dispose_surface_owners, end_batch,
+    live_effect_count, live_signal_count, owner_scope, reset_runtime, set_current_surface,
+    set_flush_notify, set_surface_enter_hook,
 };
 pub use signal::{ReadSignal, RwSignal, signal};
 pub use source::{Source, derive, derive_pair};
