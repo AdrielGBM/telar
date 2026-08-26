@@ -93,7 +93,7 @@ fn bench_single_signal_segmented(c: &mut Criterion) {
         let children: Vec<Rc<Segment>> = (0..rows)
             .map(|r| {
                 Segment::mount(CardSegment {
-                    tick: ticks[r].clone(),
+                    tick: ticks[r],
                     row: r,
                 })
             })
@@ -122,7 +122,7 @@ fn bench_single_signal_reflatten(c: &mut Criterion) {
     for &rows in &[20usize, 100, 400] {
         let tick = signal(0i32);
         let tree = ComponentList::new(CardList {
-            tick: tick.clone(),
+            tick: tick,
             rows,
             cols: 8,
         });
@@ -176,7 +176,7 @@ fn bench_scroll_tick(c: &mut Criterion) {
         // (a) Current behaviour: a scroll-offset signal change re-runs content.view() + flatten.
         let offset = signal(0.0f32);
         let tree = ComponentList::new(ScrollContent {
-            offset: offset.clone(),
+            offset: offset,
             items,
         });
         let n = tree.commands().len();

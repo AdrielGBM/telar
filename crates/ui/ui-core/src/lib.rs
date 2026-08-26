@@ -67,7 +67,7 @@ pub use keyboard::{
     reset as reset_keyboard,
 };
 pub use keynav::{KeyNav, KeyNavMove, key_nav_apply, key_nav_apply_grid};
-pub use layout_item::{ClipAxis, ClippedItem, Holding, LayoutItem, box_item};
+pub use layout_item::{ClipAxis, ClippedItem, LayoutItem, box_item};
 pub use lazy::Lazy;
 pub use line_gutter::LineGutter;
 pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};

@@ -439,7 +439,7 @@ fn build_sidebar(
 
 /// Mobile top bar: a hamburger button (toggles `menu_open`) next to the wordmark. Shown only below the breakpoint.
 fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let toggle = menu_open.clone();
+    let toggle = menu_open;
     let glyph = Text::new(
         || "\u{2630}".to_string(),
         LayoutStyle::new(),
@@ -539,7 +539,7 @@ impl ShellPage {
         )?;
         let sidebar_scroll_node = sidebar_scroll.layout_node();
         let menu_open = signal(false);
-        let topbar = build_topbar(menu_open.clone())?;
+        let topbar = build_topbar(menu_open)?;
         let topbar_node = topbar.layout_node();
         let (spacer, _) = new_leaf(
             LayoutStyle::new()

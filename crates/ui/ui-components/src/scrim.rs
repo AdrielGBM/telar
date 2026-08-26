@@ -117,7 +117,7 @@ pub(crate) fn scrim_overlay(
 
     let on_close: Option<Rc<dyn Fn()>> = on_close.map(Rc::from);
     let dismiss: DismissFn = {
-        let open = open.clone();
+        let open = open;
         Rc::new(move || {
             open.set(false);
             if let Some(cb) = &on_close {
@@ -132,7 +132,7 @@ pub(crate) fn scrim_overlay(
 
     let built = Rc::new(Cell::new(false));
     let key = {
-        let open = open.clone();
+        let open = open;
         let built = built.clone();
         move || {
             // Latch on first open; reading `open` subscribes the list so it re-runs to build the scrim then.
@@ -155,11 +155,11 @@ pub(crate) fn scrim_overlay(
             };
             let inner = build_inner(dismiss.clone())?;
             // Kept mounted; shown only while `open`. So the pre-built body survives a close/reopen (not rebuilt).
-            let registration = track_dismissible(open.clone(), dismiss.clone());
-            let open = open.clone();
+            let registration = track_dismissible(open, dismiss.clone());
+            let open = open;
             let overlay =
                 Overlay::toggleable(LayoutStyle::new().flex_column(), vec![box_item(inner)], {
-                    let open = open.clone();
+                    let open = open;
                     move || open.get()
                 })?;
             let focus_handover = track_focus_handover(open, overlay.content_node());

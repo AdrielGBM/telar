@@ -67,19 +67,19 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut tab_items: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(items.len());
     for (i, label) in items.into_iter().enumerate() {
         let idx = i as u32;
-        let label_selected = selected.clone();
+        let label_selected = selected;
         let label_widget = Text::declaring(
             move || label.to_string(),
             LayoutStyle::new(),
             move |t| tab_text(t, label_selected.get() == idx),
         )?;
 
-        let base_selected = selected.clone();
+        let base_selected = selected;
         let base_color = color.clone();
-        let hover_selected = selected.clone();
+        let hover_selected = selected;
         let hover_color = color.clone();
-        let announced_selected = selected.clone();
-        let press_selected = selected.clone();
+        let announced_selected = selected;
+        let press_selected = selected;
         let tab = StyledContainer::new(
             tab_box(),
             move |_r| tab_rect(base_selected.get() == idx, base_color.as_ref(), false),
@@ -207,7 +207,7 @@ mod tests {
         let selected = signal(0u32);
         let mut item = tabs(TabsProps {
             items: vec!["One", "Two"],
-            selected: Some(selected.clone()),
+            selected: Some(selected),
             ..Default::default()
         })
         .unwrap();

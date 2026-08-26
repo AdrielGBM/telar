@@ -61,7 +61,7 @@ impl Lazy {
         let visible: Rc<dyn Fn() -> bool> = Rc::new(visible);
 
         let eff_state = Rc::clone(&state);
-        let eff_version = version.clone();
+        let eff_version = version;
         let eff_visible = Rc::clone(&visible);
         // Runs once now — which is what makes an initially-false block cost nothing — and again on every change to a signal the condition reads.
         let _effect = effect(move || {
@@ -168,7 +168,7 @@ mod tests {
         let show = signal(false);
         let builds = Rc::new(Cell::new(0));
         let lazy = {
-            let (cond, builds) = (show.clone(), builds.clone());
+            let (cond, builds) = (show, builds.clone());
             Lazy::new(
                 LayoutStyle::new().flex_column(),
                 move || cond.get(),
@@ -196,7 +196,7 @@ mod tests {
         let show = signal(true);
         let builds = Rc::new(Cell::new(0));
         let lazy = {
-            let (cond, builds) = (show.clone(), builds.clone());
+            let (cond, builds) = (show, builds.clone());
             Lazy::new(
                 LayoutStyle::new().flex_column(),
                 move || cond.get(),
@@ -227,7 +227,7 @@ mod tests {
         reset_layout_runtime();
         let show = signal(true);
         let lazy = {
-            let cond = show.clone();
+            let cond = show;
             Lazy::new(
                 LayoutStyle::new().flex_column(),
                 move || cond.get(),
@@ -259,7 +259,7 @@ mod tests {
         reset_layout_runtime();
         let show = signal(false);
         let mut lazy = {
-            let cond = show.clone();
+            let cond = show;
             Lazy::new(
                 LayoutStyle::new().flex_column(),
                 move || cond.get(),

@@ -70,8 +70,7 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // its text to white on hover).
     let hovered = signal(false);
 
-    let (label_fill, label_outline, label_hover) =
-        (Rc::clone(&fill), Rc::clone(&outline), hovered.clone());
+    let (label_fill, label_outline, label_hover) = (Rc::clone(&fill), Rc::clone(&outline), hovered);
     let label_widget = Text::declaring(
         move || label(),
         LayoutStyle::new(),

@@ -500,7 +500,7 @@ mod tests {
         let keys = Rc::new(Cell::new(0u32));
         let counted = keys.clone();
         let showing = signal(false);
-        let flag = showing.clone();
+        let flag = showing;
         let field = crate::StyledContainer::new(
             LayoutStyle::new().width(50.0).height(20.0),
             |_r| renderer_core::RectStyle::default(),
@@ -682,7 +682,7 @@ mod tests {
     fn background_alone_receives_tap() {
         reset_layout_runtime();
         let clicked = signal(false);
-        let bg = pressable(clicked.clone());
+        let bg = pressable(clicked);
         let root = Container::new(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             vec![Box::new(bg)],
@@ -714,12 +714,12 @@ mod tests {
         let bg_clicked = signal(false);
         let overlay_clicked = signal(false);
 
-        let bg = pressable(bg_clicked.clone());
+        let bg = pressable(bg_clicked);
         // The scrim fills the overlay (which `absolute_fill`s the root), so it covers the background.
         let scrim = Container::new(LayoutStyle::new().width(400.0).height(400.0), vec![])
             .unwrap()
             .on_press({
-                let s = overlay_clicked.clone();
+                let s = overlay_clicked;
                 move || s.set(true)
             });
         let overlay = Overlay::new(LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
@@ -764,7 +764,7 @@ mod tests {
         let bg_clicked = signal(false);
 
         // 1. Lay out the page first: this registers `root` as the overlay host.
-        let bg = pressable(bg_clicked.clone());
+        let bg = pressable(bg_clicked);
         let root = Container::new(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
             vec![Box::new(bg)],
@@ -785,7 +785,7 @@ mod tests {
         let scrim = Container::new(LayoutStyle::new().width(400.0).height(400.0), vec![])
             .unwrap()
             .on_press({
-                let s = overlay_clicked.clone();
+                let s = overlay_clicked;
                 move || s.set(true)
             });
         let _overlay = Overlay::new(LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
@@ -813,12 +813,12 @@ mod tests {
         let bg_clicked = signal(false);
         let panel_clicked = signal(false);
 
-        let bg = pressable(bg_clicked.clone());
+        let bg = pressable(bg_clicked);
         // A 100×100 panel in the top-left corner; the rest of the click-through layer is transparent.
         let panel = Container::new(LayoutStyle::new().width(100.0).height(100.0), vec![])
             .unwrap()
             .on_press({
-                let s = panel_clicked.clone();
+                let s = panel_clicked;
                 move || s.set(true)
             });
         let overlay = Overlay::build(
@@ -899,7 +899,7 @@ mod tests {
             vec![Box::new(panel)],
             true,
             Some(Anchor {
-                trigger: trigger.clone(),
+                trigger: trigger,
                 placement: Placement::Below,
             }),
             Rc::new(|| true),

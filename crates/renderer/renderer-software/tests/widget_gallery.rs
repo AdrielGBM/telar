@@ -42,14 +42,14 @@ fn form_widgets_render() {
     .unwrap();
     let choice = signal(1u32);
     let r0 = radio(RadioProps {
-        selected: Some(choice.clone()),
+        selected: Some(choice),
         value: 0,
         label: Box::new(|| "Small".to_string()),
         ..Default::default()
     })
     .unwrap();
     let r1 = radio(RadioProps {
-        selected: Some(choice.clone()),
+        selected: Some(choice),
         value: 1,
         label: Box::new(|| "Medium (selected)".to_string()),
         ..Default::default()
@@ -139,7 +139,7 @@ fn modal_renders_over_a_page() {
     slots.push(None, box_item(body));
     let dialog = modal(
         ModalProps {
-            open: Some(open.clone()),
+            open: Some(open),
             title: Box::new(|| "Confirm action".to_string()),
             ..Default::default()
         },
@@ -197,7 +197,7 @@ fn select_open_renders() {
     let picked = signal(1u32);
     let sel = select(
         SelectProps {
-            selected: Some(picked.clone()),
+            selected: Some(picked),
             ..Default::default()
         },
         Children::new(|| {

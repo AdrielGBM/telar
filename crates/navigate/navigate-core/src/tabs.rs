@@ -49,9 +49,9 @@ pub struct TabStacks<T: Clone + Eq + 'static, R: Clone + 'static> {
 impl<T: Clone + Eq + 'static, R: Clone + 'static> Clone for TabStacks<T, R> {
     fn clone(&self) -> Self {
         Self {
-            active: self.active.clone(),
+            active: self.active,
             navs: self.navs.clone(),
-            history: self.history.clone(),
+            history: self.history,
         }
     }
 }
@@ -155,7 +155,7 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
     /// The backing signal, so an app can make the active tab hot-preserved state (`hot_signal`) or drive it
     /// from somewhere else entirely.
     pub fn active_signal(&self) -> RwSignal<T> {
-        self.active.clone()
+        self.active
     }
 
     /// Every tab, in the order they were declared.
@@ -790,7 +790,7 @@ mod tests {
         reset_layout_runtime();
         // What a hot-reload snapshot naming a since-deleted tab restores to.
         let active = signal(9u8);
-        let stacks = TabStacks::new(active.clone(), &[0, 1], |tab| Navigator::new(*tab));
+        let stacks = TabStacks::new(active, &[0, 1], |tab| Navigator::new(*tab));
         assert_eq!(active.peek(), 0);
         assert_eq!(stacks.peek_active(), 0);
         assert!(stacks.navigator_for(&9).is_none());

@@ -14,9 +14,7 @@ pub struct Navigator<R: Clone + 'static> {
 
 impl<R: Clone + 'static> Clone for Navigator<R> {
     fn clone(&self) -> Self {
-        Self {
-            stack: self.stack.clone(),
-        }
+        Self { stack: self.stack }
     }
 }
 
@@ -120,7 +118,7 @@ impl<R: Clone + 'static> Navigator<R> {
 
     /// The backing signal, for callers that need to observe or drive the stack directly.
     pub fn signal(&self) -> RwSignal<Vec<R>> {
-        self.stack.clone()
+        self.stack
     }
 }
 
@@ -223,7 +221,7 @@ mod tests {
     #[test]
     fn from_signal_adopts_an_existing_stack() {
         let stack = signal(vec![Route::Home, Route::Settings]);
-        let nav = Navigator::from_signal(stack.clone(), Route::Home);
+        let nav = Navigator::from_signal(stack, Route::Home);
         assert_eq!(nav.current(), Route::Settings, "the restored top is kept");
         assert_eq!(nav.depth(), 2);
         nav.push(Route::Detail);

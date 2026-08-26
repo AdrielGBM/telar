@@ -155,7 +155,7 @@ mod tests {
         let slots = slot_with_body("Drawer body");
         let drawer = drawer(
             DrawerProps {
-                open: Some(open.clone()),
+                open: Some(open),
                 side: "right",
                 ..Default::default()
             },

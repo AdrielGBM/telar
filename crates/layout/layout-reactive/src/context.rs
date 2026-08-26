@@ -357,7 +357,7 @@ impl LayoutRuntime {
     ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
         let node = self.engine.new_leaf(style.clone())?;
         let signal = signal(Rect::default());
-        self.registry.insert(node, signal.clone());
+        self.registry.insert(node, signal);
         if let Some(dimensions) = self.engine.is_fixed_size(node) {
             self.boundary_nodes.insert(node, dimensions);
         }
@@ -371,7 +371,7 @@ impl LayoutRuntime {
     ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
         let node = self.engine.new_measured_leaf(style.clone(), measure)?;
         let signal = signal(Rect::default());
-        self.registry.insert(node, signal.clone());
+        self.registry.insert(node, signal);
         Ok((node, signal))
     }
 
@@ -478,7 +478,7 @@ impl LayoutRuntime {
         let walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
             if let Some(sig) = registry.get(&node_id) {
                 if sig.peek() != rect {
-                    updates.push((sig.clone(), rect));
+                    updates.push((*sig, rect));
                 }
             }
             if is_window_walk {

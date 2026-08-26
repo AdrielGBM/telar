@@ -179,7 +179,7 @@ impl<T: Lerp + 'static> Tickable for RefCell<KeyframesInner<T>> {
         let (signal, value) = {
             let mut inner = self.borrow_mut();
             let value = inner.integrate(now, scale);
-            (inner.signal.clone(), value)
+            (inner.signal, value)
         };
         if let Some(value) = value {
             signal.set(value);
@@ -241,7 +241,7 @@ impl<T: Lerp + 'static> Keyframes<T> {
             inner.completed_once = false;
             // Re-establish t0 on the next tick, same reasoning as Animated::retarget.
             inner.last = None;
-            (inner.signal.clone(), inner.current.clone())
+            (inner.signal, inner.current.clone())
         };
         // Registration is idempotent (keyed by id), so re-registering an already-active sequence is harmless. Register before the set so a re-entrant has_active() during the flush already sees it active.
         let weak = Rc::downgrade(&self.inner);

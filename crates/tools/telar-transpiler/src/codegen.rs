@@ -9,7 +9,7 @@ use crate::naming::{
     contains_ident, literal_or_comment_end, preview_entries_const_name, replace_whole_word,
     to_pascal_case, to_snake_case,
 };
-use crate::signal_scan::{scan_effects, scan_locals, scan_signals, unbound_effect};
+use crate::signal_scan::{scan_locals, scan_signals};
 use crate::source_map::ExprSpan;
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
@@ -734,23 +734,11 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     )
     .with_locals(scan_locals(logic_source))
     .with_signals(signals.iter().map(|s| s.name.clone()).collect())
-    .with_effects(scan_effects(logic_source))
     .with_registry(input.registry);
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
 
-    // An effect nobody bound is dropped where it was made: it runs once, seeds correctly, and never fires
-    // again. The view can only keep a handle it can name, so refusing is the honest answer — a scanner that
-    // silently declines to keep an effect is worse than one that says it cannot.
-    let logic = match unbound_effect(logic_source) {
-        Some(line) => format!(
-            "compile_error!(\"an effect must be bound to a name so the view can keep it alive, or it runs \
-             once and stops: {}\");\n{}",
-            line.replace('\\', "").replace('"', "'"),
-            logic_source.trim_end()
-        ),
-        None => logic_source.trim_end().to_string(),
-    };
+    let logic = logic_source.trim_end().to_string();
 
     // A `children` placeholder anywhere in the view makes the component take a `Slots` argument.
     let has_slot = view_uses_slot(&doc.view.nodes);

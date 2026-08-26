@@ -220,7 +220,7 @@ impl ReactiveList {
         let version = signal(0u64);
 
         let eff_state = Rc::clone(&state);
-        let eff_version = version.clone();
+        let eff_version = version;
         // Runs once now (builds the initial list) and again on every change to a signal `source` reads.
         let _effect = effect(move || {
             let items = source();
@@ -342,7 +342,7 @@ mod tests {
     fn builds_initial_items() {
         reset_layout_runtime();
         let items = signal(vec![1, 2, 3]);
-        let src = items.clone();
+        let src = items;
         let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 0.0).unwrap();
         assert_eq!(list.state.borrow().children.len(), 3);
     }
@@ -352,7 +352,7 @@ mod tests {
     fn reconcile_reuses_nodes_on_reorder_and_remove() {
         reset_layout_runtime();
         let items = signal(vec![1, 2, 3]);
-        let src = items.clone();
+        let src = items;
         let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 0.0).unwrap();
         let v1: Vec<NodeId> = list
             .state
@@ -382,7 +382,7 @@ mod tests {
 
         reset_layout_runtime();
         let items = signal(vec![1i32, 2]);
-        let src = items.clone();
+        let src = items;
         let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 0.0).unwrap();
         let list_node = list.layout_node();
         compute_layout(
@@ -419,7 +419,7 @@ mod tests {
     fn reconcile_appends_new_item() {
         reset_layout_runtime();
         let items = signal(vec![1, 2]);
-        let src = items.clone();
+        let src = items;
         let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 0.0).unwrap();
         let v1: Vec<NodeId> = list
             .state
@@ -446,7 +446,7 @@ mod tests {
 
         reset_layout_runtime();
         let items = signal(vec![1i32, 2]);
-        let src = items.clone();
+        let src = items;
         let list = ReactiveList::new(move || src.get(), |n: &i32| *n, |_| leaf(), 8.0).unwrap();
         let list_node = list.layout_node();
         compute_layout(
@@ -472,7 +472,7 @@ mod tests {
     fn positional_reuses_nodes_on_append() {
         reset_layout_runtime();
         let items = signal(vec![1, 2]);
-        let src = items.clone();
+        let src = items;
         let list = ReactiveList::positional(move || src.get(), |_| leaf(), 0.0).unwrap();
         let v1: Vec<NodeId> = list
             .state
@@ -516,7 +516,7 @@ mod tests {
         let builds = Rc::new(RefCell::new(0usize));
 
         let (sink, counter) = (Rc::clone(&seen), Rc::clone(&builds));
-        let source = rows.clone();
+        let source = rows;
         let list = ReactiveList::keyed(
             move || source.get(),
             |row: &Row| row.id,
@@ -524,9 +524,8 @@ mod tests {
                 *counter.borrow_mut() += 1;
                 let sink = Rc::clone(&sink);
                 // Reading the handle inside an effect is what a real row's text/style closure does.
-                let watch = effect(move || sink.borrow_mut().push(held.get().text));
-                Ok(Box::new(crate::Container::column(vec![])?.keeping(watch))
-                    as Box<dyn LayoutItem>)
+                effect(move || sink.borrow_mut().push(held.get().text));
+                Ok(Box::new(crate::Container::column(vec![])?) as Box<dyn LayoutItem>)
             },
         )
         .unwrap();
@@ -563,13 +562,13 @@ mod tests {
 
         reset_layout_runtime();
         let items = signal(vec![1i32, 2, 3]);
-        let src = items.clone();
-        let pressed = items.clone();
+        let src = items;
+        let pressed = items;
         let mut list = ReactiveList::new(
             move || src.get(),
             |n: &i32| *n,
             move |n: i32| {
-                let items = pressed.clone();
+                let items = pressed;
                 Ok(Box::new(
                     StyledContainer::new(
                         LayoutStyle::new().width(50.0).height(20.0),
@@ -622,14 +621,14 @@ mod tests {
         reset_layout_runtime();
         let escaped: Rc<RefCell<Vec<RwSignal<usize>>>> = Rc::new(RefCell::new(Vec::new()));
         let items = signal(vec![0usize]);
-        let source = items.clone();
+        let source = items;
         let kept = Rc::clone(&escaped);
         let list = ReactiveList::new(
             move || source.get(),
             |n: &usize| *n,
             move |n: usize| {
                 let per_row = signal(n);
-                kept.borrow_mut().push(per_row.clone());
+                kept.borrow_mut().push(per_row);
                 leaf()
             },
             0.0,

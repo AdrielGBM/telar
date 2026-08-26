@@ -1,6 +1,7 @@
 use layout_core::{LayoutError, LayoutStyle, SizeDimension};
 use motion_core::Animated;
 use platform_core::Event;
+use reactive_core::{OwnerId, dispose_owner, owner_scope};
 use ui_core::{
     Component, EventResult, LayoutItem, NodeId, RenderNode, absolute_rect, mark_dirty,
     new_container, remove_node, set_children, set_display,
@@ -49,6 +50,8 @@ struct BuiltPage<R> {
     key: PageKey<R>,
     page: Box<dyn NavPage>,
     node: NodeId,
+    /// Everything the page's build created. A pruned page frees its layout node, so whatever it registered against that node has to go first — and its effects have to stop before they fire at a node that is gone.
+    owner: OwnerId,
 }
 
 /// A running entrance animation for the page that just became active, plus its direction (forward push vs.
@@ -172,9 +175,18 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
         if let Some(i) = self.index_of(&key) {
             return Ok(i);
         }
-        let page = (self.factory)(key.route())?;
+        let scope = owner_scope();
+        let owner = scope.id();
+        let page = (self.factory)(key.route());
+        drop(scope);
+        let page = page?;
         let node = page.layout_node();
-        self.pages.push(BuiltPage { key, page, node });
+        self.pages.push(BuiltPage {
+            key,
+            page,
+            node,
+            owner,
+        });
         let nodes: Vec<NodeId> = self.pages.iter().map(|p| p.node).collect();
         set_children(self.content_area, &nodes)?;
         Ok(self.pages.len() - 1)
@@ -237,6 +249,7 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
         let nodes: Vec<NodeId> = self.pages.iter().map(|p| p.node).collect();
         set_children(self.content_area, &nodes).ok();
         for page in disposed {
+            dispose_owner(page.owner);
             remove_node(page.node);
         }
     }
@@ -730,12 +743,12 @@ mod tests {
         let runs = Rc::new(RefCell::new(0usize));
         let nav = Navigator::new(0u8);
         let factory = {
-            let (source, runs) = (source.clone(), runs.clone());
+            let (source, runs) = (source, runs.clone());
             move |route: &u8| {
                 let (node, _rect) = new_leaf(LayoutStyle::new())?;
                 // Only the pushed page owns an effect, so the counter tracks exactly that page's lifetime.
                 let held = (*route == 1).then(|| {
-                    let (source, runs) = (source.clone(), runs.clone());
+                    let (source, runs) = (source, runs.clone());
                     effect(move || {
                         source.get();
                         *runs.borrow_mut() += 1;

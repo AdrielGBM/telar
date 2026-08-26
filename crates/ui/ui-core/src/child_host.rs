@@ -203,7 +203,7 @@ fn reconcile_slot<Item, KeyFn, B>(
     // Reorder/insert/drop across the whole host node, then free the nodes of items that went away.
     let nodes = flatten_nodes(&st.slots);
     let node = st.node;
-    let version = st.version.clone();
+    let version = st.version;
     drop(st);
 
     let _ = set_children(node, &nodes);
@@ -237,7 +237,7 @@ impl DynHost {
         let state = Rc::new(RefCell::new(HostState {
             node,
             slots: Vec::with_capacity(slots.len()),
-            version: version.clone(),
+            version: version,
         }));
 
         // The host's flex axis is fixed by now (its style, class-driven direction included, was set when the
@@ -337,7 +337,7 @@ mod tests {
     fn fragment_children_flatten_and_reconcile() {
         reset_layout_runtime();
         let items = signal(vec![1u32, 2, 3]);
-        let src = items.clone();
+        let src = items;
         let container = Container::from_slots(
             LayoutStyle::new().flex_row(),
             vec![
@@ -370,7 +370,7 @@ mod tests {
     fn a_fragment_whose_node_is_gone_reconciles_into_nothing() {
         reset_layout_runtime();
         let items = signal(vec![1u32, 2, 3]);
-        let src = items.clone();
+        let src = items;
         let container = Container::from_slots(
             LayoutStyle::new().flex_row(),
             vec![fragment(
@@ -399,7 +399,7 @@ mod tests {
         let built: Rc<RefCell<Vec<NodeId>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = built.clone();
         let items = signal(vec![1u32, 2, 3]);
-        let src = items.clone();
+        let src = items;
 
         let container = Container::from_slots(
             LayoutStyle::new().flex_row(),
@@ -457,7 +457,7 @@ mod tests {
         reset_layout_runtime();
         let fired = Rc::new(std::cell::Cell::new(0i32));
         let ids = signal(Vec::<i32>::new()); // empty at first, like the snapshot before the socket answers
-        let src = ids.clone();
+        let src = ids;
         let sink = fired.clone();
 
         // The `row` is the module root itself (the fixed `generate_root` returns the branch element bare).
@@ -541,7 +541,7 @@ mod tests {
         let built: Rc<RefCell<Vec<NodeId>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = built.clone();
         let ids = signal(Vec::<i32>::new());
-        let src = ids.clone();
+        let src = ids;
 
         let row = Container::from_slots(
             LayoutStyle::new()
@@ -608,7 +608,7 @@ mod tests {
         let built: Rc<RefCell<Vec<NodeId>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = built.clone();
         let items = signal(vec![1u32, 2, 3]);
-        let src = items.clone();
+        let src = items;
         let container = Container::from_slots(
             LayoutStyle::new().flex_row(),
             vec![fragment(
@@ -654,7 +654,7 @@ mod tests {
         let built: Rc<RefCell<Vec<NodeId>>> = Rc::new(RefCell::new(Vec::new()));
         let sink = built.clone();
         let items = signal(vec![1u32, 2, 3]);
-        let src = items.clone();
+        let src = items;
         let container = Container::from_slots(
             LayoutStyle::new().flex_row(),
             vec![fragment(

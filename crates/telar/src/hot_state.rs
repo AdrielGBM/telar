@@ -10,7 +10,7 @@ use reactive_core::RwSignal;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-// Serializes one registered signal's current value; holds a signal clone so the entry stays readable after the component unmounts.
+// Serializes one registered signal's current value. It stays readable after the component unmounts because the signal is created detached, not because this closure holds anything — a `Copy` handle pins nothing.
 type HotReader = Box<dyn Fn() -> Option<String>>;
 
 // ManuallyDrop keeps these TLS slots trivially-destructible: registering a TLS destructor from the dylib would make dlclose unsafe (see load_hot_app). The maps leak per reload, which is fine for a dev-only path.
@@ -32,12 +32,12 @@ where
     let restored = PENDING
         .with(|p| p.borrow_mut().remove(key))
         .and_then(|raw| serde_json::from_str::<T>(&raw).ok());
-    let sig = reactive_core::signal(restored.unwrap_or(init));
-    let reader = sig.clone();
+    // Detached, so the signal outlives the component that made it. The refcount used to do that — the reader below held a clone, which pinned the storage past unmount — and a `Copy` handle pins nothing, so a snapshot taken after the component went away would read a freed signal. Never freed until `reset_runtime` is the cost, and it matches the maps here, which already leak per reload on a dev-only path.
+    let sig = reactive_core::detached(|| reactive_core::signal(restored.unwrap_or(init)));
     REGISTRY.with(|r| {
         r.borrow_mut().insert(
             key.to_string(),
-            Box::new(move || serde_json::to_string(&reader.peek()).ok()),
+            Box::new(move || serde_json::to_string(&sig.peek()).ok()),
         );
     });
     sig

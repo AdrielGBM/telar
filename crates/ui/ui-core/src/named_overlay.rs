@@ -35,13 +35,7 @@ pub fn state(id: &str) -> RwSignal<bool> {
     }
     // Created outside the map's borrow: minting a signal touches the reactive runtime, which can reach back into anything holding a borrow across it.
     let created = signal(false);
-    NAMED.with(|named| {
-        named
-            .borrow_mut()
-            .entry(id.to_string())
-            .or_insert(created)
-            .clone()
-    })
+    NAMED.with(|named| *named.borrow_mut().entry(id.to_string()).or_insert(created))
 }
 
 /// Opens the overlay named `id`.

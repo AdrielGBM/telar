@@ -134,7 +134,8 @@ impl Default for Cascade {
 /// Forgets every declaration, for a tree being replaced wholesale. See
 /// [`reset_layout_runtime`](crate::context::reset_layout_runtime) for why it cannot be done separately.
 pub(crate) fn reset_cascade() {
-    with_cascade(|c| *c = Cascade::default());
+    // Detached for the reason the macro detaches its own `$init`: this rebuilds the surface's cascade world, whose signals outlive every scope, and attributing them to whatever owner happens to be resetting would free them with it.
+    with_cascade(|c| *c = reactive_core::detached(Cascade::default));
 }
 
 /// Records what `node` says for everything beneath it.
@@ -151,7 +152,7 @@ pub fn declare(node: NodeId, declared: Declared) {
         (None, false) => {
             let structure = with_cascade(|c| {
                 c.declared.insert(node, signal(declared));
-                c.structure.clone()
+                c.structure
             });
             // The owner that started declaring is what stops. It used to be the declaring widget's `Drop`, racing the independent path that frees layout nodes — see `crate::context` for what that costs, which is text at the wrong size and nothing else.
             reactive_core::on_cleanup(move || undeclare(node));
@@ -163,7 +164,7 @@ pub fn declare(node: NodeId, declared: Declared) {
 
 /// Forgets what `node` declared, for a node leaving the tree or stopping.
 pub fn undeclare(node: NodeId) {
-    let structure = with_cascade(|c| c.declared.remove(&node).map(|_| c.structure.clone()));
+    let structure = with_cascade(|c| c.declared.remove(&node).map(|_| c.structure));
     if let Some(structure) = structure {
         structure.set(structure.peek().wrapping_add(1));
     }
@@ -177,7 +178,7 @@ pub fn undeclare(node: NodeId) {
 /// without allocating.
 pub fn context(node: NodeId) -> Rc<Inherited> {
     let root = root();
-    let structure = with_cascade_ref(|c| c.structure.clone());
+    let structure = with_cascade_ref(|c| c.structure);
     // A node that declares nothing has no signal to read, and it is exactly that node that may start.
     let _ = structure.get();
 

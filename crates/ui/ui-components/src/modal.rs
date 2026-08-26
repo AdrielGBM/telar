@@ -183,7 +183,7 @@ mod tests {
         let slots = slot_with_body("Body");
         let modal = modal(
             ModalProps {
-                open: Some(open.clone()),
+                open: Some(open),
                 title: Box::new(|| "Confirm".to_string()),
                 ..Default::default()
             },
@@ -252,7 +252,7 @@ mod tests {
         let open = signal(false);
         let modal = modal(
             ModalProps {
-                open: Some(open.clone()),
+                open: Some(open),
                 title: Box::new(|| "Confirm".to_string()),
                 ..Default::default()
             },
@@ -353,7 +353,7 @@ mod tests {
         let open = signal(false);
         let modal = modal(
             ModalProps {
-                open: Some(open.clone()),
+                open: Some(open),
                 id: "ignored-name",
                 title: Box::new(|| "Confirm".to_string()),
                 ..Default::default()

@@ -84,8 +84,7 @@ fn resize_grip(
     let release = Rc::clone(&grab);
     Ok(box_item(
         grip.on_drag(move |local_x, local_y| {
-            let (Some(grip_rect), Some(card_rect)) = (&grip_rect, card_rect.borrow().clone())
-            else {
+            let (Some(grip_rect), Some(card_rect)) = (&grip_rect, *card_rect.borrow()) else {
                 return;
             };
             let (grip, card) = (grip_rect.get(), card_rect.get());

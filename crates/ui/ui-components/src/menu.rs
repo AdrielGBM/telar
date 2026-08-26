@@ -641,6 +641,10 @@ mod tests {
         ui_core::focus::clear();
         ui_core::reset_keyboard();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+
+        // Scoped and disposed, because this helper runs twice in one test and the second call replaces the layout runtime, which starts its ids over. An unscoped first tree keeps its effects running against ids the second tree now owns, and the second walk finds rows that are not there.
+        let scope = reactive_core::owner_scope();
+        let owner = scope.id();
         let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
 
         ui_core::focus::focus_next();
@@ -651,6 +655,10 @@ mod tests {
             route(&mut tree, &char_key(c));
         }
         route(&mut tree, &key(NamedKey::Enter));
+
+        drop(scope);
+        drop(tree);
+        reactive_core::dispose_owner(owner);
         seen.get()
     }
 

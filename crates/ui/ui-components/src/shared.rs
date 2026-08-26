@@ -267,10 +267,10 @@ pub(crate) fn captioned(
         caption_column(width),
         vec![box_item(caption), box_item(control)],
     )?
-    .styled_by(move || caption_column(width))
-    .keeping(style_follows(caption_node, move || {
+    .styled_by(move || caption_column(width));
+    style_follows(caption_node, move || {
         caption_box(control_text_size(caption_node, CAPTION_RATIO))
-    }));
+    });
     Ok(box_item(col))
 }
 

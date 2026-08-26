@@ -50,8 +50,8 @@ fn overlay_draws_on_top_and_captures_the_tap() {
     let bg_clicked = signal(false);
     let overlay_clicked = signal(false);
 
-    let background = filled((200, 60, 60), bg_clicked.clone()); // red
-    let scrim = filled((60, 60, 200), overlay_clicked.clone()); // blue
+    let background = filled((200, 60, 60), bg_clicked); // red
+    let scrim = filled((60, 60, 200), overlay_clicked); // blue
     let overlay = Overlay::new(LayoutStyle::new(), vec![Box::new(scrim)]).unwrap();
 
     let root = StyledContainer::new(

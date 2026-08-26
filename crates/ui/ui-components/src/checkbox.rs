@@ -45,7 +45,7 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let color: shared::ReactiveColor = Rc::from(color);
 
     // The check: a small inner square that only paints while checked, so toggling never reflows. Its ink is read off the box's own fill — a hard white vanished on the near-white `primary` of a neutral palette.
-    let mark_checked = checked.clone();
+    let mark_checked = checked;
     let mark_color = color.clone();
     let mark = StyledContainer::new(
         LayoutStyle::new().width(10.0).height(10.0),
@@ -63,7 +63,7 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
     )?;
 
     // The 18px box: an accent fill when checked, else a bordered white square, with the check centred inside.
-    let box_checked = checked.clone();
+    let box_checked = checked;
     let control = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -87,8 +87,8 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
     )?;
 
     // The whole row is the tap target (box + label); a tap flips the bound signal and reports the new state.
-    let toggle_checked = checked.clone();
-    let announced = checked.clone();
+    let toggle_checked = checked;
+    let announced = checked;
     shared::labelled_control(
         box_item(control),
         label,
@@ -124,7 +124,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let checked = signal(false);
         let mut widget = checkbox(CheckboxProps {
-            checked: Some(checked.clone()),
+            checked: Some(checked),
             label: Box::new(|| "Agree".to_string()),
             ..Default::default()
         })

@@ -141,7 +141,7 @@ mod tests {
         });
 
         let read_trigger = trigger.read_only();
-        let write_source = source.clone();
+        let write_source = source;
         let _writer = effect(move || {
             let v = read_trigger.get();
             if v > 0 {
@@ -244,7 +244,7 @@ mod tests {
         let doubled = memo(move || read.get() * 2);
         let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
         let log_clone = Rc::clone(&log);
-        let doubled_read = doubled.clone();
+        let doubled_read = doubled;
         let _e = effect(move || {
             log_clone.borrow_mut().push(doubled_read.get());
         });
@@ -263,7 +263,7 @@ mod tests {
         let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
         let log_clone = Rc::clone(&log);
         let unrelated_read = unrelated.read_only();
-        let doubled_read = doubled.clone();
+        let doubled_read = doubled;
         let _e = effect(move || {
             unrelated_read.get();
             log_clone.borrow_mut().push(doubled_read.get());
@@ -280,7 +280,7 @@ mod tests {
         let doubled = memo(move || read.get() * 2);
         let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
         let log_clone = Rc::clone(&log);
-        let doubled_read = doubled.clone();
+        let doubled_read = doubled;
         let _e = effect(move || {
             log_clone.borrow_mut().push(doubled_read.get());
         });
@@ -293,7 +293,7 @@ mod tests {
         let n = signal(3i32);
         let read = n.read_only();
         let doubled = memo(move || read.get() * 2);
-        let doubled_for_quad = doubled.clone();
+        let doubled_for_quad = doubled;
         let quadrupled = memo(move || doubled_for_quad.get() * 2);
 
         assert_eq!(quadrupled.get(), 12);
@@ -326,19 +326,21 @@ mod tests {
     }
 
     #[test]
-    fn dropping_one_subscriber_keeps_others_consistent() {
-        // Three effects subscribe to the same signal. Dropping the middle one and then writing repeatedly must keep the survivors firing and must not panic — exercising the in-place subscriber-list cleanup that runs alongside notify_signal's reused scratch buffer (the cleanup must stay correct now that subscribers are no longer cloned per write).
+    fn disposing_one_subscriber_keeps_others_consistent() {
+        // Three effects subscribe to the same signal. Disposing the middle one's owner and then writing repeatedly must keep the survivors firing and must not panic — exercising the in-place subscriber-list cleanup that runs alongside notify_signal's reused scratch buffer (the cleanup must stay correct now that subscribers are no longer cloned per write).
         let count = signal(0i32);
         let a = Rc::new(RefCell::new(0i32));
         let b = Rc::new(RefCell::new(0i32));
         let c = Rc::new(RefCell::new(0i32));
 
         let mk = |sink: &Rc<RefCell<i32>>, sig: &RwSignal<i32>| {
+            let scope = owner_scope();
             let read = sig.read_only();
             let sink = Rc::clone(sink);
             effect(move || {
                 *sink.borrow_mut() = read.get();
-            })
+            });
+            scope.id()
         };
 
         let _ea = mk(&a, &count);
@@ -348,25 +350,38 @@ mod tests {
         count.set(1);
         assert_eq!((*a.borrow(), *b.borrow(), *c.borrow()), (1, 1, 1));
 
-        drop(eb);
+        dispose_owner(eb);
         count.set(2);
         count.set(3);
 
-        // Survivors tracked every write; the dropped one is frozen at its last value, with no panic and no lost survivor.
+        // Survivors tracked every write; the disposed one is frozen at its last value, with no panic and no lost survivor.
         assert_eq!(*a.borrow(), 3);
         assert_eq!(*c.borrow(), 3);
         assert_eq!(*b.borrow(), 1);
     }
 
-    // A signal whose value owns other signal handles must drop cleanly: dropping the outer signal removes its
-    // storage and then drops the value, which re-enters `drop_signal` for the inner handles. If the value were
-    // dropped while the runtime borrow was still held, that re-entry would abort during teardown.
+    // Disposal frees a signal's storage under the runtime borrow and drops the value after releasing it. The
+    // value can be anything, including something whose own `Drop` reads a signal — and doing that while the
+    // borrow was held would abort rather than panic, mid-teardown, with nothing to catch it.
+    //
+    // This used to be about signal handles specifically, which owned a refcount and re-entered `drop_signal`.
+    // They have no destructor now, so the hazard is a user type's rather than the runtime's own.
     #[test]
-    fn dropping_a_signal_whose_value_holds_signals_does_not_double_borrow() {
-        let inner = signal(1i32);
-        let outer = signal(vec![inner.clone()]);
-        drop(inner);
-        drop(outer);
+    fn disposing_a_signal_whose_value_touches_the_runtime_does_not_double_borrow() {
+        struct Reads(ReadSignal<i32>);
+        impl Drop for Reads {
+            fn drop(&mut self) {
+                let _ = self.0.get();
+            }
+        }
+
+        let watched = signal(1i32);
+        let scope = owner_scope();
+        let owner = scope.id();
+        let _holder = signal(Reads(watched.read_only()));
+        drop(scope);
+        dispose_owner(owner);
+
         // Reaching here without aborting is the assertion; the runtime is still usable afterwards.
         let after = signal(5i32);
         assert_eq!(after.get(), 5);

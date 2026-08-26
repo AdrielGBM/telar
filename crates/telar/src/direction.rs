@@ -5,14 +5,12 @@
 //! knowing translations exist. The facade is the one place that already has both.
 
 use std::cell::RefCell;
-use std::mem::ManuallyDrop;
 
 use layout_core::Direction;
 
 thread_local! {
-    // Keeps the effect alive for the app's lifetime; replaced on re-call, since a hot reload re-runs the app's setup. ManuallyDrop for the same dlclose-safety reason as theme-core's signals.
-    static FOLLOW: ManuallyDrop<RefCell<Option<reactive_core::Effect>>> =
-        ManuallyDrop::new(RefCell::new(None));
+    // Replaced on re-call, since a hot reload re-runs the app's setup. Nothing here has a destructor any more — an `Effect` is an id — so the slot registers no TLS destructor and dlclose stays safe without a `ManuallyDrop`.
+    static FOLLOW: RefCell<Option<reactive_core::Effect>> = const { RefCell::new(None) };
 }
 
 /// Makes the writing direction follow the active locale, so switching to Arabic or Hebrew mirrors the layout

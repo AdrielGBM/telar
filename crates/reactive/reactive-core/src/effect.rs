@@ -1,19 +1,15 @@
 use crate::runtime;
 
-/// A live subscription. Dropping it deregisters the effect, so the closure runs once and never again — which
-/// looks exactly like a working binding until the value it derives is expected to move. Bind it to something
-/// that lives as long as the work should: a struct field, a returned value, or a `let` the reader captures.
-#[must_use = "dropping the handle deregisters the effect: it runs once and then stops. Bind it (a struct \
-              field, a returned value, a captured `let`) for as long as the subscription should last, or use \
-              `memo`, whose handle is `Rc`-backed and kept alive by whoever reads it."]
+/// A live subscription.
+///
+/// The handle is inert: an effect belongs to the owner that was active when it was registered, and stops
+/// when that owner is disposed. Dropping this changes nothing, so binding it is a choice about readability
+/// rather than a requirement — which is what removes the trap it used to carry, where `let _ = effect(…)`
+/// ran the closure once and then silently never again.
+#[derive(Clone, Copy)]
 pub struct Effect {
+    #[allow(dead_code)]
     id: runtime::EffectId,
-}
-
-impl Drop for Effect {
-    fn drop(&mut self) {
-        runtime::deregister_effect(self.id);
-    }
 }
 
 pub fn effect(f: impl Fn() + 'static) -> Effect {

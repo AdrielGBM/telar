@@ -20,7 +20,7 @@ type ApplyMode = Rc<dyn Fn()>;
 thread_local! {
     // ManuallyDrop mirrors THEME/WIDGET_THEME in context.rs: no TLS destructor is registered, so unmapping the
     // dylib on dlclose stays safe. Cleanup happens via reset_runtime() dropping the whole Runtime.
-    static ACTIVE_MODE: ManuallyDrop<RwSignal<Option<String>>> = ManuallyDrop::new(detached(|| signal(None)));
+    static ACTIVE_MODE: RwSignal<Option<String>> = detached(|| signal(None));
     static MODES: ManuallyDrop<RefCell<HashMap<String, ApplyMode>>> =
         ManuallyDrop::new(RefCell::new(HashMap::new()));
 }
@@ -84,7 +84,7 @@ pub(crate) fn is_dark() -> bool {
 thread_local! {
     // OS light/dark preference, fed by set_system_dark from the platform layer and read reactively by the
     // follow_system effect. ManuallyDrop for the same dlclose-safety reason as the signals above.
-    static SYSTEM_DARK: ManuallyDrop<RwSignal<bool>> = ManuallyDrop::new(detached(|| signal(false)));
+    static SYSTEM_DARK: RwSignal<bool> = detached(|| signal(false));
     // Keeps the follow_system effect alive for the app's lifetime; replaced (old dropped) on re-call, since a
     // hot reload re-runs the app's setup.
     static FOLLOW: ManuallyDrop<RefCell<Option<reactive_core::Effect>>> =

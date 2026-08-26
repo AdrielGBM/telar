@@ -234,7 +234,7 @@ where
             } = c;
             pending_shadows.retain(|key, rx| match rx.try_recv() {
                 Ok(pixmap) => {
-                    shadow_cache.insert(key.clone(), pixmap);
+                    shadow_cache.insert(*key, pixmap);
                     arrived = true;
                     false
                 }

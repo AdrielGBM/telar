@@ -111,7 +111,7 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
     if stretch {
         trigger_style = trigger_style.flex_grow(1.0).align_self_stretch();
     }
-    let hover_sink = hovered.clone();
+    let hover_sink = hovered;
     let trigger = StyledContainer::new(trigger_style, |_r| RectStyle::default(), trigger_content)?
         .on_hover(move |over| hover_sink.set(over));
     let trigger_node = trigger.layout_node();
@@ -128,7 +128,7 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
     let color: shared::ReactiveColor = Rc::from(color);
     let style: shared::SurfaceStyle =
         style.map(|f| -> Rc<dyn Fn(RectStyle) -> RectStyle> { Rc::from(f) });
-    let key_hovered = hovered.clone();
+    let key_hovered = hovered;
     let bubble = ReactiveList::new(
         move || vec![key_hovered.get()],
         |is_hovered: &bool| *is_hovered,
@@ -149,7 +149,7 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
                 style.clone(),
                 placement,
                 trigger_node,
-                trigger_rect.clone(),
+                trigger_rect,
             )
         },
         0.0,

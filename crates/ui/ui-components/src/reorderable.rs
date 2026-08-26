@@ -80,7 +80,7 @@ pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, Layou
     let source = move || (0..source_count()).collect::<Vec<usize>>();
 
     let build_rects = Rc::clone(&rects);
-    let build_drag = drag.clone();
+    let build_drag = drag;
     let build_move = Rc::clone(&on_move);
     let build_count = Rc::clone(&count);
     let build = move |index: usize| -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -89,14 +89,14 @@ pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, Layou
         let rect = track_layout(node).ok_or_else(|| {
             LayoutError::Engine("reorderable: an item's layout node is not in the live tree".into())
         })?;
-        remember(&build_rects, index, rect.clone());
+        remember(&build_rects, index, rect);
 
         let move_rects = Rc::clone(&build_rects);
-        let move_drag = build_drag.clone();
-        let move_rect = rect.clone();
-        let end_drag = build_drag.clone();
+        let move_drag = build_drag;
+        let move_rect = rect;
+        let end_drag = build_drag;
         let end_move = Rc::clone(&build_move);
-        let gap_drag = build_drag.clone();
+        let gap_drag = build_drag;
         let gap_count = Rc::clone(&build_count);
         let slot_style = move || slot_style(index, gap_count(), gap_drag.get().as_ref(), axis);
         // The drag signal is read only by `styled_by`'s own effect, never here and never by the list's
@@ -214,9 +214,9 @@ mod tests {
         let items = signal(vec!['a', 'b', 'c', 'd']);
         let moves = Rc::new(RefCell::new(Vec::new()));
 
-        let count_items = items.clone();
+        let count_items = items;
         let recorded = Rc::clone(&moves);
-        let moved_items = items.clone();
+        let moved_items = items;
         let widget = reorderable(ReorderableProps {
             count: Box::new(move || count_items.get().len()),
             item: Box::new(|_| {

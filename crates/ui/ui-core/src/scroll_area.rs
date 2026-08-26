@@ -252,9 +252,9 @@ impl ScrollCore {
         handle_scroll_event(
             event,
             viewport,
-            self.scroll_x.clone(),
-            self.scroll_y.clone(),
-            self.content_rect_signal.clone(),
+            self.scroll_x,
+            self.scroll_y,
+            self.content_rect_signal,
             &self.content,
         )
     }
@@ -308,7 +308,7 @@ pub struct ScrollViewport {
 impl ScrollViewport {
     /// The live scroll offset `(x, y)` in content-local px.
     pub fn offset(&self) -> (ReadSignal<f32>, ReadSignal<f32>) {
-        (self.offset_x.clone(), self.offset_y.clone())
+        (self.offset_x, self.offset_y)
     }
 
     /// Scrolls the minimum distance needed to bring `item` fully into view, leaving `margin` px of breathing
@@ -354,7 +354,7 @@ impl ScrollViewport {
 
     /// The live viewport rect; its `width`/`height` are the visible window's size.
     pub fn rect(&self) -> ReadSignal<Rect> {
-        self.rect.clone()
+        self.rect
     }
 
     /// Puts the view back at the top-left.
@@ -450,8 +450,8 @@ impl LayoutScrollArea {
             offset_x: scroll_x.read_only(),
             offset_y: scroll_y.read_only(),
             rect: leaf.rect.read_only(),
-            set_x: scroll_x.clone(),
-            set_y: scroll_y.clone(),
+            set_x: scroll_x,
+            set_y: scroll_y,
         })?;
         let content_node = content.layout_node();
         let content_rect_signal =
@@ -461,7 +461,7 @@ impl LayoutScrollArea {
         // each time the viewport resizes. The viewport rect is set by the surrounding layout; this effect
         // fires during that flush — after the runtime borrow is released — so computing here is re-entrancy
         // safe (same pattern as reactive lists).
-        let viewport = leaf.rect.clone();
+        let viewport = leaf.rect;
         let layout_effect = effect(move || {
             let vp = viewport.get();
             if vp.width > 0.0 {
@@ -480,9 +480,9 @@ impl LayoutScrollArea {
         // the transform goes on pushing the content clean out of the clip and the viewport shows *nothing*,
         // which is the shape this bug always takes: a page that is blank until it is touched.
         let clamp_effect = {
-            let viewport = leaf.rect.clone();
-            let content_rect = content_rect_signal.clone();
-            let (scroll_x, scroll_y) = (scroll_x.clone(), scroll_y.clone());
+            let viewport = leaf.rect;
+            let content_rect = content_rect_signal;
+            let (scroll_x, scroll_y) = (scroll_x, scroll_y);
             effect(move || {
                 let vp = viewport.get();
                 let content = content_rect.get();
@@ -505,8 +505,7 @@ impl LayoutScrollArea {
         };
 
         // Registered on the CONTENT node, not the viewport leaf: the content is laid out as its own root (see the effect above), so the leaf is never its ancestor and a subtree test against it would miss.
-        let scroll_region =
-            register_scroll_region(content_node, scroll_x.clone(), scroll_y.clone());
+        let scroll_region = register_scroll_region(content_node, scroll_x, scroll_y);
 
         Ok(Self {
             leaf,
@@ -686,7 +685,7 @@ mod tests {
         let page = signal(0u32);
         let watched = page.read_only();
         let commanded = viewport.clone();
-        let followed = watched.clone();
+        let followed = watched;
         let _follow = effect(move || {
             followed.get();
             commanded.scroll_to_top();
@@ -785,7 +784,7 @@ mod tests {
         .unwrap();
         let first = LayoutScrollArea::new_keeping(
             LayoutStyle::new().width(300.0).height(200.0),
-            offset.clone(),
+            offset,
             |_| Ok(Box::new(content) as Box<dyn LayoutItem>),
         )
         .unwrap();
@@ -934,7 +933,7 @@ mod tests {
 
         reset_layout_runtime();
         let s = signal(0i32);
-        let s_cb = s.clone();
+        let s_cb = s;
         // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
             LayoutStyle::new().width(50.0).height(30.0),
@@ -944,7 +943,7 @@ mod tests {
         .unwrap()
         .on_press(move || s_cb.update(|n| *n += 1));
         let btn_node = btn.layout_node();
-        let s_txt = s.clone();
+        let s_txt = s;
         let txt = crate::text::Text::new(
             move || format!("{}", s_txt.get()),
             LayoutStyle::new().width(50.0).height(20.0),
@@ -1016,7 +1015,7 @@ mod tests {
 
         reset_layout_runtime();
         let s = signal(0i32);
-        let s_cb = s.clone();
+        let s_cb = s;
         // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
             LayoutStyle::new().width(50.0).height(30.0),

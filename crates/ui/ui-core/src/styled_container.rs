@@ -122,7 +122,6 @@ pub struct StyledContainer {
     // Optional tap gesture so a styled box can itself be pressable (a clickable card); children still hit-test first.
     press: PressGesture,
     // Effects whose life is this widget's. Dropping an `Effect` deregisters it, so one that belongs to a widget must be owned by that widget: parked somewhere longer-lived it keeps firing against a node that is gone, and dropped on the floor it runs once and stops. Held here rather than in a wrapper so owning one costs no layout node — a row owning five effects is still one box.
-    kept_effects: Vec<Effect>,
     // Optional drag gesture (slider/reorder/resize): reports the pointer position on press and each move.
     drag: DragGesture,
     pointer: PointerHooks,
@@ -165,7 +164,6 @@ impl StyledContainer {
             children,
             dyn_host,
             press: PressGesture::default(),
-            kept_effects: Vec::new(),
             drag: DragGesture::default(),
             pointer: PointerHooks::default(),
             on_key: None,
@@ -412,17 +410,12 @@ impl StyledContainer {
     /// deregisters, runs once, and stops, with nothing to say so. This is the third answer, and the one an
     /// effect that belongs to a widget wants.
     ///
-    /// Chainable, so several effects can be kept without nesting anything.
-    pub fn keeping(mut self, subscription: Effect) -> Self {
-        self.kept_effects.push(subscription);
-        self
-    }
-
     /// Says what the text below this box looks like — see
     /// [`Container::declaring`](crate::Container::declaring).
     pub fn declaring(self, declared: impl Fn() -> Declared + 'static) -> Self {
         let node = self.node;
-        self.keeping(effect(move || crate::inherit::declare(node, declared())))
+        effect(move || crate::inherit::declare(node, declared()));
+        self
     }
 
     /// Keeps the box's *layout* style in step with the reactive state it was built from — the theme's metric
@@ -437,7 +430,8 @@ impl StyledContainer {
     /// `StyledContainer::new(shell(), paint, kids)?.styled_by(shell)`.
     pub fn styled_by(self, style: impl Fn() -> LayoutStyle + 'static) -> Self {
         let node = self.node;
-        self.keeping(style_follows(node, style))
+        style_follows(node, style);
+        self
     }
 
     /// Make the box itself pressable. The callback fires on a tap (release, not press) inside the box;
@@ -1854,7 +1848,7 @@ mod tests {
         let presses = Rc::new(Cell::new(0u32));
         let sink = presses.clone();
         let enabled = signal(false);
-        let flag = enabled.clone();
+        let flag = enabled;
         let mut card = StyledContainer::new(
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
@@ -1919,7 +1913,7 @@ mod tests {
         .unwrap();
         let node = card.layout_node();
         let seen = track_layout(node).expect("the container registers a rect signal");
-        let settled = seen.clone();
+        let settled = seen;
         let runs = Rc::new(Cell::new(0u32));
         let counted = runs.clone();
         // Half of its own laid-out width — the port's shape, and unlike deriving height from height it has a fixed point worth asserting.
@@ -1962,7 +1956,7 @@ mod tests {
 
         reset_layout_runtime();
         let enabled = signal(false);
-        let flag = enabled.clone();
+        let flag = enabled;
         let mut card = StyledContainer::new(
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default(),
@@ -2016,7 +2010,7 @@ mod tests {
     fn disabling_a_hovered_box_takes_the_hover_back() {
         reset_layout_runtime();
         let enabled = signal(true);
-        let flag = enabled.clone();
+        let flag = enabled;
         let mut card = StyledContainer::new(
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
             |_r| RectStyle::default().with_fill(Color::rgba(0.1, 0.1, 0.1, 1.0)),
@@ -2785,31 +2779,32 @@ mod tests {
         );
     }
 
-    /// The two failures this exists to sit between: an effect dropped on the floor runs once and stops, and one
-    /// parked somewhere longer-lived keeps firing at a widget that is gone. Kept on the widget it belongs to, it
-    /// does neither.
+    /// The span an effect belonging to a widget wants, and the two failures either side of it: dropped on the
+    /// floor it runs once and stops, parked somewhere longer-lived it keeps firing at a node that is gone.
+    ///
+    /// The widget used to hold the handle, which is why `keeping` existed. The owner holds it now, so the
+    /// span is the scope the widget was *built* in rather than the widget value's own Rust lifetime — which
+    /// is the same span for every widget a view produces, and unlike the handle it does not need a field.
     #[test]
-    fn a_kept_effect_lives_exactly_as_long_as_its_widget() {
+    fn an_effect_lives_exactly_as_long_as_the_scope_that_built_it() {
         crate::reset_layout_runtime();
         reactive_core::reset_runtime();
         let source = signal(0i32);
         let seen = std::rc::Rc::new(std::cell::Cell::new(0i32));
 
-        let watched = source.clone();
         let sink = seen.clone();
-        let boxed = StyledContainer::new(LayoutStyle::new(), |_r| RectStyle::default(), vec![])
-            .unwrap()
-            .keeping(effect(move || sink.set(watched.get())));
+        let scope = reactive_core::owner_scope();
+        let owner = scope.id();
+        let _boxed =
+            StyledContainer::new(LayoutStyle::new(), |_r| RectStyle::default(), vec![]).unwrap();
+        effect(move || sink.set(source.get()));
+        drop(scope);
 
         source.set(7);
-        assert_eq!(seen.get(), 7, "the effect runs while the widget is alive");
+        assert_eq!(seen.get(), 7, "the effect runs while the scope is alive");
 
-        drop(boxed);
+        reactive_core::dispose_owner(owner);
         source.set(9);
-        assert_eq!(
-            seen.get(),
-            7,
-            "and stops when the widget goes, rather than firing at a node that is gone"
-        );
+        assert_eq!(seen.get(), 7, "and stops when the scope is disposed");
     }
 }

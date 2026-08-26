@@ -29,7 +29,7 @@ thread_local! {
     static NEXT_ID: ManuallyDrop<RefCell<u64>> = ManuallyDrop::new(RefCell::new(0));
     // Mirrors the stack's length reactively, so a widget can style itself on whether a dialog is up (a Back
     // control that must not look disabled while it would still close something).
-    static DEPTH: ManuallyDrop<RwSignal<usize>> = ManuallyDrop::new(detached(|| signal(0)));
+    static DEPTH: RwSignal<usize> = detached(|| signal(0));
 }
 
 // Republishes the stack depth. Called after every mutation, outside the stack's borrow: writing the signal can

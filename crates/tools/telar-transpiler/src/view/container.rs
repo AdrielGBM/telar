@@ -306,7 +306,8 @@ impl ViewGen<'_> {
         format!(
             "{pad}let __rect = track_layout(__tracked.layout_node()).expect(\"a container registers its rect\");\n\
              {pad}let {target} = {target}.clone();\n\
-             {pad}__tracked.keeping(effect(move || {target}.set(__rect.get())))\n"
+             {pad}effect(move || {target}.set(__rect.get()));\n\
+             {pad}__tracked\n"
         )
     }
 

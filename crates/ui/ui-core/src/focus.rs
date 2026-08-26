@@ -156,7 +156,7 @@ reactive_core::surface_local! {
 /// The active surface's focused-widget signal, cloned out of the slot so callers never hold the slot borrow
 /// across a `.set()` — its flush re-enters the slot when an effect reads [`current`].
 fn focused_signal() -> RwSignal<Option<FocusId>> {
-    with_focus_ref(|s| s.focused.clone())
+    with_focus_ref(|s| s.focused)
 }
 
 /// Allocates a fresh focus id for a focusable widget.
@@ -213,7 +213,7 @@ pub fn is_focus_visible(id: FocusId) -> bool {
 }
 
 fn pointer_focus_signal() -> RwSignal<bool> {
-    with_focus_ref(|s| s.pointer_focus.clone())
+    with_focus_ref(|s| s.pointer_focus)
 }
 
 fn set_pointer_focus(from_pointer: bool) {

@@ -100,7 +100,7 @@ impl App for TaskApp {
         }
         self.spawned = true;
         // The signal is `!Send` and is captured by the completion callback alone — the value is what crosses.
-        let color = self.color.borrow().clone().expect("root() ran first");
+        let color = (*self.color.borrow()).expect("root() ran first");
         let observed = Arc::clone(&self.ran_on_ui_thread);
         spawn_task(
             || FROM_TASK,

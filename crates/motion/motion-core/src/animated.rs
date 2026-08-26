@@ -119,7 +119,7 @@ impl<T: Lerp + 'static> Tickable for RefCell<AnimInner<T>> {
         let (signal, value) = {
             let mut inner = self.borrow_mut();
             let value = inner.integrate(now, scale);
-            (inner.signal.clone(), value)
+            (inner.signal, value)
         };
         if let Some(value) = value {
             signal.set(value);

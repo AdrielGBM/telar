@@ -69,7 +69,7 @@ pub fn accordion(
     let body_children = slots.take_default();
 
     // Caret flips glyph with `open`; its colour is the same reactive accent as the rest of the catalogue.
-    let caret_open = open.clone();
+    let caret_open = open;
     let caret_color = color.clone();
     let caret = Text::declaring(
         move || {
@@ -93,8 +93,8 @@ pub fn accordion(
         |t| shared::control_text(t, 1.0),
     )?;
 
-    let announced_open = open.clone();
-    let toggle_open = open.clone();
+    let announced_open = open;
+    let toggle_open = open;
     let header = StyledContainer::new(
         header_box(),
         |_r| RectStyle::default(),
@@ -118,7 +118,7 @@ pub fn accordion(
 
     // Drives the body's `display` from `open`: collapses it out of flow when closed, restores it when open.
     // Runs once immediately (setting the initial display) and again on every toggle; kept alive by `Accordion`.
-    let display_open = open.clone();
+    let display_open = open;
     let _effect = effect(move || {
         set_display(body_node, display_open.get());
         let _ = mark_dirty(body_node);
@@ -184,7 +184,7 @@ mod tests {
         let mut item = accordion(
             AccordionProps {
                 title: Box::new(|| "Details".to_string()),
-                open: Some(open.clone()),
+                open: Some(open),
                 ..Default::default()
             },
             slot_with_body("Body"),
@@ -223,7 +223,7 @@ mod tests {
         let item = accordion(
             AccordionProps {
                 title: Box::new(|| "Details".to_string()),
-                open: Some(open.clone()),
+                open: Some(open),
                 ..Default::default()
             },
             slot_with_body("Body"),

@@ -93,7 +93,7 @@ impl PressGesture {
         {
             self.press_origin = Some((*x as f32, *y as f32));
             self.press_started_at = Some(Instant::now());
-            self.armed_button = Some(button.clone());
+            self.armed_button = Some(*button);
             return EventResult::Handled;
         }
         EventResult::Ignored

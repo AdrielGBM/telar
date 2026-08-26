@@ -258,12 +258,10 @@ mod tests {
         let a_node = {
             let _g = a.enter();
             let (node, _) = new_leaf(LayoutStyle::new().width(10.0).height(10.0)).unwrap();
-            let _e = effect(move || {
+            effect(move || {
                 read.get();
                 ran_c.borrow_mut().push(current_surface().0);
             });
-            // Keep the effect alive for the whole test by leaking it into the surface's scope via Box.
-            std::mem::forget(_e);
             node
         };
 
@@ -325,7 +323,7 @@ mod tests {
         let read = shared.read_only();
         let seen: Rc<RefCell<Vec<Option<f32>>>> = Rc::new(RefCell::new(Vec::new()));
         let seen_c = Rc::clone(&seen);
-        let watcher = effect(move || {
+        effect(move || {
             read.get();
             seen_c
                 .borrow_mut()
@@ -342,7 +340,6 @@ mod tests {
             &[Some(42.0)],
             "an ambient effect must resolve against the ambient layout world, not the active surface's"
         );
-        drop(watcher);
     }
 
     // Per-surface DI/context (services-core `provide`/`inject`): each surface resolves its own value, and an
@@ -373,7 +370,7 @@ mod tests {
         let read = shared.read_only();
         let seen: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
         let seen_c = Rc::clone(&seen);
-        let ea = {
+        {
             let _g = a.enter();
             effect(move || {
                 read.get();
@@ -393,7 +390,6 @@ mod tests {
             &[String::from("A")],
             "A's effect must inject A's context even when fired from B"
         );
-        drop(ea);
     }
 
     // T-3.1 / T-8.2: a global signal (theme/locale/motion are thread-local singletons — shared across
@@ -415,7 +411,7 @@ mod tests {
 
         let log_a = Rc::clone(&log);
         let read_a = global.read_only();
-        let ea = {
+        {
             let _g = a.enter();
             effect(move || {
                 read_a.get();
@@ -425,7 +421,7 @@ mod tests {
 
         let log_b = Rc::clone(&log);
         let read_b = global.read_only();
-        let eb = {
+        {
             let _g = b.enter();
             effect(move || {
                 read_b.get();
@@ -447,8 +443,5 @@ mod tests {
             entries.contains(&('b', b.handle().0)),
             "B's effect must re-run under B: {entries:?}"
         );
-
-        drop(ea);
-        drop(eb);
     }
 }

@@ -126,7 +126,7 @@ mod tests {
         );
 
         let (x, y) = (signal(0.0f32), signal(120.0f32));
-        let id = register_scroll_region(content, x.clone(), y.clone());
+        let id = register_scroll_region(content, x, y);
         let shifted = visible_rect(trigger).unwrap();
         assert_eq!(
             shifted.y,

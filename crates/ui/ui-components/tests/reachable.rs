@@ -79,7 +79,7 @@ fn a_slider_moves_under_the_arrow_keys() {
     focus::clear();
     let value = signal(0.5f32);
     let item = slider(SliderProps {
-        value: Some(value.clone()),
+        value: Some(value),
         step: 0.25,
         ..Default::default()
     })
@@ -103,7 +103,7 @@ fn enter_toggles_a_focused_checkbox() {
     focus::clear();
     let checked = signal(false);
     let item = checkbox(CheckboxProps {
-        checked: Some(checked.clone()),
+        checked: Some(checked),
         label: Box::new(|| "Wireframe".to_string()),
         ..Default::default()
     })
@@ -124,7 +124,7 @@ fn a_checked_box_is_announced_as_checked() {
     focus::clear();
     let checked = signal(true);
     let item = checkbox(CheckboxProps {
-        checked: Some(checked.clone()),
+        checked: Some(checked),
         label: Box::new(|| "Wireframe".to_string()),
         ..Default::default()
     })

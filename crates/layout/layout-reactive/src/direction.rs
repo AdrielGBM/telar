@@ -6,15 +6,12 @@
 //! laying out, so a flip re-resolves the existing nodes rather than rebuilding any part of the tree. That is
 //! also what makes it reach every surface on the thread, not just whichever one was active at the call.
 
-use std::mem::ManuallyDrop;
-
 use layout_core::Direction;
 use reactive_core::{RwSignal, detached, signal};
 
 thread_local! {
-    // ManuallyDrop mirrors theme-core's signals: no TLS destructor is registered, so unmapping the dylib on dlclose stays safe.
-    static DIRECTION: ManuallyDrop<RwSignal<Direction>> =
-        ManuallyDrop::new(detached(|| signal(Direction::Ltr)));
+    static DIRECTION: RwSignal<Direction> =
+        detached(|| signal(Direction::Ltr));
 }
 
 /// Sets the writing direction every surface lays out against, taking effect on the next layout pass.

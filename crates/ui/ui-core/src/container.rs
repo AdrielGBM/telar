@@ -19,9 +19,7 @@ pub struct Container {
     children: TrackedChildren,
     dyn_host: Option<DynHost>,
     // Optional tap gesture so a plain row/col can be pressable; children still hit-test first.
-    // See `StyledContainer::keeping` for why a widget owns its effects.
     press: PressGesture,
-    kept_effects: Vec<reactive_core::Effect>,
 }
 
 impl Container {
@@ -36,7 +34,6 @@ impl Container {
             children,
             dyn_host: None,
             press: PressGesture::default(),
-            kept_effects: Vec::new(),
         })
     }
 
@@ -56,7 +53,6 @@ impl Container {
             children: Vec::new(),
             dyn_host: Some(dyn_host),
             press: PressGesture::default(),
-            kept_effects: Vec::new(),
         })
     }
 
@@ -67,15 +63,6 @@ impl Container {
         }
     }
 
-    /// Give this container ownership of an [`Effect`](reactive_core::Effect), so it runs for exactly as long as
-    /// the container exists. See [`StyledContainer::keeping`](crate::StyledContainer::keeping) for why that is
-    /// the span an effect belonging to a widget wants, and why neither dropping the handle nor parking it
-    /// somewhere longer-lived is it.
-    pub fn keeping(mut self, subscription: reactive_core::Effect) -> Self {
-        self.kept_effects.push(subscription);
-        self
-    }
-
     /// Says what the text below this container looks like — everything under it, not the container itself,
     /// which draws no text at all.
     ///
@@ -83,9 +70,8 @@ impl Container {
     /// subtree that is rebuilt does not inherit from the one it replaced.
     pub fn declaring(self, declared: impl Fn() -> Declared + 'static) -> Self {
         let node = self.node;
-        self.keeping(reactive_core::effect(move || {
-            crate::inherit::declare(node, declared())
-        }))
+        reactive_core::effect(move || crate::inherit::declare(node, declared()));
+        self
     }
 
     /// Keeps this container's layout style in step with the reactive state it was built from — see
@@ -93,7 +79,8 @@ impl Container {
     /// also paints.
     pub fn styled_by(self, style: impl Fn() -> LayoutStyle + 'static) -> Self {
         let node = self.node;
-        self.keeping(crate::styled_container::style_follows(node, style))
+        crate::styled_container::style_follows(node, style);
+        self
     }
 
     /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it;
@@ -364,7 +351,7 @@ mod tests {
 
         reset_layout_runtime();
         let s = signal(0i32);
-        let s_cb = s.clone();
+        let s_cb = s;
         // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
             LayoutStyle::new().width(50.0).height(30.0),
@@ -374,7 +361,7 @@ mod tests {
         .unwrap()
         .on_press(move || s_cb.update(|n| *n += 1));
         let btn_node = btn.layout_node();
-        let s_txt = s.clone();
+        let s_txt = s;
         let txt = crate::text::Text::new(
             move || format!("{}", s_txt.get()),
             LayoutStyle::new().width(50.0).height(20.0),

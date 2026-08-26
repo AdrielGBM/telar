@@ -93,12 +93,12 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
     let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(|f| -> Rc<dyn Fn(f32)> { Rc::from(f) });
     let key_on_change = on_change.clone();
-    let announced_value = value.clone();
-    let commit_value = value.clone();
+    let announced_value = value;
+    let commit_value = value;
 
     // The fill: an `absolute_fill` child (so it exactly overlays the track) scaled horizontally from the left
     // edge by `value` — cheaper than relaying out a narrower box on every drag move.
-    let fill_value = value.clone();
+    let fill_value = value;
     let fill_color = color.clone();
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
@@ -120,7 +120,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // The thumb: a normal in-flow child (the only one, since the fill above is out of flow), so it lands at
     // the track's top-left by default; a translate then carries it to `value`'s position and re-centres it
     // vertically against the (thinner) track.
-    let thumb_value = value.clone();
+    let thumb_value = value;
     let thumb_color = color.clone();
     let thumb = StyledContainer::new(
         thumb_box(),
@@ -157,7 +157,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // continuous value has to invent for a keyboard, which only ever hands it whole presses.
     .control(Role::Slider)
     .valued({
-        let value = announced_value.clone();
+        let value = announced_value;
         move || platform_core::NumericValue {
             now: value.get() as f64,
             min: min as f64,
@@ -165,7 +165,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         }
     })
     .on_key({
-        let value = commit_value.clone();
+        let value = commit_value;
         let on_change = key_on_change.clone();
         move |key: &platform_core::Key| {
             let delta = match key {
@@ -225,7 +225,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let mut widget = slider(SliderProps {
-            value: Some(value.clone()),
+            value: Some(value),
             width: 200.0,
             ..Default::default()
         })
@@ -284,7 +284,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let mut widget = slider(SliderProps {
-            value: Some(value.clone()),
+            value: Some(value),
             width: 200.0,
             min: 0.0,
             max: 100.0,
@@ -307,7 +307,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let mut widget = slider(SliderProps {
-            value: Some(value.clone()),
+            value: Some(value),
             width: 100.0,
             min: 0.0,
             max: 100.0,

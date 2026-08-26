@@ -148,7 +148,7 @@ pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
             Some(Event::PointerPressed {
                 x: local_x,
                 y: local_y,
-                button: button.clone(),
+                button: *button,
                 source: source.clone(),
             })
         }
@@ -162,7 +162,7 @@ pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
             Some(Event::PointerReleased {
                 x: local_x,
                 y: local_y,
-                button: button.clone(),
+                button: *button,
                 source: source.clone(),
             })
         }

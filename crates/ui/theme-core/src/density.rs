@@ -12,8 +12,6 @@
 //! It is a signal like the theme, so a change re-runs the paint closures that read it — and, through
 //! `StyledContainer::styled_by`, re-resolves the layout styles derived from it too.
 
-use std::mem::ManuallyDrop;
-
 use reactive_core::{RwSignal, detached, signal};
 
 /// How large the controls in this part of the tree are, in the sense SwiftUI's `controlSize` means: a
@@ -46,8 +44,8 @@ impl ControlSize {
 thread_local! {
     // `ManuallyDrop` for the same reason the theme signals are: no TLS destructor, cleanup goes through the
     // runtime being dropped.
-    static CONTROL_SIZE: ManuallyDrop<RwSignal<ControlSize>> =
-        ManuallyDrop::new(detached(|| signal(ControlSize::Regular)));
+    static CONTROL_SIZE: RwSignal<ControlSize> =
+        detached(|| signal(ControlSize::Regular));
 }
 
 /// Sets the ambient control size. Reactive: everything that read it re-runs, so a switch re-spaces the

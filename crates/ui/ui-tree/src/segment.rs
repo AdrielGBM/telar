@@ -11,7 +11,7 @@ use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
 
 use geometry_core::Rect;
-use reactive_core::{Effect, RwSignal, effect, signal};
+use reactive_core::{RwSignal, effect, signal};
 use renderer_core::DrawCommand;
 
 use crate::component::Component;
@@ -32,7 +32,7 @@ reactive_core::surface_local! {
 /// The active surface's force-tick signal (cloned out of the slot so callers never hold the slot borrow
 /// across a `.set()`, whose flush would re-enter the slot to read the tick).
 fn force_tick() -> RwSignal<u64> {
-    with_force_tick_ref(|s| s.clone())
+    with_force_tick_ref(|s| *s)
 }
 
 /// Forces every segment subscribed to the active surface's `FORCE_TICK` to re-run on the next flush.
@@ -66,7 +66,6 @@ pub struct Segment {
     child_slots: Rc<RefCell<ChildSlots>>,
     // Set by the effect when this segment's output changes; cleared when composed. This lives on the Segment object (not a thread-local) so it works across the hot-reload dylib boundary: a dylib segment's effect sets it and the binary's compose/dirty-check read the same `Cell` — whereas a thread-local generation would be a separate duplicated instance per side.
     is_dirty: Rc<Cell<bool>>,
-    _effect: Effect,
 }
 
 /// A node emitted by [`Segment::walk`]: one mounted component, with its pre-order id, widget name,
@@ -128,7 +127,7 @@ impl Segment {
         let own_c = Rc::clone(&own_commands);
         let slots_c = Rc::clone(&child_slots);
         let dirty_c = Rc::clone(&is_dirty);
-        let _effect = effect(move || {
+        effect(move || {
             force_tick().get(); // re-run on force-tick (cross-boundary inputs / hot reload)
             let Some(node) = render() else {
                 return; // widget is mutably borrowed (event dispatch); keep last render
@@ -157,7 +156,6 @@ impl Segment {
             own_commands,
             child_slots,
             is_dirty,
-            _effect,
         })
     }
 
@@ -478,7 +476,7 @@ mod tests {
     fn composes_children_in_order() {
         let a = signal(0.0f32);
         let b = signal(100.0f32);
-        let (sa, sb) = (a.clone(), b.clone());
+        let (sa, sb) = (a, b);
         let children = vec![
             Segment::mount(Leaf { x: sa }),
             Segment::mount(Leaf { x: sb }),
@@ -533,7 +531,7 @@ mod tests {
     #[test]
     fn child_change_updates_output_without_parent_rerun() {
         let a = signal(0.0f32);
-        let sa = a.clone();
+        let sa = a;
         let children = vec![Segment::mount(Leaf { x: sa })];
         let root = SegmentRoot::mount(Parent { children });
         let g0 = root.generation();
@@ -565,7 +563,7 @@ mod tests {
     fn signal_dependent_segment_updates_with_runner_batching() {
         use reactive_core::{begin_batch, end_batch};
         let a = signal(0.0f32);
-        let sa = a.clone();
+        let sa = a;
         let root = SegmentRoot::mount(Leaf { x: sa });
         assert_eq!(animated_rect_x(&root), 0.0);
         begin_batch();
@@ -585,11 +583,9 @@ mod tests {
     fn memo_dependent_segment_updates_with_runner_batching() {
         use reactive_core::{begin_batch, end_batch, memo};
         let count = signal(0i32);
-        let count_mv = count.clone();
+        let count_mv = count;
         let double = memo(move || count_mv.get() * 2);
-        let root = SegmentRoot::mount(MemoLeaf {
-            double: double.clone(),
-        });
+        let root = SegmentRoot::mount(MemoLeaf { double: double });
         assert_eq!(animated_rect_x(&root), 0.0);
 
         begin_batch();
@@ -647,8 +643,8 @@ mod tests {
             let theme = signal(0.2f32);
             let sel = signal(0i32);
             let widget = Rc::new(RefCell::new(ThemedButton {
-                theme: theme.clone(),
-                sel: sel.clone(),
+                theme: theme,
+                sel: sel,
             }));
             let render = {
                 let w = Rc::clone(&widget);
@@ -672,8 +668,8 @@ mod tests {
             let theme = signal(0.2f32);
             let sel = signal(0i32);
             let widget = Rc::new(RefCell::new(ThemedButton {
-                theme: theme.clone(),
-                sel: sel.clone(),
+                theme: theme,
+                sel: sel,
             }));
             let render = {
                 let w = Rc::clone(&widget);

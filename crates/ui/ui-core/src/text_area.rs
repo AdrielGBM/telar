@@ -54,7 +54,7 @@ impl TextArea {
         let style: Rc<dyn Fn() -> TextStyle> = Rc::new(style_fn);
         // Height is measured from the line count at the current style; width is left to the parent (the field
         // stretches to fill the pane), so a long line overflows to the right rather than widening the layout.
-        let measure_value = value.clone();
+        let measure_value = value;
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |_max_width: f32| {
             let s = (measure_style)();
@@ -72,7 +72,7 @@ impl TextArea {
             focus::Role::MultilineTextInput,
         );
         let remeasure = {
-            let value = value.clone();
+            let value = value;
             effect(move || {
                 // Subscribe to the value (tracked read) without cloning it; re-measure on any change.
                 value.with(|_| {});
@@ -596,7 +596,7 @@ mod tests {
     fn focused(initial: &str) -> (TextArea, RwSignal<String>) {
         reset_layout_runtime();
         let value = signal(initial.to_string());
-        let area = TextArea::new(value.clone(), LayoutStyle::new().width(400.0), || {
+        let area = TextArea::new(value, LayoutStyle::new().width(400.0), || {
             TextStyle::new(14.0, Color::BLACK)
         })
         .unwrap();

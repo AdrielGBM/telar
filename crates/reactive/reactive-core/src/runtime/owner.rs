@@ -108,26 +108,6 @@ impl Drop for OwnerGuard {
     }
 }
 
-/// Makes `owner` current for as long as the guard lives, for an effect re-entering the scope that built it.
-///
-/// Unlike [`owner_scope`] this mints nothing — the owner already exists, and a re-run must land in it rather
-/// than beside it. `None` still pushes nothing, so an effect registered outside every scope keeps running
-/// outside every scope instead of inheriting whatever the flush was called from.
-pub(crate) fn enter_owner(owner: Option<OwnerId>) -> OwnerGuard {
-    RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        let depth = rt.owner_stack.len();
-        let id = match owner {
-            Some(owner) if rt.owners.contains_key(owner) => {
-                rt.owner_stack.push(owner);
-                owner
-            }
-            _ => OwnerId::default(),
-        };
-        OwnerGuard { id, depth }
-    })
-}
-
 // Both take the runtime rather than reaching for it, so recording an owner costs nothing beyond a push on the borrow the creation already holds.
 pub(crate) fn attach_signal(rt: &mut Runtime, id: SignalId) {
     if let Some(entry) = owning(rt) {
@@ -141,18 +121,41 @@ pub(crate) fn attach_effect(rt: &mut Runtime, id: EffectId) {
     }
 }
 
-/// The owner a creation right now belongs to, or `None` if it belongs to nobody.
+/// The owner a creation right now belongs to, minting the active surface's root if the stack is empty.
 ///
-/// Nobody covers two different cases. Outside every scope there is no owner to attribute to. Inside
-/// [`detached`](reactive_local::detached) there is one and it is the wrong one: a `surface_local!` world
-/// initialises on first access, and the first access is somebody's build, so the surface's own state would
-/// be adopted by whatever row or branch happened to touch it — and freed when that row went away.
+/// **Every surface has a root, including the ambient one** — `SurfaceHandle::NONE`, which is the whole world
+/// a single-window app ever has. Without it, everything a top-level view creates belongs to nobody: harmless
+/// while the handle refcount was still what freed things, and a plain leak once it is not. It is also what a
+/// declaration made outside every scope needs, since Phase 4 made withdrawal an owner's job.
+///
+/// The cost is the trade this whole design makes, and it lands here: a signal created outside every scope
+/// now lives until its surface does, where the refcount would have freed it at the last handle. In a UI that
+/// is almost always what you wanted; it is still a change.
+///
+/// `None` means one thing only: [`detached`](reactive_local::detached). A `surface_local!` world initialises
+/// on first access, and the first access is somebody's build — attributing a surface's own state to whatever
+/// row happened to touch it would free it when that row went away.
 fn owning(rt: &mut Runtime) -> Option<&mut OwnerEntry> {
+    let id = owning_id(rt)?;
+    rt.owners.get_mut(id)
+}
+
+pub(crate) fn owning_id(rt: &mut Runtime) -> Option<OwnerId> {
     if reactive_local::is_detached() {
         return None;
     }
-    let owner = rt.owner_stack.last().copied()?;
-    rt.owners.get_mut(owner)
+    if let Some(owner) = rt.owner_stack.last().copied() {
+        return Some(owner);
+    }
+    let surface = current_surface();
+    if let Some(root) = rt.roots.get(&surface).copied()
+        && rt.owners.contains_key(root)
+    {
+        return Some(root);
+    }
+    let root = rt.owners.insert(OwnerEntry::new(None, surface));
+    rt.roots.insert(surface, root);
+    Some(root)
 }
 
 /// Registers work the current owner runs when it is disposed.
@@ -284,10 +287,10 @@ mod tests {
     #[test]
     fn disposing_an_owner_takes_its_children_with_it() {
         let outer = owner_scope();
-        let held_by_outer = create_signal_storage(1i32, 1);
+        let held_by_outer = create_signal_storage(1i32);
         let held_by_inner = {
             let _inner = owner_scope();
-            create_signal_storage(2i32, 1)
+            create_signal_storage(2i32)
         };
 
         let root = outer.id();
@@ -306,7 +309,7 @@ mod tests {
 
         let scope = owner_scope();
         let seen_c = Rc::clone(&seen);
-        let handle = effect(move || seen_c.borrow_mut().push(read.get()));
+        effect(move || seen_c.borrow_mut().push(read.get()));
         let owner = scope.id();
         drop(scope);
 
@@ -315,12 +318,7 @@ mod tests {
 
         dispose_owner(owner);
         count.set(2);
-        assert_eq!(
-            *seen.borrow(),
-            vec![0, 1],
-            "the owner deregistered it, though the handle is still held"
-        );
-        drop(handle);
+        assert_eq!(*seen.borrow(), vec![0, 1], "the owner deregistered it");
     }
 
     /// T-1.3's guarantee, for the owner stack. A panic mid-build that leaves the stack deeper than it
@@ -339,7 +337,7 @@ mod tests {
         assert_eq!(current_owner(), before);
 
         let scope = owner_scope();
-        let after_panic = create_signal_storage(3i32, 1);
+        let after_panic = create_signal_storage(3i32);
         let owner = scope.id();
         drop(scope);
         dispose_owner(owner);
@@ -353,14 +351,14 @@ mod tests {
         let held = {
             let previous = crate::set_current_surface(surface);
             let scope = owner_scope();
-            let held = create_signal_storage(4i32, 1);
+            let held = create_signal_storage(4i32);
             drop(scope);
             crate::set_current_surface(previous);
             held
         };
         let elsewhere = {
             let scope = owner_scope();
-            let elsewhere = create_signal_storage(5i32, 1);
+            let elsewhere = create_signal_storage(5i32);
             drop(scope);
             elsewhere
         };

@@ -4,7 +4,7 @@ use std::collections::BinaryHeap;
 use std::panic::Location;
 use std::rc::Rc;
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use slotmap::SlotMap;
 
 mod effects;
@@ -14,8 +14,7 @@ mod signals;
 mod surface;
 
 pub(crate) use effects::{
-    current_observer, deregister_effect, is_alive, register_effect, register_pure_effect,
-    run_effect, schedule,
+    current_observer, is_alive, register_effect, register_pure_effect, run_effect, schedule,
 };
 pub use flush::{batch, begin_batch, end_batch, reset_runtime, set_flush_notify};
 pub use owner::{
@@ -23,8 +22,8 @@ pub use owner::{
     live_signal_count, on_cleanup, owner_scope,
 };
 pub(crate) use signals::{
-    clone_signal, create_signal_storage, drop_signal, notify_signal, set_signal_value,
-    track_signal, update_signal_value, with_signal_value,
+    create_signal_storage, notify_signal, set_signal_value, track_signal, update_signal_value,
+    with_signal_value,
 };
 pub use surface::{
     SurfaceEnterGuard, SurfaceHandle, current_surface, set_current_surface, set_surface_enter_hook,
@@ -61,14 +60,14 @@ pub(crate) struct SignalStorage {
     pub(crate) subscribers: Vec<EffectId>,
     // For each subscriber: the index in that effect's `source_slots` vec that records this signal.
     pub(crate) observer_slots: Vec<usize>,
-    // Handle reference count; the slot is freed when it reaches zero.
-    pub(crate) ref_count: usize,
 }
 
 pub(crate) struct Runtime {
     pub(crate) observer_stack: Vec<EffectId>,
     pub(crate) owners: SlotMap<OwnerId, owner::OwnerEntry>,
     pub(crate) owner_stack: Vec<OwnerId>,
+    /// The owner everything created outside every scope belongs to, one per surface, minted on demand.
+    pub(crate) roots: FxHashMap<SurfaceHandle, OwnerId>,
     pub(crate) effects: SlotMap<EffectId, EffectEntry>,
     pub(crate) signals: SlotMap<SignalId, SignalStorage>,
     pub(crate) batch_depth: usize,
@@ -89,6 +88,7 @@ impl Runtime {
             observer_stack: Vec::new(),
             owners: SlotMap::with_key(),
             owner_stack: Vec::new(),
+            roots: FxHashMap::default(),
             effects: SlotMap::with_key(),
             signals: SlotMap::with_key(),
             batch_depth: 0,

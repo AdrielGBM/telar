@@ -169,28 +169,6 @@ pub fn scan_effects(logic_source: &str) -> Vec<String> {
     effects
 }
 
-/// A `[logic]` line that *calls* `effect(…)` without binding the handle, if there is one.
-///
-/// Such an effect is dropped the instant the statement ends: it runs once, seeds correctly, and never fires
-/// again — which looks like working code until you watch it. The scanner cannot keep what was never bound, so
-/// the honest answer is to refuse rather than to quietly not keep it.
-pub fn unbound_effect(logic_source: &str) -> Option<String> {
-    logic_source
-        .lines()
-        .map(str::trim)
-        .find(|line| {
-            // A binding is handled above; `_ = effect(…)` and a bare call are the two ways to drop one.
-            let body = line
-                .strip_prefix("let _ =")
-                .or_else(|| line.strip_prefix("_ ="))
-                .unwrap_or(line);
-            !line.starts_with("//")
-                && !(line.starts_with("let ") && !line.starts_with("let _ ="))
-                && opens_an_effect(body)
-        })
-        .map(str::to_string)
-}
-
 /// Rewrites a `let NAME = signal(EXPR)` logic line into the keyed hot-reload form
 /// `let NAME = telar::hot_signal_auto!("<fn_name>::<NAME>", EXPR)` so `cargo telar dev` can snapshot
 /// and restore the value across dylib swaps. Returns `None` when the line is not a signal binding
@@ -288,20 +266,5 @@ mod effect_scan_tests {
         assert!(scan_effects("let m = memo(|| 1);").is_empty());
         // A name merely *ending* in `effect` is a different function.
         assert!(scan_effects("let e = side_effect(|| {});").is_empty());
-    }
-
-    /// The failure this refusal exists for: an effect nobody bound runs once and stops.
-    #[test]
-    fn an_unbound_effect_is_reported() {
-        assert!(unbound_effect("let _ = effect(|| {});").is_some());
-        assert!(unbound_effect("effect(|| {});").is_some());
-        assert!(unbound_effect("telar::effect(|| {});").is_some());
-    }
-
-    #[test]
-    fn a_bound_effect_is_not_reported() {
-        assert!(unbound_effect("let e = effect(|| {});").is_none());
-        assert!(unbound_effect("let e = telar::effect(|| {});").is_none());
-        assert!(unbound_effect("// effect(|| {});").is_none());
     }
 }

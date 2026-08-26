@@ -82,7 +82,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(Rc::from);
 
     let minus = stepper_button("−", Rc::clone(&color), {
-        let value = value.clone();
+        let value = value;
         let on_change = on_change.clone();
         move || {
             let v = (value.get() - step).clamp(min, max);
@@ -94,7 +94,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     })?;
 
     let plus = stepper_button("+", Rc::clone(&color), {
-        let value = value.clone();
+        let value = value;
         let on_change = on_change.clone();
         move || {
             let v = (value.get() + step).clamp(min, max);
@@ -105,7 +105,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         }
     })?;
 
-    let display_value = value.clone();
+    let display_value = value;
     let display = Text::declaring(
         move || {
             let v = display_value.get();
@@ -198,7 +198,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let value = signal(4.0f32);
         let mut widget = stepper(StepperProps {
-            value: Some(value.clone()),
+            value: Some(value),
             min: 0.0,
             max: 5.0,
             step: 1.0,
@@ -227,7 +227,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let value = signal(1.0f32);
         let mut widget = stepper(StepperProps {
-            value: Some(value.clone()),
+            value: Some(value),
             min: 0.0,
             max: 5.0,
             step: 1.0,
@@ -291,7 +291,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
         let mut widget = stepper(StepperProps {
-            value: Some(value.clone()),
+            value: Some(value),
             step: 1.0,
             ..Default::default()
         })

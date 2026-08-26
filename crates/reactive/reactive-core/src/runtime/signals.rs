@@ -3,7 +3,7 @@ use std::cmp::Reverse;
 use super::flush::flush;
 use super::{EffectId, RUNTIME, SignalId, SignalStorage};
 
-pub(crate) fn create_signal_storage<T: 'static>(value: T, initial_ref_count: usize) -> SignalId {
+pub(crate) fn create_signal_storage<T: 'static>(value: T) -> SignalId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         let id = rt.signals.insert(SignalStorage {
@@ -11,36 +11,10 @@ pub(crate) fn create_signal_storage<T: 'static>(value: T, initial_ref_count: usi
             version: 0,
             subscribers: Vec::new(),
             observer_slots: Vec::new(),
-            ref_count: initial_ref_count,
         });
         super::owner::attach_signal(&mut rt, id);
         id
     })
-}
-
-pub(crate) fn clone_signal(id: SignalId) {
-    RUNTIME.with(|rt| {
-        if let Some(storage) = rt.borrow_mut().signals.get_mut(id) {
-            storage.ref_count += 1;
-        }
-    });
-}
-
-pub(crate) fn drop_signal(id: SignalId) {
-    // Take the storage out under the borrow, but drop it (and its value) only AFTER the borrow is released.
-    // A signal whose value itself owns signal handles re-enters `drop_signal` as that value drops; dropping it
-    // while still holding the borrow here would double-borrow the runtime and abort during teardown.
-    let removed = RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        let storage = rt.signals.get_mut(id)?;
-        storage.ref_count -= 1;
-        if storage.ref_count == 0 {
-            rt.signals.remove(id)
-        } else {
-            None
-        }
-    });
-    drop(removed);
 }
 
 const DEAD: &str = "signal read after its storage was freed";
@@ -176,9 +150,12 @@ mod tests {
     /// `with_signal_value` downcast cleanly and returned the wrong signal's value with nothing to notice.
     #[test]
     fn the_id_that_freed_a_slot_cannot_read_what_moves_into_it() {
-        let first = create_signal_storage(1i32, 1);
-        drop_signal(first);
-        let second = create_signal_storage(2i32, 1);
+        let scope = crate::owner_scope();
+        let owner = scope.id();
+        let first = create_signal_storage(1i32);
+        drop(scope);
+        crate::dispose_owner(owner);
+        let second = create_signal_storage(2i32);
 
         let slot = |key: SignalId| key.data().as_ffi() as u32;
         assert_eq!(slot(first), slot(second), "the slot is reused immediately");

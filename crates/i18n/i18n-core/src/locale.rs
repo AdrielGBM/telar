@@ -5,14 +5,12 @@
 //! [`use_locale`] (through [`crate::translate`]), switching the locale re-runs only the closures that read it
 //! — the same fine-grained mechanism that re-paints only the widgets reading a theme token.
 
-use std::mem::ManuallyDrop;
-
 use reactive_core::{RwSignal, detached, signal};
 
 thread_local! {
     // ManuallyDrop mirrors theme-core's signals: no TLS destructor is registered, so unmapping the dylib on
     // dlclose stays safe. Cleanup happens via reset_runtime() dropping the whole Runtime.
-    static LOCALE: ManuallyDrop<RwSignal<Option<String>>> = ManuallyDrop::new(detached(|| signal(None)));
+    static LOCALE: RwSignal<Option<String>> = detached(|| signal(None));
 }
 
 /// Sets the active locale (a BCP-47 tag such as `"en"` or `"es"`), re-rendering every translated string that

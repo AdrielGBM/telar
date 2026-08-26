@@ -49,7 +49,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let color: shared::ReactiveColor = Rc::from(color);
 
     // The dot: an inner circle that paints the accent only while this value is selected, so selecting never reflows.
-    let dot_selected = selected.clone();
+    let dot_selected = selected;
     let dot_color = color.clone();
     let dot = StyledContainer::new(
         LayoutStyle::new().width(10.0).height(10.0),
@@ -67,7 +67,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?;
 
     // The 18px ring: white with an accent border when selected, a neutral border otherwise, dot centred inside.
-    let ring_selected = selected.clone();
+    let ring_selected = selected;
     let ring_color = color.clone();
     let ring = StyledContainer::new(
         LayoutStyle::new()
@@ -91,8 +91,8 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?;
 
     // The whole row is the tap target (ring + label); a tap selects this value and reports it.
-    let select = selected.clone();
-    let announced = selected.clone();
+    let select = selected;
+    let announced = selected;
     shared::labelled_control(
         box_item(ring),
         label,
@@ -127,7 +127,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let selected = signal(0u32);
         let mut widget = radio(RadioProps {
-            selected: Some(selected.clone()),
+            selected: Some(selected),
             value: 2,
             label: Box::new(|| "Large".to_string()),
             ..Default::default()

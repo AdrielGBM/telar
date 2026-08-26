@@ -980,7 +980,7 @@ mod tests {
     impl App for Tinted {
         fn root(&self) -> Box<dyn ui_tree::Component> {
             ui_core::reset_layout_runtime();
-            let tint = self.0.clone();
+            let tint = self.0;
             Box::new(
                 ui_core::Rectangle::new(
                     layout_core::LayoutStyle::new().width(10.0).height(10.0),
@@ -1007,7 +1007,7 @@ mod tests {
     fn new_commands_never_go_out_under_the_previous_generation() {
         let tint = reactive_core::signal(0.0f32);
         let mut handler = build_app_handler::<HeadlessWindow, ()>(
-            Box::new(Tinted(tint.clone())),
+            Box::new(Tinted(tint)),
             Arc::new(services_core::NoPaths),
             Vec::new(),
             Vec::new(),

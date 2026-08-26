@@ -1,7 +1,7 @@
 use std::cmp::Reverse;
 
 use super::flush::flush;
-use super::owner::enter_owner;
+
 use super::surface::current_surface;
 use super::{EffectEntry, EffectId, RUNTIME, SignalId};
 
@@ -12,8 +12,8 @@ pub(crate) fn current_observer() -> Option<EffectId> {
 pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        // Read off the stack we already hold rather than through `current_owner`, whose own borrow would collide with this one.
-        let owner = rt.owner_stack.last().copied();
+        // Resolved off the borrow we already hold: `current_owner` takes its own, which would collide with this one.
+        let owner = super::owner::owning_id(&mut rt);
         let id = rt.effects.insert(EffectEntry {
             callback: f,
             surface: current_surface(),
@@ -34,8 +34,8 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
 pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        // Read off the stack we already hold rather than through `current_owner`, whose own borrow would collide with this one.
-        let owner = rt.owner_stack.last().copied();
+        // Resolved off the borrow we already hold: `current_owner` takes its own, which would collide with this one.
+        let owner = super::owner::owning_id(&mut rt);
         let id = rt.effects.insert(EffectEntry {
             callback: f,
             surface: current_surface(),
@@ -184,23 +184,35 @@ pub(crate) fn run_effect(id: EffectId) {
     if let Some((ptr, surface, owner)) = ptr {
         // Clean stale subscriptions before re-running so fresh subscriptions are tracked (Finding 1.7). clean_effect acquires the runtime borrow internally (safe: we released it above).
         clean_effect(id);
-        // Push observer_stack only after cleanup so clean_effect doesn't accidentally re-register.
-        RUNTIME.with(|rt| rt.borrow_mut().observer_stack.push(id));
-        struct PopGuard;
+        // Push observer_stack only after cleanup so clean_effect doesn't accidentally re-register. The owner rides along in the same borrow, because a re-run that starts declaring must attribute it to the scope that built this effect rather than to whatever build the flush interrupted — and a borrow of its own for that cost 3-5% of a whole-tree re-run, which is the one thing `tree_flatten` measures.
+        let owner_depth = RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            rt.observer_stack.push(id);
+            let depth = rt.owner_stack.len();
+            if let Some(owner) = owner
+                && rt.owners.contains_key(owner)
+            {
+                rt.owner_stack.push(owner);
+            }
+            depth
+        });
+        struct PopGuard(usize);
         impl Drop for PopGuard {
             fn drop(&mut self) {
-                RUNTIME.with(|rt| rt.borrow_mut().observer_stack.pop());
+                RUNTIME.with(|rt| {
+                    let mut rt = rt.borrow_mut();
+                    rt.observer_stack.pop();
+                    rt.owner_stack.truncate(self.0);
+                });
             }
         }
-        let _guard = PopGuard;
+        let _guard = PopGuard(owner_depth);
         // Owner scope: re-enter this effect's surface so its layout/overlay/focus resolve against the
         // surface that built it, even when the write that scheduled it came from another surface. The
         // guard is intentionally outside the RUNTIME borrow above (which was already released) and inert
         // for single-surface apps (surface == current surface → no-op).
         {
             let _surface_guard = surface.enter();
-            // And its owner, for the same reason one step in: a re-run that starts declaring, or creates a signal it did not create the first time, has to attribute it to the scope that built this effect rather than to whatever build the flush interrupted.
-            let _owner_guard = enter_owner(owner);
             unsafe { (*ptr)() };
         }
         drop(_guard);

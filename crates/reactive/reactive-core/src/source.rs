@@ -56,11 +56,11 @@ impl Source for bool {
 
 /// A value derived from another, recomputed when its source moves.
 ///
-/// **A derivation is a [`Memo`], never a signal written by an effect.** [`effect`](crate::effect) hands back a
-/// handle whose `Drop` deregisters it, so `let _ = effect(…)` runs exactly once and then stops — the derived
-/// value is seeded correctly and never moves again, which looks like a working widget until you watch it. A
-/// `Memo` is `Rc`-backed and lives as long as the closure reading it, so whatever draws the value is what
-/// keeps the derivation alive, with nothing for a caller to remember.
+/// **A derivation is a [`Memo`], never a signal written by an effect**, though the reason has changed. It used
+/// to be that an unbound `effect(…)` deregistered where it was made and the derived value never moved again.
+/// Both now belong to the owner that built them and live exactly as long, so what is left is the plain one: a
+/// memo *is* the derived value, where a signal written by an effect is a second copy of it that has to be
+/// kept in step.
 pub fn derive<S, U>(source: S, map: impl Fn(S::Value) -> U + 'static) -> Memo<U>
 where
     S: Source + 'static,
@@ -93,7 +93,7 @@ mod tests {
     fn a_derived_value_follows_its_source() {
         reset_runtime();
         let source = signal(2i32);
-        let doubled = derive(source.clone(), |n| n * 2);
+        let doubled = derive(source, |n| n * 2);
         assert_eq!(doubled.get(), 4, "seeded from the source, not a default");
         source.set(5);
         assert_eq!(doubled.get(), 10);
@@ -122,7 +122,7 @@ mod tests {
     fn a_derivation_outlives_the_call_that_made_it() {
         reset_runtime();
         let source = signal(1i32);
-        let derived = derive(source.clone(), |n| n * 10);
+        let derived = derive(source, |n| n * 10);
         let read: Box<dyn Fn() -> i32> = Box::new(move || derived.get());
         source.set(7);
         assert_eq!(read(), 70, "whatever holds the derivation keeps it alive");
@@ -140,7 +140,7 @@ mod tests {
     fn a_derivation_is_itself_a_source() {
         reset_runtime();
         let source = signal(3i32);
-        let once = derive(source.clone(), |n| n + 1);
+        let once = derive(source, |n| n + 1);
         let twice = derive(once, |n| n * 2);
         assert_eq!(twice.get(), 8);
         source.set(4);

@@ -107,9 +107,7 @@ mod tests {
     #[test]
     fn tree_reactive_update() {
         let signal = signal(2i32);
-        let tree = ComponentList::new(Counter {
-            value: signal.clone(),
-        });
+        let tree = ComponentList::new(Counter { value: signal });
 
         assert_eq!(tree.commands().len(), 2);
 

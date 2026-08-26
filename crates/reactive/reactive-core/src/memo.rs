@@ -1,9 +1,10 @@
 use std::cell::RefCell;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use smallvec::SmallVec;
 
-use crate::runtime::{self, EffectId};
+use crate::runtime::{self, EffectId, SignalId};
 
 enum MemoState<T> {
     Computing, // reading while Computing means the closure re-entered itself: a cycle
@@ -14,45 +15,41 @@ enum MemoState<T> {
 struct MemoInner<T> {
     state: MemoState<T>,
     subscribers: SmallVec<[EffectId; 4]>,
-    effect_id: EffectId,
 }
 
+/// A derived value, recomputed when what it reads moves.
+///
+/// `Copy`, like the signal handles, and for the same reason: the handle is an id into the runtime's arena
+/// and the *owner* is what disposes it. It used to be `Rc`-backed and kept alive by whoever read it, which
+/// is why it was the one handle a `.rsx` view still had to clone by hand.
+///
+/// The `Rc<RefCell<…>>` did not disappear so much as move: it is the *value* the arena slot holds, reached
+/// through the id, so the memo's own state still has one owner while the handle has none.
 pub struct Memo<T: 'static> {
-    inner: Rc<RefCell<MemoInner<T>>>,
+    id: SignalId,
+    _marker: PhantomData<T>,
 }
 
 impl<T: 'static> Clone for Memo<T> {
     fn clone(&self) -> Self {
-        Memo {
-            inner: Rc::clone(&self.inner),
-        }
+        *self
     }
 }
 
-impl<T: 'static> Drop for Memo<T> {
-    fn drop(&mut self) {
-        if Rc::strong_count(&self.inner) == 1 {
-            let id = self.inner.borrow().effect_id;
-            runtime::deregister_effect(id);
-        }
-    }
-}
+// Hand-written rather than derived: `#[derive(Copy)]` would demand `T: Copy`, and the parameter only names what the memo computes — it is never stored in the handle.
+impl<T: 'static> Copy for Memo<T> {}
 
-impl<T: Clone + 'static> Memo<T> {
-    pub fn get(&self) -> T {
-        self.track();
-        match &self.inner.borrow().state {
-            MemoState::Clean(v) => v.clone(),
-            MemoState::Dirty => panic!("memo read while Dirty — flush ordering issue"),
-            MemoState::Computing => panic!("reactive cycle detected in memo"),
-        }
-    }
-}
+type Shared<T> = Rc<RefCell<MemoInner<T>>>;
 
 impl<T: 'static> Memo<T> {
+    fn shared(&self) -> Shared<T> {
+        runtime::with_signal_value::<Shared<T>, _>(self.id, Rc::clone)
+    }
+
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
-        self.track();
-        let borrow = self.inner.borrow();
+        let inner = self.shared();
+        self.track(&inner);
+        let borrow = inner.borrow();
         match &borrow.state {
             MemoState::Clean(v) => f(v),
             MemoState::Dirty => panic!("memo read while Dirty — flush ordering issue"),
@@ -60,9 +57,9 @@ impl<T: 'static> Memo<T> {
         }
     }
 
-    fn track(&self) {
+    fn track(&self, inner: &Shared<T>) {
         if let Some(id) = runtime::current_observer() {
-            let mut borrow = self.inner.borrow_mut();
+            let mut borrow = inner.borrow_mut();
             if !borrow.subscribers.contains(&id) {
                 borrow.subscribers.push(id);
             }
@@ -70,17 +67,20 @@ impl<T: 'static> Memo<T> {
     }
 }
 
-pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
-    use std::rc::Weak;
+impl<T: Clone + 'static> Memo<T> {
+    pub fn get(&self) -> T {
+        self.with(T::clone)
+    }
+}
 
-    let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {
+pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
+    let inner: Shared<T> = Rc::new(RefCell::new(MemoInner {
         state: MemoState::Dirty,
         subscribers: SmallVec::new(),
-        effect_id: EffectId::default(),
     }));
 
-    let weak: Weak<RefCell<MemoInner<T>>> = Rc::downgrade(&inner);
-
+    // The arena slot owns the state, so the memo is disposed with its owner like everything else. The closure holds a `Weak` rather than the slot's id, because the recompute runs during a flush that may come after disposal — a `Weak` that fails to upgrade says so, where a stale id would only panic.
+    let weak = Rc::downgrade(&inner);
     let effect_f: Box<dyn Fn()> = Box::new(move || {
         let Some(inner) = weak.upgrade() else {
             return;
@@ -116,11 +116,13 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
         }
     });
 
-    // Register as a pure effect so it runs before user effects during flush
+    let id = runtime::create_signal_storage(inner);
+    // Registered as a pure effect so it runs before user effects during flush. Nothing holds its id: the owner active here recorded it, and that is what disposes it.
     let effect_id = runtime::register_pure_effect(effect_f);
-    inner.borrow_mut().effect_id = effect_id;
-
     runtime::run_effect(effect_id);
 
-    Memo { inner }
+    Memo {
+        id,
+        _marker: PhantomData,
+    }
 }

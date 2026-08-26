@@ -78,7 +78,7 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     // Always a live `Input` (with a muted placeholder shown while empty) so the field is tappable/typable
     // from a cold start — a swapped-in placeholder `Text` takes no focus, so an empty field couldn't be
     // clicked to begin typing.
-    let mut input = Input::declaring(value.clone(), LayoutStyle::new(), move |t| {
+    let mut input = Input::declaring(value, LayoutStyle::new(), move |t| {
         let t = shared::control_text(t, 1.0);
         match color() {
             c if c == Color::TRANSPARENT => t,
@@ -103,10 +103,10 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         },
         vec![box_item(field)],
     )?
-    .styled_by(move || field_box(width))
-    .keeping(style_follows(line_node, move || {
+    .styled_by(move || field_box(width));
+    style_follows(line_node, move || {
         line_box(shared::control_text_size(line_node, 1.0))
-    }));
+    });
 
     shared::captioned(box_item(box_), label, width)
 }
@@ -156,7 +156,7 @@ mod tests {
         let value = signal("hi".to_string());
         crate::test_support::fresh_layout_runtime();
         let field = text_field(TextFieldProps {
-            value: Some(value.clone()),
+            value: Some(value),
             ..Default::default()
         })
         .unwrap();
@@ -203,7 +203,7 @@ mod tests {
     fn controlled_value_renders_as_input_text() {
         let value = signal("hi".to_string());
         let (field, _) = laid_out_field(TextFieldProps {
-            value: Some(value.clone()),
+            value: Some(value),
             ..Default::default()
         });
         let tree = ComponentList::new(field);
@@ -228,7 +228,7 @@ mod tests {
     fn typing_into_a_focused_field_edits_the_bound_signal() {
         let value = signal("a".to_string());
         let (field, rect) = laid_out_field(TextFieldProps {
-            value: Some(value.clone()),
+            value: Some(value),
             ..Default::default()
         });
         let mut tree = ComponentList::new(field);
@@ -254,7 +254,7 @@ mod tests {
         let fired = Rc::new(Cell::new(false));
         let sink = fired.clone();
         let (field, rect) = laid_out_field(TextFieldProps {
-            value: Some(value.clone()),
+            value: Some(value),
             on_submit: Some(Box::new(move || sink.set(true))),
             ..Default::default()
         });

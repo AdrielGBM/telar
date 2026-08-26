@@ -127,7 +127,7 @@ mod tests {
         let value = signal(0.3f32);
         let widget = progress(ProgressProps {
             value: {
-                let v = value.clone();
+                let v = value;
                 Box::new(move || v.get())
             },
             width: 200.0,
@@ -147,7 +147,7 @@ mod tests {
         let value = signal(0.0f32);
         let widget = progress(ProgressProps {
             value: {
-                let v = value.clone();
+                let v = value;
                 Box::new(move || v.get())
             },
             ..Default::default()
@@ -166,8 +166,8 @@ mod tests {
         reactive_core::reset_runtime();
         let used = signal(3.0f32);
         let total = signal(4.0f32);
-        let fraction = reactive_core::derive_pair(used.clone(), total.clone(), |u, t| u / t);
-        let read = fraction.clone();
+        let fraction = reactive_core::derive_pair(used, total, |u, t| u / t);
+        let read = fraction;
         let bar = progress(ProgressProps {
             value: Box::new(move || read.get()),
             stretch: true,

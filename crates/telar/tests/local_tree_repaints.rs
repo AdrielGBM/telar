@@ -54,7 +54,7 @@ fn drawn_rect(tree: &LocalTree) -> geometry_core::Rect {
 fn a_changed_signal_repaints_without_being_told_to() {
     reset_layout_runtime();
     let label = signal("before".to_string());
-    let read = label.clone();
+    let read = label;
     let text = Text::new(
         move || read.get(),
         LayoutStyle::new(),

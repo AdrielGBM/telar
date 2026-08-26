@@ -50,7 +50,7 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let checked = checked.unwrap_or_else(|| signal(false));
 
     // The knob: a fixed white circle laid out at the left inset, slid right by a transform while on (no reflow).
-    let knob_on = checked.clone();
+    let knob_on = checked;
     let knob = StyledContainer::new(
         LayoutStyle::new().width(16.0).height(16.0),
         |_r| {
@@ -66,7 +66,7 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     });
 
     // The 40×22 pill: an accent fill when on, a neutral grey when off; the 3px padding insets the knob.
-    let track_on = checked.clone();
+    let track_on = checked;
     let track = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -88,8 +88,8 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?;
 
     // The whole row is the tap target (switch + label); a tap flips the bound signal and reports the new state.
-    let toggle_on = checked.clone();
-    let announced = checked.clone();
+    let toggle_on = checked;
+    let announced = checked;
     shared::labelled_control(
         box_item(track),
         label,
@@ -125,7 +125,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let on = signal(false);
         let mut widget = toggle(ToggleProps {
-            checked: Some(on.clone()),
+            checked: Some(on),
             label: Box::new(|| "Notifications".to_string()),
             ..Default::default()
         })

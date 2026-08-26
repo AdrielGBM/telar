@@ -107,7 +107,7 @@ mod tests {
         let picked = signal(1u32);
         let item = select(
             SelectProps {
-                selected: Some(picked.clone()),
+                selected: Some(picked),
                 ..Default::default()
             },
             sizes(),
@@ -143,7 +143,7 @@ mod tests {
         let sink = seen.clone();
         let item = select(
             SelectProps {
-                selected: Some(picked.clone()),
+                selected: Some(picked),
                 on_select: Some(Box::new(move |i| sink.set(Some(i)))),
                 ..Default::default()
             },
@@ -199,7 +199,7 @@ mod tests {
         let picked = signal(1u32);
         let item = select(
             SelectProps {
-                selected: Some(picked.clone()),
+                selected: Some(picked),
                 ..Default::default()
             },
             sizes(),
@@ -250,7 +250,7 @@ mod tests {
         });
         let item = select(
             SelectProps {
-                selected: Some(picked.clone()),
+                selected: Some(picked),
                 on_select: Some(Box::new(move |i| sink.set(Some(i)))),
                 ..Default::default()
             },

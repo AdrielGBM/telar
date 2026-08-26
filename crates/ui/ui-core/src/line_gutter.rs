@@ -126,7 +126,7 @@ mod tests {
     fn height_tracks_line_count() {
         reset_layout_runtime();
         let count = signal(3usize);
-        let g = gutter(count.clone());
+        let g = gutter(count);
         let rect = g.leaf.rect;
         let root = new_container(
             LayoutStyle::new().flex_column().width(200.0),

@@ -534,11 +534,9 @@ mod tests {
     fn focused_input(initial: &str) -> (Input, RwSignal<String>) {
         reset_layout_runtime();
         let value = signal(initial.to_string());
-        let input = Input::new(
-            value.clone(),
-            LayoutStyle::new().width(200.0).height(20.0),
-            || TextStyle::new(14.0, Color::BLACK),
-        )
+        let input = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+            TextStyle::new(14.0, Color::BLACK)
+        })
         .unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(200.0).height(100.0),
@@ -604,11 +602,9 @@ mod tests {
         reset_layout_runtime();
         focus::clear();
         let value = signal(String::new());
-        let mut input = Input::new(
-            value.clone(),
-            LayoutStyle::new().width(200.0).height(20.0),
-            || TextStyle::new(14.0, Color::BLACK),
-        )
+        let mut input = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+            TextStyle::new(14.0, Color::BLACK)
+        })
         .unwrap()
         .autofocus();
         assert!(
@@ -623,7 +619,7 @@ mod tests {
         focus::clear();
         let untouched = signal(String::new());
         let mut plain = Input::new(
-            untouched.clone(),
+            untouched,
             LayoutStyle::new().width(200.0).height(20.0),
             || TextStyle::new(14.0, Color::BLACK),
         )

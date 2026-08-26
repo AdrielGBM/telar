@@ -11,26 +11,26 @@ fn peek_with<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> R {
     runtime::with_signal_value::<T, R>(id, f)
 }
 
+/// A read handle on a signal.
+///
+/// `Copy`, and the reason is the whole of [`crate::runtime::owner`]: the handle is an id, the *owner* is what
+/// frees the storage, and nothing has to be moved or cloned to be read twice. What that trades away is a
+/// compile-time guarantee for a runtime one — a handle outliving its owner used to be impossible to write and
+/// is now a checked failure against the version in the key. Leptos and Dioxus each made the same trade, both
+/// after trying the other road.
 pub struct ReadSignal<T: 'static> {
     pub(crate) id: SignalId,
     _marker: PhantomData<T>,
 }
 
+// Hand-written, because `#[derive]` would bound these on `T` — `RwSignal<String>` would not be `Copy`, which is most of the point. The parameter names what the signal holds, never what the handle stores.
 impl<T: 'static> Clone for ReadSignal<T> {
     fn clone(&self) -> Self {
-        runtime::clone_signal(self.id);
-        ReadSignal {
-            id: self.id,
-            _marker: PhantomData,
-        }
+        *self
     }
 }
 
-impl<T: 'static> Drop for ReadSignal<T> {
-    fn drop(&mut self) {
-        runtime::drop_signal(self.id);
-    }
-}
+impl<T: 'static> Copy for ReadSignal<T> {}
 
 impl<T: Clone + 'static> ReadSignal<T> {
     pub fn get(&self) -> T {
@@ -48,6 +48,7 @@ impl<T: 'static> ReadSignal<T> {
     }
 }
 
+/// A read-write handle on a signal. `Copy`, for the reasons in [`ReadSignal`].
 pub struct RwSignal<T: 'static> {
     pub(crate) id: SignalId,
     _marker: PhantomData<T>,
@@ -55,19 +56,11 @@ pub struct RwSignal<T: 'static> {
 
 impl<T: 'static> Clone for RwSignal<T> {
     fn clone(&self) -> Self {
-        runtime::clone_signal(self.id);
-        RwSignal {
-            id: self.id,
-            _marker: PhantomData,
-        }
+        *self
     }
 }
 
-impl<T: 'static> Drop for RwSignal<T> {
-    fn drop(&mut self) {
-        runtime::drop_signal(self.id);
-    }
-}
+impl<T: 'static> Copy for RwSignal<T> {}
 
 impl<T: 'static> RwSignal<T> {
     pub fn set(&self, value: T) {
@@ -91,7 +84,6 @@ impl<T: 'static> RwSignal<T> {
     }
 
     pub fn read_only(&self) -> ReadSignal<T> {
-        runtime::clone_signal(self.id);
         ReadSignal {
             id: self.id,
             _marker: PhantomData,
@@ -117,9 +109,8 @@ impl RwSignal<bool> {
 }
 
 pub fn signal<T: 'static>(value: T) -> RwSignal<T> {
-    let id = runtime::create_signal_storage(value, 1);
     RwSignal {
-        id,
+        id: runtime::create_signal_storage(value),
         _marker: PhantomData,
     }
 }
